@@ -24,7 +24,7 @@ import { useSessionPanelState } from '@/features/session-panel/use-session-panel
 import { chatControllerRegistry } from '../../sessions/runtime/chat-controller-registry';
 import { useDaemonPort } from '../../sessions/runtime/daemon-port-context';
 import { CHAT_ATTACHMENT_ADAPTER, useControllerState } from '../runtime/use-chat-thread-runtime';
-import { buildChatExtras } from '../runtime/chat-extras';
+import { buildChatExtras, isRunningFromState } from '../runtime/chat-extras';
 import { projectChatThreadMessages } from '../controller/project-messages';
 import { ChatCardHeader } from '../thread/ChatCardHeader';
 import { ChatThread } from '../thread/ChatThread';
@@ -58,7 +58,7 @@ export function ChatZone({
   }, [controller]);
 
   const messages = useMemo(() => projectChatThreadMessages(state), [state]);
-  const isRunning = state.runState.type === 'running' || state.runState.type === 'cancelling';
+  const isRunning = isRunningFromState(state);
   const extras = useMemo(() => buildChatExtras(controller, port, state), [controller, port, state]);
 
   // Zones only ever hold sessions with a daemon chat (the reconciler closes the

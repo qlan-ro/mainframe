@@ -70,8 +70,19 @@ export function buildChatExtras(
   };
 }
 
-/** isRunning derivation (mirrors react-opencode's isOpenCodeStateRunning). */
+/**
+ * isRunning derivation (mirrors react-opencode's isOpenCodeStateRunning).
+ * A pending permission gate reads as NOT running (D7, finding 9): today a
+ * pending gate makes the client dispatch `run.stopped`, so the thread looks
+ * idle while it waits, and `run.started` follows the answer. This keeps that
+ * cue even though `isRunning:false` is now ignored while the facade is
+ * attached (`handle-daemon-event.ts`) — the gate-time dip doesn't depend on
+ * the side-band backstop, it is derived here, in the ONE place this used to
+ * be duplicated three ways (`ChatZone.tsx`, `SideChatPanel.tsx`, and this
+ * file).
+ */
 export function isRunningFromState(state: ChatThreadState): boolean {
+  if (Object.keys(state.interactions.permissions).length > 0) return false;
   return state.runState.type === 'running' || state.runState.type === 'cancelling';
 }
 

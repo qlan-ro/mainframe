@@ -119,14 +119,16 @@ async fn a_panicked_resume_settles_the_promise_and_asks_for_a_resync() {
     );
 }
 /// `reset_session` sends the success reply as it seeds, so a failure after
-/// that point — a panic in the replay closure — owes the client nothing but a
-/// way back: the seeded stream is correct and the client is reading it. The
-/// slot is no evidence the reply went out, though: `session_detach` and
-/// `ChatEnded` drop it without the per-session lock, so a teardown racing the
-/// panic would make a map read answer -32603 for an id that already got a
-/// result.
+/// that point — a panic in the replay closure, before `reset_session`'s own
+/// `replay_complete` send — owes the client a closing marker for the reply
+/// it already has (`aborted: true`, spec Decision 38) before the resync: the
+/// seeded stream is correct and the client is reading it, but its replay was
+/// never closed out. The slot is no evidence the reply went out, though:
+/// `session_detach` and `ChatEnded` drop it without the per-session lock, so
+/// a teardown racing the panic would make a map read answer -32603 for an id
+/// that already got a result.
 #[tokio::test]
-async fn a_replied_resume_failure_keeps_the_session_and_sends_only_a_resync() {
+async fn a_failure_after_the_reply_closes_the_replay_before_the_resync() {
     let ctx = AppCtx::test_ctx();
     let (_client_id, connection, mut rx) = ctx.facade_hub.register("mock-cli".to_string());
     ctx.facade_hub.attach(&connection, "chat-1");
@@ -136,8 +138,13 @@ async fn a_replied_resume_failure_keeps_the_session_and_sends_only_a_resync() {
         request_id: Some(RequestId::Number(7)),
         session_id: Some("chat-1"),
         replied: true,
+        completed: false,
         cause: "the delivery task panicked".to_string(),
     });
+
+    let marker = next_frame(&mut rx).await;
+    assert_eq!(marker["method"], json!("_mainframe.dev/replay_complete"));
+    assert_eq!(marker["params"]["aborted"], json!(true));
 
     let resync = next_frame(&mut rx).await;
     assert_eq!(resync["method"], json!("_mainframe.dev/resync"));
@@ -149,6 +156,80 @@ async fn a_replied_resume_failure_keeps_the_session_and_sends_only_a_resync() {
     assert!(
         connection.is_attached("chat-1"),
         "the seeded stream is the one the client is reading"
+    );
+}
+
+/// A delivery whose own `replay_complete` already went out (the normal path
+/// ran all the way, and the panic struck later still) owes the client no
+/// second one.
+#[tokio::test]
+async fn a_delivery_that_already_completed_sends_no_second_marker() {
+    let ctx = AppCtx::test_ctx();
+    let (_client_id, connection, mut rx) = ctx.facade_hub.register("mock-cli".to_string());
+    ctx.facade_hub.attach(&connection, "chat-1");
+
+    fail_resume(ResumeFailure {
+        connection: &connection,
+        request_id: Some(RequestId::Number(7)),
+        session_id: Some("chat-1"),
+        replied: true,
+        completed: true,
+        cause: "something failed after the replay had already closed".to_string(),
+    });
+
+    let resync = next_frame(&mut rx).await;
+    assert_eq!(resync["method"], json!("_mainframe.dev/resync"));
+    assert!(
+        rx.try_recv().is_err(),
+        "no replay_complete is owed: this delivery already sent its own"
+    );
+}
+
+/// Spec Decision 38: a normal close (no failure) carries no `aborted` key at
+/// all — only a delivery that failed after its reply sets it.
+#[tokio::test]
+async fn a_normal_close_carries_no_aborted_key() {
+    let ctx = AppCtx::test_ctx();
+    let (_client_id, connection, mut rx) = ctx.facade_hub.register("mock-cli".to_string());
+
+    start_resume(
+        resume_request(1, "chat-1"),
+        &ctx,
+        &connection,
+        Arc::new(EmptyPort),
+    );
+
+    let frames = drain(&mut rx).await;
+    let marker = frames
+        .iter()
+        .find(|f| f["method"] == json!("_mainframe.dev/replay_complete"))
+        .expect("a successful resume closes with replay_complete");
+    assert!(
+        marker["params"].get("aborted").is_none(),
+        "a normal close carries no aborted key: {marker:?}"
+    );
+}
+
+/// A delivery that never replied (the snapshot itself panicked) owes the
+/// client no `replay_complete` either — there is no reply for it to close.
+#[tokio::test]
+async fn a_failure_before_the_reply_sends_no_replay_complete() {
+    let ctx = AppCtx::test_ctx();
+    let (_client_id, connection, mut rx) = ctx.facade_hub.register("mock-cli".to_string());
+
+    start_resume(
+        resume_request(7, "chat-1"),
+        &ctx,
+        &connection,
+        Arc::new(PanickingPort),
+    );
+
+    let frames = drain(&mut rx).await;
+    assert!(
+        !frames
+            .iter()
+            .any(|f| f["method"] == json!("_mainframe.dev/replay_complete")),
+        "no reply ever went out, so no replay_complete is owed: {frames:?}"
     );
 }
 

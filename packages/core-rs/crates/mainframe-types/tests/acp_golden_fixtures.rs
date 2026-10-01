@@ -17,9 +17,9 @@ use serde_json::{Value, json};
 
 use mainframe_types::acp::extensions::{
     CompactionParams, GateResolvedParams, HeartbeatParams, ItemMeta, MainframeCapabilities,
-    PromptSendMeta, QueueStateParams, QueuedPromptState, ResyncParams, RetryMarker,
-    RichPermissionAnswer, SessionDetachParams, StructuredDiff, TranscriptClearedParams,
-    TruncationMarker, UsageMeta,
+    PromptSendMeta, QueueStateParams, QueuedPromptState, ReplayCompleteParams, ResyncParams,
+    RetryMarker, RichPermissionAnswer, SessionDetachParams, StructuredDiff,
+    TranscriptClearedParams, TruncationMarker, UsageMeta,
 };
 use mainframe_types::acp::jsonrpc::{JsonRpcNotification, JsonRpcRequest, JsonRpcResponse};
 use mainframe_types::acp::permission::{RequestPermissionRequest, RequestPermissionResponse};
@@ -115,6 +115,12 @@ fn roundtrip_by_name(name: &str, body: &Value) -> Result<(), String> {
     }
     if name == "resync.params.json" {
         return roundtrip_as::<ResyncParams>(body);
+    }
+    if name == "replay-complete.notification.json" {
+        return roundtrip_as::<JsonRpcNotification>(body);
+    }
+    if name.starts_with("replay-complete.params") {
+        return roundtrip_as::<ReplayCompleteParams>(body);
     }
     if name == "compaction.notification.json" {
         return roundtrip_as::<JsonRpcNotification>(body);

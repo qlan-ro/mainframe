@@ -83,6 +83,12 @@ pub struct ItemMeta {
     /// its `title` is the task description, not a tool name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subagent: Option<bool>,
+    /// True only on the item the partial-message overlay currently backs
+    /// (spec Decision 39). Drops through the same diff as the committing
+    /// text, or the item is cleared on abort; clients drive per-part
+    /// streaming status from this, never from position.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub streaming: Option<bool>,
 }
 
 /// [`ItemMeta::kind`] — `user`/`agent` ride the item role; these mark the
@@ -131,6 +137,17 @@ pub struct MainframeCapabilities {
     pub retry_markers: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub heartbeat_interval_ms: Option<i64>,
+    /// Whether `create_update` stamps [`ITEM_CREATED_META_KEY`] on an item's
+    /// complete first frame (spec Decision 37) — a client gates its strict
+    /// accumulator mode on this rather than assuming it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub item_creation_markers: Option<bool>,
+    /// Whether every successful `session/resume` reply is followed by
+    /// exactly one `_mainframe.dev/replay_complete` for that session (spec
+    /// Decision 38) — a client stages a full replay off-screen only when
+    /// this is advertised.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub replay_complete: Option<bool>,
 }
 
 /// `api_retry` modeled as a content-replacing patch plus this marker (spec
@@ -234,17 +251,41 @@ pub struct SessionDetachParams {
     pub session_id: String,
 }
 
-/// `_mainframe.dev/resync`'s params: the chat's `MessageCache` entry hit its
-/// per-chat cap and dropped messages from the front (T20, R3.11, plan
-/// decision 4/spec 34) — an attached client's accumulator has silently
-/// diverged and must re-resume. Distinct from `transcript_cleared`: reusing
-/// that notification would blank the thread before the replay lands, where
-/// `resync` re-resumes with no reducer wipe.
+/// `_mainframe.dev/resync`'s params: the chat's cache was rebuilt from the
+/// transcript under ids an attached session may not hold (spec Decision 34,
+/// rewritten). Raised when `do_load_chat` repopulates the cache and the
+/// result differs from what was there, or when a resume delivery fails after
+/// its reply (`fail_resume`, at most once per failure streak). Cache
+/// retention alone never raises it — there is no per-chat cap (spec Decision
+/// 36). Distinct from `transcript_cleared`: reusing that notification would
+/// blank the thread before the replay lands, where `resync` re-resumes with
+/// no reducer wipe.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ResyncParams {
     pub session_id: String,
 }
+
+/// `_mainframe.dev/replay_complete`'s params: closes exactly one
+/// `session/resume` replay (spec Decision 38). Sent after `queue_state` and
+/// before the buffered catch-up, in every arm that sent a successful reply.
+/// `aborted` is present and `true` only when a resume delivery failed after
+/// its reply went out; a normal close carries no `aborted` key at all, so a
+/// client can tell "discard the staged replay" apart from "publish it" by
+/// key presence, not by a `false` value that never ships.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplayCompleteParams {
+    pub session_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub aborted: Option<bool>,
+}
+
+/// The `_meta["_mainframe.dev"]` key `create_update` stamps on an item's
+/// complete first frame, live or replayed (spec Decision 37) — nothing else
+/// carries it, so its presence exactly means "this frame is the item's
+/// complete first state".
+pub const ITEM_CREATED_META_KEY: &str = "created";
 
 /// [`CompactionParams::phase`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -292,6 +333,8 @@ mod tests {
             queued_prompts: None,
             retry_markers: None,
             heartbeat_interval_ms: None,
+            item_creation_markers: None,
+            replay_complete: None,
         };
         assert_eq!(serde_json::to_value(caps).unwrap(), json!({}));
     }

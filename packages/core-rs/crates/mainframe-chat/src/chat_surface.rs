@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use mainframe_types::adapter::{ContextUsage, ControlRequest};
 use mainframe_types::chat::QueuedMessageRef;
-use mainframe_types::display::DisplayMessage;
+use mainframe_types::display::{DisplayMessage, StreamingLeafKind};
 
 /// Compaction progress: `Started` when the CLI begins compacting, `Done`
 /// when the compaction summary lands in the transcript.
@@ -58,9 +58,14 @@ pub enum ChatSurfaceEvent {
     /// The same `DisplayMessage[]` snapshot the legacy emitter already
     /// computed for this revision (`emit_display_delta`'s `new_display`) —
     /// the canonical encoder (plan task 12) consumes this directly.
+    /// `streaming` names the leaf kind the partial-message overlay currently
+    /// backs, when `emit_display_for` finds one still open on the prepared
+    /// snapshot's last message (spec Decision 39); `None` outside a live
+    /// partial, including every resume replay (no overlay in a snapshot).
     DisplayRevision {
         chat_id: String,
         messages: Vec<DisplayMessage>,
+        streaming: Option<StreamingLeafKind>,
     },
     GateRaised {
         chat_id: String,
@@ -86,10 +91,10 @@ pub enum ChatSurfaceEvent {
     TranscriptCleared {
         chat_id: String,
     },
-    /// The chat's `MessageCache` entry hit its per-chat cap and dropped
-    /// messages from the front (T20, R3.11). An attached client's local
-    /// accumulator has silently diverged from what the cache still holds —
-    /// it must re-resume, not trust the next delta.
+    /// The chat's cache was rebuilt from the transcript under ids an attached
+    /// session may not hold (`do_load_chat`'s reload of an offloaded or
+    /// cold-opened chat, or a failed resume delivery). The client re-resumes
+    /// to converge its accumulator rather than diff old ids against new ones.
     Resync {
         chat_id: String,
     },

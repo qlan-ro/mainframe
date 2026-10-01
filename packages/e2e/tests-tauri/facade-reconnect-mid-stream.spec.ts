@@ -26,8 +26,15 @@ import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriPro
 import { sendMessage, waitForIdle, waitConnected } from '../helpers/tauri/wait.js';
 import { chatThread } from '../helpers/tauri/page-objects.js';
 import { installWsControl, type WsControl } from '../helpers/tauri/ws-control.js';
-import { sendJson, collectFrames, closeSocket } from '../helpers/tauri/raw-ws-client.js';
-import { resumeRequest, connectAndInitialize } from '../helpers/tauri/facade-protocol-support.js';
+import { sendJson, collectFrames, collectUntilQuiet, closeSocket } from '../helpers/tauri/raw-ws-client.js';
+import {
+  resumeRequest,
+  updates,
+  itemId,
+  mainframeMeta,
+  connectAndInitialize,
+  expectReplayClosedAfterQueueState,
+} from '../helpers/tauri/facade-protocol-support.js';
 
 /** Wide enough that the recording's 1s-apart chunk marks survive the clamp. */
 const MOCK_MAX_DELAY_MS = 15_000;
@@ -73,6 +80,10 @@ test.describe('§facade-reconnect mid-stream', () => {
     // ── Wire half: a reconnecting client's resume, taken mid-turn ──
     const raw = await connectAndInitialize();
     const frames = collectFrames(raw);
+    // Arrival-ordered capture for the replay boundary below. A fixed 2.5s window
+    // (chunks land 1s apart, so it never goes quiet first) spans the replay plus
+    // at least one live chunk behind it.
+    const captured = collectUntilQuiet(raw, 2_500, 2_500);
     sendJson(raw, resumeRequest(2, chatId));
     const reply = await frames.next((f) => f['id'] === 2);
     expect(reply['error']).toBeUndefined();
@@ -87,7 +98,20 @@ test.describe('§facade-reconnect mid-stream', () => {
     );
     const state = (stateFrame['params'] as { update?: { state?: string } }).update?.state;
     expect(state).toBe('running');
+
+    // Spec Decision 38: replay_complete closes the replay right after queue_state,
+    // and the live stream continues behind it. The tail keeps growing as updates
+    // to an item the replay already created, never as a second create.
+    const ordered = await captured;
     await closeSocket(raw);
+    const markerIndex = expectReplayClosedAfterQueueState(ordered, chatId, 2);
+    const replayedIds = new Set(updates(ordered.slice(0, markerIndex)).map(itemId));
+    const live = updates(ordered.slice(markerIndex + 1)).filter((f) => itemId(f) !== undefined);
+    expect(live.length, 'a live chunk must arrive behind replay_complete').toBeGreaterThan(0);
+    for (const frame of live) {
+      expect(replayedIds.has(itemId(frame)), `${itemId(frame)} continues a replayed item`).toBe(true);
+      expect(mainframeMeta(frame)?.created, `${itemId(frame)} is not re-created after the replay`).toBeUndefined();
+    }
 
     // ── UI half: sever the app's own sockets mid-stream ──
     const beforeDrop = ws.facadeConnectionCount();

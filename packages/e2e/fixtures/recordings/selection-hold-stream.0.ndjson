@@ -1,0 +1,12 @@
+{"dir": "in", "method": "sendMessage", "args": ["Say a short one-line greeting."], "delayMs": 0}
+{"dir": "out", "method": "onInit", "args": ["e2e-selection-hold-sess-1"], "delayMs": 20}
+{"dir": "out", "method": "onQueuedProcessed", "args": ["e2e-selection-hold-uuid-1"], "delayMs": 60}
+{"dir": "out", "method": "onMessage", "args": [[{"type": "text", "text": "OLDER-REPLY: this is the first turn's own settled text."}], {"model": "claude-haiku-4-5-20251001", "usage": {"input_tokens": 8, "output_tokens": 12}}], "delayMs": 300}
+{"dir": "out", "method": "onResult", "args": [{"total_cost_usd": 0.004, "usage": {"input_tokens": 8, "output_tokens": 12}, "subtype": "success", "is_error": false}], "delayMs": 350}
+{"dir": "in", "method": "sendMessage", "args": ["Write a two-paragraph explanation, one sentence per paragraph, and take your time."], "delayMs": 500}
+{"dir": "out", "method": "onInit", "args": ["e2e-selection-hold-sess-1"], "delayMs": 520}
+{"dir": "out", "method": "onQueuedProcessed", "args": ["e2e-selection-hold-uuid-2"], "delayMs": 560}
+{"dir": "out", "method": "onMessagePartial", "args": ["msg_SH", [{"type": "text", "text": "PARAGRAPH-ONE is now fully settled and will not change again.\n\nPARAGRAPH-TWO starts growing word by word"}]], "delayMs": 800}
+{"dir": "out", "method": "onMessagePartial", "args": ["msg_SH", [{"type": "text", "text": "PARAGRAPH-ONE is now fully settled and will not change again.\n\nPARAGRAPH-TWO starts growing word by word and keeps extending further with more detail added"}]], "delayMs": 2300}
+{"dir": "out", "method": "onMessage", "args": [[{"type": "text", "text": "PARAGRAPH-ONE is now fully settled and will not change again.\n\nPARAGRAPH-TWO starts growing word by word and keeps extending further with more detail added and even more words still arriving right now, and finally ends here."}], {"model": "claude-haiku-4-5-20251001", "usage": {"input_tokens": 12, "output_tokens": 48}}], "delayMs": 8500}
+{"dir": "out", "method": "onResult", "args": [{"total_cost_usd": 0.006, "usage": {"input_tokens": 20, "output_tokens": 60}, "subtype": "success", "is_error": false}], "delayMs": 8600}

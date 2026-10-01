@@ -215,5 +215,6 @@ pub fn revision_event(chat_id: &str, text: &str) -> mainframe_chat::chat_surface
             timestamp: "2026-09-14T00:00:00.000Z".to_string(),
             metadata: None,
         }],
+        streaming: None,
     }
 }

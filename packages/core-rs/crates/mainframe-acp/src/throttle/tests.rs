@@ -42,6 +42,24 @@ fn chunk_text(frame: &ThrottledFrame) -> &str {
     text.as_str()
 }
 
+fn chunk_with_meta(text: &str, meta: Option<serde_json::Value>) -> SessionUpdate {
+    SessionUpdate::AgentMessageChunk(ContentChunk {
+        message_id: "msg_1".to_string(),
+        content: ContentBlock::Text {
+            text: text.to_string(),
+            meta: None,
+        },
+        meta,
+    })
+}
+
+fn chunk_meta(frame: &ThrottledFrame) -> &Option<serde_json::Value> {
+    let SessionUpdate::AgentMessageChunk(c) = as_update(frame) else {
+        panic!("expected an AgentMessageChunk");
+    };
+    &c.meta
+}
+
 #[test]
 fn the_first_push_always_flushes_immediately() {
     let mut throttle = Throttle::new(50);
@@ -183,4 +201,39 @@ fn flush_drains_a_trailing_held_burst_and_is_a_noop_when_empty() {
 
     // Nothing pending: flush stays silent and does not reset the window.
     assert!(throttle.flush(1_040).is_empty());
+}
+
+/// Finding 7: the earlier chunk's `_meta` must not silently win just because
+/// the later one merges INTO it — the committing update's meta (or lack of
+/// one) has to be what survives, or a dropped `streaming` flag would never
+/// reach the client.
+#[test]
+fn a_merged_chunk_keeps_the_later_meta() {
+    let mut throttle = Throttle::new(50);
+    // The first push always flushes immediately (no prior window), so it
+    // never reaches the merge path — "a" establishes the window only.
+    assert_eq!(throttle.push(1_000, chunk("a")).len(), 1);
+
+    // Still inside the window: held, not flushed yet.
+    let first_meta = serde_json::json!({ "_mainframe.dev": { "streaming": true } });
+    assert!(
+        throttle
+            .push(1_010, chunk_with_meta("b", Some(first_meta)))
+            .is_empty()
+    );
+    let second_meta = serde_json::json!({ "_mainframe.dev": { "streaming": false } });
+    assert!(
+        throttle
+            .push(1_020, chunk_with_meta("c", Some(second_meta.clone())))
+            .is_empty()
+    );
+
+    let out = throttle.flush(1_030);
+    assert_eq!(out.len(), 1, "the two held chunks merge into one frame");
+    assert_eq!(chunk_text(&out[0]), "bc");
+    assert_eq!(
+        chunk_meta(&out[0]),
+        &Some(second_meta),
+        "the merged chunk carries the later (second) meta, not the first"
+    );
 }

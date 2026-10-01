@@ -92,6 +92,7 @@ const CASES: Record<NotificationMethod, { params: unknown; args: unknown[] }> = 
     args: ['chat_1', 'gate-req_001'],
   },
   '_mainframe.dev/resync': { params: { sessionId: 'chat_1' }, args: ['chat_1'] },
+  '_mainframe.dev/replay_complete': { params: { sessionId: 'chat_1' }, args: ['chat_1', false] },
 };
 
 /** `_mainframe.dev/heartbeat` has no public registrar — its listener is the constructor callback. */
@@ -105,6 +106,7 @@ const SUBSCRIBE: Record<
   '_mainframe.dev/compaction': (router, listener) => router.onCompaction(listener),
   '_mainframe.dev/gate_resolved': (router, listener) => router.onGateResolved(listener),
   '_mainframe.dev/resync': (router, listener) => router.onResync(listener),
+  '_mainframe.dev/replay_complete': (router, listener) => router.onReplayComplete(listener),
 };
 
 function subscribeAll(): { router: AcpNotificationRouter; listeners: Record<NotificationMethod, Mock> } {
@@ -159,6 +161,20 @@ describe('AcpNotificationRouter.handleNotification — table routing', () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('compaction'), expect.anything());
     expect(listeners['_mainframe.dev/compaction']).not.toHaveBeenCalled();
     warn.mockRestore();
+  });
+
+  it('_mainframe.dev/replay_complete normalizes a present aborted:true', () => {
+    const { router } = makeRouter();
+    const listener = vi.fn();
+    router.onReplayComplete(listener);
+
+    router.handleNotification({
+      jsonrpc: '2.0',
+      method: '_mainframe.dev/replay_complete',
+      params: { sessionId: 'chat_1', aborted: true },
+    } as JsonRpcNotification);
+
+    expect(listener).toHaveBeenCalledWith('chat_1', true);
   });
 
   it('an unsubscribed listener stops receiving its method', () => {

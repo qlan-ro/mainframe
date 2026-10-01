@@ -21,6 +21,8 @@ export interface DaemonEventRouterHost {
   getChatId: () => string;
   /** Apply a state event through the reducer. */
   dispatch: (event: ChatStateEvent) => void;
+  /** Is the ACP facade plane currently attached (subscribed) to this chat? (D7, finding 9/10) */
+  isFacadeAttached: () => boolean;
 }
 
 export function routeDaemonEvent(event: DaemonEvent, host: DaemonEventRouterHost): void {
@@ -60,7 +62,7 @@ export function routeDaemonEvent(event: DaemonEvent, host: DaemonEventRouterHost
     mfToast.error('Agent run failed', description !== undefined ? { description } : undefined);
   }
 
-  const result = handleDaemonEvent(event, chatId);
+  const result = handleDaemonEvent(event, chatId, host.isFacadeAttached());
   if (result.kind === 'event') {
     host.dispatch(result.event);
   }

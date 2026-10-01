@@ -3,5 +3,7 @@
   "richPermissionAnswers": true,
   "queuedPrompts": true,
   "retryMarkers": true,
-  "heartbeatIntervalMs": 15000
+  "heartbeatIntervalMs": 15000,
+  "itemCreationMarkers": true,
+  "replayComplete": true
 }

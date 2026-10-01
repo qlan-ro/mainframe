@@ -21,7 +21,7 @@ fn a_retry_marker_rides_the_next_upsert_meta_and_is_consumed_once() {
     let meta = upsert.meta.clone().flatten().expect("marker meta expected");
     assert_eq!(
         meta[MAINFRAME_META_NAMESPACE],
-        json!({ "attempt": 2, "reason": "overloaded_error" })
+        json!({ "attempt": 2, "reason": "overloaded_error", "created": true })
     );
 
     // Consumed: the next revision carries no marker.
@@ -80,8 +80,74 @@ fn a_marker_with_no_carrier_waits_and_turn_end_clears_it() {
         let SessionUpdate::AgentMessage(upsert) = as_update(frame) else {
             panic!("expected message upserts, got {frame:?}");
         };
-        assert_eq!(upsert.meta.clone().flatten(), None);
+        let meta = upsert.meta.clone().flatten();
+        if upsert.message_id == "m1" {
+            assert_eq!(meta, None, "m1's clear carries no payload meta");
+        } else {
+            // m2 is a fresh id, so its own creation frame now carries the
+            // (unrelated) `created` marker — the dropped retry marker is
+            // what must be absent from it.
+            assert_eq!(
+                meta.expect("m2's creation carries the created marker")[MAINFRAME_META_NAMESPACE],
+                json!({ "created": true }),
+                "the dropped retry marker must not reach m2's creation"
+            );
+        }
     }
+}
+
+/// Finding 8: a full-revision upsert whose meta did NOT change wires `meta`
+/// as the omitted patch (`None`), not a value — `attach_retry_marker` must
+/// never treat that as a carrier, or `merge_namespace` would start from an
+/// empty object and wire `_meta` as JUST `{attempt, reason}`, discarding the
+/// item's `containerId` (Bug 1's symptom: the item becomes its own container
+/// at the tail). The marker waits for the next upsert whose meta IS a full
+/// value.
+#[test]
+fn a_retry_marker_never_replaces_a_full_meta_with_marker_only() {
+    let mut stream = stream();
+    let existing_meta = json!({ MAINFRAME_META_NAMESPACE: { "containerId": "m1" } });
+    let _ = stream.on_revision(&[message_with_meta("m1", "Hel", existing_meta.clone())], 0);
+
+    stream.on_retry(marker());
+
+    // A non-append change (full revision) whose meta is unchanged: the wire
+    // `meta` stays omitted, so this frame must not claim the marker.
+    let updates = stream.on_revision(
+        &[message_with_meta(
+            "m1",
+            "Retried from scratch",
+            existing_meta.clone(),
+        )],
+        10,
+    );
+    assert_eq!(updates.len(), 1);
+    let SessionUpdate::AgentMessage(upsert) = as_update(&updates[0]) else {
+        panic!("expected a full revision upsert");
+    };
+    assert_eq!(
+        upsert.meta, None,
+        "an unchanged meta must stay omitted, never become marker-only"
+    );
+
+    // The marker is still pending: the next upsert that DOES carry a full
+    // meta value is the one that finally gets it, with the existing fields
+    // (`containerId`) intact.
+    let new_meta = json!({
+        MAINFRAME_META_NAMESPACE: { "containerId": "m1", "turnDurationMs": 5 }
+    });
+    let carrier = stream.on_revision(&[message_with_meta("m1", "Retried again", new_meta)], 20);
+    assert_eq!(carrier.len(), 1);
+    let SessionUpdate::AgentMessage(upsert) = as_update(&carrier[0]) else {
+        panic!("expected an upsert");
+    };
+    let meta = upsert.meta.clone().flatten().expect("marker meta expected");
+    assert_eq!(meta[MAINFRAME_META_NAMESPACE]["attempt"], json!(2));
+    assert_eq!(
+        meta[MAINFRAME_META_NAMESPACE]["containerId"],
+        json!("m1"),
+        "existing meta fields survive the merge"
+    );
 }
 
 #[test]

@@ -83,6 +83,11 @@ impl ResumeTask {
         // map — which a concurrent detach or `ChatEnded` can empty.
         let replied = Arc::new(AtomicBool::new(false));
         let task_replied = Arc::clone(&replied);
+        // Set the moment `replay_complete` goes out (`reset_session`, both
+        // arms) — `fail_resume` reads this alongside `replied` to know
+        // whether IT still owes the client the closing marker.
+        let completed = Arc::new(AtomicBool::new(false));
+        let task_completed = Arc::clone(&completed);
         // `reset_session` is the only exit from `AwaitingSeed`, so a panic on
         // the way to it would leave this session buffering every event for
         // the connection's remaining life, silently. Run it as its own task
@@ -95,6 +100,7 @@ impl ResumeTask {
                 &task_conn,
                 ports.as_ref(),
                 task_replied,
+                task_completed,
             )
             .await;
         });
@@ -104,6 +110,7 @@ impl ResumeTask {
                 request_id,
                 session_id: claimed.as_deref(),
                 replied: replied.load(Ordering::Relaxed),
+                completed: completed.load(Ordering::Relaxed),
                 cause: err.to_string(),
             });
         }
@@ -119,6 +126,9 @@ struct ResumeFailure<'a> {
     /// Whether the success reply already went out — `reset_session` sets it
     /// as it sends, in whichever arm sends it.
     replied: bool,
+    /// Whether `replay_complete` already went out — `reset_session` sets it
+    /// as it sends, in whichever arm sends it.
+    completed: bool,
     cause: String,
 }
 
@@ -137,6 +147,7 @@ fn fail_resume(failure: ResumeFailure<'_>) {
         request_id,
         session_id,
         replied,
+        completed,
         cause,
     } = failure;
     if !replied {
@@ -149,6 +160,16 @@ fn fail_resume(failure: ResumeFailure<'_>) {
         error!(%cause, "acp facade: resume delivery failed with no session to recover");
         return;
     };
+    // The reply reached the client, but the panic struck before
+    // `reset_session`'s own `replay_complete` send — this delivery still
+    // owes the client the closing marker for the reply it already has, with
+    // `aborted: true` so a staged client discards whatever partial replay it
+    // received (spec Decision 38).
+    if replied && !completed {
+        connection.send_json(&mainframe_acp::replay_complete_notification(
+            session_id, true,
+        ));
+    }
     let failures = connection.record_resume_failure(session_id);
     error!(
         %cause,
@@ -183,12 +204,14 @@ async fn deliver_resume(
     connection: &Arc<FacadeConnection>,
     ports: &dyn ResumePort,
     replied: Arc<AtomicBool>,
+    completed: Arc<AtomicBool>,
 ) {
     let (response, replay) = dispatch_resume(request, ports).await;
 
     let Some(session_id) = session_id else {
         // Malformed params: dispatch_resume already produced the structured
-        // error; there is no session to seed.
+        // error; there is no session to seed, so no `replay_complete` either
+        // — nothing was ever replied `true` for a session.
         connection.send_json(&response);
         replied.store(true, Ordering::Relaxed);
         return;
@@ -200,6 +223,7 @@ async fn deliver_resume(
         items: &replay.items,
         reply: &response,
         replied,
+        completed,
         redelivered_gate: redelivered_gate.as_deref(),
     };
     let hub = &ctx.facade_hub;

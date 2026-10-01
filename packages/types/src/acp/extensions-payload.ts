@@ -75,6 +75,14 @@ export const StructuredDiffSchema = z
   .loose();
 export type StructuredDiff = z.infer<typeof StructuredDiffSchema>;
 
+/**
+ * The `_meta["_mainframe.dev"]` key `create_update` stamps on an item's
+ * complete first frame, live or replayed (spec Decision 37) — nothing else
+ * carries it, so its presence exactly means "this frame is the item's
+ * complete first state".
+ */
+export const ITEM_CREATED_META_KEY = 'created';
+
 /** `ItemMetaSchema.skillLoaded` — mirrors `LeafContent.SkillLoaded`. */
 export const SkillLoadedMetaSchema = z
   .object({
@@ -105,6 +113,13 @@ export const ItemMetaSchema = z
     messageMeta: z.record(z.string(), z.unknown()).optional(),
     groupId: z.string().optional(),
     subagent: z.boolean().optional(),
+    /**
+     * True only on the item the partial-message overlay currently backs
+     * (spec Decision 39). Drops through the same diff as the committing
+     * text, or the item is cleared on abort; clients drive per-part
+     * streaming status from this, never from position.
+     */
+    streaming: z.boolean().optional(),
   })
   .loose();
 export type ItemMeta = z.infer<typeof ItemMetaSchema>;

@@ -48,16 +48,19 @@ impl FacadeHub {
     }
 
     /// Encode only when someone is listening: this handler runs on the sink
-    /// path for every chat in the daemon.
+    /// path for every chat in the daemon. `encode_revision` (not `encode`)
+    /// so the overlay-backed item, if any, carries `ItemMeta.streaming`
+    /// (spec Decision 39).
     pub(super) fn handle_display_revision(
         &self,
         chat_id: &str,
         messages: &[mainframe_types::display::DisplayMessage],
+        streaming: Option<mainframe_types::display::StreamingLeafKind>,
     ) {
         if self.attached_connections(chat_id).is_empty() {
             return;
         }
-        let items = mainframe_acp::encoder::encode(messages);
+        let items = mainframe_acp::encoder::encode_revision(messages, streaming);
         self.on_display_revision(chat_id, &items);
     }
 
@@ -150,8 +153,12 @@ impl ChatSurface for FacadeHub {
                 chat_id,
                 stop_reason: reason,
             } => self.handle_turn_finished(&chat_id, reason),
-            ChatSurfaceEvent::DisplayRevision { chat_id, messages } => {
-                self.handle_display_revision(&chat_id, &messages);
+            ChatSurfaceEvent::DisplayRevision {
+                chat_id,
+                messages,
+                streaming,
+            } => {
+                self.handle_display_revision(&chat_id, &messages, streaming);
             }
             ChatSurfaceEvent::GateRaised { chat_id, request } => {
                 self.handle_gate_raised(&chat_id, request);

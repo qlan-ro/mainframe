@@ -119,6 +119,7 @@ export class AcpChatController {
       getPort: () => this.port,
       getWs: () => this.ws,
       dispatch: (event) => this.dispatch(event),
+      isFacadeAttached: () => this.plane.isAttached,
     });
   }
 
@@ -287,7 +288,9 @@ export class AcpChatController {
     this.dispatch(event);
   }
 
+  /** Single dispatch choke point. `run.started` (any source) and `run.failed` both cancel the plane's deferred `run.stopped` (D7 finding 10) — a failure inside the settle delay must not be clobbered by the stale deferred idle. */
   private dispatch(event: ChatStateEvent): void {
+    if (event.type === 'run.started' || event.type === 'run.failed') this.plane.cancelPendingStop();
     const nextState = reduceChatThreadState(this.state, event);
     if (nextState === this.state) return;
     this.state = nextState;

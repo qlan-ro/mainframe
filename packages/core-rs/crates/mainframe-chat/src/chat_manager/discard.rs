@@ -37,7 +37,7 @@ impl ChatManager {
         self.messages
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .delete(&chat.id);
+            .release(&chat.id);
         self.permissions
             .lock()
             .unwrap_or_else(|e| e.into_inner())

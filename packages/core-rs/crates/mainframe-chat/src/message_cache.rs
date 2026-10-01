@@ -1,24 +1,27 @@
 //! Ported from `packages/core/src/chat/message-cache.ts`.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use mainframe_runtime::time::now_iso8601;
 use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent};
 
-const MAX_MESSAGES_PER_CHAT: usize = 2000;
 const MAX_CHATS: usize = 50;
 
-/// Bounded in-memory message store keyed by chat id.
+/// In-memory message store keyed by chat id, with no per-chat message cap
+/// (todo #350 R1, D1/D2): a chat the lifecycle registry still holds is pinned
+/// whole, so retention is never visible on the wire (no resync, no dropped
+/// history). `MAX_CHATS` bounds only unpinned entries — cold reads for a chat
+/// with no registry cell (`get_messages`); see `evict_if_needed`.
 ///
 /// CONCURRENCY.tsv (`message-cache.ts cache`): PER_ENTITY — folds into
-/// `ChatState.messages: Vec<ChatMessage>` once chat_manager lands. The cross-chat
-/// LRU evict (`MAX_CHATS`) becomes a registry op there; here it is preserved as
-/// the standalone-class behavior. `order` mirrors JS `Map` insertion order so
-/// `evictIfNeeded` drops the oldest chat, matching `cache.keys().next()`.
+/// `ChatState.messages: Vec<ChatMessage>` once chat_manager lands. `order`
+/// mirrors JS `Map` insertion order so `evict_if_needed` drops the oldest
+/// unpinned chat, matching `cache.keys().next()`.
 #[derive(Default)]
 pub struct MessageCache {
     cache: HashMap<String, Vec<ChatMessage>>,
     order: Vec<String>,
+    pinned: HashSet<String>,
 }
 
 impl MessageCache {
@@ -31,43 +34,62 @@ impl MessageCache {
     }
 
     pub fn set(&mut self, chat_id: &str, messages: Vec<ChatMessage>) {
-        let trimmed = tail(messages, MAX_MESSAGES_PER_CHAT);
         self.track_key(chat_id);
-        self.cache.insert(chat_id.to_string(), trimmed);
+        self.cache.insert(chat_id.to_string(), messages);
         self.evict_if_needed();
     }
 
+    /// Drop `chat_id`'s cache entry, keeping any pin (`deps_recovery.rs`'s
+    /// recovery clear: the chat is still in the registry, so a bare `delete`
+    /// without `unpin` would let `evict_if_needed` treat it as evictable).
     pub fn delete(&mut self, chat_id: &str) {
         if self.cache.remove(chat_id).is_some() {
             self.order.retain(|k| k != chat_id);
         }
     }
 
-    /// Appends `message`, returning whether the per-chat cap dropped
-    /// anything from the front (T20, R3.11) — an attached facade client's
-    /// signal that its accumulator has silently diverged and must re-resume
-    /// rather than trust the next delta.
-    pub fn append(&mut self, chat_id: &str, message: ChatMessage) -> bool {
-        self.track_key(chat_id);
-        let messages = self.cache.entry(chat_id.to_string()).or_default();
-        messages.push(message);
-        let evicted = if messages.len() > MAX_MESSAGES_PER_CHAT {
-            let overflow = messages.len() - MAX_MESSAGES_PER_CHAT;
-            messages.drain(0..overflow);
-            true
-        } else {
-            false
-        };
-        self.evict_if_needed();
-        evicted
+    /// Pin `chat_id`'s entry against `evict_if_needed`, called right after a
+    /// registry cell is inserted (`create_chat`, `do_load_chat`, the fork
+    /// insert).
+    pub fn pin(&mut self, chat_id: &str) {
+        self.pinned.insert(chat_id.to_string());
     }
 
+    /// Unpin `chat_id` without touching its cache entry (`end_chat`: the
+    /// registry cell goes, but the cache stays, now evictable).
+    pub fn unpin(&mut self, chat_id: &str) {
+        self.pinned.remove(chat_id);
+    }
+
+    /// `delete` plus `unpin` — the registry-cell-removal paths (offload,
+    /// archive, discard) that tear a chat down as one unit.
+    pub fn release(&mut self, chat_id: &str) {
+        self.delete(chat_id);
+        self.unpin(chat_id);
+    }
+
+    /// Appends `message`. No per-chat cap: a registry-pinned chat keeps its
+    /// whole transcript, and `evict_if_needed` is the only bound, applied
+    /// across chats rather than within one.
+    pub fn append(&mut self, chat_id: &str, message: ChatMessage) {
+        self.track_key(chat_id);
+        self.cache
+            .entry(chat_id.to_string())
+            .or_default()
+            .push(message);
+        self.evict_if_needed();
+    }
+
+    /// Drop the oldest *unpinned* chat while over `MAX_CHATS`. A chat with a
+    /// live registry cell is pinned and skipped, so the registry's own bound
+    /// (idle offload, end, archive, discard) is the real cap once every chat
+    /// is pinned (D1).
     fn evict_if_needed(&mut self) {
         while self.cache.len() > MAX_CHATS {
-            if self.order.is_empty() {
+            let Some(idx) = self.order.iter().position(|k| !self.pinned.contains(k)) else {
                 break;
-            }
-            let oldest = self.order.remove(0);
+            };
+            let oldest = self.order.remove(idx);
             self.cache.remove(&oldest);
         }
     }
@@ -139,15 +161,6 @@ impl MessageCache {
     }
 }
 
-/// `messages.slice(-n)` — keep the last `n` elements.
-fn tail(mut messages: Vec<ChatMessage>, n: usize) -> Vec<ChatMessage> {
-    if messages.len() > n {
-        let overflow = messages.len() - n;
-        messages.drain(0..overflow);
-    }
-    messages
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -205,17 +218,74 @@ mod tests {
     }
 
     #[test]
-    fn append_past_the_cap_reports_an_eviction() {
+    fn append_never_drops_from_the_front() {
         let mut cache = MessageCache::new();
-        for n in 0..MAX_MESSAGES_PER_CHAT {
-            assert!(
-                !cache.append("c1", msg(&n.to_string())),
-                "message {n} must not evict yet"
-            );
+        for n in 0..2_500 {
+            cache.append("c1", msg(&n.to_string()));
+        }
+        let expected: Vec<String> = (0..2_500).map(|n| n.to_string()).collect();
+        assert_eq!(ids(&cache, "c1"), expected);
+    }
+
+    #[test]
+    fn set_keeps_every_message() {
+        let mut cache = MessageCache::new();
+        let messages: Vec<ChatMessage> = (0..2_500).map(|n| msg(&n.to_string())).collect();
+        cache.set("c1", messages);
+        assert_eq!(cache.get("c1").unwrap().len(), 2_500);
+    }
+
+    #[test]
+    fn eviction_skips_pinned_chats() {
+        let mut cache = MessageCache::new();
+        cache.pin("a");
+        cache.set("a", vec![msg("a-1")]);
+        for n in 0..50 {
+            cache.set(&format!("chat-{n}"), vec![msg("m")]);
         }
         assert!(
-            cache.append("c1", msg("overflow")),
-            "the 2001st message must report the front-drop eviction"
+            cache.get("a").is_some(),
+            "the pinned chat survives eviction"
+        );
+        assert!(
+            cache.get("chat-0").is_none(),
+            "the oldest unpinned chat is evicted instead"
+        );
+    }
+
+    #[test]
+    fn all_pinned_never_evicts() {
+        let mut cache = MessageCache::new();
+        for n in 0..51 {
+            let id = format!("chat-{n}");
+            cache.pin(&id);
+            cache.set(&id, vec![msg("m")]);
+        }
+        for n in 0..51 {
+            assert!(
+                cache.get(&format!("chat-{n}")).is_some(),
+                "chat-{n} must survive: every entry is pinned"
+            );
+        }
+    }
+
+    #[test]
+    fn release_unpins() {
+        let mut cache = MessageCache::new();
+        cache.pin("a");
+        cache.set("a", vec![msg("a-1")]);
+        cache.release("a");
+        assert!(cache.get("a").is_none(), "release deletes the entry too");
+
+        // Re-adding the same id proves `release` actually cleared the pin:
+        // an un-pinned "a" is now the oldest key and is the first evicted.
+        cache.set("a", vec![msg("a-2")]);
+        for n in 0..50 {
+            cache.set(&format!("chat-{n}"), vec![msg("m")]);
+        }
+        assert!(
+            cache.get("a").is_none(),
+            "a re-added, un-pinned chat is evictable again"
         );
     }
 }
@@ -224,6 +294,8 @@ mod tests {
 // confidence: high
 // todos: 0
 // notes: `Map<string, ChatMessage[]>` → `HashMap` + an `order: Vec<String>` that
-// notes: mirrors JS `Map` insertion order so `evictIfNeeded` drops the oldest chat
-// notes: (`cache.keys().next()`). `slice(-N)`/`splice` → `tail`/`drain`. nanoid +
-// notes: now_iso8601 for createTransientMessage. move-to-end test ported verbatim.
+// notes: mirrors JS `Map` insertion order so `evict_if_needed` drops the oldest
+// notes: unpinned chat (`cache.keys().next()`, skipping pinned keys — todo #350
+// notes: R1, D1). No per-chat message cap: a chat with a live registry cell is
+// notes: pinned whole. nanoid + now_iso8601 for createTransientMessage.
+// notes: move-to-end test ported verbatim.

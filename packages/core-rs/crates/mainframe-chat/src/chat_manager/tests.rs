@@ -194,12 +194,27 @@ impl ChatManagerDeps for StoreDeps {
     fn get_tool_categories(&self, _chat_id: &str) -> Option<ToolCategories> {
         None
     }
+    /// A trivial 1:1 echo (one `DisplayMessage` per raw `ChatMessage`,
+    /// carrying the same id/timestamp, content dropped) — real conversion
+    /// lives outside this crate's dep set. This is enough for the retention
+    /// tests (`resume_snapshot.rs`) that assert on COUNT and id order without
+    /// caring about rendered content; no other test in this module inspects
+    /// `prepare_messages_for_client`'s output.
     fn prepare_messages_for_client(
         &self,
-        _raw: &[ChatMessage],
+        raw: &[ChatMessage],
         _categories: Option<&ToolCategories>,
     ) -> Vec<DisplayMessage> {
-        Vec::new()
+        raw.iter()
+            .map(|m| DisplayMessage {
+                id: m.id.clone(),
+                chat_id: m.chat_id.clone(),
+                r#type: mainframe_types::display::DisplayMessageType::User,
+                content: Vec::new(),
+                timestamp: m.timestamp.clone(),
+                metadata: None,
+            })
+            .collect()
     }
     fn strip_command_tags(&self, text: &str) -> String {
         text.to_string()

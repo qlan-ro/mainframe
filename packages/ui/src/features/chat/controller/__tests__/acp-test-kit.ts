@@ -13,6 +13,7 @@ import type {
   Chat,
   ClientEvent,
   DaemonEvent,
+  MainframeCapabilities,
   QueuedMessageRef,
   JsonRpcRequestId,
   PromptRequest,
@@ -29,6 +30,7 @@ import type {
   PermissionRequestListener,
   CompactionListener,
   QueueStateListener,
+  ReplayCompleteListener,
   ResyncListener,
   SessionUpdateListener,
   TranscriptClearedListener,
@@ -57,10 +59,33 @@ export interface FakeAcpClient extends AcpClientHandle {
   emitTranscriptCleared(sessionId: string): void;
   emitQueueState(sessionId: string, refs: QueuedMessageRef[]): void;
   emitResync(sessionId: string): void;
+  /** `_mainframe.dev/replay_complete` (D4) — closes the oldest open replay window. `aborted` defaults to `false` (a normal close), matching the wire's "absent means not aborted". */
+  emitReplayComplete(sessionId: string, aborted?: boolean): void;
+  /** A live-socket heartbeat/sequence gap — the connection is unchanged. */
   emitGap(): void;
+  /**
+   * A dead-socket reconnect: bumps `connectionGeneration` (mirroring
+   * `AcpFacadeClient.connect()`'s own bump on every new connection) and
+   * THEN fires the gap listeners, exactly like the real
+   * `scheduleReconnect()`'s `.then(() => this.notifyGap())`. Distinct from
+   * `emitGap()` so a test can exercise the reconnect-vs-live-gap
+   * distinction `AcpSessionAttachment.resumeFromGap()` makes (finding 1).
+   */
+  emitReconnect(): void;
+  /**
+   * Bumps `connectionGeneration` WITHOUT firing the gap listeners — mirrors
+   * a DIFFERENT caller's direct `ensureConnected()` landing a new connection
+   * while THIS attachment's own `onGap` is still waiting on the dead
+   * connection's scheduled-reconnect `notifyGap()`, which can lag behind by
+   * its own backoff (finding 1's remaining path: a window opened in that
+   * gap must be caught by `openWindow` itself, not only by the
+   * `resumeFromGap` drain).
+   */
+  bumpConnectionGenerationSilently(): void;
 }
 
-export function makeFakeAcpClient(): FakeAcpClient {
+/** Defaults to no capabilities (a pre-D3/D4 daemon) — every existing suite that doesn't opt in stays on the legacy path unchanged. */
+export function makeFakeAcpClient(options: { capabilities?: MainframeCapabilities | null } = {}): FakeAcpClient {
   const updateListeners = new Set<SessionUpdateListener>();
   const permissionListeners = new Set<PermissionRequestListener>();
   const gateResolvedListeners = new Set<GateResolvedListener>();
@@ -68,7 +93,9 @@ export function makeFakeAcpClient(): FakeAcpClient {
   const transcriptClearedListeners = new Set<TranscriptClearedListener>();
   const queueStateListeners = new Set<QueueStateListener>();
   const resyncListeners = new Set<ResyncListener>();
+  const replayCompleteListeners = new Set<ReplayCompleteListener>();
   const gapListeners = new Set<GapListener>();
+  let connectionGeneration = 0;
 
   const client: FakeAcpClient = {
     promptCalls: [],
@@ -77,6 +104,10 @@ export function makeFakeAcpClient(): FakeAcpClient {
     respondCalls: [],
     detachCalls: [],
     nextResumeMeta: undefined,
+    mainframeCapabilities: options.capabilities ?? null,
+    get connectionGeneration() {
+      return connectionGeneration;
+    },
 
     ensureConnected: vi.fn().mockResolvedValue(undefined),
 
@@ -107,6 +138,10 @@ export function makeFakeAcpClient(): FakeAcpClient {
     onResync(listener) {
       resyncListeners.add(listener);
       return () => resyncListeners.delete(listener);
+    },
+    onReplayComplete(listener) {
+      replayCompleteListeners.add(listener);
+      return () => replayCompleteListeners.delete(listener);
     },
     onGap(listener) {
       gapListeners.add(listener);
@@ -152,8 +187,18 @@ export function makeFakeAcpClient(): FakeAcpClient {
     emitResync(sessionId) {
       for (const l of resyncListeners) l(sessionId);
     },
+    emitReplayComplete(sessionId, aborted = false) {
+      for (const l of replayCompleteListeners) l(sessionId, aborted);
+    },
     emitGap() {
       for (const l of gapListeners) l();
+    },
+    emitReconnect() {
+      connectionGeneration += 1;
+      for (const l of gapListeners) l();
+    },
+    bumpConnectionGenerationSilently() {
+      connectionGeneration += 1;
     },
   };
 
@@ -271,10 +316,10 @@ export interface ControllerRig {
  */
 export function makeController(
   chatId: string = CHAT_ID,
-  options: { connected?: boolean; active?: boolean } = {},
+  options: { connected?: boolean; active?: boolean; capabilities?: MainframeCapabilities | null } = {},
 ): ControllerRig {
   const ws = makeFakeWs(options);
-  const acpClient = makeFakeAcpClient();
+  const acpClient = makeFakeAcpClient({ capabilities: options.capabilities });
   const ctrl = new AcpChatController(chatId, PORT, ws.fakeClient, () => acpClient);
   if (options.active !== false) ctrl.setActive(true);
   return { ctrl, ws, acpClient };

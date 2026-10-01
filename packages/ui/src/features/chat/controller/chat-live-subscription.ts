@@ -16,6 +16,8 @@ export interface ChatLiveSubscriptionHost {
   getPort(): number;
   getWs(): DaemonWsClient;
   dispatch(event: ChatStateEvent): void;
+  /** Is the ACP facade plane currently attached to this chat? (D7, finding 9/10) */
+  isFacadeAttached(): boolean;
 }
 
 export class ChatLiveSubscription {
@@ -36,6 +38,7 @@ export class ChatLiveSubscription {
           routeDaemonEvent(event, {
             getChatId: () => this.host.getChatId(),
             dispatch: (e) => this.host.dispatch(e),
+            isFacadeAttached: () => this.host.isFacadeAttached(),
           }),
         isDisposed: () => this.host.isDisposed(),
       });

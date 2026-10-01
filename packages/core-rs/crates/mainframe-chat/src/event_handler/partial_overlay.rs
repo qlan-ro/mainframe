@@ -20,6 +20,12 @@ use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent};
 pub struct PartialOverlay {
     pub message_id: String,
     pub content: Vec<MessageContent>,
+    /// When this overlay's message id was first seen for this `(chat,
+    /// session)` slot — frozen across every later partial for the same
+    /// message, so the synthetic `ChatMessage`'s timestamp (and, through it,
+    /// the group it opens) does not drift between partials (spec Decision
+    /// 39: "the overlay's timestamp is fixed at its first partial").
+    pub started_at: String,
 }
 
 fn overlay_message(chat_id: &str, overlay: &PartialOverlay) -> ChatMessage {
@@ -28,7 +34,7 @@ fn overlay_message(chat_id: &str, overlay: &PartialOverlay) -> ChatMessage {
         chat_id: chat_id.to_string(),
         r#type: ChatMessageType::Assistant,
         content: overlay.content.clone(),
-        timestamp: now_iso8601(),
+        timestamp: overlay.started_at.clone(),
         metadata: None,
     }
 }
@@ -41,11 +47,31 @@ impl PartialOverlays {
         Self::default()
     }
 
-    pub fn insert(&self, chat_id: &str, session_id: &str, overlay: PartialOverlay) {
-        self.0
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .insert((chat_id.to_string(), session_id.to_string()), overlay);
+    /// Insert or extend `(chat_id, session_id)`'s overlay with `message_id`'s
+    /// latest `content`. Keeps the existing `started_at` when the slot
+    /// already holds the SAME message id — a later partial for a message
+    /// already streaming, not a fresh one.
+    pub fn insert(
+        &self,
+        chat_id: &str,
+        session_id: &str,
+        message_id: &str,
+        content: Vec<MessageContent>,
+    ) {
+        let mut overlays = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        let key = (chat_id.to_string(), session_id.to_string());
+        let started_at = match overlays.get(&key) {
+            Some(existing) if existing.message_id == message_id => existing.started_at.clone(),
+            _ => now_iso8601(),
+        };
+        overlays.insert(
+            key,
+            PartialOverlay {
+                message_id: message_id.to_string(),
+                content,
+                started_at,
+            },
+        );
     }
 
     /// Remove `(chat_id, session_id)`'s overlay; reports whether one was

@@ -764,9 +764,10 @@ route uses. `?token=` works exactly as it does on `/`.
 `-32001` error (`data.supported: [2]`) and the connection stays open. The
 response's `_meta["_mainframe.dev"]` carries `MainframeCapabilities`
 (`richPermissionAnswers`, `queuedPrompts`, `retryMarkers`,
-`heartbeatIntervalMs`) — a generic ACP client that ignores this namespace
-gets a degraded but coherent experience (plain option-only gates, no
-queued-turn metadata).
+`heartbeatIntervalMs`, `itemCreationMarkers`, `replayComplete`) — a generic
+ACP client that ignores this namespace gets a degraded but coherent
+experience (plain option-only gates, no queued-turn metadata, no staged
+replay).
 
 **Methods and notifications (shipped grammar):**
 
@@ -781,10 +782,11 @@ queued-turn metadata).
 | `session/update` | daemon → client (notification) | Item chunks/upserts/patches — `AgentMessage(Chunk)`, `UserMessage(Chunk)`, `AgentThought(Chunk)`, `ToolCallUpdate`, `ToolCallContentChunk`, `StateUpdate`, `UsageUpdate`. Diffed per session (`SessionState`) so no frame after an item's first repeats its full accumulated content. |
 | `_mainframe.dev/heartbeat` | daemon → client (notification) | Periodic `{sequence}` at `heartbeatIntervalMs`; a sequence gap larger than one is the client's signal to call `session/resume` instead of heuristically refetching (the sync contract this protocol formalizes). |
 | `_mainframe.dev/gate_resolved` | daemon → client (notification) | `{sessionId, requestId}` pushed to every connection still holding a delivered gate when it resolves elsewhere (another facade client, or the CLI cancelling it); `requestId` is the gate's `session/request_permission` JSON-RPC id (`gate-{id}`). The answering connection gets its resolution through its own response exchange, not this frame. |
-| `_mainframe.dev/queue_state` | daemon → client (notification) | `{sessionId, refs: QueuedMessageRef[]}` — the session's FULL queued-prompt snapshot, pushed on every queue change (enqueue, dequeue, cancel, clear) and as the last frame of every `session/resume` replay (even when empty, so a reconnect evicts stale queued turns). A snapshot, never a delta. Queued cancel/edit stay REST (`/queued/{messageId}`). |
+| `_mainframe.dev/queue_state` | daemon → client (notification) | `{sessionId, refs: QueuedMessageRef[]}` — the session's FULL queued-prompt snapshot, pushed on every queue change (enqueue, dequeue, cancel, clear) and as part of every `session/resume` replay, ahead of that replay's `replay_complete` (even when empty, so a reconnect evicts stale queued turns). A snapshot, never a delta. Queued cancel/edit stay REST (`/queued/{messageId}`). |
 | `_mainframe.dev/compaction` | daemon → client (notification) | `{sessionId, phase: "started" \| "done"}` — live compaction progress; the durable transcript marker is `ItemMeta.isCompacted`. |
 | `_mainframe.dev/transcript_cleared` | daemon → client (notification) | `{sessionId}` — the server wiped the session's transcript (plan-mode clear-context); the client re-resumes to converge. |
-| `_mainframe.dev/resync` | daemon → client (notification) | `{sessionId}` — the chat's `MessageCache` evicted messages past its cap (2000); an attached client's local accumulator has silently diverged, so it re-resumes rather than trusting the next delta (spec Decision 34). Rides the same throttle FIFO content updates ride, so it cannot overtake a still-buffered update it depends on. |
+| `_mainframe.dev/resync` | daemon → client (notification) | `{sessionId}` — the daemon's view of the chat diverged from what an attached client may hold: `do_load_chat` rebuilt the chat's cache from the transcript and the result changed (a #178 idle-offload reload), or a resume delivery failed after its reply. Cache retention alone never raises it — there is no per-chat cap (spec Decision 36). The client treats it as a staged full replay with no reducer wipe (spec Decision 38), rather than trusting the next delta. |
+| `_mainframe.dev/replay_complete` | daemon → client (notification) | `{sessionId, aborted?: true}` — closes exactly one `session/resume` replay (spec Decision 38), sent after `queue_state` and before any buffered live catch-up, in every arm that sent a successful reply (seeded, session-gone, and a delivery failure after the reply). `aborted` is present only on the failure arm; a normal close omits the key. Replies and markers for a session pair up in FIFO order, so a client can build a full replay off-screen and publish it on a marker with no `aborted`, discarding it otherwise. Advertised as `replayComplete`. |
 
 **Reply ordering.** `session/prompt` is the one method dispatched off the
 socket-loop task (a cold-chat adapter spawn can take seconds, and inlining
@@ -795,6 +797,27 @@ socket loop writes inline before continuing. A client must not infer run
 state from reply ordering — `sendPrompt` reads only the reply's
 `_meta["_mainframe.dev"].position` (queued vs. immediate), and run state
 comes from the `state_update` stream itself.
+
+**Resume replay order.** A `session/resume` reply is followed, in order, by:
+the replayed item updates (each an upsert carrying the `created` marker,
+below), ending with one `state_update` reporting the current state; the
+redelivered gate, if one is open; `queue_state`; and `_mainframe.dev/replay_complete`
+(`aborted` present only when the delivery failed partway). Everything the
+daemon buffered live during the replay is drained behind the marker, in
+arrival order. Every successful reply is followed by exactly one
+`replay_complete` for that session, and replies/markers for one session pair
+up in FIFO order — a client with `replayComplete` builds the replay off a
+staging accumulator and publishes it atomically on that marker, instead of
+rendering it frame by frame on the visible transcript.
+
+**Item creation marker.** `session/update`'s message and tool-call upserts
+merge `{"created": true}` into `_meta["_mainframe.dev"]` on an item's
+complete first frame — every live creation and every resume-replay frame,
+and nothing else (not a chunk, a meta-only patch, a full-revision upsert, or
+a clear). A client advertised `itemCreationMarkers` creates an item only
+from such a frame; any other frame for an unknown id is a signal that the
+client's accumulator has missed a creation and must resync, never a license
+to fabricate an item from a patch.
 
 **Message content grammar.** A message/thought item's content is an ordered
 `ContentBlock` list; the vendored variants are `text` and `image` (base64
@@ -836,7 +859,11 @@ map: attachment previews, command invocation, `cost_usd`,
 `skillLoaded`, and `isCompacted` markers, `groupId` (the daemon's
 `tool_group` membership: members share the first visible member's id), and
 `subagent: true` on a task-group tool call, whose `title` is the task
-description rather than a tool name. A message item sits at the position of
+description rather than a tool name. `streaming: true` marks only the item
+the partial-message overlay currently backs (spec Decision 39); it rides the
+same diff as the committing text, or the item is cleared on abort, and a
+client drives per-part streaming status from it rather than from position.
+A message item sits at the position of
 its first content contribution; when a tool call, a subagent task, or a
 thought interrupts a run of text, the text resumes as a new item after it
 (`{containerId}-1`, `-2`, … — the unsuffixed id is always the first

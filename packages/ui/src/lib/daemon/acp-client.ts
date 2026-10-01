@@ -1,18 +1,6 @@
 /**
- * ACP v2 chat-facade client (todo #350): `/acp/{profile}` JSON-RPC-over-WS,
- * handshake, session prompt/cancel/resume, permission gates, reconnect with
- * backoff, and the heartbeat/gap-resume sync contract. This IS the desktop
- * chat transcript path (`docs/API-REFERENCE.md` § ACP Chat Facade); the
- * legacy `lib/daemon/ws-client.ts` dialect remains only for the side-band
- * event families the facade does not model (chat.updated config, queued
- * refs, background tasks, worktree offers, workflow runs, compaction
- * markers) until the daemon retires it. Session-state accumulation lives in
- * `features/chat/view-model/acp-item-accumulator.ts`; this module only
- * speaks the wire protocol. One client per adapter profile, shared by every
- * chat of that adapter (`acp-clients.ts`), multiplexing N sessions. Inbound
- * notification/request parsing and listener fan-out live in
- * `acp-notification-router.ts` — this file owns connection lifecycle and
- * reconnect only, delegating its `on*` listener methods to that router.
+ * ACP v2 chat-facade client (todo #350): `/acp/{profile}` JSON-RPC-over-WS, handshake, session prompt/cancel/resume, permission gates, reconnect with backoff, and the heartbeat/gap-resume sync contract. This IS the desktop chat transcript path (`docs/API-REFERENCE.md` § ACP Chat Facade); the legacy `lib/daemon/ws-client.ts` dialect remains only for the side-band event families the facade does not model (chat.updated config, queued refs, background tasks, worktree offers, workflow runs, compaction markers) until the daemon retires it.
+ * Session-state accumulation lives in `features/chat/view-model/acp-item-accumulator.ts`; this module only speaks the wire protocol. One client per adapter profile, shared by every chat of that adapter (`acp-clients.ts`), multiplexing N sessions. Inbound notification/request parsing and listener fan-out live in `acp-notification-router.ts` — this file owns connection lifecycle and reconnect only, delegating its `on*` listener methods to that router.
  */
 import type {
   CancelSessionNotification,
@@ -42,6 +30,7 @@ import {
   type GateResolvedListener,
   type PermissionRequestListener,
   type QueueStateListener,
+  type ReplayCompleteListener,
   type ResyncListener,
   type SessionUpdateListener,
   type TranscriptClearedListener,
@@ -92,6 +81,8 @@ export class AcpFacadeClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectDelayMs = RECONNECT_BASE_DELAY_MS;
   private manuallyClosed = false;
+  /** Bumped on every NEW underlying connection (first one included) — lets a consumer tell a live-socket `onGap` from a dead-socket reconnect, which `connected` can't (it's already `true` again by the time the gap fires). */
+  private generation = 0;
   private readonly router = new AcpNotificationRouter(
     (sequence) => this.watchdog?.observe(sequence),
     (id, code, message) => this.connection?.respondError(id, code, message),
@@ -105,6 +96,11 @@ export class AcpFacadeClient {
 
   get mainframeCapabilities(): MainframeCapabilities | null {
     return this.capabilities;
+  }
+
+  /** See the field doc — bumped on every new underlying connection, first one included. */
+  get connectionGeneration(): number {
+    return this.generation;
   }
 
   get connected(): boolean {
@@ -153,6 +149,7 @@ export class AcpFacadeClient {
         throw new Error(`[acp-client] daemon negotiated an unsupported protocol version ${response.protocolVersion}`);
       }
       this.connection = connection;
+      this.generation += 1;
       this.capabilities = parseCapabilities(response);
       this.reconnectDelayMs = RECONNECT_BASE_DELAY_MS;
       this.armWatchdog(this.capabilities?.heartbeatIntervalMs ?? FALLBACK_HEARTBEAT_INTERVAL_MS);
@@ -238,6 +235,11 @@ export class AcpFacadeClient {
   /** The chat's server-side message cache evicted from the front (`_mainframe.dev/resync`) — re-replay without wiping the transcript first. */
   onResync(listener: ResyncListener): () => void {
     return this.router.onResync(listener);
+  }
+
+  /** Closes exactly one `session/resume` replay (`_mainframe.dev/replay_complete`, spec Decision 38). */
+  onReplayComplete(listener: ReplayCompleteListener): () => void {
+    return this.router.onReplayComplete(listener);
   }
 
   /** Fires when the caller should call `resume()` to converge: a heartbeat gap, silence, or the socket closing. */

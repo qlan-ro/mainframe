@@ -24,7 +24,7 @@ function makeRun(overrides: Partial<ClaudeWorkflowRun> = {}): ClaudeWorkflowRun 
 describe('handleDaemonEvent — claude_workflow.run.updated', () => {
   it('maps to a workflow.run.updated ChatStateEvent carrying the run verbatim', () => {
     const run = makeRun({ status: 'completed', totalTokens: 900 });
-    const result = handleDaemonEvent({ type: 'claude_workflow.run.updated', chatId: CHAT_ID, run }, CHAT_ID);
+    const result = handleDaemonEvent({ type: 'claude_workflow.run.updated', chatId: CHAT_ID, run }, CHAT_ID, false);
     expect(result).toEqual({ kind: 'event', event: { type: 'workflow.run.updated', run } });
   });
 
@@ -32,6 +32,7 @@ describe('handleDaemonEvent — claude_workflow.run.updated', () => {
     const result = handleDaemonEvent(
       { type: 'claude_workflow.run.updated', chatId: OTHER_CHAT, run: makeRun() },
       CHAT_ID,
+      false,
     );
     expect(result).toEqual({ kind: 'noop' });
   });

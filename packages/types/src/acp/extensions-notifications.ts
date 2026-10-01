@@ -73,10 +73,13 @@ export const SessionDetachParamsSchema = z
 export type SessionDetachParams = z.infer<typeof SessionDetachParamsSchema>;
 
 /**
- * `_mainframe.dev/resync`'s params: the chat's message cache hit its per-chat
- * cap and dropped messages from the front — the client's accumulator has
- * silently diverged and must re-resume. Distinct from `transcript_cleared`:
- * the handler calls `reattach()` with no reducer wipe.
+ * `_mainframe.dev/resync`'s params: the chat's cache was rebuilt from the
+ * transcript under ids an attached session may not hold (spec Decision 34,
+ * rewritten). Raised when `do_load_chat` repopulates the cache and the
+ * result differs from what was there, or when a resume delivery fails after
+ * its reply (at most once per failure streak). Cache retention alone never
+ * raises it. Distinct from `transcript_cleared`: the handler calls
+ * `reattach()` with no reducer wipe.
  */
 export const ResyncParamsSchema = z
   .object({
@@ -84,6 +87,21 @@ export const ResyncParamsSchema = z
   })
   .loose();
 export type ResyncParams = z.infer<typeof ResyncParamsSchema>;
+
+/**
+ * `_mainframe.dev/replay_complete`'s params: closes exactly one
+ * `session/resume` replay (spec Decision 38). Sent after `queue_state` and
+ * before the buffered catch-up, in every arm that sent a successful reply.
+ * `aborted` is present and `true` only when a resume delivery failed after
+ * its reply went out; a normal close carries no `aborted` key at all.
+ */
+export const ReplayCompleteParamsSchema = z
+  .object({
+    sessionId: z.string(),
+    aborted: z.boolean().optional(),
+  })
+  .loose();
+export type ReplayCompleteParams = z.infer<typeof ReplayCompleteParamsSchema>;
 
 /**
  * Params for the daemon's custom `_mainframe.dev/heartbeat` notification

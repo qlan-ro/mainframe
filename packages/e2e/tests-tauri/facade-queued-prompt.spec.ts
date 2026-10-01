@@ -28,8 +28,19 @@ import {
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sendMessage, waitForIdle } from '../helpers/tauri/wait.js';
 import { chatThread } from '../helpers/tauri/page-objects.js';
-import { sendJson, nextJsonMessage, collectUntilQuiet, closeSocket } from '../helpers/tauri/raw-ws-client.js';
-import { promptRequest, connectAndInitialize } from '../helpers/tauri/facade-protocol-support.js';
+import {
+  sendJson,
+  nextJsonMessage,
+  collectFrames,
+  collectUntilQuiet,
+  closeSocket,
+} from '../helpers/tauri/raw-ws-client.js';
+import {
+  promptRequest,
+  resumeRequest,
+  connectAndInitialize,
+  expectReplayClosedAfterQueueState,
+} from '../helpers/tauri/facade-protocol-support.js';
 
 /** Turn 1 parks 3s on its `onResult`; the clamp must not collapse that window. */
 const MOCK_MAX_DELAY_MS = 3_000;
@@ -93,8 +104,25 @@ test.describe('§facade-queued-prompt (wire)', () => {
     const ws = await connectAndInitialize();
     sendJson(ws, promptRequest(2, chatId, RUNNING_PROMPT));
     await nextJsonMessage(ws);
+    const collected = collectUntilQuiet(ws, 3_000, 40_000);
+    const watch = collectFrames(ws);
     sendJson(ws, promptRequest(3, chatId, QUEUED_PROMPT));
-    const frames = (await collectUntilQuiet(ws, 3_000, 40_000)) as Frame[];
+
+    // A client reconnecting while the prompt waits (turn 1 parks for 3s) gets
+    // the queued prompt in the replay's closing snapshot, and spec Decision 38's
+    // replay_complete directly behind it.
+    await watch.next(
+      (f) => f['method'] === '_mainframe.dev/queue_state' && refContents(f as Frame).includes(QUEUED_PROMPT),
+    );
+    const reconnecting = await connectAndInitialize();
+    const resumed = collectUntilQuiet(reconnecting, 1_000, 10_000);
+    sendJson(reconnecting, resumeRequest(2, chatId));
+    const resumeFrames = (await resumed) as Frame[];
+    await closeSocket(reconnecting);
+    const markerIndex = expectReplayClosedAfterQueueState(resumeFrames, chatId, 2);
+    expect(refContents(resumeFrames[markerIndex - 1])).toEqual([QUEUED_PROMPT]);
+
+    const frames = (await collected) as Frame[];
     await closeSocket(ws);
 
     // While turn 1 runs, the second prompt lives in the queue snapshot — with its

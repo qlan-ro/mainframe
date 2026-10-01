@@ -1,0 +1,9 @@
+{"dir":"in","method":"sendMessage","args":["Read index.ts, then tell me what it exports"],"delayMs":0}
+{"dir":"out","method":"onInit","args":["e2e-text-tool-text-sess-1"],"delayMs":20}
+{"dir":"out","method":"onQueuedProcessed","args":["e2e-text-tool-text-uuid-1"],"delayMs":60}
+{"dir":"out","method":"onMessagePartial","args":["msg_S",[{"type":"text","text":"SEGMENT-ONE: reading index.ts first."}]],"delayMs":300}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"SEGMENT-ONE: reading index.ts first."},{"type":"tool_use","id":"toolu_e2e_stream_read","name":"Read","input":{"file_path":"{{PROJECT_PATH}}/index.ts"},"caller":{"type":"direct"}}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":8,"output_tokens":14}}],"delayMs":800}
+{"dir":"out","method":"onToolResult","args":[[{"type":"tool_result","toolUseId":"toolu_e2e_stream_read","content":"1\texport const greeting = \"hello\";\n2\t","isError":false}]],"delayMs":1200}
+{"dir":"out","method":"onMessagePartial","args":["msg_S",[{"type":"text","text":"SEGMENT-TWO: the file exports"}]],"delayMs":1600}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"SEGMENT-TWO: the file exports one greeting constant."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":8,"output_tokens":12}}],"delayMs":2200}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.004,"usage":{"input_tokens":16,"output_tokens":26},"subtype":"success","is_error":false}],"delayMs":2500}

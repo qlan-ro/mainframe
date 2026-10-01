@@ -25,6 +25,7 @@ import {
   HeartbeatParamsSchema,
   MAINFRAME_META_NAMESPACE,
   QueueStateParamsSchema,
+  ReplayCompleteParamsSchema,
   RequestPermissionRequestSchema,
   ResyncParamsSchema,
   TranscriptClearedParamsSchema,
@@ -39,6 +40,8 @@ export type TranscriptClearedListener = (sessionId: string) => void;
 export type QueueStateListener = (sessionId: string, refs: QueuedMessageRef[]) => void;
 /** `_mainframe.dev/resync` (T20/T34): the chat's message cache evicted from the front — re-replay without wiping the reducer's transcript first. */
 export type ResyncListener = (sessionId: string) => void;
+/** `_mainframe.dev/replay_complete` (spec Decision 38): closes exactly one `session/resume` replay. `aborted` is normalized to `false` when the wire key is absent (a normal close). */
+export type ReplayCompleteListener = (sessionId: string, aborted: boolean) => void;
 /** `_mainframe.dev/heartbeat` — registered by the constructor, not by a public `on*`. */
 export type HeartbeatListener = (sequence: number) => void;
 
@@ -52,6 +55,7 @@ interface ListenerSignatures {
   '_mainframe.dev/compaction': CompactionListener;
   '_mainframe.dev/gate_resolved': GateResolvedListener;
   '_mainframe.dev/resync': ResyncListener;
+  '_mainframe.dev/replay_complete': ReplayCompleteListener;
 }
 type ListenerMethod = keyof ListenerSignatures;
 /** `session/request_permission` is a request, not a notification — it has an error reply and stays off the table. */
@@ -91,6 +95,10 @@ const NOTIFICATIONS: readonly NotificationEntry[] = [
   defineNotification('_mainframe.dev/compaction', CompactionParamsSchema, (p) => [p.sessionId, p.phase]),
   defineNotification('_mainframe.dev/gate_resolved', GateResolvedParamsSchema, (p) => [p.sessionId, p.requestId]),
   defineNotification('_mainframe.dev/resync', ResyncParamsSchema, (p) => [p.sessionId]),
+  defineNotification('_mainframe.dev/replay_complete', ReplayCompleteParamsSchema, (p) => [
+    p.sessionId,
+    p.aborted === true,
+  ]),
 ];
 
 const ROUTES: ReadonlyMap<string, NotificationEntry> = new Map(NOTIFICATIONS.map((entry) => [entry.method, entry]));
@@ -148,6 +156,10 @@ export class AcpNotificationRouter {
 
   onResync(listener: ResyncListener): () => void {
     return this.register('_mainframe.dev/resync', listener);
+  }
+
+  onReplayComplete(listener: ReplayCompleteListener): () => void {
+    return this.register('_mainframe.dev/replay_complete', listener);
   }
 
   handleNotification(notification: JsonRpcNotification): void {

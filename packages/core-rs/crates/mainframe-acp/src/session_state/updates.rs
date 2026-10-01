@@ -5,10 +5,13 @@
 //! this module only builds the update for a single, already-decided item.
 
 use mainframe_types::acp::content::ContentChunk;
+use mainframe_types::acp::extensions::ITEM_CREATED_META_KEY;
 use mainframe_types::acp::tool_call::ToolCallUpdate;
 use mainframe_types::acp::update::{MessageUpsert, SessionUpdate};
+use serde_json::{Value, json};
 
 use crate::encoder::{EncodedItem, ItemRole};
+use crate::stream::merge_namespace;
 
 /// The clearing upsert for a vanished item: content replaced with the empty
 /// list and meta explicitly cleared (patch semantics: `Some(Some(_))`
@@ -61,6 +64,17 @@ pub(super) fn create_patch<T>(value: Option<T>) -> Option<Option<T>> {
     value.map(Some)
 }
 
+/// Stamps `_meta["_mainframe.dev"].created: true` (spec Decision 37): every
+/// live creation and every resume replay frame goes through `create_update`,
+/// so the marker exactly means "this frame is the item's complete first
+/// state" — nothing else in this module sets it.
+fn created_meta(meta: &Option<Value>) -> Option<Option<Value>> {
+    Some(Some(merge_namespace(
+        meta.clone(),
+        json!({ ITEM_CREATED_META_KEY: true }),
+    )))
+}
+
 pub(super) fn create_update(item: &EncodedItem) -> SessionUpdate {
     match item {
         EncodedItem::Message {
@@ -71,13 +85,13 @@ pub(super) fn create_update(item: &EncodedItem) -> SessionUpdate {
         } => upsert_variant(*role, false)(MessageUpsert {
             message_id: id.clone(),
             content: create_patch(Some(content.clone())),
-            meta: create_patch(meta.clone()),
+            meta: created_meta(meta),
         }),
         EncodedItem::Thought { id, content, meta } => {
             upsert_variant(ItemRole::Agent, true)(MessageUpsert {
                 message_id: id.clone(),
                 content: create_patch(Some(content.clone())),
-                meta: create_patch(meta.clone()),
+                meta: created_meta(meta),
             })
         }
         EncodedItem::ToolCall {
@@ -97,7 +111,7 @@ pub(super) fn create_update(item: &EncodedItem) -> SessionUpdate {
             locations: None,
             raw_input: create_patch(Some(raw_input.clone())),
             raw_output: None,
-            meta: create_patch(meta.clone()),
+            meta: created_meta(meta),
         }),
     }
 }

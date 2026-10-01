@@ -238,6 +238,43 @@ describe('reconcile — a replay of the same history feeds the matcher nothing (
     acpClient.emitUpdate(CHAT_ID, userEcho('live-2', 'continue'));
     expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(0);
   });
+
+  it('the same resync case in staged mode (D4): the pending stays outstanding until the replay publishes and the live echo arrives', async () => {
+    const { ctrl, acpClient } = makeController(CHAT_ID, {
+      capabilities: { itemCreationMarkers: true, replayComplete: true },
+    });
+    const creationMeta = { '_mainframe.dev': { created: true } };
+    const createdUserEcho = (messageId: string, text: string) => ({
+      ...userEcho(messageId, text),
+      _meta: creationMeta,
+    });
+
+    const loading = ctrl.load();
+    await flushMicrotasks();
+    acpClient.emitUpdate(CHAT_ID, createdUserEcho('hist-1', 'hello'));
+    acpClient.emitUpdate(CHAT_ID, createdUserEcho('hist-2', 'continue'));
+    acpClient.emitReplayComplete(CHAT_ID);
+    await loading;
+
+    await ctrl.sendMessage(makeMsg('continue'));
+    const [pendingId] = Object.keys(ctrl.getState().pendingUserMessages);
+    expect(pendingId).toBeDefined();
+
+    // The resync stages the same history off-screen — the pending must not
+    // be fed by the staged frames, only by what eventually publishes.
+    acpClient.emitResync(CHAT_ID);
+    await flushMicrotasks();
+    acpClient.emitUpdate(CHAT_ID, createdUserEcho('hist-1', 'hello'));
+    acpClient.emitUpdate(CHAT_ID, createdUserEcho('hist-2', 'continue'));
+    expect(ctrl.getState().pendingUserMessages[pendingId!]?.status).toBe('pending');
+
+    acpClient.emitReplayComplete(CHAT_ID);
+    expect(ctrl.getState().pendingUserMessages[pendingId!]?.status).toBe('pending');
+
+    // The pending's own echo finally arrives, under an id never seen before.
+    acpClient.emitUpdate(CHAT_ID, createdUserEcho('live-2', 'continue'));
+    expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(0);
+  });
 });
 
 describe('reconcile — a failed send keeps its failure indicator (T25, R3.3)', () => {

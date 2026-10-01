@@ -6,6 +6,7 @@
 
 use mainframe_types::acp::content::ContentBlock;
 use mainframe_types::acp::update::SessionUpdate;
+use serde_json::Value;
 
 /// One frame in the throttle's FIFO: a diff-engine update, coalescible, or an
 /// opaque out-of-band notification (a gate raise, a queue snapshot, …) that
@@ -104,6 +105,11 @@ fn last_update_mut(merged: &mut [ThrottledFrame]) -> Option<&mut SessionUpdate> 
 
 /// If `last` and `update` are same-id chunks of the same message kind,
 /// concatenate `update`'s delta onto `last` in place and report the merge.
+/// The merged chunk takes `update`'s `_meta` whenever it is `Some` (finding
+/// 7): the earlier chunk's meta would otherwise win by default (it merges
+/// INTO that chunk), and if that earlier meta carried `streaming: true` while
+/// the committing update's meta dropped it, the flag would never clear on
+/// the client.
 fn try_merge_chunk(last: Option<&mut SessionUpdate>, update: &SessionUpdate) -> bool {
     let Some(last) = last else {
         return false;
@@ -114,16 +120,20 @@ fn try_merge_chunk(last: Option<&mut SessionUpdate>, update: &SessionUpdate) -> 
     if !same_chunk_kind(last, update) {
         return false;
     }
-    let Some((update_id, update_delta)) = chunk_parts(update) else {
+    let Some((update_id, update_delta, update_meta)) = chunk_parts(update) else {
         return false;
     };
-    let Some((last_id, last_text)) = chunk_parts_mut(last) else {
+    let update_meta = update_meta.clone();
+    let Some((last_id, last_text, last_meta)) = chunk_parts_mut(last) else {
         return false;
     };
     if last_id != update_id {
         return false;
     }
     last_text.push_str(update_delta);
+    if update_meta.is_some() {
+        *last_meta = update_meta;
+    }
     true
 }
 
@@ -147,7 +157,11 @@ fn same_chunk_kind(a: &SessionUpdate, b: &SessionUpdate) -> bool {
 /// concatenation has no meaning for it (and an image sitting between two
 /// text chunks correctly blocks their merge, since merging is
 /// adjacent-only).
-fn chunk_parts(update: &SessionUpdate) -> Option<(&str, &str)> {
+/// The chunk's id, text delta, and its OWN `_meta` (`ContentChunk.meta` —
+/// where `content_revision` rides the item's changed `ItemMeta`, per
+/// `session_state.rs`'s chunk-extension arm; `ContentBlock::Text`'s inner
+/// `meta` is a different, content-level field, e.g. a truncation marker).
+fn chunk_parts(update: &SessionUpdate) -> Option<(&str, &str, &Option<Value>)> {
     let chunk = match update {
         SessionUpdate::AgentMessageChunk(c)
         | SessionUpdate::UserMessageChunk(c)
@@ -155,22 +169,23 @@ fn chunk_parts(update: &SessionUpdate) -> Option<(&str, &str)> {
         _ => return None,
     };
     match &chunk.content {
-        ContentBlock::Text { text, .. } => Some((&chunk.message_id, text.as_str())),
+        ContentBlock::Text { text, .. } => Some((&chunk.message_id, text.as_str(), &chunk.meta)),
         _ => None,
     }
 }
 
-fn chunk_parts_mut(update: &mut SessionUpdate) -> Option<(&str, &mut String)> {
+fn chunk_parts_mut(update: &mut SessionUpdate) -> Option<(&str, &mut String, &mut Option<Value>)> {
     let chunk = match update {
         SessionUpdate::AgentMessageChunk(c)
         | SessionUpdate::UserMessageChunk(c)
         | SessionUpdate::AgentThoughtChunk(c) => c,
         _ => return None,
     };
-    match &mut chunk.content {
-        ContentBlock::Text { text, .. } => Some((&chunk.message_id, text)),
-        _ => None,
-    }
+    let text = match &mut chunk.content {
+        ContentBlock::Text { text, .. } => text,
+        _ => return None,
+    };
+    Some((chunk.message_id.as_str(), text, &mut chunk.meta))
 }
 
 #[cfg(test)]

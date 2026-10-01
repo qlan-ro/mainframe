@@ -4,58 +4,33 @@
  * client subscription, full/gap replay, and the empty-refresh guard; the
  * plane keeps the accumulator, gates, and dispatch. See `acp-session-plane.ts`'s
  * module doc for the four-mechanism-collapse this replaces.
+ *
+ * **Staged replay (D4, plan task U2).** Once the daemon advertises
+ * `replayComplete`, every successful `session/resume` opens a window
+ * (`acp-replay-coordinator.ts`'s `ReplayWindowCoordinator`) that stays open until
+ * this session's next `_mainframe.dev/replay_complete` — `resume()` itself
+ * now stays pending that whole time, not just for the round trip. A full
+ * window tells the host to stage off-screen (`host.beginReplay`) and publish
+ * in one swap at the marker (`host.completeReplay`); a cursor window applies
+ * straight to the visible transcript, as before. Without the capability,
+ * `resume()` keeps the legacy reset-at-reply path unchanged — the
+ * coordinator settles synchronously and no window is ever pushed.
  */
-import type { JsonRpcRequestId, RequestPermissionRequest, SessionUpdate } from '@qlan-ro/mainframe-types';
 import { MAINFRAME_META_NAMESPACE } from '@qlan-ro/mainframe-types';
 import { z } from 'zod';
-import type {
-  CompactionListener,
-  GateResolvedListener,
-  PermissionRequestListener,
-  QueueStateListener,
-  ResyncListener,
-  SessionUpdateListener,
-  TranscriptClearedListener,
-} from '../../../lib/daemon/acp-notification-router';
-import type { GapListener, ReplayCursor } from '../../../lib/daemon/acp-client';
-import type { PromptRequest, PromptResponse, ResumeSessionResponse } from '@qlan-ro/mainframe-types';
-import type { ChatStateEvent } from './chat-thread-state';
-import { FullReplayRetry } from './acp-full-replay';
+import type { ReplayCursor } from '../../../lib/daemon/acp-client';
+import { FullReplayRetry, type FullReplayTrigger } from './acp-full-replay';
+import { ReplayCancelledError } from './acp-replay-window';
+import { ReplayWindowCoordinator } from './acp-replay-coordinator';
+import { wireAcpSessionListeners } from './acp-session-listeners';
+import type { ApplyOutcome } from '../view-model/acp-item-accumulator';
+import type { AcpSessionAttachmentHost, AcpSessionClientPort } from './acp-session-attachment-types';
+
+export type { AcpSessionAttachmentHost, AcpSessionClientPort } from './acp-session-attachment-types';
 
 const ResumeMetaSchema = z
   .object({ itemCount: z.number().int().optional(), fullReplay: z.boolean().optional() })
   .loose();
-
-/** The `AcpFacadeClient` surface this plane needs — narrowed so a test double doesn't reimplement the whole client. */
-export interface AcpSessionClientPort {
-  onSessionUpdate(listener: SessionUpdateListener): () => void;
-  onPermissionRequest(listener: PermissionRequestListener): () => void;
-  onGateResolved(listener: GateResolvedListener): () => void;
-  onCompaction(listener: CompactionListener): () => void;
-  onTranscriptCleared(listener: TranscriptClearedListener): () => void;
-  onQueueState(listener: QueueStateListener): () => void;
-  onResync(listener: ResyncListener): () => void;
-  onGap(listener: GapListener): () => void;
-  prompt(sessionId: string, text: string, extra?: Pick<PromptRequest, '_meta'>): Promise<PromptResponse>;
-  cancel(sessionId: string): void;
-  resume(sessionId: string, cwd: string, replayFrom?: ReplayCursor): Promise<ResumeSessionResponse>;
-  respondPermission(id: JsonRpcRequestId, response: import('@qlan-ro/mainframe-types').RequestPermissionResponse): void;
-  /** Drop this session's live stream on the daemon (D2 dormancy) — `_mainframe.dev/session_detach`. */
-  detach(sessionId: string): void;
-}
-
-export interface AcpSessionAttachmentHost {
-  getChatId(): string;
-  dispatch(event: ChatStateEvent): void;
-  isDisposed(): boolean;
-  getLastSettledItemId(): string | null;
-  resetSettledCursor(): void;
-  resetAccumulator(): void;
-  hasAccumulatedItems(): boolean;
-  onSessionUpdate(update: SessionUpdate): void;
-  onPermissionRequest(rpcId: JsonRpcRequestId, request: RequestPermissionRequest): void;
-  onGateResolvedForSession(requestId: string): void;
-}
 
 /**
  * Connect/replay half of `AcpSessionPlane`: attach, reattach, gap resume,
@@ -63,7 +38,8 @@ export interface AcpSessionAttachmentHost {
  *
  * Two independent bits of state (D2, todo #350 T33), plus `fullReplay`,
  * which serializes and bounds the re-replays resync/transcript_cleared ask
- * for (T40):
+ * for (T40), and `replay` (the window coordinator, D4), which decides what
+ * each resume reply means:
  *  - `client` — bound as soon as a session is loaded, active or not. Prompt/
  *    cancel/reply need only this, so they work from a dormant chat too
  *    (`requireClient()` never checks subscription).
@@ -78,17 +54,31 @@ export class AcpSessionAttachment {
   private readonly unsubscribe: Array<() => void> = [];
   private subscribed = false;
   /**
-   * Survives a detach — distinguishes a genuinely first-ever attach (full
-   * replay) from a switch-back (cursor resume). Set by `resume()`, not by
-   * `attach()`: a first attach whose resume rejects is not attached, but the
-   * reattach a resync then drives is, and everything gated on this flag (gap
-   * resume, reactivation, the empty-refresh guard) must come back with it.
+   * Bumped on every (re)subscribe, `detach()`, `dispose()`, and a genuine
+   * client rebind — `resume()` captures it before its round trip and treats
+   * a mismatch on return as "this attachment moved on; drop the reply."
    */
-  private hasAttached = false;
+  private generation = 0;
+  /** The client's `connectionGeneration` last observed when (re)wiring listeners — tells a live-socket gap (unchanged) apart from a reconnect (bumped); only the latter invalidates a queued window outright (finding 1). */
+  private observedConnectionGeneration = 0;
+  /** Counts overlapping `resume()` calls — two CAN be genuinely in flight (a gap resume racing an attach), and a boolean's `finally` would have the first to settle wrongly clear pending status for the one still running (finding 5). */
+  private resumePendingCount = 0;
+  /** D4: the window FIFO and the legacy/staged reply continuation. */
+  private readonly replay = new ReplayWindowCoordinator({
+    getChatId: () => this.host.getChatId(),
+    dispatch: (event) => this.host.dispatch(event),
+    hasAccumulatedItems: () => this.host.hasAccumulatedItems(),
+    resetAccumulator: () => this.host.resetAccumulator(),
+    beginReplay: (opts) => this.host.beginReplay(opts),
+    completeReplay: (opts) => this.host.completeReplay(opts),
+    discardReplay: (opts) => this.host.discardReplay(opts),
+    isResumePending: () => this.resumePendingCount > 0,
+  });
   /** One full replay at a time, for both the resync and the wipe trigger (T40). */
   private readonly fullReplay = new FullReplayRetry(
-    () => this.reattach(),
+    (opts) => this.reattach(opts),
     () => this.host.getChatId(),
+    { hasOpenWindow: () => this.replay.hasOpenWindow(), abortOpenWindow: () => this.replay.abortOpenWindow() },
   );
 
   constructor(private readonly host: AcpSessionAttachmentHost) {}
@@ -104,8 +94,12 @@ export class AcpSessionAttachment {
   /** Bind (or rebind, e.g. on a daemon switch) the shared client — no wiring, no wire traffic. Safe while dormant. */
   bindClient(client: AcpSessionClientPort): void {
     if (this.client === client) return;
-    if (this.subscribed) this.detachListeners();
+    if (this.subscribed) {
+      this.detachListeners();
+      this.cancelAllReplays();
+    }
     this.client = client;
+    this.generation += 1;
     if (this.subscribed) this.wireListeners(client);
   }
 
@@ -126,7 +120,7 @@ export class AcpSessionAttachment {
   async reactivate(client: AcpSessionClientPort): Promise<void> {
     this.bindClient(client);
     if (this.subscribed) return;
-    if (!this.hasAttached) {
+    if (!this.replay.hasAttached) {
       await this.attach(client);
       return;
     }
@@ -139,33 +133,48 @@ export class AcpSessionAttachment {
   /** Drop this session's live stream (D2 dormancy) — tells the daemon, stops listening, keeps `client` bound for prompt/cancel/reply. */
   detach(): void {
     if (!this.subscribed) return;
-    this.fullReplay.cancel();
+    this.cancelAllReplays();
     this.client?.detach(this.host.getChatId());
     this.detachListeners();
     this.subscribed = false;
+    this.generation += 1;
   }
 
   /**
    * Full re-replay of the current transcript (e.g. after a server-side
-   * wipe). Pre-resets before the round-trip AND bypasses the empty-refresh
-   * guard on the way back: the pre-reset alone would be defeated by a live
-   * update landing between the reset and the resume response, which would
-   * repopulate the accumulator and re-arm the guard just in time to refuse
-   * the wipe it's finishing. `bypassGuard` makes a server-initiated wipe
-   * deterministic regardless of that race (R2.2 / R1.3). No-op while
-   * detached — the server notification that would trigger this can't
-   * arrive without a live subscription anyway.
+   * wipe, or a resync's cache-eviction signal). `wipe` (default `true`, the
+   * historical behavior every existing caller relies on) bypasses the
+   * empty-refresh guard — a server-initiated wipe must win regardless of
+   * what the guard's inputs say; a resync (`wipe: false`) is subject to it.
+   * Without staged replay there is no off-screen staging to make skipping
+   * the pre-reset safe, so `wipe` also decides whether this call pre-resets
+   * before the round trip. `trigger` carries through to `resume()`'s
+   * backoff-reset decision (findings 3, 6, `acp-full-replay.ts`).
    */
-  async reattach(): Promise<void> {
+  async reattach(opts: { wipe?: boolean; trigger?: FullReplayTrigger } = {}): Promise<void> {
     if (!this.subscribed) return;
-    this.host.resetSettledCursor();
-    this.host.resetAccumulator();
-    await this.resume({ type: 'start' }, { bypassGuard: true });
+    const wipe = opts.wipe ?? true;
+    if (!this.stagedReplaySupported()) {
+      this.host.resetSettledCursor();
+      this.host.resetAccumulator();
+    }
+    await this.resume({ type: 'start' }, { bypassGuard: wipe, suppressBackoffReset: opts.trigger === 'needs-replay' });
   }
 
-  /** No-op while detached — same reasoning as `reattach()`. */
+  /**
+   * No-op while detached — same reasoning as `reattach()`. A gap fires for two reasons the client can't tell apart on its own: a live-socket heartbeat/sequence gap, or a dead-and-reconnected socket. Only the latter invalidates a queued window outright — its `resume()` went out on a connection that no longer exists, so its marker can never arrive, and leaving it queued would let the NEXT marker (meant for whatever this gap resume opens) close it instead, discarding the new window's staging through the shared slot (finding 1). A live gap keeps today's behavior: the open window(s) are aborted but stay queued, absorbing frames until their own marker arrives — a gap resuming the live cursor must not swallow `FullReplayRetry`'s own, unrelated armed retry.
+   */
   async resumeFromGap(): Promise<void> {
-    if (!this.subscribed || this.host.isDisposed() || !this.hasAttached) return;
+    if (!this.subscribed || this.host.isDisposed() || !this.replay.hasAttached) return;
+    const observedBefore = this.observedConnectionGeneration;
+    this.syncConnectionGeneration();
+    // `syncConnectionGeneration()` only drains when the generation actually
+    // moved; an unchanged generation means THIS is a live-socket gap on the
+    // connection already reconciled against, which still gets today's
+    // absorb-until-marker treatment rather than a drain.
+    if (this.requireClient().connectionGeneration === observedBefore) {
+      this.replay.abortOpenWindowsOnGap();
+    }
     const settled = this.host.getLastSettledItemId();
     const cursor: ReplayCursor = settled ? { type: 'item', itemId: settled } : { type: 'start' };
     try {
@@ -175,66 +184,68 @@ export class AcpSessionAttachment {
     }
   }
 
+  /**
+   * The single choke point for reconciling a reconnect THIS attachment has not yet been told about via its own `onGap` (re-review LOW): a loader's `ensureConnected()` elsewhere lands a new connection, and its `notifyGap` can lag by up to the client's own backoff. Called before routing any frame (`acp-session-listeners.ts`'s `onSessionUpdate`) and before `AcpSessionPlane.sendPrompt()` — both can otherwise land fresh, post-reconnect traffic on a stale window's staging (`AcpTranscriptStore.target()`), invisible until the late gap eventually drains it. A no-op once the generation is already reconciled, so calling it from multiple sites costs nothing extra.
+   */
+  syncConnectionGeneration(): void {
+    if (!this.client) return;
+    const current = this.client.connectionGeneration;
+    if (current === this.observedConnectionGeneration) return;
+    this.replay.cancelStaleConnection(current);
+    this.observedConnectionGeneration = current;
+  }
+
   /** Prompt/cancel/reply only need a bound client, not a live subscription — a dormant chat can still be prompted (the daemon attaches this connection on send). */
   requireClient(): AcpSessionClientPort {
     if (!this.client) throw new Error('[acp-session] not attached — no facade client yet');
     return this.client;
   }
 
+  /** D3 routing: an unknown-id frame with no creation marker. Tagged `'needs-replay'` so a steadily-unknown id backs off exponentially instead of firing a full replay per patch (finding 6, `acp-full-replay.ts`). */
+  routeNeedsReplay(): void {
+    this.replay.routeNeedsReplay(() => this.fullReplay.requestResync('needs-replay'));
+  }
+
+  /** Tracks a frame's creation against the currently-open window, for the `itemCount` cross-check at publish (advisory only). */
+  recordApplyOutcome(outcome: ApplyOutcome): void {
+    this.replay.recordApplyOutcome(outcome);
+  }
+
   dispose(): void {
-    this.fullReplay.cancel();
+    this.cancelAllReplays();
     this.detachListeners();
     this.subscribed = false;
     this.client = null;
+    this.generation += 1;
+  }
+
+  private stagedReplaySupported(): boolean {
+    return this.client?.mainframeCapabilities?.replayComplete === true;
   }
 
   private subscribeIfNeeded(): void {
     if (this.subscribed) return;
     this.wireListeners(this.requireClient());
     this.subscribed = true;
+    this.generation += 1;
   }
 
+  /** A detach, dispose, client rebind, or a gap: nothing can close any still-open window again on this binding. */
+  private cancelAllReplays(): void {
+    this.fullReplay.cancel();
+    this.replay.cancelAll();
+  }
+
+  /** Baseline for the live-gap-vs-reconnect check in `resumeFromGap()` is refreshed here too — every (re)wire starts observing the client's CURRENT connection generation. */
   private wireListeners(client: AcpSessionClientPort): void {
-    const chatId = () => this.host.getChatId();
+    this.observedConnectionGeneration = client.connectionGeneration;
     this.unsubscribe.push(
-      client.onSessionUpdate((sessionId, update) => {
-        if (sessionId === chatId()) this.host.onSessionUpdate(update);
-      }),
-      client.onPermissionRequest((id, request) => {
-        if (request.sessionId === chatId()) this.host.onPermissionRequest(id, request);
-      }),
-      client.onGateResolved((sessionId, requestId) => {
-        if (sessionId === chatId()) this.host.onGateResolvedForSession(requestId);
-      }),
-      client.onCompaction((sessionId, phase) => {
-        if (sessionId !== chatId()) return;
-        this.host.dispatch({ type: phase === 'started' ? 'compact.started' : 'compact.done' });
-      }),
-      client.onTranscriptCleared((sessionId) => {
-        if (sessionId !== chatId()) return;
-        // The server wiped the transcript (plan-mode clear-context): drop the
-        // local projection and re-replay so tool-call items drop too. The
-        // cursor and accumulator go NOW, not in the deferred reattach — a
-        // detach before that runs would swallow it, and a live update in the
-        // meantime would re-render items the server has already dropped.
-        // Only the round-trip is deferred.
-        this.host.dispatch({ type: 'transcript.cleared' });
-        this.host.resetSettledCursor();
-        this.host.resetAccumulator();
-        this.fullReplay.requestWipe();
-      }),
-      client.onQueueState((sessionId, refs) => {
-        if (sessionId !== chatId()) return;
-        // Always a full snapshot (never a delta) — the reducer replaces the
-        // queued set wholesale, so stale turns cannot survive a reconnect.
-        this.host.dispatch({ type: 'queued.snapshot', refs });
-      }),
-      client.onResync((sessionId) => {
-        if (sessionId !== chatId()) return;
-        // Cache eviction, NOT a wipe (spec: distinct from
-        // transcript_cleared) — re-replay without blanking the reducer's
-        // transcript first, or the thread flashes empty mid-conversation.
-        this.fullReplay.requestResync();
+      ...wireAcpSessionListeners(client, {
+        getChatId: () => this.host.getChatId(),
+        host: this.host,
+        fullReplay: this.fullReplay,
+        replay: this.replay,
+        syncConnectionGeneration: () => this.syncConnectionGeneration(),
       }),
       client.onGap(() => void this.resumeFromGap()),
     );
@@ -245,29 +256,38 @@ export class AcpSessionAttachment {
     this.unsubscribe.length = 0;
   }
 
-  private async resume(cursor: ReplayCursor, opts: { bypassGuard?: boolean } = {}): Promise<void> {
+  private async resume(
+    cursor: ReplayCursor,
+    opts: { bypassGuard?: boolean; suppressBackoffReset?: boolean } = {},
+  ): Promise<void> {
     const client = this.requireClient();
-    const response = await client.resume(this.host.getChatId(), '', cursor);
-    // Any successful round-trip — gap, reactivation, attach — ends a failure streak.
-    this.fullReplay.reset();
-    const meta = ResumeMetaSchema.safeParse(response._meta?.[MAINFRAME_META_NAMESPACE]);
-    const itemCount = meta.success ? (meta.data.itemCount ?? null) : null;
-    const isFullReplay = cursor.type === 'start' || (meta.success && meta.data.fullReplay === true);
-    if (!isFullReplay) return;
-    // Refuse an empty full replay of a transcript we already hold — the
-    // legacy `refusesEmptyRefresh` guard: "empty" from the daemon can mean
-    // "no history session for this chat yet", never trust it to blank a
-    // populated thread (the first attach is never refused, so a genuinely
-    // empty thread still renders as one). `reattach()` bypasses this: see
-    // its doc comment for why a server-initiated wipe must win regardless.
-    if (!opts.bypassGuard && itemCount === 0 && this.hasAttached && this.host.hasAccumulatedItems()) {
-      console.warn(`[acp-session] refused an empty full replay for ${this.host.getChatId()}`);
-      this.host.dispatch({ type: 'history.refresh.refused' });
-      return;
+    const requestGeneration = this.generation;
+    const requestConnectionGeneration = client.connectionGeneration;
+    this.resumePendingCount += 1;
+    try {
+      const response = await client.resume(this.host.getChatId(), '', cursor);
+      if (requestGeneration !== this.generation) {
+        throw new ReplayCancelledError(
+          `[acp-session] ${this.host.getChatId()} moved on before the resume reply arrived`,
+        );
+      }
+      const meta = ResumeMetaSchema.safeParse(response._meta?.[MAINFRAME_META_NAMESPACE]);
+      const itemCount = meta.success ? (meta.data.itemCount ?? null) : null;
+      const isFullReplay = cursor.type === 'start' || (meta.success && meta.data.fullReplay === true);
+      await this.replay.continueResume(
+        this.stagedReplaySupported(),
+        isFullReplay,
+        itemCount,
+        { generation: requestGeneration, connectionGeneration: requestConnectionGeneration },
+        opts,
+      );
+      // Only a window that PROVABLY completed resets the backoff — not a
+      // mere reply (a daemon-aborted delivery must not look like success,
+      // finding 3), and not a needs-replay-triggered run (closing fine
+      // isn't proof the id it was chasing is now known, finding 6).
+      if (!opts.suppressBackoffReset) this.fullReplay.reset();
+    } finally {
+      this.resumePendingCount -= 1;
     }
-    // After the guard, never before: the first full replay must stay
-    // un-refusable, and the guard reads this flag.
-    this.hasAttached = true;
-    this.host.resetAccumulator();
   }
 }

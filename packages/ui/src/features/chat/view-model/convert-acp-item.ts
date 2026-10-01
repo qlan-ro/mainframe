@@ -21,19 +21,14 @@
  */
 import type { ThreadMessageLike } from '@assistant-ui/react';
 import { ExportedMessageRepository } from '@assistant-ui/react';
-import {
-  MAINFRAME_META_NAMESPACE,
-  StructuredDiffSchema,
-  TruncationMarkerSchema,
-  type ItemMeta,
-} from '@qlan-ro/mainframe-types';
+import { MAINFRAME_META_NAMESPACE, type ItemMeta } from '@qlan-ro/mainframe-types';
 import type { ContentBlock } from '@qlan-ro/mainframe-types';
 import type { AccumulatedItem } from './acp-item-accumulator';
 import { type ContentPart, ensureNonEmpty, toJsonArgs } from './content';
 import { convertUserContainer } from './convert-acp-user';
 import type { MainframeMessageMeta } from './message-meta';
 import { parseItemMeta } from './parse-item-meta';
-import { resultImageBlocks, withResultImages } from './tool-result-images';
+import { toolCallResult } from './tool-call-result';
 import { toolGroupSummary, type ToolGroupSummaryItem } from './tool-group-summary';
 
 interface ParsedItem {
@@ -41,60 +36,33 @@ interface ParsedItem {
   readonly meta: ItemMeta;
 }
 
+/** A text/reasoning part's `MessagePartStreamStatus` — undefined means "no opinion" (today's last-part fallback for Codex and pre-partials Claude). */
+type PartStreamStatus = { type: 'running' } | { type: 'complete' };
+
 /**
- * Rebuild the legacy `mapToolResult` shape from the item's content entries:
- * `content` blocks join into the result text; a text block's namespaced meta
- * restores the `truncated`/`fullBytes` pair (spec Decision 20) and the
- * AskUserQuestion answers; a `diff` entry's fidelity payload (spec Decision
- * 15) contributes the structured hunks and before/after file text the
- * Edit/Write cards consume; an `image` entry's data survives on `images` in
- * source order, on whichever shape below is returned (todo #363).
+ * D6: `streaming === true` (the item the partial overlay currently backs)
+ * always wins and marks the part `running` — including for a replay-origin
+ * item, which happens when a mid-turn full replay's overlay text joins a
+ * segment that replay just rebuilt (`Accum::claim` extends the tail
+ * segment). Otherwise a replay-origin item's parts are `complete`, so the
+ * "running, no tokens yet" fallback (`toMessagePartStatus`) never stamps a
+ * replayed tail as running and retypes it. An item created live, not
+ * streaming, carries no status at all.
  */
-function toolCallResult(item: Extract<AccumulatedItem, { kind: 'tool-call' }>): unknown {
-  if (item.content.length === 0) return undefined;
-  const textBlocks = item.content.flatMap((entry) =>
-    entry.type === 'content' && entry.content.type === 'text' ? [entry.content] : [],
-  );
-  const text = textBlocks.map((block) => block.text).join('');
-  const blockMetas = textBlocks.map((block) => block._meta?.[MAINFRAME_META_NAMESPACE]);
-  const truncation = blockMetas.flatMap((meta) => {
-    const parsed = TruncationMarkerSchema.safeParse(meta);
-    return parsed.success && parsed.data.truncated ? [parsed.data] : [];
-  })[0];
-  const askUserQuestion = blockMetas.flatMap((meta) => {
-    const answers = (meta as { askUserQuestion?: unknown } | undefined)?.askUserQuestion;
-    return Array.isArray(answers) ? [answers] : [];
-  })[0];
-  const diff = item.content.find((entry) => entry.type === 'diff');
-  const fidelity = diff ? StructuredDiffSchema.safeParse(diff._meta?.[MAINFRAME_META_NAMESPACE]) : undefined;
-  const images = resultImageBlocks(item.content);
-  if (fidelity?.success) {
-    return withResultImages(
-      {
-        content: text,
-        structuredPatch: fidelity.data.structuredPatch,
-        originalFile: fidelity.data.originalFile,
-        modifiedFile: fidelity.data.modifiedFile,
-        ...(truncation ? { truncated: true, fullBytes: truncation.fullBytes } : {}),
-      },
-      images,
-    );
-  }
-  if (truncation)
-    return withResultImages({ content: text, truncated: true as const, fullBytes: truncation.fullBytes }, images);
-  if (askUserQuestion) return withResultImages({ content: text, askUserQuestion }, images);
-  if (images.length > 0) return withResultImages({ content: text }, images);
-  return text;
+function partStatus(parsed: ParsedItem): PartStreamStatus | undefined {
+  if (parsed.meta.streaming === true) return { type: 'running' };
+  if (parsed.item.origin === 'replay') return { type: 'complete' };
+  return undefined;
 }
 
 /**
  * Ordered blocks → aui parts: text renders as a text part, image as a native
  * image part carrying the same data URL the legacy converter built.
  */
-function messageParts(content: readonly ContentBlock[]): ContentPart[] {
+function messageParts(content: readonly ContentBlock[], status: PartStreamStatus | undefined): ContentPart[] {
   return content.map((block) =>
     block.type === 'text'
-      ? { type: 'text', text: block.text }
+      ? { type: 'text', text: block.text, ...(status && { status }) }
       : { type: 'image', image: `data:${block.mimeType};base64,${block.data}` },
   );
 }
@@ -107,7 +75,9 @@ type ChildrenMap = ReadonlyMap<string, readonly ParsedItem[]>;
 
 function toolPart(parsed: ParsedItem, children: ChildrenMap): ContentPart {
   const item = parsed.item as Extract<AccumulatedItem, { kind: 'tool-call' }>;
-  const toolName = parsed.meta.subagent ? 'Task' : (item.title ?? item.id);
+  // Never the id as a name (D3): a missing title means the daemon hasn't
+  // sent one yet, not that the id itself is presentable.
+  const toolName = parsed.meta.subagent ? 'Task' : (item.title ?? 'Unknown tool');
   return {
     type: 'tool-call',
     toolCallId: item.id,
@@ -149,19 +119,29 @@ function subagentMessages(task: Extract<AccumulatedItem, { kind: 'tool-call' }>,
 function assistantParts(
   items: readonly ParsedItem[],
   children: ChildrenMap,
-): { parts: ContentPart[]; mainframe: Pick<MainframeMessageMeta, 'partGroups' | 'groupSummaries'> | undefined } {
+): {
+  parts: ContentPart[];
+  mainframe: Pick<MainframeMessageMeta, 'partGroups' | 'groupSummaries'> | undefined;
+  /** True when any part in this container is the one the overlay is currently streaming (D6) — the container's own `ThreadMessageLike.status`. */
+  streaming: boolean;
+} {
   const parts: ContentPart[] = [];
   const groups: Record<string, string> = {};
   const members: Record<string, ToolGroupSummaryItem[]> = {};
+  let streaming = false;
 
   for (const parsed of items) {
     const { item } = parsed;
     if (item.kind === 'message') {
-      parts.push(...messageParts(item.content));
+      const status = partStatus(parsed);
+      if (status?.type === 'running') streaming = true;
+      parts.push(...messageParts(item.content, status));
       continue;
     }
     if (item.kind === 'thought') {
-      parts.push({ type: 'reasoning', text: textOf(item.content) });
+      const status = partStatus(parsed);
+      if (status?.type === 'running') streaming = true;
+      parts.push({ type: 'reasoning', text: textOf(item.content), ...(status && { status }) });
       continue;
     }
     parts.push(toolPart(parsed, children));
@@ -172,11 +152,11 @@ function assistantParts(
     }
   }
 
-  if (Object.keys(groups).length === 0) return { parts, mainframe: undefined };
+  if (Object.keys(groups).length === 0) return { parts, mainframe: undefined, streaming };
   const summaries = Object.fromEntries(
     Object.entries(members).map(([groupId, names]) => [groupId, toolGroupSummary(names)]),
   );
-  return { parts, mainframe: { partGroups: groups, groupSummaries: summaries } };
+  return { parts, mainframe: { partGroups: groups, groupSummaries: summaries }, streaming };
 }
 
 function assistantContainer(
@@ -184,7 +164,7 @@ function assistantContainer(
   children: ChildrenMap,
   base: { id: string; createdAt: Date },
 ): ThreadMessageLike {
-  const { parts, mainframe } = assistantParts(items, children);
+  const { parts, mainframe, streaming } = assistantParts(items, children);
   const messageMeta = items.find((p) => p.meta.messageMeta)?.meta.messageMeta;
   const costUsd = typeof messageMeta?.cost_usd === 'number' ? messageMeta.cost_usd : undefined;
   const turnMs = typeof messageMeta?.turnDurationMs === 'number' ? messageMeta.turnDurationMs : undefined;
@@ -203,6 +183,7 @@ function assistantContainer(
     role: 'assistant',
     content: ensureNonEmpty(parts),
     ...base,
+    ...(streaming && { status: { type: 'running' } }),
     ...(hasMeta && { metadata: { ...timing, custom: { mainframe: mf } } }),
   };
 }

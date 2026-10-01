@@ -41,6 +41,7 @@ import {
   updates,
   itemId,
   connectAndInitialize,
+  expectReplayClosedAfterQueueState,
   type SessionUpdateFrame,
 } from '../helpers/tauri/facade-protocol-support.js';
 
@@ -197,6 +198,11 @@ test.describe('§facade-protocol gates', () => {
     expect(redelivered, 'resume must redeliver the open gate').toBeDefined();
     expect(redelivered?.id).toEqual(liveGate?.id);
     expect(updates(replayFrames).length).toBeGreaterThan(0);
+
+    // Spec Decision 38: the redelivered gate is part of the replay, so it lands
+    // before the closing queue_state + replay_complete pair, not after it.
+    const markerIndex = expectReplayClosedAfterQueueState(replayFrames, chatId, 2);
+    expect(replayFrames.indexOf(redelivered!)).toBeLessThan(markerIndex);
   });
 });
 

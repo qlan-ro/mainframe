@@ -119,7 +119,7 @@ Every message, thought, and tool call has a stable id. The same id identifies th
 
 ### Chunks, upserts, and the clear frame
 
-An item's first frame is always an upsert carrying its full content and `_meta`. After that, text that extends the last block arrives as chunks when the adapter streams tokens (Claude Code 1.0.109 or newer); an adapter without token streaming sends one frame per completed block instead. A frame with no `content` key is a metadata-only patch, which is how turn cost and duration land on a message after it ends. A revision that rewrites earlier content (a provider retry, for example) arrives as a full upsert, and the retry is marked:
+An item's first frame is always an upsert carrying its full content and `_meta`, and — when the daemon advertises `itemCreationMarkers` — `_meta["_mainframe.dev"].created: true`. Nothing else carries that marker: not a chunk, not a metadata-only patch, not a full-revision upsert, not the clear frame. If you hold `itemCreationMarkers`, create an item only from a frame carrying it; any other frame naming an id you do not hold is a sign your accumulator missed a creation, and you should fall back to the bounded resync `session/resume` gives you (see "Stay in sync") rather than fabricate an item from the patch. After the create, text that extends the last block arrives as chunks when the adapter streams tokens (Claude Code 1.0.109 or newer); an adapter without token streaming sends one frame per completed block instead. A frame with no `content` key is a metadata-only patch, which is how turn cost and duration land on a message after it ends. A revision that rewrites earlier content (a provider retry, for example) arrives as a full upsert, and the retry is marked:
 
 ```json
 { "sessionUpdate": "agent_message", "messageId": "msg_agent_01",
@@ -141,11 +141,11 @@ Subagents are flat: a subagent's tool calls are ordinary tool-call items whose `
 
 ### Turn state
 
-`state_update` has three states in the schema. The daemon emits `running` when a turn starts and `idle` when it ends; `requires_action` is not emitted today. On `idle`, `stopReason` is `end_turn`, `cancelled`, or `_mainframe.dev/error` (the schema also lists `max_tokens`, `max_turn_requests`, and `refusal`, which no adapter produces yet). A `state_update` without `stopReason` is the one a `session/resume` replay ends with; it reports the current state, not a transition.
+`state_update` has three states in the schema. The daemon emits `running` when a turn starts and `idle` when it ends; `requires_action` is not emitted today. On `idle`, `stopReason` is `end_turn`, `cancelled`, or `_mainframe.dev/error` (the schema also lists `max_tokens`, `max_turn_requests`, and `refusal`, which no adapter produces yet). A `state_update` without `stopReason` is the one a `session/resume` replay ends with; it reports the current state, not a transition. `state_update` is the only source of run state — while you are attached to a session, do not infer it from anything else (a `session/prompt` reply's ordering, a side-band chat summary, and so on).
 
 ### Display metadata
 
-Every item carries `_meta["_mainframe.dev"]` with what the core grammar has no field for: `timestamp`, `containerId` (the chat message the item belongs to, so you can group items back into messages), `kind: "system" | "error"` with `errorText`, `isCompacted`, `skillLoaded`, `groupId` (tool calls the daemon groups together share the first member's id), `subagent: true` on a task launch, and `messageMeta` (the raw message metadata map: attachments, command, cost, turn duration). All of it is optional to consume.
+Every item carries `_meta["_mainframe.dev"]` with what the core grammar has no field for: `timestamp`, `containerId` (the chat message the item belongs to, so you can group items back into messages), `kind: "system" | "error"` with `errorText`, `isCompacted`, `skillLoaded`, `groupId` (tool calls the daemon groups together share the first member's id), `subagent: true` on a task launch, `messageMeta` (the raw message metadata map: attachments, command, cost, turn duration), and `streaming: true` on exactly the one item the partial-message overlay currently backs. `streaming` rides the same diff as the committing text and clears there, or the item is cleared outright on abort; drive your own per-part "is this still generating" indicator from it, never from an item's position in the transcript. All of it is optional to consume.
 
 ### Usage
 
@@ -234,14 +234,28 @@ The daemon sends a heartbeat every `heartbeatIntervalMs`:
 
 `itemCount` is the size of the daemon's full snapshot. If you hold items and get `itemCount: 0`, the daemon has no history for that chat yet; keep what you have rather than blanking. Resuming a chat id the daemon does not know is not an error; it replies with `itemCount: 0` and an `idle` state, and the mistake surfaces on the first prompt.
 
-The replay arrives in a fixed order after the reply: the item updates, then one `state_update` with the current state, then the open gate if there is one, then `queue_state`. The daemon buffers anything that happens live during the replay and delivers it afterwards, so you never see a live delta for an item before its replayed base. Stable ids make the replay idempotent on top of a partial accumulator.
+The replay arrives in a fixed order after the reply: the item updates (each carrying the `created` marker when `itemCreationMarkers` is advertised), then one `state_update` with the current state, then the open gate if there is one, then `queue_state`. The daemon buffers anything that happens live during the replay and delivers it afterwards, so you never see a live delta for an item before its replayed base. Stable ids make the replay idempotent on top of a partial accumulator.
+
+When the daemon advertises `replayComplete`, one more notification follows `queue_state`, before any of that buffered live catch-up:
+
+```json
+{ "jsonrpc": "2.0", "method": "_mainframe.dev/replay_complete", "params": { "sessionId": "chat_9f2a3b1c" } }
+```
+
+Every successful `session/resume` reply is followed by exactly one `replay_complete` for that session, and replies/markers for one session arrive in FIFO order, so you can pair each reply with its marker without tagging them yourself. That pairing is what lets you build the replay off-screen — apply the replayed item updates to a staging accumulator instead of your visible transcript — and publish it in one step on the marker, instead of letting the visible thread redraw frame by frame. If a resume delivery fails partway, the marker still arrives, but carries `aborted: true`:
+
+```json
+{ "jsonrpc": "2.0", "method": "_mainframe.dev/replay_complete", "params": { "sessionId": "chat_9f2a3b1c", "aborted": true } }
+```
+
+Discard the staged replay on `aborted: true` and keep what you had visible; a `_mainframe.dev/resync` for the same session typically follows, and you retry from there. A normal close never carries the `aborted` key at all — check for its presence, not for a `false` value that never ships.
 
 Three more notifications ask you to resync:
 
 | Notification | Params | What to do |
 |---|---|---|
 | `_mainframe.dev/transcript_cleared` | `{ sessionId }` | The daemon wiped the transcript (plan mode's clear-context). Drop your local items and resume from start. |
-| `_mainframe.dev/resync` | `{ sessionId }` | Your accumulator has diverged (the daemon's message cache evicted from the front, or a resume failed on the daemon's side). Resume from start without wiping first. |
+| `_mainframe.dev/resync` | `{ sessionId }` | The daemon's view of this chat diverged from what you hold (it rebuilt the chat's cache from the transcript with a different result, typically after an idle reload, or a resume delivery failed on the daemon's side). This is not cache retention — the daemon keeps a loaded chat's whole transcript, with no per-chat cap. Resume from start without wiping first; with `replayComplete` advertised, that resume is itself a staged replay, so your visible transcript stays put until it publishes. |
 | `_mainframe.dev/compaction` | `{ sessionId, phase: "started" \| "done" }` | Show a compaction indicator. The durable marker is `isCompacted` on the item. |
 
 Back off between consecutive resync-driven resumes (the desktop client starts at one second and caps at thirty). A resume that fails repeatably on the daemon triggers a resync only once per failure streak, so a naive client does not loop, but a polite one still waits.

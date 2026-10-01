@@ -16,26 +16,17 @@
  * (transcript, run state, permission entries) exactly like the side-band
  * router does, so the reducer stays the single state store.
  */
-import type {
-  ControlRequest,
-  ControlResponse,
-  PromptSendMeta,
-  RequestPermissionRequest,
-  SessionUpdate,
-} from '@qlan-ro/mainframe-types';
+import type { ControlResponse, PromptSendMeta, SessionUpdate } from '@qlan-ro/mainframe-types';
 import { MAINFRAME_META_NAMESPACE, UsageMetaSchema } from '@qlan-ro/mainframe-types';
-import { z } from 'zod';
-import type { JsonRpcRequestId } from '@qlan-ro/mainframe-types';
-import { AcpItemAccumulator } from '../view-model/acp-item-accumulator';
 import { convertAcpItems } from '../view-model/convert-acp-item';
-import { buildAcpRichAnswer } from '../gates/build-acp-permission-response';
+import type { AccumulatedItem } from '../view-model/acp-item-accumulator';
 import type { ChatStateEvent } from './chat-thread-state';
-import { resolveGateControlRequest } from './synthesize-control-request';
 import { AcpSessionAttachment, type AcpSessionClientPort } from './acp-session-attachment';
+import { AcpTranscriptStore } from './acp-transcript-store';
+import { AcpGateTracker } from './acp-session-gates';
+import { RunStopSettle } from './acp-run-stop-settle';
 
 export type { AcpSessionClientPort } from './acp-session-attachment';
-
-const GateMetaSchema = z.object({ controlRequest: z.record(z.string(), z.unknown()) }).loose();
 
 /** The reconcile matcher's input shape (`chat-reconcile.ts`). */
 type ReconcilableUserMessage = { content: Array<{ type: 'text'; text: string }> };
@@ -52,17 +43,26 @@ export interface AcpSessionPlaneHost {
 }
 
 export class AcpSessionPlane {
-  private readonly accumulator = new AcpItemAccumulator();
-  private readonly firstSeenAt = new Map<string, Date>();
-  /** ControlRequest.requestId → the JSON-RPC id its gate traveled under. */
-  private readonly gateRpcIds = new Map<string, JsonRpcRequestId>();
+  /** Owns the visible + staging accumulators (D4) — `strictCreation` is read fresh per accumulator since capabilities are only known once a client attaches. */
+  private readonly store = new AcpTranscriptStore(() => ({
+    strictCreation: this.attachment?.currentClient?.mainframeCapabilities?.itemCreationMarkers === true,
+  }));
+  /** Captured while a full replay stages off-screen — applied at `completeReplay()` once the staged items become visible, never dispatched live mid-staging. */
+  private pendingReplayState: Extract<SessionUpdate, { sessionUpdate: 'state_update' }> | null = null;
   /** Resume cursor: only advanced when the turn goes idle — a cursor into a still-streaming item would drop its tail (resume.rs replays up to and including the cursor at its CURRENT content). */
   private lastSettledItemId: string | null = null;
   /** Item ids already fed to the reconcile matcher — see `takeUnreconciledUserMessages()`. */
   private readonly reconciledUserItemIds = new Set<string>();
   private readonly attachment: AcpSessionAttachment;
+  private readonly gates: AcpGateTracker;
+  private readonly runStop: RunStopSettle;
 
   constructor(private readonly host: AcpSessionPlaneHost) {
+    this.runStop = new RunStopSettle({ dispatch: (event) => this.host.dispatch(event) });
+    this.gates = new AcpGateTracker({
+      dispatch: (event) => this.host.dispatch(event),
+      requireClient: () => this.attachment.requireClient(),
+    });
     this.attachment = new AcpSessionAttachment({
       getChatId: () => this.host.getChatId(),
       dispatch: (event) => this.host.dispatch(event),
@@ -72,16 +72,19 @@ export class AcpSessionPlane {
         this.lastSettledItemId = null;
       },
       resetAccumulator: () => {
-        this.accumulator.reset();
-        this.firstSeenAt.clear();
+        this.store.resetAll();
+        this.pendingReplayState = null;
         // `reconciledUserItemIds` deliberately survives: the replay that
         // refills the accumulator carries the same stable ids, and those
         // messages were reconciled once already (R3.3).
       },
-      hasAccumulatedItems: () => this.accumulator.itemsInOrder.length > 0,
+      hasAccumulatedItems: () => this.store.accumulator.itemsInOrder.length > 0,
       onSessionUpdate: (update) => this.handleUpdate(update),
-      onPermissionRequest: (rpcId, request) => this.handleGate(rpcId, request),
-      onGateResolvedForSession: (requestId) => this.handleGateResolved(requestId),
+      onPermissionRequest: (rpcId, request) => this.gates.handleGate(rpcId, request),
+      onGateResolvedForSession: (requestId) => this.gates.handleGateResolved(requestId),
+      beginReplay: (opts) => this.beginReplay(opts),
+      completeReplay: (opts) => this.completeReplay(opts),
+      discardReplay: (opts) => this.discardReplay(opts),
     });
   }
 
@@ -93,6 +96,11 @@ export class AcpSessionPlane {
   /** Bind (or rebind) the client without subscribing — prompt/cancel/reply work from here; no wire traffic (D2, T33). */
   bindClient(client: AcpSessionClientPort): void {
     this.attachment.bindClient(client);
+  }
+
+  /** True while this session's facade subscription is live (D7, finding 9/10) — the side-band `isRunning:false` backstop is gated on this. */
+  get isAttached(): boolean {
+    return this.attachment.isSubscribed;
   }
 
   /** Re-establish the live stream after a detach — cursor resume from the last settled item, not a full replay (D2, T33). */
@@ -112,6 +120,8 @@ export class AcpSessionPlane {
 
   async sendPrompt(text: string, sendMeta: PromptSendMeta): Promise<{ queued: boolean }> {
     const client = this.attachment.requireClient();
+    // The daemon attaches THIS connection on the prompt path with a fresh stream even if a reconnect elsewhere beat this attachment's own gap (re-review LOW) — reconcile first, or the live turn this send starts routes into a stale window's staging and stays invisible until the late gap catches up.
+    this.attachment.syncConnectionGeneration();
     const meta = Object.keys(sendMeta).length > 0 ? { _meta: { [MAINFRAME_META_NAMESPACE]: sendMeta } } : {};
     const response = await client.prompt(this.host.getChatId(), text, meta);
     const queuedState = response._meta?.[MAINFRAME_META_NAMESPACE] as { position?: number } | undefined;
@@ -122,20 +132,9 @@ export class AcpSessionPlane {
     this.attachment.requireClient().cancel(this.host.getChatId());
   }
 
-  /**
-   * Answer a gate with the rich `_mainframe.dev` payload (spec decision 12).
-   * `selectedOptionId` is the offered option the user actually clicked, so
-   * the plain half of the answer is truthful end-to-end; only a gate that
-   * answers without picking an option (Plan, AskUserQuestion) falls back to
-   * a behavior-derived id. The daemon prefers the carried `ControlResponse`
-   * either way, never inferring from the option.
-   */
+  /** Answer a gate — see `AcpGateTracker.replyToPermission` (spec decision 12). */
   replyToPermission(response: ControlResponse, selectedOptionId?: string): void {
-    const rpcId = this.gateRpcIds.get(response.requestId) ?? `gate-${response.requestId}`;
-    this.gateRpcIds.delete(response.requestId);
-    const optionId = selectedOptionId ?? (response.behavior === 'deny' ? 'reject-once' : 'allow-once');
-    this.attachment.requireClient().respondPermission(rpcId, buildAcpRichAnswer(optionId, response));
-    this.host.dispatch({ type: 'permission.resolved', requestId: response.requestId });
+    this.gates.replyToPermission(response, selectedOptionId);
   }
 
   /**
@@ -168,7 +167,7 @@ export class AcpSessionPlane {
   }
 
   private userItems(): Array<{ id: string; text: string }> {
-    return this.accumulator.itemsInOrder.flatMap((item) => {
+    return this.store.accumulator.itemsInOrder.flatMap((item) => {
       if (item.kind !== 'message' || item.role !== 'user') return [];
       const text = item.content.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('');
       return [{ id: item.id, text }];
@@ -176,11 +175,35 @@ export class AcpSessionPlane {
   }
 
   dispose(): void {
+    this.cancelPendingStop();
     this.attachment.dispose();
   }
 
+  /** Cancels the deferred `run.stopped` an idle `state_update` scheduled (D7, finding 10) — see `acp-run-stop-settle.ts`. Called before forwarding ANY `run.started`, from any source. */
+  cancelPendingStop(): void {
+    this.runStop.cancel();
+  }
+
+  /**
+   * Applies a frame to whichever accumulator is current (visible, or a full
+   * replay's staging target — D4). A `needs-replay` outcome (D3 strict mode)
+   * leaves state untouched and routes to a bounded resync instead. While
+   * staging, state/usage frames are captured for `completeReplay()` to
+   * replay once, against the published items — never dispatched live, so a
+   * mid-replay snapshot can't flap the run indicator or settle the cursor
+   * against the wrong (stale, still-visible) transcript.
+   */
   private handleUpdate(update: SessionUpdate): void {
-    this.accumulator.apply(update);
+    const outcome = this.store.target().apply(update);
+    this.attachment.recordApplyOutcome(outcome);
+    if (outcome.kind === 'needs-replay') {
+      this.attachment.routeNeedsReplay();
+      return;
+    }
+    if (this.store.isStaging) {
+      if (update.sessionUpdate === 'state_update') this.pendingReplayState = update;
+      return;
+    }
     if (update.sessionUpdate === 'state_update') {
       this.applyStateUpdate(update);
       return;
@@ -190,6 +213,41 @@ export class AcpSessionPlane {
       return;
     }
     this.refreshMessages();
+  }
+
+  /** `AcpSessionAttachmentHost.beginReplay` — a replay window opened (D4). */
+  private beginReplay(opts: { full: boolean }): void {
+    this.pendingReplayState = null;
+    if (opts.full) this.store.beginFullReplay();
+    else this.store.beginCursorReplay();
+  }
+
+  /**
+   * `AcpSessionAttachmentHost.completeReplay` — the oldest window closed
+   * normally. A full window publishes its staged items in one swap and
+   * dispatches `transcript.updated` exactly once, then reconciles run state
+   * and the settled cursor from whatever `state_update` it captured while
+   * staging — against the NOW-published items, never the pre-replay ones. A
+   * cursor window already dispatched live, frame by frame; this only clears
+   * `replaying`.
+   */
+  private completeReplay(opts: { full: boolean }): void {
+    if (!opts.full) {
+      this.store.endCursorReplay();
+      return;
+    }
+    const items = this.store.publishStaging();
+    this.refreshFrom(items);
+    const state = this.pendingReplayState;
+    this.pendingReplayState = null;
+    if (state) this.applyStateUpdate(state);
+  }
+
+  /** `AcpSessionAttachmentHost.discardReplay` — a daemon `aborted:true`, or a previously client-aborted window's marker finally arriving. The visible transcript is untouched. */
+  private discardReplay(opts: { full: boolean }): void {
+    this.pendingReplayState = null;
+    if (opts.full) this.store.discardStaging();
+    else this.store.endCursorReplay();
   }
 
   /**
@@ -210,52 +268,29 @@ export class AcpSessionPlane {
 
   private applyStateUpdate(update: Extract<SessionUpdate, { sessionUpdate: 'state_update' }>): void {
     if (update.state === 'running') {
+      this.runStop.cancel();
       this.host.dispatch({ type: 'run.started' });
       return;
     }
     if (update.state === 'idle') {
-      const items = this.accumulator.itemsInOrder;
+      // The settled cursor is computed immediately — against the staging
+      // accumulator while a full window is staging (`completeReplay()`
+      // calls this against the just-published items instead), never the
+      // stale visible one — but the `run.stopped` dispatch itself waits out
+      // the settle delay (D7, finding 10).
+      const items = this.store.accumulator.itemsInOrder;
       this.lastSettledItemId = items.length > 0 ? items[items.length - 1]!.id : this.lastSettledItemId;
-      this.host.dispatch({ type: 'run.stopped' });
+      this.runStop.scheduleStop();
     }
-  }
-
-  /**
-   * `session/request_permission` → `ChatPermissionEntry`: the carried `ControlRequest`
-   * (rich cards render it) plus the wire-level `options` (rendered verbatim, spec
-   * decision 12). A missing/unparseable `_meta` — version-skewed daemon, or a
-   * non-Mainframe ACP agent — synthesizes a stand-in `ControlRequest` rather than
-   * dropping the gate: `options` alone is the presentation floor (spec decision 27).
-   */
-  private handleGate(rpcId: JsonRpcRequestId, request: RequestPermissionRequest): void {
-    const parsed = GateMetaSchema.safeParse(request._meta?.[MAINFRAME_META_NAMESPACE]);
-    const carried = parsed.success ? (parsed.data.controlRequest as unknown as ControlRequest) : undefined;
-    const { control, synthesized } = resolveGateControlRequest(rpcId, request, carried);
-    if (synthesized) console.warn('[acp-session] gate has no usable controlRequest — rendering from options alone');
-    this.gateRpcIds.set(control.requestId, rpcId);
-    this.host.dispatch({
-      type: 'permission.requested',
-      requestId: control.requestId,
-      request: control,
-      options: request.options,
-      synthesizedRequest: synthesized,
-    });
-  }
-
-  /** The gate resolved elsewhere (`_mainframe.dev/gate_resolved`); rpc ids are `gate-{requestId}`. */
-  private handleGateResolved(rpcId: string): void {
-    const requestId = rpcId.startsWith('gate-') ? rpcId.slice('gate-'.length) : rpcId;
-    this.gateRpcIds.delete(requestId);
-    this.host.dispatch({ type: 'permission.resolved', requestId });
   }
 
   private refreshMessages(): void {
-    const items = this.accumulator.itemsInOrder;
+    this.refreshFrom(this.store.accumulator.itemsInOrder);
+  }
+
+  private refreshFrom(items: AccumulatedItem[]): void {
     const now = () => new Date();
-    for (const item of items) {
-      if (!this.firstSeenAt.has(item.id)) this.firstSeenAt.set(item.id, now());
-    }
-    const messages = convertAcpItems(items, (id) => this.firstSeenAt.get(id) ?? now());
+    const messages = convertAcpItems(items, (id) => this.store.firstSeenAtOf(id, now));
     this.host.dispatch({ type: 'transcript.updated', messages });
   }
 }
