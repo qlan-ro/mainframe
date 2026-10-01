@@ -9,6 +9,11 @@
         "type": "text",
         "text": "Looking into it further"
       }
-    ]
+    ],
+    "_meta": {
+      "_mainframe.dev": {
+        "created": true
+      }
+    }
   }
 }

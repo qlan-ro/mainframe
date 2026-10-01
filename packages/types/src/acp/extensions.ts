@@ -88,6 +88,19 @@ export const MainframeCapabilitiesSchema = z
     queuedPrompts: z.boolean().optional(),
     retryMarkers: z.boolean().optional(),
     heartbeatIntervalMs: z.number().int().nonnegative().optional(),
+    /**
+     * Whether `create_update` stamps `ITEM_CREATED_META_KEY` on an item's
+     * complete first frame (spec Decision 37) — a client gates its strict
+     * accumulator mode on this rather than assuming it.
+     */
+    itemCreationMarkers: z.boolean().optional(),
+    /**
+     * Whether every successful `session/resume` reply is followed by
+     * exactly one `_mainframe.dev/replay_complete` for that session (spec
+     * Decision 38) — a client stages a full replay off-screen only when
+     * this is advertised.
+     */
+    replayComplete: z.boolean().optional(),
   })
   .loose();
 export type MainframeCapabilities = z.infer<typeof MainframeCapabilitiesSchema>;

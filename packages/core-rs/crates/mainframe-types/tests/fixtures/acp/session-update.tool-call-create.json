@@ -16,6 +16,11 @@
     ],
     "rawInput": {
       "file_path": "/Users/dev/code/mainframe/package.json"
+    },
+    "_meta": {
+      "_mainframe.dev": {
+        "created": true
+      }
     }
   }
 }

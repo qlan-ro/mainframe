@@ -63,6 +63,16 @@ pub enum ToolCategory {
     Subagent,
 }
 
+/// Which leaf kind the partial-message overlay currently backs (spec
+/// Decision 39). An in-process contract between `emit_display_for` and
+/// `mainframe_acp::encoder::encode_revision` — never serialized, since the
+/// wire only ever sees the resulting `ItemMeta.streaming: bool`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StreamingLeafKind {
+    Text,
+    Thinking,
+}
+
 /// UI-render-form content union. Untagged wrapper composing the shared
 /// `LeafContent` with the display-only node variants; both sub-sets are
 /// internally tagged on disjoint `type` values, so `LeafContent` stays shared

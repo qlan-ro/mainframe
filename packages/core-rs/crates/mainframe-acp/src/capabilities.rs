@@ -7,7 +7,8 @@
 
 use mainframe_types::acp::extensions::{
     CompactionParams, CompactionWirePhase, GateResolvedParams, HeartbeatParams,
-    MainframeCapabilities, QueueStateParams, ResyncParams, TranscriptClearedParams,
+    MainframeCapabilities, QueueStateParams, ReplayCompleteParams, ResyncParams,
+    TranscriptClearedParams,
 };
 use mainframe_types::acp::jsonrpc::JsonRpcNotification;
 use mainframe_types::chat::QueuedMessageRef;
@@ -28,6 +29,8 @@ pub fn mainframe_capabilities(heartbeat_interval_ms: u64) -> MainframeCapabiliti
         queued_prompts: Some(true),
         retry_markers: Some(true),
         heartbeat_interval_ms: Some(heartbeat_interval_ms as i64),
+        item_creation_markers: Some(true),
+        replay_complete: Some(true),
     }
 }
 
@@ -106,16 +109,34 @@ pub fn queue_state_notification(
     }
 }
 
-/// The `_mainframe.dev/resync` notification (T20, R3.11): the session's
-/// `MessageCache` evicted from the front, so an attached client's
-/// accumulator has diverged and must re-resume — with no reducer wipe,
-/// unlike `transcript_cleared`.
+/// The `_mainframe.dev/resync` notification (spec Decision 34, rewritten):
+/// the daemon's view of the chat diverged from what an attached client may
+/// hold — `do_load_chat` rebuilt the cache from the transcript and the
+/// result changed, or a resume delivery failed after its reply — so the
+/// client re-resumes, with no reducer wipe, unlike `transcript_cleared`.
+/// Cache retention alone never raises it.
 pub fn resync_notification(session_id: &str) -> JsonRpcNotification {
     JsonRpcNotification {
         jsonrpc: "2.0".into(),
         method: "_mainframe.dev/resync".into(),
         params: Some(serde_json::json!(ResyncParams {
             session_id: session_id.to_string(),
+        })),
+    }
+}
+
+/// The `_mainframe.dev/replay_complete` notification (spec Decision 38):
+/// closes exactly one `session/resume` replay, sent after `queue_state` and
+/// before the buffered catch-up in every arm that sent a successful reply.
+/// `aborted` carries `true` only when a resume delivery failed after its
+/// reply went out; a normal close omits the key entirely.
+pub fn replay_complete_notification(session_id: &str, aborted: bool) -> JsonRpcNotification {
+    JsonRpcNotification {
+        jsonrpc: "2.0".into(),
+        method: "_mainframe.dev/replay_complete".into(),
+        params: Some(serde_json::json!(ReplayCompleteParams {
+            session_id: session_id.to_string(),
+            aborted: aborted.then_some(true),
         })),
     }
 }
@@ -140,6 +161,29 @@ mod tests {
         assert_eq!(value["queuedPrompts"], fixture["queuedPrompts"]);
         assert_eq!(value["retryMarkers"], fixture["retryMarkers"]);
         assert_eq!(value["heartbeatIntervalMs"], fixture["heartbeatIntervalMs"]);
+        assert_eq!(value["itemCreationMarkers"], fixture["itemCreationMarkers"]);
+        assert_eq!(value["replayComplete"], fixture["replayComplete"]);
+    }
+
+    #[test]
+    fn replay_complete_matches_the_pinned_fixture() {
+        let normal_fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../mainframe-types/tests/fixtures/acp/replay-complete.notification.json"
+        ))
+        .unwrap();
+        let normal = replay_complete_notification("chat_1", false);
+        let mut normal_value = serde_json::to_value(&normal).unwrap();
+        normal_value["_provenance"] = normal_fixture["_provenance"].clone();
+        assert_eq!(normal_value, normal_fixture);
+
+        let aborted_fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../mainframe-types/tests/fixtures/acp/replay-complete.params-aborted.json"
+        ))
+        .unwrap();
+        let aborted = replay_complete_notification("chat_1", true);
+        let mut aborted_params = serde_json::to_value(&aborted).unwrap()["params"].clone();
+        aborted_params["_provenance"] = aborted_fixture["_provenance"].clone();
+        assert_eq!(aborted_params, aborted_fixture);
     }
 
     #[test]

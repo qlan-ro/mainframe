@@ -20,5 +20,6 @@
     "attachments": [{ "name": "notes.md", "kind": "file", "sizeBytes": 1024 }]
   },
   "groupId": "toolu_grp_01",
-  "subagent": true
+  "subagent": true,
+  "streaming": true
 }
