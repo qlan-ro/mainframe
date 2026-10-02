@@ -331,6 +331,7 @@ impl CodexSession {
 
         {
             let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+            state.command_state.clear();
             state.thread_id = Some(new_thread_id.clone());
             state.reported_model = non_empty(reported_model.as_deref()).map(str::to_string);
         }
@@ -733,6 +734,11 @@ impl AdapterSession for CodexSession {
 
     fn kill(&self) -> BoxFuture<'_, Result<(), AdapterError>> {
         Box::pin(async move {
+            self.state
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .command_state
+                .clear();
             let client = self
                 .client
                 .lock()
@@ -764,7 +770,8 @@ impl AdapterSession for CodexSession {
                 .unwrap_or_else(|e| e.into_inner())
                 .clone();
             let (thread_id, turn_id) = {
-                let st = self.state.lock().unwrap_or_else(|e| e.into_inner());
+                let mut st = self.state.lock().unwrap_or_else(|e| e.into_inner());
+                st.command_state.clear();
                 (st.thread_id.clone(), st.current_turn_id.clone())
             };
             let (Some(client), Some(thread_id), Some(turn_id)) = (client, thread_id, turn_id)
@@ -962,6 +969,7 @@ impl CodexSession {
         let sink_n = self.sink.clone();
         let state_n = self.state.clone();
         let state_r = self.state.clone();
+        let state_x = self.state.clone();
         let config_r = self.config.clone();
         let client_slot_r = self.client.clone();
         let approval_r = approval;
@@ -1009,6 +1017,11 @@ impl CodexSession {
                 s.on_error(AdapterError::Message(error));
             }),
             on_exit: Box::new(move |code| {
+                state_x
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .command_state
+                    .clear();
                 *status_x.lock().unwrap_or_else(|e| e.into_inner()) = AdapterProcessStatus::Stopped;
                 *client_slot_x.lock().unwrap_or_else(|e| e.into_inner()) = None;
                 let s = sink_x.lock().unwrap_or_else(|e| e.into_inner()).clone();
@@ -1069,3 +1082,6 @@ mod tests {
 // notes: stay stubs (TODO(port)) with identical TS behavior. set_codex_provider_tuning
 // notes: is an inherent method (no trait slot yet). PendingConfig has a manual
 // notes: Default (ExecutionMode has none). NullSink mirrors the TS nullSink.
+
+#[cfg(test)]
+mod command_metadata_tests;

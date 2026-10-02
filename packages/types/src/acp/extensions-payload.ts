@@ -8,6 +8,7 @@
  * `mainframe-types/src/acp/extensions.rs`.
  */
 import { z } from 'zod';
+import { CommandExecutionMetadataSchema } from '../command-execution.js';
 
 /**
  * The CLI's own context-occupancy percentage riding a `usage_update`'s
@@ -105,6 +106,7 @@ export const ItemMetaSchema = z
   .object({
     timestamp: z.string().optional(),
     containerId: z.string().optional(),
+    commandExecution: CommandExecutionMetadataSchema.optional(),
     parentToolCallId: z.string().optional(),
     kind: z.enum(['system', 'error']).optional(),
     errorText: z.string().optional(),

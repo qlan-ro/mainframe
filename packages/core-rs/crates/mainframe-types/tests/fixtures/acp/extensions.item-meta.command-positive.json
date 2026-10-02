@@ -1,0 +1,32 @@
+{
+  "_provenance": "synthetic",
+  "containerId": "message",
+  "groupId": "cmd",
+  "parentToolCallId": "parent",
+  "commandExecution": {
+    "commandActions": [
+      {
+        "type": "read",
+        "command": "cat a",
+        "name": "a",
+        "path": "a"
+      },
+      {
+        "type": "search",
+        "command": "rg x",
+        "query": null,
+        "path": null
+      },
+      {
+        "type": "listFiles",
+        "command": "ls",
+        "path": null
+      },
+      {
+        "type": "unknown",
+        "command": "custom"
+      }
+    ],
+    "reportedDurationMs": 1234
+  }
+}

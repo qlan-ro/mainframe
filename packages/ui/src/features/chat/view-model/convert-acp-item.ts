@@ -85,6 +85,7 @@ function toolPart(parsed: ParsedItem, children: ChildrenMap): ContentPart {
     args: toJsonArgs((item.rawInput ?? {}) as object),
     result: toolCallResult(item),
     isError: item.status === 'failed' ? true : undefined,
+    ...(parsed.meta.commandExecution && { providerMetadata: { codex: parsed.meta.commandExecution } }),
     ...(parsed.meta.subagent ? { messages: subagentMessages(item, children) } : {}),
   };
 }

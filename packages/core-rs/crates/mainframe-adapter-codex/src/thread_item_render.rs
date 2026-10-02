@@ -11,8 +11,8 @@ use mainframe_types::chat::{TodoItem, TodoStatus};
 use crate::collab_card;
 use crate::event_mapper::CodexSessionState;
 use crate::history::{
-    bash_input, file_change_input, is_exec_error, mcp_result_content, parse_unified_diff,
-    reasoning_text, text_block, thinking_block, tool_result_block, tool_use_block, vendor_metadata,
+    file_change_input, is_exec_error, mcp_result_content, parse_unified_diff, reasoning_text,
+    text_block, thinking_block, tool_result_block, tool_use_block, vendor_metadata,
 };
 use crate::image_generation_render::handle_image_generation;
 use crate::item_types::{
@@ -120,7 +120,7 @@ fn render_reasoning(r: &ReasoningItem, sink: &Arc<dyn SessionSink>) {
 
 fn render_command_execution(c: &CommandExecutionItem, sink: &Arc<dyn SessionSink>) {
     sink.on_message(
-        vec![tool_use_block(&c.id, "Bash", bash_input(&c.command))],
+        vec![crate::command_metadata::tool_block(c)],
         vendor_metadata(&c.id),
     );
     sink.on_tool_result(

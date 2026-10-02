@@ -45,6 +45,7 @@ mod tests {
             input.insert("file_path".to_string(), json!(fp));
         }
         MessageContent::Node(MessageContentNode::ToolUse {
+            command_execution: None,
             id: "tu".to_string(),
             name: name.to_string(),
             input,

@@ -52,6 +52,8 @@ pub(crate) fn build_unified_exec_item(
 ) -> Option<ThreadItem> {
     let command = pending.remove(call_id)?;
     Some(ThreadItem::CommandExecution(CommandExecutionItem {
+        command_actions: None,
+        duration_ms: None,
         id: call_id.to_string(),
         command,
         aggregated_output: output,
