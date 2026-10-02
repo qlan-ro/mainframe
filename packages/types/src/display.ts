@@ -1,3 +1,4 @@
+import type { CommandExecutionMetadata } from './command-execution.js';
 import type { DiffHunk, ToolResultImage } from './chat.js';
 import type { ControlRequest } from './adapter.js';
 import type { ClaudeWorkflowRun } from './claude-workflow.js';
@@ -33,6 +34,7 @@ export type DisplayContent =
   | LeafContent
   | {
       type: 'tool_call';
+      commandExecution?: CommandExecutionMetadata;
       id: string;
       name: string;
       input: Record<string, unknown>;

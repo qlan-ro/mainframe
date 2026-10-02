@@ -88,6 +88,7 @@ fn an_empty_request_id_never_matches_a_restored_placeholder() {
         chat_id: "chat-1".to_string(),
         r#type: ChatMessageType::Assistant,
         content: vec![MessageContent::Node(MessageContentNode::ToolUse {
+            command_execution: None,
             id: "tu-1".to_string(),
             name: "Bash".to_string(),
             input: std::collections::HashMap::new(),

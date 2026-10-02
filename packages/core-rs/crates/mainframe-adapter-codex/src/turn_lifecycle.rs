@@ -21,6 +21,17 @@ use crate::types::{
 pub(crate) fn handle_turn_started(params: TurnStartedParams, state: &mut CodexSessionState) {
     if !matches!(
         resolve_owner(params.thread_id.as_deref(), state),
+        Owner::Unknown
+    ) {
+        let thread = params
+            .thread_id
+            .as_deref()
+            .or(state.thread_id.as_deref())
+            .unwrap_or_default();
+        state.command_state.start_turn(thread, &params.turn.id);
+    }
+    if !matches!(
+        resolve_owner(params.thread_id.as_deref(), state),
         Owner::Parent
     ) {
         return;
@@ -46,6 +57,7 @@ pub(crate) fn handle_turn_completed(
 ) {
     match resolve_owner(params.thread_id.as_deref(), state) {
         Owner::Child(t) => {
+            state.command_state.end_turn(&t, &params.turn.id);
             collab_card::on_sub_agent_turn_completed(&t, &params.turn.status, sink, state);
             return;
         }
@@ -66,6 +78,12 @@ pub(crate) fn handle_turn_completed(
     // never survive the turn (AC 8).
     end_all_activity(state);
 
+    let thread = params
+        .thread_id
+        .as_deref()
+        .or(state.thread_id.as_deref())
+        .unwrap_or_default();
+    state.command_state.end_parent_turn(thread, &params.turn.id);
     state.current_turn_plan = None;
     state.current_turn_id = None;
     emit_parent_turn_result(params.turn, sink, state);

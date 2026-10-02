@@ -49,6 +49,8 @@ pub struct MessageSendCommand {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemMeta {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command_execution: Option<crate::command_execution::CommandExecutionMetadata>,
     /// The containing `DisplayMessage.timestamp` (ISO-8601).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timestamp: Option<String>,

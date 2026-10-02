@@ -79,6 +79,10 @@ pub enum StreamingLeafKind {
 /// with `MessageContent` while deserialization is unambiguous.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "Boxing every node would allocate even without command metadata."
+)]
 pub enum DisplayContent {
     Leaf(LeafContent),
     Node(DisplayNode),
@@ -92,6 +96,8 @@ pub enum DisplayContent {
 )]
 pub enum DisplayNode {
     ToolCall {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        command_execution: Option<Box<crate::command_execution::CommandExecutionMetadata>>,
         id: String,
         name: String,
         input: HashMap<String, serde_json::Value>,

@@ -366,6 +366,8 @@ pub enum MessageContent {
 )]
 pub enum MessageContentNode {
     ToolUse {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        command_execution: Option<crate::command_execution::CommandExecutionMetadata>,
         id: String,
         name: String,
         input: HashMap<String, serde_json::Value>,

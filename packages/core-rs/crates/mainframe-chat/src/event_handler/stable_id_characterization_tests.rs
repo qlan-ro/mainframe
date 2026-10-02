@@ -101,6 +101,7 @@ fn bash_tool_use() -> MessageContent {
         serde_json::Value::String("ls -la".to_string()),
     );
     MessageContent::Node(MessageContentNode::ToolUse {
+        command_execution: None,
         id: "tu-1".to_string(),
         name: "Bash".to_string(),
         input,

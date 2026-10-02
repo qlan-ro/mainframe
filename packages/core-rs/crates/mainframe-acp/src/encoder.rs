@@ -225,6 +225,7 @@ fn encode_tool_group(
             input,
             category,
             result,
+            command_execution,
             ..
         }) = call
             && *category != ToolCategory::Hidden
@@ -237,6 +238,7 @@ fn encode_tool_group(
                 result,
                 container,
                 group_id.as_deref(),
+                command_execution,
             ));
         }
     }
@@ -268,6 +270,7 @@ fn tool_call_item(
     result: &Option<ToolCallResult>,
     container: &Container<'_>,
     group_id: Option<&str>,
+    command_execution: &Option<Box<mainframe_types::command_execution::CommandExecutionMetadata>>,
 ) -> EncodedItem {
     EncodedItem::ToolCall {
         id: id.to_string(),
@@ -278,6 +281,7 @@ fn tool_call_item(
         content: result_content(name, input, result),
         meta: wrap_meta(ItemMeta {
             group_id: group_id.map(str::to_string),
+            command_execution: command_execution.as_deref().cloned(),
             ..container.base_meta()
         }),
     }

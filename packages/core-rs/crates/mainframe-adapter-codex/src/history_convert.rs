@@ -7,8 +7,8 @@ use std::collections::HashMap;
 use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent, MessageContentNode};
 
 use crate::history::{
-    bash_input, file_change_input, is_exec_error, make_message, mcp_result_content, reasoning_text,
-    text_block, thinking_block, tool_result_block, tool_use_block,
+    file_change_input, is_exec_error, make_message, mcp_result_content, reasoning_text, text_block,
+    thinking_block, tool_result_block, tool_use_block,
 };
 use crate::history_collab_resolve::{
     CardMap, CollabCtx, handle_collab_tool_call, handle_sub_agent_activity, resolve_open_cards,
@@ -58,7 +58,7 @@ pub fn convert_thread_items(
                     &c.id,
                     chat_id,
                     ChatMessageType::Assistant,
-                    vec![tool_use_block(&c.id, "Bash", bash_input(&c.command))],
+                    vec![crate::command_metadata::tool_block(c)],
                 ));
                 messages.push(make_message(
                     &format!("{}:result", c.id),
