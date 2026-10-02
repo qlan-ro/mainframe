@@ -207,4 +207,36 @@ describe('useSmooth contract fed by the real D6/D7 pipeline (long-chat-and-strea
     tick(500);
     expect(shown()).toBe(LONG);
   });
+
+  /**
+   * Todo #382 (resume-snapshot overlay parity): a reconnect's resume replay
+   * now carries the SAME item id and `streaming: true` the live stream was
+   * already showing. A part that mounted live, fully revealed, and is then
+   * re-rendered as a replay-origin item with the identical text must show
+   * that text at once (no retype) — only text received AFTER the resume
+   * (the suffix) may still animate.
+   */
+  it('6. a resume replay of the already-shown text never retypes it, then extends without retyping', async () => {
+    const live = [textItem(LONG, { streaming: true, origin: 'live' })];
+    const r = render(<Harness isRunning messages={messagesFromItems(live, 'running')} />);
+    tick(500);
+    expect(shown()).toBe(LONG);
+
+    // The resume snapshot now includes the overlay: same item id, same
+    // text, still streaming — origin flips to 'replay'.
+    const resumedSameText = [textItem(LONG, { streaming: true, origin: 'replay' })];
+    r.rerender(<Harness isRunning messages={messagesFromItems(resumedSameText, 'running')} />);
+    await flush();
+    expect(shown()).toBe(LONG);
+    expect(shown().length).not.toBeLessThan(LONG.length);
+
+    // The stream continues past the resumed text.
+    const grown = [textItem(LONG + MORE, { streaming: true, origin: 'replay' })];
+    r.rerender(<Harness isRunning messages={messagesFromItems(grown, 'running')} />);
+    await flush();
+    expect(shown().length).toBeGreaterThanOrEqual(LONG.length);
+    expect(shown().length).toBeLessThan(LONG.length + MORE.length);
+    tick(500);
+    expect(shown()).toBe(LONG + MORE);
+  });
 });
