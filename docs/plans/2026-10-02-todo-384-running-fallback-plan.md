@@ -10,6 +10,8 @@ The user folded Codex activity-grouping research and #374 outer disclosure into 
 
 G1 completed at `6e263dc0`; G2 at `5da834e3`; G3 at `283fbe21`. Parent reports G3 validation: 200 tests passed. Integration with main `e6af2bfa` completed cleanly at `98466ca8e27285bd2bdabb52c2e7acf18287eabc`, with 83 focused tests and UI typecheck passing. These are execution receipts from the parent lane, not tests rerun by this plan author.
 
+The grouping extension preserves legacy daemon containers, native parts and Verbose action/footer scopes. Compact uses additive source-span metadata to distinguish work from final text, including when both occupy one existing text part.
+
 The sections below preserve the original G1–G3 decisions, baseline facts and verification intent as historical context. Do not rerun their planning stages or implement them again. Execute G4→G5→G6→G7→G8 from the integrated checkout; each new group owns its tests and exact file list. Parent owns independent review of the additions and combined code review/QA.
 
 ## Established facts
