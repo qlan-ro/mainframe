@@ -7,25 +7,14 @@
  * around them — inks, rungs, rules — is v2.
  */
 import React from 'react';
-import { structuredPatch } from 'diff';
 import type { DiffHunk } from '@qlan-ro/mainframe-types';
 import { cn } from '@/lib/utils';
+
+export { countDiffStats, computeFallbackHunks } from './diff-data';
 
 // ---------------------------------------------------------------------------
 // Pure math helpers (no React)
 // ---------------------------------------------------------------------------
-
-export function countDiffStats(hunks: DiffHunk[]): { added: number; removed: number } {
-  let added = 0;
-  let removed = 0;
-  for (const hunk of hunks) {
-    for (const line of hunk.lines) {
-      if (line[0] === '+') added++;
-      else if (line[0] === '-') removed++;
-    }
-  }
-  return { added, removed };
-}
 
 export function reconstructFromHunks(hunks: DiffHunk[]): { original: string; modified: string } {
   const oldLines: string[] = [];
@@ -43,17 +32,6 @@ export function reconstructFromHunks(hunks: DiffHunk[]): { original: string; mod
     }
   }
   return { original: oldLines.join('\n'), modified: newLines.join('\n') };
-}
-
-export function computeFallbackHunks(oldStr: string, newStr: string): DiffHunk[] {
-  const patch = structuredPatch('', '', oldStr, newStr, '', '', { context: 3 });
-  return patch.hunks.map((h) => ({
-    oldStart: h.oldStart,
-    oldLines: h.oldLines,
-    newStart: h.newStart,
-    newLines: h.newLines,
-    lines: h.lines,
-  }));
 }
 
 // ---------------------------------------------------------------------------

@@ -11,16 +11,9 @@
  */
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { PlusIcon } from 'lucide-react';
-import {
-  isStructuredResult,
-  resolveResultText,
-  countDiffStats,
-  DiffFromPatch,
-  ClickableFilePath,
-  StatusDot,
-  CollapsibleCardShell,
-} from '../shared';
+import { resolveResultText, DiffFromPatch, ClickableFilePath, StatusDot, CollapsibleCardShell } from '../shared';
 import type { DiffHunk } from '@qlan-ro/mainframe-types';
+import { resolveToolDiff } from '../shared/diff-data';
 import { ToolResultExpand } from '../ToolResultExpand';
 import { useChatId } from '../chat-tool-context';
 
@@ -102,6 +95,25 @@ function WriteCardBody({
 // WriteFileCard
 // ---------------------------------------------------------------------------
 
+function WriteCardTrailing({
+  added,
+  result,
+  isError,
+}: {
+  added: number | undefined;
+  result: unknown;
+  isError: boolean | undefined;
+}) {
+  return (
+    <>
+      {added != null && (
+        <span className="shrink-0 font-mono text-xs font-semibold tabular-nums text-muted-foreground">+{added}</span>
+      )}
+      <StatusDot result={result} isError={isError} />
+    </>
+  );
+}
+
 export const WriteFileCard: ToolCallMessagePartComponent = (part) => {
   const { args, result, isError, toolCallId } = part;
   const chatId = useChatId();
@@ -110,23 +122,9 @@ export const WriteFileCard: ToolCallMessagePartComponent = (part) => {
   const content = (args['content'] as string) ?? '';
 
   const { text: resultText, truncated, fullBytes } = resolveResultText(result);
-  const structured = isStructuredResult(result);
-
-  const hunks = structured ? (result.structuredPatch ?? null) : null;
-  const stats = hunks ? countDiffStats(hunks) : null;
+  const { hunks, stats } = resolveToolDiff('Write', args, result);
   const hasError = Boolean(resultText && isError);
   const showExpand = hasError && truncated && Boolean(chatId) && Boolean(toolCallId);
-
-  const trailing = (
-    <>
-      {stats?.added != null && (
-        <span className="shrink-0 font-mono text-xs font-semibold tabular-nums text-muted-foreground">
-          +{stats.added}
-        </span>
-      )}
-      <StatusDot result={result} isError={isError} />
-    </>
-  );
 
   const body =
     hunks || content || hasError ? (
@@ -152,7 +150,7 @@ export const WriteFileCard: ToolCallMessagePartComponent = (part) => {
       icon={<PlusIcon />}
       verb="Write"
       target={<ClickableFilePath filePath={filePath} />}
-      trailing={trailing}
+      trailing={<WriteCardTrailing added={stats?.added} result={result} isError={isError} />}
     >
       {body}
     </CollapsibleCardShell>

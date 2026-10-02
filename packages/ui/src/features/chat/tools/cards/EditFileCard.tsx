@@ -18,8 +18,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import {
   isStructuredResult,
   resolveResultText,
-  countDiffStats,
-  computeFallbackHunks,
   reconstructFromHunks,
   DiffFromPatch,
   DiffFallback,
@@ -27,13 +25,10 @@ import {
   StatusDot,
   CollapsibleCardShell,
 } from '../shared';
+import { resolveToolDiff } from '../shared/diff-data';
 import { ToolResultExpand } from '../ToolResultExpand';
 import { useChatId, useOpenFile } from '../chat-tool-context';
 import type { DiffHunk } from '@qlan-ro/mainframe-types';
-
-// ---------------------------------------------------------------------------
-// Stat pills (+N / −N)
-// ---------------------------------------------------------------------------
 
 function StatPills({ added, removed }: { added: number | null; removed: number | null }) {
   if (added === null && removed === null) return null;
@@ -44,10 +39,6 @@ function StatPills({ added, removed }: { added: number | null; removed: number |
     </span>
   );
 }
-
-// ---------------------------------------------------------------------------
-// OpenDiffButton
-// ---------------------------------------------------------------------------
 
 function OpenDiffButton({ onOpenDiff }: { onOpenDiff: (e: React.MouseEvent | React.KeyboardEvent) => void }) {
   return (
@@ -82,10 +73,6 @@ function OpenDiffButton({ onOpenDiff }: { onOpenDiff: (e: React.MouseEvent | Rea
     </Tooltip>
   );
 }
-
-// ---------------------------------------------------------------------------
-// EditCardBody — diff view + optional error footer
-// ---------------------------------------------------------------------------
 
 interface EditCardBodyProps {
   displayHunks: DiffHunk[] | null;
@@ -140,10 +127,6 @@ function EditCardBody({
   );
 }
 
-// ---------------------------------------------------------------------------
-// DiffUnavailableBody — fallback when no structured/fallback diff and no error
-// ---------------------------------------------------------------------------
-
 function RawResultTextBody({ text }: { text: string }) {
   return (
     <pre
@@ -166,10 +149,6 @@ function DiffUnavailableBody() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// useEditCardState
-// ---------------------------------------------------------------------------
-
 interface EditCardState {
   filePath: string;
   oldString: string;
@@ -185,33 +164,20 @@ interface EditCardState {
   handleOpenDiff: (e: React.MouseEvent | React.KeyboardEvent) => void;
 }
 
-function useEditCardState(
-  args: Record<string, unknown>,
+function useEditDiffAction(
+  {
+    filePath,
+    oldString,
+    newString,
+    displayHunks,
+  }: Pick<EditCardState, 'filePath' | 'oldString' | 'newString' | 'displayHunks'>,
   result: unknown,
-  isError: boolean | undefined,
-  toolCallId: string | undefined,
-): EditCardState {
-  const chatId = useChatId();
+) {
   const { openDiff } = useOpenFile();
-
-  const filePath = (args['file_path'] as string) ?? '';
-  const oldString = (args['old_string'] as string) ?? '';
-  const newString = (args['new_string'] as string) ?? '';
-
-  const { text: resultText, truncated, fullBytes } = resolveResultText(result);
-  const structured = isStructuredResult(result);
-
-  const hunks = structured ? (result.structuredPatch ?? null) : null;
-  const displayHunks = hunks ?? (oldString || newString ? computeFallbackHunks(oldString, newString) : null);
-
-  const stats = displayHunks ? countDiffStats(displayHunks) : null;
-  const hasError = Boolean(resultText && isError);
-  const showExpand = hasError && truncated && Boolean(chatId) && Boolean(toolCallId);
-
-  const handleOpenDiff = useCallback(
+  return useCallback(
     (e: React.MouseEvent | React.KeyboardEvent) => {
       e.stopPropagation();
-      if (structured && isStructuredResult(result) && result.originalFile && result.modifiedFile) {
+      if (isStructuredResult(result) && result.originalFile && result.modifiedFile) {
         openDiff(filePath, result.originalFile, result.modifiedFile);
         return;
       }
@@ -220,8 +186,29 @@ function useEditCardState(
         : { original: oldString, modified: newString };
       openDiff(filePath, original, modified);
     },
-    [structured, result, filePath, displayHunks, oldString, newString, openDiff],
+    [result, filePath, displayHunks, oldString, newString, openDiff],
   );
+}
+
+function useEditCardState(
+  args: Record<string, unknown>,
+  result: unknown,
+  isError: boolean | undefined,
+  toolCallId: string | undefined,
+): EditCardState {
+  const chatId = useChatId();
+
+  const filePath = (args['file_path'] as string) ?? '';
+  const oldString = (args['old_string'] as string) ?? '';
+  const newString = (args['new_string'] as string) ?? '';
+
+  const { text: resultText, truncated, fullBytes } = resolveResultText(result);
+
+  const { hunks: displayHunks, stats } = resolveToolDiff('Edit', args, result);
+  const hasError = Boolean(resultText && isError);
+  const showExpand = hasError && truncated && Boolean(chatId) && Boolean(toolCallId);
+
+  const handleOpenDiff = useEditDiffAction({ filePath, oldString, newString, displayHunks }, result);
 
   return {
     filePath,
@@ -238,10 +225,6 @@ function useEditCardState(
     handleOpenDiff,
   };
 }
-
-// ---------------------------------------------------------------------------
-// EditFileCard
-// ---------------------------------------------------------------------------
 
 export const EditFileCard: ToolCallMessagePartComponent = (part) => {
   const { args, result, isError, toolCallId } = part;

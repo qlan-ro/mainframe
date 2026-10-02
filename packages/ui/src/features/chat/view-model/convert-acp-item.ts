@@ -29,6 +29,7 @@ import { convertUserContainer } from './convert-acp-user';
 import type { MainframeMessageMeta } from './message-meta';
 import { parseItemMeta } from './parse-item-meta';
 import { toolCallResult } from './tool-call-result';
+import { projectToolLifecycle } from './tool-call-lifecycle';
 import { toolGroupSummary, type ToolGroupSummaryItem } from './tool-group-summary';
 
 interface ParsedItem {
@@ -78,6 +79,7 @@ function toolPart(parsed: ParsedItem, children: ChildrenMap): ContentPart {
   // Never the id as a name (D3): a missing title means the daemon hasn't
   // sent one yet, not that the id itself is presentable.
   const toolName = parsed.meta.subagent ? 'Task' : (item.title ?? 'Unknown tool');
+  const lifecycle = projectToolLifecycle(item.status);
   return {
     type: 'tool-call',
     toolCallId: item.id,
@@ -85,6 +87,7 @@ function toolPart(parsed: ParsedItem, children: ChildrenMap): ContentPart {
     args: toJsonArgs((item.rawInput ?? {}) as object),
     result: toolCallResult(item),
     isError: item.status === 'failed' ? true : undefined,
+    ...(lifecycle && { providerMetadata: { mainframe: lifecycle } }),
     ...(parsed.meta.subagent ? { messages: subagentMessages(item, children) } : {}),
   };
 }

@@ -43,7 +43,7 @@ describe('convertAcpItems — tool result shapes', () => {
     const container = convertAcpItems([item], stampFor)[0]!;
     const part = container.content[0] as { isError?: boolean; result?: unknown };
     expect(part.isError).toBe(true);
-    expect(part.result).toBeUndefined();
+    expect(part.result).toBe('');
   });
 
   it('a truncation marker on a text block yields the {content,truncated,fullBytes} result shape', () => {
