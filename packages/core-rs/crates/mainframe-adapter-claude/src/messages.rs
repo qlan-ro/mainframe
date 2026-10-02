@@ -17,3 +17,13 @@ pub mod session_files;
 pub mod task_subject_backfill;
 
 mod command_metadata;
+
+mod display_assistant;
+mod display_tool_groups;
+mod display_user;
+mod presentation_display;
+mod presentation_grouping;
+#[cfg(test)]
+mod presentation_grouping_tests;
+
+mod display_pipeline_markers;

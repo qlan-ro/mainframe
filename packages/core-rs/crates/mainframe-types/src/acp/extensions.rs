@@ -1,10 +1,7 @@
 //! Mainframe metadata and custom notification payloads, opaque to generic ACP clients.
-
-use std::collections::HashMap;
-
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-
+use std::collections::HashMap;
 mod capabilities;
 pub use capabilities::MainframeCapabilities;
 
@@ -92,6 +89,12 @@ pub struct ItemMeta {
     /// streaming status from this, never from position.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub streaming: Option<bool>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::transcript_presentation::deserialize_sources"
+    )]
+    pub presentation_sources: Option<crate::transcript_presentation::PresentationSources>,
 }
 
 /// [`ItemMeta::kind`] — `user`/`agent` ride the item role; these mark the
@@ -103,7 +106,6 @@ pub enum ItemContainerKind {
     Error,
 }
 
-/// [`ItemMeta::skill_loaded`] — mirrors `LeafContent::SkillLoaded`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillLoadedMeta {

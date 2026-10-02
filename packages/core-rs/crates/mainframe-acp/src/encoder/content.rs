@@ -44,8 +44,17 @@ pub(super) fn encode_content(
     let mut message = Accum::new(AccumKind::Message(role));
     let mut thought = Accum::new(AccumKind::Thought);
 
-    for block in content {
-        handle_block(block, container, role, &mut message, &mut thought, out);
+    for (index, block) in content.iter().enumerate() {
+        let mut source_container = container.clone();
+        source_container.path.push(index);
+        handle_block(
+            block,
+            &source_container,
+            role,
+            &mut message,
+            &mut thought,
+            out,
+        );
     }
 
     // Attachment evidence with no leaves never claims — open the slot so finish emits the item.
@@ -84,22 +93,27 @@ fn handle_leaf(
 ) {
     match leaf {
         LeafContent::Text { text, .. } => {
-            push_text(&mut message.claim(out, container).blocks, text);
+            let accum = message.claim(out, container);
+            presentation::push_leaf(accum, leaf, container);
+            push_text(&mut accum.blocks, text);
         }
         LeafContent::Thinking { thinking, .. } => {
-            push_text(&mut thought.claim(out, container).blocks, thinking);
+            let accum = thought.claim(out, container);
+            presentation::push_leaf(accum, leaf, container);
+            push_text(&mut accum.blocks, thinking);
         }
         LeafContent::Image {
             media_type, data, ..
-        } => message
-            .claim(out, container)
-            .blocks
-            .push(ContentBlock::Image {
+        } => {
+            let accum = message.claim(out, container);
+            presentation::push_leaf(accum, leaf, container);
+            accum.blocks.push(ContentBlock::Image {
                 data: data.clone(),
                 mime_type: media_type.clone(),
                 uri: None,
                 meta: None,
-            }),
+            });
+        }
         LeafContent::SkillLoaded {
             skill_name,
             path,
@@ -158,7 +172,6 @@ fn handle_node(
             agent_id, task_args, calls, result, container, role, out, *timing,
         ),
         DisplayNode::TaskProgress { items } => handle_task_progress(items, container, out),
-        // Gates stay out-of-band on the facade (spec) — no item.
         DisplayNode::PermissionRequest { .. } => {}
         DisplayNode::Error { message: m } => {
             let accum = message.claim(out, container);
@@ -188,6 +201,8 @@ fn handle_task_group(
         agent_id, task_args, result, container, timing,
     ));
     let child = Container {
+        presentation_sources: container.presentation_sources,
+        path: container.path.clone(),
         id: agent_id,
         timestamp: container.timestamp,
         kind: None,
@@ -205,7 +220,9 @@ fn handle_task_progress(
     container: &Container<'_>,
     out: &mut Vec<EncodedItem>,
 ) {
-    for item in items {
+    for (index, item) in items.iter().enumerate() {
+        let mut source_container = container.clone();
+        source_container.path.push(index);
         if item.category != ToolCategory::Hidden {
             out.push(tool_call_item(
                 &item.id,
@@ -213,7 +230,7 @@ fn handle_task_progress(
                 &item.input,
                 item.category,
                 &item.result,
-                container,
+                &source_container,
                 None,
                 item.timing,
                 &None,

@@ -60,3 +60,4 @@ export type {
 } from './plugin.js';
 
 export * from './tool-call-timing.js';
+export * from './transcript-presentation.js';
