@@ -9,8 +9,10 @@
 
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Mutex;
 
 use mainframe_types::acp::extensions::MAINFRAME_META_NAMESPACE;
+use mainframe_types::acp::extensions::RevisionCursor as WireRevisionCursor;
 use mainframe_types::acp::jsonrpc::{JsonRpcRequest, JsonRpcResponse};
 use mainframe_types::acp::session::{ResumeSessionRequest, ResumeSessionResponse};
 use mainframe_types::acp::update::{
@@ -23,14 +25,21 @@ use serde_json::Value;
 
 use crate::encoder::{self, EncodedItem};
 use crate::gates;
+use crate::revision_log::RevisionLog;
 use crate::rpc;
 use crate::session_state::SessionState;
+
+mod revision;
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 /// The cursor `ResumeSessionRequest.replayFrom` carries — an opaque `Value`
 /// on the vendored wire type (group A left the scheme to this task).
-/// `Start` always full-replays; `Item` resumes after the named stable item.
+/// `Start` always full-replays; `Item` resumes after the named stable item;
+/// `Revision` (todo #377) names a server-issued epoch/revision boundary,
+/// resolved against the chat's `RevisionLog` when the connection opted into
+/// revision cursors and the chat has one — otherwise treated the same as an
+/// unknown `Item` cursor (edge case 9: a full replay, not a request error).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(
     tag = "type",
@@ -40,6 +49,7 @@ pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 pub enum ReplayCursor {
     Start,
     Item { item_id: String },
+    Revision { epoch: String, revision: u64 },
 }
 
 /// `ResumePort::resume_snapshot`'s result (todo #382): display history, the
@@ -87,9 +97,17 @@ pub struct ResumeReplay {
 /// success response, since "unknown cursor" is itself a defined outcome
 /// (full replay with the [`MAINFRAME_META_NAMESPACE`] `fullReplay` marker),
 /// not an error (spec edge cases 9).
+///
+/// `revision_log` (todo #377) is the chat's revision log, when the
+/// connection opted into revision cursors — `None` for a connection that did
+/// not, which gets byte-identical legacy behavior with no `cursor` meta at
+/// all. The caller (`mainframe-server`'s hub) owns the log's lifecycle;
+/// this function only locks it, after its own snapshot read, to seed an
+/// unseeded log and plan against a revision cursor.
 pub async fn dispatch_resume(
     request: JsonRpcRequest,
     port: &dyn ResumePort,
+    revision_log: Option<&Mutex<RevisionLog>>,
 ) -> (JsonRpcResponse, ResumeReplay) {
     let id = request.id.clone();
     let resume = match parse_resume_params(request) {
@@ -103,15 +121,20 @@ pub async fn dispatch_resume(
     // `streaming: None` this is byte-identical to `encode`'s output (spec
     // Decision 39).
     let items = encoder::encode_revision(&snapshot.messages, snapshot.streaming);
-    let resolved = resolve_cursor(&items, resume.replay_from.as_ref());
-    let (mut updates, full_replay) = replay(&items, resolved);
+    let resolved = revision::resolve(&items, resume.replay_from.as_ref(), revision_log);
+    let mut updates = resolved.updates;
     updates.push(turn_state_update(port.is_running(&resume.session_id)));
 
     let pending_permission_request = snapshot
         .pending
         .as_ref()
         .map(|request| build_pending_permission_request(&resume.session_id, request));
-    let response = success_response(id, items.len(), full_replay);
+    let response = success_response(
+        id,
+        items.len(),
+        resolved.full_replay,
+        resolved.cursor.as_ref(),
+    );
     (
         response,
         ResumeReplay {
@@ -169,10 +192,11 @@ fn success_response(
     id: Option<mainframe_types::acp::jsonrpc::RequestId>,
     item_count: usize,
     full_replay: bool,
+    cursor: Option<&WireRevisionCursor>,
 ) -> JsonRpcResponse {
     let response = ResumeSessionResponse {
         config_options: None,
-        meta: Some(resume_meta(item_count, full_replay)),
+        meta: Some(resume_meta(item_count, full_replay, cursor)),
     };
     let result = serde_json::to_value(response).unwrap_or(Value::Null);
     rpc::success_response(id, result)
@@ -183,11 +207,17 @@ fn success_response(
 /// apart from the "no history session yet" degenerate read and refuse the
 /// blanking re-seed (the legacy `refusesEmptyRefresh` guard, kept on the
 /// facade). `fullReplay` marks an unknown/pre-compaction cursor fallback.
-fn resume_meta(item_count: usize, full_replay: bool) -> Value {
+/// `cursor` (todo #377) is present only for a connection that opted into
+/// revision cursors — the new replay boundary this reply's updates converge
+/// a client to, regardless of which cursor shape the request itself used.
+fn resume_meta(item_count: usize, full_replay: bool, cursor: Option<&WireRevisionCursor>) -> Value {
     let mut ns = serde_json::Map::new();
     ns.insert("itemCount".into(), serde_json::json!(item_count));
     if full_replay {
         ns.insert("fullReplay".into(), Value::Bool(true));
+    }
+    if let Some(cursor) = cursor {
+        ns.insert("cursor".into(), serde_json::json!(cursor));
     }
     serde_json::json!({ MAINFRAME_META_NAMESPACE: ns })
 }
@@ -210,7 +240,11 @@ fn resolve_cursor(items: &[EncodedItem], replay_from: Option<&Value>) -> Resolve
             .iter()
             .position(|item| item.id() == item_id)
             .map_or(ResolvedCursor::Unknown, ResolvedCursor::Found),
-        Err(_) => ResolvedCursor::Unknown,
+        // A revision cursor with no log to resolve it against (the
+        // connection never opted in, or `revision.rs` already tried and
+        // found none) — treated the same as an unknown item cursor: a full
+        // replay, not a request error (edge case 9).
+        Ok(ReplayCursor::Revision { .. }) | Err(_) => ResolvedCursor::Unknown,
     }
 }
 
