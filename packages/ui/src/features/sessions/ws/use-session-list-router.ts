@@ -35,6 +35,7 @@ import { useLayoutStore } from '../../../store/layout';
 import { isDraftSessionId } from '../../../store/layout-persist';
 import { useLastSessionStore } from '../../../store/last-session';
 import { isCreateInFlight } from '../runtime/new-thread-coordinator';
+import { useIsNewThreadSwitchPending } from '../new-thread/new-thread-switch-pending';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
 import { threadItemsToSessionItems } from '../view-model/chat-to-thread-custom';
 import { pickInitialSession } from '../view-model/initial-session';
@@ -89,6 +90,9 @@ export function useSessionListRouter(): void {
   // outside the selector (a fresh array would loop useAuiState's Object.is).
   const threadItems = useAuiState((s) => s.threads.threadItems);
   const items = useMemo(() => threadItemsToSessionItems(threadItems), [threadItems]);
+  // A user-initiated New switch in flight (todo #375) — the automatic
+  // selections below must yield to it rather than race and cancel it.
+  const newThreadSwitchPending = useIsNewThreadSwitchPending();
 
   // Keep a ref so the router callback (created once in the [threads] effect) can
   // read the current active thread id without closing over a stale value.
@@ -197,7 +201,12 @@ export function useSessionListRouter(): void {
         // Carry the draft's arrangement onto the real chat id before switching, so
         // the handoff cannot re-seed chat-only (adoptSession is itself re-entrant-safe).
         useLayoutStore.getState().adoptSession(mainThreadId, draftRemoteId);
-        void threads.switchToThread(draftRemoteId);
+        // A user-initiated New may still be switching away from THIS exact
+        // draft right now (todo #375) — re-key the layout above, but leave the
+        // switch itself alone, or this handoff's switchToThread would cancel
+        // it out from under the user. Re-evaluated once the claim releases
+        // (newThreadSwitchPending is an effect dep).
+        if (!newThreadSwitchPending) void threads.switchToThread(draftRemoteId);
         return;
       }
 
@@ -214,15 +223,22 @@ export function useSessionListRouter(): void {
       }
 
       // See reconcileDraftHandoff for the deliberate-New-vs-involuntary-bump split.
-      const handoffTarget = reconcileDraftHandoff(prevRealActiveRef, items, fallback);
-      if (handoffTarget != null) threads.switchToThread(handoffTarget);
+      // Skipped (not just its switch) while a New is pending: consuming
+      // prevRealActiveRef here would lose the reconciliation once the claim
+      // releases and this effect re-runs (todo #375).
+      if (!newThreadSwitchPending) {
+        const handoffTarget = reconcileDraftHandoff(prevRealActiveRef, items, fallback);
+        if (handoffTarget != null) threads.switchToThread(handoffTarget);
+      }
       return;
     }
     if (active == null) return; // unreachable (onDraft covers it) — narrows for TS
 
     // Defensive: aui usually switches away first, but if the active thread itself
-    // is archived out from under us, fall back the same way.
+    // is archived out from under us, fall back the same way — unless a New is
+    // still pending (todo #375), which must not be raced by this fallback either.
     if (active.status === 'archived') {
+      if (newThreadSwitchPending) return;
       const target = fallback();
       if (target != null) threads.switchToThread(target);
       return;
@@ -237,7 +253,7 @@ export function useSessionListRouter(): void {
     if (active.remoteId != null && active.remoteId !== mainThreadId) unreadStore.clearUnread(active.remoteId);
     rememberActiveSession(active, items);
     clearFilterOnCrossProject(active);
-  }, [mainThreadId, items, threadItems, threads]);
+  }, [mainThreadId, items, threadItems, threads, newThreadSwitchPending]);
 
   // Boot auto-select: open a session once the list first loads, so the app doesn't
   // land on the empty new-thread picker. Prefers the last session open before the
@@ -256,13 +272,15 @@ export function useSessionListRouter(): void {
     didAutoSelectRef.current = true;
 
     const onBootDraft = mainThreadId == null || mainThreadId.startsWith('__LOCALID_');
-    if (!onBootDraft || (mainThreadId != null && isCreateInFlight(mainThreadId))) return;
+    // The one-shot is consumed above regardless — a New switch pending (todo
+    // #375) means the user already chose it, same as isCreateInFlight.
+    if (!onBootDraft || newThreadSwitchPending || (mainThreadId != null && isCreateInFlight(mainThreadId))) return;
 
     const target = pickInitialSession(items, useLastSessionStore.getState().lastSessionId);
     if (target != null && target !== mainThreadId) {
       threads.switchToThread(target);
     }
-  }, [items, mainThreadId, threads]);
+  }, [items, mainThreadId, threads, newThreadSwitchPending]);
 
   // Ghost-chat prune (todo #346) — see use-ghost-chat-prune.ts.
   useGhostChatPrune(items, threads);

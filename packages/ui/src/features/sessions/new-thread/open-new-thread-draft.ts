@@ -5,7 +5,13 @@
  * and the selection toolbar's "New session" action) share one implementation.
  * Every dependency is read fresh via `runtimeThreads.getState()` rather than
  * captured once, because a call site can unmount mid-await.
+ *
+ * Holds a `new-thread-switch-pending` claim across `switchToNewThread()` and
+ * the activation poll, released in a `finally` before `initializeDraft` runs
+ * (todo #375) — so `useSessionListRouter`'s automatic selections yield to
+ * this switch instead of racing it and cancelling it out from under us.
  */
+import { beginNewThreadSwitch } from './new-thread-switch-pending';
 export interface OpenNewThreadDraftDeps {
   filterProjectIds: ReadonlySet<string>;
   clearProjectFilter: () => void;
@@ -82,8 +88,14 @@ export async function openNewThreadDraft(args: OpenNewThreadDraftArgs, deps: Ope
   }
 
   resetNewThreadDraft(runtimeThreads.getState().newThreadId);
-  await runtimeThreads.switchToNewThread();
-  const newThreadId = await waitForSwitchedDraft(runtimeThreads);
+  const releaseSwitchPending = beginNewThreadSwitch();
+  let newThreadId: string | null;
+  try {
+    await runtimeThreads.switchToNewThread();
+    newThreadId = await waitForSwitchedDraft(runtimeThreads);
+  } finally {
+    releaseSwitchPending();
+  }
   if (newThreadId == null) {
     mfToastError('Couldn’t open a new session', {
       description: 'The new session never became active. Try again.',
