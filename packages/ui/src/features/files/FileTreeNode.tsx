@@ -121,7 +121,10 @@ export function FileTreeNode({ entry, depth, port, projectId, chatId, base, reve
             text={entry.name}
             tooltip={fullPath}
             className="min-w-0"
-            contentClassName="font-mono break-all"
+            contentClassName="pointer-events-none font-mono break-all"
+            delayDuration={500}
+            skipDelayDuration={0}
+            disableHoverableContent
           />
         </button>
       </FileTreeRowMenu>
@@ -148,7 +151,10 @@ export function FileTreeNode({ entry, depth, port, projectId, chatId, base, reve
             text={entry.name}
             tooltip={fullPath}
             className="min-w-0"
-            contentClassName="font-mono break-all"
+            contentClassName="pointer-events-none font-mono break-all"
+            delayDuration={500}
+            skipDelayDuration={0}
+            disableHoverableContent
           />
         </button>
       </FileTreeRowMenu>

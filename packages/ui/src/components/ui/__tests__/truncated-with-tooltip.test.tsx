@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { TruncatedWithTooltip } from '../truncated-with-tooltip';
 
@@ -20,6 +20,52 @@ describe('TruncatedWithTooltip', () => {
     expect(screen.queryByTestId('empty')).toBeNull();
     expect(container.firstChild).toBeNull();
   });
+});
+
+it('keeps custom hints immediate by default', async () => {
+  const user = userEvent.setup();
+  render(<TruncatedWithTooltip text="file.ts" tooltip="/workspace/file.ts" />);
+  await user.hover(screen.getByText('file.ts'));
+  expect(screen.getByRole('tooltip')).toHaveTextContent('/workspace/file.ts');
+});
+
+it('applies the configured delay again after closing an opened hint', async () => {
+  vi.useFakeTimers();
+  try {
+    render(
+      <TruncatedWithTooltip
+        text="file.ts"
+        tooltip="/workspace/file.ts"
+        delayDuration={500}
+        skipDelayDuration={0}
+        disableHoverableContent
+      />,
+    );
+    const label = screen.getByText('file.ts');
+    fireEvent.pointerMove(label, { pointerType: 'mouse' });
+    await act(() => vi.advanceTimersByTimeAsync(499));
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    await act(() => vi.advanceTimersByTimeAsync(1));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('/workspace/file.ts');
+    fireEvent.pointerLeave(label, { pointerType: 'mouse' });
+    await act(() => vi.advanceTimersByTimeAsync(1));
+    fireEvent.pointerMove(label, { pointerType: 'mouse' });
+    await act(() => vi.advanceTimersByTimeAsync(499));
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    await act(() => vi.advanceTimersByTimeAsync(1));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('/workspace/file.ts');
+  } finally {
+    cleanup();
+    vi.useRealTimers();
+  }
+});
+
+it('retains immediate focus hints for callers that supply a tab stop', () => {
+  render(<TruncatedWithTooltip text="file.ts" tooltip="/workspace/file.ts" delayDuration={500} tabIndex={0} />);
+  fireEvent.focus(screen.getByText('file.ts'));
+  expect(screen.getByRole('tooltip')).toHaveTextContent('/workspace/file.ts');
+  fireEvent.blur(screen.getByText('file.ts'));
+  expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
 });
 
 // ---------------------------------------------------------------------------
