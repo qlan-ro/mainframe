@@ -44,7 +44,11 @@ pub struct CommandExecutionItem {
         skip_serializing_if = "Option::is_none"
     )]
     pub command_actions: Option<Vec<mainframe_types::command_execution::CommandAction>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        deserialize_with = "crate::command_metadata::duration",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub duration_ms: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exit_code: Option<i64>,

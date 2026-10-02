@@ -25,6 +25,10 @@ pub(crate) fn actions<'de, D: Deserializer<'de>>(
     }))
 }
 
+pub(crate) fn duration<'de, D: Deserializer<'de>>(d: D) -> Result<Option<i64>, D::Error> {
+    Ok(Value::deserialize(d)?.as_i64())
+}
+
 pub(crate) fn output<'de, D: Deserializer<'de>>(d: D) -> Result<String, D::Error> {
     Ok(Option::<String>::deserialize(d)?.unwrap_or_default())
 }
