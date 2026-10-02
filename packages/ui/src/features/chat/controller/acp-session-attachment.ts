@@ -24,6 +24,7 @@ import { ReplayCancelledError } from './acp-replay-window';
 import { ReplayWindowCoordinator } from './acp-replay-coordinator';
 import { wireAcpSessionListeners } from './acp-session-listeners';
 import type { ApplyOutcome } from '../view-model/acp-item-accumulator';
+import type { ReplayStage } from './acp-replay-stage';
 import type { AcpSessionAttachmentHost, AcpSessionClientPort } from './acp-session-attachment-types';
 
 export type { AcpSessionAttachmentHost, AcpSessionClientPort } from './acp-session-attachment-types';
@@ -185,7 +186,7 @@ export class AcpSessionAttachment {
   }
 
   /**
-   * The single choke point for reconciling a reconnect THIS attachment has not yet been told about via its own `onGap` (re-review LOW): a loader's `ensureConnected()` elsewhere lands a new connection, and its `notifyGap` can lag by up to the client's own backoff. Called before routing any frame (`acp-session-listeners.ts`'s `onSessionUpdate`) and before `AcpSessionPlane.sendPrompt()` — both can otherwise land fresh, post-reconnect traffic on a stale window's staging (`AcpTranscriptStore.target()`), invisible until the late gap eventually drains it. A no-op once the generation is already reconciled, so calling it from multiple sites costs nothing extra.
+   * The single choke point for reconciling a reconnect THIS attachment has not yet been told about via its own `onGap` (re-review LOW): a loader's `ensureConnected()` elsewhere lands a new connection, and its `notifyGap` can lag by up to the client's own backoff. Called before routing any frame (`acp-session-listeners.ts`'s `onSessionUpdate`) and before `AcpSessionPlane.sendPrompt()` — both can otherwise land fresh, post-reconnect traffic on a stale window's own stage (routed via `currentReplayStage()`), invisible until the late gap eventually drains it. A no-op once the generation is already reconciled, so calling it from multiple sites costs nothing extra.
    */
   syncConnectionGeneration(): void {
     if (!this.client) return;
@@ -204,6 +205,11 @@ export class AcpSessionAttachment {
   /** D3 routing: an unknown-id frame with no creation marker. Tagged `'needs-replay'` so a steadily-unknown id backs off exponentially instead of firing a full replay per patch (finding 6, `acp-full-replay.ts`). */
   routeNeedsReplay(): void {
     this.replay.routeNeedsReplay(() => this.fullReplay.requestResync('needs-replay'));
+  }
+
+  /** The FIFO-front window's own stage — where a routed frame applies (todo #385). `null` while the FIFO is empty or its front window was refused. */
+  currentReplayStage(): ReplayStage | null {
+    return this.replay.currentStage();
   }
 
   /** Tracks a frame's creation against the currently-open window, for the `itemCount` cross-check at publish (advisory only). */

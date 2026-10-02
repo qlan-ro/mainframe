@@ -10,7 +10,16 @@
  * module's API — `AcpSessionAttachment` (via `ReplayWindowCoordinator`,
  * `acp-replay-coordinator.ts`) drives every transition (open, close, abort)
  * and `resume()` simply awaits `window.promise`.
+ *
+ * **Per-window storage (todo #385).** Every window but a refused one owns a
+ * `ReplayStage` (`acp-replay-coordinator.ts`'s `openWindow` assigns it right
+ * after construction, before any frame can route to this window) — its own
+ * off-screen accumulator if full, or just its deferred state if a cursor.
+ * Releasing a window (abort, drain, or its own marker) always releases THAT
+ * window's own stage, never another window's.
  */
+
+import type { ReplayStage } from './acp-replay-stage';
 
 /** `refused` is the empty-refresh guard's outcome: nothing is staged, nothing publishes, but it still occupies a FIFO slot so markers close in order. */
 export type ReplayWindowKind = 'full' | 'cursor' | 'refused';
@@ -32,6 +41,8 @@ export class ReplayWindow {
   status: ReplayWindowStatus = 'open';
   /** Count of `apply()` calls that created a brand-new item while this window was open — cross-checked against `itemCount` at publish, advisory only. */
   createdCount = 0;
+  /** This window's own replay storage — `null` only for a `refused` window, which never stages anything. Set once, immediately after construction (`ReplayWindowCoordinator.openWindow`). */
+  stage: ReplayStage | null = null;
   readonly promise: Promise<void>;
   private resolveFn!: () => void;
   private rejectFn!: (error: unknown) => void;
