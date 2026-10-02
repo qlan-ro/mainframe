@@ -13,6 +13,7 @@ use mainframe_types::display::DisplayContent;
 use mainframe_types::display::ToolCategories;
 use serde_json::Value;
 
+use crate::hidden_boundary::{HiddenBoundary, paragraph_break};
 use crate::tool_categorization::{
     is_explore_tool, is_hidden_tool_part, is_subagent_tool, is_task_progress_tool,
 };
@@ -213,54 +214,130 @@ fn collect_task_item(buckets: &mut Vec<ProgressBucket>, result_len: usize, tc: &
 /// Post-processes parts to group consecutive explore tools, suppress hidden
 /// tools, and accumulate task-progress tools into one `_task_progress` entry per
 /// parent. Categories are adapter-declared — pass the adapter's `ToolCategories`.
+///
+/// A dropped hidden tool call still leaves a paragraph boundary for the text
+/// that follows it (todo #383, `hidden_boundary.rs`) — the encoder itself is
+/// unchanged and still concatenates adjacent text leaves with no separator.
 pub fn group_tool_call_parts(parts: &[PartEntry], categories: &ToolCategories) -> Vec<PartEntry> {
     let mut result: Vec<PartEntry> = Vec::new();
     // Progress tools accumulate per parentToolUseId (None = main agent), so a
     // subagent's progress feed stays single-parented and can nest inside its
     // task group instead of merging with the main agent's into one mixed entry.
     let mut buckets: Vec<ProgressBucket> = Vec::new();
+    let mut boundary = HiddenBoundary::new();
     let mut i = 0usize;
 
     while i < parts.len() {
         let part = &parts[i];
-
-        let tc = match part.as_tool_call() {
-            Some(tc) => tc,
+        i = match part.as_tool_call() {
+            Some(tc) => dispatch_tool_call_part(
+                parts,
+                i,
+                &tc,
+                categories,
+                &mut result,
+                &mut buckets,
+                &mut boundary,
+            ),
             None => {
-                result.push(part.clone());
-                i += 1;
-                continue;
+                push_non_tool_part(&mut result, &buckets, &mut boundary, part.clone());
+                i + 1
             }
         };
-
-        // Collect task progress tools for accumulated display. Checked BEFORE the
-        // hidden suppression: adapters mark the V2 task tools as both `hidden` (so
-        // they never render as raw tool cards) and `progress` (so they surface as a
-        // _TaskProgress entry). Progress must win, or they'd be dropped.
-        if is_task_progress_tool(tc.tool_name, categories) {
-            collect_task_item(&mut buckets, result.len(), &tc);
-            i += 1;
-            continue;
-        }
-
-        // Skip hidden tools
-        if is_hidden_tool_part(tc.tool_name, tc.category, categories) {
-            i += 1;
-            continue;
-        }
-
-        if is_explore_tool(tc.tool_name, categories) {
-            i = collect_explore_run(parts, i, &mut result, categories, &mut buckets);
-            continue;
-        }
-
-        // Everything else passes through
-        result.push(part.clone());
-        i += 1;
     }
 
     splice_progress_entries(&mut result, buckets);
     result
+}
+
+/// Dispatches the `ToolCall` part at `parts[i]`: accumulates a progress tool
+/// (checked first — the V2 task tools are both `hidden` and `progress`, and
+/// progress must win or they'd be dropped), drops a hidden tool while
+/// recording the paragraph boundary its drop leaves behind, collects an
+/// explore run, or passes a visible tool call through. Every branch but the
+/// hidden drop clears the pending boundary. Returns the index of the next
+/// unconsumed part.
+fn dispatch_tool_call_part(
+    parts: &[PartEntry],
+    i: usize,
+    tc: &ToolCallRef<'_>,
+    categories: &ToolCategories,
+    result: &mut Vec<PartEntry>,
+    buckets: &mut Vec<ProgressBucket>,
+    boundary: &mut HiddenBoundary,
+) -> usize {
+    if is_task_progress_tool(tc.tool_name, categories) {
+        collect_task_item(buckets, result.len(), tc);
+        return i + 1;
+    }
+    if is_hidden_tool_part(tc.tool_name, tc.category, categories) {
+        boundary.mark_hidden_drop(tc.parent_tool_use_id.clone());
+        return i + 1;
+    }
+    if is_explore_tool(tc.tool_name, categories) {
+        let next = collect_explore_run(parts, i, result, categories, buckets);
+        // The run always pushes a visible item, so text on either side is
+        // already in separate segments — no boundary needed.
+        boundary.clear();
+        return next;
+    }
+    // Everything else passes through
+    boundary.clear();
+    result.push(parts[i].clone());
+    i + 1
+}
+
+/// Pushes a non-tool-call part (`Text` or `Passthrough`), applying a pending
+/// hidden-call paragraph break to qualifying text first. The break applies
+/// only when: a boundary is pending for this text's parent; the last pushed
+/// entry is a same-parent, non-whitespace `Text`; and no progress bucket will
+/// be spliced at the current position (`splice_progress_entries` already
+/// separates that case). An empty incoming text leaves the boundary pending
+/// for a later push; every other push clears it.
+fn push_non_tool_part(
+    result: &mut Vec<PartEntry>,
+    buckets: &[ProgressBucket],
+    boundary: &mut HiddenBoundary,
+    part: PartEntry,
+) {
+    let PartEntry::Text {
+        text,
+        parent_tool_use_id,
+    } = part
+    else {
+        boundary.clear();
+        result.push(part);
+        return;
+    };
+    if text.is_empty() {
+        result.push(PartEntry::Text {
+            text,
+            parent_tool_use_id,
+        });
+        return;
+    }
+
+    let tail = match result.last() {
+        Some(PartEntry::Text {
+            text: t,
+            parent_tool_use_id: p,
+        }) if *p == parent_tool_use_id && !t.trim().is_empty() => Some(t.as_str()),
+        _ => None,
+    };
+    let can_break = boundary.pending_for(&parent_tool_use_id)
+        && tail.is_some()
+        && !buckets.iter().any(|b| b.insert_index == result.len());
+
+    let text = match (can_break, tail) {
+        (true, Some(tail)) => format!("{}{text}", "\n".repeat(paragraph_break(tail, &text))),
+        _ => text,
+    };
+
+    boundary.clear();
+    result.push(PartEntry::Text {
+        text,
+        parent_tool_use_id,
+    });
 }
 
 /// Collects the run of consecutive explore tools starting at `start` into a
@@ -416,6 +493,7 @@ pub fn group_task_children(parts: &[PartEntry], categories: &ToolCategories) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mainframe_types::content::LeafContent;
     use std::collections::HashSet;
 
     /// Mirrors `ClaudeAdapter.getToolCategories()`: the V2 task tools are BOTH
@@ -1248,6 +1326,219 @@ mod tests {
             p,
             PartEntry::ToolCall { tool_call_id, .. } if tool_call_id == "b"
         )));
+    }
+
+    /* ── hidden-call paragraph boundary (todo #383) ──────────────────── */
+
+    fn text_tagged(t: &str, parent: &str) -> PartEntry {
+        PartEntry::Text {
+            text: t.to_string(),
+            parent_tool_use_id: Some(parent.to_string()),
+        }
+    }
+
+    fn passthrough_thinking(t: &str) -> PartEntry {
+        PartEntry::Passthrough {
+            content: DisplayContent::Leaf(LeafContent::Thinking {
+                thinking: t.to_string(),
+                parent_tool_use_id: None,
+            }),
+            parent_tool_use_id: None,
+        }
+    }
+
+    fn passthrough_image() -> PartEntry {
+        PartEntry::Passthrough {
+            content: DisplayContent::Leaf(LeafContent::Image {
+                media_type: "image/png".to_string(),
+                data: "...".to_string(),
+                parent_tool_use_id: None,
+            }),
+            parent_tool_use_id: None,
+        }
+    }
+
+    fn text_of(p: &PartEntry) -> &str {
+        match p {
+            PartEntry::Text { text, .. } => text,
+            other => panic!("expected Text, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn ordinary_adjacent_text_with_no_hidden_call_is_unmodified() {
+        let parts = vec![text("first"), text("second")];
+        assert_eq!(
+            group_tool_call_parts(&parts, &claude_cats()),
+            vec![text("first"), text("second")]
+        );
+    }
+
+    #[test]
+    fn hidden_call_between_texts_inserts_a_blank_line() {
+        let parts = vec![
+            text("first"),
+            tc("TodoWrite", Some("h1"), None, None),
+            text("second"),
+        ];
+        let result = group_tool_call_parts(&parts, &claude_cats());
+        assert_eq!(result.len(), 2);
+        assert_eq!(text_of(&result[0]), "first");
+        assert_eq!(text_of(&result[1]), "\n\nsecond");
+    }
+
+    #[test]
+    fn existing_blank_line_on_the_tail_is_not_doubled() {
+        let parts = vec![
+            text("first\n\n"),
+            tc("TodoWrite", Some("h1"), None, None),
+            text("second"),
+        ];
+        let result = group_tool_call_parts(&parts, &claude_cats());
+        assert_eq!(text_of(&result[1]), "second");
+    }
+
+    #[test]
+    fn a_single_trailing_newline_on_the_tail_is_topped_up_to_two() {
+        let parts = vec![
+            text("first\n"),
+            tc("TodoWrite", Some("h1"), None, None),
+            text("second"),
+        ];
+        let result = group_tool_call_parts(&parts, &claude_cats());
+        assert_eq!(text_of(&result[1]), "\nsecond");
+    }
+
+    #[test]
+    fn a_single_leading_newline_on_the_incoming_text_is_topped_up_to_two() {
+        let parts = vec![
+            text("first"),
+            tc("TodoWrite", Some("h1"), None, None),
+            text("\nsecond"),
+        ];
+        let result = group_tool_call_parts(&parts, &claude_cats());
+        assert_eq!(text_of(&result[1]), "\n\nsecond");
+    }
+
+    #[test]
+    fn two_hidden_calls_in_a_row_produce_one_boundary() {
+        let parts = vec![
+            text("first"),
+            tc("TodoWrite", Some("h1"), None, None),
+            tc("AskUserQuestion", Some("h2"), None, None),
+            text("second"),
+        ];
+        let result = group_tool_call_parts(&parts, &claude_cats());
+        assert_eq!(result.len(), 2);
+        assert_eq!(text_of(&result[1]), "\n\nsecond");
+    }
+
+    #[test]
+    fn a_leading_hidden_call_with_no_tail_text_adds_no_separator() {
+        let parts = vec![tc("TodoWrite", Some("h1"), None, None), text("second")];
+        let result = group_tool_call_parts(&parts, &claude_cats());
+        assert_eq!(result, vec![text("second")]);
+    }
+
+    #[test]
+    fn a_trailing_hidden_call_with_no_following_text_adds_no_separator() {
+        let parts = vec![text("first"), tc("TodoWrite", Some("h1"), None, None)];
+        let result = group_tool_call_parts(&parts, &claude_cats());
+        assert_eq!(result, vec![text("first")]);
+    }
+
+    #[test]
+    fn a_passthrough_image_between_hidden_and_text_clears_the_boundary() {
+        let parts = vec![
+            text("first"),
+            tc("TodoWrite", Some("h1"), None, None),
+            passthrough_image(),
+            text("second"),
+        ];
+        let result = group_tool_call_parts(&parts, &claude_cats());
+        assert_eq!(result.len(), 3);
+        assert_eq!(text_of(&result[0]), "first");
+        assert_eq!(text_of(&result[2]), "second");
+    }
+
+    #[test]
+    fn a_passthrough_thinking_between_hidden_and_text_clears_the_boundary() {
+        let parts = vec![
+            text("first"),
+            tc("TodoWrite", Some("h1"), None, None),
+            passthrough_thinking("hmm"),
+            text("second"),
+        ];
+        let result = group_tool_call_parts(&parts, &claude_cats());
+        assert_eq!(result.len(), 3);
+        assert_eq!(text_of(&result[0]), "first");
+        assert_eq!(text_of(&result[2]), "second");
+    }
+
+    #[test]
+    fn a_spliced_task_progress_entry_between_the_texts_suppresses_the_break() {
+        let parts = vec![
+            text("first"),
+            tc("TaskCreate", Some("tc1"), None, None),
+            tc("TodoWrite", Some("h1"), None, None),
+            text("second"),
+        ];
+        let result = group_tool_call_parts(&parts, &claude_cats());
+        let labels: Vec<String> = result.iter().map(label).collect();
+        assert_eq!(
+            labels,
+            vec!["text:first", "tool:_TaskProgress", "text:second"]
+        );
+    }
+
+    #[test]
+    fn a_hidden_call_from_a_different_parent_adds_no_break() {
+        let parts = vec![
+            text("first"),
+            tc_tagged("TodoWrite", "h1", "sub1", None),
+            text("second"),
+        ];
+        let result = group_tool_call_parts(&parts, &claude_cats());
+        assert_eq!(result, vec![text("first"), text("second")]);
+    }
+
+    #[test]
+    fn a_hidden_call_matching_the_subagent_texts_parent_gets_the_break() {
+        let parts = vec![
+            text_tagged("first", "sub1"),
+            tc_tagged("TodoWrite", "h1", "sub1", None),
+            text_tagged("second", "sub1"),
+        ];
+        let result = group_tool_call_parts(&parts, &claude_cats());
+        assert_eq!(result.len(), 2);
+        assert_eq!(text_of(&result[0]), "first");
+        assert_eq!(text_of(&result[1]), "\n\nsecond");
+    }
+
+    #[test]
+    fn the_subagent_break_survives_nesting_into_the_task_group() {
+        let task_id = "t-agent";
+        let tagged = vec![
+            text_tagged("first", task_id),
+            tc_tagged("TodoWrite", "h1", task_id, None),
+            text_tagged("second", task_id),
+        ];
+        let grouped = group_tool_call_parts(&tagged, &claude_cats());
+        assert_eq!(grouped.len(), 2);
+        assert_eq!(text_of(&grouped[1]), "\n\nsecond");
+
+        let mut parts = vec![tc("Task", Some(task_id), None, None)];
+        parts.extend(grouped);
+        let result = group_task_children(&parts, &claude_cats());
+        assert_eq!(result.len(), 1);
+        match &result[0] {
+            PartEntry::TaskGroup(e) => {
+                assert_eq!(e.children.len(), 2);
+                assert_eq!(text_of(&e.children[0]), "first");
+                assert_eq!(text_of(&e.children[1]), "\n\nsecond");
+            }
+            other => panic!("expected _task_group, got {other:?}"),
+        }
     }
 }
 
