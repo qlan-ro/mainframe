@@ -16,7 +16,7 @@ use serde_json::Value;
 use crate::encoder::{EncodedItem, ItemRole};
 
 mod tool_patch;
-mod updates;
+pub(crate) mod updates;
 use tool_patch::tool_call_patch;
 use updates::{clear_update, create_patch, create_update, message_variant, upsert_variant};
 

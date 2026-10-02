@@ -14,6 +14,7 @@ pub mod gate_registry;
 pub mod gates;
 pub mod prompt;
 pub mod resume;
+pub mod revision_log;
 pub mod rpc;
 pub mod session_state;
 pub mod stream;
@@ -36,6 +37,7 @@ pub use gates::{
 };
 pub use prompt::{PromptAcceptance, PromptError, PromptPort};
 pub use resume::{ReplayCursor, ResumePort, ResumeReplay, dispatch_resume};
+pub use revision_log::{RecordOutcome, ReplayPlan, RevisionLog};
 pub use session_state::SessionState;
 pub use stream::SessionStream;
 pub use throttle::{Throttle, ThrottledFrame};
