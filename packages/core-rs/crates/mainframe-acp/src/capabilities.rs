@@ -31,6 +31,10 @@ pub fn mainframe_capabilities(heartbeat_interval_ms: u64) -> MainframeCapabiliti
         heartbeat_interval_ms: Some(heartbeat_interval_ms as i64),
         item_creation_markers: Some(true),
         replay_complete: Some(true),
+        // Flipped to `Some(true)` once the daemon side of revision cursors
+        // lands (todo #377, group G2) — keeps the workspace building while
+        // only the wire contract exists.
+        revision_cursors: None,
     }
 }
 

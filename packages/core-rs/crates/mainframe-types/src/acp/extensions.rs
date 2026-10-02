@@ -156,6 +156,35 @@ pub struct MainframeCapabilities {
     /// this is advertised.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub replay_complete: Option<bool>,
+    /// Whether the daemon negotiates revision-versioned resume cursors
+    /// (todo #377): an opted-in connection's `session/resume` reply adds
+    /// `cursor` meta and is followed by `_mainframe.dev/cursor`
+    /// notifications after catch-up. A connection that does not opt in via
+    /// [`REVISION_CURSORS_OPT_IN_KEY`] keeps today's item-cursor-only wire
+    /// regardless of this flag.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub revision_cursors: Option<bool>,
+}
+
+/// The `initialize` request `_meta["_mainframe.dev"]` key a client sets to
+/// `true` to opt into revision-versioned resume cursors (todo #377). Absent
+/// or `false` keeps the connection on item cursors only, byte-identical to
+/// today, even when [`MainframeCapabilities::revision_cursors`] advertises
+/// server support.
+pub const REVISION_CURSORS_OPT_IN_KEY: &str = "revisionCursors";
+
+/// The replay boundary a revision-cursor `session/resume` reply returns and
+/// the `_mainframe.dev/cursor` notification advances (todo #377). `epoch`
+/// identifies the log generation — `TranscriptCleared`, `Resync`,
+/// compaction, and a tool-call vanish each rotate it, which invalidates
+/// every cursor from the prior epoch. `revision` is the daemon's monotonic
+/// per-chat counter. Mirrors `packages/types/src/acp/extensions.ts`'
+/// `RevisionCursorSchema`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RevisionCursor {
+    pub epoch: String,
+    pub revision: u64,
 }
 
 /// `api_retry` modeled as a content-replacing patch plus this marker (spec
@@ -295,6 +324,20 @@ pub struct ReplayCompleteParams {
 /// complete first state".
 pub const ITEM_CREATED_META_KEY: &str = "created";
 
+/// `_mainframe.dev/cursor`'s params (todo #377): the replay boundary a
+/// reconnecting client now holds every change through. Rides the
+/// per-session throttle FIFO after the frames of the display revision it
+/// describes, so receiving it means the client holds every change up to
+/// and including `revision`. Sent only to connections that opted into
+/// revision cursors via [`REVISION_CURSORS_OPT_IN_KEY`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CursorParams {
+    pub session_id: String,
+    pub epoch: String,
+    pub revision: u64,
+}
+
 /// [`CompactionParams::phase`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -343,6 +386,7 @@ mod tests {
             heartbeat_interval_ms: None,
             item_creation_markers: None,
             replay_complete: None,
+            revision_cursors: None,
         };
         assert_eq!(serde_json::to_value(caps).unwrap(), json!({}));
     }

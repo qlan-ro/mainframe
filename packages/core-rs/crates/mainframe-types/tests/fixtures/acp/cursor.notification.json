@@ -1,0 +1,10 @@
+{
+  "_provenance": "synthetic",
+  "jsonrpc": "2.0",
+  "method": "_mainframe.dev/cursor",
+  "params": {
+    "sessionId": "chat_9f2a3b1c",
+    "epoch": "ep_4b7f9c21",
+    "revision": 42
+  }
+}
