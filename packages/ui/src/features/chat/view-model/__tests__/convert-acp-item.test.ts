@@ -71,6 +71,7 @@ describe('convertAcpItems — reaggregation', () => {
           args: { file_path: '/a' },
           result: 'A',
           isError: undefined,
+          providerMetadata: { mainframe: { acpStatus: 'completed' } },
         },
         {
           type: 'tool-call',
@@ -79,6 +80,7 @@ describe('convertAcpItems — reaggregation', () => {
           args: {},
           result: '',
           isError: undefined,
+          providerMetadata: { mainframe: { acpStatus: 'completed' } },
         },
         { type: 'reasoning', text: 'thinking' },
       ],
@@ -123,11 +125,27 @@ describe('convertAcpItems — reaggregation', () => {
     expect(converted.map((m) => m.id)).toEqual(['c1', 'c2']);
     expect(converted[0]!.content).toEqual([
       { type: 'text', text: 'first' },
-      { type: 'tool-call', toolCallId: 't1', toolName: 'Bash', args: {}, result: '', isError: undefined },
+      {
+        type: 'tool-call',
+        toolCallId: 't1',
+        toolName: 'Bash',
+        args: {},
+        result: '',
+        isError: undefined,
+        providerMetadata: { mainframe: { acpStatus: 'completed' } },
+      },
     ]);
     expect(converted[1]!.content).toEqual([
       { type: 'text', text: 'second' },
-      { type: 'tool-call', toolCallId: 't2', toolName: 'Bash', args: {}, result: '', isError: undefined },
+      {
+        type: 'tool-call',
+        toolCallId: 't2',
+        toolName: 'Bash',
+        args: {},
+        result: '',
+        isError: undefined,
+        providerMetadata: { mainframe: { acpStatus: 'completed' } },
+      },
     ]);
   });
 
@@ -179,9 +197,25 @@ describe('convertAcpItems — reaggregation', () => {
         createdAt,
         content: [
           { type: 'text', text: 'first' },
-          { type: 'tool-call', toolCallId: 't1', toolName: 'Bash', args: {}, result: '', isError: undefined },
+          {
+            type: 'tool-call',
+            toolCallId: 't1',
+            toolName: 'Bash',
+            args: {},
+            result: '',
+            isError: undefined,
+            providerMetadata: { mainframe: { acpStatus: 'completed' } },
+          },
           { type: 'text', text: 'second' },
-          { type: 'tool-call', toolCallId: 't2', toolName: 'Bash', args: {}, result: '', isError: undefined },
+          {
+            type: 'tool-call',
+            toolCallId: 't2',
+            toolName: 'Bash',
+            args: {},
+            result: '',
+            isError: undefined,
+            providerMetadata: { mainframe: { acpStatus: 'completed' } },
+          },
           { type: 'text', text: 'third' },
         ],
       },

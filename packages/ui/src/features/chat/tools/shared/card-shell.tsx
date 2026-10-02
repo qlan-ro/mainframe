@@ -1,5 +1,7 @@
 'use client';
 
+import { useCompactDetail } from './compact-detail-context';
+
 /**
  * CollapsibleCardShell — shared chrome for all tool cards.
  *
@@ -79,61 +81,51 @@ export interface CollapsibleCardShellProps {
   headerAccessory?: React.ReactNode;
 }
 
-export function CollapsibleCardShell({
-  testId,
-  triggerId,
-  result,
-  isError,
-  defaultOpen = false,
-  disableTrigger = false,
-  icon,
-  verb,
-  target,
-  trailing,
-  children,
-  className,
-  subHeader,
-  headerAccessory,
-}: CollapsibleCardShellProps) {
-  const hasBody = Boolean(children);
+function CardHeader(props: CollapsibleCardShellProps) {
+  const disabled = props.disableTrigger || !props.children;
+  return (
+    <div className="flex w-full items-center">
+      <CollapsibleTrigger
+        data-testid={props.triggerId}
+        disabled={disabled}
+        className={cn(
+          'flex flex-1 items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-muted',
+          "[&_svg]:shrink-0 [&_svg]:text-muted-foreground [&_svg:not([class*='size-'])]:size-3.5",
+          disabled && 'cursor-default',
+        )}
+      >
+        {props.icon}
+        <span className="shrink-0 font-medium text-foreground">{props.verb}</span>
+        {props.target && <span className="min-w-0 truncate">{props.target}</span>}
+        <span className="min-w-2 flex-1" />
+        {props.trailing && <span className="flex shrink-0 items-center gap-1.5">{props.trailing}</span>}
+      </CollapsibleTrigger>
+      {props.headerAccessory && (
+        <span className="flex shrink-0 items-center gap-1.5 pr-3">{props.headerAccessory}</span>
+      )}
+    </div>
+  );
+}
 
+export function CollapsibleCardShell(props: CollapsibleCardShellProps) {
+  const compactDetail = useCompactDetail();
   return (
     <Collapsible
-      data-testid={testId}
-      defaultOpen={defaultOpen}
-      className={cn(cardStyle(result, isError), 'w-full', className)}
+      data-testid={props.testId}
+      defaultOpen={compactDetail || props.defaultOpen || false}
+      className={cn(cardStyle(props.result, props.isError), 'w-full', props.className)}
     >
-      <div className="flex w-full items-center">
-        <CollapsibleTrigger
-          data-testid={triggerId}
-          disabled={disableTrigger || !hasBody}
-          className={cn(
-            'flex flex-1 items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-muted',
-            "[&_svg]:shrink-0 [&_svg]:text-muted-foreground [&_svg:not([class*='size-'])]:size-3.5",
-            (disableTrigger || !hasBody) && 'cursor-default',
-          )}
-        >
-          {icon}
-          <span className="shrink-0 font-medium text-foreground">{verb}</span>
-          {target && <span className="min-w-0 truncate">{target}</span>}
-          <span className="min-w-2 flex-1" />
-          {trailing && <span className="flex shrink-0 items-center gap-1.5">{trailing}</span>}
-        </CollapsibleTrigger>
-        {headerAccessory && <span className="flex shrink-0 items-center gap-1.5 pr-3">{headerAccessory}</span>}
-      </div>
-
-      {subHeader}
-
-      {hasBody && (
+      <CardHeader {...props} />
+      {props.subHeader}
+      {Boolean(props.children) && (
         <CollapsibleContent
           className={cn(
             'overflow-hidden',
-            'data-[state=open]:animate-collapsible-down',
-            'data-[state=closed]:animate-collapsible-up',
-            'data-[state=closed]:fill-mode-forwards',
+            !compactDetail &&
+              'data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up data-[state=closed]:fill-mode-forwards',
           )}
         >
-          {children}
+          {props.children}
         </CollapsibleContent>
       )}
     </Collapsible>

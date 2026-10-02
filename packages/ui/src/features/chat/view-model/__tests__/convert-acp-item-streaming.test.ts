@@ -146,6 +146,7 @@ describe('convertAcpItems — tool name never falls back to the id (D3)', () => 
         type: 'tool-call',
         toolCallId: 'tool-call-id-should-never-render',
         toolName: 'Unknown tool',
+        providerMetadata: { mainframe: { acpStatus: 'pending' } },
         args: {},
         result: undefined,
         isError: undefined,
