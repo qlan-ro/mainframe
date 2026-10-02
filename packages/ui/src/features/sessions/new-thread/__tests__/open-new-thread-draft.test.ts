@@ -7,9 +7,10 @@
  * behaviors SessionsNewButton.test.tsx already pins for the picker's `pick()`,
  * plus the new project-filter and prefill behaviors the second call site needs.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AssistantClient } from '@assistant-ui/react';
 import { openNewThreadDraft, type OpenNewThreadDraftDeps } from '../open-new-thread-draft';
+import { isNewThreadSwitchPending, useNewThreadSwitchPending } from '../new-thread-switch-pending';
 
 function makeDeps(overrides: Partial<OpenNewThreadDraftDeps> = {}): OpenNewThreadDraftDeps {
   return {
@@ -30,6 +31,74 @@ function makeDeps(overrides: Partial<OpenNewThreadDraftDeps> = {}): OpenNewThrea
     ...overrides,
   };
 }
+
+beforeEach(() => {
+  useNewThreadSwitchPending.setState({ count: 0 });
+});
+
+describe('openNewThreadDraft — new-thread-switch-pending claim (todo #375)', () => {
+  it('holds the claim through switchToNewThread + the activation poll, and releases it before initializeDraft runs', async () => {
+    const pendingDuringSwitch: boolean[] = [];
+    const pendingDuringInitialize: boolean[] = [];
+    const deps = makeDeps({
+      runtimeThreads: {
+        getState: vi.fn(() => ({ newThreadId: '__LOCALID_1', mainThreadId: '__LOCALID_1' })),
+        switchToNewThread: vi.fn(async () => {
+          pendingDuringSwitch.push(isNewThreadSwitchPending());
+        }),
+      },
+      initializeDraft: vi.fn(async () => {
+        pendingDuringInitialize.push(isNewThreadSwitchPending());
+        return {};
+      }),
+    });
+
+    expect(isNewThreadSwitchPending()).toBe(false);
+    await openNewThreadDraft({ projectId: 'proj-a' }, deps);
+
+    expect(pendingDuringSwitch).toEqual([true]);
+    expect(pendingDuringInitialize).toEqual([false]);
+    expect(isNewThreadSwitchPending()).toBe(false);
+  });
+
+  it('releases the claim when the switched draft never settles (bounded failure still toasts)', async () => {
+    vi.useFakeTimers();
+    try {
+      const deps = makeDeps({
+        runtimeThreads: {
+          getState: vi.fn(() => ({ newThreadId: null, mainThreadId: null })),
+          switchToNewThread: vi.fn(async () => {}),
+        },
+      });
+
+      const promise = openNewThreadDraft({ projectId: 'proj-a' }, deps);
+      expect(isNewThreadSwitchPending()).toBe(true);
+      await vi.advanceTimersByTimeAsync(1100);
+      await promise;
+
+      expect(isNewThreadSwitchPending()).toBe(false);
+      expect(deps.mfToastError).toHaveBeenCalledWith('Couldn’t open a new session', {
+        description: 'The new session never became active. Try again.',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('releases the claim even when switchToNewThread itself rejects', async () => {
+    const deps = makeDeps({
+      runtimeThreads: {
+        getState: vi.fn(() => ({ newThreadId: '__LOCALID_1', mainThreadId: '__LOCALID_1' })),
+        switchToNewThread: vi.fn(async () => {
+          throw new Error('switch blew up');
+        }),
+      },
+    });
+
+    await expect(openNewThreadDraft({ projectId: 'proj-a' }, deps)).rejects.toThrow('switch blew up');
+    expect(isNewThreadSwitchPending()).toBe(false);
+  });
+});
 
 describe('openNewThreadDraft — project filter clearing', () => {
   it('clears the filter when the scope is set and does not contain the target project', async () => {

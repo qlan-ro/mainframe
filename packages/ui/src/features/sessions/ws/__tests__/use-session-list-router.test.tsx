@@ -27,6 +27,10 @@
  *  - a draft never writes lastSessionId / lastForProject
  *  - a burst of onReload() calls coalesces into a leading reload plus at most
  *    one trailing reload per 200ms window, not one reload per event
+ *  - while a New-session switch is pending (todo #375): first-send adoption
+ *    re-keys the layout but does not switch; the switch resumes once the
+ *    claim releases; boot auto-select consumes its one-shot without
+ *    switching; the archived-active fallback is skipped
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
@@ -131,6 +135,14 @@ vi.mock('../../runtime/new-thread-coordinator', () => ({
   isCreateInFlight: (localId: string) => inFlightLocalIds.has(localId),
 }));
 
+// A controllable stand-in for the new-thread-switch-pending claim (todo #375) —
+// the real module's zustand hook is swapped for a plain boolean read so tests
+// can flip it between renders without going through beginNewThreadSwitch().
+let newThreadSwitchPendingValue = false;
+vi.mock('../../new-thread/new-thread-switch-pending', () => ({
+  useIsNewThreadSwitchPending: () => newThreadSwitchPendingValue,
+}));
+
 vi.mock('@assistant-ui/react', async () => {
   const actual = await vi.importActual<typeof import('@assistant-ui/react')>('@assistant-ui/react');
   // One stable `threads` SCOPE across renders — the real scope survives a main-
@@ -176,6 +188,7 @@ beforeEach(() => {
   filterProjectIdsValue = new Set();
   mainThreadIdValue = null;
   inFlightLocalIds = new Set();
+  newThreadSwitchPendingValue = false;
   lastSessionIdValue = null;
   setLastSessionIdSpy = vi.fn();
   setLastForProjectSpy = vi.fn();
@@ -714,6 +727,86 @@ describe('useSessionListRouter — first send adopts the created session (todo #
       { id: 'chat-other', remoteId: 'chat-other', status: 'regular', custom: { projectId: 'p2', updatedAt: 5000 } },
     ];
     rerender();
+
+    expect(switchSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// New-session switch pending (todo #375): automatic selections yield to a
+// user-initiated New rather than racing and cancelling it.
+// ---------------------------------------------------------------------------
+
+describe('useSessionListRouter — yields to a pending New-session switch (todo #375)', () => {
+  /** Boot on chat-A, then open a deliberate New draft (mirrors startOnDraft above). */
+  function startOnPendingDraft(): () => void {
+    mainThreadIdValue = 'chat-A';
+    fakeThreadItems = [
+      { id: 'chat-A', remoteId: 'chat-A', status: 'regular', custom: { projectId: 'p1', updatedAt: 3000 } },
+    ];
+    const { rerender } = renderHook(() => useSessionListRouter());
+    mainThreadIdValue = '__LOCALID_new';
+    rerender();
+    switchSpy.mockClear();
+    return rerender;
+  }
+
+  it('while pending, first-send adoption re-keys the layout but does not switch', () => {
+    const rerender = startOnPendingDraft();
+
+    newThreadSwitchPendingValue = true;
+    fakeThreadItems = [
+      { id: 'chat-A', remoteId: 'chat-A', status: 'regular', custom: { projectId: 'p1', updatedAt: 3000 } },
+      { id: '__LOCALID_new', remoteId: 'chat-new', status: 'regular' },
+      { id: 'chat-new', remoteId: 'chat-new', status: 'regular', custom: { projectId: 'p1', updatedAt: 4000 } },
+    ];
+    rerender();
+
+    expect(switchSpy).not.toHaveBeenCalled();
+    expect(useLayoutStore.getState().sessions.has('__LOCALID_new')).toBe(false);
+    expect(useLayoutStore.getState().sessions.get('chat-new')).toBeDefined();
+  });
+
+  it('once the claim releases, the deferred switch goes through', () => {
+    const rerender = startOnPendingDraft();
+
+    newThreadSwitchPendingValue = true;
+    fakeThreadItems = [
+      { id: 'chat-A', remoteId: 'chat-A', status: 'regular', custom: { projectId: 'p1', updatedAt: 3000 } },
+      { id: '__LOCALID_new', remoteId: 'chat-new', status: 'regular' },
+      { id: 'chat-new', remoteId: 'chat-new', status: 'regular', custom: { projectId: 'p1', updatedAt: 4000 } },
+    ];
+    rerender();
+    expect(switchSpy).not.toHaveBeenCalled();
+
+    newThreadSwitchPendingValue = false;
+    rerender();
+
+    expect(switchSpy).toHaveBeenCalledTimes(1);
+    expect(switchSpy).toHaveBeenCalledWith('chat-new');
+  });
+
+  it('boot auto-select consumes its one-shot without switching while a New switch is pending, and never fires later', () => {
+    mainThreadIdValue = '__LOCALID_boot';
+    newThreadSwitchPendingValue = true;
+    fakeThreadItems = [bootItem('chat-just-created', 1000)];
+
+    const { rerender } = renderHook(() => useSessionListRouter());
+    expect(switchSpy).not.toHaveBeenCalled();
+
+    newThreadSwitchPendingValue = false;
+    fakeThreadItems = [bootItem('chat-just-created', 1000), bootItem('chat-second', 2000)];
+    rerender();
+
+    expect(switchSpy).not.toHaveBeenCalled();
+  });
+
+  it('the archived-active fallback is skipped while a New switch is pending', () => {
+    mainThreadIdValue = 'chat-A';
+    newThreadSwitchPendingValue = true;
+    fakeThreadItems = [{ id: 'chat-A', remoteId: 'chat-A', status: 'archived', custom: { projectId: 'p1' } }];
+
+    renderHook(() => useSessionListRouter());
 
     expect(switchSpy).not.toHaveBeenCalled();
   });

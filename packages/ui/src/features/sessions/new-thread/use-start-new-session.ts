@@ -26,6 +26,7 @@
 import { useAui } from '@assistant-ui/react';
 import { soleProjectId, useSessionFilters } from '@/store/session-filters';
 import { useActiveIdentity } from '../use-active-identity';
+import { beginNewThreadSwitch } from './new-thread-switch-pending';
 import { resetNewThreadDraft } from './reset-new-thread-draft';
 import { useDraftReturnTarget } from './use-draft-return-target';
 import { useOpenNewThreadDraft } from './use-open-new-thread-draft';
@@ -58,7 +59,11 @@ export function useStartNewSession(): () => void {
     if (target == null) {
       if (!isActiveSlot) useDraftReturnTarget.getState().setReturnTarget(mainThreadId ?? null);
       resetNewThreadDraft(newThreadId);
-      void aui.threads.switchToNewThread();
+      // No activation wait on this path, but the router's automatic
+      // selections must still yield to it while the switch is settling
+      // (todo #375) — same claim openNewThreadDraft holds on its path.
+      const releaseSwitchPending = beginNewThreadSwitch();
+      void Promise.resolve(aui.threads.switchToNewThread()).finally(releaseSwitchPending);
       return;
     }
 
