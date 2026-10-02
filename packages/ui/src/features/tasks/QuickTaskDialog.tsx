@@ -40,6 +40,7 @@ export function QuickTaskDialog({ port, projectId, projects, filterProjectId, on
     >
       <DialogContent
         data-testid="tasks-quick-dialog"
+        resizeKey={projectId !== null ? 'tasks-quick' : undefined}
         className={projectId === null ? 'sm:max-w-sm' : 'max-w-md w-full max-h-[90vh] flex flex-col p-0 gap-0'}
         closeButtonClassName={projectId === null ? undefined : 'top-1.5'}
       >

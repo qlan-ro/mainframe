@@ -99,7 +99,7 @@ export function TaskEditModal({
     <Dialog open onOpenChange={(next) => !next && onClose()}>
       {/* The dialog scrolls as one, the way stock does — a pinned header and
           footer would mean re-plumbing padding out of DialogContent again. */}
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent resizeKey="tasks-sidebar-edit" className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{todo ? `Edit task #${todo.number}` : 'New task'}</DialogTitle>
           <DialogDescription>
@@ -144,9 +144,7 @@ export function TaskEditModal({
                 onChange={(e) => set.body(e.target.value)}
                 onPaste={(e) => void form.attachPasted(e)}
                 placeholder="Describe the task…"
-                // The stock textarea is field-sizing-content; uncapped, a long
-                // brief pushes every field below it out of the dialog.
-                className="max-h-64 resize-none"
+                className="max-h-[min(16rem,40dvh)] overflow-y-auto resize-none"
               />
             </div>
 
