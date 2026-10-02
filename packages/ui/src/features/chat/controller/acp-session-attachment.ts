@@ -58,11 +58,7 @@ export class AcpSessionAttachment {
   private client: AcpSessionClientPort | null = null;
   private readonly unsubscribe: Array<() => void> = [];
   private subscribed = false;
-  /**
-   * Bumped on every (re)subscribe, `detach()`, `dispose()`, and a genuine
-   * client rebind — `resume()` captures it before its round trip and treats
-   * a mismatch on return as "this attachment moved on; drop the reply."
-   */
+  /** Bumped on every (re)subscribe, `detach()`, `dispose()`, and a genuine client rebind — `resume()` captures it before its round trip and treats a mismatch on return as "this attachment moved on; drop the reply." */
   private generation = 0;
   /** The client's `connectionGeneration` last observed when (re)wiring listeners — tells a live-socket gap (unchanged) apart from a reconnect (bumped); only the latter invalidates a queued window outright (finding 1). */
   private observedConnectionGeneration = 0;
