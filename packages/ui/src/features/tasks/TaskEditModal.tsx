@@ -147,7 +147,11 @@ export function TaskEditModal({ port, projectId, todo, allTodos, allLabels, onCl
         if (!o) onClose();
       }}
     >
-      <DialogContent className="max-w-lg w-full max-h-[90vh] flex flex-col p-0 gap-0" closeButtonClassName="top-1.5">
+      <DialogContent
+        resizeKey="tasks-board-edit"
+        className="max-w-lg w-full max-h-[90vh] flex flex-col p-0 gap-0"
+        closeButtonClassName="top-1.5"
+      >
         {/* pr-12 clears the stock close button. */}
         <DialogHeader className="shrink-0 border-b px-4 py-3 pr-12">
           <DialogTitle className="flex items-center gap-2">
@@ -201,7 +205,7 @@ export function TaskEditModal({ port, projectId, todo, allTodos, allLabels, onCl
               <Textarea
                 id="tasks-edit-body"
                 data-testid="tasks-edit-body"
-                className="resize-none"
+                className="max-h-[min(16rem,40dvh)] overflow-y-auto resize-none"
                 rows={4}
                 value={body}
                 onChange={(e) => setBody(e.target.value)}

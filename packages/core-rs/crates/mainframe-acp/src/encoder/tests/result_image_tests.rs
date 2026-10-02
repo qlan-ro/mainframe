@@ -40,6 +40,7 @@ fn a_result_with_images_encodes_one_image_entry_per_image_after_the_text_entry()
         DisplayMessageType::Assistant,
         vec![DisplayContent::Node(DisplayNode::ToolCall {
             timing: None,
+            command_execution: None,
             id: "toolu_img_1".to_string(),
             name: "Read".to_string(),
             input: HashMap::new(),

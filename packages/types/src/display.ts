@@ -1,4 +1,5 @@
 import type { ToolCallTiming } from './tool-call-timing.js';
+import type { CommandExecutionMetadata } from './command-execution.js';
 import type { DiffHunk, ToolResultImage } from './chat.js';
 import type { ControlRequest } from './adapter.js';
 import type { ClaudeWorkflowRun } from './claude-workflow.js';
@@ -35,6 +36,7 @@ export type DisplayContent =
   | {
       type: 'tool_call';
       timing?: ToolCallTiming;
+      commandExecution?: CommandExecutionMetadata;
       id: string;
       name: string;
       input: Record<string, unknown>;

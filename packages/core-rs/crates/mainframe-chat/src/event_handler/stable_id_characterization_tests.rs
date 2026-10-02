@@ -102,6 +102,7 @@ fn bash_tool_use() -> MessageContent {
     );
     MessageContent::Node(MessageContentNode::ToolUse {
         timing: None,
+        command_execution: None,
         id: "tu-1".to_string(),
         name: "Bash".to_string(),
         input,

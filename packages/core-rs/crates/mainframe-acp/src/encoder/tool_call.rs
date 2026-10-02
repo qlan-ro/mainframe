@@ -1,3 +1,4 @@
+use mainframe_types::command_execution::CommandExecutionMetadata;
 use mainframe_types::tool_call_timing::ToolCallTiming;
 
 use super::*;
@@ -26,6 +27,7 @@ pub(super) fn encode_tool_group(
             category,
             result,
             timing,
+            command_execution,
             ..
         }) = call
             && *category != ToolCategory::Hidden
@@ -39,6 +41,7 @@ pub(super) fn encode_tool_group(
                 container,
                 group_id.as_deref(),
                 *timing,
+                command_execution,
             ));
         }
     }
@@ -71,6 +74,7 @@ pub(super) fn tool_call_item(
     container: &Container<'_>,
     group_id: Option<&str>,
     timing: Option<ToolCallTiming>,
+    command_execution: &Option<Box<CommandExecutionMetadata>>,
 ) -> EncodedItem {
     EncodedItem::ToolCall {
         id: id.to_string(),
@@ -82,6 +86,7 @@ pub(super) fn tool_call_item(
         meta: wrap_meta(ItemMeta {
             group_id: group_id.map(str::to_string),
             tool_call_timing: timing,
+            command_execution: command_execution.as_deref().cloned(),
             ..container.base_meta()
         }),
     }

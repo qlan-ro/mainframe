@@ -86,6 +86,7 @@ function toolPart(parsed: ParsedItem, children: ChildrenMap): ContentPart {
     result: toolCallResult(item),
     ...(parsed.meta.toolCallTiming ? { timing: parsed.meta.toolCallTiming } : {}),
     isError: item.status === 'failed' ? true : undefined,
+    ...(parsed.meta.commandExecution && { providerMetadata: { codex: parsed.meta.commandExecution } }),
     ...(parsed.meta.subagent ? { messages: subagentMessages(item, children) } : {}),
   };
 }

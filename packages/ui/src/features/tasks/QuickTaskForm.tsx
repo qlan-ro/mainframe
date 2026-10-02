@@ -176,7 +176,7 @@ export function QuickTaskForm({ port, projectId, open, onClose }: Props) {
             onPaste={handlePaste}
             placeholder="Details (optional)"
             rows={2}
-            className="resize-none"
+            className="max-h-[min(16rem,40dvh)] overflow-y-auto resize-none"
             onKeyDown={handleModEnter}
           />
           <span className="text-xs text-muted-foreground">Paste image to attach</span>

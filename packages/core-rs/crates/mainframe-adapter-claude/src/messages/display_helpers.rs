@@ -19,6 +19,7 @@ use mainframe_types::display::{
 };
 use serde_json::{Value, json};
 
+use super::command_metadata::source_command_metadata;
 use super::message_grouping::GroupedMessage;
 use super::message_parsing::{
     parse_attached_file_path_tags, parse_command_message, strip_mainframe_command_tags,
@@ -220,6 +221,7 @@ pub fn convert_assistant_content(
                 id,
                 name,
                 input,
+                command_execution,
                 parent_tool_use_id,
                 ..
             }) => {
@@ -245,6 +247,7 @@ pub fn convert_assistant_content(
                     id: id.clone(),
                     name: name.clone(),
                     input: input.clone(),
+                    command_execution: command_execution.clone().map(Box::new),
                     category,
                     result,
                     parent_tool_use_id: with_parent_id(parent_tool_use_id),
@@ -463,6 +466,10 @@ fn convert_grouped_parts_to_display(
                     .map(|item| {
                         DisplayContent::Node(DisplayNode::ToolCall {
                             timing: None,
+                            command_execution: source_command_metadata(
+                                original_content,
+                                &item.tool_call_id,
+                            ),
                             id: item.tool_call_id.clone(),
                             name: item.tool_name.clone(),
                             input: item.args.clone(),
@@ -528,6 +535,7 @@ fn convert_grouped_parts_to_display(
                 };
                 result.push(DisplayContent::Node(DisplayNode::ToolCall {
                     timing: None,
+                    command_execution: source_command_metadata(original_content, tool_call_id),
                     id: tool_call_id.clone(),
                     name: tool_name.clone(),
                     input: args.clone(),
@@ -565,6 +573,7 @@ fn convert_task_child(
             ..
         } => DisplayContent::Node(DisplayNode::ToolCall {
             timing: None,
+            command_execution: source_command_metadata(original_content, tool_call_id),
             id: tool_call_id.clone(),
             name: tool_name.clone(),
             input: args.clone(),

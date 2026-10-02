@@ -4,6 +4,7 @@ export * from './content.js';
 export * from './tags.js';
 export * from './device.js';
 export * from './chat.js';
+export * from './command-execution.js';
 export * from './display.js';
 export * from './events.js';
 export * from './skill.js';

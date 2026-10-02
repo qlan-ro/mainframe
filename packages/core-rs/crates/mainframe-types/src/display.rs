@@ -81,7 +81,7 @@ pub enum StreamingLeafKind {
 #[serde(untagged)]
 #[expect(
     clippy::large_enum_variant,
-    reason = "Inline display nodes avoid allocating every non-leaf content block"
+    reason = "Inline display nodes avoid allocating every non-leaf content block; command metadata is already boxed"
 )]
 pub enum DisplayContent {
     Leaf(LeafContent),
@@ -102,6 +102,8 @@ pub enum DisplayNode {
             deserialize_with = "crate::tool_call_timing::deserialize_optional"
         )]
         timing: Option<crate::tool_call_timing::ToolCallTiming>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        command_execution: Option<Box<crate::command_execution::CommandExecutionMetadata>>,
         id: String,
         name: String,
         input: HashMap<String, serde_json::Value>,

@@ -1,4 +1,5 @@
 import type { ToolCallTiming } from './tool-call-timing.js';
+import type { CommandExecutionMetadata } from './command-execution.js';
 import type { SessionMention } from './context.js';
 import type { BackgroundActivity } from './background-task.js';
 import type { DetectedPr, ControlRequest, EffortLevel } from './adapter.js';
@@ -184,6 +185,7 @@ export type MessageContent =
       id: string;
       name: string;
       input: Record<string, unknown>;
+      commandExecution?: CommandExecutionMetadata;
       parentToolUseId?: string;
     }
   | {

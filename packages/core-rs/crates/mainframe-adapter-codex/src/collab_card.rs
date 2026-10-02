@@ -45,12 +45,15 @@ pub(crate) fn on_sub_agent_activity(
             sink,
             state,
         ),
-        SubAgentKind::Interrupted => resolve_card(
-            &item.agent_thread_id,
-            Outcome::Error("Sub-agent interrupted".to_string()),
-            sink,
-            state,
-        ),
+        SubAgentKind::Interrupted => {
+            state.command_state.clear_thread(&item.agent_thread_id);
+            resolve_card(
+                &item.agent_thread_id,
+                Outcome::Error("Sub-agent interrupted".to_string()),
+                sink,
+                state,
+            );
+        }
         SubAgentKind::Interacted | SubAgentKind::Unknown => tracing::debug!(
             module = "codex:collab",
             kind = %item.kind,
@@ -169,6 +172,7 @@ pub(crate) fn on_collab_tool_call(
         CollabTool::CloseAgent if phase == Phase::Completed => {
             if classify_collab_status(&item.status) != CollabCallStatus::Failed {
                 for child in item.receiver_thread_ids.iter().flatten() {
+                    state.command_state.clear_thread(child);
                     crate::collab_activity::end_activity(child, state);
                 }
             }

@@ -124,6 +124,7 @@ mod tests {
     fn tool_use(id: &str) -> MessageContent {
         MessageContent::Node(MessageContentNode::ToolUse {
             timing: None,
+            command_execution: None,
             id: id.to_string(),
             name: "Bash".to_string(),
             input: HashMap::new(),

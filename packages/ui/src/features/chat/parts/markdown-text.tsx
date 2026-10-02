@@ -22,9 +22,9 @@
  * `MarkdownText` is the `TextMessagePartComponent` wired into AssistantMessage.
  * `markdownComponents` is exported separately so UserMessage can reuse it.
  */
-import React, { memo, useCallback, useRef, type FC } from 'react';
+import React, { memo, useRef, type FC } from 'react';
 import type { TextMessagePartComponent } from '@assistant-ui/react';
-import { useAuiState } from '@assistant-ui/react';
+import { INTERNAL } from '@assistant-ui/react';
 import {
   MarkdownTextPrimitive,
   unstable_memoizeMarkdownComponents,
@@ -43,7 +43,7 @@ import { SyntaxHighlighter } from './syntax-highlight';
 import { CodeHeader } from './CodeHeader';
 import { MarkdownUl, MarkdownOl, MarkdownLi, MarkdownTaskCheckbox } from './markdown-lists';
 import { MarkdownTable, MarkdownThead, MarkdownTh, MarkdownTd, MarkdownTr } from './markdown-table';
-import { useSelectionHold } from './selection-hold';
+import { useHeldDisplayedText } from './use-held-displayed-text';
 
 // ── Inline code ───────────────────────────────────────────────────────────────
 // Handles inline `code` spans. Fenced code blocks are handled by the native
@@ -172,63 +172,22 @@ export const MARKDOWN_ROOT_CLASS = 'aui-md';
 
 // ── MarkdownText: TextMessagePartComponent ────────────────────────────────────
 
-/**
- * Holds this part's text at its last snapshot while a non-collapsed selection
- * intersects it — see `selection-hold.ts`'s module doc for the mechanism this
- * guards against. `useAuiState` (not the deprecated `useMessagePartText`)
- * gives the same live `{ text, status }` the primitive's own internal
- * subscription reads, so we can decide "hold or not" without touching
- * `useSmooth` itself: `preprocess` (an `@assistant-ui/react-markdown` prop
- * that runs BEFORE `useSmooth` sees the text) swaps in the frozen snapshot
- * instead. Dropping `effectivelyHeld` the instant the part completes — even
- * if the selection itself is still up — is required, not optional: once a
- * part is done streaming, nothing will ever trigger another render that
- * could release the hold on its own, so staying frozen past completion would
- * strand the user on a truncated snapshot forever.
- *
- * Freezing the INPUT alone is not enough: `useSmooth`'s own reveal timer
- * keeps ticking forward toward whatever text it was LAST given, independent
- * of whether that text is still growing — a selection made mid-reveal of the
- * settle-delayed final snippet (D7; no new text ever arrives after) would
- * still see the in-progress reveal replace the node's data tick by tick. So
- * `smooth` itself also drops to `false` while held: combined with the frozen
- * snapshot, the primitive has nothing left to animate toward and renders the
- * snapshot statically until release, when `smooth` flips back on to animate
- * the catch-up.
- */
-function useHeldText(containerRef: React.RefObject<HTMLDivElement | null>): {
-  preprocess: (text: string) => string;
-  smooth: boolean;
-} {
-  const held = useSelectionHold(containerRef);
-  const part = useAuiState((s) => (s.part.type === 'text' || s.part.type === 'reasoning' ? s.part : null));
-  const effectivelyHeld = held && part?.status?.type !== 'complete';
-  const frozenTextRef = useRef<string | null>(null);
-
-  const preprocess = useCallback(
-    (text: string) => {
-      if (!effectivelyHeld) {
-        frozenTextRef.current = null;
-        return text;
-      }
-      if (frozenTextRef.current === null) frozenTextRef.current = text;
-      return frozenTextRef.current;
-    },
-    // A fresh callback identity on every hold/release flip is the point: it
-    // is what forces `MarkdownTextPrimitive`'s internal `useMemo` to
-    // re-evaluate `preprocess` even when the live text itself hasn't
-    // changed since the last render (e.g. the selection just started).
-    [effectivelyHeld],
-  );
-  return { preprocess, smooth: !effectivelyHeld };
-}
+// `INTERNAL.withSmoothContextProvider` is only touched inside render below
+// (never at module scope): this file's `markdownComponents` export is
+// imported by consumers (e.g. `user-directive-renderers.tsx`) that never
+// render `MarkdownText` itself, and some of those tests mock
+// `@assistant-ui/react` without an `INTERNAL` key — a module-scope access
+// would throw just from importing the module. `useHeldDisplayedText` (in
+// `use-held-displayed-text.ts`) owns the same deferral for its own
+// `INTERNAL.useSmooth` use, plus the hold/freeze mechanism itself — see that
+// file's doc comment for the independent review findings it guards against.
 
 const MarkdownTextImpl: TextMessagePartComponent = () => {
   // `data-text-part` marks the searchable text container for in-chat Find
   // (FindBar walks [data-message-id] → [data-text-part]). The wrapper guarantees
   // the attribute lands on a real DOM node regardless of primitive prop-forwarding.
   const containerRef = useRef<HTMLDivElement>(null);
-  const { preprocess, smooth } = useHeldText(containerRef);
+  const preprocess = useHeldDisplayedText(containerRef);
   return (
     <div data-text-part ref={containerRef}>
       <SmartActionsProvider>
@@ -236,7 +195,7 @@ const MarkdownTextImpl: TextMessagePartComponent = () => {
           className={MARKDOWN_ROOT_CLASS}
           remarkPlugins={REMARK_PLUGINS}
           urlTransform={urlTransform}
-          smooth={smooth}
+          smooth={false}
           components={markdownComponents}
           preprocess={preprocess}
         />
@@ -245,5 +204,27 @@ const MarkdownTextImpl: TextMessagePartComponent = () => {
   );
 };
 
-export const MarkdownText: TextMessagePartComponent = memo(MarkdownTextImpl);
+const MemoizedMarkdownTextImpl = memo(MarkdownTextImpl);
+
+/**
+ * Applies `INTERNAL.withSmoothContextProvider` lazily, at first RENDER, not at
+ * module-evaluation time. Importing this module just for `markdownComponents`
+ * (as `user-directive-renderers.tsx` does) must never touch `INTERNAL` — some
+ * of those consumers' tests mock `@assistant-ui/react` without an `INTERNAL`
+ * export, and a module-scope `withSmoothContextProvider(...)` call threw just
+ * from the import, regardless of whether `MarkdownText` itself ever rendered.
+ * A module-level singleton (built once, on the first render that needs it)
+ * rather than a per-instance `useMemo` — every `MarkdownText` instance shares
+ * the same wrapped component, matching the module-scope `const MarkdownText =
+ * withSmoothContextProvider(...)` this replaces.
+ */
+let Wrapped: TextMessagePartComponent | null = null;
+
+const MarkdownTextOuter: TextMessagePartComponent = (props) => {
+  Wrapped ??= INTERNAL.withSmoothContextProvider(MemoizedMarkdownTextImpl);
+  const Component = Wrapped;
+  return <Component {...props} />;
+};
+
+export const MarkdownText: TextMessagePartComponent = MarkdownTextOuter;
 MarkdownText.displayName = 'MarkdownText';

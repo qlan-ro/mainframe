@@ -16,7 +16,7 @@
  *  (b) selection in a COMPLETED paragraph of the message that IS streaming,
  *      while a LATER paragraph in the SAME message grows;
  *  (c) selection inside the paragraph that is itself STILL GROWING — the
- *      hold/release contract this file's second describe block covers.
+ *      hold/release contract `selection-hold-release.test.tsx` covers fully.
  */
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -29,7 +29,6 @@ import {
   flush,
   selectSubstring,
   assertSelectionSurvived,
-  clearSelection,
   shownText,
 } from './selection-persistence-support';
 
@@ -158,81 +157,31 @@ describe('a transcript selection survives streaming and re-renders elsewhere (pr
       // the hold, not luck, is what kept the Range attached.
       expect(shownText()).toBe('Hello wonderful world');
     });
-  });
-});
 
-describe('hold/release (independent review item 2: the general growing-text guarantee)', () => {
-  beforeEach(() => {
-    vi.useFakeTimers({
-      toFake: ['Date', 'setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame'],
+    it('selecting WHILE the reveal still lags behind a just-grown live text does not collapse (independent review round 2, finding 1)', async () => {
+      // `preprocess` must freeze the DISPLAYED (already-revealed) text, not
+      // the live INPUT: freezing the input meant engaging the hold right
+      // after a growth tick — before the reveal caught up to it — jumped the
+      // DOM straight from the revealed prefix to the full (longer) live
+      // text in one commit, replacing the WHOLE text node's data even
+      // though the selected substring itself never moved.
+      const items = [textItem('m1', 'Hello wonderful world', { streaming: true, origin: 'live' })];
+      const r = render(<Harness isRunning messages={messagesFromItems(items, 'running')} />);
+      tick(1000); // fully reveal the base text first
+      await flush();
+      expect(shownText()).toBe('Hello wonderful world');
+
+      const grownText = 'Hello wonderful world and even more text arrives';
+      const grown = [textItem('m1', grownText, { streaming: true, origin: 'live' })];
+      r.rerender(<Harness isRunning messages={messagesFromItems(grown, 'running')} />);
+      await flush();
+      tick(20); // short — the reveal has NOT caught up to the new text yet
+      await flush();
+      expect(shownText().length).toBeLessThan(grownText.length); // still lagging, confirms the repro window is real
+
+      selectSubstring(document, 'wonderful');
+      await flush(); // let the hold's own state update actually commit
+      assertSelectionSurvived('wonderful');
     });
-  });
-  afterEach(() => {
-    window.getSelection()?.removeAllRanges();
-    vi.useRealTimers();
-  });
-
-  it('release (selection clears) catches up to the final text', async () => {
-    const items = [textItem('m1', 'Hello wonderful world', { streaming: true, origin: 'live' })];
-    const r = render(<Harness isRunning messages={messagesFromItems(items, 'running')} />);
-    tick(1000);
-    await flush();
-
-    selectSubstring(document, 'wonderful');
-    const grown = [
-      textItem('m1', 'Hello wonderful world and even more text arrives', { streaming: true, origin: 'live' }),
-    ];
-    r.rerender(<Harness isRunning messages={messagesFromItems(grown, 'running')} />);
-    await flush();
-    tick(500);
-    await flush();
-    expect(shownText()).toBe('Hello wonderful world'); // still held, frozen
-
-    clearSelection();
-    await flush();
-    tick(1000); // the reveal resumes catching up from the held snapshot
-    await flush();
-    expect(shownText()).toBe('Hello wonderful world and even more text arrives');
-  });
-
-  it('no stale text survives the turn completing while held — it ends on the final text even without the selection clearing', async () => {
-    const items = [textItem('m1', 'Hello wonderful world', { streaming: true, origin: 'live' })];
-    const r = render(<Harness isRunning messages={messagesFromItems(items, 'running')} />);
-    tick(1000);
-    await flush();
-
-    selectSubstring(document, 'wonderful');
-    const final = [textItem('m1', 'Hello wonderful world, the end.', { origin: 'live' })];
-    r.rerender(<Harness isRunning={false} messages={messagesFromItems(final, 'idle')} />);
-    await flush();
-    tick(1000);
-    await flush();
-
-    // The selection was never cleared — only the message completing forced
-    // the release — and the part still lands on the FINAL text, not the
-    // snapshot frozen at selection time.
-    expect(shownText()).toBe('Hello wonderful world, the end.');
-  });
-
-  it('only the selected part is held — a second, unselected streaming part keeps revealing live', async () => {
-    const selected = textItem('m1', 'Hello wonderful world', { streaming: true, origin: 'live' });
-    const other = { ...textItem('m2', 'Elsewhere growing', { streaming: true, origin: 'live' }) };
-    const r = render(<Harness isRunning messages={messagesFromItems([selected, other], 'running')} />);
-    tick(1000);
-    await flush();
-
-    selectSubstring(document, 'wonderful');
-    const grownBoth = [
-      textItem('m1', 'Hello wonderful world and even more text arrives', { streaming: true, origin: 'live' }),
-      textItem('m2', 'Elsewhere growing longer too', { streaming: true, origin: 'live' }),
-    ];
-    r.rerender(<Harness isRunning messages={messagesFromItems(grownBoth, 'running')} />);
-    await flush();
-    tick(500);
-    await flush();
-
-    const texts = Array.from(document.querySelectorAll('[data-status]')).map((el) => el.textContent ?? '');
-    expect(texts[0]).toBe('Hello wonderful world'); // held
-    expect(texts[1]).toBe('Elsewhere growing longer too'); // unrelated — kept rendering live
   });
 });

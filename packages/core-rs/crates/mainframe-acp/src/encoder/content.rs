@@ -130,11 +130,20 @@ fn handle_node(
             category,
             result,
             timing,
+            command_execution,
             ..
         } => {
             if *category != ToolCategory::Hidden {
                 out.push(tool_call_item(
-                    id, name, input, *category, result, container, None, *timing,
+                    id,
+                    name,
+                    input,
+                    *category,
+                    result,
+                    container,
+                    None,
+                    *timing,
+                    command_execution,
                 ));
             }
         }
@@ -207,6 +216,7 @@ fn handle_task_progress(
                 container,
                 None,
                 item.timing,
+                &None,
             ));
         }
     }

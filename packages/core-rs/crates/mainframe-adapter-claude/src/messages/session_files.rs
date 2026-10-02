@@ -46,6 +46,7 @@ mod tests {
         }
         MessageContent::Node(MessageContentNode::ToolUse {
             timing: None,
+            command_execution: None,
             id: "tu".to_string(),
             name: name.to_string(),
             input,
