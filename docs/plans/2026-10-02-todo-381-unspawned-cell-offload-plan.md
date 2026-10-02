@@ -16,7 +16,7 @@ Spawned sessions keep their current policy: the same threshold, `session.last_ac
   - `start_chat`;
   - `begin_send` registration and `SendGuard` drop (`end_send`);
   - `release_history`;
-  - `ChatManager`'s `get_active_chat` in `chat_manager/deps_config.rs`. Config edits on an unsent chat do not take a lifecycle claim, so this covers them.
+  - `ChatManager`'s `get_active_chat` in `chat_manager/deps_config.rs`. Config edits on an unsent chat do not take a lifecycle claim, so this touch protects a cell that still exists during the edit.
 
   `ChatOffload::recheck` runs after `try_claim_offload` has refused any busy chat. Because each use either holds a claim during selection or touches the clock when it ends, a race resolves through the existing claim and recheck.
 - **One eligibility rule.** Add a free function in `idle_scanner.rs`, `idle_since(session: Option<&Arc<dyn AdapterSession>>, last_used_at: i64) -> Option<i64>`:
@@ -25,6 +25,7 @@ Spawned sessions keep their current policy: the same threshold, `session.last_ac
 
   `select_idle_candidates` and `ChatOffload::recheck` both use this function and drop their separate `session?`, `is_spawned` and `last_activity_at` checks. Clone the session and `last_used_at` out of the cell lock before calling session methods, as the current code does.
 - **Offload.** `recheck` returns the optional session handle. The session-less case is valid, so it should no longer mean "skip". Keep the Working, pending-permission and queued-ref checks for every cell. Step 3 calls `kill()` only when a handle exists. That call is harmless on an unspawned handle (see Established facts) and reaps an exited process. Steps 4–6 stay the same: remove the cell, call `MessageCache::release`, `clear_display_state`, `permissions.forget`, release the claim and emit `ChatOffloaded`. They must not archive, delete or emit `ChatEnded`.
+- **Config entry points rebuild an offloaded cell.** A touch cannot bring back a cell that is already gone. A chat opened in the UI gets an unspawned cell through `resumeChat` and `do_load_chat`; if it stays on screen unsent past the threshold it is offloaded, and the UI does not call resume again. Today `ConfigManager::update_chat_config`, `enable_worktree` and `attach_worktree` then fail in `require_active_chat` ("Chat {id} not found", a 500 from PATCH `/config`), and `disable_worktree` silently returns `Ok(())` with no change. So each `ChatManager` entry point in `chat_manager/config_api.rs` (`update_chat_config`, `enable_worktree`, `attach_worktree`, `disable_worktree`, and `accept_worktree_offer`, which goes through `attach_worktree`) first calls `self.lifecycle.load_chat(chat_id).await`, ignoring its return value. That call skips and touches when the cell exists and rebuilds it (waiting out any in-flight offload) when it does not. Put the call before the `is_chat_working` check so the check sees the rebuilt cell; in `accept_worktree_offer` put it before `claim_accept`. A rebuilt cell has a fresh `last_used_at`, so the next scan cannot remove it during the edit. A chat that is missing from the store keeps today's error from `require_active_chat`.
 - Update the doc comments that say an unspawned cell is never a candidate. These are in the module docs for `idle_scanner.rs` and `idle_offload.rs`, the `select_idle_candidates` doc and the `recheck` doc.
 
 ## Files
@@ -34,6 +35,7 @@ Spawned sessions keep their current policy: the same threshold, `session.last_ac
 - `packages/core-rs/crates/mainframe-chat/src/idle_offload.rs`: recheck and optional kill
 - `packages/core-rs/crates/mainframe-chat/src/lifecycle_manager.rs` and `lifecycle_manager/flight_claims.rs`: touch helper and calls, constructor at insertions
 - `packages/core-rs/crates/mainframe-chat/src/chat_manager/fork_api.rs` and `chat_manager/deps_config.rs`
+- `packages/core-rs/crates/mainframe-chat/src/chat_manager/config_api.rs`: `load_chat` before each config and worktree delegation
 - `packages/core-rs/crates/mainframe-chat/src/message_cache.rs`: test-only `is_pinned` accessor, so tests can observe pin release
 - Every `ActiveChat { .. }` literal in the crate's tests (about 15 files): move each to the constructor, or add the field
 - `packages/core-rs/crates/mainframe-chat/src/chat_manager/tests/offload.rs`: integration tests
@@ -57,12 +59,13 @@ Spawned sessions keep their current policy: the same threshold, `session.last_ac
        - a load in flight keeps the cell, or the existing flight-claims guard test covers it.
      - (e) On an unspawned backdated cell, a pending permission, a queued ref or a Working process state each prevents offload.
      - (f) The AC3 row "no spawned process" changes meaning. Relabel or adjust it so that it asserts a fresh unspawned cell stays live.
+     - (g) Config after offload. Backdate and offload an unspawned cell (as in (a) or (b)), then call `ChatManager::update_chat_config` with a model change: it returns `Ok`, the cell is back in the registry, and the stored and active chat carry the new model. Repeat with a worktree-bound chat: offload it, call `disable_worktree`, and assert the chat's worktree binding is cleared in the store and on the rebuilt cell. Both must fail before the `config_api.rs` change (not found, or a silent no-op that leaves the binding).
 2. **Green.** Implement the design above, then update every struct literal.
 3. Add a patch changeset. Recent changesets for daemon-only fixes name `@qlan-ro/mainframe-app-tauri`.
 
 ## Risks
 
-- **Over-eager offload.** Any user path that reads an unspawned cell without a claim or a touch could see its cell disappear mid-operation. Known claim-free users are config edits (now touched) and permission responses (blocked by the pending check). The reviewer should confirm that no other path holds a cell `Arc` across an await on a chat that has been idle for two hours.
+- **Over-eager offload.** Any user path that reads an unspawned cell without a claim or a touch could see its cell disappear mid-operation. Known claim-free users are config edits (now touched, and rebuilt through `load_chat` when the cell is gone) and permission responses (blocked by the pending check). The reviewer should confirm that no other path holds a cell `Arc` across an await on a chat that has been idle for two hours.
 - **Stale Working state.** An unspawned cell whose persisted `process_state` is Working, for example a REST resume held by a pending gate, stays pinned. The acceptance criteria require this behavior. Do not relax it here.
 - **Lock order.** `idle_since` calls session methods. Never call it while holding the cell mutex.
 - **Fixture churn.** The struct-literal updates are mechanical and must not change behavior in other tests.
@@ -74,6 +77,7 @@ Spawned sessions keep their current policy: the same threshold, `session.last_ac
 - `ChatLifecycleManager::resume_chat` (`lifecycle_manager.rs`) calls `load_chat` and starts only Working chats. `do_load_chat` attaches an unspawned session from `create_session` when a resume or fork anchor exists.
 - `try_claim_offload` (`lifecycle_manager/flight_claims.rs`) refuses a claim while loading, starting, interrupting, history or send activity is in flight. `begin_send`, `load_chat`, `start_chat` and `get_messages` (`chat_manager/history.rs`) wait out an in-flight offload.
 - `ClaudeSession::kill` (`mainframe-adapter-claude/src/session.rs`) returns `Ok` when no child exists. Codex `kill` (`mainframe-adapter-codex/src/session.rs`, `impl AdapterSession`) clears command state and returns `Ok` when no client exists.
+- `ConfigManager::update_chat_config`, `enable_worktree` and `attach_worktree` (`config_manager.rs`) call `require_active_chat` and fail when the cell is missing; `disable_worktree` returns `Ok(())` without a cell. `ChatLifecycleManager::load_chat` returns early (`Flight::Skip`) when the cell exists and otherwise reloads it, after `await_offload`.
 - `AdapterSession::last_activity_at` (`mainframe-adapter-api/src/adapter.rs`) defaults to `None`, which means "always active".
 - `chat_manager/tests/offload.rs` provides `offloader_for`, `seed_offloadable_chat_with_transcript`, `long_idle` and the real-clock pattern. `StoreDeps::set_spawn_ok` and `created_sessions` are in `chat_manager/tests.rs`.
 - `MessageCache` has no public pin query (`message_cache.rs`, field `pinned`), so pin-release tests need a test-only accessor.
