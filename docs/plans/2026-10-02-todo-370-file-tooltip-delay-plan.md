@@ -2,7 +2,7 @@
 
 Approved todo #370, size S, no-spec route. Implement 500ms pointer hover for file and folder paths, with every row visit receiving the delay. Keep folder toggles, file opening, nearby rows, context menus, keyboard navigation and full-path access usable. Other tooltips retain their defaults.
 
-## Established behavior
+## Established facts
 
 - `packages/ui/src/features/files/FileTreeNode.tsx`, `FileTreeNode`, renders both path hints through `TruncatedWithTooltip`. Row buttons own navigation and toggling; `FileTreeRowMenu` owns Copy Path and other context actions.
 - `packages/ui/src/components/ui/truncated-with-tooltip.tsx`, `TruncatedWithTooltip`, permits custom path text even without clipping. Its outer provider is shadowed by the provider inside `Tooltip` in `packages/ui/src/components/ui/tooltip.tsx`. Both currently default to zero delay.
