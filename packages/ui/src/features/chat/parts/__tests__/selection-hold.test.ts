@@ -9,7 +9,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import { createRef } from 'react';
-import { useSelectionHold } from '../selection-hold';
+import { useSelectionHold, recheckHeld } from '../selection-hold';
 
 function selectWithin(el: Element, needle: string): void {
   const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
@@ -99,5 +99,37 @@ describe('selection-hold.ts registry', () => {
     // O(N): one evaluation per mount. The quadratic bug would land at
     // N*(N+1)/2 = 1275 for N=50 — comfortably clear of a generous O(N) bound.
     expect(intersectsNodeSpy.mock.calls.length).toBeLessThanOrEqual(N);
+  });
+
+  it('recheckHeld releases a held entry whose selection is gone, without waiting for a selectionchange event (independent review round 3, finding 1)', () => {
+    // `held` only ever updates in response to a `selectionchange` event —
+    // WebKit doesn't reliably fire one for every programmatic range change
+    // (e.g. `removeAllRanges()` after a Quote action), so a hold could
+    // otherwise stay stuck forever. `recheckHeld` is the safeguard a
+    // consumer calls when it re-renders for its own reasons; it must release
+    // on its own, with no event in between.
+    const { el, hook } = mountPart('Hello wonderful world');
+    act(() => selectWithin(el, 'wonderful'));
+    expect(hook.result.current).toBe(true);
+
+    // Clear the selection WITHOUT dispatching `selectionchange` — the exact
+    // "missed event" scenario.
+    window.getSelection()?.removeAllRanges();
+    expect(hook.result.current).toBe(true); // still (wrongly) held — no event ran
+
+    act(() => recheckHeld(el));
+    expect(hook.result.current).toBe(false);
+  });
+
+  it('recheckHeld is a no-op when the held selection is still live and still intersects the container', () => {
+    // Never promotes, and never releases a hold that is still legitimate —
+    // only a real `selectionchange` (or an actual loss of intersection)
+    // should ever end a hold that's still current.
+    const { el, hook } = mountPart('Hello wonderful world');
+    act(() => selectWithin(el, 'wonderful'));
+    expect(hook.result.current).toBe(true);
+
+    act(() => recheckHeld(el));
+    expect(hook.result.current).toBe(true);
   });
 });

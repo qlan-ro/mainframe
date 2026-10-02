@@ -135,4 +135,13 @@ export function clearSelection(): void {
   document.dispatchEvent(new Event('selectionchange'));
 }
 
+/**
+ * Collapses the selection WITHOUT firing `selectionchange` — simulates a
+ * missed event (WebKit is unreliable here, notably `removeAllRanges()` after
+ * a Quote action), independent review round 3, finding 1.
+ */
+export function clearSelectionWithoutEvent(): void {
+  window.getSelection()?.removeAllRanges();
+}
+
 export const shownText = (): string => document.querySelector('[data-status]')!.textContent ?? '';
