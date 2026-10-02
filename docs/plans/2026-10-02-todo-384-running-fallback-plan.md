@@ -1,8 +1,16 @@
-# Running fallback marks the previous answer — implementation plan
+# Authoritative streaming and compact activity grouping — implementation plan
 
 Approved brief: todo #384, `brief.md` in the external lane state. Size: medium; no separate spec. Base: `8145d3051b656a7fe5df7bc3fcb02ba3052376f9`, branch `todo/384-running-fallback`.
 
 Keep a completed answer settled when a new turn starts on a daemon that advertises authoritative item streaming. Preserve the existing nearest-assistant fallback for unknown and legacy daemons, including an acknowledgment after the streaming assistant. Do not change transcript ordering, transport throttling, animation timing, or mobile.
+
+## Consolidated scope and completed baseline
+
+The user folded Codex activity-grouping research and #374 outer disclosure into #384 on 2026-10-03. The executable extension is [G4–G8 in the grouping addendum](2026-10-03-todo-384-grouping-addendum.md), based on the [accepted source research](../research/2026-10-03-codex-activity-grouping.md). It supersedes the original exclusion of grouping/animation changes only where that addendum explicitly requires them. The streaming fallback fix and legacy compatibility remain required.
+
+G1 completed at `6e263dc0`; G2 at `5da834e3`; G3 at `283fbe21`. Parent reports G3 validation: 200 tests passed. Integration with main `e6af2bfa` completed cleanly at `98466ca8e27285bd2bdabb52c2e7acf18287eabc`, with 83 focused tests and UI typecheck passing. These are execution receipts from the parent lane, not tests rerun by this plan author.
+
+The sections below preserve the original G1–G3 decisions, baseline facts and verification intent as historical context. Do not rerun their planning stages or implement them again. Execute G4→G5→G6→G7→G8 from the integrated checkout; each new group owns its tests and exact file list. Parent owns independent review of the additions and combined code review/QA.
 
 ## Established facts
 
@@ -28,7 +36,7 @@ Keep a completed answer settled when a new turn starts on a daemon that advertis
 5. In authoritative mode, preserve every explicit assistant status, including running behind a user acknowledgment; give assistants lacking status the native complete message status. Do not assign status to user/system messages or rewrite parts. In legacy mode retain the existing fallback exactly, including cancelling and the acknowledgment search. Thread-level run/cancel indicators remain governed by run state in both modes.
 6. Main and split chat continue using the shared projection. Prove both actual native provider paths consume the result correctly; no runtime-specific duplicate fallback, global animation switch, or changes to selection/scroll handling.
 
-## G1 — Advertise and pin the streaming contract
+## G1 — Completed: advertise and pin the streaming contract
 
 Kind: `core`. Depends on: none. `parallel_safe: false`. Tests belong to this group.
 
@@ -52,7 +60,7 @@ Implementation:
 
 Verification intent: run the shared TS/Rust golden fixtures and focused capability, encoder, metadata-drop, throttle and hub tests; typecheck/build shared types and check affected Rust crates. The advertised guarantee must be demonstrated by production encoding tests, not capability fixtures alone. If an uncovered producer path contradicts this narrow contract, report it before advertising broader support.
 
-## G2 — Carry negotiation through client binding and reconnect
+## G2 — Completed: carry negotiation through client binding and reconnect
 
 Kind: `ui`. Depends on: `G1`. `parallel_safe: false`. Tests belong to this group.
 
@@ -78,7 +86,7 @@ Implementation:
 
 Verification intent: run focused client, attachment and reducer tests plus existing reconnect/gap/staged-replay tests. Assert observed reducer events and their order, not just the client getter. No transcript traffic is required to deliver a newly negotiated capability to an already-bound dormant or active chat.
 
-## G3 — Gate the fallback and prove both rendered paths
+## G3 — Completed: gate the fallback and prove both rendered paths
 
 Kind: `ui`. Depends on: `G2`. `parallel_safe: false`. Tests belong to this group.
 
@@ -104,7 +112,7 @@ Verification intent: new projection and both native-wrapper tests fail against t
 
 ## Exit criteria and handoff
 
-Execute `G1 → G2 → G3` sequentially. Each author owns implementation and its regression tests; do not hand off a deliberately failing test group. The parent owns independent code review, then runtime QA, before final acceptance.
+Original sequence `G1 → G2 → G3` is complete; the new execution sequence is in the addendum. Each author owns implementation and its regression tests; do not hand off a deliberately failing test group. The parent owns independent code review, then runtime QA, before final acceptance.
 
 - All changed/new implementation files stay at most 300 lines and functions at most 50. The identified extractions are part of their code groups; avoid extending existing oversized test files. No dependency or lockfile changes are needed.
 - Run the relevant TS/Rust tests, typechecks/build checks, lint and formatting; report actual commands/results at execution time. Planning verification below is not an implementation gate result.
