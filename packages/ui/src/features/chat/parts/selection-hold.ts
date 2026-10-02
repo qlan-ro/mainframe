@@ -103,6 +103,26 @@ function recomputeFromSelection(): void {
   releaseExcept(matched);
 }
 
+/**
+ * Re-validates ONE container against the CURRENT selection without waiting
+ * for a `selectionchange` event (independent review round 3, finding 1):
+ * WebKit doesn't reliably fire that event for every programmatic range
+ * change — notably `removeAllRanges()` after a Quote action — so a held part
+ * could otherwise stay frozen forever once nothing else ever selects again.
+ * A caller that already re-renders for its own reasons (new streamed text, a
+ * part swap) gets a free chance here to catch a hold that should have
+ * released already. Only ever RELEASES this one entry; a real
+ * `selectionchange` is still what starts a hold.
+ */
+export function recheckHeld(container: HTMLElement): void {
+  const entry = entries.get(container);
+  if (!entry || !held.has(entry)) return;
+  const range = currentNonCollapsedRange();
+  if (range && range.intersectsNode(container)) return;
+  held.delete(entry);
+  entry.setHeld(false);
+}
+
 function ensureListening(): void {
   if (listening) return;
   document.addEventListener('selectionchange', recomputeFromSelection);

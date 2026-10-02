@@ -16,8 +16,10 @@ import {
   selectSubstring,
   assertSelectionSurvived,
   clearSelection,
+  clearSelectionWithoutEvent,
   shownText,
 } from './selection-persistence-support';
+import * as selectionHold from '../selection-hold';
 
 describe('hold/release (independent review item 2: the general growing-text guarantee)', () => {
   beforeEach(() => {
@@ -124,7 +126,7 @@ describe('hold/release (independent review item 2: the general growing-text guar
     expect(shownText()).toBe('Hello wonderful world, the end.');
   });
 
-  it("a thread switch while held never shows the OLD chat's frozen text (independent review round 2, finding 5)", async () => {
+  it("a thread switch while held never shows the OLD chat's frozen text, nor flashes a fresh re-hold (independent review round 2 finding 5, round 3 finding 2)", async () => {
     // `ChatThread` isn't keyed per chat and parts render by index, so the
     // SAME `MarkdownText` instance — and hence the SAME DOM container the
     // hold registration tracks — can be reused across a thread switch. A
@@ -145,11 +147,68 @@ describe('hold/release (independent review item 2: the general growing-text guar
     const differentChat = [textItem('m-other-chat', 'Totally unrelated content', { origin: 'replay' })];
     r.rerender(<Harness isRunning={false} messages={messagesFromItems(differentChat, 'idle')} />);
     await flush();
+
+    // Immediately, with no settling tick: a part change releases rather
+    // than re-capturing (independent review round 3, finding 2) — an
+    // earlier version re-captured a fresh snapshot of the NEW part's own
+    // still-settling text, flashing a partial frame before eventually
+    // correcting on a later render. There should be nothing left of the
+    // old chat's text, and no need to wait for it to go away.
+    expect(shownText()).not.toContain('wonderful');
+    expect(shownText()).toBe('Totally unrelated content');
+
     tick(500);
     await flush();
 
     expect(shownText()).not.toContain('wonderful');
     expect(shownText()).toBe('Totally unrelated content');
+  });
+
+  it('releases a stale hold on its own once something re-renders, even if selectionchange never fires again (independent review round 3, finding 1)', async () => {
+    // `held` only updates in response to a `selectionchange` event. WebKit is
+    // unreliable about firing it for every programmatic range change — most
+    // notably `removeAllRanges()` right after a Quote action — so without a
+    // safeguard a part could stay frozen forever once nothing else happens to
+    // select again. `recheckHeld` is the safeguard: a consumer that already
+    // re-renders for its own reasons gets a free recheck of the real DOM
+    // selection against its own container, with no event required.
+    //
+    // jsdom (unlike WebKit's actual bug) also eventually fires `selectionchange`
+    // for a programmatic `removeAllRanges()` on its own — asynchronously, via
+    // an internal dispatch path (`DocumentImpl._dispatch`) that bypasses even
+    // `EventTarget.prototype.dispatchEvent`, so it can't be suppressed from
+    // test code. That means a `shownText()` assertion after advancing timers
+    // can't tell OUR safeguard apart from jsdom's own delayed notification —
+    // `selection-hold.test.ts` already covers `recheckHeld`'s release logic in
+    // isolation, with no timers involved at all. What this test adds is the
+    // WIRING: that a part which re-renders after a missed clear calls
+    // `recheckHeld` for its OWN container, not just on some unrelated timer.
+    const recheckHeldSpy = vi.spyOn(selectionHold, 'recheckHeld');
+    try {
+      const items = [textItem('m1', 'Hello wonderful world', { streaming: true, origin: 'live' })];
+      const r = render(<Harness isRunning messages={messagesFromItems(items, 'running')} />);
+      tick(1000);
+      await flush();
+
+      selectSubstring(document, 'wonderful');
+      assertSelectionSurvived('wonderful');
+      expect(shownText()).toBe('Hello wonderful world');
+      const container = document.querySelector('[data-text-part]');
+      expect(container).not.toBeNull();
+
+      clearSelectionWithoutEvent();
+      recheckHeldSpy.mockClear();
+
+      const grown = [
+        textItem('m1', 'Hello wonderful world and it just keeps going', { streaming: true, origin: 'live' }),
+      ];
+      r.rerender(<Harness isRunning messages={messagesFromItems(grown, 'running')} />);
+      await flush();
+
+      expect(recheckHeldSpy).toHaveBeenCalledWith(container);
+    } finally {
+      recheckHeldSpy.mockRestore();
+    }
   });
 
   it('only the selected part is held — a second, unselected streaming part keeps revealing live', async () => {
