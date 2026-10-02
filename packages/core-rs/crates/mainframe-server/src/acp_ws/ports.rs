@@ -7,12 +7,11 @@
 use std::sync::Arc;
 
 use mainframe_acp::prompt::{BoxFuture, PromptAcceptance, PromptError, PromptPort};
-use mainframe_acp::resume::ResumePort;
+use mainframe_acp::resume::{ResumePort, ResumeSnapshot};
 use mainframe_chat::chat_manager::{ChatManager, CommandMeta};
 use mainframe_chat::permission_handler::PermissionError;
 use mainframe_types::acp::extensions::PromptSendMeta;
-use mainframe_types::adapter::{ControlRequest, ControlResponse};
-use mainframe_types::display::DisplayMessage;
+use mainframe_types::adapter::ControlResponse;
 
 #[derive(Clone)]
 pub struct ManagerPorts {
@@ -85,11 +84,22 @@ impl ResumePort for ManagerPorts {
     fn resume_snapshot<'a>(
         &'a self,
         session_id: &'a str,
-    ) -> mainframe_acp::resume::BoxFuture<'a, (Vec<DisplayMessage>, Option<ControlRequest>)> {
+    ) -> mainframe_acp::resume::BoxFuture<'a, ResumeSnapshot> {
         Box::pin(async move {
             match &self.manager {
-                Some(manager) => manager.get_resume_snapshot(session_id).await,
-                None => (Vec::new(), None),
+                Some(manager) => {
+                    let snapshot = manager.get_resume_snapshot(session_id).await;
+                    ResumeSnapshot {
+                        messages: snapshot.messages,
+                        streaming: snapshot.streaming,
+                        pending: snapshot.pending,
+                    }
+                }
+                None => ResumeSnapshot {
+                    messages: Vec::new(),
+                    streaming: None,
+                    pending: None,
+                },
             }
         })
     }
