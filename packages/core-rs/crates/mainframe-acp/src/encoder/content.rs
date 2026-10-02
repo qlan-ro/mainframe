@@ -129,6 +129,7 @@ fn handle_node(
             input,
             category,
             result,
+            timing,
             command_execution,
             ..
         } => {
@@ -141,6 +142,7 @@ fn handle_node(
                     result,
                     container,
                     None,
+                    *timing,
                     command_execution,
                 ));
             }
@@ -151,7 +153,10 @@ fn handle_node(
             task_args,
             calls,
             result,
-        } => handle_task_group(agent_id, task_args, calls, result, container, role, out),
+            timing,
+        } => handle_task_group(
+            agent_id, task_args, calls, result, container, role, out, *timing,
+        ),
         DisplayNode::TaskProgress { items } => handle_task_progress(items, container, out),
         // Gates stay out-of-band on the facade (spec) — no item.
         DisplayNode::PermissionRequest { .. } => {}
@@ -177,8 +182,11 @@ fn handle_task_group(
     container: &Container<'_>,
     role: ItemRole,
     out: &mut Vec<EncodedItem>,
+    timing: Option<mainframe_types::tool_call_timing::ToolCallTiming>,
 ) {
-    out.push(task_group_item(agent_id, task_args, result, container));
+    out.push(task_group_item(
+        agent_id, task_args, result, container, timing,
+    ));
     let child = Container {
         id: agent_id,
         timestamp: container.timestamp,
@@ -207,6 +215,7 @@ fn handle_task_progress(
                 &item.result,
                 container,
                 None,
+                item.timing,
                 &None,
             ));
         }

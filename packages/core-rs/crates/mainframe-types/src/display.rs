@@ -81,7 +81,7 @@ pub enum StreamingLeafKind {
 #[serde(untagged)]
 #[expect(
     clippy::large_enum_variant,
-    reason = "Boxing every node would allocate even without command metadata."
+    reason = "Inline display nodes avoid allocating every non-leaf content block; command metadata is already boxed"
 )]
 pub enum DisplayContent {
     Leaf(LeafContent),
@@ -96,6 +96,12 @@ pub enum DisplayContent {
 )]
 pub enum DisplayNode {
     ToolCall {
+        #[serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            deserialize_with = "crate::tool_call_timing::deserialize_optional"
+        )]
+        timing: Option<crate::tool_call_timing::ToolCallTiming>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         command_execution: Option<Box<crate::command_execution::CommandExecutionMetadata>>,
         id: String,
@@ -111,6 +117,12 @@ pub enum DisplayNode {
         calls: Vec<DisplayContent>,
     },
     TaskGroup {
+        #[serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            deserialize_with = "crate::tool_call_timing::deserialize_optional"
+        )]
+        timing: Option<crate::tool_call_timing::ToolCallTiming>,
         agent_id: String,
         task_args: HashMap<String, serde_json::Value>,
         calls: Vec<DisplayContent>,
@@ -137,6 +149,12 @@ pub enum DisplayNode {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskProgressItem {
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::tool_call_timing::deserialize_optional"
+    )]
+    pub timing: Option<crate::tool_call_timing::ToolCallTiming>,
     pub id: String,
     pub name: String,
     pub input: HashMap<String, serde_json::Value>,

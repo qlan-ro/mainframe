@@ -110,6 +110,7 @@ fn bash_create_tool_use() -> MessageContent {
         serde_json::Value::String("gh pr create --title x".to_string()),
     );
     MessageContent::Node(MessageContentNode::ToolUse {
+        timing: None,
         command_execution: None,
         id: "tu1".to_string(),
         name: "Bash".to_string(),

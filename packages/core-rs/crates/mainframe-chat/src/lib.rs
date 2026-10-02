@@ -53,3 +53,5 @@ mod test_support;
 // todos: 0
 // notes: this file only wires `pub mod` declarations. Consumes the
 // notes: mainframe-adapter-api traits (sessions are Arc<dyn AdapterSession>).
+
+mod tool_call_timing;

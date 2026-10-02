@@ -8,6 +8,7 @@
  * `mainframe-types/src/acp/extensions.rs`.
  */
 import { z } from 'zod';
+import { ToolCallTimingSchema } from '../tool-call-timing.js';
 import { CommandExecutionMetadataSchema } from '../command-execution.js';
 
 /**
@@ -104,6 +105,7 @@ export type SkillLoadedMeta = z.infer<typeof SkillLoadedMetaSchema>;
  */
 export const ItemMetaSchema = z
   .object({
+    toolCallTiming: ToolCallTimingSchema.optional().catch(undefined),
     timestamp: z.string().optional(),
     containerId: z.string().optional(),
     commandExecution: CommandExecutionMetadataSchema.optional(),

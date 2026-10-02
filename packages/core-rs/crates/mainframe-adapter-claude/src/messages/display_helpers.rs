@@ -223,6 +223,7 @@ pub fn convert_assistant_content(
                 input,
                 command_execution,
                 parent_tool_use_id,
+                ..
             }) => {
                 if seen_tool_ids.contains(id) {
                     continue;
@@ -242,6 +243,7 @@ pub fn convert_assistant_content(
                 let result =
                     result_block.and_then(|rb| to_tool_call_result(rb, Some(name), Some(input)));
                 content.push(DisplayContent::Node(DisplayNode::ToolCall {
+                    timing: None,
                     id: id.clone(),
                     name: name.clone(),
                     input: input.clone(),
@@ -463,6 +465,7 @@ fn convert_grouped_parts_to_display(
                     .iter()
                     .map(|item| {
                         DisplayContent::Node(DisplayNode::ToolCall {
+                            timing: None,
                             command_execution: source_command_metadata(
                                 original_content,
                                 &item.tool_call_id,
@@ -486,6 +489,7 @@ fn convert_grouped_parts_to_display(
                     .map(|child| convert_task_child(child, original_content, categories))
                     .collect();
                 result.push(DisplayContent::Node(DisplayNode::TaskGroup {
+                    timing: None,
                     agent_id: entry.tool_call_id.clone(),
                     task_args: entry.task_args.clone(),
                     calls,
@@ -497,6 +501,7 @@ fn convert_grouped_parts_to_display(
                     .items
                     .iter()
                     .map(|item| TaskProgressItem {
+                        timing: None,
                         id: item.tool_call_id.clone(),
                         name: item.tool_name.clone(),
                         input: item.args.clone(),
@@ -529,6 +534,7 @@ fn convert_grouped_parts_to_display(
                     None => (categorize_tool_call(tool_name, Some(categories)), None),
                 };
                 result.push(DisplayContent::Node(DisplayNode::ToolCall {
+                    timing: None,
                     command_execution: source_command_metadata(original_content, tool_call_id),
                     id: tool_call_id.clone(),
                     name: tool_name.clone(),
@@ -566,6 +572,7 @@ fn convert_task_child(
             parent_tool_use_id,
             ..
         } => DisplayContent::Node(DisplayNode::ToolCall {
+            timing: None,
             command_execution: source_command_metadata(original_content, tool_call_id),
             id: tool_call_id.clone(),
             name: tool_name.clone(),

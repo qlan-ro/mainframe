@@ -71,6 +71,7 @@ fn backfill_blocks(
                 task_args,
                 calls,
                 result,
+                timing,
             }) => {
                 let mut inner = SubjectScope::new();
                 match backfill_blocks(calls, &mut inner) {
@@ -78,6 +79,7 @@ fn backfill_blocks(
                     Some(new_calls) => {
                         changed = true;
                         next.push(DisplayContent::Node(DisplayNode::TaskGroup {
+                            timing: *timing,
                             agent_id: agent_id.clone(),
                             task_args: task_args.clone(),
                             calls: new_calls,
@@ -186,6 +188,7 @@ mod tests {
 
     fn create_item(id: &str, subject: &str) -> TaskProgressItem {
         TaskProgressItem {
+            timing: None,
             id: format!("toolu_create_{id}"),
             name: "TaskCreate".to_string(),
             input: [("subject".to_string(), json!(subject))]
@@ -214,6 +217,7 @@ mod tests {
             input.insert(k.to_string(), v);
         }
         TaskProgressItem {
+            timing: None,
             id: format!("toolu_update_{task_id}_{status}"),
             name: "TaskUpdate".to_string(),
             input,
@@ -328,6 +332,7 @@ mod tests {
     #[test]
     fn falls_back_to_sequential_ids_for_pending_create() {
         let pending = TaskProgressItem {
+            timing: None,
             id: "toolu_create_pending".to_string(),
             name: "TaskCreate".to_string(),
             input: [("subject".to_string(), json!("Streaming task"))]
@@ -350,6 +355,7 @@ mod tests {
     #[test]
     fn continues_sequential_fallback_after_result_ids() {
         let pending = TaskProgressItem {
+            timing: None,
             id: "toolu_create_pending2".to_string(),
             name: "TaskCreate".to_string(),
             input: [("subject".to_string(), json!("Sixth task"))]
@@ -372,6 +378,7 @@ mod tests {
     #[test]
     fn scopes_subagent_task_progress_separately() {
         let nested = DisplayContent::Node(DisplayNode::TaskGroup {
+            timing: None,
             agent_id: "agent-1".to_string(),
             task_args: HashMap::new(),
             calls: vec![DisplayContent::Node(DisplayNode::TaskProgress {
@@ -438,6 +445,7 @@ mod tests {
     #[test]
     fn coerces_numeric_taskid() {
         let numeric_update = TaskProgressItem {
+            timing: None,
             id: "toolu_update_3_numeric".to_string(),
             name: "TaskUpdate".to_string(),
             input: [

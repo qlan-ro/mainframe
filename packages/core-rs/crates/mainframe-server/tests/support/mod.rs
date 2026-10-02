@@ -7,6 +7,7 @@
 pub mod barrier_adapter;
 pub mod facade;
 pub mod raw_http;
+pub mod tool_timing_adapter;
 
 use std::net::SocketAddr;
 use std::os::unix::fs::PermissionsExt;

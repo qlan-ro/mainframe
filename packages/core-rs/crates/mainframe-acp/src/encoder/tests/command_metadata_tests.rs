@@ -11,6 +11,7 @@ fn snapshot(duration: Option<i64>) -> Vec<EncodedItem> {
     let call = serde_json::from_value(command).unwrap();
     let grouped = DisplayContent::Node(DisplayNode::ToolGroup { calls: vec![call] });
     let task = DisplayContent::Node(DisplayNode::TaskGroup {
+        timing: None,
         agent_id: "parent".into(),
         task_args: HashMap::new(),
         calls: vec![grouped],

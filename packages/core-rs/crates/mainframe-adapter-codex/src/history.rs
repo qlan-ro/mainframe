@@ -139,6 +139,7 @@ pub(crate) fn tool_use_block(
     input: HashMap<String, Value>,
 ) -> MessageContent {
     MessageContent::Node(mainframe_types::chat::MessageContentNode::ToolUse {
+        timing: None,
         command_execution: None,
         id: id.to_string(),
         name: name.to_string(),
@@ -217,9 +218,11 @@ pub(crate) fn with_parent(block: MessageContent, pid: &str) -> MessageContent {
             id,
             name,
             input,
+            timing,
             command_execution,
             ..
         }) => MessageContent::Node(N::ToolUse {
+            timing,
             id,
             name,
             input,

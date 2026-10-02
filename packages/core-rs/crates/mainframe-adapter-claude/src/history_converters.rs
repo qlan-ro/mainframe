@@ -373,6 +373,7 @@ fn convert_assistant_entry(
                 }
                 Some("tool_use") => {
                     content_blocks.push(MessageContent::Node(MessageContentNode::ToolUse {
+                        timing: None,
                         command_execution: None,
                         id: block
                             .get("id")

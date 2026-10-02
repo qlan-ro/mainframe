@@ -43,7 +43,17 @@ describe('convertAcpItems — tool result shapes', () => {
     const container = convertAcpItems([item], stampFor)[0]!;
     const part = container.content[0] as { isError?: boolean; result?: unknown };
     expect(part.isError).toBe(true);
-    expect(part.result).toBeUndefined();
+    expect(part.result).toBe('');
+  });
+
+  it.each(['completed', 'failed'] as const)('keeps %s empty results defined for both content encodings', (status) => {
+    const base = { kind: 'tool-call' as const, id: 'empty', status };
+    expect(toolResultOf({ ...base, content: [] })).toBe('');
+    expect(toolResultOf({ ...base, content: [{ type: 'content', content: { type: 'text', text: '' } }] })).toBe('');
+  });
+
+  it.each(['pending', 'in_progress', 'cancelled'] as const)('leaves %s calls without output unresolved', (status) => {
+    expect(toolResultOf({ kind: 'tool-call', id: 'running', status, content: [] })).toBeUndefined();
   });
 
   it('a truncation marker on a text block yields the {content,truncated,fullBytes} result shape', () => {

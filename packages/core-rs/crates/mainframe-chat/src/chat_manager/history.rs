@@ -48,12 +48,12 @@ impl ChatManager {
         };
         match session.load_history().await {
             Ok(history) => {
-                let remapped = remap_history(history, chat_id);
+                let mut remapped = remap_history(history, chat_id);
                 if !remapped.is_empty() {
-                    self.messages
-                        .lock()
-                        .unwrap_or_else(|e| e.into_inner())
-                        .set(chat_id, remapped.clone());
+                    {
+                        let mut messages = self.messages.lock().unwrap_or_else(|e| e.into_inner());
+                        remapped = messages.set_and_snapshot(chat_id, remapped);
+                    }
                     self.permissions
                         .lock()
                         .unwrap_or_else(|e| e.into_inner())
