@@ -17,10 +17,12 @@ import type {
   JsonRpcRequestId,
   QueuedMessageRef,
   RequestPermissionRequest,
+  RevisionCursor,
   SessionUpdate,
 } from '@qlan-ro/mainframe-types';
 import {
   CompactionParamsSchema,
+  CursorParamsSchema,
   GateResolvedParamsSchema,
   HeartbeatParamsSchema,
   MAINFRAME_META_NAMESPACE,
@@ -42,6 +44,8 @@ export type QueueStateListener = (sessionId: string, refs: QueuedMessageRef[]) =
 export type ResyncListener = (sessionId: string) => void;
 /** `_mainframe.dev/replay_complete` (spec Decision 38): closes exactly one `session/resume` replay. `aborted` is normalized to `false` when the wire key is absent (a normal close). */
 export type ReplayCompleteListener = (sessionId: string, aborted: boolean) => void;
+/** `_mainframe.dev/cursor` (todo #377): the replay boundary a reconnecting client now holds every change through — advances the durable revision cursor outside a resume round trip. Sent only to connections that opted into revision cursors. */
+export type CursorListener = (sessionId: string, cursor: RevisionCursor) => void;
 /** `_mainframe.dev/heartbeat` — registered by the constructor, not by a public `on*`. */
 export type HeartbeatListener = (sequence: number) => void;
 
@@ -56,6 +60,7 @@ interface ListenerSignatures {
   '_mainframe.dev/gate_resolved': GateResolvedListener;
   '_mainframe.dev/resync': ResyncListener;
   '_mainframe.dev/replay_complete': ReplayCompleteListener;
+  '_mainframe.dev/cursor': CursorListener;
 }
 type ListenerMethod = keyof ListenerSignatures;
 /** `session/request_permission` is a request, not a notification — it has an error reply and stays off the table. */
@@ -98,6 +103,10 @@ const NOTIFICATIONS: readonly NotificationEntry[] = [
   defineNotification('_mainframe.dev/replay_complete', ReplayCompleteParamsSchema, (p) => [
     p.sessionId,
     p.aborted === true,
+  ]),
+  defineNotification('_mainframe.dev/cursor', CursorParamsSchema, (p) => [
+    p.sessionId,
+    { epoch: p.epoch, revision: p.revision },
   ]),
 ];
 
@@ -160,6 +169,10 @@ export class AcpNotificationRouter {
 
   onReplayComplete(listener: ReplayCompleteListener): () => void {
     return this.register('_mainframe.dev/replay_complete', listener);
+  }
+
+  onCursor(listener: CursorListener): () => void {
+    return this.register('_mainframe.dev/cursor', listener);
   }
 
   handleNotification(notification: JsonRpcNotification): void {

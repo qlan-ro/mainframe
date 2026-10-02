@@ -25,6 +25,15 @@ describe('AcpFacadeClient — handshake', () => {
     expect(client.mainframeCapabilities).toEqual({ heartbeatIntervalMs: 15000 });
   });
 
+  it('opts into revision-versioned resume cursors via initialize _meta (todo #377)', async () => {
+    const { socket } = await connectedClient();
+
+    expect(socket.sent[0]).toMatchObject({
+      method: 'initialize',
+      params: { _meta: { '_mainframe.dev': { revisionCursors: true } } },
+    });
+  });
+
   it('rejects when the daemon negotiates an unsupported protocol version', async () => {
     const socket = new FakeSocket();
     const client = new AcpFacadeClient('mock-cli', { url: () => 'ws://test', createSocket: () => socket });

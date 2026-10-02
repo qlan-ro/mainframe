@@ -5,6 +5,8 @@
  * contributes no cases of its own (same convention as `acp-test-kit.ts`).
  */
 import { vi } from 'vitest';
+import type { MainframeCapabilities, RevisionCursor } from '@qlan-ro/mainframe-types';
+import type { ReplayCursor } from '../../../../lib/daemon/acp-client';
 import type { ChatStateEvent } from '../chat-thread-state';
 import {
   AcpSessionAttachment,
@@ -19,7 +21,11 @@ export type ResumeResult = Awaited<ReturnType<AcpSessionClientPort['resume']>>;
 export function makeHost(overrides: { hasAccumulatedItems?: () => boolean } = {}) {
   // Stateful on purpose: the cursor/accumulator resets are what a wipe is FOR,
   // so a test has to be able to observe them, not just count the calls.
-  const state = { settledItemId: null as string | null, hasItems: false };
+  const state = {
+    settledItemId: null as string | null,
+    hasItems: false,
+    durableCursor: null as RevisionCursor | null,
+  };
   const dispatch = vi.fn<(event: ChatStateEvent) => void>();
   const resetAccumulator = vi.fn<() => void>(() => {
     state.hasItems = false;
@@ -27,6 +33,26 @@ export function makeHost(overrides: { hasAccumulatedItems?: () => boolean } = {}
   const resetSettledCursor = vi.fn<() => void>(() => {
     state.settledItemId = null;
   });
+  const clearDurableCursor = vi.fn<() => void>(() => {
+    state.durableCursor = null;
+  });
+  // Mirrors `ResumeCursorTracker.advanceFromNotification` — kept minimal here
+  // since the tracker's own behavior is unit-tested in `acp-resume-cursor.test.ts`.
+  const advanceCursorFromNotification = vi.fn<(cursor: RevisionCursor) => void>((cursor) => {
+    if (!state.durableCursor || state.durableCursor.epoch !== cursor.epoch) {
+      state.durableCursor = null;
+      return;
+    }
+    if (cursor.revision > state.durableCursor.revision) state.durableCursor = cursor;
+  });
+  const nextReplayFrom = vi.fn<(capabilities: MainframeCapabilities | null | undefined) => ReplayCursor>(
+    (capabilities) => {
+      if (capabilities?.revisionCursors === true && capabilities?.replayComplete === true && state.durableCursor) {
+        return { type: 'revision', epoch: state.durableCursor.epoch, revision: state.durableCursor.revision };
+      }
+      return state.settledItemId ? { type: 'item', itemId: state.settledItemId } : { type: 'start' };
+    },
+  );
   const beginReplay = vi.fn<(opts: { full: boolean }) => ReplayStage>((opts) => new ReplayStage(opts.full, null));
   const completeReplay = vi.fn<(stage: ReplayStage) => void>();
   const discardReplay = vi.fn<(stage: ReplayStage) => void>();
@@ -34,8 +60,10 @@ export function makeHost(overrides: { hasAccumulatedItems?: () => boolean } = {}
     getChatId: () => CHAT_ID,
     dispatch,
     isDisposed: () => false,
-    getLastSettledItemId: () => state.settledItemId,
+    nextReplayFrom,
     resetSettledCursor,
+    clearDurableCursor,
+    advanceCursorFromNotification,
     resetAccumulator,
     hasAccumulatedItems: overrides.hasAccumulatedItems ?? (() => state.hasItems),
     onSessionUpdate: vi.fn(),
@@ -45,7 +73,17 @@ export function makeHost(overrides: { hasAccumulatedItems?: () => boolean } = {}
     completeReplay,
     discardReplay,
   };
-  return { host, state, dispatch, resetAccumulator, resetSettledCursor, beginReplay, completeReplay, discardReplay };
+  return {
+    host,
+    state,
+    dispatch,
+    resetAccumulator,
+    resetSettledCursor,
+    clearDurableCursor,
+    beginReplay,
+    completeReplay,
+    discardReplay,
+  };
 }
 
 export function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {

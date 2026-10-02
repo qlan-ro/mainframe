@@ -93,6 +93,10 @@ const CASES: Record<NotificationMethod, { params: unknown; args: unknown[] }> = 
   },
   '_mainframe.dev/resync': { params: { sessionId: 'chat_1' }, args: ['chat_1'] },
   '_mainframe.dev/replay_complete': { params: { sessionId: 'chat_1' }, args: ['chat_1', false] },
+  '_mainframe.dev/cursor': {
+    params: { sessionId: 'chat_1', epoch: 'epoch-1', revision: 4 },
+    args: ['chat_1', { epoch: 'epoch-1', revision: 4 }],
+  },
 };
 
 /** `_mainframe.dev/heartbeat` has no public registrar — its listener is the constructor callback. */
@@ -107,6 +111,7 @@ const SUBSCRIBE: Record<
   '_mainframe.dev/gate_resolved': (router, listener) => router.onGateResolved(listener),
   '_mainframe.dev/resync': (router, listener) => router.onResync(listener),
   '_mainframe.dev/replay_complete': (router, listener) => router.onReplayComplete(listener),
+  '_mainframe.dev/cursor': (router, listener) => router.onCursor(listener),
 };
 
 function subscribeAll(): { router: AcpNotificationRouter; listeners: Record<NotificationMethod, Mock> } {
