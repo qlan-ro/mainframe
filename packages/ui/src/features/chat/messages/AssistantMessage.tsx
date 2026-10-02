@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useMemo } from 'react';
 import { MessagePrimitive, useAuiState } from '@assistant-ui/react';
 import { Message, MessageContent, MessageFooter } from '@/components/ui/message';
 import { useUiPrefs } from '@/store/ui-prefs';
@@ -20,6 +20,7 @@ export function AssistantMessage() {
   const isNested = useIsNestedTranscript();
   const mode = useUiPrefs((s) => s.transcriptMode);
   const scope = useTranscriptScope();
+  const messageScope = useMemo(() => ({ ...scope, messageId }), [scope, messageId]);
   const parts =
     mode === 'compact' ? (
       <Suspense fallback={null}>
@@ -29,7 +30,7 @@ export function AssistantMessage() {
       <VerboseParts />
     );
   return (
-    <TranscriptScopeProvider value={{ ...scope, messageId }}>
+    <TranscriptScopeProvider value={messageScope}>
       <MessagePrimitive.Root data-testid="chat-assistant-message" data-message-id={messageId} className="py-2">
         <Message>
           <MessageContent>

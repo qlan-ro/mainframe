@@ -18,18 +18,23 @@ export function RootTranscriptScope({ children }: { children: ReactNode }) {
   const threadId = useSideAwareThreadId();
   const extras = useChatExtras();
   const fallback = useId();
+  const chatId = extras?.state.chatId;
+  const permissions = extras?.permissions;
+  const pendingToolIds = useMemo(
+    () =>
+      new Set(
+        Object.values(permissions ?? {}).flatMap((entry) => (entry.request.toolUseId ? [entry.request.toolUseId] : [])),
+      ),
+    [permissions],
+  );
   const value = useMemo(
     () => ({
-      rootThreadId: threadId ?? extras?.state.chatId ?? fallback,
-      chatId: extras?.state.chatId,
+      rootThreadId: threadId ?? chatId ?? fallback,
+      chatId,
       ancestors: [],
-      pendingToolIds: new Set(
-        Object.values(extras?.permissions ?? {}).flatMap((entry) =>
-          entry.request.toolUseId ? [entry.request.toolUseId] : [],
-        ),
-      ),
+      pendingToolIds,
     }),
-    [threadId, extras, fallback],
+    [threadId, chatId, fallback, pendingToolIds],
   );
   return <TranscriptScopeProvider value={value}>{children}</TranscriptScopeProvider>;
 }
