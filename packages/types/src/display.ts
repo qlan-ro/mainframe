@@ -1,3 +1,4 @@
+import type { ToolCallTiming } from './tool-call-timing.js';
 import type { DiffHunk, ToolResultImage } from './chat.js';
 import type { ControlRequest } from './adapter.js';
 import type { ClaudeWorkflowRun } from './claude-workflow.js';
@@ -33,6 +34,7 @@ export type DisplayContent =
   | LeafContent
   | {
       type: 'tool_call';
+      timing?: ToolCallTiming;
       id: string;
       name: string;
       input: Record<string, unknown>;
@@ -43,6 +45,7 @@ export type DisplayContent =
   | { type: 'tool_group'; calls: DisplayContent[] }
   | {
       type: 'task_group';
+      timing?: ToolCallTiming;
       agentId: string;
       taskArgs: Record<string, unknown>;
       calls: DisplayContent[];
@@ -51,6 +54,7 @@ export type DisplayContent =
   | {
       type: 'task_progress';
       items: Array<{
+        timing?: ToolCallTiming;
         id: string;
         name: string;
         input: Record<string, unknown>;

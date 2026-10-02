@@ -1,0 +1,9 @@
+{
+  "_provenance": "synthetic",
+  "timestamp": "2026-10-02T00:00:00Z",
+  "containerId": "container",
+  "parentToolCallId": "parent",
+  "toolCallTiming": {
+    "startedAt": 1790899200000
+  }
+}

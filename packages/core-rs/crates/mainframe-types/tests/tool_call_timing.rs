@@ -28,3 +28,19 @@ fn tool_call_timing_invalid_history_is_ignored_without_losing_call() {
         assert!(output.get("timing").is_none());
     }
 }
+
+#[test]
+fn tool_timing_item_meta_ignores_malformed_timing_independently() {
+    use mainframe_types::acp::extensions::ItemMeta;
+    let meta: ItemMeta = serde_json::from_value(json!({
+        "containerId":"container","parentToolCallId":"parent", "messageMeta":{"custom":"kept"},
+        "toolCallTiming":{"startedAt":1000,"completedAt":999}
+    }))
+    .unwrap();
+    assert_eq!(
+        serde_json::to_value(meta).unwrap(),
+        json!({
+            "containerId":"container","parentToolCallId":"parent","messageMeta":{"custom":"kept"}
+        })
+    );
+}

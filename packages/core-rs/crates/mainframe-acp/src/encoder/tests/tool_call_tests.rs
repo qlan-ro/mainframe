@@ -72,6 +72,7 @@ fn flattened_task_group_items() -> Vec<EncodedItem> {
         "dmsg_4",
         DisplayMessageType::Assistant,
         vec![DisplayContent::Node(DisplayNode::TaskGroup {
+            timing: None,
             agent_id: "toolu_task_1".to_string(),
             task_args,
             calls: vec![
@@ -163,6 +164,7 @@ fn flattens_task_progress_items_to_tool_call_items() {
         DisplayMessageType::Assistant,
         vec![DisplayContent::Node(DisplayNode::TaskProgress {
             items: vec![TaskProgressItem {
+                timing: None,
                 id: "toolu_bg_1".to_string(),
                 name: "Bash".to_string(),
                 input: HashMap::new(),

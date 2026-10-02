@@ -70,7 +70,9 @@ pub fn prepare_messages_for_client(
 
     // Cross-message pass: name TaskUpdate items whose TaskCreate lives in an
     // earlier grouped message (the CLI's update events carry no subject).
-    backfill_task_subjects(&result)
+    let mut result = backfill_task_subjects(&result);
+    mainframe_display::apply_tool_call_timing(messages, &mut result);
+    result
 }
 
 fn convert_grouped_to_display(
@@ -977,3 +979,6 @@ mod tests {
 // notes: PermissionRequest (parentToolUseId dropped, matching the TS `{type,request}`
 // notes: / `{type:'compaction'}` literals). All ~30 display-pipeline.test.ts cases
 // notes: ported (asserted against serde_json Values to mirror the TS deep-equality).
+
+#[cfg(test)]
+mod tool_timing_tests;

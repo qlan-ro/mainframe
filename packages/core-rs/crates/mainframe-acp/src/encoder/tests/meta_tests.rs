@@ -154,6 +154,7 @@ fn an_ask_user_question_result_carries_its_answers_in_the_text_block_meta() {
         "dmsg_ask",
         DisplayMessageType::Assistant,
         vec![DisplayContent::Node(DisplayNode::ToolCall {
+            timing: None,
             id: "toolu_ask".to_string(),
             name: "AskUserQuestion".to_string(),
             input: HashMap::new(),
