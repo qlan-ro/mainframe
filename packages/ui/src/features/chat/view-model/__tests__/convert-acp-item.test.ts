@@ -77,7 +77,7 @@ describe('convertAcpItems — reaggregation', () => {
           toolCallId: 't2',
           toolName: 'Write',
           args: {},
-          result: undefined,
+          result: '',
           isError: undefined,
         },
         { type: 'reasoning', text: 'thinking' },
@@ -123,11 +123,11 @@ describe('convertAcpItems — reaggregation', () => {
     expect(converted.map((m) => m.id)).toEqual(['c1', 'c2']);
     expect(converted[0]!.content).toEqual([
       { type: 'text', text: 'first' },
-      { type: 'tool-call', toolCallId: 't1', toolName: 'Bash', args: {}, result: undefined, isError: undefined },
+      { type: 'tool-call', toolCallId: 't1', toolName: 'Bash', args: {}, result: '', isError: undefined },
     ]);
     expect(converted[1]!.content).toEqual([
       { type: 'text', text: 'second' },
-      { type: 'tool-call', toolCallId: 't2', toolName: 'Bash', args: {}, result: undefined, isError: undefined },
+      { type: 'tool-call', toolCallId: 't2', toolName: 'Bash', args: {}, result: '', isError: undefined },
     ]);
   });
 
@@ -179,9 +179,9 @@ describe('convertAcpItems — reaggregation', () => {
         createdAt,
         content: [
           { type: 'text', text: 'first' },
-          { type: 'tool-call', toolCallId: 't1', toolName: 'Bash', args: {}, result: undefined, isError: undefined },
+          { type: 'tool-call', toolCallId: 't1', toolName: 'Bash', args: {}, result: '', isError: undefined },
           { type: 'text', text: 'second' },
-          { type: 'tool-call', toolCallId: 't2', toolName: 'Bash', args: {}, result: undefined, isError: undefined },
+          { type: 'tool-call', toolCallId: 't2', toolName: 'Bash', args: {}, result: '', isError: undefined },
           { type: 'text', text: 'third' },
         ],
       },
