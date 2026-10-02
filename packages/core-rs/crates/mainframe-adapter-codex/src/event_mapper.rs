@@ -76,12 +76,14 @@ pub fn handle_notification(
                 handle_account_rate_limits_updated(p, sink);
             }
         }
+        "item/agentMessage/delta" => {
+            crate::agent_message_partial::handle_agent_message_delta(params, sink, state)
+        }
         // Known-but-unhandled notifications — silently ignore.
         "turn/diff/updated"
         | "turn/plan/updated"
         | "thread/closed"
         | "thread/status/changed"
-        | "item/agentMessage/delta"
         | "item/commandExecution/outputDelta"
         | "item/fileChange/outputDelta"
         | "item/reasoning/summaryTextDelta"

@@ -737,8 +737,7 @@ impl AdapterSession for CodexSession {
             self.state
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
-                .command_state
-                .clear();
+                .clear_transient();
             let client = self
                 .client
                 .lock()
@@ -1020,8 +1019,7 @@ impl CodexSession {
                 state_x
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
-                    .command_state
-                    .clear();
+                    .clear_transient();
                 *status_x.lock().unwrap_or_else(|e| e.into_inner()) = AdapterProcessStatus::Stopped;
                 *client_slot_x.lock().unwrap_or_else(|e| e.into_inner()) = None;
                 let s = sink_x.lock().unwrap_or_else(|e| e.into_inner()).clone();

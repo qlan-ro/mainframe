@@ -16,9 +16,7 @@ use mainframe_types::chat::{
 };
 use mainframe_types::content::LeafContent;
 use mainframe_types::context::SkillFileEntry;
-use mainframe_types::display::{
-    DisplayContent, DisplayMessage, DisplayMessageType, StreamingLeafKind, ToolCategories,
-};
+use mainframe_types::display::{DisplayMessage, ToolCategories};
 use mainframe_types::events::{
     ChatNotificationKind, ChatNotificationLevel, ChatUpdatedReason, DaemonEvent,
 };
@@ -30,9 +28,11 @@ use crate::fork::PendingForkState;
 use crate::message_cache::MessageCache;
 use crate::permission_manager::{CancelOutcome, PermissionManager};
 use crate::types::ActiveChat;
+pub(crate) use display_projection::project_display;
 use partial_overlay::PartialOverlays;
 use worktree_tool::{creates_worktree, moves_transcript};
 
+pub(crate) mod display_projection;
 mod partial_overlay;
 mod worktree_tool;
 
@@ -185,6 +185,14 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
     /// chat end/archive) — nothing else clears this per-chat bookkeeping.
     pub fn clear_display_state(&self, chat_id: &str) {
         self.partial_overlays.remove_chat(chat_id);
+    }
+
+    /// The chat's current in-flight overlay message, for `ChatManager`'s
+    /// resume snapshot (todo #382) — the same read `emit_display_for` uses
+    /// for live revisions, so a snapshot taken mid-stream can project it
+    /// through the identical [`display_projection::project_display`].
+    pub fn current_overlay_message(&self, chat_id: &str) -> Option<ChatMessage> {
+        self.partial_overlays.message_for(chat_id)
     }
 }
 

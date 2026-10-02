@@ -39,6 +39,10 @@ pub(crate) fn handle_turn_started(params: TurnStartedParams, state: &mut CodexSe
     state.current_turn_plan = None;
     state.current_turn_id = Some(params.turn.id);
     state.compaction_emitted = false;
+    // A new parent turn starting must not inherit the previous turn's
+    // in-flight agent-message text (todo #378) — a child's own turn/started
+    // never reaches here (the `Owner::Parent` check above returned already).
+    state.agent_message_partial.clear();
 }
 
 pub(crate) fn handle_plan_delta(params: PlanDeltaParams, state: &mut CodexSessionState) {
@@ -86,6 +90,10 @@ pub(crate) fn handle_turn_completed(
     state.command_state.end_parent_turn(thread, &params.turn.id);
     state.current_turn_plan = None;
     state.current_turn_id = None;
+    // Todo #378: any status (completed/failed/interrupted) ends the turn's
+    // in-flight agent-message accumulation — a stale delta for this turn
+    // must find no current_turn_id to match against afterward.
+    state.agent_message_partial.clear();
     emit_parent_turn_result(params.turn, sink, state);
 }
 

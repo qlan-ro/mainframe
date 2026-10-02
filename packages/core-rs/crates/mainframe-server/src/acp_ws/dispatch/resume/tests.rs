@@ -2,10 +2,8 @@
 //! client: a settled promise and a way back onto the stream (todo #350, PR
 //! #688 review).
 
-use mainframe_acp::resume::BoxFuture;
+use mainframe_acp::resume::{BoxFuture, ResumeSnapshot};
 use mainframe_types::acp::jsonrpc::RequestId;
-use mainframe_types::adapter::ControlRequest;
-use mainframe_types::display::DisplayMessage;
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
 
@@ -17,10 +15,7 @@ use crate::ctx::AppCtx;
 struct PanickingPort;
 
 impl ResumePort for PanickingPort {
-    fn resume_snapshot<'a>(
-        &'a self,
-        _session_id: &'a str,
-    ) -> BoxFuture<'a, (Vec<DisplayMessage>, Option<ControlRequest>)> {
+    fn resume_snapshot<'a>(&'a self, _session_id: &'a str) -> BoxFuture<'a, ResumeSnapshot> {
         Box::pin(async { panic!("resume snapshot blew up") })
     }
 
@@ -34,11 +29,14 @@ impl ResumePort for PanickingPort {
 struct EmptyPort;
 
 impl ResumePort for EmptyPort {
-    fn resume_snapshot<'a>(
-        &'a self,
-        _session_id: &'a str,
-    ) -> BoxFuture<'a, (Vec<DisplayMessage>, Option<ControlRequest>)> {
-        Box::pin(async { (Vec::new(), None) })
+    fn resume_snapshot<'a>(&'a self, _session_id: &'a str) -> BoxFuture<'a, ResumeSnapshot> {
+        Box::pin(async {
+            ResumeSnapshot {
+                messages: Vec::new(),
+                streaming: None,
+                pending: None,
+            }
+        })
     }
 
     fn is_running(&self, _session_id: &str) -> bool {

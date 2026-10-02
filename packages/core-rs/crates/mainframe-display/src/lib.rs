@@ -12,6 +12,7 @@
 
 pub mod display_helpers;
 pub mod display_pipeline;
+pub mod hidden_boundary;
 pub mod parse_unified_diff;
 pub mod tool_categorization;
 pub mod tool_grouping;

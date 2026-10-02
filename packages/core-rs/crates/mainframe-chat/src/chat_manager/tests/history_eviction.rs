@@ -30,12 +30,18 @@ fn fully_pinned_cache() -> (Arc<StoreDeps>, ChatManager) {
 #[tokio::test]
 async fn cold_history_resume_survives_immediate_eviction_and_restores_permission() {
     let (deps, manager) = fully_pinned_cache();
-    let (messages, pending) = manager.get_resume_snapshot("c1").await;
+    let snapshot = manager.get_resume_snapshot("c1").await;
     assert_eq!(
-        messages.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(),
+        snapshot
+            .messages
+            .iter()
+            .map(|m| m.id.as_str())
+            .collect::<Vec<_>>(),
         ["history-call"]
     );
-    let pending = pending.expect("history restores the unanswered tool call");
+    let pending = snapshot
+        .pending
+        .expect("history restores the unanswered tool call");
     assert_eq!(pending.tool_use_id, "pending-call");
     assert_eq!(pending.tool_name, "Bash");
     assert_eq!(pending.input["command"], "pwd");

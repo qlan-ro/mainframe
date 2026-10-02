@@ -155,8 +155,10 @@ pub fn encode(messages: &[DisplayMessage]) -> Vec<EncodedItem> {
 /// whichever accumulator segment is still open at `finish` with
 /// `ItemMeta.streaming: true` when its kind matches `streaming` (spec
 /// Decision 39) — the item the partial-message overlay currently backs.
-/// `handle_display_revision` calls this; resume replay keeps `encode`,
-/// because a resume snapshot has no overlay.
+/// `handle_display_revision` calls this for live revisions; `dispatch_resume`
+/// (todo #382) calls it too, since a resume snapshot now carries the same
+/// overlay a live revision would — `streaming: None` makes this
+/// byte-identical to `encode`, so a no-overlay resume is unaffected.
 pub fn encode_revision(
     messages: &[DisplayMessage],
     streaming: Option<StreamingLeafKind>,
