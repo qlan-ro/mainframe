@@ -7,6 +7,7 @@
  * structures themselves live in `acp-replay-window.ts`.
  */
 import { ReplayCancelledError, ReplayWindow, ReplayWindowFifo, type ReplayWindowKind } from './acp-replay-window';
+import type { ReplayStage } from './acp-replay-stage';
 import type { ChatStateEvent } from './chat-thread-state';
 
 /** What `ReplayWindowCoordinator` needs from `AcpSessionAttachmentHost` — a view, not the whole interface, so the coordinator stays independent of the attachment's own state. */
@@ -21,9 +22,9 @@ export interface ReplayCoordinatorHost {
   dispatch(event: ChatStateEvent): void;
   hasAccumulatedItems(): boolean;
   resetAccumulator(): void;
-  beginReplay(opts: { full: boolean }): void;
-  completeReplay(opts: { full: boolean }): void;
-  discardReplay(opts: { full: boolean }): void;
+  beginReplay(opts: { full: boolean }): ReplayStage;
+  completeReplay(stage: ReplayStage): void;
+  discardReplay(stage: ReplayStage): void;
   /** True from the moment a `resume()` request is sent until its window settles (attachment-owned; the coordinator only reads it). */
   isResumePending(): boolean;
 }
@@ -41,6 +42,11 @@ export class ReplayWindowCoordinator {
 
   hasOpenWindow(): boolean {
     return this.fifo.front()?.status === 'open';
+  }
+
+  /** The FIFO-front window's own stage — where a routed frame applies (todo #385). `null` while the FIFO is empty or its front window was refused. */
+  currentStage(): ReplayStage | null {
+    return this.fifo.front()?.stage ?? null;
   }
 
   /** A resync superseded the oldest still-open window (never this instance's own in-flight run — `FullReplayRetry` already dedupes that case). Its staging, if any, stays reachable until its own marker arrives. */
@@ -74,7 +80,7 @@ export class ReplayWindowCoordinator {
   cancelAll(): void {
     for (const window of this.fifo.drain()) {
       window.abort(new ReplayCancelledError(`[acp-session] replay for ${this.host.getChatId()} was cancelled`));
-      if (window.kind === 'full') this.host.discardReplay({ full: true });
+      if (window.stage) this.host.discardReplay(window.stage);
     }
   }
 
@@ -98,7 +104,7 @@ export class ReplayWindowCoordinator {
           `[acp-session] the connection for ${this.host.getChatId()} reconnected, invalidating a queued replay`,
         ),
       );
-      if (window.kind === 'full') this.host.discardReplay({ full: true });
+      if (window.stage) this.host.discardReplay(window.stage);
     }
   }
 
@@ -145,8 +151,9 @@ export class ReplayWindowCoordinator {
     }
     if (window.status === 'aborted') {
       // Already settled client-side (gap/resync/detach) — this marker is
-      // pure bookkeeping: drop any staging it was still holding onto.
-      if (window.kind === 'full') this.host.discardReplay({ full: true });
+      // pure bookkeeping: drop any staging THIS window was still holding
+      // onto, never another window's.
+      if (window.stage) this.host.discardReplay(window.stage);
       return;
     }
     if (window.kind === 'refused') {
@@ -154,12 +161,12 @@ export class ReplayWindowCoordinator {
       return;
     }
     if (aborted) {
-      this.host.discardReplay({ full: window.kind === 'full' });
+      if (window.stage) this.host.discardReplay(window.stage);
       window.settleReject(new Error(`[acp-session] resume for ${this.host.getChatId()} was aborted by the daemon`));
       return;
     }
     this.warnOnItemCountMismatch(window);
-    this.host.completeReplay({ full: window.kind === 'full' });
+    if (window.stage) this.host.completeReplay(window.stage);
     window.settleResolve();
   }
 
@@ -213,9 +220,9 @@ export class ReplayWindowCoordinator {
     } else if (kind === 'full') {
       // After the guard, never before — same ordering reason as the legacy path.
       this.hasAttachedOnce = true;
-      this.host.beginReplay({ full: true });
+      window.stage = this.host.beginReplay({ full: true });
     } else {
-      this.host.beginReplay({ full: false });
+      window.stage = this.host.beginReplay({ full: false });
     }
 
     await window.promise;

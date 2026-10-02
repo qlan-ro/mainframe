@@ -369,10 +369,11 @@ describe('AcpSessionPlane — staged windows close oldest first (finding 7 of th
    * returns control at its own `await`, so the FIFO is still empty when the
    * second call runs its own (no-op) abort-check and sends its own request.
    * Both windows are therefore genuinely open, independent, and unaborted;
-   * each is tracked here via its OWN settlement (not transcript content,
-   * which — for two concurrently-staging FULL windows specifically — would
-   * hit the single-staging-slot limitation `AcpTranscriptStore` still has;
-   * see this task's final report).
+   * each is tracked here via its OWN settlement rather than transcript
+   * content, which stays the simplest signal even now that two
+   * concurrently-staging FULL windows no longer share one staging slot
+   * (`AcpTranscriptStore.openStage()` gives each its own accumulator, todo
+   * #385) — `acp-replay-stage-ownership.test.ts` covers that case directly.
    */
   it('two overlapping gap-resumes open two independent (cursor) windows; replay_complete closes them oldest-first', async () => {
     const client = makeFakeAcpClient({ capabilities: STAGED });
@@ -852,7 +853,9 @@ describe('AcpSessionAttachment — a reconnect mid-replay does not wedge the win
 describe("AcpSessionAttachment — a reconnect that beats this chat's own gap signal is still caught (finding 1, remaining path)", () => {
   it('openWindow itself drains the stale window when a new resume opens on a reconnect resumeFromGap never saw', async () => {
     const client = makeFakeAcpClient({ capabilities: STAGED });
-    const { host, state, discardReplay, completeReplay } = makeAttachmentHost({ hasAccumulatedItems: () => true });
+    const { host, state, beginReplay, discardReplay, completeReplay } = makeAttachmentHost({
+      hasAccumulatedItems: () => true,
+    });
     const attachment = new AcpSessionAttachment(host);
     const attached = attachment.attach(client as unknown as AcpSessionClientPort);
     await tick();
@@ -881,8 +884,11 @@ describe("AcpSessionAttachment — a reconnect that beats this chat's own gap si
 
     // `openWindow` itself must have drained A the moment B's resume came
     // back — BEFORE any marker arrives at all. Without the fix, A is still
-    // queued (merely aborted) ahead of B at this point.
-    expect(discardReplay).toHaveBeenCalledWith({ full: true });
+    // queued (merely aborted) ahead of B at this point. Matched on A's own
+    // stage (not just `{ full: true }`) so this also proves B's own stage —
+    // asserted below — is a DIFFERENT object, never the one just discarded.
+    const stageA = beginReplay.mock.results[1]!.value;
+    expect(discardReplay).toHaveBeenCalledWith(stageA);
     discardReplay.mockClear();
 
     // The single marker that DOES arrive is now free to close B cleanly —
@@ -890,7 +896,8 @@ describe("AcpSessionAttachment — a reconnect that beats this chat's own gap si
     // own staging through the shared slot and leaving `reattached` hanging.
     client.emitReplayComplete(CHAT_ID);
     await reattached;
-    expect(completeReplay).toHaveBeenCalledWith({ full: true }); // B published on its own marker
+    const stageB = beginReplay.mock.results[2]!.value;
+    expect(completeReplay).toHaveBeenCalledWith(stageB); // B published on its own stage
     expect(discardReplay).not.toHaveBeenCalled(); // B's own marker, not A's — nothing left to discard
 
     // The late gap finally arrives (the dead connection's own scheduled
@@ -901,7 +908,8 @@ describe("AcpSessionAttachment — a reconnect that beats this chat's own gap si
     await tick();
     client.emitReplayComplete(CHAT_ID); // closes window C
     await gapResumed;
-    expect(completeReplay).toHaveBeenCalledWith({ full: true });
+    const stageC = beginReplay.mock.results[3]!.value;
+    expect(completeReplay).toHaveBeenCalledWith(stageC);
 
     // resumePendingCount is back to 0 — a needs-replay request right now
     // fires a brand-new resume instead of being swallowed as "still pending".
@@ -959,12 +967,12 @@ describe('AcpSessionPlane — a send is not hidden behind a stale window after a
 });
 
 describe('AcpSessionPlane — a live create after the first full replay carries no status (finding 2)', () => {
-  it('does not leave origin: "replay" set on the published accumulator after publishStaging()', async () => {
+  it('does not leave origin: "replay" set on the published accumulator after store.publish()', async () => {
     const client = makeFakeAcpClient({ capabilities: STAGED });
     const host = makeHost();
     const plane = new AcpSessionPlane(host);
     // The very first attach() is itself a full replay that stages off-screen
-    // and publishes via `AcpTranscriptStore.publishStaging()` — exactly the
+    // and publishes via `AcpTranscriptStore.publish()` — exactly the
     // path that used to leave `replaying: true` set on the now-visible
     // accumulator forever.
     await attachWithItems(plane, client, 1);
