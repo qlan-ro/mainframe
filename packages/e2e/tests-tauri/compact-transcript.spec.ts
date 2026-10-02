@@ -45,7 +45,7 @@ test.describe('compact transcript preference and disclosure', () => {
     await waitForIdle(page, 60_000);
     await expect(page.getByTestId('chat-bash-card').first()).toBeVisible();
     await selectTranscript(page, 'compact');
-    const row = page.locator('[data-testid^="chat-compact-toggle-"]').first();
+    const row = page.getByRole('button', { name: 'Listed directory', exact: true });
     await expect(row).toHaveAttribute('aria-expanded', 'false');
     await row.focus();
     await row.press('Enter');
