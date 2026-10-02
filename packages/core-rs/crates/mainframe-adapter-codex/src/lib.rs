@@ -13,6 +13,7 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
 pub mod adapter;
+pub mod agent_message_partial;
 pub mod approval_handler;
 pub(crate) mod collab_activity;
 pub(crate) mod collab_card;
