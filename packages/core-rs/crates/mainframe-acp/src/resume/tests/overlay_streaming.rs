@@ -33,9 +33,9 @@ async fn a_text_streaming_snapshot_marks_only_the_last_agent_message_as_streamin
             dmsg("dmsg_1", vec![text("first")]),
             dmsg("dmsg_2", vec![text("second, still open")]),
         ],
-        pending: None,
         running: true,
         streaming: Some(StreamingLeafKind::Text),
+        ..FakePort::default()
     };
     let (_response, replay) =
         dispatch_resume(resume_request(Some(json!({ "type": "start" }))), &port).await;
@@ -63,9 +63,9 @@ async fn a_text_streaming_snapshot_marks_only_the_last_agent_message_as_streamin
 async fn a_thinking_streaming_snapshot_marks_only_the_open_thought() {
     let port = FakePort {
         messages: vec![dmsg("dmsg_1", vec![thinking("pondering")])],
-        pending: None,
         running: true,
         streaming: Some(StreamingLeafKind::Thinking),
+        ..FakePort::default()
     };
     let (_response, replay) =
         dispatch_resume(resume_request(Some(json!({ "type": "start" }))), &port).await;
@@ -90,9 +90,7 @@ async fn no_streaming_snapshot_replays_identically_to_the_pre_382_encode_based_p
 
     let streaming_port = FakePort {
         messages: messages.clone(),
-        pending: None,
-        running: false,
-        streaming: None,
+        ..FakePort::default()
     };
     let (streaming_response, streaming_replay) = dispatch_resume(
         resume_request(Some(json!({ "type": "start" }))),
