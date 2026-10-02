@@ -34,16 +34,6 @@ impl MessageCache {
         self.cache.get(chat_id)
     }
 
-    pub fn set(&mut self, chat_id: &str, mut messages: Vec<ChatMessage>) {
-        self.tool_timings
-            .entry(chat_id.to_owned())
-            .or_default()
-            .merge_history(&mut messages);
-        self.track_key(chat_id);
-        self.cache.insert(chat_id.to_string(), messages);
-        self.evict_if_needed();
-    }
-
     /// Drop `chat_id`'s cache entry, keeping any pin (`deps_recovery.rs`'s
     /// recovery clear: the chat is still in the registry, so a bare `delete`
     /// without `unpin` would let `evict_if_needed` treat it as evictable).
@@ -314,3 +304,8 @@ mod tests {
 pub(crate) mod timing_tests;
 
 mod tool_timing;
+
+#[cfg(test)]
+mod history_timing_tests;
+
+mod history;

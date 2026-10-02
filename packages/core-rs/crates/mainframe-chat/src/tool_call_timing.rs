@@ -58,7 +58,9 @@ impl ToolTimingStore {
                         .merge_history(*timing);
                 }
                 MessageContent::Node(MessageContentNode::ToolResult { tool_use_id, .. }) => {
-                    self.calls.entry(tool_use_id.clone()).or_default().terminal = true;
+                    let call = self.calls.entry(tool_use_id.clone()).or_default();
+                    // History cannot timestamp the end of a retained live observation.
+                    call.terminal |= call.session.is_none();
                 }
                 _ => {}
             }

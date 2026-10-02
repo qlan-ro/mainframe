@@ -52,8 +52,7 @@ impl ChatManager {
                 if !remapped.is_empty() {
                     {
                         let mut messages = self.messages.lock().unwrap_or_else(|e| e.into_inner());
-                        messages.set(chat_id, remapped);
-                        remapped = messages.get(chat_id).cloned().unwrap_or_default();
+                        remapped = messages.set_and_snapshot(chat_id, remapped);
                     }
                     self.permissions
                         .lock()
