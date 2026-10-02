@@ -28,7 +28,9 @@ impl RecordingSurface {
             .iter()
             .filter_map(|e| match e {
                 ChatSurfaceEvent::DisplayRevision {
-                    messages, streaming, ..
+                    messages,
+                    streaming,
+                    ..
                 } => Some((messages.clone(), *streaming)),
                 _ => None,
             })

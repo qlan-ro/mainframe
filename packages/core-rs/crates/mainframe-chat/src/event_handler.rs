@@ -322,10 +322,9 @@ fn emit_display_for<D: EventHandlerDeps>(
     // message id the completed message will keep), so the surface streams
     // the growing block instead of waiting for its completion.
     let overlay = partial_overlays.message_for(chat_id);
-    let (new_display, streaming) =
-        project_display(raw, overlay, |combined| {
-            deps.prepare_messages_for_client(combined, categories)
-        });
+    let (new_display, streaming) = project_display(raw, overlay, |combined| {
+        deps.prepare_messages_for_client(combined, categories)
+    });
     chat_surface::notify(
         surface,
         ChatSurfaceEvent::DisplayRevision {

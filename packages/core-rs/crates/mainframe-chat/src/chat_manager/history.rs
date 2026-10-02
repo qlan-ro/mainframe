@@ -167,9 +167,10 @@ impl ChatManager {
         let categories = self.deps.get_tool_categories(chat_id);
         let overlay = self.event_handler.current_overlay_message(chat_id);
         let deps = self.deps.as_ref();
-        let (messages, streaming) = crate::event_handler::project_display(&raw, overlay, |combined| {
-            deps.prepare_messages_for_client(combined, categories.as_ref())
-        });
+        let (messages, streaming) =
+            crate::event_handler::project_display(&raw, overlay, |combined| {
+                deps.prepare_messages_for_client(combined, categories.as_ref())
+            });
         // Reconcile the persisted `transcriptMissing` flag the same way
         // `get_display_messages` did — the resume snapshot doesn't surface
         // the flag itself, only the side effect (persist + broadcast).

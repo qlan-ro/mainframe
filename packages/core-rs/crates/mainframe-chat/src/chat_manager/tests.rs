@@ -219,9 +219,7 @@ impl ChatManagerDeps for StoreDeps {
                     ChatMessageType::Permission => {
                         mainframe_types::display::DisplayMessageType::Permission
                     }
-                    ChatMessageType::System => {
-                        mainframe_types::display::DisplayMessageType::System
-                    }
+                    ChatMessageType::System => mainframe_types::display::DisplayMessageType::System,
                     _ => mainframe_types::display::DisplayMessageType::Assistant,
                 },
                 content: m

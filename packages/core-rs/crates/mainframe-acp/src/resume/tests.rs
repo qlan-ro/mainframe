@@ -2,7 +2,9 @@ use std::collections::HashMap;
 
 use mainframe_types::acp::jsonrpc::RequestId;
 use mainframe_types::acp::update::{SessionState as WireSessionState, SessionUpdate};
-use mainframe_types::display::{DisplayContent, DisplayMessage, DisplayMessageType, StreamingLeafKind};
+use mainframe_types::display::{
+    DisplayContent, DisplayMessage, DisplayMessageType, StreamingLeafKind,
+};
 use serde_json::json;
 
 use super::*;

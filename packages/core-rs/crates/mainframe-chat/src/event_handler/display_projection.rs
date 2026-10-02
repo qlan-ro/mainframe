@@ -11,7 +11,9 @@
 
 use mainframe_types::chat::{ChatMessage, MessageContent};
 use mainframe_types::content::LeafContent;
-use mainframe_types::display::{DisplayContent, DisplayMessage, DisplayMessageType, StreamingLeafKind};
+use mainframe_types::display::{
+    DisplayContent, DisplayMessage, DisplayMessageType, StreamingLeafKind,
+};
 
 /// Append `overlay` (when present) as a synthetic tail message, run `prepare`
 /// over the combined raw history, and determine whether the result is still
