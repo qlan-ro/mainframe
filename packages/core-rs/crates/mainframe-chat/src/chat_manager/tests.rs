@@ -227,7 +227,15 @@ impl ChatManagerDeps for StoreDeps {
         Some(chat)
     }
     fn chats_create(&self, _new_chat: &mainframe_types::chat::NewChat) -> Chat {
-        test_chat("new")
+        let chat = test_chat("new");
+        // Mirrors the real repository (persist, then return): todo #381's
+        // offload-of-a-just-created-chat tests need `chats_get("new")` to find
+        // it afterward, the same way a real `create_chat` leaves a row behind.
+        self.store
+            .lock()
+            .unwrap()
+            .insert(chat.id.clone(), chat.clone());
+        chat
     }
     fn chats_delete(&self, chat_id: &str) {
         self.store.lock().unwrap().remove(chat_id);
@@ -265,6 +273,17 @@ impl ChatManagerDeps for StoreDeps {
             }
             if let Some(vse) = patch.vendor_session_ephemeral {
                 c.vendor_session_ephemeral = vse;
+            }
+            // todo #381's config-after-offload tests assert the model/worktree
+            // binding actually persisted to the store, not just the live cell.
+            if let Some(model) = patch.model.clone() {
+                c.model = Some(model);
+            }
+            if let Some(worktree_path) = patch.worktree_path.clone() {
+                c.worktree_path = worktree_path;
+            }
+            if let Some(branch_name) = patch.branch_name.clone() {
+                c.branch_name = branch_name;
             }
         }
     }
@@ -884,11 +903,7 @@ impl AdapterSession for RecSession {
 fn seed_active(mgr: &ChatManager, chat_id: &str, chat: Chat, session: Arc<dyn AdapterSession>) {
     mgr.active_chats.insert(
         chat_id.to_string(),
-        Arc::new(Mutex::new(ActiveChat {
-            chat,
-            session: Some(session),
-            turn_started_at: None,
-        })),
+        Arc::new(Mutex::new(ActiveChat::new(chat, Some(session)))),
     );
 }
 

@@ -80,6 +80,8 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             match waiting {
                 Some(n) => join_flight(&self.guards, n, |g| g.offloading.get(chat_id)).await,
                 None => {
+                    // Registering a send is a use (todo #381).
+                    self.touch(chat_id);
                     return SendGuard {
                         lifecycle: self.clone(),
                         chat_id: chat_id.to_string(),
@@ -90,6 +92,10 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
     }
 
     fn end_send(&self, chat_id: &str) {
+        // A send ending is also a use (todo #381): without this, a long turn
+        // whose `begin_send` registration predates the idle threshold would
+        // look idle the instant the guard drops.
+        self.touch(chat_id);
         let mut g = self.guards.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(count) = g.sending.get_mut(chat_id) {
             *count -= 1;
@@ -127,6 +133,8 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
     }
 
     pub(crate) fn release_history(&self, chat_id: &str) {
+        // A finished history read is a use (todo #381).
+        self.touch(chat_id);
         let notify = self
             .guards
             .lock()
