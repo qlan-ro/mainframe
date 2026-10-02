@@ -1,3 +1,4 @@
+import { useCompactDetail } from '../shared/compact-detail-context';
 /**
  * Shared chrome for the "centered note on the chat spine" tool family — MCP,
  * worktree enter/exit, schedule/cron/monitor, skill-loaded.
@@ -125,7 +126,8 @@ export function MarkerPre({ children, muted = false }: { children: React.ReactNo
 
 /** Local open/close state for expandable marker rows. */
 export function useMarkerOpen(defaultOpen = false) {
-  const [open, setOpen] = useState(defaultOpen);
+  const compactDetail = useCompactDetail();
+  const [open, setOpen] = useState(compactDetail || defaultOpen);
   const toggle = () => setOpen((v) => !v);
   return { open, toggle };
 }

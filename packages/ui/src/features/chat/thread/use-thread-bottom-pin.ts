@@ -1,75 +1,81 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, type RefCallback } from 'react';
 
-const BOTTOM_THRESHOLD_PX = 2;
-
-function isAtBottom(element: HTMLElement) {
-  return element.scrollHeight - element.clientHeight - element.scrollTop <= BOTTOM_THRESHOLD_PX;
+function createPinState() {
+  return {
+    pinned: true,
+    locks: 0,
+    frame: null as number | null,
+    observer: null as ResizeObserver | null,
+    removeScroll: null as (() => void) | null,
+  };
+}
+function usePinObservers(
+  viewportElement: React.RefObject<HTMLDivElement | null>,
+  state: React.RefObject<ReturnType<typeof createPinState>>,
+) {
+  const viewportRef: RefCallback<HTMLDivElement> = useCallback(
+    (element) => {
+      state.current.removeScroll?.();
+      viewportElement.current = element;
+      if (!element) return;
+      const track = () => {
+        if (!state.current.locks)
+          state.current.pinned = element.scrollHeight - element.clientHeight - element.scrollTop <= 2;
+      };
+      track();
+      element.addEventListener('scroll', track, { passive: true });
+      state.current.removeScroll = () => element.removeEventListener('scroll', track);
+    },
+    [state, viewportElement],
+  );
+  const contentRef: RefCallback<HTMLDivElement> = useCallback(
+    (element) => {
+      state.current.observer?.disconnect();
+      state.current.observer = null;
+      if (!element || typeof ResizeObserver === 'undefined') return;
+      state.current.observer = new ResizeObserver(() => {
+        if (state.current.frame !== null || state.current.locks) return;
+        state.current.frame = requestAnimationFrame(() => {
+          state.current.frame = null;
+          const viewport = viewportElement.current;
+          if (viewport && state.current.pinned && !state.current.locks) viewport.scrollTop = viewport.scrollHeight;
+        });
+      });
+      state.current.observer.observe(element);
+    },
+    [state, viewportElement],
+  );
+  return { viewportRef, contentRef };
 }
 
-/**
- * Keeps the transcript pinned to its bottom edge.
- *
- * `threadId` is the session the viewport is currently showing. Every session in
- * the single-thread surface shares ONE viewport element, so a switch changes the
- * content underneath a scroll offset that survives — and assistant-ui's own
- * switch-scroll (`threadListItem.switchedTo` → scrollToBottom) never reaches a
- * Viewport mounted outside the per-item subtree, as ours is. Without the re-pin
- * below, switching into a session after reading back in any session left the
- * transcript parked mid-history.
- */
 export function useThreadBottomPin(threadId: string | null) {
   const viewportElement = useRef<HTMLDivElement | null>(null);
-  const pinned = useRef(true);
-  const removeScrollListener = useRef<(() => void) | null>(null);
-  const resizeObserver = useRef<ResizeObserver | null>(null);
-  const frame = useRef<number | null>(null);
-
-  const viewportRef: RefCallback<HTMLDivElement> = useCallback((element) => {
-    removeScrollListener.current?.();
-    viewportElement.current = element;
-    if (!element) return;
-
-    const trackPinnedState = () => {
-      pinned.current = isAtBottom(element);
+  const state = useRef(createPinState());
+  const refs = usePinObservers(viewportElement, state);
+  const beginInteraction = useCallback(() => {
+    state.current.locks++;
+    if (state.current.frame !== null) cancelAnimationFrame(state.current.frame);
+    state.current.frame = null;
+    let released = false;
+    return () => {
+      if (!released) {
+        released = true;
+        state.current.locks--;
+      }
     };
-    trackPinnedState();
-    element.addEventListener('scroll', trackPinnedState, { passive: true });
-    removeScrollListener.current = () => element.removeEventListener('scroll', trackPinnedState);
   }, []);
-
-  const contentRef: RefCallback<HTMLDivElement> = useCallback((element) => {
-    resizeObserver.current?.disconnect();
-    resizeObserver.current = null;
-    if (!element || typeof ResizeObserver === 'undefined') return;
-
-    resizeObserver.current = new ResizeObserver(() => {
-      if (frame.current !== null) return;
-      frame.current = requestAnimationFrame(() => {
-        frame.current = null;
-        const viewport = viewportElement.current;
-        if (viewport && pinned.current) viewport.scrollTop = viewport.scrollHeight;
-      });
-    });
-    resizeObserver.current.observe(element);
-  }, []);
-
-  // A switched-into session starts pinned regardless of where the previous one
-  // was left; its history often lands a beat later, which the observer above
-  // then follows down.
   useLayoutEffect(() => {
-    pinned.current = true;
+    state.current.pinned = true;
     const viewport = viewportElement.current;
     if (viewport) viewport.scrollTop = viewport.scrollHeight;
   }, [threadId]);
-
-  useEffect(
-    () => () => {
-      removeScrollListener.current?.();
-      resizeObserver.current?.disconnect();
-      if (frame.current !== null) cancelAnimationFrame(frame.current);
-    },
-    [],
-  );
-
-  return { viewportRef, contentRef };
+  useEffect(() => {
+    const current = state.current;
+    return () => {
+      current.removeScroll?.();
+      current.observer?.disconnect();
+      if (current.frame !== null) cancelAnimationFrame(current.frame);
+    };
+  }, []);
+  return { ...refs, viewportElement, beginInteraction };
 }

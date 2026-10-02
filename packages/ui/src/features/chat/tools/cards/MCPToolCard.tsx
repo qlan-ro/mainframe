@@ -1,3 +1,4 @@
+import { useCompactDetail } from '../shared/compact-detail-context';
 /**
  * MCPToolCard — marker pill for `mcp__<server>__<tool>` tool calls.
  *
@@ -11,6 +12,7 @@
  *   - Expandable (success only) → MarkerBody with ARGUMENTS + RESULT sections.
  *   - Tooltip on the pill = the raw toolName.
  */
+import type { ToolResultImage } from '@qlan-ro/mainframe-types';
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { PlugIcon } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -56,6 +58,50 @@ function extractResultText(result: unknown): string {
 
 // ── MCPToolCard ───────────────────────────────────────────────────────────────
 
+function McpBody({
+  argsText,
+  resultText,
+  images,
+  toolCallId,
+}: {
+  argsText: string;
+  resultText: string;
+  images: ToolResultImage[];
+  toolCallId: string;
+}) {
+  return (
+    <MarkerBody>
+      <div className="flex flex-col gap-3">
+        <div>
+          <MarkerCapsLabel>Arguments</MarkerCapsLabel>
+          <MarkerPre muted>{argsText}</MarkerPre>
+        </div>
+        {resultText && (
+          <div>
+            <MarkerCapsLabel>Result</MarkerCapsLabel>
+            <MarkerPre>{resultText}</MarkerPre>
+          </div>
+        )}
+        {images.length > 0 && (
+          <div>
+            <MarkerCapsLabel>Images</MarkerCapsLabel>
+            <ToolResultImageThumbs toolCallId={toolCallId} images={images} />
+          </div>
+        )}
+      </div>
+    </MarkerBody>
+  );
+}
+
+function McpLabel({ server, verb, state, tool }: { server: string; verb: string; state: MarkerState; tool: string }) {
+  return (
+    <>
+      {server} {verb} {state !== 'error' && <span className="text-primary">{tool}</span>}
+      {state === 'error' && <span className="text-destructive">{tool}</span>}
+    </>
+  );
+}
+
 export const MCPToolCard: ToolCallMessagePartComponent = ({ toolCallId, toolName, args, result, isError }) => {
   const { server, tool } = parseMcpToolName(toolName);
   const { open, toggle } = useMarkerOpen(false);
@@ -64,20 +110,14 @@ export const MCPToolCard: ToolCallMessagePartComponent = ({ toolCallId, toolName
   const errored = !isPending && isErrorResult(result, isError);
 
   const state: MarkerState = isPending ? 'pending' : errored ? 'error' : 'done';
-  const expandable = state === 'done';
+  const compactDetail = useCompactDetail();
+  const expandable = state === 'done' || compactDetail;
 
   const verb = errored ? 'failed:' : isPending ? 'executing' : 'executed';
 
   const argsText = JSON.stringify(args, null, 2);
   const resultText = extractResultText(result);
   const images = resultImages(result);
-
-  const pillContent = (
-    <>
-      {server} {verb} {state !== 'error' && <span className="text-primary">{tool}</span>}
-      {state === 'error' && <span className="text-destructive">{tool}</span>}
-    </>
-  );
 
   return (
     <MarkerWrap>
@@ -92,7 +132,7 @@ export const MCPToolCard: ToolCallMessagePartComponent = ({ toolCallId, toolName
               onClick={toggle}
               testId="chat-mcp-pill"
             >
-              {pillContent}
+              <McpLabel server={server} verb={verb} state={state} tool={tool} />
             </MarkerPill>
           </span>
         </TooltipTrigger>
@@ -102,26 +142,7 @@ export const MCPToolCard: ToolCallMessagePartComponent = ({ toolCallId, toolName
       </Tooltip>
 
       {open && expandable && (
-        <MarkerBody>
-          <div className="flex flex-col gap-3">
-            <div>
-              <MarkerCapsLabel>Arguments</MarkerCapsLabel>
-              <MarkerPre muted>{argsText}</MarkerPre>
-            </div>
-            {resultText && (
-              <div>
-                <MarkerCapsLabel>Result</MarkerCapsLabel>
-                <MarkerPre>{resultText}</MarkerPre>
-              </div>
-            )}
-            {images.length > 0 && (
-              <div>
-                <MarkerCapsLabel>Images</MarkerCapsLabel>
-                <ToolResultImageThumbs toolCallId={toolCallId} images={images} />
-              </div>
-            )}
-          </div>
-        </MarkerBody>
+        <McpBody argsText={argsText} resultText={resultText} images={images} toolCallId={toolCallId} />
       )}
     </MarkerWrap>
   );
