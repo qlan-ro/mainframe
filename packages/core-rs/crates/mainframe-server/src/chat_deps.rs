@@ -1434,6 +1434,7 @@ mod scan_loaded_history_tests {
             chat_id: "c1".to_string(),
             r#type: ChatMessageType::Assistant,
             content: vec![MessageContent::Node(MessageContentNode::ToolUse {
+                timing: None,
                 id: tool_use_id.to_string(),
                 name: name.to_string(),
                 input,

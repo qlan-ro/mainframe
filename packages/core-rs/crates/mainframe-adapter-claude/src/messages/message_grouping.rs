@@ -123,6 +123,7 @@ mod tests {
 
     fn tool_use(id: &str) -> MessageContent {
         MessageContent::Node(MessageContentNode::ToolUse {
+            timing: None,
             id: id.to_string(),
             name: "Bash".to_string(),
             input: HashMap::new(),

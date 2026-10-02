@@ -17,11 +17,12 @@ const MAX_CHATS: usize = 50;
 /// `ChatState.messages: Vec<ChatMessage>` once chat_manager lands. `order`
 /// mirrors JS `Map` insertion order so `evict_if_needed` drops the oldest
 /// unpinned chat, matching `cache.keys().next()`.
-#[derive(Default)]
 pub struct MessageCache {
     cache: HashMap<String, Vec<ChatMessage>>,
     order: Vec<String>,
     pinned: HashSet<String>,
+    tool_timings: HashMap<String, crate::tool_call_timing::ToolTimingStore>,
+    now_epoch_ms: std::sync::Arc<dyn Fn() -> u64 + Send + Sync>,
 }
 
 impl MessageCache {
@@ -33,7 +34,11 @@ impl MessageCache {
         self.cache.get(chat_id)
     }
 
-    pub fn set(&mut self, chat_id: &str, messages: Vec<ChatMessage>) {
+    pub fn set(&mut self, chat_id: &str, mut messages: Vec<ChatMessage>) {
+        self.tool_timings
+            .entry(chat_id.to_owned())
+            .or_default()
+            .merge_history(&mut messages);
         self.track_key(chat_id);
         self.cache.insert(chat_id.to_string(), messages);
         self.evict_if_needed();
@@ -43,6 +48,7 @@ impl MessageCache {
     /// recovery clear: the chat is still in the registry, so a bare `delete`
     /// without `unpin` would let `evict_if_needed` treat it as evictable).
     pub fn delete(&mut self, chat_id: &str) {
+        self.tool_timings.remove(chat_id);
         if self.cache.remove(chat_id).is_some() {
             self.order.retain(|k| k != chat_id);
         }
@@ -71,12 +77,15 @@ impl MessageCache {
     /// Appends `message`. No per-chat cap: a registry-pinned chat keeps its
     /// whole transcript, and `evict_if_needed` is the only bound, applied
     /// across chats rather than within one.
-    pub fn append(&mut self, chat_id: &str, message: ChatMessage) {
-        self.track_key(chat_id);
-        self.cache
-            .entry(chat_id.to_string())
+    pub fn append(&mut self, chat_id: &str, mut message: ChatMessage) {
+        self.tool_timings
+            .entry(chat_id.to_owned())
             .or_default()
-            .push(message);
+            .merge_history(std::slice::from_mut(&mut message));
+        self.track_key(chat_id);
+        let messages = self.cache.entry(chat_id.to_string()).or_default();
+        messages.push(message);
+        self.tool_timings[chat_id].apply(messages);
         self.evict_if_needed();
     }
 
@@ -91,6 +100,7 @@ impl MessageCache {
             };
             let oldest = self.order.remove(idx);
             self.cache.remove(&oldest);
+            self.tool_timings.remove(&oldest);
         }
     }
 
@@ -299,3 +309,8 @@ mod tests {
 // notes: R1, D1). No per-chat message cap: a chat with a live registry cell is
 // notes: pinned whole. nanoid + now_iso8601 for createTransientMessage.
 // notes: move-to-end test ported verbatim.
+
+#[cfg(test)]
+pub(crate) mod timing_tests;
+
+mod tool_timing;

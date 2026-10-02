@@ -33,6 +33,7 @@ pub fn append_assistant_blocks(
     for block in content {
         match block.get("type").and_then(Value::as_str) {
             Some("tool_use") => existing.push(MessageContent::Node(MessageContentNode::ToolUse {
+                timing: None,
                 id: block
                     .get("id")
                     .and_then(Value::as_str)
@@ -274,6 +275,7 @@ mod tests {
 
     fn tool_use(id: &str, name: &str, parent: Option<&str>) -> MessageContent {
         MessageContent::Node(MessageContentNode::ToolUse {
+            timing: None,
             id: id.to_string(),
             name: name.to_string(),
             input: HashMap::new(),

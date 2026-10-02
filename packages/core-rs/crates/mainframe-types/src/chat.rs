@@ -366,6 +366,12 @@ pub enum MessageContent {
 )]
 pub enum MessageContentNode {
     ToolUse {
+        #[serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            deserialize_with = "crate::tool_call_timing::deserialize_optional"
+        )]
+        timing: Option<crate::tool_call_timing::ToolCallTiming>,
         id: String,
         name: String,
         input: HashMap<String, serde_json::Value>,

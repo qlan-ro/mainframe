@@ -221,6 +221,7 @@ pub fn convert_assistant_content(
                 name,
                 input,
                 parent_tool_use_id,
+                ..
             }) => {
                 if seen_tool_ids.contains(id) {
                     continue;

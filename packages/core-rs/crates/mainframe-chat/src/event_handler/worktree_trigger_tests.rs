@@ -119,6 +119,7 @@ fn tool_use(id: &str, name: &str, command: Option<&str>) -> MessageContent {
         );
     }
     MessageContent::Node(MessageContentNode::ToolUse {
+        timing: None,
         id: id.to_string(),
         name: name.to_string(),
         input,

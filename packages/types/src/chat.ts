@@ -1,3 +1,4 @@
+import type { ToolCallTiming } from './tool-call-timing.js';
 import type { SessionMention } from './context.js';
 import type { BackgroundActivity } from './background-task.js';
 import type { DetectedPr, ControlRequest, EffortLevel } from './adapter.js';
@@ -177,7 +178,14 @@ export interface ToolResultImage {
  */
 export type MessageContent =
   | LeafContent
-  | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown>; parentToolUseId?: string }
+  | {
+      type: 'tool_use';
+      timing?: ToolCallTiming;
+      id: string;
+      name: string;
+      input: Record<string, unknown>;
+      parentToolUseId?: string;
+    }
   | {
       type: 'tool_result';
       toolUseId: string;
