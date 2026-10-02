@@ -158,8 +158,15 @@ pub(crate) fn handle_agent_message_delta(
     {
         return;
     }
+    let presentation = state
+        .presentation
+        .partial(&delta.thread_id, &delta.turn_id, &delta.item_id);
     if let Some((item_id, text)) = state.agent_message_partial.accumulate(delta) {
-        sink.on_message_partial(&item_id, vec![text_block(&text)]);
+        let content = vec![text_block(&text)];
+        match presentation {
+            Some(p) => sink.on_message_partial_with_presentation(&item_id, content, p),
+            None => sink.on_message_partial(&item_id, content),
+        }
     }
 }
 

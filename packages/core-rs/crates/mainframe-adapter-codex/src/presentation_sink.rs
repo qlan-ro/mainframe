@@ -1,86 +1,44 @@
-//! Moved out of `event_mapper.rs` (task 1, todo #247) to keep that file under
-//! the 300-line ceiling. `ParentIdSink`, unchanged.
-
 use std::sync::Arc;
 
 use mainframe_adapter_api::SessionSink;
 use mainframe_types::adapter::{MessageMetadata, SessionResult};
 use mainframe_types::chat::{MessageContent, TodoItem};
 
-use crate::history::with_parent;
 use mainframe_types::transcript_presentation::{PresentationUpdate, TranscriptPresentation};
 
-/// Wraps a sink to tag every emitted block with `parentToolUseId` (mirrors the TS
-/// `wrapSinkWithParentId`). Only `on_message`/`on_tool_result` are transformed;
-/// every other callback delegates unchanged.
-pub(crate) struct ParentIdSink {
+pub(crate) struct PresentationSink {
     inner: Arc<dyn SessionSink>,
-    parent: String,
+    presentation: TranscriptPresentation,
 }
-
-impl ParentIdSink {
-    pub(crate) fn new(inner: Arc<dyn SessionSink>, parent: String) -> Self {
-        Self { inner, parent }
+impl PresentationSink {
+    pub(crate) fn wrap(
+        inner: Arc<dyn SessionSink>,
+        presentation: TranscriptPresentation,
+    ) -> Arc<dyn SessionSink> {
+        Arc::new(Self {
+            inner,
+            presentation,
+        })
     }
 }
 
-impl SessionSink for ParentIdSink {
+impl SessionSink for PresentationSink {
     fn on_init(&self, session_id: &str) {
         self.inner.on_init(session_id);
     }
     fn on_message(&self, content: Vec<MessageContent>, metadata: Option<MessageMetadata>) {
-        self.inner.on_message(
-            content
-                .into_iter()
-                .map(|b| with_parent(b, &self.parent))
-                .collect(),
-            metadata,
-        );
-    }
-    fn on_message_with_presentation(
-        &self,
-        content: Vec<MessageContent>,
-        metadata: Option<MessageMetadata>,
-        mut p: TranscriptPresentation,
-    ) {
-        p.parent_tool_use_id = Some(self.parent.clone());
-        self.inner.on_message_with_presentation(
-            content
-                .into_iter()
-                .map(|b| with_parent(b, &self.parent))
-                .collect(),
-            metadata,
-            p,
-        );
-    }
-    fn on_message_partial_with_presentation(
-        &self,
-        id: &str,
-        content: Vec<MessageContent>,
-        mut p: TranscriptPresentation,
-    ) {
-        p.parent_tool_use_id = Some(self.parent.clone());
-        self.inner.on_message_partial_with_presentation(
-            id,
-            content
-                .into_iter()
-                .map(|b| with_parent(b, &self.parent))
-                .collect(),
-            p,
-        );
-    }
-    fn on_presentation_update(&self, mut update: PresentationUpdate) {
-        update.presentation.parent_tool_use_id = Some(self.parent.clone());
-        self.inner.on_presentation_update(update);
+        self.inner
+            .on_message_with_presentation(content, metadata, self.presentation.clone());
     }
     fn on_tool_result(&self, content: Vec<MessageContent>, vendor_id: Option<String>) {
-        self.inner.on_tool_result(
-            content
-                .into_iter()
-                .map(|b| with_parent(b, &self.parent))
-                .collect(),
-            vendor_id,
-        );
+        self.inner.on_tool_result(content, vendor_id);
+    }
+    fn on_message_partial(&self, id: &str, content: Vec<MessageContent>) {
+        self.inner
+            .on_message_partial_with_presentation(id, content, self.presentation.clone());
+    }
+    fn on_presentation_update(&self, update: PresentationUpdate) {
+        self.inner.on_presentation_update(update);
     }
     fn on_permission(&self, request: mainframe_adapter_api::ControlRequest) {
         self.inner.on_permission(request);
@@ -134,6 +92,3 @@ impl SessionSink for ParentIdSink {
         self.inner.on_trust_required(project_path);
     }
 }
-
-#[cfg(test)]
-mod tests;

@@ -74,6 +74,7 @@ pub struct CodexSessionState {
     /// Todo #378: the parent's own in-flight `item/agentMessage/delta`
     /// accumulation, fed to `SessionSink::on_message_partial`.
     pub agent_message_partial: AgentMessagePartialState,
+    pub presentation: crate::transcript_presentation::PresentationStateByThread,
 }
 
 impl CodexSessionState {
@@ -88,6 +89,7 @@ impl CodexSessionState {
     /// early would let a late delta from the same turn restart the text
     /// mid-message.
     pub fn clear_transient(&mut self) {
+        self.presentation.clear();
         self.command_state.clear();
         self.agent_message_partial.clear();
     }
