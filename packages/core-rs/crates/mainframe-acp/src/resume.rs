@@ -17,7 +17,7 @@ use mainframe_types::acp::update::{
     IdleStateUpdate, SessionState as WireSessionState, SessionUpdate,
 };
 use mainframe_types::adapter::ControlRequest;
-use mainframe_types::display::DisplayMessage;
+use mainframe_types::display::{DisplayMessage, StreamingLeafKind};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -42,14 +42,22 @@ pub enum ReplayCursor {
     Item { item_id: String },
 }
 
+/// `ResumePort::resume_snapshot`'s result (todo #382): display history, the
+/// `StreamingLeafKind` of the in-flight partial overlay projected into it
+/// (if any — mirrors `mainframe_chat::chat_manager::ResumeSnapshot`, kept as
+/// a separate type since this crate depends only on `mainframe-types`, not
+/// `mainframe-chat`), and any still-open permission gate.
+pub struct ResumeSnapshot {
+    pub messages: Vec<DisplayMessage>,
+    pub streaming: Option<StreamingLeafKind>,
+    pub pending: Option<ControlRequest>,
+}
+
 /// The chat-manager surface `session/resume` needs: display history plus any
 /// still-open gate for `session_id`, gathered in one call — a production
 /// implementation wraps `ChatManager::get_resume_snapshot`.
 pub trait ResumePort: Send + Sync {
-    fn resume_snapshot<'a>(
-        &'a self,
-        session_id: &'a str,
-    ) -> BoxFuture<'a, (Vec<DisplayMessage>, Option<ControlRequest>)>;
+    fn resume_snapshot<'a>(&'a self, session_id: &'a str) -> BoxFuture<'a, ResumeSnapshot>;
 
     /// Whether `session_id` has a turn in flight right now — read after the
     /// snapshot so a mid-turn reconnect's replay ends with the state the
@@ -89,13 +97,18 @@ pub async fn dispatch_resume(
         Err(response) => return (response, empty_replay()),
     };
 
-    let (messages, pending) = port.resume_snapshot(&resume.session_id).await;
-    let items = encoder::encode(&messages);
+    let snapshot = port.resume_snapshot(&resume.session_id).await;
+    // `encode_revision`, not `encode`: a mid-stream snapshot carries the
+    // in-flight partial overlay's `StreamingLeafKind` (todo #382) — with
+    // `streaming: None` this is byte-identical to `encode`'s output (spec
+    // Decision 39).
+    let items = encoder::encode_revision(&snapshot.messages, snapshot.streaming);
     let resolved = resolve_cursor(&items, resume.replay_from.as_ref());
     let (mut updates, full_replay) = replay(&items, resolved);
     updates.push(turn_state_update(port.is_running(&resume.session_id)));
 
-    let pending_permission_request = pending
+    let pending_permission_request = snapshot
+        .pending
         .as_ref()
         .map(|request| build_pending_permission_request(&resume.session_id, request));
     let response = success_response(id, items.len(), full_replay);
@@ -104,7 +117,7 @@ pub async fn dispatch_resume(
         ResumeReplay {
             updates,
             pending_permission_request,
-            pending_gate: pending,
+            pending_gate: snapshot.pending,
             items,
         },
     )

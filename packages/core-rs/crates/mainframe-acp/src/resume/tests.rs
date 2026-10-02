@@ -2,7 +2,9 @@ use std::collections::HashMap;
 
 use mainframe_types::acp::jsonrpc::RequestId;
 use mainframe_types::acp::update::{SessionState as WireSessionState, SessionUpdate};
-use mainframe_types::display::{DisplayContent, DisplayMessage, DisplayMessageType};
+use mainframe_types::display::{
+    DisplayContent, DisplayMessage, DisplayMessageType, StreamingLeafKind,
+};
 use serde_json::json;
 
 use super::*;
@@ -25,6 +27,13 @@ fn text(s: &str) -> DisplayContent {
     })
 }
 
+fn thinking(s: &str) -> DisplayContent {
+    DisplayContent::Leaf(mainframe_types::content::LeafContent::Thinking {
+        thinking: s.to_string(),
+        parent_tool_use_id: None,
+    })
+}
+
 fn control_request(request_id: &str) -> ControlRequest {
     ControlRequest {
         request_id: request_id.to_string(),
@@ -37,18 +46,23 @@ fn control_request(request_id: &str) -> ControlRequest {
     }
 }
 
+#[derive(Default)]
 struct FakePort {
     messages: Vec<DisplayMessage>,
     pending: Option<ControlRequest>,
     running: bool,
+    streaming: Option<StreamingLeafKind>,
 }
 
 impl ResumePort for FakePort {
-    fn resume_snapshot<'a>(
-        &'a self,
-        _session_id: &'a str,
-    ) -> BoxFuture<'a, (Vec<DisplayMessage>, Option<ControlRequest>)> {
-        Box::pin(async move { (self.messages.clone(), self.pending.clone()) })
+    fn resume_snapshot<'a>(&'a self, _session_id: &'a str) -> BoxFuture<'a, ResumeSnapshot> {
+        Box::pin(async move {
+            ResumeSnapshot {
+                messages: self.messages.clone(),
+                streaming: self.streaming,
+                pending: self.pending.clone(),
+            }
+        })
     }
 
     fn is_running(&self, _session_id: &str) -> bool {
@@ -76,8 +90,7 @@ fn resume_request(replay_from: Option<Value>) -> JsonRpcRequest {
 async fn a_start_cursor_replays_every_item_as_a_create() {
     let port = FakePort {
         messages: vec![dmsg("dmsg_1", vec![text("hello")])],
-        pending: None,
-        running: false,
+        ..FakePort::default()
     };
     let (response, replay) =
         dispatch_resume(resume_request(Some(json!({ "type": "start" }))), &port).await;
@@ -111,8 +124,7 @@ async fn a_replay_create_carries_the_marker() {
             dmsg("dmsg_1", vec![text("hello")]),
             dmsg("dmsg_2", vec![text("world")]),
         ],
-        pending: None,
-        running: false,
+        ..FakePort::default()
     };
     let (_response, replay) =
         dispatch_resume(resume_request(Some(json!({ "type": "start" }))), &port).await;
@@ -145,8 +157,7 @@ async fn a_replay_create_carries_the_marker() {
 async fn an_absent_cursor_behaves_like_start() {
     let port = FakePort {
         messages: vec![dmsg("dmsg_1", vec![text("hello")])],
-        pending: None,
-        running: false,
+        ..FakePort::default()
     };
     let (_response, replay) = dispatch_resume(resume_request(None), &port).await;
     assert_eq!(replay.updates.len(), 2);
@@ -159,8 +170,7 @@ async fn a_known_cursor_replays_only_items_after_it() {
             dmsg("dmsg_1", vec![text("first")]),
             dmsg("dmsg_2", vec![text("second")]),
         ],
-        pending: None,
-        running: false,
+        ..FakePort::default()
     };
     let (_response, replay) = dispatch_resume(
         resume_request(Some(json!({ "type": "item", "itemId": "dmsg_1" }))),
@@ -179,8 +189,7 @@ async fn a_known_cursor_replays_only_items_after_it() {
 async fn an_unknown_cursor_gets_a_full_replay_with_the_compaction_marker() {
     let port = FakePort {
         messages: vec![dmsg("dmsg_1", vec![text("hello")])],
-        pending: None,
-        running: false,
+        ..FakePort::default()
     };
     let (response, replay) = dispatch_resume(
         resume_request(Some(json!({ "type": "item", "itemId": "never-seen" }))),
@@ -203,8 +212,7 @@ async fn an_unknown_cursor_gets_a_full_replay_with_the_compaction_marker() {
 async fn a_malformed_cursor_shape_is_treated_as_unknown_not_a_request_error() {
     let port = FakePort {
         messages: vec![dmsg("dmsg_1", vec![text("hello")])],
-        pending: None,
-        running: false,
+        ..FakePort::default()
     };
     let (response, replay) = dispatch_resume(
         resume_request(Some(json!({ "type": "not-a-real-cursor-type" }))),
@@ -222,9 +230,8 @@ async fn a_malformed_cursor_shape_is_treated_as_unknown_not_a_request_error() {
 #[tokio::test]
 async fn an_open_gate_is_redelivered_as_a_request_permission_request() {
     let port = FakePort {
-        messages: Vec::new(),
         pending: Some(control_request("req_1")),
-        running: false,
+        ..FakePort::default()
     };
     let (_response, replay) = dispatch_resume(resume_request(None), &port).await;
 
@@ -238,11 +245,7 @@ async fn an_open_gate_is_redelivered_as_a_request_permission_request() {
 
 #[tokio::test]
 async fn no_pending_gate_means_no_redelivered_request() {
-    let port = FakePort {
-        messages: Vec::new(),
-        pending: None,
-        running: false,
-    };
+    let port = FakePort::default();
     let (_response, replay) = dispatch_resume(resume_request(None), &port).await;
     assert!(replay.pending_permission_request.is_none());
 }
@@ -255,11 +258,7 @@ async fn missing_params_gets_invalid_params() {
         method: "session/resume".to_string(),
         params: None,
     };
-    let port = FakePort {
-        messages: Vec::new(),
-        pending: None,
-        running: false,
-    };
+    let port = FakePort::default();
     let (response, replay) = dispatch_resume(request, &port).await;
     assert!(matches!(
         response.outcome,
@@ -272,8 +271,8 @@ async fn missing_params_gets_invalid_params() {
 async fn resume_replay_ends_with_the_current_turn_state() {
     let running_port = FakePort {
         messages: vec![dmsg("dmsg_1", vec![text("hello")])],
-        pending: None,
         running: true,
+        ..FakePort::default()
     };
     let (_response, replay) = dispatch_resume(resume_request(None), &running_port).await;
     assert!(matches!(
@@ -283,8 +282,7 @@ async fn resume_replay_ends_with_the_current_turn_state() {
 
     let idle_port = FakePort {
         messages: vec![dmsg("dmsg_1", vec![text("hello")])],
-        pending: None,
-        running: false,
+        ..FakePort::default()
     };
     let (_response, replay) = dispatch_resume(resume_request(None), &idle_port).await;
     assert!(matches!(
@@ -292,3 +290,7 @@ async fn resume_replay_ends_with_the_current_turn_state() {
         Some(SessionUpdate::StateUpdate(WireSessionState::Idle(idle))) if idle.stop_reason.is_none()
     ));
 }
+
+// Overlay-parity streaming-attribution tests (todo #382) live in
+// `overlay_streaming.rs`, split out to keep this file under 300 lines.
+mod overlay_streaming;

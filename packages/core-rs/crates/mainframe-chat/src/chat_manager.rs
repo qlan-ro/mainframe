@@ -94,6 +94,7 @@ mod update;
 pub use deps::ChatManagerDeps;
 pub use errors::{ChatFieldsPartial, CommandMeta, ForkError, SendError, TrustWorkspaceError};
 pub use external_facade::ExternalSessionFacade;
+pub use history::ResumeSnapshot;
 pub use side_chat::OpenSideChatError;
 pub use update::{ChatUpdate, ProcessedAttachments};
 

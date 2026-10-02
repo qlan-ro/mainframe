@@ -21,6 +21,7 @@ mod fork_title;
 mod history_eviction;
 mod offload;
 mod plan_mode;
+mod resume_overlay;
 mod resume_snapshot;
 mod side_chat;
 
@@ -196,11 +197,13 @@ impl ChatManagerDeps for StoreDeps {
         None
     }
     /// A trivial 1:1 echo (one `DisplayMessage` per raw `ChatMessage`,
-    /// carrying the same id/timestamp, content dropped) — real conversion
-    /// lives outside this crate's dep set. This is enough for the retention
-    /// tests (`resume_snapshot.rs`) that assert on COUNT and id order without
-    /// caring about rendered content; no other test in this module inspects
-    /// `prepare_messages_for_client`'s output.
+    /// carrying the same id/timestamp/type and its leaf content verbatim,
+    /// `Node` content dropped) — real conversion (grouping, tag stripping)
+    /// lives outside this crate's dep set. Carrying the type and leaf
+    /// content through (todo #382) is what lets `resume_overlay.rs`'s
+    /// streaming-attribution assertions (which need an `Assistant` message
+    /// whose own last leaf matches the overlay's) exercise the real
+    /// `project_display` path, not just COUNT/id-order retention checks.
     fn prepare_messages_for_client(
         &self,
         raw: &[ChatMessage],
@@ -210,8 +213,25 @@ impl ChatManagerDeps for StoreDeps {
             .map(|m| DisplayMessage {
                 id: m.id.clone(),
                 chat_id: m.chat_id.clone(),
-                r#type: mainframe_types::display::DisplayMessageType::User,
-                content: Vec::new(),
+                r#type: match m.r#type {
+                    ChatMessageType::User => mainframe_types::display::DisplayMessageType::User,
+                    ChatMessageType::Error => mainframe_types::display::DisplayMessageType::Error,
+                    ChatMessageType::Permission => {
+                        mainframe_types::display::DisplayMessageType::Permission
+                    }
+                    ChatMessageType::System => mainframe_types::display::DisplayMessageType::System,
+                    _ => mainframe_types::display::DisplayMessageType::Assistant,
+                },
+                content: m
+                    .content
+                    .iter()
+                    .filter_map(|c| match c {
+                        MessageContent::Leaf(leaf) => {
+                            Some(mainframe_types::display::DisplayContent::Leaf(leaf.clone()))
+                        }
+                        MessageContent::Node(_) => None,
+                    })
+                    .collect(),
                 timestamp: m.timestamp.clone(),
                 metadata: None,
             })

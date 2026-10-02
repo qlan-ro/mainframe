@@ -81,9 +81,9 @@ async fn a_resume_snapshot_loads_the_transcript_once() {
     *deps.transcript_present.lock().unwrap() = Some(true);
     let mgr = ChatManager::new(deps.clone());
 
-    let (_messages, pending) = mgr.get_resume_snapshot("c1").await;
+    let snapshot = mgr.get_resume_snapshot("c1").await;
 
-    assert!(pending.is_none(), "this fixture has no open gate");
+    assert!(snapshot.pending.is_none(), "this fixture has no open gate");
     assert_eq!(
         deps.history_loads.load(Ordering::SeqCst),
         1,
@@ -104,14 +104,14 @@ async fn warm_and_cold_snapshots_agree_past_two_thousand() {
     *deps.transcript_present.lock().unwrap() = Some(true);
     let mgr = ChatManager::new(deps.clone());
 
-    let (cold_messages, _pending) = mgr.get_resume_snapshot("c1").await;
+    let cold_messages = mgr.get_resume_snapshot("c1").await.messages;
     assert_eq!(
         cold_messages.len(),
         2_100,
         "the cold snapshot holds every message, past the old per-chat cap"
     );
 
-    let (warm_messages, _pending) = mgr.get_resume_snapshot("c1").await;
+    let warm_messages = mgr.get_resume_snapshot("c1").await.messages;
     assert_eq!(
         warm_messages.len(),
         2_100,
@@ -143,7 +143,7 @@ async fn first_live_revision_extends_the_snapshot_prefix() {
     let surface = RecordingSurface::arc();
     let mgr = mgr.with_chat_surface(surface.clone());
 
-    let (snapshot_messages, _pending) = mgr.get_resume_snapshot("c1").await;
+    let snapshot_messages = mgr.get_resume_snapshot("c1").await.messages;
     assert_eq!(snapshot_messages.len(), 2_100);
 
     let sink = mgr.event_handler.build_sink("c1", None);
@@ -239,9 +239,9 @@ async fn tool_timing_resume_reads_preserve_running_completed_and_legacy_calls() 
     sink.on_message(vec![tool("a")], None);
     clock.store(1100, Ordering::SeqCst);
     sink.on_message(vec![tool("b")], None);
-    let (running, _) = mgr.get_resume_snapshot("c1").await;
+    let running = mgr.get_resume_snapshot("c1").await.messages;
     clock.store(9000, Ordering::SeqCst);
-    assert_eq!(mgr.get_resume_snapshot("c1").await.0, running);
+    assert_eq!(mgr.get_resume_snapshot("c1").await.messages, running);
     assert_eq!(
         timings(&mgr.messages.lock().unwrap(), "c1"),
         vec![
@@ -252,9 +252,9 @@ async fn tool_timing_resume_reads_preserve_running_completed_and_legacy_calls() 
     );
     clock.store(1200, Ordering::SeqCst);
     sink.on_tool_result(vec![result("a", false)], None);
-    let (completed, _) = mgr.get_resume_snapshot("c1").await;
+    let completed = mgr.get_resume_snapshot("c1").await.messages;
     clock.store(9900, Ordering::SeqCst);
-    assert_eq!(mgr.get_resume_snapshot("c1").await.0, completed);
+    assert_eq!(mgr.get_resume_snapshot("c1").await.messages, completed);
     assert_eq!(
         timings(&mgr.messages.lock().unwrap(), "c1"),
         vec![
