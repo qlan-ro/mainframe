@@ -3,8 +3,8 @@
  *
  * Mirrors react-opencode's `openCodeMessageProjection.ts`. The transcript
  * arrives already converted (`state.messages`, produced by the ACP session
- * plane through `convert-acp-item.ts`); the projection appends the pending
- * (optimistic) user messages and stamps the streaming tail.
+ * plane through `convert-acp-item.ts`); pending and queued user messages
+ * follow it. Only legacy daemons need the nearest-assistant running fallback.
  */
 import { ExportedMessageRepository } from '@assistant-ui/react';
 import type { ThreadMessage, ThreadMessageLike, ThreadUserMessage } from '@assistant-ui/react';
@@ -82,43 +82,31 @@ function projectQueuedMessages(state: ChatThreadState, serverMessageIds: Readonl
 // Projection entry
 // ---------------------------------------------------------------------------
 
-export function projectChatThreadMessages(state: ChatThreadState): ThreadMessage[] {
-  // Already-converted server messages in order — a single cast suffices
-  // because fromArray also accepts ThreadMessageLike[], but we want a
-  // consistent ThreadMessage[] for downstream hooks.
-  const serverMessages: ThreadMessage[] = state.messages.map((m) => m as ThreadMessageLike as ThreadMessage);
-
-  // Streaming "typing" reveal: while a run is active (or cancelling — D7, a
-  // cancel in flight still counts as running), mark the TAIL assistant
-  // message `running` so assistant-ui's default useSmooth (in MarkdownTextPrimitive)
-  // reveals its text character-by-character as the facade streams
-  // session/update chunks. We use a pre-built messageRepository, which
-  // assistant-ui imports verbatim WITHOUT the auto-status it applies on the
-  // messages+convertMessage path — so the running status must be set here, or
-  // every message stays `complete` and appears instantly. Only the tail streams;
-  // earlier turns and all loaded history (runState idle) stay complete/instant.
-  //
-  // This is a FALLBACK only (D6): a message that already carries its own
-  // `running` status — because `convert-acp-item.ts` found a part the
-  // overlay is actively streaming — is never second-guessed here. The walk
-  // looks backward for the nearest ASSISTANT message, not literally the
-  // last entry: a just-acked user bubble can land after the streaming
-  // assistant turn in server order (`project-messages-ack-during-stream.test.ts`),
-  // and must not steal or block the running status from the assistant still
-  // streaming ahead of it.
-  const isRunNowish = state.runState.type === 'running' || state.runState.type === 'cancelling';
-  const alreadyRunning = serverMessages.some(
-    (m): m is ThreadMessage & { status: { type: 'running' } } => m.role === 'assistant' && m.status?.type === 'running',
-  );
-  if (isRunNowish && !alreadyRunning) {
-    for (let i = serverMessages.length - 1; i >= 0; i--) {
-      const msg = serverMessages[i]!;
-      if (msg.role === 'assistant') {
-        serverMessages[i] = { ...msg, status: { type: 'running' } } as ThreadMessage;
+function projectServerMessages(state: ChatThreadState): ThreadMessage[] {
+  const messages = state.messages.map((message) => message as ThreadMessageLike as ThreadMessage);
+  if (state.authoritativeItemStreaming) {
+    return messages.map((message) =>
+      message.role === 'assistant' && message.status === undefined
+        ? { ...message, status: { type: 'complete', reason: 'unknown' } }
+        : message,
+    );
+  }
+  const running = state.runState.type === 'running' || state.runState.type === 'cancelling';
+  const alreadyRunning = messages.some((message) => message.role === 'assistant' && message.status?.type === 'running');
+  if (running && !alreadyRunning) {
+    for (let index = messages.length - 1; index >= 0; index--) {
+      const message = messages[index]!;
+      if (message.role === 'assistant') {
+        messages[index] = { ...message, status: { type: 'running' } };
         break;
       }
     }
   }
+  return messages;
+}
+
+export function projectChatThreadMessages(state: ChatThreadState): ThreadMessage[] {
+  const serverMessages = projectServerMessages(state);
 
   // Queued turns (D1) — the encoder never sends these as part of the
   // transcript, so they render from the queue snapshot alone, between the
