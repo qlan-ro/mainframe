@@ -18,6 +18,7 @@ mod fork_chat;
 mod fork_history;
 mod fork_sweep;
 mod fork_title;
+mod history_eviction;
 mod offload;
 mod plan_mode;
 mod resume_snapshot;

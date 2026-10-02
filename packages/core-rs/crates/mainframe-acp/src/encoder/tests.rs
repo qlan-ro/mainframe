@@ -7,6 +7,7 @@
 //! `marker_tests.rs` (todo #350, plan task 37, R2.13) — all five share
 //! this file's fixture builders via `use super::*`.
 
+mod command_metadata_tests;
 mod marker_tests;
 mod meta_tests;
 mod result_content_tests;
@@ -83,6 +84,8 @@ fn image_block(data: &str, mime_type: &str) -> ContentBlock {
 
 fn tool_call(id: &str, name: &str, category: ToolCategory, result: Option<&str>) -> DisplayContent {
     DisplayContent::Node(DisplayNode::ToolCall {
+        timing: None,
+        command_execution: None,
         id: id.to_string(),
         name: name.to_string(),
         input: HashMap::new(),
@@ -271,3 +274,5 @@ fn queued_messages_are_not_encoded_as_items() {
     let ids: Vec<&str> = items.iter().map(EncodedItem::id).collect();
     assert_eq!(ids, vec!["u1", "a1"]);
 }
+
+mod tool_timing_tests;

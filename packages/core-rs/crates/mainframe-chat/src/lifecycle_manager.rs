@@ -993,7 +993,8 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             if !remapped.is_empty() {
                 let mut messages = self.messages.lock().unwrap_or_else(|e| e.into_inner());
                 let previous = messages.get(chat_id).cloned();
-                messages.set(chat_id, remapped.clone());
+                messages.set(chat_id, remapped);
+                let remapped = messages.get(chat_id).cloned().unwrap_or_default();
                 drop(messages);
                 self.permissions
                     .lock()

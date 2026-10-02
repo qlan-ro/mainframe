@@ -15,6 +15,7 @@ pub mod background_task;
 pub mod chat;
 pub mod claude_workflow;
 pub mod command;
+pub mod command_execution;
 pub mod content;
 pub mod context;
 pub mod device;
@@ -35,3 +36,5 @@ pub mod task_progress;
 pub mod transcript;
 pub mod workflow;
 pub mod worktree_offer;
+
+pub mod tool_call_timing;

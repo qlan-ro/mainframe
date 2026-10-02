@@ -47,15 +47,18 @@
 //! session-id `chat_id` back to the Mainframe chat id, mirroring
 //! `chat_manager::shared::remap_history`.
 //!
-//! **Both** then run through `prepare_messages_for_client` → `encode`, and
-//! the ordered item lists are compared after normalizing only the one
-//! pre-existing, unconditional field AC9 excludes: the display timestamp
-//! (minted by the daemon on live receipt, never reproducible from a disk
-//! read) — see `normalize` below. No exception list: every id, role, kind,
-//! content, tool call, and grouping decision is compared as-is.
+//! Both paths run through `prepare_messages_for_client` and `encode`.
+//! Tool timing comes from live observation and is absent from provider history.
+//! The test asserts that boundary before comparing every other graph field,
+//! excluding only the display timestamp minted on live receipt.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+#[path = "live_vs_cold_reload_golden/timing.rs"]
+mod timing;
+
 use std::sync::{Arc, Mutex};
+
+use timing::{OBSERVED_AT, assert_and_remove_live_timing, normalize};
 
 use mainframe_acp::encoder::{EncodedItem, encode};
 use mainframe_adapter_claude::events::handle_stdout;
@@ -188,7 +191,9 @@ fn claude_session() -> Arc<ClaudeSession> {
 /// other line goes through `handle_stdout` into a real `EventHandler` sink,
 /// matching a spawned CLI process's stdout.
 fn run_live_pipeline() -> Vec<mainframe_types::chat::ChatMessage> {
-    let cache = Arc::new(Mutex::new(MessageCache::new()));
+    let cache = Arc::new(Mutex::new(MessageCache::with_clock(Arc::new(|| {
+        OBSERVED_AT
+    }))));
     let permissions = Arc::new(Mutex::new(PermissionManager::new()));
     let deps = Arc::new(NoopDeps);
     let handler = EventHandler::new(cache.clone(), permissions, deps);
@@ -251,72 +256,10 @@ async fn run_cold_reload(transcript_path: &str) -> Vec<mainframe_types::chat::Ch
         .collect()
 }
 
-/// Strips the display timestamp — AC9's only excluded field, per plan
-/// decision 10 (`docs/specs/2026-09-25-todo-178-idle-whole-chat-offload.md`):
-/// the daemon mints it on live receipt, so a disk read can never reproduce
-/// it. No other field, id included, is touched: `run_live_pipeline` forces
-/// the human prompt's id to the transcript's own uuid (the same uuid
-/// `chat_manager::send_queue::queued_message_metadata` now hands the CLI on
-/// every send), and `history_converters::convert_assistant_entry` reconstructs
-/// the signature-only `thinking` entries that precede each tool_use/text
-/// entry so grouping picks the same base id on both sides — closing the two
-/// divergences decision 10 required fixed here rather than excepted.
-fn normalize(item: EncodedItem) -> EncodedItem {
-    fn strip_timestamp(meta: Option<Value>) -> Option<Value> {
-        let mut meta = meta?;
-        let ns = meta
-            .get_mut(mainframe_types::acp::extensions::MAINFRAME_META_NAMESPACE)?
-            .as_object_mut()?;
-        ns.remove("timestamp");
-        Some(meta)
-    }
-    match item {
-        EncodedItem::Message {
-            id,
-            role,
-            content,
-            meta,
-        } => EncodedItem::Message {
-            id,
-            role,
-            content,
-            meta: strip_timestamp(meta),
-        },
-        EncodedItem::Thought { id, content, meta } => EncodedItem::Thought {
-            id,
-            content,
-            meta: strip_timestamp(meta),
-        },
-        EncodedItem::ToolCall {
-            id,
-            title,
-            kind,
-            status,
-            raw_input,
-            content,
-            meta,
-        } => EncodedItem::ToolCall {
-            id,
-            title,
-            kind,
-            status,
-            raw_input,
-            content,
-            meta: strip_timestamp(meta),
-        },
-    }
-}
-
 #[tokio::test]
 async fn cold_reload_renders_the_same_graph_as_the_live_stream() {
     let dir = tempfile::tempdir().unwrap();
-    // `discover_session_jsonl_files`'s sidechain scan excludes the primary
-    // file from its sibling scan by matching the filename `{session_id}.jsonl`
-    // (`self_name`), not the resolved path — Claude never renames the
-    // transcript's basename on relocation, only its directory, so the stored
-    // `session_file_path` always keeps this name in production. Naming the
-    // fixture anything else here would make `discover_session_jsonl_files`
-    // treat the primary file as its own sidechain and double-process it.
+    // The session basename prevents discovery from reading the primary file as its own sidechain.
     let transcript_path = dir.path().join(format!("{SESSION_ID}.jsonl"));
     tokio::fs::write(&transcript_path, FIXTURE).await.unwrap();
 
@@ -340,17 +283,14 @@ async fn cold_reload_renders_the_same_graph_as_the_live_stream() {
     let live_display = prepare_messages_for_client(&live_raw, None);
     let cold_display = prepare_messages_for_client(&cold_raw, None);
 
-    let live_items: Vec<EncodedItem> = encode(&live_display).into_iter().map(normalize).collect();
+    let mut live_items: Vec<EncodedItem> =
+        encode(&live_display).into_iter().map(normalize).collect();
     let cold_items: Vec<EncodedItem> = encode(&cold_display).into_iter().map(normalize).collect();
+
+    assert_and_remove_live_timing(&mut live_items, &cold_items);
 
     assert_eq!(
         live_items, cold_items,
         "cold-reloaded encoded items must match the live-streamed graph"
-    );
-    assert!(
-        live_items
-            .iter()
-            .any(|i| matches!(i, EncodedItem::ToolCall { .. })),
-        "sanity: the fixture must exercise at least one tool call"
     );
 }

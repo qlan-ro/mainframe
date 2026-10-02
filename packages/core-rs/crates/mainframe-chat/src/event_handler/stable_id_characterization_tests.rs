@@ -15,12 +15,12 @@
 use super::*;
 use crate::test_support::test_chat;
 
-struct ShapeDeps {
+pub(super) struct ShapeDeps {
     cell: Arc<Mutex<ActiveChat>>,
 }
 
 impl ShapeDeps {
-    fn new() -> Arc<Self> {
+    pub(super) fn new() -> Arc<Self> {
         Arc::new(Self {
             cell: Arc::new(Mutex::new(ActiveChat {
                 chat: test_chat("chat-shape"),
@@ -85,7 +85,7 @@ impl EventHandlerDeps for ShapeDeps {
 }
 
 fn sink(deps: Arc<ShapeDeps>) -> (Arc<dyn SessionSink>, Arc<Mutex<MessageCache>>) {
-    let messages = Arc::new(Mutex::new(MessageCache::new()));
+    let messages = Arc::new(Mutex::new(MessageCache::with_clock(Arc::new(|| 1000))));
     let handler = EventHandler::new(
         messages.clone(),
         Arc::new(Mutex::new(PermissionManager::new())),
@@ -101,11 +101,24 @@ fn bash_tool_use() -> MessageContent {
         serde_json::Value::String("ls -la".to_string()),
     );
     MessageContent::Node(MessageContentNode::ToolUse {
+        timing: None,
+        command_execution: None,
         id: "tu-1".to_string(),
         name: "Bash".to_string(),
         input,
         parent_tool_use_id: None,
     })
+}
+
+fn completed_bash_tool_use() -> MessageContent {
+    let mut block = bash_tool_use();
+    if let MessageContent::Node(MessageContentNode::ToolUse { timing, .. }) = &mut block {
+        *timing = Some(mainframe_types::tool_call_timing::ToolCallTiming {
+            started_at: 1000,
+            completed_at: Some(1000),
+        });
+    }
+    block
 }
 
 fn bash_tool_result() -> MessageContent {
@@ -199,7 +212,7 @@ fn cached_message_shape_is_pinned_for_tool_use_and_tool_result() {
     } = &cached[0];
     assert_eq!(msg_chat_id.as_str(), "chat-shape");
     assert_eq!(*r#type, ChatMessageType::Assistant);
-    assert_eq!(content, &vec![bash_tool_use()]);
+    assert_eq!(content, &vec![completed_bash_tool_use()]);
     let mut expected_meta = HashMap::new();
     expected_meta.insert(
         "model".to_string(),

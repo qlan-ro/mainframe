@@ -19,6 +19,8 @@ pub(crate) mod collab_card;
 pub(crate) mod collab_identity;
 pub(crate) mod collab_protocol;
 pub(crate) mod collab_resolve;
+mod command_metadata;
+mod command_state;
 pub(crate) mod compaction;
 pub mod context_files;
 pub(crate) mod context_window;

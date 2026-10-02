@@ -36,7 +36,20 @@ pub struct ReasoningItem {
 pub struct CommandExecutionItem {
     pub id: String,
     pub command: String,
+    #[serde(default, deserialize_with = "crate::command_metadata::output")]
     pub aggregated_output: String,
+    #[serde(
+        default,
+        deserialize_with = "crate::command_metadata::actions",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub command_actions: Option<Vec<mainframe_types::command_execution::CommandAction>>,
+    #[serde(
+        default,
+        deserialize_with = "crate::command_metadata::duration",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub duration_ms: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exit_code: Option<i64>,
     pub status: String,

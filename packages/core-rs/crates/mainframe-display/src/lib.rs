@@ -41,3 +41,6 @@ pub use tool_grouping::{
 // notes: they should be REASSIGNED to mainframe-adapter-claude (carrying
 // notes: apply-tool-grouping-characterization + display-helpers-* + tool-grouping/
 // notes: display-pipeline tests with them). Left as compiling empty modules.
+
+pub mod tool_call_timing;
+pub use tool_call_timing::apply_tool_call_timing;

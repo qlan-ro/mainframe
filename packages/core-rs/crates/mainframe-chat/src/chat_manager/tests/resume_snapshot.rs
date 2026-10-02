@@ -220,3 +220,48 @@ async fn crossing_two_thousand_raises_no_resync() {
         "crossing the old 2,000-message cap must never raise a resync"
     );
 }
+
+#[tokio::test]
+async fn tool_timing_resume_reads_preserve_running_completed_and_legacy_calls() {
+    use crate::message_cache::timing_tests::{result, timings, tool};
+    use serde_json::json;
+    use std::sync::atomic::AtomicU64;
+
+    let mgr = ChatManager::new(StoreDeps::with_chats(vec![test_chat("c1")]));
+    let clock = Arc::new(AtomicU64::new(1000));
+    let now = clock.clone();
+    *mgr.messages.lock().unwrap() =
+        MessageCache::with_clock(Arc::new(move || now.load(Ordering::SeqCst)));
+    let mut history = numbered_message(0);
+    history.content = vec![tool("legacy")];
+    mgr.messages.lock().unwrap().set("c1", vec![history]);
+    let sink = mgr.event_handler.build_sink("c1", Some("session".into()));
+    sink.on_message(vec![tool("a")], None);
+    clock.store(1100, Ordering::SeqCst);
+    sink.on_message(vec![tool("b")], None);
+    let (running, _) = mgr.get_resume_snapshot("c1").await;
+    clock.store(9000, Ordering::SeqCst);
+    assert_eq!(mgr.get_resume_snapshot("c1").await.0, running);
+    assert_eq!(
+        timings(&mgr.messages.lock().unwrap(), "c1"),
+        vec![
+            serde_json::Value::Null,
+            json!({"startedAt":1000}),
+            json!({"startedAt":1100})
+        ]
+    );
+    clock.store(1200, Ordering::SeqCst);
+    sink.on_tool_result(vec![result("a", false)], None);
+    let (completed, _) = mgr.get_resume_snapshot("c1").await;
+    clock.store(9900, Ordering::SeqCst);
+    assert_eq!(mgr.get_resume_snapshot("c1").await.0, completed);
+    assert_eq!(
+        timings(&mgr.messages.lock().unwrap(), "c1"),
+        vec![
+            serde_json::Value::Null,
+            json!({"startedAt":1000,"completedAt":1200}),
+            json!({"startedAt":1100})
+        ]
+    );
+    assert_eq!(mgr.get_messages("c1").await.len(), 4);
+}

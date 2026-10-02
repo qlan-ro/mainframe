@@ -17,6 +17,8 @@ fn edit_diff_content() -> mainframe_types::acp::tool_call::Diff {
         "dmsg_6",
         DisplayMessageType::Assistant,
         vec![DisplayContent::Node(DisplayNode::ToolCall {
+            timing: None,
+            command_execution: None,
             id: "toolu_edit_1".to_string(),
             name: "Edit".to_string(),
             input,
@@ -98,6 +100,8 @@ fn a_write_result_with_hunks_and_no_pre_image_encodes_an_add_diff() {
         "dmsg_7",
         DisplayMessageType::Assistant,
         vec![DisplayContent::Node(DisplayNode::ToolCall {
+            timing: None,
+            command_execution: None,
             id: "toolu_write_1".to_string(),
             name: "Write".to_string(),
             input,
@@ -149,6 +153,8 @@ fn a_truncated_result_marks_its_text_block_with_the_namespaced_marker() {
         "dmsg_7",
         DisplayMessageType::Assistant,
         vec![DisplayContent::Node(DisplayNode::ToolCall {
+            timing: None,
+            command_execution: None,
             id: "toolu_9".to_string(),
             name: "Bash".to_string(),
             input: HashMap::new(),

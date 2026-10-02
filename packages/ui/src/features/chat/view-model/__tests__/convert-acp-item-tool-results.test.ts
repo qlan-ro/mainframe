@@ -46,6 +46,16 @@ describe('convertAcpItems — tool result shapes', () => {
     expect(part.result).toBe('');
   });
 
+  it.each(['completed', 'failed'] as const)('keeps %s empty results defined for both content encodings', (status) => {
+    const base = { kind: 'tool-call' as const, id: 'empty', status };
+    expect(toolResultOf({ ...base, content: [] })).toBe('');
+    expect(toolResultOf({ ...base, content: [{ type: 'content', content: { type: 'text', text: '' } }] })).toBe('');
+  });
+
+  it.each(['pending', 'in_progress', 'cancelled'] as const)('leaves %s calls without output unresolved', (status) => {
+    expect(toolResultOf({ kind: 'tool-call', id: 'running', status, content: [] })).toBeUndefined();
+  });
+
   it('a truncation marker on a text block yields the {content,truncated,fullBytes} result shape', () => {
     const item: AccumulatedItem = {
       kind: 'tool-call',

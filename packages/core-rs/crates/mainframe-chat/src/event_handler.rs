@@ -727,10 +727,17 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
         }
         let message =
             self.transient_with_id(ChatMessageType::Assistant, cleaned, Some(meta), vendor_id);
-        self.append_and_display(message);
+        self.append_timed_and_display(message);
     }
 
     fn on_tool_result(&self, content: Vec<MessageContent>, vendor_id: Option<String>) {
+        let message = self.transient_with_id(
+            ChatMessageType::ToolResult,
+            content.clone(),
+            None,
+            vendor_id,
+        );
+        self.append_timed_and_display(message);
         let mut edited_paths: Vec<String> = Vec::new();
         let mut subagent_completed = false;
         let mut worktree_trigger = false;
@@ -786,9 +793,6 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
         if transcript_moved {
             self.deps.on_transcript_moved(&self.chat_id);
         }
-
-        let message = self.transient_with_id(ChatMessageType::ToolResult, content, None, vendor_id);
-        self.append_and_display(message);
 
         if !edited_paths.is_empty() {
             self.deps.emit_event(DaemonEvent::ContextUpdated {
@@ -1037,6 +1041,9 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
 
         let is_error = data.subtype.as_deref() == Some("error_during_execution")
             && data.is_error != Some(false);
+        if was_interrupted || is_error {
+            self.finish_tool_timing();
+        }
         let reason = if was_interrupted {
             ChatUpdatedReason::Interrupted
         } else if is_error {
@@ -1197,6 +1204,7 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
     }
 
     fn on_exit(&self, _code: Option<i32>) {
+        self.finish_tool_timing();
         // Own-session overlay cleanup runs unconditionally, ahead of the
         // superseded-session guard below (T13, R3.19): a stale sink's exit
         // must still drop ITS OWN partial content, but must never reach a
@@ -1422,53 +1430,7 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
     }
 
     fn on_subagent_child(&self, parent_tool_use_id: &str, blocks: Vec<MessageContent>) {
-        let has_cache = self
-            .messages
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .get(&self.chat_id)
-            .is_some();
-        if !has_cache {
-            warn!(
-                chat_id = self.chat_id,
-                parent_tool_use_id,
-                block_count = blocks.len(),
-                "onSubagentChild: no messages in cache; dropping blocks"
-            );
-            return;
-        }
-        let mut blocks = Some(blocks);
-        let updated = self.mutate_messages(|v| {
-            for i in (0..v.len()).rev() {
-                if v[i].r#type != ChatMessageType::Assistant {
-                    continue;
-                }
-                let owns = v[i].content.iter().any(|b| {
-                    matches!(b, MessageContent::Node(MessageContentNode::ToolUse { id, .. }) if id == parent_tool_use_id)
-                });
-                if !owns {
-                    continue;
-                }
-                if let Some(bs) = blocks.take() {
-                    v[i].content.extend(bs);
-                }
-                return Some(v[i].clone());
-            }
-            None
-        });
-        match updated {
-            Some(Some(_message)) => {
-                self.emit_display();
-            }
-            _ => {
-                warn!(
-                    chat_id = self.chat_id,
-                    parent_tool_use_id,
-                    block_count = blocks.map(|b| b.len()).unwrap_or(0),
-                    "onSubagentChild: parent tool_use not found in cache; dropping blocks"
-                );
-            }
-        }
+        self.append_timed_children(parent_tool_use_id, blocks);
     }
 
     fn on_trust_required(&self, project_path: &str) {
@@ -2467,3 +2429,8 @@ mod tests {
 // notes: Ported: session-path (3), move-on-process (3), turn-timing (2),
 // notes: background-activity (4) test cases.
 // todos: 0
+
+#[cfg(test)]
+mod tool_timing_tests;
+
+mod tool_timing;

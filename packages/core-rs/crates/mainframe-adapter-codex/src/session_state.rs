@@ -41,6 +41,7 @@ pub struct SubAgentCard {
 #[derive(Debug, Default)]
 pub struct CodexSessionState {
     pub thread_id: Option<String>,
+    pub command_state: crate::command_state::CommandState,
     /// The model the app-server resolved on `thread/start`/`thread/resume` — the
     /// turn-start fallback (`turn_model::resolve_turn_model`) when the chat has no
     /// configured model.

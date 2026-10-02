@@ -86,8 +86,14 @@ function toolPart(parsed: ParsedItem, children: ChildrenMap): ContentPart {
     toolName,
     args: toJsonArgs((item.rawInput ?? {}) as object),
     result: toolCallResult(item),
+    ...(parsed.meta.toolCallTiming ? { timing: parsed.meta.toolCallTiming } : {}),
     isError: item.status === 'failed' ? true : undefined,
-    ...(lifecycle && { providerMetadata: { mainframe: lifecycle } }),
+    ...((lifecycle || parsed.meta.commandExecution) && {
+      providerMetadata: {
+        ...(lifecycle && { mainframe: lifecycle }),
+        ...(parsed.meta.commandExecution && { codex: parsed.meta.commandExecution }),
+      },
+    }),
     ...(parsed.meta.subagent ? { messages: subagentMessages(item, children) } : {}),
   };
 }

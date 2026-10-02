@@ -163,6 +163,16 @@ fn handle_item_started(
     let sink = &sink;
 
     match serde_json::from_value::<ThreadItem>(params.item) {
+        Ok(ThreadItem::CommandExecution(item)) => {
+            let thread = params
+                .thread_id
+                .as_deref()
+                .or(state.thread_id.as_deref())
+                .unwrap_or_default();
+            state
+                .command_state
+                .started(thread, params.turn_id.as_deref(), &item);
+        }
         Ok(ThreadItem::ContextCompaction(_)) => {
             crate::compaction::handle_compaction_started(sink);
         }
@@ -195,7 +205,19 @@ fn handle_item_completed(
     }
 
     match serde_json::from_value::<ThreadItem>(params.item.clone()) {
-        Ok(item) => render_completed_item(item, params.thread_id.as_deref(), sink, state),
+        Ok(mut item) => {
+            if let ThreadItem::CommandExecution(command) = &mut item {
+                let thread = params
+                    .thread_id
+                    .as_deref()
+                    .or(state.thread_id.as_deref())
+                    .unwrap_or_default();
+                state
+                    .command_state
+                    .complete(thread, params.turn_id.as_deref(), command);
+            }
+            render_completed_item(item, params.thread_id.as_deref(), sink, state);
+        }
         Err(_) => {
             tracing::debug!(
                 module = "codex:events",

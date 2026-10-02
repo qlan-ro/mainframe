@@ -216,3 +216,23 @@ describe('every fixture key is declared in its schema (R2.10)', () => {
     expect(undeclared).toEqual([]);
   });
 });
+
+describe('tool timing metadata validation', () => {
+  it.each([
+    { startedAt: -1 },
+    { startedAt: 1000, completedAt: 999 },
+    { startedAt: 1000, completedAt: null },
+    { completedAt: 1200 },
+  ])('drops malformed timing without losing the containing metadata %j', (toolCallTiming) => {
+    const parsed = ItemMetaSchema.parse({
+      containerId: 'container',
+      parentToolCallId: 'parent',
+      messageMeta: { custom: 'kept' },
+      toolCallTiming,
+    });
+    expect(parsed.toolCallTiming).toBeUndefined();
+    expect(parsed.containerId).toBe('container');
+    expect(parsed.parentToolCallId).toBe('parent');
+    expect(parsed.messageMeta).toEqual({ custom: 'kept' });
+  });
+});

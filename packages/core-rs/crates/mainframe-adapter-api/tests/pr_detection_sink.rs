@@ -57,6 +57,8 @@ fn tool_use(id: &str, name: &str, command: Option<&str>) -> MessageContent {
         input.insert("command".to_string(), Value::String(command.to_string()));
     }
     MessageContent::Node(MessageContentNode::ToolUse {
+        timing: None,
+        command_execution: None,
         id: id.to_string(),
         name: name.to_string(),
         input,

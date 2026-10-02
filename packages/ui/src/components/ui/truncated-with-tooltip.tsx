@@ -1,5 +1,5 @@
 import { useRef, useState, type ComponentPropsWithoutRef, type ReactNode } from 'react';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useIsTruncated } from '@/lib/ui/use-is-truncated';
 import { cn } from '@/lib/utils';
 
@@ -9,6 +9,9 @@ interface TruncatedWithTooltipProps extends Omit<ComponentPropsWithoutRef<'span'
   tooltip?: ReactNode;
   side?: 'top' | 'bottom' | 'left' | 'right';
   contentClassName?: string;
+  delayDuration?: number;
+  skipDelayDuration?: number;
+  disableHoverableContent?: boolean;
 }
 
 /**
@@ -24,6 +27,9 @@ export function TruncatedWithTooltip({
   tooltip,
   side = 'top',
   contentClassName,
+  delayDuration,
+  skipDelayDuration,
+  disableHoverableContent,
   ...rest
 }: TruncatedWithTooltipProps) {
   const ref = useRef<HTMLSpanElement>(null);
@@ -32,17 +38,21 @@ export function TruncatedWithTooltip({
   if (!text) return null;
   const canOpen = tooltip !== undefined || truncated;
   return (
-    <TooltipProvider>
-      <Tooltip open={hovered && canOpen} onOpenChange={setHovered}>
-        <TooltipTrigger asChild>
-          <span ref={ref} className={cn('truncate', className)} {...rest}>
-            {text}
-          </span>
-        </TooltipTrigger>
-        <TooltipContent side={side} className={cn('max-w-[min(60ch,80vw)] break-words', contentClassName)}>
-          {tooltip ?? text}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <Tooltip
+      open={hovered && canOpen}
+      onOpenChange={setHovered}
+      delayDuration={delayDuration}
+      skipDelayDuration={skipDelayDuration}
+      disableHoverableContent={disableHoverableContent}
+    >
+      <TooltipTrigger asChild>
+        <span ref={ref} className={cn('truncate', className)} {...rest}>
+          {text}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side={side} className={cn('max-w-[min(60ch,80vw)] break-words', contentClassName)}>
+        {tooltip ?? text}
+      </TooltipContent>
+    </Tooltip>
   );
 }

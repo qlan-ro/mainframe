@@ -119,6 +119,8 @@ pub(crate) fn handle_function_call_output(
     if let Some(command) = pending_exec.remove(call_id) {
         let (exit_code, output) = parse_rollout_output(&output);
         items.push(ThreadItem::CommandExecution(CommandExecutionItem {
+            command_actions: None,
+            duration_ms: None,
             id: call_id.clone(),
             command,
             aggregated_output: output,
