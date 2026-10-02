@@ -129,7 +129,7 @@ function directCommand(program: string, args: string[]): Action | undefined {
     prettier: ['--check', '--write'],
   };
   const rest = operands(args, flags[program]!, program === 'tsc' ? ['--project', '-p'] : ['--config']);
-  if (!rest) return undefined;
+  if (!rest || (program === 'vitest' && rest.length > 0 && rest[0] !== 'run')) return undefined;
   return { kind };
 }
 

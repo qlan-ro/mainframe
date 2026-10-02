@@ -134,3 +134,30 @@ it.each(['head --lines invalid src/a.ts', "sed -n '1p' --unknown a"])(
     expect(commandLabel(tool({ args: { command, description: 'Fallback' } }), 'success')).toBe('Ran Fallback');
   },
 );
+
+it.each(['vitest', 'pnpm exec vitest', 'npx vitest'])(
+  'does not claim tests passed for discovery, setup or unsupported modes through %s',
+  (prefix) => {
+    for (const mode of ['list', 'list --run', 'init browser', 'bench', 'watch', 'unsupported-mode']) {
+      const command = `${prefix} ${mode}`;
+      expect(commandLabel(tool({ args: { command } }), 'success')).toBe(`Ran ${command}`);
+      expect(commandLabel(tool({ args: { command, description: 'Inspect test configuration' } }), 'success')).toBe(
+        'Ran Inspect test configuration',
+      );
+    }
+  },
+);
+
+it.each([
+  'vitest',
+  'vitest --run',
+  'vitest run',
+  'vitest run src/example.test.ts',
+  'vitest --config vitest.config.ts run src/example.test.ts',
+  'vitest run -- list',
+  'pnpm exec vitest run src/example.test.ts',
+  'npx vitest run src/example.test.ts',
+  "bash -lc 'pnpm exec vitest run src/example.test.ts'",
+])('retains the success label for a supported test execution: %s', (command) => {
+  expect(commandLabel(tool({ args: { command } }), 'success')).toBe('Tests passed');
+});
