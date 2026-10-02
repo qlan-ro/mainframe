@@ -1,7 +1,4 @@
-/**
- * ACP v2 chat-facade client (todo #350): `/acp/{profile}` JSON-RPC-over-WS, handshake, session prompt/cancel/resume, permission gates, reconnect with backoff, and the heartbeat/gap-resume sync contract. This IS the desktop chat transcript path (`docs/API-REFERENCE.md` § ACP Chat Facade); the legacy `lib/daemon/ws-client.ts` dialect remains only for the side-band event families the facade does not model (chat.updated config, queued refs, background tasks, worktree offers, workflow runs, compaction markers) until the daemon retires it.
- * Session-state accumulation lives in `features/chat/view-model/acp-item-accumulator.ts`; this module only speaks the wire protocol. One client per adapter profile, shared by every chat of that adapter (`acp-clients.ts`), multiplexing N sessions. Inbound notification/request parsing and listener fan-out live in `acp-notification-router.ts` — this file owns connection lifecycle and reconnect only, delegating its `on*` listener methods to that router.
- */
+/** Negotiation is shared across all chat sessions bound to this per-profile client. */
 import type {
   CancelSessionNotification,
   InitializeRequest,
@@ -16,13 +13,12 @@ import type {
 } from '@qlan-ro/mainframe-types';
 import {
   InitializeResponseSchema,
-  MAINFRAME_META_NAMESPACE,
-  MainframeCapabilitiesSchema,
   PINNED_PROTOCOL_VERSION,
   PromptResponseSchema,
   ResumeSessionResponseSchema,
 } from '@qlan-ro/mainframe-types';
 import { getActiveDaemon } from './active-daemon';
+import { AcpCapabilityState, parseCapabilities, type CapabilitiesListener } from './acp-capability-state';
 import { HeartbeatWatchdog } from './acp-heartbeat-watchdog';
 import {
   AcpNotificationRouter,
@@ -63,20 +59,14 @@ function defaultSocketFactory(url: string): AcpSocketLike {
   return new WebSocket(url) as unknown as AcpSocketLike;
 }
 
-function parseCapabilities(response: InitializeResponse): MainframeCapabilities | null {
-  const raw = response._meta?.[MAINFRAME_META_NAMESPACE];
-  if (raw === undefined) return null;
-  const parsed = MainframeCapabilitiesSchema.safeParse(raw);
-  return parsed.success ? parsed.data : null;
-}
-
 const RECONNECT_BASE_DELAY_MS = 1_000;
 const RECONNECT_MAX_DELAY_MS = 15_000;
 
 export class AcpFacadeClient {
   private connection: RpcConnection | null = null;
   private watchdog: HeartbeatWatchdog | null = null;
-  private capabilities: MainframeCapabilities | null = null;
+  private readonly capabilities = new AcpCapabilityState();
+  private connectAttempt = 0;
   private connectPromise: Promise<InitializeResponse> | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectDelayMs = RECONNECT_BASE_DELAY_MS;
@@ -95,7 +85,11 @@ export class AcpFacadeClient {
   ) {}
 
   get mainframeCapabilities(): MainframeCapabilities | null {
-    return this.capabilities;
+    return this.capabilities.current;
+  }
+
+  onCapabilitiesChanged(listener: CapabilitiesListener): () => void {
+    return this.capabilities.subscribe(listener);
   }
 
   /** See the field doc — bumped on every new underlying connection, first one included. */
@@ -123,18 +117,17 @@ export class AcpFacadeClient {
     return attempt;
   }
 
-  /**
-   * Builds the connection locally and only assigns `this.connection` once
-   * the handshake AND version check pass — an un-negotiated connection must
-   * never be handed out via `requireConnection()`. Any failure along the
-   * way closes this attempt's own socket before rethrowing, so a rejected
-   * `connect()` never leaks one (R3.4).
-   */
+  /** Install successful negotiation in the reply handler before the next session frame can dispatch. */
   async connect(): Promise<InitializeResponse> {
+    const attempt = ++this.connectAttempt;
     const url = (this.deps.url ?? (() => defaultUrl(this.profile)))();
     const connection = new RpcConnection(url, this.deps.createSocket ?? defaultSocketFactory);
-    connection.onNotification((n) => this.router.handleNotification(n));
-    connection.onRequest((r) => this.router.handleRequest(r));
+    connection.onNotification((n) => {
+      if (this.connection === connection) this.router.handleNotification(n);
+    });
+    connection.onRequest((r) => {
+      if (this.connection === connection) this.router.handleRequest(r);
+    });
     connection.onClose(() => this.handleClose(connection));
     try {
       await connection.open();
@@ -143,16 +136,11 @@ export class AcpFacadeClient {
         protocolVersion: PINNED_PROTOCOL_VERSION,
         info: this.deps.clientInfo ?? DEFAULT_CLIENT_INFO,
       };
-      const result = await connection.sendRequest('initialize', request);
-      const response = InitializeResponseSchema.parse(result);
-      if (response.protocolVersion !== PINNED_PROTOCOL_VERSION) {
-        throw new Error(`[acp-client] daemon negotiated an unsupported protocol version ${response.protocolVersion}`);
-      }
-      this.connection = connection;
-      this.generation += 1;
-      this.capabilities = parseCapabilities(response);
-      this.reconnectDelayMs = RECONNECT_BASE_DELAY_MS;
-      this.armWatchdog(this.capabilities?.heartbeatIntervalMs ?? FALLBACK_HEARTBEAT_INTERVAL_MS);
+      let response!: InitializeResponse;
+      await connection.sendRequest('initialize', request, (result) => {
+        if (attempt !== this.connectAttempt) throw new Error('[acp-client] initialization superseded');
+        response = this.acceptInitialize(connection, result);
+      });
       return response;
     } catch (error) {
       connection.close();
@@ -161,6 +149,7 @@ export class AcpFacadeClient {
   }
 
   disconnect(): void {
+    this.connectAttempt += 1;
     this.manuallyClosed = true;
     if (this.reconnectTimer !== null) {
       clearTimeout(this.reconnectTimer);
@@ -246,6 +235,21 @@ export class AcpFacadeClient {
   onGap(listener: GapListener): () => void {
     this.gapListeners.add(listener);
     return () => this.gapListeners.delete(listener);
+  }
+
+  private acceptInitialize(connection: RpcConnection, result: unknown): InitializeResponse {
+    const response = InitializeResponseSchema.parse(result);
+    if (response.protocolVersion !== PINNED_PROTOCOL_VERSION) {
+      throw new Error(`[acp-client] daemon negotiated an unsupported protocol version ${response.protocolVersion}`);
+    }
+    const capabilities = parseCapabilities(response);
+    this.connection = connection;
+    this.generation += 1;
+    this.reconnectDelayMs = RECONNECT_BASE_DELAY_MS;
+    this.watchdog?.stop();
+    this.armWatchdog(capabilities?.heartbeatIntervalMs ?? FALLBACK_HEARTBEAT_INTERVAL_MS);
+    this.capabilities.replace(capabilities);
+    return response;
   }
 
   private requireConnection(): RpcConnection {
