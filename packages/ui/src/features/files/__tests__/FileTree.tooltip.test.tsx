@@ -4,6 +4,7 @@ import { userEvent } from '@testing-library/user-event';
 import { getFileTree, type FileTreeEntry } from '@/lib/api/files';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { FileTreeNode } from '../FileTreeNode';
+import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
 
 vi.mock('@/lib/api/files', () => ({ getFileTree: vi.fn() }));
 vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: vi.fn() }));
@@ -12,6 +13,9 @@ vi.mock('@/lib/daemon/use-daemon-is-local', () => ({ useDaemonIsLocal: () => tru
 const folder: FileTreeEntry = { name: 'src', path: 'src', type: 'directory' };
 const file: FileTreeEntry = { name: 'index.ts', path: 'index.ts', type: 'file' };
 const child: FileTreeEntry = { name: 'child.ts', path: 'src/child.ts', type: 'file' };
+// Vitest stubs CSS imports; load the stylesheet for computed-style assertions.
+const fileTreeStyles = process.getBuiltinModule('fs').readFileSync('src/features/files/file-tree.css', 'utf8');
+let style: HTMLStyleElement;
 
 function renderRows(entries = [folder, file]) {
   render(
@@ -46,12 +50,16 @@ function leave(name: string) {
 
 beforeEach(() => {
   vi.useFakeTimers();
+  style = document.createElement('style');
+  style.textContent = fileTreeStyles;
+  document.head.append(style);
   vi.mocked(getFileTree).mockResolvedValue([child]);
   vi.mocked(emitSurfaceIntent).mockClear();
 });
 
 afterEach(() => {
   cleanup();
+  style.remove();
   vi.useRealTimers();
 });
 
@@ -96,13 +104,29 @@ it('requires a fresh delay when returning to an opened row through another row',
   expect(screen.getByRole('tooltip')).toHaveTextContent('/workspace/src');
 });
 
-it.each([folder, file])('keeps $type path content pointer-transparent and dismisses on leave', async (entry) => {
+it.each([folder, file])('keeps the $type hint and its positioning wrapper pointer-transparent', async (entry) => {
   renderRows([entry]);
   hover(entry.name);
   await advance(500);
-  expect(screen.getByRole('tooltip').closest('[data-slot="tooltip-content"]')).toHaveClass('pointer-events-none');
+  const content = screen.getByRole('tooltip');
+  const wrapper = content.closest('[data-radix-popper-content-wrapper]');
+  expect(wrapper).not.toBeNull();
+  expect(getComputedStyle(wrapper!).pointerEvents).toBe('none');
+  expect(getComputedStyle(content).pointerEvents).toBe('none');
+  expect(getComputedStyle(content.querySelector('svg')!).pointerEvents).toBe('none');
   leave(entry.name);
   expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+});
+
+it('preserves pointer interaction on other tooltips and their positioning wrappers', async () => {
+  render(<TruncatedWithTooltip text="label" tooltip="More information" />);
+  hover('label');
+  await advance(0);
+  const content = screen.getByRole('tooltip');
+  const wrapper = content.closest('[data-radix-popper-content-wrapper]');
+  expect(wrapper).not.toBeNull();
+  expect(getComputedStyle(wrapper!).pointerEvents).toBe('auto');
+  expect(getComputedStyle(content).pointerEvents).toBe('auto');
 });
 
 it('expands and collapses on the first click before and after its hint opens', async () => {

@@ -1,0 +1,4 @@
+[data-radix-popper-content-wrapper]:has(> .file-tree-path-tooltip),
+.file-tree-path-tooltip {
+  pointer-events: none;
+}

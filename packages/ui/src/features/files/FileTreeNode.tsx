@@ -14,6 +14,7 @@ import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
 import { FileTreeRowMenu } from './FileTreeRowMenu';
 import { openModeForMouseEvent } from './open-mode-from-mouse';
 import { isAncestorOf, sortEntries, toFullPath } from './file-tree-utils';
+import './file-tree.css';
 
 /** Emits `open-file`, adding `mode` only when it isn't the default preview — keeps existing exact-shape assertions green. */
 function emitOpenFile(path: string, mode: TabMode): void {
@@ -121,7 +122,7 @@ export function FileTreeNode({ entry, depth, port, projectId, chatId, base, reve
             text={entry.name}
             tooltip={fullPath}
             className="min-w-0"
-            contentClassName="pointer-events-none font-mono break-all"
+            contentClassName="file-tree-path-tooltip font-mono break-all"
             delayDuration={500}
             skipDelayDuration={0}
             disableHoverableContent
@@ -151,7 +152,7 @@ export function FileTreeNode({ entry, depth, port, projectId, chatId, base, reve
             text={entry.name}
             tooltip={fullPath}
             className="min-w-0"
-            contentClassName="pointer-events-none font-mono break-all"
+            contentClassName="file-tree-path-tooltip font-mono break-all"
             delayDuration={500}
             skipDelayDuration={0}
             disableHoverableContent
