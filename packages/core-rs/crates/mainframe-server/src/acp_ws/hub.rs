@@ -8,23 +8,28 @@
 //! and the resume seed/teardown lifecycle; `fanout.rs` owns per-event
 //! delivery and `handlers.rs` the `ChatSurface` sink itself.
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use dashmap::DashMap;
+use mainframe_acp::revision_log::RevisionLog;
 use mainframe_acp::stream::SessionStream;
-use mainframe_acp::{AnswerOutcome, EncodedItem, GateRegistry, ThrottledFrame};
+use mainframe_acp::{AnswerOutcome, GateRegistry};
 use mainframe_chat::chat_surface::ChatSurface;
-use mainframe_types::acp::jsonrpc::{JsonRpcRequest, JsonRpcResponse};
+use mainframe_types::acp::jsonrpc::JsonRpcRequest;
 use mainframe_types::adapter::ControlRequest;
 use tokio::sync::mpsc;
 use tracing::debug;
 
-use super::facade_conn::{FacadeConnection, SessionSlot, StreamOp, rpc_id_string};
+use super::facade_conn::{FacadeConnection, SessionSlot, rpc_id_string};
 
 mod fanout;
 mod handlers;
+mod revisions;
+pub use fanout::ResumeSeed;
+use fanout::drain_into;
+use revisions::RevisionRegistry;
 
 /// Coalescing window for chunk fan-out (spec decision 14) and the cadence of
 /// each connection's flush tick — an implementation choice per the spec; the
@@ -35,6 +40,8 @@ pub struct FacadeHub {
     connections: DashMap<String, Arc<FacadeConnection>>,
     gates: Mutex<GateRegistry>,
     throttle_interval_ms: i64,
+    /// Per-chat revision logs (todo #377) — see `revisions.rs`.
+    revisions: RevisionRegistry,
 }
 
 impl Default for FacadeHub {
@@ -49,6 +56,7 @@ impl FacadeHub {
             connections: DashMap::new(),
             gates: Mutex::new(GateRegistry::new()),
             throttle_interval_ms,
+            revisions: RevisionRegistry::default(),
         }
     }
 
@@ -102,20 +110,32 @@ impl FacadeHub {
     /// can be in flight at once (a gap watchdog racing a reattach), and the
     /// second claim would throw away everything the first one's window had
     /// already buffered.
-    pub fn begin_resume(&self, connection: &FacadeConnection, chat_id: &str) {
+    ///
+    /// Returns the chat's revision log (todo #377) for an opted-in
+    /// connection, creating one if it has none yet — read AFTER the claim
+    /// above is installed, so any `record` above the boundary
+    /// `dispatch_resume` later reads is buffered here as catch-up, never
+    /// missed outright. `None` for a connection that did not opt in.
+    pub fn begin_resume(
+        &self,
+        connection: &FacadeConnection,
+        chat_id: &str,
+    ) -> Option<Arc<Mutex<RevisionLog>>> {
         let mut sessions = connection.locked_sessions();
-        if matches!(
+        let already_awaiting = matches!(
             sessions.get(chat_id),
             Some(SessionSlot::AwaitingSeed { .. })
-        ) {
-            return;
-        }
-        sessions.insert(
-            chat_id.to_string(),
-            SessionSlot::AwaitingSeed {
-                pending: Vec::new(),
-            },
         );
+        if !already_awaiting {
+            sessions.insert(
+                chat_id.to_string(),
+                SessionSlot::AwaitingSeed {
+                    pending: Vec::new(),
+                },
+            );
+        }
+        drop(sessions);
+        self.revision_log_for_resume(connection.is_revision_cursors_opted_in(), chat_id)
     }
 
     /// Atomically replace the session's stream state with one seeded to
@@ -223,64 +243,6 @@ impl FacadeHub {
     fn locked_registry(&self) -> std::sync::MutexGuard<'_, GateRegistry> {
         self.gates.lock().unwrap_or_else(|e| e.into_inner())
     }
-}
-
-/// What a completing `session/resume` hands [`FacadeHub::reset_session`].
-pub struct ResumeSeed<'a> {
-    /// The snapshot the connection's stream is re-seeded to.
-    pub items: &'a [EncodedItem],
-    /// The `session/resume` reply, sent ahead of the replay — and sent even
-    /// when the session is gone, so the client's promise always settles.
-    pub reply: &'a JsonRpcResponse,
-    /// Set as `reply` goes out, in whichever arm sends it. The replay and the
-    /// catch-up run behind that send, so a delivery that dies in there has
-    /// already settled the client's promise and owes it no second answer.
-    pub replied: Arc<AtomicBool>,
-    /// Set as the `replay_complete` marker goes out, in whichever arm sends
-    /// it. `fail_resume` reads this alongside `replied`: a delivery that
-    /// replied but died before this was set owes the client its own
-    /// `replay_complete { aborted: true }`.
-    pub completed: Arc<AtomicBool>,
-    /// The rpc id of the gate the replay redelivers on its own, if any.
-    pub redelivered_gate: Option<&'a str>,
-}
-
-/// Replay everything buffered while the snapshot was in flight through the
-/// freshly seeded `stream`, in arrival order, so each op emits the frames it
-/// would have emitted live — behind the replay, never folded into it.
-///
-/// Two buffered gate raises are dropped instead. The one `redelivered_gate`
-/// names, because the replay just sent that same request itself. And any
-/// raise the connection no longer holds as pending: only
-/// `handle_gate_resolved` removes a delivered gate, and it pushes
-/// `gate_resolved` immediately (criterion 8) — forwarding the raise behind
-/// that would leave the client a live gate the daemon has already closed.
-fn drain_into(
-    stream: &mut SessionStream,
-    buffered: SessionSlot,
-    connection: &FacadeConnection,
-    redelivered_gate: Option<&str>,
-) -> Vec<ThrottledFrame> {
-    let SessionSlot::AwaitingSeed { pending } = buffered else {
-        return Vec::new();
-    };
-    let now = now_ms();
-    let mut frames = Vec::new();
-    for op in pending {
-        if let StreamOp::Raw {
-            gate_rpc_id: Some(id),
-            ..
-        } = &op
-            // Takes the gates lock while the sessions lock is held. Every path
-            // that nests the two takes `sessions` first — the replay's
-            // `deliver_gate` does too — so the order cannot cycle.
-            && (Some(id.as_str()) == redelivered_gate || connection.peek_gate(id).is_none())
-        {
-            continue;
-        }
-        frames.extend(fanout::run_op(stream, op, now));
-    }
-    frames
 }
 
 fn now_ms() -> i64 {

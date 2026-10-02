@@ -28,6 +28,13 @@ pub struct FacadeConnection {
     /// frame, so an `Atomic` rather than a `Mutex` (no critical section to
     /// hold, just a flag).
     negotiated: AtomicBool,
+    /// Set once a successful `initialize` also opted into revision-
+    /// versioned resume cursors (todo #377, spec
+    /// `REVISION_CURSORS_OPT_IN_KEY`). Gates every `cursor` reply meta,
+    /// `_mainframe.dev/cursor` notification, and the hub's decision to
+    /// create this chat's `RevisionLog` on this connection's resume — a
+    /// connection that never sets this gets byte-identical legacy behavior.
+    revision_cursors_opted_in: AtomicBool,
     /// One `tokio::sync::Mutex` per session, held for the duration of a
     /// spawned `session/prompt` (T10). Serializes concurrent prompts for the
     /// SAME session — queue position and D1's tail ordering both depend on
@@ -49,6 +56,7 @@ impl FacadeConnection {
             sessions: Mutex::new(HashMap::new()),
             pending_gates: Mutex::new(HashMap::new()),
             negotiated: AtomicBool::new(false),
+            revision_cursors_opted_in: AtomicBool::new(false),
             prompt_locks: Mutex::new(HashMap::new()),
             resume_failures: Mutex::new(HashMap::new()),
         }
@@ -112,6 +120,15 @@ impl FacadeConnection {
 
     pub fn mark_negotiated(&self) {
         self.negotiated.store(true, Ordering::Relaxed);
+    }
+
+    pub fn is_revision_cursors_opted_in(&self) -> bool {
+        self.revision_cursors_opted_in.load(Ordering::Relaxed)
+    }
+
+    pub fn mark_revision_cursors_opted_in(&self) {
+        self.revision_cursors_opted_in
+            .store(true, Ordering::Relaxed);
     }
 
     pub(super) fn locked_sessions(
@@ -205,11 +222,21 @@ impl FacadeConnection {
     }
 
     /// Dispatch one throttle-drained frame: an update through the normal
-    /// `session/update` envelope, a raw frame as-is (T6).
+    /// `session/update` envelope, a raw frame as-is (T6), or a revision-
+    /// cursor boundary (todo #377) as `_mainframe.dev/cursor` — only for a
+    /// connection that opted in. The run-op layer already filters a cursor
+    /// out before it ever reaches a non-opted connection's throttle FIFO
+    /// (`fanout.rs::run_op`); this check is the second, defensive gate, so
+    /// nothing short of that filtering ever reaches the wire for one.
     pub fn send_throttled(&self, chat_id: &str, frame: ThrottledFrame) {
         match frame {
             ThrottledFrame::Update(update) => self.send_update(chat_id, update),
             ThrottledFrame::Raw(payload) => self.send_frame(payload),
+            ThrottledFrame::Cursor(cursor) => {
+                if self.is_revision_cursors_opted_in() {
+                    self.send_json(&mainframe_acp::cursor_notification(chat_id, &cursor));
+                }
+            }
         }
     }
 

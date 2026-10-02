@@ -42,7 +42,16 @@ pub struct PendingGate {
 /// client two live requests for one decision.
 #[derive(Clone)]
 pub(crate) enum StreamOp {
-    Revision(Vec<mainframe_acp::EncodedItem>),
+    /// `cursor` (todo #377) is the chat's revision-log boundary once this
+    /// same display revision was recorded into it — `None` for a chat with
+    /// no log, or when the record was a no-op. Carried alongside the items
+    /// rather than recomputed on replay, so a buffered catch-up frame's
+    /// cursor is exactly the one the live revision would have sent, never
+    /// a later log state read after the fact.
+    Revision {
+        items: Vec<mainframe_acp::EncodedItem>,
+        cursor: Option<mainframe_types::acp::extensions::RevisionCursor>,
+    },
     Raw {
         payload: String,
         gate_rpc_id: Option<String>,

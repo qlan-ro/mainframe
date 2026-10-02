@@ -6,9 +6,11 @@
 //! task gets scheduled.
 
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use mainframe_acp::resume::ResumePort;
+use mainframe_acp::revision_log::RevisionLog;
 use mainframe_acp::{dispatch_resume, rpc};
 use mainframe_types::acp::jsonrpc::{JsonRpcRequest, RequestId};
 use tracing::error;
@@ -32,9 +34,11 @@ pub(super) fn start_resume(
     let session_id = params_session_id(request.params.as_ref());
     // Mark this session as awaiting its snapshot BEFORE anything awaits, so
     // a live revision that races it is buffered rather than lost (T5, R2.9).
-    if let Some(session_id) = &session_id {
-        ctx.facade_hub.begin_resume(connection, session_id);
-    }
+    // `begin_resume` also hands back the chat's revision log (todo #377),
+    // when this connection opted in — `None` for one that did not.
+    let revision_log = session_id
+        .as_deref()
+        .and_then(|id| ctx.facade_hub.begin_resume(connection, id));
     // Queued here, on the socket loop, so arrival order is acquisition order.
     let wait = session_id
         .as_deref()
@@ -46,8 +50,23 @@ pub(super) fn start_resume(
         ctx: Arc::clone(ctx),
         connection: Arc::clone(connection),
         ports,
+        revision_log,
     };
     tokio::spawn(task.run(wait));
+}
+
+/// The two settlement flags a resume delivery and its failure path share —
+/// bundled so `deliver_resume` stays under clippy's argument-count limit
+/// now that it also takes `revision_log` (todo #377).
+struct DeliveryProgress {
+    /// Set the moment the reply goes out, so the failure path below knows
+    /// whether the client's promise has settled without asking the session
+    /// map — which a concurrent detach or `ChatEnded` can empty.
+    replied: Arc<AtomicBool>,
+    /// Set the moment `replay_complete` goes out (`reset_session`, both
+    /// arms) — `fail_resume` reads this alongside `replied` to know whether
+    /// IT still owes the client the closing marker.
+    completed: Arc<AtomicBool>,
 }
 
 /// One `session/resume` past the socket loop: everything the spawned task
@@ -60,6 +79,9 @@ struct ResumeTask {
     ctx: Arc<AppCtx>,
     connection: Arc<FacadeConnection>,
     ports: Arc<dyn ResumePort>,
+    /// The chat's revision log (todo #377), from `begin_resume` — `None`
+    /// for a connection that did not opt into revision cursors.
+    revision_log: Option<Arc<Mutex<RevisionLog>>>,
 }
 
 impl ResumeTask {
@@ -75,19 +97,16 @@ impl ResumeTask {
             ctx,
             connection,
             ports,
+            revision_log,
         } = self;
         let claimed = session_id.clone();
         let (task_ctx, task_conn) = (Arc::clone(&ctx), Arc::clone(&connection));
-        // Set the moment the reply goes out, so the failure path below knows
-        // whether the client's promise has settled without asking the session
-        // map — which a concurrent detach or `ChatEnded` can empty.
         let replied = Arc::new(AtomicBool::new(false));
-        let task_replied = Arc::clone(&replied);
-        // Set the moment `replay_complete` goes out (`reset_session`, both
-        // arms) — `fail_resume` reads this alongside `replied` to know
-        // whether IT still owes the client the closing marker.
         let completed = Arc::new(AtomicBool::new(false));
-        let task_completed = Arc::clone(&completed);
+        let task_progress = DeliveryProgress {
+            replied: Arc::clone(&replied),
+            completed: Arc::clone(&completed),
+        };
         // `reset_session` is the only exit from `AwaitingSeed`, so a panic on
         // the way to it would leave this session buffering every event for
         // the connection's remaining life, silently. Run it as its own task
@@ -99,8 +118,8 @@ impl ResumeTask {
                 &task_ctx,
                 &task_conn,
                 ports.as_ref(),
-                task_replied,
-                task_completed,
+                revision_log.as_deref(),
+                task_progress,
             )
             .await;
         });
@@ -203,17 +222,17 @@ async fn deliver_resume(
     ctx: &Arc<AppCtx>,
     connection: &Arc<FacadeConnection>,
     ports: &dyn ResumePort,
-    replied: Arc<AtomicBool>,
-    completed: Arc<AtomicBool>,
+    revision_log: Option<&Mutex<RevisionLog>>,
+    progress: DeliveryProgress,
 ) {
-    let (response, replay) = dispatch_resume(request, ports).await;
+    let (response, replay) = dispatch_resume(request, ports, revision_log).await;
 
     let Some(session_id) = session_id else {
         // Malformed params: dispatch_resume already produced the structured
         // error; there is no session to seed, so no `replay_complete` either
         // — nothing was ever replied `true` for a session.
         connection.send_json(&response);
-        replied.store(true, Ordering::Relaxed);
+        progress.replied.store(true, Ordering::Relaxed);
         return;
     };
 
@@ -222,8 +241,8 @@ async fn deliver_resume(
     let seed = ResumeSeed {
         items: &replay.items,
         reply: &response,
-        replied,
-        completed,
+        replied: progress.replied,
+        completed: progress.completed,
         redelivered_gate: redelivered_gate.as_deref(),
     };
     let hub = &ctx.facade_hub;
