@@ -16,7 +16,9 @@ import { resultImageBlocks, withResultImages } from './tool-result-images';
  * source order, on whichever shape below is returned (todo #363).
  */
 export function toolCallResult(item: Extract<AccumulatedItem, { kind: 'tool-call' }>): unknown {
-  if (item.content.length === 0) return item.status === 'completed' || item.status === 'failed' ? '' : undefined;
+  if (item.content.length === 0) {
+    return item.status === 'completed' || item.status === 'failed' ? '' : undefined;
+  }
   const textBlocks = item.content.flatMap((entry) =>
     entry.type === 'content' && entry.content.type === 'text' ? [entry.content] : [],
   );

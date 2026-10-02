@@ -71,7 +71,11 @@ export function dialogSizeFor(sizes: DialogSizes, key: string, fallback: DialogS
 
 const SIDE_CHAT_DEFAULT_FRAC = 0.4;
 
+export type TranscriptMode = 'verbose' | 'compact';
+
 interface UiPrefsState {
+  transcriptMode: TranscriptMode;
+  setTranscriptMode: (mode: TranscriptMode) => void;
   sidebarVisible: boolean;
   sidebarWidth: number;
   /** Once true, the mid-session model/effort/feature change warning is suppressed for good. */
@@ -104,6 +108,7 @@ interface UiPrefsState {
 /** The persisted subset. */
 function partializeUiPrefs(s: UiPrefsState) {
   return {
+    transcriptMode: s.transcriptMode,
     sidebarVisible: s.sidebarVisible,
     sidebarWidth: s.sidebarWidth,
     dontWarnOnTuningChange: s.dontWarnOnTuningChange,
@@ -116,9 +121,16 @@ function partializeUiPrefs(s: UiPrefsState) {
 
 type PersistedUiPrefs = ReturnType<typeof partializeUiPrefs>;
 
+function sanitizeTranscriptPreference(persisted: unknown): Partial<PersistedUiPrefs> {
+  const state = persisted !== null && typeof persisted === 'object' ? (persisted as Record<string, unknown>) : {};
+  return { ...state, transcriptMode: state.transcriptMode === 'compact' ? 'compact' : 'verbose' };
+}
+
 export const useUiPrefs = create<UiPrefsState>()(
   persist(
     (set) => ({
+      transcriptMode: 'verbose',
+      setTranscriptMode: (transcriptMode) => set({ transcriptMode }),
       sidebarVisible: true,
       sidebarWidth: SIDEBAR_DEFAULT_WIDTH,
       dontWarnOnTuningChange: false,
@@ -147,11 +159,12 @@ export const useUiPrefs = create<UiPrefsState>()(
     }),
     {
       name: 'mf:ui-prefs',
-      version: 6,
+      version: 7,
       partialize: partializeUiPrefs,
+      merge: (persisted, current) => ({ ...current, ...sanitizeTranscriptPreference(persisted) }),
       migrate: (persisted, version): PersistedUiPrefs => {
         if (version >= 6 || persisted === null || typeof persisted !== 'object') {
-          return persisted as PersistedUiPrefs;
+          return sanitizeTranscriptPreference(persisted) as PersistedUiPrefs;
         }
         const next = { ...(persisted as Record<string, unknown>) };
         if (version < 2) {
@@ -188,7 +201,7 @@ export const useUiPrefs = create<UiPrefsState>()(
         // collapsible sidebar sections and no right-click affordance remain.
         delete next.collapsedSidebarSections;
         delete next.rightClickHintDismissed;
-        return next as PersistedUiPrefs;
+        return sanitizeTranscriptPreference(next) as PersistedUiPrefs;
       },
     },
   ),

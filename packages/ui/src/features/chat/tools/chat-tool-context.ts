@@ -5,13 +5,15 @@
  * - `useOpenFile` emits surface intents; only `layout/` subscribes.
  */
 import { useCallback } from 'react';
+import { useTranscriptScope } from '../messages/compact/transcript-scope';
 import { useChatExtras } from '../runtime/chat-extras';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 
 /** The active chat id, or undefined before the runtime is ready. */
 export function useChatId(): string | undefined {
   const extras = useChatExtras();
-  return extras?.state.chatId;
+  const scope = useTranscriptScope();
+  return extras?.state.chatId ?? scope.chatId;
 }
 
 /** 0-based line/character reveal target, forwarded as-is to the open-file intent. */

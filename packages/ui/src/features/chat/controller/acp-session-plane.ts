@@ -23,6 +23,7 @@ import type { AccumulatedItem } from '../view-model/acp-item-accumulator';
 import type { ChatStateEvent } from './chat-thread-state';
 import { AcpSessionAttachment, type AcpSessionClientPort } from './acp-session-attachment';
 import { AcpTranscriptStore } from './acp-transcript-store';
+import type { ReplayStage } from './acp-replay-stage';
 import { AcpGateTracker } from './acp-session-gates';
 import { RunStopSettle } from './acp-run-stop-settle';
 
@@ -47,8 +48,6 @@ export class AcpSessionPlane {
   private readonly store = new AcpTranscriptStore(() => ({
     strictCreation: this.attachment?.currentClient?.mainframeCapabilities?.itemCreationMarkers === true,
   }));
-  /** Captured while a full replay stages off-screen — applied at `completeReplay()` once the staged items become visible, never dispatched live mid-staging. */
-  private pendingReplayState: Extract<SessionUpdate, { sessionUpdate: 'state_update' }> | null = null;
   /** Resume cursor: only advanced when the turn goes idle — a cursor into a still-streaming item would drop its tail (resume.rs replays up to and including the cursor at its CURRENT content). */
   private lastSettledItemId: string | null = null;
   /** Item ids already fed to the reconcile matcher — see `takeUnreconciledUserMessages()`. */
@@ -73,7 +72,6 @@ export class AcpSessionPlane {
       },
       resetAccumulator: () => {
         this.store.resetAll();
-        this.pendingReplayState = null;
         // `reconciledUserItemIds` deliberately survives: the replay that
         // refills the accumulator carries the same stable ids, and those
         // messages were reconciled once already (R3.3).
@@ -185,27 +183,30 @@ export class AcpSessionPlane {
   }
 
   /**
-   * Applies a frame to whichever accumulator is current (visible, or a full
-   * replay's staging target — D4). A `needs-replay` outcome (D3 strict mode)
-   * leaves state untouched and routes to a bounded resync instead. While
-   * staging, state/usage frames are captured for `completeReplay()` to
-   * replay once, against the published items — never dispatched live, so a
-   * mid-replay snapshot can't flap the run indicator or settle the cursor
-   * against the wrong (stale, still-visible) transcript.
+   * Applies a frame to whichever window owns it right now — the FIFO-front
+   * window's own stage, or `visible` when none is open (D4; per-window
+   * ownership, todo #385). A `needs-replay` outcome (D3 strict mode) leaves
+   * state untouched and routes to a bounded resync instead. While a FULL
+   * stage is staging, state frames are captured on THAT stage for its own
+   * `completeReplay()` to replay once, against the items it actually
+   * published — never dispatched live, so a mid-replay snapshot can't flap
+   * the run indicator or settle the cursor against the wrong (stale,
+   * still-visible) transcript.
    */
   private handleUpdate(update: SessionUpdate): void {
-    const outcome = this.store.target().apply(update);
+    const stage = this.attachment.currentReplayStage();
+    const outcome = this.store.apply(update, stage);
     this.attachment.recordApplyOutcome(outcome);
     if (outcome.kind === 'needs-replay') {
       this.attachment.routeNeedsReplay();
       return;
     }
-    if (this.store.isStaging) {
-      if (update.sessionUpdate === 'state_update') this.pendingReplayState = update;
+    if (stage?.full) {
+      if (update.sessionUpdate === 'state_update') stage.pendingState = update;
       return;
     }
     if (update.sessionUpdate === 'state_update') {
-      this.applyStateUpdate(update);
+      this.applyStateUpdate(update, this.store.accumulator.itemsInOrder);
       return;
     }
     if (update.sessionUpdate === 'usage_update') {
@@ -215,39 +216,35 @@ export class AcpSessionPlane {
     this.refreshMessages();
   }
 
-  /** `AcpSessionAttachmentHost.beginReplay` — a replay window opened (D4). */
-  private beginReplay(opts: { full: boolean }): void {
-    this.pendingReplayState = null;
-    if (opts.full) this.store.beginFullReplay();
-    else this.store.beginCursorReplay();
+  /** `AcpSessionAttachmentHost.beginReplay` — a replay window opened (D4); returns that window's own stage. */
+  private beginReplay(opts: { full: boolean }): ReplayStage {
+    return this.store.openStage(opts.full);
   }
 
   /**
-   * `AcpSessionAttachmentHost.completeReplay` — the oldest window closed
-   * normally. A full window publishes its staged items in one swap and
-   * dispatches `transcript.updated` exactly once, then reconciles run state
-   * and the settled cursor from whatever `state_update` it captured while
-   * staging — against the NOW-published items, never the pre-replay ones. A
-   * cursor window already dispatched live, frame by frame; this only clears
-   * `replaying`.
+   * `AcpSessionAttachmentHost.completeReplay` — THIS window's own
+   * `replay_complete` arrived normally. A full stage publishes its staged
+   * items in one swap and dispatches `transcript.updated` exactly once, then
+   * reconciles run state and the settled cursor from whatever `state_update`
+   * it captured while staging — against the NOW-published items, never the
+   * pre-replay ones. `store.publish` is a no-op (returns `null`) for a
+   * cursor stage, or a stage that already published/discarded — a cursor
+   * window already dispatched live, frame by frame, and a stale/duplicate
+   * call dispatches nothing.
    */
-  private completeReplay(opts: { full: boolean }): void {
-    if (!opts.full) {
-      this.store.endCursorReplay();
-      return;
-    }
-    const items = this.store.publishStaging();
+  private completeReplay(stage: ReplayStage): void {
+    const items = this.store.publish(stage);
+    if (!items) return;
     this.refreshFrom(items);
-    const state = this.pendingReplayState;
-    this.pendingReplayState = null;
-    if (state) this.applyStateUpdate(state);
+    const state = stage.pendingState;
+    stage.pendingState = null;
+    if (state) this.applyStateUpdate(state, items);
   }
 
-  /** `AcpSessionAttachmentHost.discardReplay` — a daemon `aborted:true`, or a previously client-aborted window's marker finally arriving. The visible transcript is untouched. */
-  private discardReplay(opts: { full: boolean }): void {
-    this.pendingReplayState = null;
-    if (opts.full) this.store.discardStaging();
-    else this.store.endCursorReplay();
+  /** `AcpSessionAttachmentHost.discardReplay` — THIS window's stage was discarded: a daemon `aborted:true`, or a previously client-aborted window's marker finally arriving. The visible transcript is untouched. */
+  private discardReplay(stage: ReplayStage): void {
+    stage.pendingState = null;
+    this.store.discard(stage);
   }
 
   /**
@@ -266,19 +263,19 @@ export class AcpSessionPlane {
     });
   }
 
-  private applyStateUpdate(update: Extract<SessionUpdate, { sessionUpdate: 'state_update' }>): void {
+  /** `items` is explicit — the live accumulator's for a live frame, or the just-published items for a full stage's own `completeReplay()` — never the stale, pre-publish visible transcript. */
+  private applyStateUpdate(
+    update: Extract<SessionUpdate, { sessionUpdate: 'state_update' }>,
+    items: AccumulatedItem[],
+  ): void {
     if (update.state === 'running') {
       this.runStop.cancel();
       this.host.dispatch({ type: 'run.started' });
       return;
     }
     if (update.state === 'idle') {
-      // The settled cursor is computed immediately — against the staging
-      // accumulator while a full window is staging (`completeReplay()`
-      // calls this against the just-published items instead), never the
-      // stale visible one — but the `run.stopped` dispatch itself waits out
-      // the settle delay (D7, finding 10).
-      const items = this.store.accumulator.itemsInOrder;
+      // The settled cursor is computed immediately — the `run.stopped`
+      // dispatch itself waits out the settle delay (D7, finding 10).
       this.lastSettledItemId = items.length > 0 ? items[items.length - 1]!.id : this.lastSettledItemId;
       this.runStop.scheduleStop();
     }

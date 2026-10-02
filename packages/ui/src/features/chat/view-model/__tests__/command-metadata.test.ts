@@ -25,7 +25,7 @@ it.each([0, 1234])('preserves Codex actions and exact duration %i on the native 
       toolCallId: 'cmd',
       toolName: 'Bash',
       args: { command: 'cat a' },
-      providerMetadata: { codex: commandExecution },
+      providerMetadata: { codex: commandExecution, mainframe: { acpStatus: 'completed' } },
     }),
   ]);
 });
@@ -67,7 +67,12 @@ it('keeps metadata through whole-meta updates, grouping, and subagent projection
       toolCallId: 'task',
       messages: [
         expect.objectContaining({
-          content: [expect.objectContaining({ toolCallId: 'cmd', providerMetadata: { codex: commandExecution } })],
+          content: [
+            expect.objectContaining({
+              toolCallId: 'cmd',
+              providerMetadata: { codex: commandExecution, mainframe: { acpStatus: 'completed' } },
+            }),
+          ],
         }),
       ],
     }),
@@ -88,4 +93,39 @@ it('does not attach provider metadata to legacy tool calls', () => {
     () => new Date(0),
   );
   expect(messages[0]?.content).toEqual([expect.not.objectContaining({ providerMetadata: expect.anything() })]);
+});
+
+it('projects lifecycle, Codex metadata and native timing together without altering arguments or output', () => {
+  const commandExecution = {
+    commandActions: [{ type: 'read', command: 'cat a', name: 'a', path: 'a' }],
+    reportedDurationMs: 123,
+  };
+  const toolCallTiming = { startedAt: 1790899200000, completedAt: 1790899200123 };
+  const messages = convertAcpItems(
+    [
+      {
+        kind: 'tool-call',
+        id: 'joint',
+        title: 'Bash',
+        status: 'completed',
+        rawInput: { command: 'cat a', description: 'Read a' },
+        content: [{ type: 'content', content: { type: 'text', text: 'file contents' } }],
+        meta: { '_mainframe.dev': { containerId: 'message', commandExecution, toolCallTiming } },
+      },
+    ],
+    () => new Date(0),
+  );
+  expect(messages[0]).toMatchObject({
+    id: 'message',
+    content: [
+      {
+        toolCallId: 'joint',
+        toolName: 'Bash',
+        args: { command: 'cat a', description: 'Read a' },
+        result: 'file contents',
+        timing: toolCallTiming,
+        providerMetadata: { codex: commandExecution, mainframe: { acpStatus: 'completed' } },
+      },
+    ],
+  });
 });

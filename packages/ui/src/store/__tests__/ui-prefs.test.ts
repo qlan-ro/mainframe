@@ -192,6 +192,7 @@ describe('useUiPrefs persistence', () => {
         'sideChatFrac',
         'sidebarVisible',
         'sidebarWidth',
+        'transcriptMode',
       ].sort(),
     );
     // Actions are never serialized.

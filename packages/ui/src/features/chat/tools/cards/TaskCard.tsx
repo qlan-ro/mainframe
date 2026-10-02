@@ -19,16 +19,15 @@
  */
 
 import { useState, useCallback } from 'react';
-import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
-import { ReadonlyThreadProvider, ThreadPrimitive } from '@assistant-ui/react';
+import type { ToolCallMessagePartComponent, ToolCallMessagePartProps } from '@assistant-ui/react';
 import { Bot, ChevronDown } from 'lucide-react';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
 import { cn } from '@/lib/utils';
 import { ErrorDot } from '../shared';
-import { boundedMessageComponents } from '../../messages/bounded-messages';
-import { NestedTranscriptProvider } from '../../messages/nested-transcript-context';
+import { SubagentTranscript } from './SubagentTranscript';
+import { useTranscriptScope } from '../../messages/compact/transcript-scope';
 
 // ── Header sub-components ─────────────────────────────────────────────────────
 
@@ -39,6 +38,28 @@ interface TaskHeaderProps {
   fullPrompt: string | undefined;
   isRunning: boolean;
   isError: boolean | undefined;
+}
+
+function TaskDescription({ description, fullPrompt }: Pick<TaskHeaderProps, 'description' | 'fullPrompt'>) {
+  if (!description) return null;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          data-testid="chat-task-description"
+          className="min-w-0 flex-1 truncate text-xs text-muted-foreground"
+          tabIndex={0}
+        >
+          {description}
+        </span>
+      </TooltipTrigger>
+      {fullPrompt && (
+        <TooltipContent side="bottom" className="max-w-[480px] whitespace-pre-wrap">
+          {fullPrompt}
+        </TooltipContent>
+      )}
+    </Tooltip>
+  );
 }
 
 function TaskHeader({ agentName, model, description, fullPrompt, isRunning, isError }: TaskHeaderProps) {
@@ -58,25 +79,7 @@ function TaskHeader({ agentName, model, description, fullPrompt, isRunning, isEr
       {/* Model (mono, muted) */}
       {model && <TruncatedWithTooltip text={model} className="font-mono text-xs text-muted-foreground" />}
 
-      {/* Description / prompt */}
-      {description && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span
-              data-testid="chat-task-description"
-              className="min-w-0 flex-1 truncate text-xs text-muted-foreground"
-              tabIndex={0}
-            >
-              {description}
-            </span>
-          </TooltipTrigger>
-          {fullPrompt && (
-            <TooltipContent side="bottom" className="max-w-[480px] whitespace-pre-wrap">
-              {fullPrompt}
-            </TooltipContent>
-          )}
-        </Tooltip>
-      )}
+      <TaskDescription description={description} fullPrompt={fullPrompt} />
 
       <span className="flex-1" />
 
@@ -101,25 +104,9 @@ function TaskHeader({ agentName, model, description, fullPrompt, isRunning, isEr
   );
 }
 
-// ── Subagent transcript ───────────────────────────────────────────────────────
-
-function SubagentTranscript({ messages }: { messages: readonly import('@assistant-ui/react').ThreadMessage[] }) {
-  return (
-    <div className="ml-[12px] border-l-2 border-border pl-3.5">
-      <NestedTranscriptProvider>
-        <ReadonlyThreadProvider messages={messages}>
-          <ThreadPrimitive.Messages components={boundedMessageComponents} />
-        </ReadonlyThreadProvider>
-      </NestedTranscriptProvider>
-    </div>
-  );
-}
-
 // ── TaskCard ──────────────────────────────────────────────────────────────────
 
-export const TaskCard: ToolCallMessagePartComponent = (part) => {
-  const { args, result, isError, status, messages } = part;
-
+function taskHeaderProps({ args, result, isError, status }: ToolCallMessagePartProps): TaskHeaderProps {
   const agentName = (args['subagent_type'] as string | undefined) ?? 'Task';
   const model = args['model'] as string | undefined;
   const rawDescription = (args['description'] as string | undefined) ?? (args['prompt'] as string | undefined) ?? '';
@@ -134,8 +121,14 @@ export const TaskCard: ToolCallMessagePartComponent = (part) => {
       : undefined;
 
   const isRunning = status?.type === 'running' || result === undefined;
+  return { agentName, model, description, fullPrompt, isRunning, isError };
+}
 
-  // Scroll lock: collapse animates so we track open state locally
+export const TaskCard: ToolCallMessagePartComponent = (part) => {
+  const { messages, toolCallId } = part;
+  const { messageId = '' } = useTranscriptScope();
+
+  const header = taskHeaderProps(part);
   const [open, setOpen] = useState(false);
   const handleOpenChange = useCallback((next: boolean) => setOpen(next), []);
 
@@ -150,22 +143,15 @@ export const TaskCard: ToolCallMessagePartComponent = (part) => {
       <CollapsibleTrigger
         data-testid="chat-task-toggle"
         className="w-full text-left transition-opacity hover:opacity-80"
-        aria-label={`Toggle ${agentName} transcript`}
+        aria-label={`Toggle ${header.agentName} transcript`}
       >
-        <TaskHeader
-          agentName={agentName}
-          model={model}
-          description={description}
-          fullPrompt={fullPrompt}
-          isRunning={isRunning}
-          isError={isError}
-        />
+        <TaskHeader {...header} />
       </CollapsibleTrigger>
 
       <CollapsibleContent>
         {messages && messages.length > 0 ? (
           <div className="mt-2">
-            <SubagentTranscript messages={messages} />
+            <SubagentTranscript messages={messages} messageId={messageId} toolCallId={toolCallId} />
           </div>
         ) : null}
       </CollapsibleContent>

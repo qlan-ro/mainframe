@@ -1,4 +1,5 @@
 import { useTheme, type ThemeMode, type UiScale } from '../../../../store/theme';
+import { useUiPrefs, type TranscriptMode } from '@/store/ui-prefs';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 const MODES: { id: ThemeMode; label: string }[] = [
@@ -11,6 +12,11 @@ const UI_SIZES: { id: UiScale; label: string }[] = [
   { id: 'compact', label: 'Compact' },
   { id: 'normal', label: 'Normal' },
   { id: 'large', label: 'Large' },
+];
+
+const TRANSCRIPT_MODES: { id: TranscriptMode; label: string }[] = [
+  { id: 'verbose', label: 'Verbose' },
+  { id: 'compact', label: 'Compact' },
 ];
 
 export function PickerRow<T extends string>({
@@ -31,6 +37,8 @@ export function PickerRow<T extends string>({
       <span className="text-sm text-muted-foreground">{label}</span>
       <ToggleGroup
         type="single"
+        aria-label={label}
+        data-testid={`${prefix}-group`}
         variant="outline"
         size="sm"
         value={current}
@@ -53,6 +61,8 @@ export function AppearanceControls() {
   const uiScale = useTheme((s) => s.uiScale);
   const setMode = useTheme((s) => s.setMode);
   const setUiScale = useTheme((s) => s.setUiScale);
+  const transcriptMode = useUiPrefs((s) => s.transcriptMode);
+  const setTranscriptMode = useUiPrefs((s) => s.setTranscriptMode);
 
   return (
     <div className="flex flex-col gap-3">
@@ -64,6 +74,13 @@ export function AppearanceControls() {
         onSelect={setUiScale}
       />
       <PickerRow label="Mode" options={MODES} current={mode} prefix="settings-appearance-mode" onSelect={setMode} />
+      <PickerRow
+        label="Transcript"
+        options={TRANSCRIPT_MODES}
+        current={transcriptMode}
+        prefix="settings-appearance-transcript"
+        onSelect={setTranscriptMode}
+      />
     </div>
   );
 }

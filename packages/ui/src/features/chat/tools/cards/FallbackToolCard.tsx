@@ -1,5 +1,7 @@
 'use client';
 
+import { useCompactDetail } from '../shared/compact-detail-context';
+
 /**
  * FallbackToolCard — the default/unregistered-tool card, extended with
  * tool-result image thumbnails (todo #363).
@@ -25,6 +27,7 @@ import {
 import { resolveResultText, resultImages, ToolResultImageThumbs } from '../shared';
 
 export const FallbackToolCard: ToolCallMessagePartComponent = ({ toolCallId, toolName, argsText, result, status }) => {
+  const compactDetail = useCompactDetail();
   const isCancelled = status?.type === 'incomplete' && status.reason === 'cancelled';
   const images = resultImages(result);
   const { text } = resolveResultText(result);
@@ -33,7 +36,7 @@ export const FallbackToolCard: ToolCallMessagePartComponent = ({ toolCallId, too
   const resultForDisplay = images.length > 0 ? text || undefined : result;
 
   return (
-    <ToolFallbackRoot className={cn(isCancelled && 'opacity-60')}>
+    <ToolFallbackRoot defaultOpen={compactDetail} className={cn(isCancelled && 'opacity-60')}>
       <div className="flex w-full items-center gap-2">
         <ToolFallbackTrigger toolName={toolName} status={status} className="min-w-0 flex-1" />
         {images.length > 0 && (

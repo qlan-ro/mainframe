@@ -11,6 +11,7 @@ import {
   type AcpSessionAttachmentHost,
   type AcpSessionClientPort,
 } from '../acp-session-attachment';
+import { ReplayStage } from '../acp-replay-stage';
 import { CHAT_ID, makeFakeAcpClient } from './acp-test-kit';
 
 export type ResumeResult = Awaited<ReturnType<AcpSessionClientPort['resume']>>;
@@ -26,9 +27,9 @@ export function makeHost(overrides: { hasAccumulatedItems?: () => boolean } = {}
   const resetSettledCursor = vi.fn<() => void>(() => {
     state.settledItemId = null;
   });
-  const beginReplay = vi.fn<(opts: { full: boolean }) => void>();
-  const completeReplay = vi.fn<(opts: { full: boolean }) => void>();
-  const discardReplay = vi.fn<(opts: { full: boolean }) => void>();
+  const beginReplay = vi.fn<(opts: { full: boolean }) => ReplayStage>((opts) => new ReplayStage(opts.full, null));
+  const completeReplay = vi.fn<(stage: ReplayStage) => void>();
+  const discardReplay = vi.fn<(stage: ReplayStage) => void>();
   const host: AcpSessionAttachmentHost = {
     getChatId: () => CHAT_ID,
     dispatch,

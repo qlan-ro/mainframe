@@ -26,6 +26,7 @@ import type {
 } from '../../../lib/daemon/acp-notification-router';
 import type { CapabilitiesListener } from '../../../lib/daemon/acp-capability-state';
 import type { GapListener, ReplayCursor } from '../../../lib/daemon/acp-client';
+import type { ReplayStage } from './acp-replay-stage';
 import type { ChatStateEvent } from './chat-thread-state';
 
 /** The `AcpFacadeClient` surface the plane needs — narrowed so a test double doesn't reimplement the whole client. */
@@ -65,10 +66,10 @@ export interface AcpSessionAttachmentHost {
   onSessionUpdate(update: SessionUpdate): void;
   onPermissionRequest(rpcId: JsonRpcRequestId, request: RequestPermissionRequest): void;
   onGateResolvedForSession(requestId: string): void;
-  /** A replay window opened — stage off-screen (full) or mark the visible accumulator replaying (cursor). */
-  beginReplay(opts: { full: boolean }): void;
-  /** The oldest window's `replay_complete` arrived with no `aborted` flag — publish (full) or finish (cursor). */
-  completeReplay(opts: { full: boolean }): void;
-  /** The oldest window was discarded — a daemon `aborted:true`, or a previously client-aborted window's marker finally arriving. Staging (if any) is thrown away; the visible transcript is untouched. */
-  discardReplay(opts: { full: boolean }): void;
+  /** A replay window opened — returns that window's own stage: an off-screen accumulator (full) or a placeholder marking the visible accumulator replaying (cursor). */
+  beginReplay(opts: { full: boolean }): ReplayStage;
+  /** A window's own `replay_complete` arrived with no `aborted` flag — publish (full) or finish (cursor) THAT window's stage, never another window's. */
+  completeReplay(stage: ReplayStage): void;
+  /** A window's own stage was discarded — a daemon `aborted:true`, or a previously client-aborted window's marker finally arriving. That window's staging (if any) is thrown away; the visible transcript is untouched. */
+  discardReplay(stage: ReplayStage): void;
 }
