@@ -1,5 +1,14 @@
 # @qlan-ro/mainframe-app-tauri
 
+## 2.2.3
+
+### Patch Changes
+
+- [#757](https://github.com/qlan-ro/mainframe/pull/757) [`8684aa5`](https://github.com/qlan-ro/mainframe/commit/8684aa51f75c2bf95d3ece2e96a8a25ec99591b9) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fix new chats showing no transcript at all. A session resume that read the display snapshot before the chat's first prompt seeded the incremental display projector with empty history; every message appended afterward was then silently skipped instead of being folded into the chat, so the daemon never sent any transcript items.
+
+- Updated dependencies [[`2f933a8`](https://github.com/qlan-ro/mainframe/commit/2f933a8ecabfa64cd13e27d5d946dcde241330b2)]:
+  - @qlan-ro/mainframe-ui@2.6.1
+
 ## 2.2.2
 
 ### Patch Changes
