@@ -120,3 +120,30 @@ it('waits for confirmed Claude completion while preserving its final node', asyn
   expect(view.container.querySelector('[data-message-id="final"] [data-text-part]')).toBe(node);
   expect(screen.queryByText('Claude work')).toBeNull();
 });
+it('shows precise Codex duration and suppresses only the matching native duration', async () => {
+  const timing = { startedAtMs: 10000, completedAtMs: 12000, durationMs: 1900 };
+  const original = finalMessage({ timing });
+  const final = {
+    ...original,
+    metadata: {
+      ...original.metadata,
+      timing: { totalStreamTime: 1900, streamStartTime: 0, totalChunks: 1, toolCallCount: 0 },
+      custom: { mainframe: { ...original.metadata.custom.mainframe, cost: 0.01 } },
+    },
+  };
+  const view = render(
+    <TurnFixture rootId="precise-duration" messages={[turnMessage('work', 'Work', { timing }), final]} />,
+  );
+  expect(screen.getByRole('button', { name: 'Worked for 1.90s' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Message cost' })).toBeVisible();
+  view.rerender(
+    <TurnFixture
+      rootId="precise-duration"
+      messages={[
+        turnMessage('work', 'Work', { timing }),
+        { ...final, metadata: { ...final.metadata, timing: { ...final.metadata.timing, totalStreamTime: 2000 } } },
+      ]}
+    />,
+  );
+  expect(await screen.findByRole('button', { name: 'Message timing' })).toHaveTextContent('2.00s');
+});

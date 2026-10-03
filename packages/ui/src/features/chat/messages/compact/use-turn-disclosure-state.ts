@@ -26,6 +26,7 @@ export function useTurnDisclosureState(
   };
   useLayoutEffect(() => {
     const next = new Set(automatic);
+    const blocked = guard.collectBlocked();
     for (const [key, turn] of model.turns) {
       if (turn.invalid) turnDisclosureStore.invalidate(key);
       const close =
@@ -34,7 +35,7 @@ export function useTurnDisclosureState(
         !turnDisclosureStore.isInvalid(key) &&
         !backgroundAgent &&
         !turn.activeAgent &&
-        !guard.blocked(turn);
+        !blocked.has(key);
       if (turnDisclosureStore.get(key) !== undefined || close === next.has(key)) continue;
       anchors.current.get(key)?.();
       if (close) next.add(key);

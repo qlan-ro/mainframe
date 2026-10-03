@@ -150,3 +150,43 @@ it('keeps pending native permissions and full question cards outside collapsed w
   expect(await screen.findByText('Which route?')).toBeVisible();
   expect(screen.queryByText('Hidden work')).toBeNull();
 });
+it('keeps confirmed Claude terminal thinking inside both work and activity disclosures', async () => {
+  const { turnSource } = await import('./turn-fixtures');
+  const { fixtureMessage } = await import('./fixtures');
+  const context = {
+    provider: 'claude' as const,
+    phase: 'final_answer' as const,
+    state: 'completed' as const,
+    finalEligible: true,
+  };
+  const message = fixtureMessage(
+    [
+      { type: 'reasoning', text: 'Terminal thought' },
+      { type: 'text', text: 'Claude answer' },
+    ],
+    'terminal',
+  );
+  const terminal = {
+    ...message,
+    metadata: {
+      ...message.metadata,
+      custom: {
+        mainframe: {
+          partSources: {
+            0: [turnSource('thinking', 0, 16, context)],
+            1: [turnSource('answer', 0, 13, context)],
+          },
+        },
+      },
+    },
+  };
+  render(<TurnFixture rootId="claude-terminal-thinking" messages={[terminal]} />);
+  expect(screen.getByRole('button', { name: 'Work details' })).toHaveAttribute('aria-expanded', 'false');
+  expect(screen.queryByText('Terminal thought')).toBeNull();
+  expect(screen.getByText('Claude answer')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Work details' }));
+  expect(screen.queryByText('Terminal thought')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Thought' }));
+  expect(screen.getAllByText('Terminal thought')).toHaveLength(1);
+  expect(screen.getAllByText('Claude answer')).toHaveLength(1);
+});

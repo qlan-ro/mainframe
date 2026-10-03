@@ -2,23 +2,32 @@ import type { ThreadMessage } from '@assistant-ui/react';
 import { activityMemberIdentity, buildActivityGroups } from './build-activity-groups';
 import { resolveToolStatus } from './tool-status';
 import { toolKind } from './tool-kind';
-import { messageSourceUnits } from './turn-source-units';
+import { TurnPresentationCache } from './turn-presentation-cache';
+import { indexDisplayUnits, indexSourceTurns } from './turn-disclosure-index';
 import { verifiedTurnTiming, turnDuration } from './turn-timing';
 import type { DisplayUnit, SourceUnit, TurnDisclosure, TurnPresentation, TurnScope } from './turn-types';
 
-function groupUnits(units: readonly SourceUnit[], scope: TurnScope): DisplayUnit[] {
+function groupUnits(units: readonly SourceUnit[], scope: TurnScope, cache: TurnPresentationCache): DisplayUnit[] {
   const chunks: SourceUnit[][] = [];
   for (const unit of units) {
     const last = chunks[chunks.length - 1];
-    if (last && last[0]!.work === unit.work && last[0]!.turnKey === unit.turnKey) last.push(unit);
+    if (
+      last &&
+      last[0]!.work === unit.work &&
+      last[0]!.turnKey === unit.turnKey &&
+      (unit.turnKey || last[0]!.messageId === unit.messageId)
+    )
+      last.push(unit);
     else chunks.push([unit]);
   }
   return chunks.flatMap((chunk, index) =>
-    buildActivityGroups(chunk, scope.pendingToolIds, index === chunks.length - 1).map((entry) => {
-      if (entry.type === 'standalone') return entry.member as SourceUnit;
-      const members = entry.members as readonly SourceUnit[];
-      return { ...members[0]!, activity: { group: entry, members } };
-    }),
+    cache.group(chunk, index === chunks.length - 1, () =>
+      buildActivityGroups(chunk, scope.pendingToolIds, index === chunks.length - 1).map((entry) => {
+        if (entry.type === 'standalone') return entry.member as SourceUnit;
+        const members = entry.members as readonly SourceUnit[];
+        return { ...members[0]!, activity: { group: entry, members } };
+      }),
+    ),
   );
 }
 
@@ -30,30 +39,30 @@ function unsafePart(unit: SourceUnit, scope: TurnScope): boolean {
 }
 function turn(
   units: readonly SourceUnit[],
-  all: readonly (SourceUnit | null)[],
+  interrupted: boolean,
+  workKeys: readonly string[],
   scope: TurnScope,
   now: number,
 ): TurnDisclosure {
   const key = units[0]!.turnKey!;
   const contexts = units.map((unit) => unit.presentation!);
-  const first = all.indexOf(units[0]!),
-    last = all.indexOf(units[units.length - 1]!);
   const unsafe =
     contexts.some((context) => ['cancelled', 'failed', 'invalid', 'unknown'].includes(context.state)) ||
     units.some((unit) => unsafePart(unit, scope)) ||
-    all.slice(first, last + 1).some((unit) => !unit || unit.turnKey !== key);
+    interrupted;
   const finals = units.filter((unit) => unit.final);
+  const completed = contexts.every((context) => context.state === 'completed');
   const eligible = finals.some((unit) =>
     unit.presentation?.provider === 'codex'
       ? ['running', 'completed'].includes(unit.presentation.state)
-      : unit.presentation?.provider === 'claude' && contexts.every((context) => context.state === 'completed'),
+      : unit.presentation?.provider === 'claude' && completed,
   );
   const work = units.filter((unit) => unit.work && (unit.part.type !== 'text' || unit.part.text.trim()));
   return {
     key,
-    workKeys: work.map((unit) => unit.key),
+    workKeys,
     innerKeys: work.map(activityMemberIdentity),
-    firstWorkKey: work[0]?.key,
+    firstWorkKey: workKeys[0],
     available: work.length > 0 && eligible,
     unsafe,
     invalid: contexts.some((context) => context.state === 'invalid'),
@@ -104,43 +113,33 @@ export function buildTurnDisclosures(
   messages: readonly ThreadMessage[],
   scope: TurnScope,
   now = Date.now(),
+  cache = new TurnPresentationCache(),
 ): TurnPresentation {
-  const byMessage = messages.map((message) => ({ message, units: messageSourceUnits(message, scope) }));
-  const all = byMessage.flatMap(({ message, units }) =>
-    message.role === 'assistant' && units.length ? units : [null],
+  cache.begin(scope);
+  const byMessage = messages.map((message) => ({ message, units: cache.sourceUnits(message, scope) }));
+  const all = byMessage.flatMap(({ units }, index) => (units.length ? units : [boundaryUnit(index, scope)]));
+  const sourceIndex = indexSourceTurns(all);
+  const groups = groupUnits(all, scope, cache);
+  const displayIndex = indexDisplayUnits(groups);
+  const turns = new Map(
+    [...sourceIndex.members].map(([key, units]) => [
+      key,
+      cache.turn(turn(units, sourceIndex.interrupted.has(key), displayIndex.work.get(key) ?? [], scope, now)),
+    ]),
   );
-  const members = new Map<string, SourceUnit[]>();
-  for (const unit of all)
-    if (unit?.turnKey) {
-      const group = members.get(unit.turnKey) ?? [];
-      group.push(unit);
-      members.set(unit.turnKey, group);
-    }
-  const turns = new Map([...members].map(([key, units]) => [key, turn(units, all, scope, now)]));
-  const groups = groupUnits(
-    all.map((unit, index) => unit ?? boundaryUnit(index, scope)),
-    scope,
-  );
-  for (const [key, model] of turns) {
-    const workKeys = groups.filter((unit) => unit.turnKey === key && unit.work).map((unit) => unit.key);
-    turns.set(key, { ...model, workKeys, firstWorkKey: workKeys[0] });
-  }
-  return {
-    turns,
-    messages: byMessage.map(({ message, units }) => ({
+  const presentations = byMessage.map(({ message, units }) =>
+    cache.message({
       messageId: message.id,
       native: !units.length,
-      footerInDetails:
-        units.length > 0 &&
-        units.every((unit) =>
-          groups.some(
-            (group) =>
-              group.activity?.members.includes(unit) &&
-              group.activity.members.some((member) => member.messageId !== message.id),
-          ),
-        ),
-      units: groups.filter((unit) => unit.messageId === message.id),
+      footerInDetails: units.length > 0 && units.every((unit) => displayIndex.shared.has(unit)),
+      units: displayIndex.messages.get(message.id) ?? [],
       timingTurnKey: timingKey(message, units, turns, now),
-    })),
+    }),
+  );
+  cache.finish();
+  return {
+    turns,
+    messages: presentations,
+    messagesById: new Map(presentations.map((message) => [message.messageId, message])),
   };
 }

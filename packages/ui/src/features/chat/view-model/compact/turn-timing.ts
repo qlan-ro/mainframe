@@ -12,14 +12,22 @@ export function verifiedTurnTiming(units: readonly SourceUnit[], now: number): T
       timing[key] = value;
     }
   }
-  const { startedAtMs: start, completedAtMs: end, durationMs } = timing;
   if (
-    start !== undefined &&
-    end !== undefined &&
-    (end < start || (durationMs !== undefined && durationMs !== end - start))
+    !consistentInterval(
+      timing,
+      units.every((unit) => unit.presentation?.provider === 'codex'),
+    )
   )
     return undefined;
   return Object.keys(timing).length ? timing : undefined;
+}
+function consistentInterval(timing: TurnTiming, codex: boolean): boolean {
+  const { startedAtMs: start, completedAtMs: end, durationMs } = timing;
+  if (start === undefined || end === undefined) return true;
+  if (end < start) return false;
+  if (durationMs === undefined || durationMs === end - start) return true;
+  // Codex endpoints have whole-second precision; durationMs retains sub-second precision.
+  return codex && start % 1000 === 0 && end % 1000 === 0 && Math.abs(durationMs - (end - start)) < 1000;
 }
 export function turnDuration(timing: TurnTiming | undefined, running: boolean, now: number): number | undefined {
   if (!timing) return undefined;

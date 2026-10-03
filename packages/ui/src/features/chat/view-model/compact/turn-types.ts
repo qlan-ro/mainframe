@@ -42,6 +42,7 @@ export interface MessagePresentation {
 }
 export interface TurnPresentation {
   readonly messages: readonly MessagePresentation[];
+  readonly messagesById: ReadonlyMap<string, MessagePresentation>;
   readonly turns: ReadonlyMap<string, TurnDisclosure>;
 }
 export function turnKey(scope: TurnScope, presentation: TranscriptPresentation): string {

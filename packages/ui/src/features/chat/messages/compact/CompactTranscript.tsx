@@ -1,6 +1,7 @@
 import { useMemo, useRef } from 'react';
 import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
 import { useChatExtras } from '../../runtime/chat-extras';
+import { TurnPresentationCache } from '../../view-model/compact/turn-presentation-cache';
 import { buildTurnDisclosures } from '../../view-model/compact/build-turn-disclosures';
 import { boundedMessageComponents } from '../bounded-messages';
 import { MessageRenderBoundary } from '../MessageRenderBoundary';
@@ -13,7 +14,7 @@ import { useTurnDisclosureState } from './use-turn-disclosure-state';
 function AssistantSlice() {
   const id = useAuiState((s) => s.message.id);
   const { model } = useTurnPresentation();
-  const presentation = model.messages.find((message) => message.messageId === id);
+  const presentation = model.messagesById.get(id);
   return (
     <MessageRenderBoundary>
       {!presentation || presentation.native ? (
@@ -31,7 +32,8 @@ export function CompactTranscript() {
   const extras = useChatExtras();
   const backgroundAgent = Object.values(extras?.state.backgroundTasks ?? {}).some((task) => task.kind === 'agent');
   const root = useRef<HTMLDivElement>(null);
-  const model = useMemo(() => buildTurnDisclosures(messages, scope), [messages, scope]);
+  const cache = useMemo(() => new TurnPresentationCache(), []);
+  const model = useMemo(() => buildTurnDisclosures(messages, scope, Date.now(), cache), [messages, scope, cache]);
   const state = useTurnDisclosureState(model, root, backgroundAgent);
   return (
     <TurnPresentationProvider value={{ model, ...state }}>

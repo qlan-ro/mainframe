@@ -4,8 +4,9 @@ import type { ActivityEntry, ActivityMember } from './types';
 
 function routine(member: ActivityMember, pending: ReadonlySet<string>): boolean {
   const { part, presentation } = member;
-  if (member.boundary || (presentation?.phase && presentation.phase !== 'work')) return false;
+  if (member.boundary) return false;
   if (part.type === 'reasoning') return part.status.type !== 'incomplete';
+  if (presentation?.phase && presentation.phase !== 'work') return false;
   if (part.type !== 'tool-call' || isFullCard(part.toolName)) return false;
   const kind = toolKind(part.toolName);
   return kind !== 'unknown' && kind !== 'subagent' && ['running', 'success'].includes(resolveToolStatus(part, pending));

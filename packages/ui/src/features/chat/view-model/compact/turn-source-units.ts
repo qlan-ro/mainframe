@@ -33,7 +33,8 @@ function unit(message: ThreadMessage, index: number, scope: TurnScope, source?: 
   const protectedUnit = protectedPart(part, scope);
   const final =
     part.type === 'text' && !!part.text.trim() && context?.phase === 'final_answer' && context.finalEligible;
-  const work = !!context && !protectedUnit && ['work', 'commentary'].includes(context.phase ?? '');
+  const work =
+    !!context && !protectedUnit && (part.type === 'reasoning' || ['work', 'commentary'].includes(context.phase ?? ''));
   return {
     ...scope,
     key: JSON.stringify([

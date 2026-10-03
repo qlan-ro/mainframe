@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import type { TurnDisclosure } from '../../../view-model/compact/turn-types';
 import { useUiPrefs } from '@/store/ui-prefs';
 import { TurnFixture, finalMessage, turnMessage } from './turn-fixtures';
 import { clearSelection, expectControlsResolve, selectText, turnTool } from './turn-test-support';
@@ -108,4 +109,52 @@ it('coordinates native disclosure scroll locking with the viewport bottom-pin co
   expect(beginInteraction).toHaveBeenCalledTimes(1);
   expect(viewport.scrollTop).toBe(300);
   await waitFor(() => expect(release).toHaveBeenCalledTimes(1));
+});
+it('collects blocked turn keys with one DOM query for many historical turns', async () => {
+  const { collectBlockedTurnKeys } = await import('../use-turn-interaction-guard');
+  const root = document.createElement('div');
+  const turns = new Map<string, TurnDisclosure>();
+  for (let index = 0; index < 100; index++) {
+    const key = `turn-${index}`;
+    const slot = document.createElement('div');
+    slot.dataset.workTurn = key;
+    root.append(slot);
+    turns.set(key, {
+      key,
+      innerKeys: [],
+      workKeys: [],
+      available: true,
+      unsafe: false,
+      invalid: false,
+      activeAgent: false,
+      running: false,
+    });
+  }
+  const query = vi.spyOn(root, 'querySelectorAll');
+  expect(collectBlockedTurnKeys(root, turns).size).toBe(0);
+  expect(query).toHaveBeenCalledTimes(1);
+  expect(query).toHaveBeenCalledWith('[data-work-turn]');
+});
+it('runs one guard collection per update rather than one for each eligible turn', async () => {
+  const messages = Array.from({ length: 20 }, (_, index) => [
+    turnMessage(`work-${index}`, `Work ${index}`, { turnId: `${index}` }),
+    turnMessage(`final-${index}`, `Answer ${index}`, {
+      turnId: `${index}`,
+      phase: 'final_answer',
+      finalEligible: true,
+    }),
+  ]).flat();
+  const view = render(<TurnFixture rootId="many-guards" messages={messages} />);
+  await act(async () => {});
+  const root = screen.getByTestId('chat-compact-transcript');
+  const query = vi.spyOn(root, 'querySelectorAll');
+  const updated = [
+    ...messages.slice(0, -1),
+    turnMessage('final-19', 'Answer grows', { turnId: '19', phase: 'final_answer', finalEligible: true }),
+  ];
+  view.rerender(<TurnFixture rootId="many-guards" messages={updated} />);
+  await screen.findByText('Answer grows');
+  const collections = query.mock.calls.filter(([selector]) => selector === '[data-work-turn]').length;
+  expect(collections).toBeGreaterThan(0);
+  expect(collections).toBeLessThanOrEqual(2);
 });

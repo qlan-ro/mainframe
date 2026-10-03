@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo } from 'react';
+import { createContext, memo, useContext, useMemo } from 'react';
 import { MessagePrimitive, ThreadPrimitive, useAuiState, type ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { Message, MessageContent, MessageFooter } from '@/components/ui/message';
 import type { DisplayUnit, SourceUnit, MessagePresentation } from '../../view-model/compact/turn-types';
@@ -23,11 +23,10 @@ const nativeComponents = {
     <ZoomableImage src={image} className="max-h-80 max-w-full rounded-md border border-border object-contain" />
   ),
 };
-const Detail = createContext<{ unit: SourceUnit; footer: boolean } | null>(null);
+const Detail = createContext<{ unit: SourceUnit; footer: boolean; timing: boolean } | null>(null);
 function SourceDetail() {
-  const { unit, footer } = useContext(Detail)!;
-  const { model } = useTurnPresentation();
-  const timing = model.messages.find((message) => message.messageId === unit.messageId)?.timingTurnKey;
+  const { unit, footer, timing } = useContext(Detail)!;
+  const indices = useMemo(() => [unit.index], [unit.index]);
   const parent = useTranscriptScope();
   const scope = useMemo(() => ({ ...parent, messageId: unit.messageId }), [parent, unit.messageId]);
   return (
@@ -36,7 +35,7 @@ function SourceDetail() {
         {unit.part.type === 'reasoning' ? (
           <CompactTextSlice unit={unit} />
         ) : (
-          <CompactDetailRows indices={[unit.index]} expanded />
+          <CompactDetailRows indices={indices} expanded />
         )}
         {footer && (
           <MessageFooter className="min-h-6 gap-2 px-0">
@@ -50,27 +49,42 @@ function SourceDetail() {
   );
 }
 const detailComponents = { AssistantMessage: SourceDetail, UserMessage: () => null };
+const ScopedDetail = memo(function ScopedDetail({
+  unit,
+  footer,
+  timing,
+}: {
+  unit: SourceUnit;
+  footer: boolean;
+  timing: boolean;
+}) {
+  const value = useMemo(() => ({ unit, footer, timing }), [unit, footer, timing]);
+  return (
+    <Detail.Provider value={value}>
+      <ThreadPrimitive.Unstable_MessageById messageId={unit.messageId} components={detailComponents} />
+    </Detail.Provider>
+  );
+});
 function ActivityDetails({ members }: { members: readonly SourceUnit[] }) {
   const { model } = useTurnPresentation();
+  const lastSources = useMemo(() => new Map(members.map((unit) => [unit.messageId, unit])), [members]);
   return (
     <>
-      {members.map((unit, index) => (
-        <Detail.Provider
-          key={unit.key}
-          value={{
-            unit,
-            footer:
-              !members.slice(index + 1).some((member) => member.messageId === unit.messageId) &&
-              model.messages.find((message) => message.messageId === unit.messageId)?.footerInDetails === true,
-          }}
-        >
-          <ThreadPrimitive.Unstable_MessageById messageId={unit.messageId} components={detailComponents} />
-        </Detail.Provider>
-      ))}
+      {members.map((unit) => {
+        const source = model.messagesById.get(unit.messageId);
+        return (
+          <ScopedDetail
+            key={unit.key}
+            unit={unit}
+            footer={lastSources.get(unit.messageId) === unit && source?.footerInDetails === true}
+            timing={!!source?.timingTurnKey}
+          />
+        );
+      })}
     </>
   );
 }
-function Content({ unit }: { unit: DisplayUnit }) {
+const Content = memo(function Content({ unit }: { unit: DisplayUnit }) {
   if (unit.activity)
     return (
       <CompactActivityGroup group={unit.activity.group} details={<ActivityDetails members={unit.activity.members} />} />
@@ -79,7 +93,7 @@ function Content({ unit }: { unit: DisplayUnit }) {
   if (unit.part.type === 'tool-call' && !isFullCard(unit.part.toolName))
     return <CompactDetailRows indices={[unit.index]} />;
   return <MessagePrimitive.PartByIndex index={unit.index} components={nativeComponents} />;
-}
+});
 function Slot({ unit }: { unit: DisplayUnit }) {
   const state = useTurnPresentation();
   const turn = unit.turnKey && state.model.turns.get(unit.turnKey);
