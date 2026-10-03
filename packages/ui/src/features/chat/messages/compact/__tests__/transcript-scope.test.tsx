@@ -12,7 +12,7 @@ import { SideChatScopeProvider } from '@/features/side-chat/side-chat-scope';
 import { buildChatExtras } from '../../../runtime/chat-extras';
 import { createChatThreadState, type ChatThreadState } from '../../../controller/chat-thread-state';
 import type { AcpChatController } from '../../../controller/acp-chat-controller';
-import * as model from '../../../view-model/compact/build-compact-rows';
+import * as model from '../../../view-model/compact/build-activity-groups';
 import { AssistantMessage } from '../../AssistantMessage';
 import { NestedTranscriptScope, RootTranscriptScope, useTranscriptScope } from '../transcript-scope';
 import { fixtureMessage, fixtureTool } from './fixtures';
@@ -110,7 +110,7 @@ beforeEach(() => {
 });
 
 it('does not rebuild historical rows when only the active message streams with new extras', async () => {
-  const build = vi.spyOn(model, 'buildCompactRows');
+  const build = vi.spyOn(model, 'buildActivityGroups');
   const state = createChatThreadState('scope-chat');
   const view = render(<ScopeFixture messages={[history, active('first chunk')]} state={state} />);
   await screen.findByText('first chunk');
@@ -140,7 +140,7 @@ it('refreshes permission statuses and carries root identity and pending IDs thro
   const state = createChatThreadState('scope-chat');
   const messages = [active('awaiting input')];
   const view = render(<ScopeFixture messages={messages} state={state} />);
-  await screen.findByRole('button', { name: /Reading/ });
+  await screen.findByRole('button', { name: 'Read files' });
   view.rerender(<ScopeFixture messages={messages} state={withPermission(state)} />);
   await screen.findByRole('button', { name: /Waiting for approval/ });
   expect(readScope()).toMatchObject({
@@ -150,7 +150,7 @@ it('refreshes permission statuses and carries root identity and pending IDs thro
     pendingToolIds: ['active-read'],
   });
   view.rerender(<ScopeFixture messages={messages} state={{ ...state, chatId: 'other-chat' }} sideId="other-root" />);
-  await screen.findByRole('button', { name: /Reading/ });
+  await screen.findByRole('button', { name: 'Read files' });
   await waitFor(() =>
     expect(readScope()).toMatchObject({ rootThreadId: 'other-root', chatId: 'other-chat', pendingToolIds: [] }),
   );

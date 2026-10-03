@@ -11,7 +11,7 @@ afterEach(() => {
 it('supports keyboard disclosure with a stable accessible name and bounded detail area', async () => {
   const user = userEvent.setup();
   render(<CompactFixture rootId="keyboard" messages={[fixtureMessage([fixtureTool()])]} />);
-  const toggle = screen.getByRole('button', { name: 'Read /src/a.ts' });
+  const toggle = screen.getByRole('button', { name: 'Read files' });
   act(() => toggle.focus());
   await user.keyboard('{Enter}');
   expect(toggle).toHaveAttribute('aria-expanded', 'true');
@@ -48,9 +48,12 @@ it('keeps known empty completion stopped while a missing terminal signal remains
       ]}
     />,
   );
-  expect(screen.getByRole('button', { name: 'Read /src/a.ts' })).toBeInTheDocument();
+  const toggle = screen.getByRole('button', { name: 'Reading /src/a.ts' });
+  expect(toggle).toBeInTheDocument();
   expect(screen.getByLabelText('running')).toHaveClass('motion-reduce:animate-none');
   expect(screen.getAllByLabelText('running')).toHaveLength(1);
+  fireEvent.click(toggle);
+  expect(screen.getByText('Read /src/a.ts')).toBeInTheDocument();
 });
 it('ticks a supplied clock without rebuilding compact rows or changing disclosure', () => {
   vi.useFakeTimers();

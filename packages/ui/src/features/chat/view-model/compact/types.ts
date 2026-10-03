@@ -33,3 +33,23 @@ export type CompactRow =
   | CompactToolRow
   | { type: 'reasoning'; indices: number[]; running: boolean; label: 'Thinking' | 'Thought' }
   | { type: 'passthrough'; indices: number[] };
+
+export interface ActivityMember extends IndexedPart {
+  readonly messageId: string;
+  readonly rootThreadId: string;
+  readonly ancestors: readonly string[];
+  readonly sourceMessageId?: string;
+  readonly sourceBlockIndex?: number;
+  readonly presentation?: import('@qlan-ro/mainframe-types').TranscriptPresentation;
+  readonly boundary?: boolean;
+}
+export interface ActivityGroup {
+  readonly type: 'activity';
+  readonly members: readonly ActivityMember[];
+  readonly active: boolean;
+}
+export type ActivityEntry = ActivityGroup | { readonly type: 'standalone'; readonly member: ActivityMember };
+export interface ActivityLabel {
+  readonly identity: string;
+  readonly text: string;
+}
