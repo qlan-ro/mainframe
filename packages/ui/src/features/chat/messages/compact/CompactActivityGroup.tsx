@@ -10,6 +10,7 @@ import { buildCompactRows } from '../../view-model/compact/build-compact-rows';
 import { CompactElapsed } from './CompactElapsed';
 import { CompactToolRow } from './CompactToolRow';
 import { CompactToolDetails } from './CompactToolDetails';
+import { ReasoningText } from '../../parts/ReasoningText';
 import { CompactReasoningRow } from './CompactReasoningRow';
 import { disclosureKey } from './disclosure-store';
 import { TranscriptScopeProvider, useTranscriptScope } from './transcript-scope';
@@ -34,9 +35,6 @@ function ExpandedToolDetails({ row }: { row: ToolRow }) {
       <CompactToolDetails indices={row.indices} />
     </div>
   );
-}
-function ReasoningText({ text }: { text: string }) {
-  return <>{text}</>;
 }
 const reasoningComponents = { Reasoning: ReasoningText };
 export function CompactDetailRows({ indices, expanded = false }: { indices: readonly number[]; expanded?: boolean }) {

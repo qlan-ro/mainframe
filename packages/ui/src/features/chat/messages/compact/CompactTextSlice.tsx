@@ -1,5 +1,6 @@
 import { TextMessagePartProvider } from '@assistant-ui/react';
 import type { SourceUnit } from '../../view-model/compact/turn-types';
+import { ReasoningText } from '../../parts/ReasoningText';
 import { MarkdownText } from '../../parts/markdown-text';
 
 export function CompactTextSlice({ unit }: { unit: SourceUnit }) {
@@ -10,7 +11,9 @@ export function CompactTextSlice({ unit }: { unit: SourceUnit }) {
       {part.type === 'text' ? (
         <MarkdownText {...part} />
       ) : (
-        <div className="whitespace-pre-wrap text-sm text-muted-foreground">{part.text}</div>
+        <div className="whitespace-pre-wrap text-sm text-muted-foreground">
+          <ReasoningText {...part} />
+        </div>
       )}
     </TextMessagePartProvider>
   );
