@@ -102,12 +102,26 @@ impl ToolTimingStore {
         })
     }
 
-    pub(crate) fn apply(&self, messages: &mut [ChatMessage]) {
+    /// Writes this store's per-id timing onto every `ToolUse` occurrence,
+    /// returning the ids whose timing actually changed (with the new value)
+    /// so a caller can record a surgical `RawChange::Timing` journal entry
+    /// instead of assuming the whole message list needs re-folding (todo
+    /// #376).
+    pub(crate) fn apply(
+        &self,
+        messages: &mut [ChatMessage],
+    ) -> Vec<(String, Option<ToolCallTiming>)> {
+        let mut changed = Vec::new();
         for block in messages.iter_mut().flat_map(|m| &mut m.content) {
             if let MessageContent::Node(MessageContentNode::ToolUse { id, timing, .. }) = block {
-                *timing = self.calls.get(id).and_then(|call| call.timing);
+                let new_timing = self.calls.get(id).and_then(|call| call.timing);
+                if *timing != new_timing {
+                    changed.push((id.clone(), new_timing));
+                    *timing = new_timing;
+                }
             }
         }
+        changed
     }
 }
 

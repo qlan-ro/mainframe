@@ -24,6 +24,7 @@ impl MessageCache {
             order: Vec::new(),
             pinned: HashSet::new(),
             tool_timings: HashMap::new(),
+            projections: HashMap::new(),
             now_epoch_ms,
         }
     }
@@ -35,7 +36,11 @@ impl MessageCache {
         self.track_key(chat_id);
         let messages = self.cache.entry(chat_id.to_owned()).or_default();
         messages.push(message);
-        self.tool_timings[chat_id].apply(messages);
+        let changed = self.tool_timings[chat_id].apply(messages);
+        self.record_change(chat_id, mainframe_display::RawChange::Appended);
+        for (id, timing) in changed {
+            self.record_change(chat_id, mainframe_display::RawChange::Timing(id, timing));
+        }
         self.evict_if_needed();
     }
 
@@ -58,7 +63,11 @@ impl MessageCache {
         let store = self.tool_timings.entry(chat_id.to_owned()).or_default();
         store.observe(session, &blocks, now);
         messages[index].content.extend(blocks);
-        store.apply(messages);
+        let changed = store.apply(messages);
+        self.record_change(chat_id, mainframe_display::RawChange::Nested(index));
+        for (id, timing) in changed {
+            self.record_change(chat_id, mainframe_display::RawChange::Timing(id, timing));
+        }
         true
     }
 
@@ -68,8 +77,11 @@ impl MessageCache {
         };
         let now = (self.now_epoch_ms)().min(MAX_EPOCH_MS);
         let changed = store.finish_session(session, now);
-        if let Some(messages) = self.cache.get_mut(chat_id) {
-            store.apply(messages);
+        let timing_changes = self.cache.get_mut(chat_id).map(|messages| store.apply(messages));
+        if let Some(timing_changes) = timing_changes {
+            for (id, timing) in timing_changes {
+                self.record_change(chat_id, mainframe_display::RawChange::Timing(id, timing));
+            }
         }
         changed
     }

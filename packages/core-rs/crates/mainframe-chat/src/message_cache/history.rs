@@ -27,6 +27,7 @@ impl MessageCache {
     fn replace_messages(&mut self, chat_id: &str, messages: Vec<ChatMessage>) {
         self.track_key(chat_id);
         self.cache.insert(chat_id.to_owned(), messages);
+        self.drop_projection(chat_id);
         self.evict_if_needed();
     }
 }
