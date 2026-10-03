@@ -32,6 +32,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # GH_PAT, not GITHUB_TOKEN: a PR pushed and opened with the workflow token
+      # is authored by github-actions[bot], and GitHub does not run `pull_request`
+      # workflows for events the workflow token creates — the version PR's CI runs
+      # ended `action_required`/startup-failure with zero jobs, so its required
+      # checks never reported and every merge needed an admin bypass. With a PAT
+      # the PR is authored by the token owner and CI (incl. the e2e gate) runs.
       - name: Create or update version PR
         uses: changesets/action@v1
         with:
@@ -39,4 +45,4 @@ jobs:
           commit: 'chore: version packages'
           version: pnpm version-packages
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
