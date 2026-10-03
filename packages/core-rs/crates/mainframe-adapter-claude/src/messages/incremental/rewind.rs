@@ -56,10 +56,20 @@ pub(crate) fn scope_before(scope_before: &[SubjectScope], r: usize) -> SubjectSc
         .unwrap_or_else(SubjectScope::new)
 }
 
-/// The raw index the refold must start from: group `r`'s own start, or
-/// `raw_len` (fold nothing but a possible overlay) when `r` is past the end.
-pub(crate) fn refold_start(groups: &[Group], r: usize, raw_len: usize) -> usize {
-    groups.get(r).map(|g| g.raw_range.start).unwrap_or(raw_len)
+/// The raw index the refold must start from: group `r`'s own start, or —
+/// when `r` is past the end (no rewind target, i.e. `r == groups.len()`) —
+/// wherever the last group left off. With no groups at all that's raw index
+/// 0: nothing has ever been durably folded, so a refold must cover the
+/// whole raw slice rather than skip it (todo #376 follow-up). When `groups`
+/// is non-empty and `r == groups.len()`, `groups.last().end` already equals
+/// `raw.len()` because `baseline_rewind_point` only returns `groups.len()`
+/// when nothing (append, overlay now or before) could have grown `raw`
+/// since the last fold.
+pub(crate) fn refold_start(groups: &[Group], r: usize) -> usize {
+    groups
+        .get(r)
+        .map(|g| g.raw_range.start)
+        .unwrap_or_else(|| groups.last().map(|g| g.raw_range.end).unwrap_or(0))
 }
 
 /// The raw slice an incremental call must (re)fold: `raw[start..]` plus a

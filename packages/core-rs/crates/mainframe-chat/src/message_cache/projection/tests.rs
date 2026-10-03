@@ -376,6 +376,42 @@ fn project_display_folds_in_a_pending_delta_from_a_prior_display_snapshot() {
     assert!(!delta.full);
 }
 
+/// todo #376 follow-up regression: `session/resume` reaches
+/// `EventHandler::display_snapshot` -> `MessageCache::display_snapshot`
+/// before the chat's first prompt, seeding the real `IncrementalProjector`
+/// (not a fake) with an empty `raw` slice. The exact production path —
+/// `display_snapshot` on an empty chat, then `append`, then
+/// `project_display` — must come back with a non-empty delta, not silently
+/// stay empty forever.
+#[test]
+fn display_snapshot_on_an_empty_chat_then_append_folds_into_project_display() {
+    use mainframe_adapter_claude::messages::incremental::IncrementalProjector;
+
+    let mut cache = MessageCache::new();
+
+    // `session/resume` before the first prompt: an empty chat's history is
+    // read as `[]`, seeding the projector with nothing.
+    let materialized = cache.display_snapshot("c1", &[], None, None, || {
+        Box::new(IncrementalProjector::new())
+    });
+    assert!(materialized.is_empty());
+
+    cache.append("c1", msg("a"));
+    let delta = cache.project_display("c1", None, None, || unreachable!());
+    // `project_display` merges this call's delta with the pending `Full`
+    // delta `display_snapshot` stashed above (`DisplayDelta::merge`: a
+    // pending `full` always wins), so `delta.full` is expected `true` here
+    // regardless of the bug — the regression shows up in `len`/`snapshot`
+    // instead, carried through from the inner incremental call.
+    assert!(delta.full);
+    assert_eq!(delta.len, 1, "the first real message must be folded");
+    assert_eq!(
+        delta.snapshot.materialize().len(),
+        1,
+        "an empty-groups seed must not leave every later append a no-op"
+    );
+}
+
 #[test]
 fn an_unknown_chat_leaves_no_journal_entry() {
     let mut cache = MessageCache::new();
