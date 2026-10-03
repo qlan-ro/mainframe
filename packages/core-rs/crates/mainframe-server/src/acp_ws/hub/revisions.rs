@@ -9,6 +9,7 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 
 use mainframe_acp::EncodedItem;
+use mainframe_acp::encoder::delta::EncodedDelta;
 use mainframe_acp::revision_log::{RecordOutcome, RevisionLog};
 use mainframe_types::acp::extensions::RevisionCursor;
 
@@ -118,14 +119,20 @@ impl FacadeHub {
     /// not depend on connection presence). Returns the new boundary for a
     /// recorded, non-empty change; `None` when there is no log, nothing
     /// changed, or a vanished tool call forced an epoch reset instead.
-    pub(super) fn record_revision(
+    ///
+    /// Todo #376 G4: `delta`-shaped (`RevisionLog::record_delta`) rather than
+    /// a flat item list — `full` is the lazy fresh-attach fallback
+    /// `record_delta` forces only when this log is unseeded and `delta` is
+    /// incremental.
+    pub(super) fn record_display_delta(
         &self,
         chat_id: &str,
-        items: &[EncodedItem],
+        delta: &EncodedDelta,
+        full: impl FnOnce() -> Vec<Vec<EncodedItem>>,
     ) -> Option<RevisionCursor> {
         let log = self.revisions.get(chat_id)?;
         let mut locked = log.lock().unwrap_or_else(|err| err.into_inner());
-        match locked.record(items) {
+        match locked.record_delta(delta, full) {
             RecordOutcome::Recorded(_) => Some(locked.boundary()),
             RecordOutcome::Unchanged => None,
             RecordOutcome::ToolCallVanished => {

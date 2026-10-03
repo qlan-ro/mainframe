@@ -83,20 +83,20 @@ fn reply(id: i64) -> mainframe_types::acp::jsonrpc::JsonRpcResponse {
     )
 }
 
-/// The common `ResumeSeed`: a snapshot and its reply, with no gate the
-/// replay redelivers and a reply flag nobody reads.
-fn seed<'a>(items: &'a [EncodedItem], reply: &'a JsonRpcResponse) -> ResumeSeed<'a> {
-    seed_with_flag(items, reply, Arc::new(AtomicBool::new(false)))
+/// The common `ResumeSeed`: a snapshot (per-container, todo #376 G4) and its
+/// reply, with no gate the replay redelivers and a reply flag nobody reads.
+fn seed<'a>(containers: &'a [Vec<EncodedItem>], reply: &'a JsonRpcResponse) -> ResumeSeed<'a> {
+    seed_with_flag(containers, reply, Arc::new(AtomicBool::new(false)))
 }
 
 /// [`seed`] for the cases that watch when the reply flag is set.
 fn seed_with_flag<'a>(
-    items: &'a [EncodedItem],
+    containers: &'a [Vec<EncodedItem>],
     reply: &'a JsonRpcResponse,
     replied: Arc<AtomicBool>,
 ) -> ResumeSeed<'a> {
     ResumeSeed {
-        items,
+        containers,
         reply,
         replied,
         completed: Arc::new(AtomicBool::new(false)),

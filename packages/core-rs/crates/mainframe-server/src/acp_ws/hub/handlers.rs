@@ -3,18 +3,24 @@
 //! method routes through `fanout.rs`, which owns the T5/T6 critical section
 //! — nothing here takes a lock itself.
 
+use std::sync::{Arc, OnceLock};
+
+use mainframe_acp::encoder::delta::EncodedDelta;
+use mainframe_acp::encoder::{self, EncodedItem};
 use mainframe_acp::gate_request_id;
 use mainframe_chat::chat_surface::{
     ChatSurface, ChatSurfaceEvent, CompactionPhase, TurnStopReason,
 };
+use mainframe_display::DisplayDelta;
 use mainframe_types::acp::extensions::{
     CompactionWirePhase, MAINFRAME_META_NAMESPACE, RetryMarker, UsageMeta,
 };
 use mainframe_types::acp::update::{StopReason, UsageUpdate};
 use mainframe_types::adapter::{ContextUsage, ControlRequest};
+use mainframe_types::display::StreamingLeafKind;
 use tracing::{debug, warn};
 
-use super::super::facade_conn::StreamOp;
+use super::super::facade_conn::{LazyFullEncoding, StreamOp};
 use super::FacadeHub;
 use super::fanout::RawFrameKind;
 
@@ -49,30 +55,40 @@ impl FacadeHub {
 
     /// Encode only when someone is listening OR the chat has a revision log
     /// to record into (todo #377: accounting must not depend on connection
-    /// presence) — a chat with neither pays nothing new. `encode_revision`
-    /// (not `encode`) so the overlay-backed item, if any, carries
-    /// `ItemMeta.streaming` (spec Decision 39).
+    /// presence) — a chat with neither pays nothing new.
     ///
-    /// Minimal todo #376 adaptation (G3): materializes the delta's full
-    /// container list and runs today's full `encode_revision`/`record_revision`
-    /// over it, same as before the chat side started emitting deltas instead
-    /// of a full list — G4 switches this to encode only `delta.changes` and
-    /// call `record_delta`.
+    /// Todo #376 G4: encodes only `delta.changes` (`encode_container`, not
+    /// `encode_revision`'s whole-snapshot `encode_messages`), with the
+    /// `streaming` flag landing on ordinal `len - 1` — the chat side's own
+    /// "last non-queued container" rule, which already guarantees that
+    /// ordinal is always in `changes` whenever `streaming` is `Some` (see
+    /// the plan's "Streaming flag" section). `full` is a lazily evaluated,
+    /// `Arc`-memoized per-container encoding of the delta's WHOLE snapshot —
+    /// forced here outright when `delta.full` (its `changes` would
+    /// otherwise need to cover every ordinal to become an `EncodedDelta`'s
+    /// own `full` shape), and left lazy otherwise, for whichever of
+    /// `record_delta` or an unseeded attached stream's `on_revision_delta`
+    /// needs the fresh-attach fallback — computed at most once no matter
+    /// how many of those call it inside this one synchronous call.
     pub(super) fn handle_display_revision(
         &self,
         chat_id: &str,
-        delta: &mainframe_display::DisplayDelta,
-        streaming: Option<mainframe_types::display::StreamingLeafKind>,
+        delta: &DisplayDelta,
+        streaming: Option<StreamingLeafKind>,
     ) {
         let connections = self.attached_connections(chat_id);
         if connections.is_empty() && !self.has_revision_log(chat_id) {
             return;
         }
-        let messages = delta.snapshot.materialize();
-        let items = mainframe_acp::encoder::encode_revision(&messages, streaming);
-        let cursor = self.record_revision(chat_id, &items);
+        let full = lazy_full_encoding(delta, streaming);
+        let encoded = if delta.full {
+            EncodedDelta::full(full())
+        } else {
+            encode_changes(delta, streaming)
+        };
+        let cursor = self.record_display_delta(chat_id, &encoded, || full());
         if !connections.is_empty() {
-            self.on_display_revision(chat_id, &items, cursor);
+            self.on_display_revision(chat_id, Arc::new(encoded), full, cursor);
         }
     }
 
@@ -217,4 +233,47 @@ impl ChatSurface for FacadeHub {
             ChatSurfaceEvent::ChatEnded { chat_id } => self.handle_chat_ended(&chat_id),
         }
     }
+}
+
+/// `delta.changes` re-encoded one container at a time, with `streaming`
+/// landing on ordinal `len - 1` — the hub-side half of the "last non-queued
+/// container" rule the chat-side projector already enforces when it decides
+/// which ordinal belongs in `changes` for a streaming update (todo #376 G4
+/// task 3).
+fn encode_changes(delta: &DisplayDelta, streaming: Option<StreamingLeafKind>) -> EncodedDelta {
+    let streaming_ordinal = delta.len.checked_sub(1);
+    let changes = delta
+        .changes
+        .iter()
+        .map(|(ordinal, message)| {
+            let leaf = streaming.filter(|_| Some(*ordinal) == streaming_ordinal);
+            (*ordinal, encoder::encode_container(message, leaf))
+        })
+        .collect();
+    EncodedDelta {
+        full: false,
+        changes,
+        len: delta.len,
+    }
+}
+
+/// A per-container encoding of `delta`'s WHOLE materialized snapshot,
+/// computed at most once no matter how many of this call's consumers force
+/// it — `record_display_delta` and every attached connection's
+/// `on_revision_delta` share the same `Arc`-memoized closure (todo #376 G4
+/// task 3). Correct to call even outside the synchronous window that
+/// produced `delta`, UNLIKE `delta.snapshot.materialize()` directly, because
+/// the `OnceLock` freezes whatever the first call observed — but nothing
+/// here ever calls it outside that window regardless (see `StreamOp::Revision`'s
+/// doc).
+fn lazy_full_encoding(delta: &DisplayDelta, streaming: Option<StreamingLeafKind>) -> LazyFullEncoding {
+    let snapshot = delta.snapshot.clone();
+    let cell: Arc<OnceLock<Vec<Vec<EncodedItem>>>> = Arc::new(OnceLock::new());
+    Arc::new(move || {
+        cell.get_or_init(|| {
+            let messages = snapshot.materialize();
+            encoder::encode_containers(&messages, streaming)
+        })
+        .clone()
+    })
 }

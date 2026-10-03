@@ -4,6 +4,7 @@
 //! `hub/tests/revision_cursor_tests.rs`; these are the narrower
 //! registry/method-level cases.
 
+use mainframe_acp::encoder::delta::EncodedDelta;
 use mainframe_acp::encoder::{EncodedItem, ItemRole};
 use mainframe_types::acp::content::ContentBlock;
 
@@ -23,6 +24,16 @@ fn msg(id: &str, text: &str) -> EncodedItem {
 
 fn hub() -> FacadeHub {
     FacadeHub::new(0)
+}
+
+/// A `full` `EncodedDelta` over one container holding `items` — the shape
+/// `record_display_delta` expects, standing in for these tests' old flat
+/// `record(items)` calls (todo #376 G4). `record_full`'s outcomes,
+/// boundary bumps, and tombstones match `record`'s exactly for this shape;
+/// `full`'s own fallback closure is never called for a `full` delta, so
+/// every call site below hands it an unreachable stub.
+fn full(items: Vec<EncodedItem>) -> EncodedDelta {
+    EncodedDelta::full(vec![items])
 }
 
 #[test]
@@ -113,7 +124,7 @@ fn touching_a_chat_protects_it_from_eviction() {
 fn record_revision_on_a_chat_with_no_log_returns_none() {
     let hub = hub();
     assert!(
-        hub.record_revision("chat-1", &[msg("m1", "hello")])
+        hub.record_display_delta("chat-1", &full(vec![msg("m1", "hello")]), || unreachable!())
             .is_none()
     );
 }
@@ -123,7 +134,7 @@ fn record_revision_returns_the_new_boundary_on_a_change() {
     let hub = hub();
     hub.revisions.get_or_create("chat-1");
     let cursor = hub
-        .record_revision("chat-1", &[msg("m1", "hello")])
+        .record_display_delta("chat-1", &full(vec![msg("m1", "hello")]), || unreachable!())
         .expect("a new item is a recorded change");
     assert_eq!(cursor.revision, 1);
 }
@@ -132,9 +143,9 @@ fn record_revision_returns_the_new_boundary_on_a_change() {
 fn record_revision_returns_none_for_an_identical_snapshot() {
     let hub = hub();
     hub.revisions.get_or_create("chat-1");
-    hub.record_revision("chat-1", &[msg("m1", "hello")]);
+    hub.record_display_delta("chat-1", &full(vec![msg("m1", "hello")]), || unreachable!());
     assert!(
-        hub.record_revision("chat-1", &[msg("m1", "hello")])
+        hub.record_display_delta("chat-1", &full(vec![msg("m1", "hello")]), || unreachable!())
             .is_none()
     );
 }
@@ -153,9 +164,12 @@ fn a_vanished_tool_call_resets_the_epoch_instead_of_recording() {
     };
     let log = hub.revisions.get_or_create("chat-1");
     let before_epoch = log.lock().unwrap().boundary().epoch;
-    hub.record_revision("chat-1", &[tool]);
+    hub.record_display_delta("chat-1", &full(vec![tool]), || unreachable!());
 
-    assert!(hub.record_revision("chat-1", &[]).is_none());
+    assert!(
+        hub.record_display_delta("chat-1", &full(vec![]), || unreachable!())
+            .is_none()
+    );
     let after = hub.revisions.get("chat-1").expect("still logged");
     assert_ne!(after.lock().unwrap().boundary().epoch, before_epoch);
 }

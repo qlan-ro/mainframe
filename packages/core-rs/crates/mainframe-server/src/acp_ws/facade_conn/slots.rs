@@ -4,27 +4,22 @@
 //! limit; the behaviour lives in the parent's `impl FacadeConnection`.
 
 use std::future::Future;
+use std::sync::Arc;
 
+use mainframe_acp::encoder::EncodedItem;
+use mainframe_acp::encoder::delta::EncodedDelta;
 use mainframe_acp::stream::SessionStream;
 use mainframe_types::adapter::ControlRequest;
 
-/// A claim on a session's lock, taken on the socket loop and awaited from
-/// the spawned task that does the work.
-pub enum SessionLockWait {
-    /// Uncontended: the guard was available on the spot.
-    Held(tokio::sync::OwnedMutexGuard<()>),
-    /// Contended: already queued behind the holder, in arrival order.
-    Queued(std::pin::Pin<Box<dyn Future<Output = tokio::sync::OwnedMutexGuard<()>> + Send>>),
-}
-
-impl SessionLockWait {
-    pub async fn guard(self) -> tokio::sync::OwnedMutexGuard<()> {
-        match self {
-            SessionLockWait::Held(guard) => guard,
-            SessionLockWait::Queued(acquire) => acquire.await,
-        }
-    }
-}
+/// The fresh-attach fallback a [`StreamOp::Revision`] carries alongside its
+/// incremental delta (todo #376 G4): a per-container encoding of the WHOLE
+/// current snapshot, computed at most once per `handle_display_revision`
+/// call no matter how many attached connections or the revision log end up
+/// needing it (an unseeded `SessionState`/`RevisionLog`, the fresh-`attach`
+/// case). `Arc<dyn Fn...>` because `StreamOp` is `Clone` (buffered, merged)
+/// and the same handle is handed to every attached connection's
+/// `SessionStream::on_revision_delta` plus `RevisionLog::record_delta`.
+pub(crate) type LazyFullEncoding = Arc<dyn Fn() -> Vec<Vec<EncodedItem>> + Send + Sync>;
 
 /// A gate delivered to a connection and not yet answered, keyed by the
 /// JSON-RPC id its `session/request_permission` traveled under.
@@ -42,14 +37,21 @@ pub struct PendingGate {
 /// client two live requests for one decision.
 #[derive(Clone)]
 pub(crate) enum StreamOp {
-    /// `cursor` (todo #377) is the chat's revision-log boundary once this
-    /// same display revision was recorded into it — `None` for a chat with
-    /// no log, or when the record was a no-op. Carried alongside the items
-    /// rather than recomputed on replay, so a buffered catch-up frame's
-    /// cursor is exactly the one the live revision would have sent, never
-    /// a later log state read after the fact.
+    /// `delta` (todo #376 G4) is the per-container encoding of only the
+    /// containers this revision touched — `SessionStream::on_revision_delta`
+    /// applies it without re-comparing settled containers. `full` is the
+    /// fresh-attach fallback above, forced only when a stream is unseeded
+    /// and `delta` is incremental; the hub never forces it from a buffered
+    /// op (a drained op always hits a stream `reset_session` already
+    /// seeded). `cursor` (todo #377) is the chat's revision-log boundary
+    /// once this same display revision was recorded into it — `None` for a
+    /// chat with no log, or when the record was a no-op. Carried alongside
+    /// the delta rather than recomputed on replay, so a buffered catch-up
+    /// frame's cursor is exactly the one the live revision would have sent,
+    /// never a later log state read after the fact.
     Revision {
-        items: Vec<mainframe_acp::EncodedItem>,
+        delta: Arc<EncodedDelta>,
+        full: LazyFullEncoding,
         cursor: Option<mainframe_types::acp::extensions::RevisionCursor>,
     },
     Raw {
@@ -60,6 +62,24 @@ pub(crate) enum StreamOp {
     TurnFinished(mainframe_types::acp::update::StopReason),
     Usage(mainframe_types::acp::update::UsageUpdate),
     Retry(mainframe_types::acp::extensions::RetryMarker),
+}
+
+/// A claim on a session's lock, taken on the socket loop and awaited from
+/// the spawned task that does the work.
+pub enum SessionLockWait {
+    /// Uncontended: the guard was available on the spot.
+    Held(tokio::sync::OwnedMutexGuard<()>),
+    /// Contended: already queued behind the holder, in arrival order.
+    Queued(std::pin::Pin<Box<dyn Future<Output = tokio::sync::OwnedMutexGuard<()>> + Send>>),
+}
+
+impl SessionLockWait {
+    pub async fn guard(self) -> tokio::sync::OwnedMutexGuard<()> {
+        match self {
+            SessionLockWait::Held(guard) => guard,
+            SessionLockWait::Queued(acquire) => acquire.await,
+        }
+    }
 }
 
 /// A connection's per-session slot. `AwaitingSeed` covers the window a

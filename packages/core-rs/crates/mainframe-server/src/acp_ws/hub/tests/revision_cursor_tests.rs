@@ -89,7 +89,7 @@ async fn a_revision_racing_the_resume_window_arrives_as_catch_up_with_its_cursor
     hub.on_chat_surface_event(revision("chat-1", "Hello"));
     assert!(drain(&mut rx).is_empty());
 
-    let items = mainframe_acp::encode(&[]);
+    let items = mainframe_acp::encoder::encode_containers(&[], None);
     hub.reset_session(&conn, "chat-1", seed(&items, &reply(1)), |_c| {});
 
     let frames = drain(&mut rx);
@@ -139,7 +139,7 @@ async fn the_reply_cursor_itself_never_catches_up_to_a_revision_racing_the_resum
         }),
     );
 
-    let items = mainframe_acp::encode(&[]);
+    let items = mainframe_acp::encoder::encode_containers(&[], None);
     hub.reset_session(
         &conn,
         "chat-1",
