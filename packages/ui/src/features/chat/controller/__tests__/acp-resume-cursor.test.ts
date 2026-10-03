@@ -37,10 +37,10 @@ describe('ResumeCursorTracker.nextReplayFrom — selection matrix', () => {
     expect(tracker.nextReplayFrom({ revisionCursors: true })).toEqual({ type: 'item', itemId: 'm1' });
   });
 
-  it('both capabilities but no durable cursor yet falls back to the item cursor, then start', () => {
+  it('both capabilities but no durable cursor yet picks start, not the item cursor, even with a settled item', () => {
     const tracker = new ResumeCursorTracker();
     tracker.recordSettledItem('m1');
-    expect(tracker.nextReplayFrom(BOTH)).toEqual({ type: 'item', itemId: 'm1' });
+    expect(tracker.nextReplayFrom(BOTH)).toEqual({ type: 'start' });
     const empty = new ResumeCursorTracker();
     expect(empty.nextReplayFrom(BOTH)).toEqual({ type: 'start' });
   });
@@ -64,13 +64,14 @@ describe('ResumeCursorTracker.commitReplyCursor', () => {
 });
 
 describe('ResumeCursorTracker.clearDurableCursor', () => {
-  it('drops the durable cursor so nextReplayFrom falls back to the legacy item cursor', () => {
+  it('drops the durable cursor so nextReplayFrom falls back to the legacy item cursor on a legacy daemon, but start on a revision-capable one', () => {
     const tracker = new ResumeCursorTracker();
     tracker.recordSettledItem('m1');
     tracker.commitReplyCursor({ epoch: 'e1', revision: 1 });
     tracker.clearDurableCursor();
     expect(tracker.getDurableCursor()).toBeNull();
-    expect(tracker.nextReplayFrom(BOTH)).toEqual({ type: 'item', itemId: 'm1' });
+    expect(tracker.nextReplayFrom(LEGACY)).toEqual({ type: 'item', itemId: 'm1' });
+    expect(tracker.nextReplayFrom(BOTH)).toEqual({ type: 'start' });
   });
 });
 

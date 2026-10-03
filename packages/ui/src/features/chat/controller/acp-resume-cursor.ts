@@ -80,14 +80,21 @@ export class ResumeCursorTracker {
    * The next `session/resume` cursor to send: a revision cursor when the
    * daemon negotiates both `revisionCursors` and `replayComplete` (the
    * reply-cursor commit path only ever runs through a staged replay window)
-   * and a durable cursor already exists; the legacy item cursor for a
-   * settled transcript on any other daemon; `start` otherwise (first-ever
-   * attach, or a revision-capable daemon this chat has never resumed
-   * against yet).
+   * and a durable cursor already exists; `start` for a revision-capable
+   * daemon with no durable cursor yet (first-ever attach, or one cleared by
+   * an epoch change — `advanceFromNotification`/`clearDurableCursor` — while
+   * `lastSettledItemId` survives). An item cursor only ever drops edits to
+   * the settled item and everything before it (the bug this todo exists to
+   * fix), so it is reserved for a daemon that never negotiated revision
+   * cursors at all: the legacy item cursor for a settled transcript there,
+   * `start` otherwise.
    */
   nextReplayFrom(capabilities: MainframeCapabilities | null | undefined): ReplayCursor {
-    if (capabilities?.revisionCursors === true && capabilities?.replayComplete === true && this.durableCursor) {
-      return { type: 'revision', epoch: this.durableCursor.epoch, revision: this.durableCursor.revision };
+    if (capabilities?.revisionCursors === true && capabilities?.replayComplete === true) {
+      if (this.durableCursor) {
+        return { type: 'revision', epoch: this.durableCursor.epoch, revision: this.durableCursor.revision };
+      }
+      return { type: 'start' };
     }
     if (this.lastSettledItemId) return { type: 'item', itemId: this.lastSettledItemId };
     return { type: 'start' };
