@@ -1,8 +1,4 @@
-//! Ported from `packages/core/src/plugins/builtin/codex/event-mapper.ts`.
-//!
-//! Maps Codex app-server notifications onto `SessionSink` callbacks. Every
-//! notification method is dispatched identically to the TS `handleNotification`;
-//! unknown methods are logged at debug and skipped (never a hard error).
+//! Maps Codex app-server notifications onto `SessionSink` callbacks.
 
 use std::sync::Arc;
 
@@ -32,71 +28,56 @@ pub fn handle_notification(
     state: &mut CodexSessionState,
 ) {
     tracing::debug!(module = "codex:events", method, "codex notification");
-
     match method {
-        "thread/started" => {
-            if let Ok(p) = serde_json::from_value::<ThreadStartedParams>(params.clone()) {
-                handle_thread_started(p, sink, state);
-            }
-        }
-        "turn/started" => {
-            if let Ok(p) = serde_json::from_value::<TurnStartedParams>(params.clone()) {
-                handle_turn_started(p, state);
-            }
-        }
-        "item/completed" => {
-            if let Ok(p) = serde_json::from_value::<ItemCompletedParams>(params.clone()) {
-                handle_item_completed(p, sink, state);
-            }
-        }
-        "item/plan/delta" => {
-            if let Ok(p) = serde_json::from_value::<PlanDeltaParams>(params.clone()) {
-                handle_plan_delta(p, state);
-            }
-        }
-        "turn/completed" => {
-            if let Ok(p) = serde_json::from_value::<TurnCompletedParams>(params.clone()) {
-                handle_turn_completed(p, sink, state);
-            }
-        }
-        "thread/tokenUsage/updated" => {
-            if let Ok(p) = serde_json::from_value::<TokenUsageUpdatedParams>(params.clone()) {
-                handle_token_usage(p, sink, state);
-            }
-        }
+        "thread/started" => decode(params, |p: ThreadStartedParams| {
+            handle_thread_started(p, sink, state)
+        }),
+        "turn/started" => decode(params, |p: TurnStartedParams| handle_turn_started(p, state)),
+        "item/completed" => decode(params, |p: ItemCompletedParams| {
+            handle_item_completed(p, sink, state)
+        }),
+        "item/started" => decode(params, |p: ItemStartedParams| {
+            handle_item_started(p, sink, state)
+        }),
+        "item/plan/delta" => decode(params, |p: PlanDeltaParams| handle_plan_delta(p, state)),
+        "turn/completed" => decode(params, |p: TurnCompletedParams| {
+            handle_turn_completed(p, sink, state)
+        }),
+        "thread/tokenUsage/updated" => decode(params, |p: TokenUsageUpdatedParams| {
+            handle_token_usage(p, sink, state)
+        }),
         "thread/compacted" => crate::compaction::handle_compaction_completed(sink, state, None),
-        "item/started" => {
-            if let Ok(p) = serde_json::from_value::<ItemStartedParams>(params.clone()) {
-                handle_item_started(p, sink, state);
-            }
+        "account/rateLimits/updated" => decode(params, |p: AccountRateLimitsUpdatedParams| {
+            handle_account_rate_limits_updated(p, sink)
+        }),
+        "item/agentMessage/delta" => {
+            crate::agent_message_partial::handle_agent_message_delta(params, sink, state)
         }
-        "account/rateLimits/updated" => {
-            if let Ok(p) = serde_json::from_value::<AccountRateLimitsUpdatedParams>(params.clone())
-            {
-                handle_account_rate_limits_updated(p, sink);
-            }
-        }
-        // Known-but-unhandled notifications — silently ignore.
+        _ => handle_unmapped(method),
+    }
+}
+fn decode<T: serde::de::DeserializeOwned>(params: &Value, handle: impl FnOnce(T)) {
+    if let Ok(p) = serde_json::from_value(params.clone()) {
+        handle(p);
+    }
+}
+fn handle_unmapped(method: &str) {
+    match method {
         "turn/diff/updated"
         | "turn/plan/updated"
         | "thread/closed"
         | "thread/status/changed"
-        | "item/agentMessage/delta"
         | "item/commandExecution/outputDelta"
         | "item/fileChange/outputDelta"
         | "item/reasoning/summaryTextDelta"
         | "item/reasoning/textDelta"
         | "thread/name/updated" => {}
-        _ => {
-            if method.starts_with("codex/event/") {
-                return;
-            }
-            tracing::debug!(
-                module = "codex:events",
-                method,
-                "codex: unhandled notification"
-            );
-        }
+        _ if method.starts_with("codex/event/") => {}
+        _ => tracing::debug!(
+            module = "codex:events",
+            method,
+            "codex: unhandled notification"
+        ),
     }
 }
 
@@ -160,6 +141,14 @@ fn handle_item_started(
     let Some(sink) = owner_sink(&owner, sink, state) else {
         return;
     };
+    let _ = presentation_for_item(
+        params.thread_id.as_deref(),
+        params.turn_id.as_deref(),
+        &params.item,
+        false,
+        sink.as_ref(),
+        state,
+    );
     let sink = &sink;
 
     match serde_json::from_value::<ThreadItem>(params.item) {
@@ -193,6 +182,20 @@ fn handle_item_completed(
     let Some(sink) = owner_sink(&owner, sink, state) else {
         return;
     };
+    let contextual = presentation_for_item(
+        params.thread_id.as_deref(),
+        params.turn_id.as_deref(),
+        &params.item,
+        true,
+        sink.as_ref(),
+        state,
+    );
+    if contextual.as_ref().is_some_and(|(_, duplicate)| *duplicate) {
+        return;
+    }
+    let sink = contextual
+        .map(|(p, _)| crate::presentation_sink::PresentationSink::wrap(sink.clone(), p))
+        .unwrap_or(sink);
     let sink = &sink;
 
     // Plan deltas only ever describe the parent's own turn — a child's plan item
@@ -204,6 +207,13 @@ fn handle_item_completed(
         return;
     }
 
+    render_completed(params, sink, state);
+}
+fn render_completed(
+    params: ItemCompletedParams,
+    sink: &Arc<dyn SessionSink>,
+    state: &mut CodexSessionState,
+) {
     match serde_json::from_value::<ThreadItem>(params.item.clone()) {
         Ok(mut item) => {
             if let ThreadItem::CommandExecution(command) = &mut item {
@@ -268,29 +278,23 @@ fn plan_item_fields(item: &Value) -> Option<(String, String)> {
     Some((id, text))
 }
 
-// PORT STATUS: src/plugins/builtin/codex/event-mapper.ts (395 lines)
-// confidence: medium
-// todos: 0
-// notes: handle_notification dispatches every method identically to the TS switch;
-// notes: unknown methods debug-log once + skip. `wrapSinkWithParentId` becomes a
-// notes: ParentIdSink newtype over Arc<dyn SessionSink> (delegates all callbacks;
-// notes: transforms only on_message/on_tool_result). CodexSessionState uses
-// notes: always-present empty HashSet/HashMap for the TS lazily-created Set/Map
-// notes: fields. The imageGeneration savedPath disk-read fallback keeps the TS
-// notes: async readFile via tokio::spawn + a hand-rolled base64 encoder (no base64
-// notes: crate in the allowlist; inline path uses Codex's own base64 unchanged).
-// notes: parse_unified_diff is the crate-local shim (see history.rs blocker note).
-// notes: handle_turn_completed sends SessionResult.context_tokens = this turn's raw
-// notes: input usage (None when no usage yet), resolving the TS sink's
-// notes: `contextTokens === undefined → fall back to usage` path (event-handler.ts:366)
-// notes: here because Option<i64> can't carry the undefined/null distinction downstream.
-// notes: Tests in tests/event_mapper.rs (collab-agent-spawn + plan-item-capture +
-// notes: turn-completed context/usage). `account/rateLimits/updated` moved out of
-// notes: the silent-ignore arm into handle_account_rate_limits_updated, which
-// notes: normalizes via quota_rate_limit and calls sink.on_provider_quota (no `?.`
-// notes: needed — the trait's default no-op body covers sinks that don't override
-// notes: it). Tested in tests/quota_notification.rs.
-// notes: task 1 (todo #247) carved CodexSessionState/CurrentTurnPlan/LastUsage into
-// notes: session_state.rs, ParentIdSink into parent_id_sink.rs, and the four turn/
-// notes: usage/plan handlers into turn_lifecycle.rs; re-exported here so external
-// notes: `event_mapper::X` call sites keep compiling.
+fn presentation_for_item(
+    thread: Option<&str>,
+    turn: Option<&str>,
+    item: &Value,
+    completed: bool,
+    sink: &dyn SessionSink,
+    state: &mut CodexSessionState,
+) -> Option<(
+    mainframe_types::transcript_presentation::TranscriptPresentation,
+    bool,
+)> {
+    let (thread, turn) = (thread?, turn?);
+    let parent = match resolve_owner(Some(thread), state) {
+        Owner::Parent if state.thread_id.as_deref() == Some(thread) => None,
+        Owner::Child(t) => state.card_for_thread(&t).map(|c| c.card_id.clone()),
+        _ => return None,
+    };
+    state.presentation.ensure(thread, turn, parent);
+    state.presentation.item(thread, turn, item, completed, sink)
+}

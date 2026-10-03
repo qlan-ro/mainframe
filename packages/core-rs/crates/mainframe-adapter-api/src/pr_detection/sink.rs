@@ -64,6 +64,34 @@ impl PrDetectionSink {
 }
 
 impl SessionSink for PrDetectionSink {
+    fn on_message_with_presentation(
+        &self,
+        content: Vec<MessageContent>,
+        metadata: Option<MessageMetadata>,
+        presentation: mainframe_types::transcript_presentation::TranscriptPresentation,
+    ) {
+        self.observe_tool_uses(&content);
+        self.inner
+            .on_message_with_presentation(content, metadata, presentation);
+    }
+
+    fn on_message_partial_with_presentation(
+        &self,
+        api_message_id: &str,
+        content: Vec<MessageContent>,
+        presentation: mainframe_types::transcript_presentation::TranscriptPresentation,
+    ) {
+        self.inner
+            .on_message_partial_with_presentation(api_message_id, content, presentation);
+    }
+
+    fn on_presentation_update(
+        &self,
+        presentation: mainframe_types::transcript_presentation::PresentationUpdate,
+    ) {
+        self.inner.on_presentation_update(presentation);
+    }
+
     fn on_init(&self, session_id: &str) {
         self.inner.on_init(session_id);
     }

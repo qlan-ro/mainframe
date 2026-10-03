@@ -7,7 +7,10 @@ const EMPTY_PART: Parameters<typeof INTERNAL.useSmooth>[0] = {
 };
 
 export const ReasoningText: ReasoningMessagePartComponent = () => {
-  const part = useAuiState((state) => (state.part.type === 'reasoning' ? state.part : EMPTY_PART));
+  // Native scoped reasoning ranges use text-part providers.
+  const part = useAuiState((state) =>
+    state.part.type === 'reasoning' || state.part.type === 'text' ? state.part : EMPTY_PART,
+  );
   const { text } = INTERNAL.useSmooth(part, true);
   return <>{text}</>;
 };

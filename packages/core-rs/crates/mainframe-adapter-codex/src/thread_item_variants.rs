@@ -20,7 +20,13 @@ pub struct ContextCompactionItem {
 pub struct AgentMessageItem {
     pub id: String,
     pub text: String,
+    #[serde(default, deserialize_with = "crate::presentation_fields::phase")]
     pub phase: Option<String>,
+    #[serde(default)]
+    pub delivery: crate::presentation_fields::OptionalField<crate::presentation_fields::Delivery>,
+    #[serde(default)]
+    pub questions:
+        crate::presentation_fields::OptionalField<Vec<crate::presentation_fields::Question>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

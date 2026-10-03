@@ -33,25 +33,9 @@ fn is_assistant_or_tool_use(t: ChatMessageType) -> bool {
 pub fn group_messages(messages: Vec<ChatMessage>) -> Vec<GroupedMessage> {
     let mut result: Vec<GroupedMessage> = Vec::new();
 
-    for msg in messages {
-        // Internal turn metadata marker emitted on result events.
-        let turn_duration_ms = msg
-            .metadata
-            .as_ref()
-            .and_then(|m| m.get("turnDurationMs"))
-            .filter(|v| v.is_number())
-            .cloned();
-        if msg.r#type == ChatMessageType::System
-            && let Some(duration) = turn_duration_ms.clone()
-        {
-            for prev in result.iter_mut().rev() {
-                if is_assistant_or_tool_use(prev.base.r#type) {
-                    let mut meta = prev.base.metadata.take().unwrap_or_default();
-                    meta.insert("turnDurationMs".to_string(), duration);
-                    prev.base.metadata = Some(meta);
-                    break;
-                }
-            }
+    for mut msg in messages {
+        super::presentation_grouping::initialize(&mut msg);
+        if attach_duration(&msg, &mut result) {
             continue;
         }
 
@@ -75,6 +59,7 @@ pub fn group_messages(messages: Vec<ChatMessage>) -> Vec<GroupedMessage> {
             && let Some(prev) = result.last_mut()
             && is_assistant_or_tool_use(prev.base.r#type)
         {
+            super::presentation_grouping::append(&mut prev.base, &msg);
             prev.base.content.extend(msg.content);
             continue;
         }
@@ -85,24 +70,59 @@ pub fn group_messages(messages: Vec<ChatMessage>) -> Vec<GroupedMessage> {
         });
     }
 
+    deduplicate_tools(&mut result);
+
+    result
+}
+
+fn attach_duration(msg: &ChatMessage, result: &mut [GroupedMessage]) -> bool {
+    // Internal turn metadata marker emitted on result events.
+    let turn_duration_ms = msg
+        .metadata
+        .as_ref()
+        .and_then(|m| m.get("turnDurationMs"))
+        .filter(|v| v.is_number())
+        .cloned();
+    if msg.r#type == ChatMessageType::System
+        && let Some(duration) = turn_duration_ms.clone()
+    {
+        for prev in result.iter_mut().rev() {
+            if is_assistant_or_tool_use(prev.base.r#type) {
+                let mut meta = prev.base.metadata.take().unwrap_or_default();
+                meta.insert("turnDurationMs".to_string(), duration);
+                prev.base.metadata = Some(meta);
+                break;
+            }
+        }
+        return true;
+    }
+
+    false
+}
+
+fn deduplicate_tools(result: &mut [GroupedMessage]) {
     // Deduplicate tool_use blocks by id across all messages.
     let mut seen_tool_use_ids: HashSet<String> = HashSet::new();
     for msg in result.iter_mut() {
         if !is_assistant_or_tool_use(msg.base.r#type) {
             continue;
         }
+        let mut index = 0;
+        let mut retained = Vec::new();
         msg.base.content.retain(|block| {
+            let original_index = index;
+            index += 1;
             if let MessageContent::Node(MessageContentNode::ToolUse { id, .. }) = block {
                 if seen_tool_use_ids.contains(id) {
                     return false;
                 }
                 seen_tool_use_ids.insert(id.clone());
             }
+            retained.push(original_index);
             true
         });
+        super::presentation_grouping::retain(&mut msg.base, &retained);
     }
-
-    result
 }
 
 #[cfg(test)]

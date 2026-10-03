@@ -13,6 +13,7 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
 pub mod adapter;
+pub mod agent_message_partial;
 pub mod approval_handler;
 pub(crate) mod collab_activity;
 pub(crate) mod collab_card;
@@ -83,3 +84,12 @@ pub use session::{CodexScanDeps, CodexSession};
 // notes: quota_rate_limit/quota_identity/quota_pull port the quota harvester
 // notes: (quota-rate-limit.ts, quota-identity.ts, quota-pull.ts); event_mapper.rs
 // notes: wires account/rateLimits/updated to quota_rate_limit's normalizer.
+
+mod notification_types;
+mod presentation_fields;
+mod presentation_history;
+#[cfg(test)]
+mod presentation_history_tests;
+mod presentation_sink;
+mod thread_read_types;
+mod transcript_presentation;

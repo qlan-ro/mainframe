@@ -81,7 +81,7 @@ it('routes nested full-output requests through the inherited root chat ID', asyn
     />,
   );
   fireEvent.click(screen.getAllByRole('button')[0]!);
-  const shell = await screen.findByRole('button', { name: 'Ran echo hello' });
+  const shell = await screen.findByRole('button', { name: 'Ran a command' });
   fireEvent.click(shell);
   await waitFor(() => expect(screen.getByTestId('tool-result-expand-toggle')).toBeEnabled());
   fireEvent.click(screen.getByTestId('tool-result-expand-toggle'));
@@ -113,7 +113,7 @@ it('keeps full cards visible between compact tool rows', () => {
   expect(screen.getByTestId('chat-plan-card')).toBeInTheDocument();
   expect(screen.getByTestId('chat-ask-card')).toBeInTheDocument();
   expect(screen.getByTestId('chat-workflow-launcher-workflow')).toBeInTheDocument();
-  expect(screen.getAllByRole('button', { name: 'Read /src/a.ts' })).toHaveLength(2);
+  expect(screen.getAllByRole('button', { name: 'Read files' })).toHaveLength(2);
 });
 
 it('opens native image thumbnails without closing the expanded compact row', () => {

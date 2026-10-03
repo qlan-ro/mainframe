@@ -101,6 +101,8 @@ export const MainframeCapabilitiesSchema = z
      * this is advertised.
      */
     replayComplete: z.boolean().optional(),
+    /** When true, item streaming markers describe top-level text/thinking overlays; an absent/false marker means no overlay. */
+    authoritativeItemStreaming: z.boolean().optional(),
     /**
      * Whether the daemon negotiates revision-versioned resume cursors
      * (todo #377): an opted-in connection's `session/resume` reply adds

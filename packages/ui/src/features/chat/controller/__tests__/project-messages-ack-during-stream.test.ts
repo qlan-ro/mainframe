@@ -7,6 +7,10 @@
  * status from the assistant still streaming ahead of it.
  */
 import { describe, it, expect } from 'vitest';
+import type { MainframeCapabilities } from '@qlan-ro/mainframe-types';
+import { AcpSessionAttachment } from '../acp-session-attachment';
+import { makeHost } from './acp-attachment-support';
+import { makeFakeAcpClient } from './acp-test-kit';
 import type { ThreadMessageLike } from '@assistant-ui/react';
 import { reduceChatThreadState, createChatThreadState } from '../chat-thread-state.js';
 import { projectChatThreadMessages } from '../project-messages.js';
@@ -34,4 +38,25 @@ describe('ack-during-stream — a trailing user bubble does not block the assist
     expect(a1.status?.type).toBe('running');
     expect(q.status?.type ?? 'complete').not.toBe('running');
   });
+});
+
+it.each<MainframeCapabilities>([
+  { authoritativeItemStreaming: false },
+  { replayComplete: true, itemCreationMarkers: true },
+])('retains the acknowledgment fallback after binding negotiated legacy capabilities %j', (capabilities) => {
+  let state = createChatThreadState('c1');
+  const { host } = makeHost();
+  host.dispatch = (event) => {
+    state = reduceChatThreadState(state, event);
+  };
+  const attachment = new AcpSessionAttachment(host);
+  attachment.bindClient(makeFakeAcpClient({ capabilities: { authoritativeItemStreaming: true } }));
+  attachment.bindClient(makeFakeAcpClient({ capabilities }));
+  state = reduceChatThreadState(state, { type: 'run.started' });
+  state = reduceChatThreadState(state, { type: 'transcript.updated', messages: [asst('a1'), user('q')] });
+  const messages = projectChatThreadMessages(state);
+  expect(state.authoritativeItemStreaming).toBe(false);
+  expect(messages[0]!.status?.type).toBe('running');
+  expect(messages[1]).not.toHaveProperty('status');
+  attachment.dispose();
 });

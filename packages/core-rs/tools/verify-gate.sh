@@ -11,4 +11,5 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CRATES_DIR="$SCRIPT_DIR/../crates"
 
+python3 -m unittest discover -s "$SCRIPT_DIR" -p "test_verify_gate.py"
 python3 "$SCRIPT_DIR/verify_gate.py" "$CRATES_DIR"

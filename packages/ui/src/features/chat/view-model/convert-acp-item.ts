@@ -1,24 +1,3 @@
-/**
- * `AccumulatedItem[]` → `ThreadMessageLike[]` — the ONE message converter
- * (desktop-cutover pass; the legacy `convert-message.ts` is deleted).
- *
- * Reaggregation: the encoder flattens each `DisplayMessage` into items that
- * all carry the container's id in `_meta["_mainframe.dev"].containerId`
- * (`ItemMeta`). This module folds them back into one aui message per
- * container — parts in item order, the daemon's tool-group membership echoed
- * as `partGroups`/`groupSummaries`, subagent transcripts rebuilt from the
- * `parentToolCallId` relation into a `Task` tool-call part carrying nested
- * `messages` — so the renderer (`AssistantMessage` GroupedParts, the tool
- * cards, `MessageTimestamp`) is byte-identical with what the legacy
- * projection produced.
- *
- * Legacy invariants preserved: per-container ≥1-content-part fallback,
- * capture-sentinel image routing + review comments (convert-acp-user.ts),
- * error containers rendering the styled error block, system containers
- * carrying skill/compaction meta. Id-keyed accumulation makes the legacy
- * per-message `uniqueId()` dedup structural: two parts can never share an id
- * because two items cannot.
- */
 import type { ThreadMessageLike } from '@assistant-ui/react';
 import { ExportedMessageRepository } from '@assistant-ui/react';
 import { MAINFRAME_META_NAMESPACE, type ItemMeta } from '@qlan-ro/mainframe-types';
@@ -29,6 +8,7 @@ import { convertUserContainer } from './convert-acp-user';
 import type { MainframeMessageMeta } from './message-meta';
 import { parseItemMeta } from './parse-item-meta';
 import { toolCallResult } from './tool-call-result';
+import { mapPresentationSources } from './transcript-presentation';
 import { projectToolLifecycle } from './tool-call-lifecycle';
 import { toolGroupSummary, type ToolGroupSummaryItem } from './tool-group-summary';
 
@@ -130,10 +110,11 @@ function assistantParts(
   children: ChildrenMap,
 ): {
   parts: ContentPart[];
-  mainframe: Pick<MainframeMessageMeta, 'partGroups' | 'groupSummaries'> | undefined;
+  mainframe: Pick<MainframeMessageMeta, 'partGroups' | 'groupSummaries' | 'partSources'> | undefined;
   /** True when any part in this container is the one the overlay is currently streaming (D6) — the container's own `ThreadMessageLike.status`. */
   streaming: boolean;
 } {
+  const partSources = mapPresentationSources(items);
   const parts: ContentPart[] = [];
   const groups: Record<string, string> = {};
   const members: Record<string, ToolGroupSummaryItem[]> = {};
@@ -161,11 +142,16 @@ function assistantParts(
     }
   }
 
-  if (Object.keys(groups).length === 0) return { parts, mainframe: undefined, streaming };
+  if (Object.keys(groups).length === 0)
+    return { parts, mainframe: partSources ? { partSources } : undefined, streaming };
   const summaries = Object.fromEntries(
     Object.entries(members).map(([groupId, names]) => [groupId, toolGroupSummary(names)]),
   );
-  return { parts, mainframe: { partGroups: groups, groupSummaries: summaries }, streaming };
+  return {
+    parts,
+    mainframe: { partGroups: groups, groupSummaries: summaries, ...(partSources && { partSources }) },
+    streaming,
+  };
 }
 
 function assistantContainer(

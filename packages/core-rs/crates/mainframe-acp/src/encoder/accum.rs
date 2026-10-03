@@ -25,6 +25,8 @@ pub(super) struct Accum {
     pub(super) pos: Option<usize>,
     pub(super) segment: usize,
     pub(super) blocks: Vec<ContentBlock>,
+    pub(super) presentation_sources:
+        Vec<mainframe_types::transcript_presentation::PresentationSource>,
     pub(super) error_text: Option<String>,
     pub(super) skill_loaded: Option<SkillLoadedMeta>,
     pub(super) is_compacted: bool,
@@ -37,6 +39,7 @@ impl Accum {
             pos: None,
             segment: 0,
             blocks: Vec::new(),
+            presentation_sources: Vec::new(),
             error_text: None,
             skill_loaded: None,
             is_compacted: false,
@@ -83,6 +86,13 @@ impl Accum {
         let id = self.id(container);
         let content = std::mem::take(&mut self.blocks);
         let streaming = streaming.then_some(true);
+        let sources = std::mem::take(&mut self.presentation_sources);
+        let presentation_sources = (!sources.is_empty()).then_some(
+            mainframe_types::transcript_presentation::PresentationSources {
+                version: 1,
+                sources,
+            },
+        );
         match self.kind {
             AccumKind::Message(role) => EncodedItem::Message {
                 id,
@@ -93,6 +103,7 @@ impl Accum {
                     skill_loaded: self.skill_loaded.take(),
                     is_compacted: std::mem::take(&mut self.is_compacted).then_some(true),
                     streaming,
+                    presentation_sources,
                     ..container.base_meta()
                 }),
             },
@@ -101,6 +112,7 @@ impl Accum {
                 content,
                 meta: wrap_meta(ItemMeta {
                     streaming,
+                    presentation_sources,
                     ..container.base_meta()
                 }),
             },

@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { beforeEach, expect, it } from 'vitest';
 import { useUiPrefs } from '@/store/ui-prefs';
 import { AssistantMessage } from '../../AssistantMessage';
+import { disclosureKey } from '../disclosure-store';
 import { CompactFixture, fixtureMessage, fixtureTool } from './fixtures';
 
 beforeEach(() => useUiPrefs.getState().setTranscriptMode('compact'));
@@ -10,17 +11,18 @@ it('preserves an opened call through splitting, merging and remounting', async (
   const first = fixtureTool();
   const second = fixtureTool({ toolCallId: 'read-b', args: { file_path: '/src/b.ts' } });
   const initial = [fixtureMessage([first, { type: 'text', text: 'Between' }, second])];
+  const secondId = `chat-compact-toggle-${encodeURIComponent(disclosureKey('regroup', [], 'message', 'tool:read-b'))}`;
   const view = render(<CompactFixture rootId="regroup" messages={initial} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Read /src/b.ts' }));
+  fireEvent.click(screen.getByTestId(secondId));
   view.rerender(<CompactFixture rootId="regroup" messages={[fixtureMessage([first, second])]} />);
-  expect(await screen.findByRole('button', { name: 'Read 2 files in /src' })).toHaveAttribute('aria-expanded', 'true');
-  fireEvent.click(screen.getByRole('button', { name: 'Read 2 files in /src' }));
+  expect(await screen.findByRole('button', { name: 'Read files' })).toHaveAttribute('aria-expanded', 'true');
+  fireEvent.click(screen.getByRole('button', { name: 'Read files' }));
   view.rerender(<CompactFixture rootId="regroup" messages={initial} />);
-  expect(await screen.findByRole('button', { name: 'Read /src/b.ts' })).toHaveAttribute('aria-expanded', 'false');
-  fireEvent.click(screen.getByRole('button', { name: 'Read /src/b.ts' }));
+  expect(await screen.findByTestId(secondId)).toHaveAttribute('aria-expanded', 'false');
+  fireEvent.click(screen.getByTestId(secondId));
   view.unmount();
   render(<CompactFixture rootId="regroup" messages={initial} />);
-  expect(await screen.findByRole('button', { name: 'Read /src/b.ts' })).toHaveAttribute('aria-expanded', 'true');
+  expect(await screen.findByTestId(secondId)).toHaveAttribute('aria-expanded', 'true');
 });
 
 it('switches an active turn through Verbose and back without losing compact disclosure', async () => {
@@ -61,15 +63,15 @@ it('opens nested transcripts directly and isolates identical call IDs in root an
       Message={AssistantMessage}
     />,
   );
-  fireEvent.click(await screen.findByRole('button', { name: 'Read /src/a.ts' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Read files' }));
   const agentButtons = screen
     .getAllByRole('button')
     .filter((button) => /alpha|beta/.test(button.getAttribute('aria-label') ?? ''));
   expect(agentButtons).toHaveLength(2);
   agentButtons.forEach((button) => fireEvent.click(button));
   expect(screen.queryByTestId('chat-task-toggle')).toBeNull();
-  await waitFor(() => expect(screen.getAllByRole('button', { name: 'Read /src/a.ts' })).toHaveLength(3));
-  const reads = screen.getAllByRole('button', { name: 'Read /src/a.ts' });
+  await waitFor(() => expect(screen.getAllByRole('button', { name: 'Read files' })).toHaveLength(3));
+  const reads = screen.getAllByRole('button', { name: 'Read files' });
   expect(reads.map((button) => button.getAttribute('aria-expanded'))).toEqual(['true', 'false', 'false']);
   fireEvent.click(reads[1]!);
   expect(reads[2]).toHaveAttribute('aria-expanded', 'false');
@@ -88,8 +90,8 @@ it('keeps equal call IDs independent in main and side roots', () => {
       </div>
     </>,
   );
-  const main = within(screen.getByTestId('main')).getByRole('button', { name: 'Read /src/a.ts' });
-  const side = within(screen.getByTestId('side')).getByRole('button', { name: 'Read /src/a.ts' });
+  const main = within(screen.getByTestId('main')).getByRole('button', { name: 'Read files' });
+  const side = within(screen.getByTestId('side')).getByRole('button', { name: 'Read files' });
   fireEvent.click(main);
   expect(main).toHaveAttribute('aria-expanded', 'true');
   expect(side).toHaveAttribute('aria-expanded', 'false');

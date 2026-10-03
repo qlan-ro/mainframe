@@ -15,7 +15,8 @@
       "retryMarkers": true,
       "heartbeatIntervalMs": 15000,
       "itemCreationMarkers": true,
-      "replayComplete": true
+      "replayComplete": true,
+      "authoritativeItemStreaming": true
     }
   }
 }

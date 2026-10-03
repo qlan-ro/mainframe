@@ -19,7 +19,9 @@ pub(super) fn encode_tool_group(
         }
         _ => None,
     });
-    for call in calls {
+    for (index, call) in calls.iter().enumerate() {
+        let mut source_container = container.clone();
+        source_container.path.push(index);
         if let DisplayContent::Node(DisplayNode::ToolCall {
             id,
             name,
@@ -38,7 +40,7 @@ pub(super) fn encode_tool_group(
                 input,
                 *category,
                 result,
-                container,
+                &source_container,
                 group_id.as_deref(),
                 *timing,
                 command_execution,
@@ -87,6 +89,7 @@ pub(super) fn tool_call_item(
             group_id: group_id.map(str::to_string),
             tool_call_timing: timing,
             command_execution: command_execution.as_deref().cloned(),
+            presentation_sources: presentation::whole(container),
             ..container.base_meta()
         }),
     }
@@ -119,6 +122,7 @@ pub(super) fn task_group_item(
         meta: wrap_meta(ItemMeta {
             subagent: Some(true),
             tool_call_timing: timing,
+            presentation_sources: presentation::whole(container),
             ..container.base_meta()
         }),
     }

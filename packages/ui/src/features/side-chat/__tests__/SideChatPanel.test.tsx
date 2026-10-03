@@ -27,7 +27,12 @@ vi.mock('@assistant-ui/react', () => ({
 vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({ useDaemonPort: () => 31415 }));
 
 const fakeController = {
-  getState: () => ({ runState: { type: 'idle' }, loadState: { type: 'idle' }, interactions: { permissions: {} } }),
+  getState: () => ({
+    messages: [],
+    runState: { type: 'idle' },
+    loadState: { type: 'idle' },
+    interactions: { permissions: {} },
+  }),
   subscribeState: () => () => undefined,
   sendMessage: vi.fn(),
   cancel: vi.fn(),

@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 
+use crate::agent_message_partial::AgentMessagePartialState;
 use crate::thread_registry::ThreadRegistryDeps;
 
 /// The `{ id, text }` plan captured incrementally across a turn.
@@ -70,11 +71,27 @@ pub struct CodexSessionState {
     pub background_tasks: Option<Arc<BackgroundTaskTracker>>,
     /// child thread id → its live tracker task id. Presence means "a row is live".
     pub agent_task_ids: HashMap<String, String>,
+    /// Todo #378: the parent's own in-flight `item/agentMessage/delta`
+    /// accumulation, fed to `SessionSink::on_message_partial`.
+    pub agent_message_partial: AgentMessagePartialState,
+    pub presentation: crate::transcript_presentation::PresentationStateByThread,
 }
 
 impl CodexSessionState {
     pub fn card_for_thread(&self, tid: &str) -> Option<&SubAgentCard> {
         self.sub_agent_cards.get(tid)
+    }
+
+    /// Released on kill and process exit (`session.rs`): in-flight
+    /// command/partial-message state that must not leak into the next turn
+    /// or session. `interrupt` deliberately does not call this — its own
+    /// `turn/completed { status: "interrupted" }` clears it, and clearing
+    /// early would let a late delta from the same turn restart the text
+    /// mid-message.
+    pub fn clear_transient(&mut self) {
+        self.presentation.clear();
+        self.command_state.clear();
+        self.agent_message_partial.clear();
     }
 
     pub fn open_card_ids(&self) -> Vec<String> {

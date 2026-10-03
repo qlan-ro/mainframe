@@ -8,6 +8,7 @@ use mainframe_types::adapter::{MessageMetadata, SessionResult};
 use mainframe_types::chat::{MessageContent, TodoItem};
 
 use crate::history::with_parent;
+use mainframe_types::transcript_presentation::{PresentationUpdate, TranscriptPresentation};
 
 /// Wraps a sink to tag every emitted block with `parentToolUseId` (mirrors the TS
 /// `wrapSinkWithParentId`). Only `on_message`/`on_tool_result` are transformed;
@@ -35,6 +36,42 @@ impl SessionSink for ParentIdSink {
                 .collect(),
             metadata,
         );
+    }
+    fn on_message_with_presentation(
+        &self,
+        content: Vec<MessageContent>,
+        metadata: Option<MessageMetadata>,
+        mut p: TranscriptPresentation,
+    ) {
+        p.parent_tool_use_id = Some(self.parent.clone());
+        self.inner.on_message_with_presentation(
+            content
+                .into_iter()
+                .map(|b| with_parent(b, &self.parent))
+                .collect(),
+            metadata,
+            p,
+        );
+    }
+    fn on_message_partial_with_presentation(
+        &self,
+        id: &str,
+        content: Vec<MessageContent>,
+        mut p: TranscriptPresentation,
+    ) {
+        p.parent_tool_use_id = Some(self.parent.clone());
+        self.inner.on_message_partial_with_presentation(
+            id,
+            content
+                .into_iter()
+                .map(|b| with_parent(b, &self.parent))
+                .collect(),
+            p,
+        );
+    }
+    fn on_presentation_update(&self, mut update: PresentationUpdate) {
+        update.presentation.parent_tool_use_id = Some(self.parent.clone());
+        self.inner.on_presentation_update(update);
     }
     fn on_tool_result(&self, content: Vec<MessageContent>, vendor_id: Option<String>) {
         self.inner.on_tool_result(

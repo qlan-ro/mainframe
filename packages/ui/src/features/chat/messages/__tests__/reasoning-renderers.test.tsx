@@ -1,3 +1,5 @@
+import { useUiPrefs } from '@/store/ui-prefs';
+import { TurnFixture, turnMessage, turnSource } from '../compact/__tests__/turn-fixtures';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import {
@@ -73,3 +75,38 @@ for (const mode of ['verbose', 'compact'] as const) {
     expect(body(mode).textContent).toBe(first + LONG);
   });
 }
+
+function mappedReasoning(tail: string, running: boolean) {
+  const text = LONG + tail;
+  return {
+    ...turnMessage('mapped-thought', text, { state: running ? 'running' : 'completed' }, [
+      turnSource('settled', 0, LONG.length),
+      turnSource('live', LONG.length, text.length, { state: running ? 'running' : 'completed' }),
+    ]),
+    content: [{ type: 'reasoning' as const, text }],
+  };
+}
+it('smooths only the live mapped reasoning range without duplicating the whole native part', async () => {
+  useUiPrefs.getState().setTranscriptMode('compact');
+  const view = render(<TurnFixture rootId="mapped-smoothing" messages={[mappedReasoning(MORE, true)]} />);
+  const toggle = screen.getByRole('button', { name: 'Thinking' });
+  fireEvent.click(toggle);
+  const text = () =>
+    [...view.container.querySelectorAll('[data-source-message-id="mapped-thought"] .whitespace-pre-wrap')].map(
+      (element) => element.textContent,
+    );
+  expect(text()).toEqual([LONG, '']);
+  tick(100);
+  expect(text()[0]).toBe(LONG);
+  expect(text()[1]!.length).toBeGreaterThan(0);
+  expect(text()[1]!.length).toBeLessThan(MORE.length);
+  view.rerender(<TurnFixture rootId="mapped-smoothing" messages={[mappedReasoning(MORE + '\n  ', false)]} />);
+  await flush();
+  tick(1000);
+  expect(text()).toEqual([LONG, MORE + '\n  ']);
+  expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  fireEvent.click(toggle);
+  tick(300);
+  fireEvent.click(toggle);
+  expect(text()).toEqual([LONG, MORE + '\n  ']);
+});

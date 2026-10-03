@@ -9,8 +9,8 @@ use mainframe_adapter_api::AdapterError;
 use mainframe_types::chat::ChatMessage;
 use serde_json::json;
 
-use crate::history::convert_thread_items;
 use crate::jsonrpc::JsonRpcClient;
+use crate::presentation_history::convert_turns;
 use crate::rollout_reader::read_rollout_items;
 use crate::session::de;
 use crate::thread_registry::{AgentMetadata, lookup_agent_metadata};
@@ -65,7 +65,7 @@ pub(crate) async fn load_history_inner(
         resume_thread_id,
     );
 
-    let all_items: Vec<ThreadItem> = turns.into_iter().flat_map(|t| t.items).collect();
+    let all_items: Vec<ThreadItem> = turns.iter().flat_map(|t| t.items.iter().cloned()).collect();
 
     let child_thread_ids = collect_child_thread_ids(&all_items);
 
@@ -75,8 +75,23 @@ pub(crate) async fn load_history_inner(
         lookup_agent_metadata(&child_thread_ids)
     };
 
+    let child_items_by_thread =
+        load_children(temp, &child_thread_ids, &agent_meta_by_thread).await?;
+    Ok(convert_turns(
+        &turns,
+        resume_thread_id,
+        &child_items_by_thread,
+        &agent_meta_by_thread,
+    ))
+}
+
+async fn load_children(
+    temp: &Arc<JsonRpcClient>,
+    child_thread_ids: &[String],
+    agent_meta_by_thread: &HashMap<String, AgentMetadata>,
+) -> Result<HashMap<String, Vec<ThreadItem>>, AdapterError> {
     let mut child_items_by_thread: HashMap<String, Vec<ThreadItem>> = HashMap::new();
-    for child_id in &child_thread_ids {
+    for child_id in child_thread_ids {
         // Prefer the raw rollout JSONL — it has function_call records (bash) that
         // thread/read strips. Fall back to thread/read if unavailable.
         let rollout_path = agent_meta_by_thread
@@ -113,12 +128,7 @@ pub(crate) async fn load_history_inner(
         }
     }
 
-    Ok(convert_thread_items(
-        &all_items,
-        resume_thread_id,
-        &child_items_by_thread,
-        &agent_meta_by_thread,
-    ))
+    Ok(child_items_by_thread)
 }
 
 /// Child thread ids to fetch and nest, from both naming routes (todo #247
@@ -161,6 +171,7 @@ mod tests {
             id: id.to_string(),
             status: "completed".to_string(),
             items: Vec::new(),
+            timing: Default::default(),
         }
     }
 

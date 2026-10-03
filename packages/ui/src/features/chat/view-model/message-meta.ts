@@ -13,10 +13,12 @@
  * own shape, not ours.)
  */
 import { useAuiState } from '@assistant-ui/react';
+import type { PartSources } from './transcript-presentation';
 import type { CaptureRow } from './parse-captures';
 import type { ReviewComment } from './parse-review-comment';
 
 export interface MainframeMessageMeta {
+  readonly partSources?: PartSources;
   // assistant turn
   readonly partGroups?: Readonly<Record<string, string>>;
   readonly groupSummaries?: Readonly<Record<string, string>>;
