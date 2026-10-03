@@ -109,13 +109,16 @@ jobs:
   # The mock e2e suite (~1h, workers:1) gates ONLY the changesets version PR:
   # that PR is the last stop before a release, and the Release workflow used to
   # be the first time the suite saw any of a release's merges — a red suite
-  # there meant a merged version bump and a failed release. Skipped on every
-  # other PR (a skipped job satisfies the required check), so feature PRs
-  # stay fast. The condition is passed INTO the reusable workflow rather than
-  # put on this job: a `uses:` job skipped here reports as "e2e-mock", but
-  # when it runs the check is "e2e-mock / e2e-mock" — skipping inside keeps
-  # the one name main's ruleset requires.
+  # there meant a merged version bump and a failed release. It does not run
+  # here even on the version PR: that branch is force-pushed after every merge
+  # to main. `require-manual` fails the check at once instead, and
+  # e2e-gate.yml is the manual run that turns it green on the final head.
+  # Feature PRs get `skip` (a skipped job satisfies the required check). The
+  # decision is passed INTO the reusable workflow rather than put on this job:
+  # a `uses:` job skipped here reports as "e2e-mock", but when it runs the
+  # check is "e2e-mock / e2e-mock" — deciding inside keeps the one name main's
+  # ruleset requires.
   e2e-mock:
     uses: ./.github/workflows/e2e-mock.yml
     with:
-      run: ${{ github.head_ref == 'changeset-release/main' }}
+      mode: ${{ github.head_ref == 'changeset-release/main' && 'require-manual' || 'skip' }}
