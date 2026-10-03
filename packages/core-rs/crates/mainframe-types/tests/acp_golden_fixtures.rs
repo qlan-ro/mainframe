@@ -16,10 +16,10 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 use mainframe_types::acp::extensions::{
-    CompactionParams, GateResolvedParams, HeartbeatParams, ItemMeta, MainframeCapabilities,
-    PromptSendMeta, QueueStateParams, QueuedPromptState, ReplayCompleteParams, ResyncParams,
-    RetryMarker, RichPermissionAnswer, SessionDetachParams, StructuredDiff,
-    TranscriptClearedParams, TruncationMarker, UsageMeta,
+    CompactionParams, CursorParams, GateResolvedParams, HeartbeatParams, ItemMeta,
+    MainframeCapabilities, PromptSendMeta, QueueStateParams, QueuedPromptState,
+    ReplayCompleteParams, ResyncParams, RetryMarker, RichPermissionAnswer, SessionDetachParams,
+    StructuredDiff, TranscriptClearedParams, TruncationMarker, UsageMeta,
 };
 use mainframe_types::acp::jsonrpc::{JsonRpcNotification, JsonRpcRequest, JsonRpcResponse};
 use mainframe_types::acp::permission::{RequestPermissionRequest, RequestPermissionResponse};
@@ -139,6 +139,12 @@ fn roundtrip_by_name(name: &str, body: &Value) -> Result<(), String> {
     }
     if name == "gate-resolved.params.json" {
         return roundtrip_as::<GateResolvedParams>(body);
+    }
+    if name == "cursor.notification.json" {
+        return roundtrip_as::<JsonRpcNotification>(body);
+    }
+    if name == "cursor.params.json" {
+        return roundtrip_as::<CursorParams>(body);
     }
     if name.starts_with("extensions.capabilities") {
         return roundtrip_as::<MainframeCapabilities>(body);

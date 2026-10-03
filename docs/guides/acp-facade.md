@@ -250,6 +250,41 @@ Every successful `session/resume` reply is followed by exactly one `replay_compl
 
 Discard the staged replay on `aborted: true` and keep what you had visible; a `_mainframe.dev/resync` for the same session typically follows, and you retry from there. A normal close never carries the `aborted` key at all — check for its presence, not for a `false` value that never ships.
 
+### Revision cursors (todo #377)
+
+A plain item cursor resumes strictly after the named item, so a change to an item you already hold — a late metadata patch (turn duration attaching after the turn ended), or a deletion — never reaches you on reconnect. Opt into revision-versioned cursors with your own `initialize` request to get that fixed:
+
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "initialize",
+  "params": { "protocolVersion": 2, "info": { "name": "my-client", "version": "1.0.0" },
+              "_meta": { "_mainframe.dev": { "revisionCursors": true } } } }
+```
+
+Only an opted-in connection gets anything new; otherwise the wire is byte-identical to the plain item-cursor behavior above, even if the daemon advertises `revisionCursors: true`. Once opted in, every `session/resume` reply carries a `cursor` boundary regardless of which `replayFrom` shape you sent — including your first-ever resume, which still sends `{ "type": "start" }`:
+
+```json
+{ "jsonrpc": "2.0", "id": 1, "result": { "_meta": { "_mainframe.dev": {
+  "itemCount": 24, "cursor": { "epoch": "ep_4b7f9c21", "revision": 18 } } } } }
+```
+
+Store that `cursor` durably and resume with it next time instead of an item cursor:
+
+```json
+{ "jsonrpc": "2.0", "id": 2, "method": "session/resume",
+  "params": { "sessionId": "chat_9f2a3b1c", "cwd": "/path/to/repo",
+              "replayFrom": { "type": "revision", "epoch": "ep_4b7f9c21", "revision": 18 } } }
+```
+
+Within the same epoch and a revision the daemon has retained, the reply's replay is exactly the changes since then — edits, meta-only patches, and clears for anything deleted, not just creates for anything new — plus the new `cursor`. An unknown epoch or a revision outside the retained range falls back to a full replay with `fullReplay: true`, the same signal a stale item cursor gives you. Epochs rotate (a transcript clear, a resync, a finished compaction) and invalidate every cursor from the old one outright — do not try to reuse a stored cursor across an epoch change; resume from `start` instead and let the reply hand you a fresh one.
+
+While attached, a `_mainframe.dev/cursor` notification advances your durable cursor:
+
+```json
+{ "jsonrpc": "2.0", "method": "_mainframe.dev/cursor", "params": { "sessionId": "chat_9f2a3b1c", "epoch": "ep_4b7f9c21", "revision": 19 } }
+```
+
+It rides the same per-session order as `session/update`, after the frames of the display revision it describes — receiving it means you have already applied everything through `revision`. Advance your stored cursor only then, and only while no resume or staged replay is in flight for that session; an interrupted replay must not advance past what you actually applied. A `transcript_cleared` or `_mainframe.dev/resync` clears your stored cursor the same way it clears your items — the next resume goes out as `{ "type": "start" }`.
+
 Three more notifications ask you to resync:
 
 | Notification | Params | What to do |

@@ -37,8 +37,12 @@ async fn a_text_streaming_snapshot_marks_only_the_last_agent_message_as_streamin
         streaming: Some(StreamingLeafKind::Text),
         ..FakePort::default()
     };
-    let (_response, replay) =
-        dispatch_resume(resume_request(Some(json!({ "type": "start" }))), &port).await;
+    let (_response, replay) = dispatch_resume(
+        resume_request(Some(json!({ "type": "start" }))),
+        &port,
+        None,
+    )
+    .await;
 
     let upserts: Vec<&MessageUpsert> = replay
         .updates
@@ -67,8 +71,12 @@ async fn a_thinking_streaming_snapshot_marks_only_the_open_thought() {
         streaming: Some(StreamingLeafKind::Thinking),
         ..FakePort::default()
     };
-    let (_response, replay) =
-        dispatch_resume(resume_request(Some(json!({ "type": "start" }))), &port).await;
+    let (_response, replay) = dispatch_resume(
+        resume_request(Some(json!({ "type": "start" }))),
+        &port,
+        None,
+    )
+    .await;
 
     let thought = replay
         .updates
@@ -95,6 +103,7 @@ async fn no_streaming_snapshot_replays_identically_to_the_pre_382_encode_based_p
     let (streaming_response, streaming_replay) = dispatch_resume(
         resume_request(Some(json!({ "type": "start" }))),
         &streaming_port,
+        None,
     )
     .await;
 
@@ -126,7 +135,7 @@ async fn an_open_gate_still_redelivers_alongside_a_streaming_snapshot() {
         running: true,
         streaming: Some(StreamingLeafKind::Text),
     };
-    let (_response, replay) = dispatch_resume(resume_request(None), &port).await;
+    let (_response, replay) = dispatch_resume(resume_request(None), &port, None).await;
 
     let request = replay
         .pending_permission_request

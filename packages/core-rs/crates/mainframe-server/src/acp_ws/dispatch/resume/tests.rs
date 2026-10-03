@@ -287,3 +287,8 @@ async fn a_resume_that_succeeds_clears_the_failure_count() {
         "a resume that worked since means this failure is not the loop"
     );
 }
+
+// End-to-end revision-cursor cases through `start_resume` (todo #377) live
+// in `revision_cursor_tests.rs`, split out to keep this file under 300
+// lines — it shares this file's fixtures via `use super::*`.
+mod revision_cursor_tests;

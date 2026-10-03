@@ -9,8 +9,13 @@ mod awaiting_seed_tests;
 mod gate_tests;
 mod notification_tests;
 mod resume_race_tests;
+mod revision_cursor_tests;
 
+use std::sync::atomic::AtomicBool;
+
+use mainframe_acp::EncodedItem;
 use mainframe_chat::chat_surface::{ChatSurfaceEvent, TurnStopReason};
+use mainframe_types::acp::jsonrpc::JsonRpcResponse;
 use mainframe_types::adapter::ControlRequest;
 use mainframe_types::content::LeafContent;
 use mainframe_types::display::{DisplayContent, DisplayMessage, DisplayMessageType};

@@ -6,12 +6,13 @@
 //! only assembles them.
 
 use mainframe_types::acp::extensions::{
-    CompactionParams, CompactionWirePhase, GateResolvedParams, HeartbeatParams,
-    MainframeCapabilities, QueueStateParams, ReplayCompleteParams, ResyncParams,
-    TranscriptClearedParams,
+    CompactionParams, CompactionWirePhase, CursorParams, GateResolvedParams, HeartbeatParams,
+    MAINFRAME_META_NAMESPACE, MainframeCapabilities, QueueStateParams, REVISION_CURSORS_OPT_IN_KEY,
+    ReplayCompleteParams, ResyncParams, RevisionCursor, TranscriptClearedParams,
 };
 use mainframe_types::acp::jsonrpc::JsonRpcNotification;
 use mainframe_types::chat::QueuedMessageRef;
+use serde_json::Value;
 
 /// Production default heartbeat cadence, matching the vendored fixtures
 /// (`heartbeat.notification.json`'s sibling `initialize.response.json`
@@ -31,6 +32,44 @@ pub fn mainframe_capabilities(heartbeat_interval_ms: u64) -> MainframeCapabiliti
         heartbeat_interval_ms: Some(heartbeat_interval_ms as i64),
         item_creation_markers: Some(true),
         replay_complete: Some(true),
+        // The daemon side landed (todo #377, group G2): a connection that
+        // opts in via `REVISION_CURSORS_OPT_IN_KEY` gets cursor meta and
+        // `_mainframe.dev/cursor` notifications; one that does not keeps
+        // today's item-cursor-only wire regardless of this flag.
+        revision_cursors: Some(true),
+    }
+}
+
+/// Whether an `initialize` request opts into revision-versioned resume
+/// cursors (todo #377): `params._meta["_mainframe.dev"].revisionCursors ==
+/// true`. Reads the raw request params directly, ahead of
+/// `InitializeRequest` deserialization succeeding or the handshake
+/// negotiating — `mainframe-server`'s `dispatch_fallback` calls this on the
+/// still-owned frame before handing it to `dispatch_with_prompt`, and only
+/// acts on the result once that call reports the handshake negotiated.
+pub fn client_opts_into_revision_cursors(params: Option<&Value>) -> bool {
+    params
+        .and_then(|params| params.get("_meta"))
+        .and_then(|meta| meta.get(MAINFRAME_META_NAMESPACE))
+        .and_then(|ns| ns.get(REVISION_CURSORS_OPT_IN_KEY))
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+}
+
+/// The `_mainframe.dev/cursor` notification (todo #377): the replay boundary
+/// a reconnecting client now holds every change through — rides the
+/// per-session throttle FIFO after the frames of the display revision it
+/// describes (`ThrottledFrame::Cursor`), and is built only for a connection
+/// that opted in.
+pub fn cursor_notification(session_id: &str, cursor: &RevisionCursor) -> JsonRpcNotification {
+    JsonRpcNotification {
+        jsonrpc: "2.0".into(),
+        method: "_mainframe.dev/cursor".into(),
+        params: Some(serde_json::json!(CursorParams {
+            session_id: session_id.to_string(),
+            epoch: cursor.epoch.clone(),
+            revision: cursor.revision,
+        })),
     }
 }
 
@@ -163,6 +202,38 @@ mod tests {
         assert_eq!(value["heartbeatIntervalMs"], fixture["heartbeatIntervalMs"]);
         assert_eq!(value["itemCreationMarkers"], fixture["itemCreationMarkers"]);
         assert_eq!(value["replayComplete"], fixture["replayComplete"]);
+        assert_eq!(value["revisionCursors"], fixture["revisionCursors"]);
+    }
+
+    #[test]
+    fn client_opts_into_revision_cursors_reads_the_meta_namespace() {
+        let opted_in = serde_json::json!({
+            "_meta": { "_mainframe.dev": { "revisionCursors": true } }
+        });
+        assert!(client_opts_into_revision_cursors(Some(&opted_in)));
+
+        let opted_out = serde_json::json!({ "_meta": { "_mainframe.dev": {} } });
+        assert!(!client_opts_into_revision_cursors(Some(&opted_out)));
+
+        assert!(!client_opts_into_revision_cursors(None));
+    }
+
+    #[test]
+    fn cursor_notification_matches_the_pinned_fixture() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../mainframe-types/tests/fixtures/acp/cursor.notification.json"
+        ))
+        .unwrap();
+        let note = cursor_notification(
+            "chat_9f2a3b1c",
+            &mainframe_types::acp::extensions::RevisionCursor {
+                epoch: "ep_4b7f9c21".to_string(),
+                revision: 42,
+            },
+        );
+        let mut value = serde_json::to_value(&note).unwrap();
+        value["_provenance"] = fixture["_provenance"].clone();
+        assert_eq!(value, fixture);
     }
 
     #[test]

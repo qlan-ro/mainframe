@@ -129,3 +129,20 @@ export const GateResolvedParamsSchema = z
   })
   .loose();
 export type GateResolvedParams = z.infer<typeof GateResolvedParamsSchema>;
+
+/**
+ * `_mainframe.dev/cursor`'s params (todo #377): the replay boundary a
+ * reconnecting client now holds every change through. Rides the
+ * per-session throttle FIFO after the frames of the display revision it
+ * describes, so receiving it means the client holds every change up to
+ * and including `revision`. Sent only to connections that opted into
+ * revision cursors via `REVISION_CURSORS_OPT_IN_KEY` (`extensions.ts`).
+ */
+export const CursorParamsSchema = z
+  .object({
+    sessionId: z.string(),
+    epoch: z.string(),
+    revision: z.number().int().nonnegative(),
+  })
+  .loose();
+export type CursorParams = z.infer<typeof CursorParamsSchema>;

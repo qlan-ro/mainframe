@@ -1,0 +1,15 @@
+{
+  "_provenance": "synthetic",
+  "protocolVersion": 2,
+  "info": {
+    "name": "mainframe-ui",
+    "title": "Mainframe",
+    "version": "2.2.0"
+  },
+  "capabilities": {},
+  "_meta": {
+    "_mainframe.dev": {
+      "revisionCursors": true
+    }
+  }
+}

@@ -2,24 +2,24 @@
  * ACP v2 chat-facade client (todo #350): `/acp/{profile}` JSON-RPC-over-WS, handshake, session prompt/cancel/resume, permission gates, reconnect with backoff, and the heartbeat/gap-resume sync contract. This IS the desktop chat transcript path (`docs/API-REFERENCE.md` § ACP Chat Facade); the legacy `lib/daemon/ws-client.ts` dialect remains only for the side-band event families the facade does not model (chat.updated config, queued refs, background tasks, worktree offers, workflow runs, compaction markers) until the daemon retires it.
  * Session-state accumulation lives in `features/chat/view-model/acp-item-accumulator.ts`; this module only speaks the wire protocol. One client per adapter profile, shared by every chat of that adapter (`acp-clients.ts`), multiplexing N sessions. Inbound notification/request parsing and listener fan-out live in `acp-notification-router.ts` — this file owns connection lifecycle and reconnect only, delegating its `on*` listener methods to that router.
  */
-import type {
-  CancelSessionNotification,
-  InitializeRequest,
-  InitializeResponse,
-  JsonRpcRequestId,
-  MainframeCapabilities,
-  PromptRequest,
-  PromptResponse,
-  RequestPermissionResponse,
-  ResumeSessionRequest,
-  ResumeSessionResponse,
-} from '@qlan-ro/mainframe-types';
 import {
+  type CancelSessionNotification,
   InitializeResponseSchema,
+  type InitializeRequest,
+  type InitializeResponse,
+  type JsonRpcRequestId,
   MAINFRAME_META_NAMESPACE,
+  type MainframeCapabilities,
   MainframeCapabilitiesSchema,
   PINNED_PROTOCOL_VERSION,
+  type PromptRequest,
+  type PromptResponse,
   PromptResponseSchema,
+  type ReplayCursor,
+  type RequestPermissionResponse,
+  REVISION_CURSORS_OPT_IN_KEY,
+  type ResumeSessionRequest,
+  type ResumeSessionResponse,
   ResumeSessionResponseSchema,
 } from '@qlan-ro/mainframe-types';
 import { getActiveDaemon } from './active-daemon';
@@ -27,6 +27,7 @@ import { HeartbeatWatchdog } from './acp-heartbeat-watchdog';
 import {
   AcpNotificationRouter,
   type CompactionListener,
+  type CursorListener,
   type GateResolvedListener,
   type PermissionRequestListener,
   type QueueStateListener,
@@ -36,10 +37,8 @@ import {
   type TranscriptClearedListener,
 } from './acp-notification-router';
 import { RpcConnection, type AcpSocketFactory, type AcpSocketLike } from './acp-rpc-connection';
-
-/** Matches `mainframe_acp::resume::ReplayCursor`'s wire shape — opaque on the vendored type by design (session.ts). */
-export type ReplayCursor = { type: 'start' } | { type: 'item'; itemId: string };
-
+/** `mainframe_acp::resume::ReplayCursor`'s wire shape (todo #377 added the `revision` variant) — single-canonical-type in `@qlan-ro/mainframe-types`, re-exported for existing `from './acp-client'` imports. */
+export type { ReplayCursor };
 /** Production default; overridden per-connection by the daemon's advertised `heartbeatIntervalMs`. */
 const FALLBACK_HEARTBEAT_INTERVAL_MS = 15_000;
 const DEFAULT_CLIENT_INFO = { name: 'mainframe-ui', version: '0.0.0' };
@@ -139,9 +138,11 @@ export class AcpFacadeClient {
     try {
       await connection.open();
 
+      // `_meta` opts into revision-versioned resume cursors (todo #377) — ignored by a daemon that doesn't advertise `revisionCursors` back.
       const request: InitializeRequest = {
         protocolVersion: PINNED_PROTOCOL_VERSION,
         info: this.deps.clientInfo ?? DEFAULT_CLIENT_INFO,
+        _meta: { [MAINFRAME_META_NAMESPACE]: { [REVISION_CURSORS_OPT_IN_KEY]: true } },
       };
       const result = await connection.sendRequest('initialize', request);
       const response = InitializeResponseSchema.parse(result);
@@ -240,6 +241,11 @@ export class AcpFacadeClient {
   /** Closes exactly one `session/resume` replay (`_mainframe.dev/replay_complete`, spec Decision 38). */
   onReplayComplete(listener: ReplayCompleteListener): () => void {
     return this.router.onReplayComplete(listener);
+  }
+
+  /** Advances the durable revision cursor outside a resume round trip (`_mainframe.dev/cursor`, todo #377). */
+  onCursor(listener: CursorListener): () => void {
+    return this.router.onCursor(listener);
   }
 
   /** Fires when the caller should call `resume()` to converge: a heartbeat gap, silence, or the socket closing. */

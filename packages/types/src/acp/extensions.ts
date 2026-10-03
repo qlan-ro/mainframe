@@ -101,9 +101,60 @@ export const MainframeCapabilitiesSchema = z
      * this is advertised.
      */
     replayComplete: z.boolean().optional(),
+    /**
+     * Whether the daemon negotiates revision-versioned resume cursors
+     * (todo #377): an opted-in connection's `session/resume` reply adds
+     * `cursor` meta and is followed by `_mainframe.dev/cursor`
+     * notifications after catch-up. A connection that does not opt in via
+     * `REVISION_CURSORS_OPT_IN_KEY` keeps today's item-cursor-only wire
+     * regardless of this flag.
+     */
+    revisionCursors: z.boolean().optional(),
   })
   .loose();
 export type MainframeCapabilities = z.infer<typeof MainframeCapabilitiesSchema>;
+
+/**
+ * The `initialize` request `_meta["_mainframe.dev"]` key a client sets to
+ * `true` to opt into revision-versioned resume cursors (todo #377). Absent
+ * or `false` keeps the connection on item cursors only, byte-identical to
+ * today, even when `MainframeCapabilities.revisionCursors` advertises
+ * server support.
+ */
+export const REVISION_CURSORS_OPT_IN_KEY = 'revisionCursors';
+
+/**
+ * The replay boundary a revision-cursor `session/resume` reply returns and
+ * the `_mainframe.dev/cursor` notification advances (todo #377). `epoch`
+ * identifies the log generation — `transcript_cleared`, `resync`,
+ * compaction, and a tool-call vanish each rotate it, which invalidates
+ * every cursor from the prior epoch. `revision` is the daemon's monotonic
+ * per-chat counter. Mirrors
+ * `mainframe-types/src/acp/extensions.rs`'s `RevisionCursor`.
+ */
+export const RevisionCursorSchema = z
+  .object({
+    epoch: z.string(),
+    revision: z.number().int().nonnegative(),
+  })
+  .loose();
+export type RevisionCursor = z.infer<typeof RevisionCursorSchema>;
+
+/**
+ * `ResumeSessionRequest.replayFrom`'s wire shape (todo #377) — opaque on
+ * the vendored `ResumeSessionRequest` type by design (`session.ts`).
+ * `start` always full-replays; `item` resumes after the named stable item
+ * (legacy daemons and clients that have not negotiated revision cursors);
+ * `revision` resumes from a server-issued `{epoch, revision}` boundary.
+ * Moved here from `acp-client.ts` so the daemon-contract type and its
+ * validator live together (single-canonical-type rule).
+ */
+export const ReplayCursorSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('start') }),
+  z.object({ type: z.literal('item'), itemId: z.string() }),
+  z.object({ type: z.literal('revision'), epoch: z.string(), revision: z.number().int().nonnegative() }),
+]);
+export type ReplayCursor = z.infer<typeof ReplayCursorSchema>;
 
 /**
  * The rich permission answer (spec decision 12): today's `ControlResponse`

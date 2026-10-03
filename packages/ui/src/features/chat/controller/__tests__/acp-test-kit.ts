@@ -21,11 +21,13 @@ import type {
   RequestPermissionRequest,
   RequestPermissionResponse,
   ResumeSessionResponse,
+  RevisionCursor,
   SessionUpdate,
 } from '@qlan-ro/mainframe-types';
 import type { DaemonWsClient } from '../../../../lib/daemon/ws-client';
 import type { GapListener, ReplayCursor } from '../../../../lib/daemon/acp-client';
 import type {
+  CursorListener,
   GateResolvedListener,
   PermissionRequestListener,
   CompactionListener,
@@ -51,7 +53,7 @@ export interface FakeAcpClient extends AcpClientHandle {
   readonly respondCalls: Array<{ id: JsonRpcRequestId; response: RequestPermissionResponse }>;
   readonly detachCalls: string[];
   /** Controls the next resume() response's `_meta['_mainframe.dev']`. */
-  nextResumeMeta: { itemCount?: number; fullReplay?: boolean } | undefined;
+  nextResumeMeta: { itemCount?: number; fullReplay?: boolean; cursor?: RevisionCursor } | undefined;
   emitUpdate(sessionId: string, update: SessionUpdate): void;
   emitPermissionRequest(id: JsonRpcRequestId, request: RequestPermissionRequest): void;
   emitGateResolved(sessionId: string, requestId: string): void;
@@ -61,6 +63,8 @@ export interface FakeAcpClient extends AcpClientHandle {
   emitResync(sessionId: string): void;
   /** `_mainframe.dev/replay_complete` (D4) — closes the oldest open replay window. `aborted` defaults to `false` (a normal close), matching the wire's "absent means not aborted". */
   emitReplayComplete(sessionId: string, aborted?: boolean): void;
+  /** `_mainframe.dev/cursor` (todo #377) — advances the durable revision cursor outside a resume round trip. */
+  emitCursor(sessionId: string, cursor: RevisionCursor): void;
   /** A live-socket heartbeat/sequence gap — the connection is unchanged. */
   emitGap(): void;
   /**
@@ -94,6 +98,7 @@ export function makeFakeAcpClient(options: { capabilities?: MainframeCapabilitie
   const queueStateListeners = new Set<QueueStateListener>();
   const resyncListeners = new Set<ResyncListener>();
   const replayCompleteListeners = new Set<ReplayCompleteListener>();
+  const cursorListeners = new Set<CursorListener>();
   const gapListeners = new Set<GapListener>();
   let connectionGeneration = 0;
 
@@ -143,6 +148,10 @@ export function makeFakeAcpClient(options: { capabilities?: MainframeCapabilitie
       replayCompleteListeners.add(listener);
       return () => replayCompleteListeners.delete(listener);
     },
+    onCursor(listener) {
+      cursorListeners.add(listener);
+      return () => cursorListeners.delete(listener);
+    },
     onGap(listener) {
       gapListeners.add(listener);
       return () => gapListeners.delete(listener);
@@ -189,6 +198,9 @@ export function makeFakeAcpClient(options: { capabilities?: MainframeCapabilitie
     },
     emitReplayComplete(sessionId, aborted = false) {
       for (const l of replayCompleteListeners) l(sessionId, aborted);
+    },
+    emitCursor(sessionId, cursor) {
+      for (const l of cursorListeners) l(sessionId, cursor);
     },
     emitGap() {
       for (const l of gapListeners) l();

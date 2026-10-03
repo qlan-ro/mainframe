@@ -6,6 +6,7 @@
  * class decides what a reply means once it arrives. The window/FIFO data
  * structures themselves live in `acp-replay-window.ts`.
  */
+import type { RevisionCursor } from '@qlan-ro/mainframe-types';
 import { ReplayCancelledError, ReplayWindow, ReplayWindowFifo, type ReplayWindowKind } from './acp-replay-window';
 import type { ReplayStage } from './acp-replay-stage';
 import type { ChatStateEvent } from './chat-thread-state';
@@ -132,6 +133,7 @@ export class ReplayWindowCoordinator {
     staged: boolean,
     isFullReplay: boolean,
     itemCount: number | null,
+    replyCursor: RevisionCursor | null,
     ids: WindowIdentity,
     opts: { bypassGuard?: boolean },
   ): Promise<void> {
@@ -139,7 +141,7 @@ export class ReplayWindowCoordinator {
       this.legacyContinuation(isFullReplay, itemCount, opts);
       return;
     }
-    await this.openWindow(isFullReplay, itemCount, ids, opts);
+    await this.openWindow(isFullReplay, itemCount, replyCursor, ids, opts);
   }
 
   /** Closes the FIFO's oldest window — regardless of its status, because replies and markers for one session pair up in FIFO order (spec Decision 38). */
@@ -193,6 +195,7 @@ export class ReplayWindowCoordinator {
   private async openWindow(
     isFullReplay: boolean,
     itemCount: number | null,
+    replyCursor: RevisionCursor | null,
     ids: WindowIdentity,
     opts: { bypassGuard?: boolean },
   ): Promise<void> {
@@ -224,6 +227,7 @@ export class ReplayWindowCoordinator {
     } else {
       window.stage = this.host.beginReplay({ full: false });
     }
+    if (window.stage) window.stage.replyCursor = replyCursor;
 
     await window.promise;
   }

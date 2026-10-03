@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import {
+  CursorParamsSchema,
   GateResolvedParamsSchema,
   HeartbeatParamsSchema,
   ItemMetaSchema,
@@ -78,6 +79,8 @@ function schemaFor(name: string): z.ZodType {
   if (name === 'heartbeat.params.json') return HeartbeatParamsSchema;
   if (name === 'gate-resolved.notification.json') return JsonRpcNotificationSchema;
   if (name === 'gate-resolved.params.json') return GateResolvedParamsSchema;
+  if (name === 'cursor.notification.json') return JsonRpcNotificationSchema;
+  if (name === 'cursor.params.json') return CursorParamsSchema;
   if (name.startsWith('extensions.capabilities')) return MainframeCapabilitiesSchema;
   if (name.startsWith('extensions.usage-meta')) return UsageMetaSchema;
   if (name.startsWith('extensions.retry-marker')) return RetryMarkerSchema;
