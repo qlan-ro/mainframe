@@ -1,0 +1,26 @@
+{
+  "todo": 379,
+  "base": "d1b5d721f19eab8f0e8356d6b75b749984d672cc",
+  "plan": "docs/plans/2026-10-03-todo-379-smooth-stream-reasoning.md",
+  "task_groups": [
+    {
+      "id": "G1",
+      "title": "Shared reasoning leaf and both renderer paths",
+      "kind": "ui",
+      "depends_on": [],
+      "parallel_safe": false,
+      "tests_coupled": true,
+      "files": [
+        "packages/ui/src/features/chat/parts/ReasoningText.tsx",
+        "packages/ui/src/features/chat/messages/VerboseParts.tsx",
+        "packages/ui/src/features/chat/messages/compact/CompactRows.tsx",
+        "packages/ui/src/features/chat/parts/__tests__/reasoning-smooth.test.tsx",
+        "packages/ui/src/features/chat/parts/__tests__/reasoning-smooth-fixtures.tsx",
+        "packages/ui/src/features/chat/messages/__tests__/reasoning-renderers.test.tsx",
+        ".changeset/smooth-stream-reasoning.md"
+      ],
+      "verification_intent": "Native reasoning smoothing and real Verbose/Compact renderer tests: progressive reveal, completed replay/reopen, immediate-idle drain, settled earlier parts, exact whitespace, interruption/replacement/identity, reduced motion and cleanup; existing prose/group/disclosure regressions; UI typecheck, affected lint/format and patch changeset."
+    }
+  ],
+  "blocked_384_dependency": false
+}
