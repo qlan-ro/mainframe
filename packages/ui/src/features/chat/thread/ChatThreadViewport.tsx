@@ -1,6 +1,7 @@
-import { useMemo, type ReactNode } from 'react';
+import { lazy, Suspense, useMemo, type ReactNode } from 'react';
 import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
 import { ArrowDownIcon } from 'lucide-react';
+import { useUiPrefs } from '@/store/ui-prefs';
 import { Button } from '@/components/ui/button';
 import { useSideAwareThreadId } from '@/features/side-chat/side-chat-scope';
 import { useDraftConfigStore } from '@/features/sessions/runtime/draft-config';
@@ -21,6 +22,19 @@ import {
 } from './ChatThreadIndicators';
 import type { ChatThreadVariant } from './ChatThread';
 
+const CompactTranscript = lazy(() =>
+  import('../messages/compact/CompactTranscript').then((module) => ({ default: module.CompactTranscript })),
+);
+function TranscriptMessages() {
+  const mode = useUiPrefs((state) => state.transcriptMode);
+  return mode === 'compact' ? (
+    <Suspense fallback={null}>
+      <CompactTranscript />
+    </Suspense>
+  ) : (
+    <ThreadPrimitive.Messages components={boundedMessageComponents} />
+  );
+}
 function ThreadFooterInput({ variant }: { variant: ChatThreadVariant }) {
   const directoryMissing = useChatExtras()?.state.chatConfig?.directoryMissing ?? false;
   const itemId = useSideAwareThreadId();
@@ -80,7 +94,7 @@ export function ChatThreadViewport({ emptyState, variant }: { emptyState?: React
           <LoadErrorBanner />
           {variant !== 'side' && <ContextNotPreservedNotice />}
           {messageCount === 0 && emptyState != null ? emptyState : null}
-          <ThreadPrimitive.Messages components={boundedMessageComponents} />
+          <TranscriptMessages />
           <GeneratingIndicator />
           <CompactingIndicator />
         </div>

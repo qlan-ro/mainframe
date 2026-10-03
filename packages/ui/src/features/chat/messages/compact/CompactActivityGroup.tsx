@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo } from 'react';
+import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { MessagePrimitive, ThreadPrimitive, useAuiState } from '@assistant-ui/react';
 import { CheckIcon, Loader2Icon } from 'lucide-react';
 import type { ActivityGroup, CompactToolRow as ToolRow } from '../../view-model/compact/types';
@@ -114,7 +114,7 @@ function ActivityDetails({ group }: { group: ActivityGroup }) {
     </>
   );
 }
-export function CompactActivityGroup({ group }: { group: ActivityGroup }) {
+export function CompactActivityGroup({ group, details }: { group: ActivityGroup; details?: ReactNode }) {
   const scope = useTranscriptScope();
   const candidate = group.active
     ? activityLabel(group, scope.pendingToolIds)
@@ -132,7 +132,7 @@ export function CompactActivityGroup({ group }: { group: ActivityGroup }) {
         />
       }
     >
-      <ActivityDetails group={group} />
+      {details ?? <ActivityDetails group={group} />}
     </CompactDisclosure>
   );
 }
