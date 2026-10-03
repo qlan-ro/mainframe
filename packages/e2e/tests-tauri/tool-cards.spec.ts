@@ -466,9 +466,13 @@ test.describe('§tool-cards — Plan revision (plan-revision)', () => {
     await expect(planCard.getByTestId('chat-plan-trigger')).toBeDisabled();
     await expect(planCard.getByTestId('chat-plan-body')).toHaveCount(0);
 
-    // Clean up exactly as chat.spec.ts does: reject the revised plan so the mock session ends cleanly.
+    // Clean up exactly as chat.spec.ts does: reject the revised plan so the mock session ends
+    // cleanly. That reject sends the model another reply and starts a new turn, but the
+    // `plan-revision` recording has no further frames to answer it with, so that follow-up turn
+    // never reaches idle in replay — bound the wait instead of asserting on it; nothing
+    // downstream depends on it.
     await page.getByTestId('chat-plan-reject').click();
-    await waitForIdle(page, 60_000);
+    await waitForIdle(page, 5_000).catch(() => {});
   });
 });
 

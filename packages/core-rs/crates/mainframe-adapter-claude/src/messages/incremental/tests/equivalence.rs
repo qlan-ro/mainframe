@@ -34,6 +34,22 @@ fn text_partials_grow_via_overlay_then_an_interrupted_overlay_is_removed() {
 }
 
 #[test]
+fn appends_after_an_empty_seed_stay_equivalent_to_the_full_pipeline() {
+    // todo #376 follow-up regression: the projector's first call can be a
+    // `full_rebuild` on an empty `raw` slice (a `session/resume` that
+    // reaches `display_snapshot` before the first prompt). Every later
+    // incremental call must still agree with a fresh full-pipeline run.
+    let mut h = Harness::new();
+    h.step(RawChanges::new(), None);
+
+    h.raw.push(user("u1", "go"));
+    h.step(appended(), None);
+
+    h.raw.push(assistant("a1", vec![text("hi there")]));
+    h.step(appended(), None);
+}
+
+#[test]
 fn tool_calls_with_results_match_the_full_pipeline() {
     let mut h = Harness::new();
     h.raw.push(assistant(

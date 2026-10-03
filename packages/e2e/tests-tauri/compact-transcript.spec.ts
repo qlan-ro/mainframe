@@ -45,10 +45,16 @@ test.describe('compact transcript preference and disclosure', () => {
     await waitForIdle(page, 60_000);
     await expect(page.getByTestId('chat-bash-card').first()).toBeVisible();
     await selectTranscript(page, 'compact');
-    const row = page.getByRole('button', { name: 'Listed directory', exact: true });
+    // #754 groups the thinking step and the `ls` Bash call into one "Read
+    // files" activity group (`activity-summary.ts` classifies `ls` as
+    // exploration) — the directory listing is no longer a top-level row.
+    const row = page.getByRole('button', { name: 'Read files', exact: true });
     await expect(row).toHaveAttribute('aria-expanded', 'false');
     await row.focus();
     await row.press('Enter');
+    // `BashCard` defaults open inside a compact group's details
+    // (`defaultOpen={compactDetail}`), so expanding the group alone already
+    // reveals the directory listing's output underneath it.
     await expect(page.getByTestId('chat-bash-output').first()).toBeVisible();
     await selectTranscript(page, 'verbose');
     await expect(page.getByTestId('chat-bash-card').first()).toBeVisible();

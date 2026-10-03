@@ -1509,6 +1509,7 @@ dependencies = [
  "dashmap",
  "dirs",
  "mainframe-adapter-api",
+ "mainframe-adapter-claude",
  "mainframe-background-tasks",
  "mainframe-display",
  "mainframe-runtime",

@@ -27,3 +27,8 @@ mainframe-background-tasks = { workspace = true }
 [dev-dependencies]
 tempfile = { workspace = true }
 mainframe-runtime = { workspace = true, features = ["test-support"] }
+# The real production projector (todo #376 follow-up): a fake like
+# `FullRebuildProjector` can never reproduce an empty-groups seed bug, so the
+# `display_snapshot`-then-`append` regression test needs the actual
+# `IncrementalProjector`, not the deps-trait fake every other test here uses.
+mainframe-adapter-claude = { workspace = true }

@@ -221,9 +221,13 @@ test.describe('§plan revision', () => {
     await page.locator('[data-testid="chat-plan-gate"]').waitFor({ timeout: 45_000 });
     await expect(page.locator('[data-testid="chat-plan-gate"]')).toBeVisible();
 
-    // Clean up: reject so the mock session ends cleanly
+    // Clean up: reject so the mock session ends cleanly. Rejecting a second
+    // plan revision sends the model another reply and starts a new turn,
+    // but the `plan-revision` recording has no further frames to answer it
+    // with, so that follow-up turn never reaches idle in replay — bound the
+    // wait instead of asserting on it; nothing downstream depends on it.
     await page.locator('[data-testid="chat-plan-reject"]').click();
-    await waitForIdle(page, 60_000);
+    await waitForIdle(page, 5_000).catch(() => {});
   });
 });
 

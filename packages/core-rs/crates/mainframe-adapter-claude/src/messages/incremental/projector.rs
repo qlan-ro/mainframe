@@ -196,7 +196,7 @@ impl IncrementalProjector {
         patched: &mut Vec<usize>,
     ) -> (usize, usize) {
         let mut scope = scope_before(&self.scope_before, r);
-        let start = refold_start(&self.groups, r, raw.len());
+        let start = refold_start(&self.groups, r);
         let combined = combined_tail(raw, start, overlay);
 
         // Ids owned by groups[r..] all have owner >= r, so dropping them
