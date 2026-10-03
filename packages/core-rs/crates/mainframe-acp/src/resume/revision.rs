@@ -5,6 +5,7 @@
 //! (`super::replay`) with no `cursor` meta at all — byte-identical to the
 //! pre-#377 wire for a connection that never negotiated the feature.
 
+use std::collections::HashSet;
 use std::sync::Mutex;
 
 use mainframe_types::acp::extensions::RevisionCursor as WireRevisionCursor;
@@ -48,9 +49,10 @@ pub(super) fn resolve(
     containers: &[Vec<EncodedItem>],
     replay_from: Option<&Value>,
     revision_log: Option<(&Mutex<RevisionLog>, WireRevisionCursor)>,
+    previews: &HashSet<String>,
 ) -> Resolved {
     let Some((log_mutex, boundary)) = revision_log else {
-        let (updates, full_replay) = replay(items, resolve_cursor(items, replay_from));
+        let (updates, full_replay) = replay(items, resolve_cursor(items, replay_from), previews);
         return Resolved {
             updates,
             full_replay,
@@ -69,7 +71,7 @@ pub(super) fn resolve(
         // opted-in connection: replay exactly as before, but still attach
         // the boundary so the client can establish its first durable
         // cursor.
-        let (updates, full_replay) = replay(items, resolve_cursor(items, replay_from));
+        let (updates, full_replay) = replay(items, resolve_cursor(items, replay_from), previews);
         return Resolved {
             updates,
             full_replay,
@@ -83,7 +85,7 @@ pub(super) fn resolve(
             cursor: Some(boundary),
         },
         ReplayPlan::Full => {
-            let (updates, _) = replay(items, ResolvedCursor::Unknown);
+            let (updates, _) = replay(items, ResolvedCursor::Unknown, previews);
             Resolved {
                 updates,
                 full_replay: true,

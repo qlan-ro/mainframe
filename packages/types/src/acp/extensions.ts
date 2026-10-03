@@ -112,6 +112,14 @@ export const MainframeCapabilitiesSchema = z
      * regardless of this flag.
      */
     revisionCursors: z.boolean().optional(),
+    /**
+     * Whether a full `session/resume` replay sends tool results older than
+     * the newest containers as previews carrying the truncation marker, for
+     * a connection that opted in with `REPLAY_RESULT_PREVIEWS_OPT_IN_KEY`
+     * (spec Decision 41). The client expands a preview through the existing
+     * full-result REST route.
+     */
+    replayResultPreviews: z.boolean().optional(),
   })
   .loose();
 export type MainframeCapabilities = z.infer<typeof MainframeCapabilitiesSchema>;
@@ -124,6 +132,14 @@ export type MainframeCapabilities = z.infer<typeof MainframeCapabilitiesSchema>;
  * server support.
  */
 export const REVISION_CURSORS_OPT_IN_KEY = 'revisionCursors';
+
+/**
+ * The `initialize` request `_meta["_mainframe.dev"]` key a client sets to
+ * `true` to receive replay result previews (spec Decision 41). Absent or
+ * `false` keeps every replayed tool result full, even when
+ * `MainframeCapabilities.replayResultPreviews` advertises server support.
+ */
+export const REPLAY_RESULT_PREVIEWS_OPT_IN_KEY = 'replayResultPreviews';
 
 /**
  * The replay boundary a revision-cursor `session/resume` reply returns and

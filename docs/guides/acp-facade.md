@@ -285,6 +285,25 @@ While attached, a `_mainframe.dev/cursor` notification advances your durable cur
 
 It rides the same per-session order as `session/update`, after the frames of the display revision it describes — receiving it means you have already applied everything through `revision`. Advance your stored cursor only then, and only while no resume or staged replay is in flight for that session; an interrupted replay must not advance past what you actually applied. A `transcript_cleared` or `_mainframe.dev/resync` clears your stored cursor the same way it clears your items — the next resume goes out as `{ "type": "start" }`.
 
+### Replay result previews
+
+A long chat's full replay is mostly tool-result text (one 1958-item chat replayed 31.6 MB, 28.9 MB of it results). If your client can fetch a result on demand, opt into previews in your `initialize` request:
+
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "initialize",
+  "params": { "protocolVersion": 2, "info": { "name": "my-client", "version": "1.0.0" },
+              "_meta": { "_mainframe.dev": { "replayResultPreviews": true } } } }
+```
+
+On every full replay (`start`, an unknown cursor, a revision fallback) an opted-in connection then receives each tool call older than the newest 20 containers with its text result cut to 2 KB and marked exactly like the daemon's own 32 KB truncation:
+
+```json
+{ "type": "content", "content": { "type": "text", "text": "…first 2 KB…",
+  "_meta": { "_mainframe.dev": { "truncated": true, "fullBytes": 48213 } } } }
+```
+
+Render the preview, and fetch the full text with `GET /api/chats/{chatId}/tool-result/{toolCallId}` when the user asks for it. Raw input, diffs, images and message text are never trimmed; the newest 20 containers always replay in full; a cursor replay previews nothing new. The daemon keeps trimming those ids on every later revision of this connection, so a live re-encode of a settled container never pushes you the full text you did not ask for. Without the opt-in the wire is byte-identical to before, even against a daemon that advertises `replayResultPreviews`.
+
 Three more notifications ask you to resync:
 
 | Notification | Params | What to do |

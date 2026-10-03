@@ -17,6 +17,8 @@
 //! holding the gate, not every session subscriber, so it is sent directly
 //! rather than queued through this per-session throttle.
 
+use std::collections::HashSet;
+
 use mainframe_types::acp::extensions::{MAINFRAME_META_NAMESPACE, RetryMarker, RevisionCursor};
 use mainframe_types::acp::update::{
     IdleStateUpdate, SessionState as WireSessionState, SessionUpdate, StopReason, UsageUpdate,
@@ -45,6 +47,14 @@ impl SessionStream {
             throttle: Throttle::new(throttle_interval_ms),
             pending_retry: None,
         }
+    }
+
+    /// The tool-call ids the replay that seeds this stream sent as result
+    /// previews (spec Decision 41, `ResumeReplay.preview_ids`) — set before
+    /// seeding, so every later revision of those items is trimmed the same
+    /// way and never restores a result the client only holds a preview of.
+    pub fn set_previews(&mut self, ids: HashSet<String>) {
+        self.state.set_previews(ids);
     }
 
     /// Mark `items` as already known without emitting anything — the resume

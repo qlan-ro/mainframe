@@ -35,6 +35,12 @@ pub struct FacadeConnection {
     /// create this chat's `RevisionLog` on this connection's resume — a
     /// connection that never sets this gets byte-identical legacy behavior.
     revision_cursors_opted_in: AtomicBool,
+    /// Set once a successful `initialize` opted into replay result previews
+    /// (spec Decision 41, `REPLAY_RESULT_PREVIEWS_OPT_IN_KEY`): this
+    /// connection's full resume replays send old tool results as previews
+    /// and its seeded streams keep trimming those ids. Never set means every
+    /// replayed result stays full, byte-identical to before.
+    replay_result_previews_opted_in: AtomicBool,
     /// One `tokio::sync::Mutex` per session, held for the duration of a
     /// spawned `session/prompt` (T10). Serializes concurrent prompts for the
     /// SAME session — queue position and D1's tail ordering both depend on
@@ -57,6 +63,7 @@ impl FacadeConnection {
             pending_gates: Mutex::new(HashMap::new()),
             negotiated: AtomicBool::new(false),
             revision_cursors_opted_in: AtomicBool::new(false),
+            replay_result_previews_opted_in: AtomicBool::new(false),
             prompt_locks: Mutex::new(HashMap::new()),
             resume_failures: Mutex::new(HashMap::new()),
         }
@@ -128,6 +135,15 @@ impl FacadeConnection {
 
     pub fn mark_revision_cursors_opted_in(&self) {
         self.revision_cursors_opted_in
+            .store(true, Ordering::Relaxed);
+    }
+
+    pub fn is_replay_result_previews_opted_in(&self) -> bool {
+        self.replay_result_previews_opted_in.load(Ordering::Relaxed)
+    }
+
+    pub fn mark_replay_result_previews_opted_in(&self) {
+        self.replay_result_previews_opted_in
             .store(true, Ordering::Relaxed);
     }
 

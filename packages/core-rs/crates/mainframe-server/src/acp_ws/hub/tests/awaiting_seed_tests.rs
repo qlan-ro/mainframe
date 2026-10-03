@@ -209,6 +209,7 @@ async fn a_gate_the_replay_redelivers_is_not_also_drained_from_the_buffer() {
         replied: Arc::new(AtomicBool::new(false)),
         completed: Arc::new(AtomicBool::new(false)),
         redelivered_gate: Some(rpc_id.as_str()),
+        preview_ids: &NO_PREVIEWS,
     };
     hub.reset_session(&conn, "chat-1", seed, |c| {
         c.deliver_gate("chat-1", &control, &frame)

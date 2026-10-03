@@ -13,6 +13,7 @@ pub mod encoder;
 pub mod gate_registry;
 pub mod gates;
 pub mod prompt;
+pub mod replay_previews;
 pub mod resume;
 pub mod revision_log;
 pub mod rpc;
@@ -21,10 +22,11 @@ pub mod stream;
 pub mod throttle;
 
 pub use capabilities::{
-    DEFAULT_HEARTBEAT_INTERVAL_MS, client_opts_into_revision_cursors, compaction_notification,
-    cursor_notification, gate_resolved_notification, heartbeat_notification,
-    mainframe_capabilities, queue_state_notification, replay_complete_notification,
-    resync_notification, transcript_cleared_notification,
+    DEFAULT_HEARTBEAT_INTERVAL_MS, client_opts_into_replay_result_previews,
+    client_opts_into_revision_cursors, compaction_notification, cursor_notification,
+    gate_resolved_notification, heartbeat_notification, mainframe_capabilities,
+    queue_state_notification, replay_complete_notification, resync_notification,
+    transcript_cleared_notification,
 };
 pub use connection::{
     DaemonInfo, DispatchOutcome, dispatch_with_prompt, handle_frame_with_prompt,
@@ -38,7 +40,10 @@ pub use gates::{
     parse_answer as parse_permission_answer,
 };
 pub use prompt::{PromptAcceptance, PromptError, PromptPort};
-pub use resume::{ReplayCursor, ResumePort, ResumeReplay, dispatch_resume};
+pub use replay_previews::{FULL_RESULT_CONTAINERS, PREVIEW_BYTES, preview_ids, preview_item};
+pub use resume::{
+    ReplayCursor, ResumeOptions, ResumePort, ResumeReplay, dispatch_resume, dispatch_resume_with,
+};
 pub use revision_log::{RecordOutcome, ReplayPlan, RevisionLog};
 pub use session_state::SessionState;
 pub use stream::SessionStream;

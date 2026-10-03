@@ -7,6 +7,7 @@
 //! dependency, so the port stays a plain trait a hand-written fake can
 //! implement in tests.
 
+use std::collections::HashSet;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Mutex;
@@ -25,6 +26,7 @@ use serde_json::Value;
 
 use crate::encoder::{self, EncodedItem};
 use crate::gates;
+use crate::replay_previews;
 use crate::revision_log::RevisionLog;
 use crate::rpc;
 use crate::session_state::SessionState;
@@ -96,6 +98,20 @@ pub struct ResumeReplay {
     /// aware caller (a seeded `SessionStream`/`RevisionLog`, G4) seeds from
     /// this instead of re-flattening.
     pub containers: Vec<Vec<EncodedItem>>,
+    /// The tool-call ids this replay sent as result previews (spec Decision
+    /// 41) — empty unless the connection opted in. The caller seeds its live
+    /// diff state with the same set so later revisions of those items stay
+    /// trimmed on this connection.
+    pub preview_ids: HashSet<String>,
+}
+
+/// Per-connection choices a `session/resume` honors.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ResumeOptions {
+    /// The connection opted into replay result previews (spec Decision 41):
+    /// a full replay sends tool results older than the newest
+    /// [`replay_previews::FULL_RESULT_CONTAINERS`] containers as previews.
+    pub result_previews: bool,
 }
 
 /// `session/resume` dispatch. Malformed params get the same structured
@@ -120,6 +136,16 @@ pub async fn dispatch_resume(
     port: &dyn ResumePort,
     revision_log: Option<(&Mutex<RevisionLog>, WireRevisionCursor)>,
 ) -> (JsonRpcResponse, ResumeReplay) {
+    dispatch_resume_with(request, port, revision_log, ResumeOptions::default()).await
+}
+
+/// [`dispatch_resume`] with the connection's negotiated [`ResumeOptions`].
+pub async fn dispatch_resume_with(
+    request: JsonRpcRequest,
+    port: &dyn ResumePort,
+    revision_log: Option<(&Mutex<RevisionLog>, WireRevisionCursor)>,
+    options: ResumeOptions,
+) -> (JsonRpcResponse, ResumeReplay) {
     let id = request.id.clone();
     let resume = match parse_resume_params(request) {
         Ok(resume) => resume,
@@ -135,11 +161,20 @@ pub async fn dispatch_resume(
     // `revision::resolve` can seed a log's container index too.
     let containers = encoder::encode_containers(&snapshot.messages, snapshot.streaming);
     let items: Vec<EncodedItem> = containers.iter().flatten().cloned().collect();
+    // Spec Decision 41: only an opted-in connection previews old results,
+    // and the set is fixed here so the replay frames and the caller's seeded
+    // diff state trim exactly the same ids.
+    let preview_ids = if options.result_previews {
+        replay_previews::preview_ids(&containers)
+    } else {
+        HashSet::new()
+    };
     let resolved = revision::resolve(
         &items,
         &containers,
         resume.replay_from.as_ref(),
         revision_log,
+        &preview_ids,
     );
     let mut updates = resolved.updates;
     updates.push(turn_state_update(port.is_running(&resume.session_id)));
@@ -162,6 +197,7 @@ pub async fn dispatch_resume(
             pending_gate: snapshot.pending,
             items,
             containers,
+            preview_ids,
         },
     )
 }
@@ -173,6 +209,7 @@ fn empty_replay() -> ResumeReplay {
         pending_gate: None,
         items: Vec::new(),
         containers: Vec::new(),
+        preview_ids: HashSet::new(),
     }
 }
 
@@ -273,8 +310,13 @@ fn resolve_cursor(items: &[EncodedItem], replay_from: Option<&Value>) -> Resolve
 /// including the cursor are fed once (seeding them as "already known") and
 /// discarded, so the collected diff creates only the items after it — full
 /// frames, since a resume has no prior wire state to delta against.
-fn replay(items: &[EncodedItem], resolved: ResolvedCursor) -> (Vec<SessionUpdate>, bool) {
+fn replay(
+    items: &[EncodedItem],
+    resolved: ResolvedCursor,
+    previews: &HashSet<String>,
+) -> (Vec<SessionUpdate>, bool) {
     let mut state = SessionState::new();
+    state.set_previews(previews.clone());
     match resolved {
         ResolvedCursor::Start => (state.diff(items), false),
         ResolvedCursor::Found(cursor_idx) => {

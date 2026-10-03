@@ -4,7 +4,7 @@
 //! itself; these are the narrower `resolve`-level cases that would be
 //! awkward to drive through the full `ResumePort` plumbing.
 
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex};
 
 use mainframe_types::acp::content::ContentBlock;
 use mainframe_types::acp::extensions::RevisionCursor;
@@ -12,6 +12,9 @@ use serde_json::json;
 
 use super::*;
 use crate::encoder::ItemRole;
+
+/// A connection that did not opt into replay result previews (spec Decision 41).
+static NO_PREVIEWS: LazyLock<HashSet<String>> = LazyLock::new(HashSet::new);
 
 /// The boundary a caller like `hub.rs::begin_resume` would have captured
 /// for `log` at this moment — these tests have no race to simulate, so the
@@ -47,6 +50,7 @@ fn no_log_means_no_cursor_meta_at_all() {
         &containers_of(&items),
         Some(&json!({ "type": "start" })),
         None,
+        &NO_PREVIEWS,
     );
     assert!(resolved.cursor.is_none());
     assert!(!resolved.full_replay);
@@ -61,6 +65,7 @@ fn a_legacy_cursor_on_an_opted_in_connection_still_gets_the_boundary() {
         &containers_of(&items),
         Some(&json!({ "type": "start" })),
         Some((&log, boundary_of(&log))),
+        &NO_PREVIEWS,
     );
     assert_eq!(
         resolved.cursor,
@@ -84,6 +89,7 @@ fn an_unseeded_log_is_seeded_from_the_snapshot() {
         &containers_of(&items),
         None,
         Some((&log, boundary_of(&log))),
+        &NO_PREVIEWS,
     );
 
     // A later revision cursor at revision 0 (the seed) sees no changes.
@@ -93,6 +99,7 @@ fn an_unseeded_log_is_seeded_from_the_snapshot() {
         &containers_of(&items),
         Some(&cursor),
         Some((&log, boundary_of(&log))),
+        &NO_PREVIEWS,
     );
     assert!(resolved.updates.is_empty());
     assert!(!resolved.full_replay);
@@ -112,6 +119,7 @@ fn a_revision_cursor_within_the_boundary_is_incremental() {
         &containers_of(&items),
         Some(&cursor),
         Some((&log, boundary_of(&log))),
+        &NO_PREVIEWS,
     );
     assert!(!resolved.full_replay);
     assert_eq!(
@@ -136,6 +144,7 @@ fn an_unknown_epoch_falls_back_to_a_full_replay_with_the_new_cursor() {
         &containers_of(&items),
         Some(&cursor),
         Some((&log, boundary_of(&log))),
+        &NO_PREVIEWS,
     );
     assert!(resolved.full_replay);
     assert_eq!(

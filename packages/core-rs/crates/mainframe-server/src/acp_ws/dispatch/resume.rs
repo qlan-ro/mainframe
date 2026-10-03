@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use mainframe_acp::resume::ResumePort;
 use mainframe_acp::revision_log::RevisionLog;
-use mainframe_acp::{dispatch_resume, rpc};
+use mainframe_acp::{ResumeOptions, dispatch_resume_with, rpc};
 use mainframe_types::acp::extensions::RevisionCursor;
 use mainframe_types::acp::jsonrpc::{JsonRpcRequest, RequestId};
 use tracing::error;
@@ -238,7 +238,10 @@ async fn deliver_resume(
     revision_log: Option<(&Mutex<RevisionLog>, RevisionCursor)>,
     progress: DeliveryProgress,
 ) {
-    let (response, replay) = dispatch_resume(request, ports, revision_log).await;
+    let options = ResumeOptions {
+        result_previews: connection.is_replay_result_previews_opted_in(),
+    };
+    let (response, replay) = dispatch_resume_with(request, ports, revision_log, options).await;
 
     let Some(session_id) = session_id else {
         // Malformed params: dispatch_resume already produced the structured
@@ -257,6 +260,7 @@ async fn deliver_resume(
         replied: progress.replied,
         completed: progress.completed,
         redelivered_gate: redelivered_gate.as_deref(),
+        preview_ids: &replay.preview_ids,
     };
     let hub = &ctx.facade_hub;
     hub.reset_session(connection, &session_id, seed, |conn| {

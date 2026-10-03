@@ -5,7 +5,7 @@
 //! and enqueued after it, where a second diff for the same session could
 //! interleave ahead of it — or buffered there for a resume in flight.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
@@ -43,6 +43,10 @@ pub struct ResumeSeed<'a> {
     pub completed: Arc<AtomicBool>,
     /// The rpc id of the gate the replay redelivers on its own, if any.
     pub redelivered_gate: Option<&'a str>,
+    /// The tool-call ids the replay sent as result previews (spec Decision
+    /// 41, `ResumeReplay.preview_ids`) — the seeded stream trims the same ids
+    /// on every later revision. Empty for a connection that did not opt in.
+    pub preview_ids: &'a HashSet<String>,
 }
 
 /// Replay everything buffered while the snapshot was in flight through the

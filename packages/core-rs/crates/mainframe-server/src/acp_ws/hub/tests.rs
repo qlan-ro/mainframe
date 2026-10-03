@@ -11,6 +11,8 @@ mod notification_tests;
 mod resume_race_tests;
 mod revision_cursor_tests;
 
+use std::collections::HashSet;
+use std::sync::LazyLock;
 use std::sync::atomic::AtomicBool;
 
 use mainframe_acp::EncodedItem;
@@ -83,6 +85,9 @@ fn reply(id: i64) -> mainframe_types::acp::jsonrpc::JsonRpcResponse {
     )
 }
 
+/// A connection that did not opt into replay result previews (spec Decision 41).
+static NO_PREVIEWS: LazyLock<HashSet<String>> = LazyLock::new(HashSet::new);
+
 /// The common `ResumeSeed`: a snapshot (per-container, todo #376 G4) and its
 /// reply, with no gate the replay redelivers and a reply flag nobody reads.
 fn seed<'a>(containers: &'a [Vec<EncodedItem>], reply: &'a JsonRpcResponse) -> ResumeSeed<'a> {
@@ -101,6 +106,7 @@ fn seed_with_flag<'a>(
         replied,
         completed: Arc::new(AtomicBool::new(false)),
         redelivered_gate: None,
+        preview_ids: &NO_PREVIEWS,
     }
 }
 

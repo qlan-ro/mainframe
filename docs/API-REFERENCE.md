@@ -765,9 +765,10 @@ route uses. `?token=` works exactly as it does on `/`.
 response's `_meta["_mainframe.dev"]` carries `MainframeCapabilities`
 (`richPermissionAnswers`, `queuedPrompts`, `retryMarkers`,
 `heartbeatIntervalMs`, `itemCreationMarkers`, `replayComplete`,
-`revisionCursors`) — a generic ACP client that ignores this namespace gets a
-degraded but coherent experience (plain option-only gates, no queued-turn
-metadata, no staged replay, item cursors only).
+`revisionCursors`, `replayResultPreviews`) — a generic ACP client that ignores
+this namespace gets a degraded but coherent experience (plain option-only
+gates, no queued-turn metadata, no staged replay, item cursors only, full
+replays).
 
 **Revision cursors (todo #377).** A client opts into epoch/revision resume
 cursors with its own `initialize` request `_meta["_mainframe.dev"]`:
@@ -779,6 +780,19 @@ reconnect recover changes to items it already holds — a late edit, a
 meta-only patch (e.g. a turn duration attached after the turn ended), or a
 deletion — which a plain item cursor (resume strictly after a named item)
 cannot express.
+
+**Replay result previews (spec Decision 41).** A client opts in with its
+`initialize` request `_meta["_mainframe.dev"]`: `{replayResultPreviews: true}`.
+On every full replay an opted-in connection receives each tool call older
+than the newest 20 containers with its text result cut to 2 KB and marked
+with the truncation marker (`_meta["_mainframe.dev"].truncated: true` plus
+`fullBytes`), the same shape the display layer's own 32 KB cap produces, so
+the card's existing expand fetches the full text from
+`GET /api/chats/{id}/tool-result/{toolUseId}`. The previewed ids are seeded
+into the connection's diff state and stay trimmed on every later revision;
+raw input, diffs, images and message text are never trimmed, a cursor replay
+previews nothing new, and a connection that does not opt in is byte-identical
+to before.
 
 **Methods and notifications (shipped grammar):**
 

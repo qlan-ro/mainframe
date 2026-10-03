@@ -6,7 +6,8 @@ mod capabilities;
 use crate::adapter::ControlResponse;
 use crate::chat::{DiffHunk, QueuedMessageRef};
 pub use capabilities::{
-    CursorParams, MainframeCapabilities, REVISION_CURSORS_OPT_IN_KEY, RevisionCursor,
+    CursorParams, MainframeCapabilities, REPLAY_RESULT_PREVIEWS_OPT_IN_KEY,
+    REVISION_CURSORS_OPT_IN_KEY, RevisionCursor,
 };
 
 /// The `_meta` key every extension value below is namespaced under.
