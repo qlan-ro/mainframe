@@ -16,6 +16,43 @@ pub(super) fn apply_update(current: &mut TranscriptPresentation, update: &Transc
     }
 }
 
+/// Apply `update` to one cached message's presentation context. Returns
+/// whether the stored value actually changed, so `MessageCache::update_in_place`
+/// journals only real edits for the display projector (todo #376).
+fn update_message_presentation(message: &mut ChatMessage, update: &PresentationUpdate) -> bool {
+    let presentation = &update.presentation;
+    if update
+        .source_message_ids
+        .as_ref()
+        .is_some_and(|ids| !ids.contains(&message.id))
+    {
+        return false;
+    }
+    let Some(value) = message
+        .metadata
+        .as_mut()
+        .and_then(|meta| meta.get_mut(PRESENTATION_CONTEXT_KEY))
+    else {
+        return false;
+    };
+    let Ok(mut current) = serde_json::from_value::<TranscriptPresentation>(value.clone()) else {
+        return false;
+    };
+    let eligible = current.same_turn(presentation) && current.state != PresentationState::Invalid;
+    apply_update(&mut current, presentation);
+    if eligible && update.source_message_ids.is_some() {
+        current.phase = presentation.phase;
+        current.final_eligible = presentation.final_eligible;
+    }
+    match serde_json::to_value(current) {
+        Ok(updated) if updated != *value => {
+            *value = updated;
+            true
+        }
+        _ => false,
+    }
+}
+
 impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
     pub(super) fn partial_with_presentation(
         &self,
@@ -47,38 +84,12 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         if !presentation.is_valid() {
             return;
         }
-        self.mutate_messages(|messages| {
-            for message in messages {
-                if update
-                    .source_message_ids
-                    .as_ref()
-                    .is_some_and(|ids| !ids.contains(&message.id))
-                {
-                    continue;
-                }
-                let Some(meta) = message.metadata.as_mut() else {
-                    continue;
-                };
-                let Some(value) = meta.get_mut(PRESENTATION_CONTEXT_KEY) else {
-                    continue;
-                };
-                let Ok(mut current) =
-                    serde_json::from_value::<TranscriptPresentation>(value.clone())
-                else {
-                    continue;
-                };
-                let eligible =
-                    current.same_turn(presentation) && current.state != PresentationState::Invalid;
-                apply_update(&mut current, presentation);
-                if eligible && update.source_message_ids.is_some() {
-                    current.phase = presentation.phase;
-                    current.final_eligible = presentation.final_eligible;
-                }
-                if let Ok(updated) = serde_json::to_value(current) {
-                    *value = updated;
-                }
-            }
-        });
+        self.messages
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .update_in_place(&self.chat_id, |message| {
+                update_message_presentation(message, &update)
+            });
         self.partial_overlays
             .update_presentation(&self.chat_id, self.session_key(), &update);
         self.emit_display();

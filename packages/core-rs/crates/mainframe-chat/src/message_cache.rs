@@ -22,6 +22,9 @@ pub struct MessageCache {
     order: Vec<String>,
     pinned: HashSet<String>,
     tool_timings: HashMap<String, crate::tool_call_timing::ToolTimingStore>,
+    /// Per-chat incremental-display-projection state (todo #376): a display
+    /// projector plus its mutation journal. See `projection.rs`.
+    projections: HashMap<String, projection::ProjectionSlot>,
     now_epoch_ms: std::sync::Arc<dyn Fn() -> u64 + Send + Sync>,
 }
 
@@ -39,6 +42,7 @@ impl MessageCache {
     /// without `unpin` would let `evict_if_needed` treat it as evictable).
     pub fn delete(&mut self, chat_id: &str) {
         self.tool_timings.remove(chat_id);
+        self.drop_projection(chat_id);
         if self.cache.remove(chat_id).is_some() {
             self.order.retain(|k| k != chat_id);
         }
@@ -83,7 +87,11 @@ impl MessageCache {
         self.track_key(chat_id);
         let messages = self.cache.entry(chat_id.to_string()).or_default();
         messages.push(message);
-        self.tool_timings[chat_id].apply(messages);
+        let changed = self.tool_timings[chat_id].apply(messages);
+        self.record_change(chat_id, mainframe_display::RawChange::Appended);
+        for (id, timing) in changed {
+            self.record_change(chat_id, mainframe_display::RawChange::Timing(id, timing));
+        }
         self.evict_if_needed();
     }
 
@@ -99,6 +107,7 @@ impl MessageCache {
             let oldest = self.order.remove(idx);
             self.cache.remove(&oldest);
             self.tool_timings.remove(&oldest);
+            self.drop_projection(&oldest);
         }
     }
 
@@ -111,6 +120,7 @@ impl MessageCache {
             return false;
         };
         msgs.remove(idx);
+        self.record_change(chat_id, mainframe_display::RawChange::Structural(idx));
         true
     }
 
@@ -124,6 +134,84 @@ impl MessageCache {
         };
         let msg = msgs.remove(idx);
         msgs.push(msg);
+        self.record_change(chat_id, mainframe_display::RawChange::Structural(idx));
+        true
+    }
+
+    /// Strip `queued`/`uuid` metadata from the message with `id`, then move it
+    /// to the end (mirrors `delete m.metadata.queued; messages.moveToEnd(id)`).
+    /// Replaces the old clone-mutate-`set` round trip
+    /// (`SessionSinkImpl::mutate_messages`): it records a `Structural(from)`
+    /// journal entry instead of dropping the projection slot wholesale, and it
+    /// never clones the chat's history to do it.
+    pub fn strip_queued_and_move_to_end(&mut self, chat_id: &str, id: &str) -> bool {
+        let Some(msgs) = self.cache.get_mut(chat_id) else {
+            return false;
+        };
+        let Some(pos) = msgs.iter().position(|m| m.id == id) else {
+            return false;
+        };
+        if let Some(md) = msgs[pos].metadata.as_mut() {
+            md.remove("queued");
+            md.remove("uuid");
+        }
+        let m = msgs.remove(pos);
+        msgs.push(m);
+        self.record_change(chat_id, mainframe_display::RawChange::Structural(pos));
+        true
+    }
+
+    /// Strip `queued`/`uuid` metadata from every queued message in `chat_id`
+    /// (session exit: the CLI owns every queued prompt, none can be replayed
+    /// after it dies). Returns whether any message was queued. Records one
+    /// `Structural` entry at the earliest touched index, same as a single
+    /// `strip_queued_and_move_to_end` call would.
+    pub fn strip_all_queued(&mut self, chat_id: &str) -> bool {
+        let Some(msgs) = self.cache.get_mut(chat_id) else {
+            return false;
+        };
+        let mut first_touched: Option<usize> = None;
+        for (idx, m) in msgs.iter_mut().enumerate() {
+            if !is_queued(m) {
+                continue;
+            }
+            if let Some(md) = m.metadata.as_mut() {
+                md.remove("queued");
+                md.remove("uuid");
+            }
+            first_touched.get_or_insert(idx);
+        }
+        let Some(from) = first_touched else {
+            return false;
+        };
+        self.record_change(chat_id, mainframe_display::RawChange::Structural(from));
+        true
+    }
+
+    /// Run `edit` over every message of `chat_id` in place; `edit` reports
+    /// whether it changed that message. Records one `Structural` entry at the
+    /// earliest changed index (the same journal shape `strip_all_queued`
+    /// uses for its in-place metadata edits), so the display projector
+    /// re-folds from there instead of dropping its slot (todo #376). Returns
+    /// whether any message changed.
+    pub fn update_in_place(
+        &mut self,
+        chat_id: &str,
+        mut edit: impl FnMut(&mut ChatMessage) -> bool,
+    ) -> bool {
+        let Some(msgs) = self.cache.get_mut(chat_id) else {
+            return false;
+        };
+        let mut first_touched: Option<usize> = None;
+        for (idx, m) in msgs.iter_mut().enumerate() {
+            if edit(m) {
+                first_touched.get_or_insert(idx);
+            }
+        }
+        let Some(from) = first_touched else {
+            return false;
+        };
+        self.record_change(chat_id, mainframe_display::RawChange::Structural(from));
         true
     }
 
@@ -167,6 +255,15 @@ impl MessageCache {
             self.order.push(chat_id.to_string());
         }
     }
+}
+
+/// `metadata.queued === true` (`strip_all_queued`'s per-message test).
+fn is_queued(m: &ChatMessage) -> bool {
+    m.metadata
+        .as_ref()
+        .and_then(|md| md.get("queued"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
 }
 
 #[cfg(test)]
@@ -317,3 +414,5 @@ mod tool_timing;
 mod history_timing_tests;
 
 mod history;
+
+mod projection;

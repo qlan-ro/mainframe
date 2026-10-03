@@ -252,7 +252,7 @@ async fn deliver_resume(
     let queued = queued_for(ctx, &session_id);
     let redelivered_gate = redelivered_gate_id(&replay);
     let seed = ResumeSeed {
-        items: &replay.items,
+        containers: &replay.containers,
         reply: &response,
         replied: progress.replied,
         completed: progress.completed,

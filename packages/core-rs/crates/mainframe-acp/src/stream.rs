@@ -24,6 +24,7 @@ use mainframe_types::acp::update::{
 use serde_json::{Map, Value};
 
 use crate::encoder::EncodedItem;
+use crate::encoder::delta::EncodedDelta;
 use crate::session_state::SessionState;
 use crate::throttle::{Throttle, ThrottledFrame};
 
@@ -53,6 +54,14 @@ impl SessionStream {
         let _ = self.state.diff(items);
     }
 
+    /// Like [`Self::seed`], but container-aware (todo #376 G2 task 5) — the
+    /// resume replay's per-container shape (`ResumeReplay.containers`), so
+    /// the next [`Self::on_revision_delta`] can delta against it without
+    /// this stream ever re-flattening settled history itself.
+    pub fn seed_containers(&mut self, containers: &[Vec<EncodedItem>]) {
+        self.state.seed_containers(containers);
+    }
+
     /// A display revision for this session: diff, attach any pending retry
     /// marker, and run the result through the throttle. Returns the frames
     /// due now; the rest sit buffered until the next revision or
@@ -70,6 +79,31 @@ impl SessionStream {
         cursor: Option<RevisionCursor>,
     ) -> Vec<ThrottledFrame> {
         let mut updates = self.state.diff(items);
+        if self.pending_retry.is_some() {
+            self.attach_retry_marker(&mut updates);
+        }
+        let mut due = self.push_all(updates, now_ms);
+        if let Some(cursor) = cursor {
+            due.extend(self.throttle.push_cursor(now_ms, cursor));
+        }
+        due
+    }
+
+    /// Like [`Self::on_revision`], but for a container delta (todo #376 G2
+    /// task 5): the hub encodes only the changed containers and passes the
+    /// result here instead of a full flattened snapshot. `full` is the
+    /// lazy fallback `SessionState::apply` needs only for the fresh-attach
+    /// case (an unseeded state given an incremental delta); everything
+    /// else about this method — the retry marker, the throttle FIFO, the
+    /// cursor placement — matches `on_revision` frame for frame.
+    pub fn on_revision_delta(
+        &mut self,
+        delta: &EncodedDelta,
+        full: impl FnOnce() -> Vec<Vec<EncodedItem>>,
+        now_ms: i64,
+        cursor: Option<RevisionCursor>,
+    ) -> Vec<ThrottledFrame> {
+        let mut updates = self.state.apply(delta, full);
         if self.pending_retry.is_some() {
             self.attach_retry_marker(&mut updates);
         }

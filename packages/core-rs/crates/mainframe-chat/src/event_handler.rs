@@ -6,6 +6,9 @@ use std::time::Instant;
 
 use mainframe_adapter_api::SessionSink;
 use mainframe_adapter_api::pr_detection::PrDetectionSink;
+use mainframe_display::DisplayProjector;
+#[cfg(test)]
+use mainframe_display::FullRebuildProjector;
 use mainframe_runtime::time::now_iso8601;
 use mainframe_types::adapter::{
     ContextUsage, ControlRequest, DetectedPr, MessageMetadata, ProviderQuota, SessionResult,
@@ -16,7 +19,7 @@ use mainframe_types::chat::{
 };
 use mainframe_types::content::LeafContent;
 use mainframe_types::context::SkillFileEntry;
-use mainframe_types::display::{DisplayMessage, ToolCategories};
+use mainframe_types::display::{DisplayMessage, StreamingLeafKind, ToolCategories};
 use mainframe_types::events::{
     ChatNotificationKind, ChatNotificationLevel, ChatUpdatedReason, DaemonEvent,
 };
@@ -28,7 +31,7 @@ use crate::fork::PendingForkState;
 use crate::message_cache::MessageCache;
 use crate::permission_manager::{CancelOutcome, PermissionManager};
 use crate::types::ActiveChat;
-pub(crate) use display_projection::project_display;
+use display_projection::streaming_leaf_kind;
 use partial_overlay::PartialOverlays;
 use worktree_tool::{creates_worktree, moves_transcript};
 
@@ -190,9 +193,39 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
     /// The chat's current in-flight overlay message, for `ChatManager`'s
     /// resume snapshot (todo #382) — the same read `emit_display_for` uses
     /// for live revisions, so a snapshot taken mid-stream can project it
-    /// through the identical [`display_projection::project_display`].
+    /// through the identical step.
     pub fn current_overlay_message(&self, chat_id: &str) -> Option<ChatMessage> {
         self.partial_overlays.message_for(chat_id)
+    }
+
+    /// The resume-snapshot read (todo #382, #376): bring the chat's
+    /// projection current the same way a live emission does, but without
+    /// notifying — any non-empty delta this produces is stashed as the
+    /// slot's pending delta and merged into the next live emission
+    /// (`MessageCache::display_snapshot`). Returns the materialized
+    /// container list and the overlay's streaming kind, if any.
+    ///
+    /// `raw` is the caller's own freshly-read history (`ChatManager::get_messages`'s
+    /// return), not re-derived from the cache: a cold load past `MAX_CHATS`
+    /// can evict its own cache entry again immediately
+    /// (`history_eviction.rs`), and the snapshot must still reflect what was
+    /// just loaded.
+    pub fn display_snapshot(
+        &self,
+        chat_id: &str,
+        raw: &[ChatMessage],
+    ) -> (Vec<DisplayMessage>, Option<StreamingLeafKind>) {
+        let categories = self.deps.get_tool_categories(chat_id);
+        let overlay = self.partial_overlays.message_for(chat_id);
+        let mut msgs = self.messages.lock().unwrap_or_else(|e| e.into_inner());
+        let materialized =
+            msgs.display_snapshot(chat_id, raw, overlay.as_ref(), categories.as_ref(), || {
+                self.deps.display_projector()
+            });
+        let streaming = overlay
+            .as_ref()
+            .and_then(|o| streaming_leaf_kind(Some(o), materialized.last()));
+        (materialized, streaming)
     }
 }
 
@@ -249,7 +282,6 @@ pub use deps::{EventChatUpdate, EventHandlerDeps, PushOut};
 mod display_emission;
 use display_emission::emit_display_for;
 mod sink;
-use sink::{is_queued, strip_queued_and_move};
 mod sink_exit;
 mod sink_messages;
 mod sink_metadata;

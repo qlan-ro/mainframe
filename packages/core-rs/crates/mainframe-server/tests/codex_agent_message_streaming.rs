@@ -1,5 +1,5 @@
 //! Todo #378, end-to-end runtime coverage: a real `EventHandler` sink wired
-//! to the real display pipeline (`prepare_messages_for_client`), driven by
+//! to the real display pipeline (the production `IncrementalProjector`), driven by
 //! the Codex adapter's `handle_notification` replaying the captured
 //! `item/agentMessage/delta` stream (codex-cli 0.155.1). Pins the
 //! `DisplayRevision` → `encode_revision` transitions a live chat-surface
@@ -10,7 +10,6 @@
 use std::sync::{Arc, Mutex};
 
 use mainframe_acp::encoder::{EncodedItem, encode_revision};
-use mainframe_adapter_claude::messages::display_pipeline::prepare_messages_for_client;
 use mainframe_adapter_codex::event_mapper::{CodexSessionState, handle_notification};
 use mainframe_chat::chat_surface::{ChatSurface, ChatSurfaceEvent};
 use mainframe_chat::event_handler::{EventChatUpdate, EventHandler, EventHandlerDeps};
@@ -20,7 +19,7 @@ use mainframe_chat::types::ActiveChat;
 use mainframe_types::acp::content::ContentBlock;
 use mainframe_types::acp::extensions::MAINFRAME_META_NAMESPACE;
 use mainframe_types::adapter::DetectedPr;
-use mainframe_types::chat::{ChatMessage, QueuedMessageRef, TodoItem};
+use mainframe_types::chat::{QueuedMessageRef, TodoItem};
 use mainframe_types::context::SkillFileEntry;
 use mainframe_types::display::{DisplayMessage, StreamingLeafKind, ToolCategories};
 use mainframe_types::events::DaemonEvent;
@@ -30,11 +29,12 @@ const FIXTURE: &str = include_str!("fixtures/agent-message-delta-0.155.1.jsonl")
 const CHAT_ID: &str = "chat-codex-378";
 const SESSION_ID: &str = "codex-session-378";
 
-/// A deps impl with every hook inert except `prepare_messages_for_client`,
-/// which uses the real shared display pipeline (established fact: Codex
-/// chats run through it too, `mainframe-server/src/chat_deps.rs`) — the
-/// thing this test actually needs live, since the streaming determination
-/// (`display_projection::project_display`) depends on its output shape.
+/// A deps impl with every hook inert except `display_projector`, which
+/// returns the production `IncrementalProjector` over the real shared
+/// display pipeline (established fact: Codex chats run through it too,
+/// `mainframe-server/src/chat_deps.rs`) — the thing this test actually needs
+/// live, since the streaming determination
+/// (`display_projection::streaming_leaf_kind`) depends on its output shape.
 struct Deps;
 
 impl EventHandlerDeps for Deps {
@@ -50,12 +50,8 @@ impl EventHandlerDeps for Deps {
     fn get_queued_refs(&self, _chat_id: &str) -> Vec<QueuedMessageRef> {
         Vec::new()
     }
-    fn prepare_messages_for_client(
-        &self,
-        raw: &[ChatMessage],
-        categories: Option<&ToolCategories>,
-    ) -> Vec<DisplayMessage> {
-        prepare_messages_for_client(raw, categories)
+    fn display_projector(&self) -> Box<dyn mainframe_display::DisplayProjector> {
+        Box::new(mainframe_adapter_claude::messages::incremental::IncrementalProjector::new())
     }
     fn strip_command_tags(&self, text: &str) -> String {
         text.to_string()
@@ -105,11 +101,10 @@ impl RevisionSurface {
 impl ChatSurface for RevisionSurface {
     fn on_chat_surface_event(&self, event: ChatSurfaceEvent) {
         if let ChatSurfaceEvent::DisplayRevision {
-            messages,
-            streaming,
-            ..
+            delta, streaming, ..
         } = event
         {
+            let messages = delta.snapshot.materialize();
             self.revisions.lock().unwrap().push((messages, streaming));
         }
     }

@@ -1,13 +1,10 @@
-//! The overlay-aware display projection shared by live `DisplayRevision`s
+//! The streaming determination shared by live `DisplayRevision`s
 //! (`event_handler.rs::emit_display_for`) and resume snapshots
-//! (`chat_manager/history.rs::get_resume_snapshot`), so both read the exact
-//! same "append the in-flight overlay, then determine streaming" behavior
-//! from one place (todo #382).
-//!
-//! Kept deps-trait-free: the caller already knows which `prepare_messages_for_client`
-//! it has (`EventHandlerDeps` on the live path, `ChatManagerDeps` on the resume
-//! path — two distinct traits with the same shape), so it is passed in as a
-//! closure rather than forcing a shared trait bound here.
+//! (`EventHandler::display_snapshot`), so both read the exact same rule
+//! (todo #382). Before todo #376 this module also combined the overlay with
+//! raw history and ran `prepare` over the result; that step now lives inside
+//! each `DisplayProjector` (`mainframe-display`, `mainframe-adapter-claude`),
+//! so only the streaming rule remains here.
 
 use mainframe_types::chat::{ChatMessage, MessageContent};
 use mainframe_types::content::LeafContent;
@@ -15,49 +12,20 @@ use mainframe_types::display::{
     DisplayContent, DisplayMessage, DisplayMessageType, StreamingLeafKind,
 };
 
-/// Append `overlay` (when present) as a synthetic tail message, run `prepare`
-/// over the combined raw history, and determine whether the result is still
-/// streaming. Returns `prepare`'s output and `Some(kind)` only when the
-/// overlay's own leaf survived conversion onto the prepared display's last
-/// message (spec Decision 39).
-pub(crate) fn project_display(
-    raw: &[ChatMessage],
-    overlay: Option<ChatMessage>,
-    prepare: impl FnOnce(&[ChatMessage]) -> Vec<DisplayMessage>,
-) -> (Vec<DisplayMessage>, Option<StreamingLeafKind>) {
-    let has_overlay = overlay.is_some();
-    let with_overlay: Vec<ChatMessage>;
-    let combined: &[ChatMessage] = match overlay {
-        Some(synthetic) => {
-            with_overlay = raw
-                .iter()
-                .cloned()
-                .chain(std::iter::once(synthetic))
-                .collect();
-            &with_overlay[..]
-        }
-        None => raw,
-    };
-    let new_display = prepare(combined);
-    // The overlay is the last leaf of `combined` when present — read it back
-    // off `combined` rather than cloning the overlay a second time.
-    let streaming = has_overlay
-        .then(|| streaming_leaf_kind(combined.last(), &new_display))
-        .flatten();
-    (new_display, streaming)
-}
-
 /// Spec Decision 39's streaming determination: `Some` only when the overlay's
 /// own leaf has non-empty text/thinking after trim AND the prepared display's
-/// last message is an assistant message whose own last leaf is the same
+/// last container is an assistant message whose own last leaf is the same
 /// kind. The second check catches an overlay the conversion stripped to
 /// empty (tag stripping, grouping) — that case must never report streaming.
-fn streaming_leaf_kind(
+/// `last_container` is the projection's current last container (ordinal
+/// `len - 1`), read from the projector's snapshot rather than a full
+/// materialized list — the streaming check never needs to look further back.
+pub(crate) fn streaming_leaf_kind(
     overlay: Option<&ChatMessage>,
-    new_display: &[DisplayMessage],
+    last_container: Option<&DisplayMessage>,
 ) -> Option<StreamingLeafKind> {
     let overlay_kind = overlay.and_then(overlay_leaf_kind)?;
-    let last_message = new_display.last()?;
+    let last_message = last_container?;
     if last_message.r#type != DisplayMessageType::Assistant {
         return None;
     }

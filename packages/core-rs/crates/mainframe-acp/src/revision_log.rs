@@ -73,6 +73,17 @@ pub struct RevisionLog {
     /// this floor cannot be served incrementally — its retained tombstone
     /// range is gone.
     floor: u64,
+    /// Per-ordinal item ids (todo #376 G2 task 4) — the same container
+    /// index `session_state/containers.rs` keeps, so `record_delta` can
+    /// find an affected or removed ordinal's old ids without scanning
+    /// every item. Maintained only by `record_delta`/`seed_containers`;
+    /// `record`/`seed` (the flat path) leave it alone.
+    containers: Vec<Vec<String>>,
+    /// Cumulative count of items `record`/`record_delta` has compared
+    /// against their previous value — the deterministic gate an
+    /// incremental `record_delta` must not grow past the affected
+    /// containers' item count.
+    items_compared: u64,
 }
 
 impl RevisionLog {
@@ -84,7 +95,13 @@ impl RevisionLog {
             items: HashMap::new(),
             tombstones: VecDeque::new(),
             floor: 0,
+            containers: Vec::new(),
+            items_compared: 0,
         }
+    }
+
+    pub fn items_compared(&self) -> u64 {
+        self.items_compared
     }
 
     /// Mark `items` as the baseline at the current revision, with no bump —
@@ -121,6 +138,7 @@ impl RevisionLog {
             vanished_ids.push(id.clone());
         }
 
+        self.items_compared += items.len() as u64;
         let changed_ids: Vec<&EncodedItem> = items
             .iter()
             .filter(|item| !matches!(self.items.get(item.id()), Some((_, prev)) if prev == *item))
@@ -212,6 +230,8 @@ impl RevisionLog {
         }
     }
 }
+
+mod delta;
 
 #[cfg(test)]
 mod tests;

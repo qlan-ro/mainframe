@@ -22,6 +22,54 @@ pub fn apply_tool_call_timing(raw: &[ChatMessage], display: &mut [DisplayMessage
     }
 }
 
+/// Single-id, single-container variant for the incremental projector: a
+/// `timing(id)` journal entry patches only the one node that owns `id`,
+/// leaving every other node's cached timing in the container untouched (unlike
+/// [`apply_tool_call_timing`], which recomputes every node from a full map).
+pub fn apply_tool_call_timing_to_container(
+    container: &mut DisplayMessage,
+    id: &str,
+    timing: Option<ToolCallTiming>,
+) {
+    patch_blocks(&mut container.content, id, timing);
+}
+
+fn patch_blocks(blocks: &mut [DisplayContent], id: &str, timing: Option<ToolCallTiming>) {
+    for block in blocks {
+        match block {
+            DisplayContent::Node(DisplayNode::ToolCall {
+                id: block_id,
+                timing: slot,
+                ..
+            }) if block_id == id => {
+                *slot = timing;
+            }
+            DisplayContent::Node(DisplayNode::TaskGroup {
+                agent_id,
+                timing: slot,
+                calls,
+                ..
+            }) => {
+                if agent_id == id {
+                    *slot = timing;
+                }
+                patch_blocks(calls, id, timing);
+            }
+            DisplayContent::Node(DisplayNode::ToolGroup { calls }) => {
+                patch_blocks(calls, id, timing)
+            }
+            DisplayContent::Node(DisplayNode::TaskProgress { items }) => {
+                for item in items {
+                    if item.id == id {
+                        item.timing = timing;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
 fn apply_to_blocks(blocks: &mut [DisplayContent], timings: &HashMap<&str, ToolCallTiming>) {
     for block in blocks {
         match block {

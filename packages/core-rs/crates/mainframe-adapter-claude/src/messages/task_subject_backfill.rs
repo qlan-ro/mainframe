@@ -23,14 +23,20 @@ use mainframe_types::display::{
 use mainframe_types::task_progress::extract_task_id;
 use serde_json::Value;
 
-/// Mutable walk state for one task-id namespace.
-struct SubjectScope {
+/// Mutable walk state for one task-id namespace. `pub(crate)` so the
+/// incremental projector (todo #376) can carry a scope across a rewind: it
+/// computes the scope *before* the rewind point by folding
+/// [`scope_after`] over the settled prefix, then continues the same fold
+/// via [`backfill_from`] over the refolded suffix, so a resumed fold
+/// produces exactly the subjects a full walk from index 0 would.
+#[derive(Clone)]
+pub(crate) struct SubjectScope {
     next_id: i64,
     subjects: HashMap<String, String>,
 }
 
 impl SubjectScope {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             next_id: 1,
             subjects: HashMap::new(),
@@ -40,13 +46,22 @@ impl SubjectScope {
 
 pub fn backfill_task_subjects(messages: &[DisplayMessage]) -> Vec<DisplayMessage> {
     let mut scope = SubjectScope::new();
+    backfill_from(messages, &mut scope)
+}
+
+/// Fold `messages` through `scope`, continuing from whatever state it
+/// already carries. Mirrors `backfill_task_subjects`'s per-message walk.
+pub(crate) fn backfill_from(
+    messages: &[DisplayMessage],
+    scope: &mut SubjectScope,
+) -> Vec<DisplayMessage> {
     messages
         .iter()
         .map(|msg| {
             if msg.r#type != DisplayMessageType::Assistant {
                 return msg.clone();
             }
-            match backfill_blocks(&msg.content, &mut scope) {
+            match backfill_blocks(&msg.content, scope) {
                 None => msg.clone(),
                 Some(content) => DisplayMessage {
                     content,
@@ -55,6 +70,18 @@ pub fn backfill_task_subjects(messages: &[DisplayMessage]) -> Vec<DisplayMessage
             }
         })
         .collect()
+}
+
+/// The scope after folding `messages` from a fresh namespace — used to seed
+/// a resumed fold over a later suffix without re-walking from index 0.
+/// `pub(crate)` for its unit test below only; production code gets this
+/// from the incremental projector's cached `scope_before` checkpoints
+/// instead (todo #376 follow-up — see `messages/incremental/rewind.rs`).
+#[cfg(test)]
+pub(crate) fn scope_after(messages: &[DisplayMessage]) -> SubjectScope {
+    let mut scope = SubjectScope::new();
+    let _ = backfill_from(messages, &mut scope);
+    scope
 }
 
 /// Returns `None` when nothing changed (mirrors the TS same-reference return).

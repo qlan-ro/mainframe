@@ -14,6 +14,7 @@ pub mod display_helpers;
 pub mod display_pipeline;
 pub mod hidden_boundary;
 pub mod parse_unified_diff;
+pub mod projection;
 pub mod tool_categorization;
 pub mod tool_grouping;
 pub mod truncate_tool_content;
@@ -44,4 +45,9 @@ pub use tool_grouping::{
 // notes: display-pipeline tests with them). Left as compiling empty modules.
 
 pub mod tool_call_timing;
-pub use tool_call_timing::apply_tool_call_timing;
+pub use tool_call_timing::{apply_tool_call_timing, apply_tool_call_timing_to_container};
+
+pub use projection::{
+    DisplayDelta, DisplayProjector, DisplaySnapshot, FullRebuildProjector, ProjectionInput,
+    ProjectionStats, RawChange, RawChanges,
+};

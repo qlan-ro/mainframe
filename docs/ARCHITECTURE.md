@@ -307,8 +307,17 @@ never in a normal boot.
 
 `ChatManager` (`mainframe-chat`) is the layer above the registry: it owns one
 state machine per chat, tying a live `AdapterSession` to the cached display
-messages (via `mainframe-display`'s adapter-agnostic pipeline), the FIFO
-permission queue, and session config.
+messages, the FIFO permission queue, and session config. Display messages are
+NOT recomputed from scratch on every partial: each chat keeps a stateful
+`DisplayProjector` (`mainframe-display`; `IncrementalProjector` in
+`mainframe-adapter-claude` for Claude chats) that turns a raw-cache mutation
+plus the live streaming overlay into a container-level `DisplayDelta` —
+touching only the containers a mutation actually affected. `mainframe-server`'s
+ACP facade hub encodes and diffs only those changed containers
+(`encode_container`/`SessionState::apply`/`RevisionLog::record_delta`), so an
+ordinary streaming update's cost scales with the active turn, not with the
+chat's settled history length. Full history load, an explicit transcript
+replacement, or resume replay still produce (and consume) a full snapshot.
 
 ## Daemon ↔ client transport
 

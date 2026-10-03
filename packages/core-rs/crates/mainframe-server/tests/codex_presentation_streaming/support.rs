@@ -1,9 +1,8 @@
-use mainframe_adapter_claude::messages::display_pipeline::prepare_messages_for_client;
 use mainframe_chat::chat_surface::{ChatSurface, ChatSurfaceEvent};
 use mainframe_chat::event_handler::{EventChatUpdate, EventHandlerDeps};
 use mainframe_chat::types::ActiveChat;
 use mainframe_types::adapter::DetectedPr;
-use mainframe_types::chat::{ChatMessage, QueuedMessageRef, TodoItem};
+use mainframe_types::chat::{QueuedMessageRef, TodoItem};
 use mainframe_types::context::SkillFileEntry;
 use mainframe_types::display::{DisplayMessage, StreamingLeafKind, ToolCategories};
 use mainframe_types::events::DaemonEvent;
@@ -28,12 +27,8 @@ impl EventHandlerDeps for Deps {
     fn get_queued_refs(&self, _chat_id: &str) -> Vec<QueuedMessageRef> {
         Vec::new()
     }
-    fn prepare_messages_for_client(
-        &self,
-        raw: &[ChatMessage],
-        categories: Option<&ToolCategories>,
-    ) -> Vec<DisplayMessage> {
-        prepare_messages_for_client(raw, categories)
+    fn display_projector(&self) -> Box<dyn mainframe_display::DisplayProjector> {
+        Box::new(mainframe_adapter_claude::messages::incremental::IncrementalProjector::new())
     }
     fn strip_command_tags(&self, text: &str) -> String {
         text.to_string()
@@ -83,11 +78,10 @@ impl RevisionSurface {
 impl ChatSurface for RevisionSurface {
     fn on_chat_surface_event(&self, event: ChatSurfaceEvent) {
         if let ChatSurfaceEvent::DisplayRevision {
-            messages,
-            streaming,
-            ..
+            delta, streaming, ..
         } = event
         {
+            let messages = delta.snapshot.materialize();
             self.revisions.lock().unwrap().push((messages, streaming));
         }
     }

@@ -15,6 +15,7 @@ use serde_json::Value;
 
 use crate::encoder::{EncodedItem, ItemRole};
 
+mod containers;
 mod tool_patch;
 pub(crate) mod updates;
 use tool_patch::tool_call_patch;
@@ -24,14 +25,33 @@ use updates::{clear_update, create_patch, create_update, message_variant, upsert
 /// (a just-attached or just-resumed session) always creates every item —
 /// matching `session/resume`'s intended "replay from cursor" seam (group E)
 /// without this crate depending on that group's cursor scheme.
+///
+/// `containers` and `seeded` (todo #376 G2 task 3) are the container-delta
+/// half of this state: a per-ordinal list of item ids, kept in sync by
+/// [`containers::apply`] so an incremental [`crate::encoder::delta::EncodedDelta`]
+/// can find exactly which old ids an affected or removed ordinal owned
+/// without scanning every item. `diff` does not maintain this index — it
+/// is the resume-replay path, always starting from a fresh, unseeded state.
 #[derive(Default)]
 pub struct SessionState {
     items: HashMap<String, EncodedItem>,
+    containers: Vec<Vec<String>>,
+    seeded: bool,
+    items_compared: u64,
 }
 
 impl SessionState {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Cumulative count of items this state has compared against their
+    /// previous value, across every `diff`/`apply` call — the deterministic
+    /// gate an incremental `apply` must not grow past the affected
+    /// containers' item count, no matter how much settled history sits
+    /// outside them (todo #376 G2 task 3).
+    pub fn items_compared(&self) -> u64 {
+        self.items_compared
     }
 
     /// Diff a fresh encoder snapshot against the last one seen, returning the
@@ -46,6 +66,7 @@ impl SessionState {
     pub fn diff(&mut self, new_items: &[EncodedItem]) -> Vec<SessionUpdate> {
         let mut updates = self.clear_vanished(new_items);
         for item in new_items {
+            self.items_compared += 1;
             match self.items.get(item.id()) {
                 None => updates.push(create_update(item)),
                 Some(prev) if prev == item => {}
@@ -53,6 +74,7 @@ impl SessionState {
             }
             self.items.insert(item.id().to_string(), item.clone());
         }
+        self.seeded = true;
         updates
     }
 

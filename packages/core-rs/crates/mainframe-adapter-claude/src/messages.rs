@@ -9,6 +9,7 @@
 
 pub mod display_helpers;
 pub mod display_pipeline;
+pub mod incremental;
 pub mod message_grouping;
 pub mod message_parsing;
 pub mod parse_ask_user_question;

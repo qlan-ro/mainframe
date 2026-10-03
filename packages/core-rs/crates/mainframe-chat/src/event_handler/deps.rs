@@ -40,12 +40,14 @@ pub trait EventHandlerDeps: Send + Sync {
     fn on_queued_processed(&self, chat_id: &str, uuid: &str);
     fn on_queued_cleared(&self, chat_id: &str);
     fn get_queued_refs(&self, chat_id: &str) -> Vec<QueuedMessageRef>;
-    /// `prepareMessagesForClient` (Claude-specific; injected to avoid a cycle).
-    fn prepare_messages_for_client(
-        &self,
-        raw: &[ChatMessage],
-        categories: Option<&ToolCategories>,
-    ) -> Vec<DisplayMessage>;
+    /// A fresh [`DisplayProjector`] for one chat's display computation (todo
+    /// #376; replaces `prepareMessagesForClient`, now internal to the
+    /// projector). Required, not defaulted — the #273 silently-inherited-
+    /// default rule: every deps impl must state which projector it is. The
+    /// production impl (`mainframe-server/src/chat_deps.rs`) returns the
+    /// Claude `IncrementalProjector`; every fake wraps its existing fake
+    /// `prepare` in `FullRebuildProjector`.
+    fn display_projector(&self) -> Box<dyn DisplayProjector>;
     /// `stripMainframeCommandTags` (Claude-specific; injected).
     fn strip_command_tags(&self, text: &str) -> String;
 

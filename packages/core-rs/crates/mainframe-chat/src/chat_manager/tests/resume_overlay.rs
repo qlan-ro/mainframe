@@ -9,9 +9,14 @@ use crate::chat_surface::{ChatSurface, ChatSurfaceEvent};
 use mainframe_types::content::LeafContent;
 use mainframe_types::display::{DisplayContent, StreamingLeafKind};
 
+/// Materializes each `DisplayRevision`'s snapshot at receipt (todo #376):
+/// the handle is only valid during the synchronous `notify` call that
+/// carries it, so storing the raw event and materializing later would risk
+/// reading a LATER projector state than the one this revision actually
+/// carried.
 #[derive(Default)]
 struct RecordingSurface {
-    events: Mutex<Vec<ChatSurfaceEvent>>,
+    revisions: Mutex<Vec<(Vec<DisplayMessage>, Option<StreamingLeafKind>)>>,
 }
 
 impl RecordingSurface {
@@ -22,25 +27,21 @@ impl RecordingSurface {
     /// Every `DisplayRevision` this surface has seen, as `(messages,
     /// streaming)`, in order.
     fn revisions(&self) -> Vec<(Vec<DisplayMessage>, Option<StreamingLeafKind>)> {
-        self.events
-            .lock()
-            .unwrap()
-            .iter()
-            .filter_map(|e| match e {
-                ChatSurfaceEvent::DisplayRevision {
-                    messages,
-                    streaming,
-                    ..
-                } => Some((messages.clone(), *streaming)),
-                _ => None,
-            })
-            .collect()
+        self.revisions.lock().unwrap().clone()
     }
 }
 
 impl ChatSurface for RecordingSurface {
     fn on_chat_surface_event(&self, event: ChatSurfaceEvent) {
-        self.events.lock().unwrap().push(event);
+        if let ChatSurfaceEvent::DisplayRevision {
+            delta, streaming, ..
+        } = event
+        {
+            self.revisions
+                .lock()
+                .unwrap()
+                .push((delta.snapshot.materialize(), streaming));
+        }
     }
 }
 

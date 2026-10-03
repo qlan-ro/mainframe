@@ -74,7 +74,7 @@ use mainframe_claude_workflows::store::ClaudeWorkflowStore;
 use mainframe_types::adapter::{DetectedPr, SessionOptions};
 use mainframe_types::chat::{ChatMessageType, QueuedMessageRef, TodoItem};
 use mainframe_types::context::SkillFileEntry;
-use mainframe_types::display::{DisplayMessage, ToolCategories};
+use mainframe_types::display::ToolCategories;
 use mainframe_types::events::DaemonEvent;
 use serde_json::Value;
 
@@ -102,12 +102,10 @@ impl EventHandlerDeps for NoopDeps {
     fn get_queued_refs(&self, _chat_id: &str) -> Vec<QueuedMessageRef> {
         Vec::new()
     }
-    fn prepare_messages_for_client(
-        &self,
-        _raw: &[mainframe_types::chat::ChatMessage],
-        _categories: Option<&ToolCategories>,
-    ) -> Vec<DisplayMessage> {
-        Vec::new()
+    fn display_projector(&self) -> Box<dyn mainframe_display::DisplayProjector> {
+        Box::new(mainframe_display::FullRebuildProjector::new(
+            |_raw, _overlay, _categories| Vec::new(),
+        ))
     }
     fn strip_command_tags(&self, text: &str) -> String {
         text.to_string()

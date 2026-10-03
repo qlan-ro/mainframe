@@ -70,20 +70,6 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
             )
     }
 
-    /// `MessageCache` exposes only immutable `get`; in-place message mutation
-    /// (TS `delete m.metadata.queued`) is reproduced by clone → mutate → `set`
-    /// (`set` on an existing key replaces the vec without disturbing its slot).
-    pub(super) fn mutate_messages<R>(
-        &self,
-        f: impl FnOnce(&mut Vec<ChatMessage>) -> R,
-    ) -> Option<R> {
-        let mut msgs = self.messages.lock().unwrap_or_else(|e| e.into_inner());
-        let mut v = msgs.get(&self.chat_id)?.clone();
-        let r = f(&mut v);
-        msgs.set(&self.chat_id, v);
-        Some(r)
-    }
-
     /// Emits `PermissionRequested` (plus its push, when notify-worthy) for the
     /// request now at the front of the queue, then a `ChatUpdated` — mirroring
     /// what `on_permission` emits for a freshly enqueued front request.
@@ -111,28 +97,6 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
                 .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
         }
     }
-}
-
-/// Strip `queued`/`uuid` metadata from the message with `id`, then move it to the
-/// end (mirrors `delete m.metadata.queued; messages.moveToEnd(id)`).
-pub(super) fn strip_queued_and_move(v: &mut Vec<ChatMessage>, id: &str) {
-    let Some(pos) = v.iter().position(|m| m.id == id) else {
-        return;
-    };
-    if let Some(md) = v[pos].metadata.as_mut() {
-        md.remove("queued");
-        md.remove("uuid");
-    }
-    let m = v.remove(pos);
-    v.push(m);
-}
-
-pub(super) fn is_queued(m: &ChatMessage) -> bool {
-    m.metadata
-        .as_ref()
-        .and_then(|md| md.get("queued"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false)
 }
 
 impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {

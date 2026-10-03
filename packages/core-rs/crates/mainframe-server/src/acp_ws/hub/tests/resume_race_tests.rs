@@ -13,7 +13,7 @@ async fn reset_session_seeds_replayed_state_so_live_updates_continue_as_deltas()
     let hub = hub();
     let (_id, conn, mut rx) = hub.register("mock-cli".to_string());
 
-    let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
+    let items = mainframe_acp::encoder::encode_containers(&[display_message("m1", "Hello")], None);
     hub.begin_resume(&conn, "chat-1");
     hub.reset_session(&conn, "chat-1", seed(&items, &reply(1)), |c| {
         c.send_update(
@@ -50,14 +50,14 @@ async fn a_revision_after_a_resume_deltas_against_the_replay() {
     let (_id, conn, mut rx) = hub.register("mock-cli".to_string());
 
     // First resume: seeds "Hel".
-    let partial = mainframe_acp::encode(&[display_message("m1", "Hel")]);
+    let partial = mainframe_acp::encoder::encode_containers(&[display_message("m1", "Hel")], None);
     hub.begin_resume(&conn, "chat-1");
     hub.reset_session(&conn, "chat-1", seed(&partial, &reply(1)), |_c| {});
     drain(&mut rx);
 
     // A reconnect resumes again, this time at "Hello" — the seeded state
     // must be replaced wholesale, not merged with the stale "Hel" state.
-    let full = mainframe_acp::encode(&[display_message("m1", "Hello")]);
+    let full = mainframe_acp::encoder::encode_containers(&[display_message("m1", "Hello")], None);
     hub.begin_resume(&conn, "chat-1");
     hub.reset_session(&conn, "chat-1", seed(&full, &reply(2)), |c| {
         c.send_update(
@@ -105,7 +105,7 @@ async fn a_detach_during_the_snapshot_await_is_not_undone_by_the_resume() {
     conn.forget_chat("chat-1");
 
     let replayed = AtomicBool::new(false);
-    let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
+    let items = mainframe_acp::encoder::encode_containers(&[display_message("m1", "Hello")], None);
     hub.reset_session(&conn, "chat-1", seed(&items, &reply(9)), |_c| {
         replayed.store(true, Ordering::SeqCst);
     });
@@ -144,7 +144,7 @@ async fn a_reply_to_a_dropped_session_is_followed_by_replay_complete() {
     hub.begin_resume(&conn, "chat-1");
     conn.forget_chat("chat-1");
 
-    let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
+    let items = mainframe_acp::encoder::encode_containers(&[display_message("m1", "Hello")], None);
     hub.reset_session(&conn, "chat-1", seed(&items, &reply(9)), |_c| {});
 
     let frames = drain(&mut rx);
@@ -168,7 +168,7 @@ async fn replay_complete_follows_queue_state_and_precedes_catch_up() {
     hub.on_chat_surface_event(revision("chat-1", "Hello!"));
     assert!(drain(&mut rx).is_empty());
 
-    let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
+    let items = mainframe_acp::encoder::encode_containers(&[display_message("m1", "Hello")], None);
     hub.reset_session(&conn, "chat-1", seed(&items, &reply(1)), |c| {
         c.send_update(
             "chat-1",
@@ -235,7 +235,7 @@ async fn the_reply_is_marked_sent_before_the_replay_runs() {
 
     let replied = Arc::new(AtomicBool::new(false));
     let seen_by_the_replay = AtomicBool::new(false);
-    let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
+    let items = mainframe_acp::encoder::encode_containers(&[display_message("m1", "Hello")], None);
     hub.begin_resume(&conn, "chat-1");
     hub.reset_session(
         &conn,
@@ -258,7 +258,7 @@ async fn a_reply_to_a_dropped_session_is_marked_sent_too() {
     let (_id, conn, _rx) = hub.register("mock-cli".to_string());
 
     let replied = Arc::new(AtomicBool::new(false));
-    let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
+    let items = mainframe_acp::encoder::encode_containers(&[display_message("m1", "Hello")], None);
     hub.reset_session(
         &conn,
         "chat-1",

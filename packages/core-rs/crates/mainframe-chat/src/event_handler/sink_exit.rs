@@ -43,20 +43,10 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
     }
     fn clear_exit_queue(&self) {
         let had_queued = self
-            .mutate_messages(|v| {
-                let mut had = false;
-                for m in v.iter_mut() {
-                    if is_queued(m) {
-                        if let Some(md) = m.metadata.as_mut() {
-                            md.remove("queued");
-                            md.remove("uuid");
-                        }
-                        had = true;
-                    }
-                }
-                had
-            })
-            .unwrap_or(false);
+            .messages
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .strip_all_queued(&self.chat_id);
         if had_queued {
             self.emit_display();
         }

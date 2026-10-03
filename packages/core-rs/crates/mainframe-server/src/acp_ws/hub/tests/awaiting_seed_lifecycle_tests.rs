@@ -25,7 +25,7 @@ async fn a_turn_that_ends_during_the_await_reaches_the_client_after_the_replay()
     });
     assert!(drain(&mut rx).is_empty(), "nothing before the replay");
 
-    let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
+    let items = mainframe_acp::encoder::encode_containers(&[display_message("m1", "Hello")], None);
     // `replay_marker` stands in for the replay's trailing state_update, which
     // reports the session as running.
     hub.reset_session(&conn, "chat-1", seed(&items, &reply(1)), replay_marker);
@@ -54,7 +54,7 @@ async fn a_turn_that_starts_during_the_await_reaches_the_client_after_the_replay
         chat_id: "chat-1".to_string(),
     });
 
-    let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
+    let items = mainframe_acp::encoder::encode_containers(&[display_message("m1", "Hello")], None);
     hub.reset_session(&conn, "chat-1", seed(&items, &reply(1)), |_c| {});
 
     let frames = drain(&mut rx);
@@ -82,7 +82,7 @@ async fn usage_raised_during_the_await_reaches_the_client_after_the_replay() {
         },
     });
 
-    let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
+    let items = mainframe_acp::encoder::encode_containers(&[display_message("m1", "Hello")], None);
     hub.reset_session(&conn, "chat-1", seed(&items, &reply(1)), |_c| {});
 
     let frames = drain(&mut rx);
@@ -109,7 +109,7 @@ async fn a_retry_raised_during_the_await_marks_the_first_frame_after_the_replay(
         reason: Some("overloaded_error".to_string()),
     });
 
-    let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
+    let items = mainframe_acp::encoder::encode_containers(&[display_message("m1", "Hello")], None);
     hub.reset_session(&conn, "chat-1", seed(&items, &reply(1)), |_c| {});
     drain(&mut rx);
 
@@ -120,10 +120,10 @@ async fn a_retry_raised_during_the_await_marks_the_first_frame_after_the_replay(
     // marker carrier).
     hub.on_chat_surface_event(ChatSurfaceEvent::DisplayRevision {
         chat_id: "chat-1".to_string(),
-        messages: vec![
+        delta: full_delta(vec![
             display_message("m1", "Hello"),
             display_message("m2", "Retried answer"),
-        ],
+        ]),
         streaming: None,
     });
 

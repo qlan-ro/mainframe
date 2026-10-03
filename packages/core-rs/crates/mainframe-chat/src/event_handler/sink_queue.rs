@@ -21,7 +21,10 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
             })
         };
         if let Some(id) = &found_id {
-            self.mutate_messages(|v| strip_queued_and_move(v, id));
+            self.messages
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .strip_queued_and_move_to_end(&self.chat_id, id);
         }
         if found_id.is_some() {
             self.emit_display();
@@ -55,7 +58,10 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
             if let (true, Some(u)) = (queued, uuid) {
                 cached_queued_uuids.insert(u.clone());
                 if !ref_uuids.contains(&u) {
-                    self.mutate_messages(|v| strip_queued_and_move(v, &id));
+                    self.messages
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .strip_queued_and_move_to_end(&self.chat_id, &id);
                     display_changed = true;
                     warn!(
                         chat_id = self.chat_id,

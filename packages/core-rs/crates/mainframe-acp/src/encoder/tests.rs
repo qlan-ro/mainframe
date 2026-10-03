@@ -8,6 +8,7 @@
 //! this file's fixture builders via `use super::*`.
 
 mod command_metadata_tests;
+mod container_tests;
 mod marker_tests;
 mod meta_tests;
 mod result_content_tests;

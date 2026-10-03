@@ -43,10 +43,22 @@ fn display_message(id: &str, text: &str) -> DisplayMessage {
     }
 }
 
+/// Wraps `messages` in a `full` `DisplayDelta` over a fresh `DisplaySnapshot`
+/// (todo #376) — the shape `emit_display_for` now emits.
+fn full_delta(messages: Vec<DisplayMessage>) -> mainframe_display::DisplayDelta {
+    mainframe_display::DisplayDelta {
+        full: true,
+        changes: Vec::new(),
+        len: messages.len(),
+        snapshot: mainframe_display::DisplaySnapshot::new(messages),
+        stats: mainframe_display::ProjectionStats::default(),
+    }
+}
+
 fn revision(chat_id: &str, text: &str) -> ChatSurfaceEvent {
     ChatSurfaceEvent::DisplayRevision {
         chat_id: chat_id.to_string(),
-        messages: vec![display_message("m1", text)],
+        delta: full_delta(vec![display_message("m1", text)]),
         streaming: None,
     }
 }
@@ -71,20 +83,20 @@ fn reply(id: i64) -> mainframe_types::acp::jsonrpc::JsonRpcResponse {
     )
 }
 
-/// The common `ResumeSeed`: a snapshot and its reply, with no gate the
-/// replay redelivers and a reply flag nobody reads.
-fn seed<'a>(items: &'a [EncodedItem], reply: &'a JsonRpcResponse) -> ResumeSeed<'a> {
-    seed_with_flag(items, reply, Arc::new(AtomicBool::new(false)))
+/// The common `ResumeSeed`: a snapshot (per-container, todo #376 G4) and its
+/// reply, with no gate the replay redelivers and a reply flag nobody reads.
+fn seed<'a>(containers: &'a [Vec<EncodedItem>], reply: &'a JsonRpcResponse) -> ResumeSeed<'a> {
+    seed_with_flag(containers, reply, Arc::new(AtomicBool::new(false)))
 }
 
 /// [`seed`] for the cases that watch when the reply flag is set.
 fn seed_with_flag<'a>(
-    items: &'a [EncodedItem],
+    containers: &'a [Vec<EncodedItem>],
     reply: &'a JsonRpcResponse,
     replied: Arc<AtomicBool>,
 ) -> ResumeSeed<'a> {
     ResumeSeed {
-        items,
+        containers,
         reply,
         replied,
         completed: Arc::new(AtomicBool::new(false)),
@@ -165,7 +177,7 @@ async fn a_live_revision_with_streaming_wires_the_flag() {
 
     hub.on_chat_surface_event(ChatSurfaceEvent::DisplayRevision {
         chat_id: "chat-1".to_string(),
-        messages: vec![display_message("m1", "Hello")],
+        delta: full_delta(vec![display_message("m1", "Hello")]),
         streaming: Some(mainframe_types::display::StreamingLeafKind::Text),
     });
 
@@ -231,7 +243,7 @@ fn next_turn_revision(
     }
     ChatSurfaceEvent::DisplayRevision {
         chat_id: "chat-1".into(),
-        messages: vec![display_message("m1", "completed answer"), current],
+        delta: full_delta(vec![display_message("m1", "completed answer"), current]),
         streaming: partial.then_some(kind),
     }
 }

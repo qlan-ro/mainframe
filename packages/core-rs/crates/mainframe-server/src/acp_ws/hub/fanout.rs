@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
+use mainframe_acp::encoder::delta::EncodedDelta;
 use mainframe_acp::stream::SessionStream;
 use mainframe_acp::{EncodedItem, ThrottledFrame};
 use mainframe_types::acp::extensions::RevisionCursor;
@@ -17,13 +18,17 @@ use mainframe_types::adapter::ControlRequest;
 use serde::Serialize;
 use tracing::warn;
 
-use super::super::facade_conn::{FacadeConnection, SessionSlot, StreamOp};
+use super::super::facade_conn::{FacadeConnection, LazyFullEncoding, SessionSlot, StreamOp};
 use super::{FacadeHub, now_ms};
 
 /// What a completing `session/resume` hands [`FacadeHub::reset_session`].
 pub struct ResumeSeed<'a> {
-    /// The snapshot the connection's stream is re-seeded to.
-    pub items: &'a [EncodedItem],
+    /// The snapshot the connection's stream is re-seeded to, per container
+    /// (todo #376 G4) — the same shape `ResumeReplay.containers` and
+    /// `encoder::encode_containers` produce, so the freshly seeded stream's
+    /// container index lines up with the next live delta's ordinals with no
+    /// re-flattening.
+    pub containers: &'a [Vec<EncodedItem>],
     /// The `session/resume` reply, sent ahead of the replay — and sent even
     /// when the session is gone, so the client's promise always settles.
     pub reply: &'a JsonRpcResponse,
@@ -108,22 +113,26 @@ impl FacadeHub {
     }
 
     /// [`ChatSurfaceEvent::DisplayRevision`]'s handler. A revision buffered
-    /// during a resume replaces the one already waiting: only the latest
-    /// snapshot matters, and diffing it against the seed is what
-    /// [`FacadeHub::reset_session`] does with it (T5, R2.9). `cursor` (todo
-    /// #377) is the chat's revision-log boundary once this same revision
-    /// was recorded — carried alongside the items so a buffered catch-up
-    /// frame's cursor is exactly the one the live revision would have sent.
+    /// during a resume merges into the one already waiting (todo #376 G4:
+    /// [`EncodedDelta::merge`], "latest wins" over the union of touched
+    /// ordinals) rather than replacing it outright, and applying it is what
+    /// [`FacadeHub::reset_session`] does via `SessionStream::on_revision_delta`
+    /// (T5, R2.9). `cursor` (todo #377) is the chat's revision-log boundary
+    /// once this same revision was recorded — carried alongside the delta so
+    /// a buffered catch-up frame's cursor is exactly the one the live
+    /// revision would have sent.
     pub(super) fn on_display_revision(
         &self,
         chat_id: &str,
-        items: &[EncodedItem],
+        delta: Arc<EncodedDelta>,
+        full: LazyFullEncoding,
         cursor: Option<RevisionCursor>,
     ) {
         self.apply_stream_op(
             chat_id,
             StreamOp::Revision {
-                items: items.to_vec(),
+                delta,
+                full,
                 cursor,
             },
         );
@@ -218,20 +227,44 @@ pub(super) fn deliver_op(
     }
 }
 
-/// Buffer `op` in arrival order — except a revision, which replaces any
-/// revision already waiting rather than queueing behind it. The replacing
-/// op's cursor (todo #377) wins too, since it is the later, higher one —
+/// Buffer `op` in arrival order — except a revision, which MERGES into any
+/// revision already waiting (todo #376 G4: `EncodedDelta::merge`) rather than
+/// replacing or queueing behind it, so a container an earlier buffered delta
+/// touched but a later one did not stays in the merged result. The later
+/// op's `full` fallback and cursor (todo #377) win outright: `full` is never
+/// forced from a buffered op regardless (the drain always hits an already-
+/// seeded stream), and the cursor is the later, higher one —
 /// `RevisionLog`'s monotonic revision counter guarantees that ordering.
 fn buffer_op(pending: &mut Vec<StreamOp>, op: StreamOp) {
-    if matches!(op, StreamOp::Revision { .. })
-        && let Some(slot) = pending
-            .iter_mut()
-            .find(|held| matches!(held, StreamOp::Revision { .. }))
-    {
-        *slot = op;
+    let StreamOp::Revision {
+        delta,
+        full,
+        cursor,
+    } = op
+    else {
+        pending.push(op);
         return;
-    }
-    pending.push(op);
+    };
+    let Some(index) = pending
+        .iter()
+        .position(|held| matches!(held, StreamOp::Revision { .. }))
+    else {
+        pending.push(StreamOp::Revision {
+            delta,
+            full,
+            cursor,
+        });
+        return;
+    };
+    let StreamOp::Revision { delta: base, .. } = &pending[index] else {
+        unreachable!("just matched above")
+    };
+    let merged = Arc::new((**base).clone().merge((*delta).clone()));
+    pending[index] = StreamOp::Revision {
+        delta: merged,
+        full,
+        cursor,
+    };
 }
 
 /// The one interpreter for a [`StreamOp`], used live and on the resume
@@ -240,7 +273,10 @@ fn buffer_op(pending: &mut Vec<StreamOp>, op: StreamOp) {
 /// revision's cursor is threaded into the stream at all — a non-opted
 /// connection's `Throttle` FIFO never even enqueues a `Cursor` frame, not
 /// just drops it at send time (`facade_conn.rs::send_throttled`'s own
-/// check is the second, defensive gate).
+/// check is the second, defensive gate). `full` (todo #376 G4) is forced at
+/// most once per `StreamOp::Revision`, shared across however many attached
+/// streams call it, by the `Arc`-backed closure `handle_display_revision`
+/// built.
 pub(super) fn run_op(
     stream: &mut SessionStream,
     op: StreamOp,
@@ -248,9 +284,11 @@ pub(super) fn run_op(
     opted_in: bool,
 ) -> Vec<ThrottledFrame> {
     match op {
-        StreamOp::Revision { items, cursor } => {
-            stream.on_revision(&items, now, cursor.filter(|_| opted_in))
-        }
+        StreamOp::Revision {
+            delta,
+            full,
+            cursor,
+        } => stream.on_revision_delta(&delta, || full(), now, cursor.filter(|_| opted_in)),
         StreamOp::Raw { payload, .. } => stream.push_raw(payload, now),
         StreamOp::TurnStarted => stream.on_turn_started(now),
         StreamOp::TurnFinished(reason) => stream.on_turn_finished(reason, now),

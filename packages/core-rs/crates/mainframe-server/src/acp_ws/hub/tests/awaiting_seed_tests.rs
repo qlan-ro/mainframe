@@ -23,7 +23,7 @@ async fn a_revision_during_the_snapshot_await_is_buffered_not_lost() {
     );
 
     // The snapshot the await returned reflects the PRE-race content.
-    let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
+    let items = mainframe_acp::encoder::encode_containers(&[display_message("m1", "Hello")], None);
     hub.reset_session(&conn, "chat-1", seed(&items, &reply(1)), |_c| {});
 
     let frames = drain(&mut rx);
@@ -55,7 +55,7 @@ async fn buffered_ops_drain_after_replay_complete() {
     });
     assert!(drain(&mut rx).is_empty());
 
-    let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
+    let items = mainframe_acp::encoder::encode_containers(&[display_message("m1", "Hello")], None);
     hub.reset_session(&conn, "chat-1", seed(&items, &reply(1)), |_c| {});
 
     let frames = drain(&mut rx);
@@ -95,7 +95,7 @@ async fn a_raw_frame_during_the_snapshot_await_is_drained_after_the_replay() {
         "a raw frame during the await must not overtake the replay"
     );
 
-    let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
+    let items = mainframe_acp::encoder::encode_containers(&[display_message("m1", "Hello")], None);
     hub.reset_session(&conn, "chat-1", seed(&items, &reply(1)), replay_marker);
 
     let frames = drain(&mut rx);
@@ -129,7 +129,7 @@ async fn a_transcript_clear_during_the_snapshot_await_is_delivered_after_the_rep
         "a clear during the await must not wipe the replay it precedes"
     );
 
-    let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
+    let items = mainframe_acp::encoder::encode_containers(&[display_message("m1", "Hello")], None);
     hub.reset_session(&conn, "chat-1", seed(&items, &reply(1)), replay_marker);
 
     let frames = drain(&mut rx);
@@ -160,7 +160,7 @@ async fn a_buffered_raw_drains_behind_the_buffered_revision() {
     });
     assert!(drain(&mut rx).is_empty());
 
-    let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
+    let items = mainframe_acp::encoder::encode_containers(&[display_message("m1", "Hello")], None);
     hub.reset_session(&conn, "chat-1", seed(&items, &reply(1)), replay_marker);
 
     let frames = drain(&mut rx);
@@ -201,10 +201,10 @@ async fn a_gate_the_replay_redelivers_is_not_also_drained_from_the_buffer() {
         mainframe_acp::gate_request_id(&control.request_id),
         &control,
     );
-    let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
+    let items = mainframe_acp::encoder::encode_containers(&[display_message("m1", "Hello")], None);
     let reply = reply(1);
     let seed = ResumeSeed {
-        items: &items,
+        containers: &items,
         reply: &reply,
         replied: Arc::new(AtomicBool::new(false)),
         completed: Arc::new(AtomicBool::new(false)),
@@ -243,7 +243,7 @@ async fn a_gate_resolved_during_the_await_is_not_raised_by_the_drain() {
         request_id: "req-3".to_string(),
     });
 
-    let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
+    let items = mainframe_acp::encoder::encode_containers(&[display_message("m1", "Hello")], None);
     hub.reset_session(&conn, "chat-1", seed(&items, &reply(1)), replay_marker);
 
     let frames = drain(&mut rx);
@@ -291,7 +291,7 @@ async fn a_gate_resolved_since_the_snapshot_is_not_redelivered_by_the_replay() {
         mainframe_acp::gate_request_id(&control.request_id),
         &control,
     );
-    let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
+    let items = mainframe_acp::encoder::encode_containers(&[display_message("m1", "Hello")], None);
     hub.reset_session(&conn, "chat-1", seed(&items, &reply(1)), |c| {
         hub.redeliver_gate(c, "chat-1", &control, &frame);
     });
@@ -327,7 +327,7 @@ async fn a_second_begin_resume_keeps_what_the_first_buffered() {
     });
     hub.begin_resume(&conn, "chat-1");
 
-    let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
+    let items = mainframe_acp::encoder::encode_containers(&[display_message("m1", "Hello")], None);
     hub.reset_session(&conn, "chat-1", seed(&items, &reply(1)), replay_marker);
 
     let frames = drain(&mut rx);
