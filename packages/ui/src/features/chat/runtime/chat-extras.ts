@@ -11,7 +11,7 @@
  * store — the controller's reducer state is the sole source.
  */
 import { useAuiState } from '@assistant-ui/react';
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import type { ControlResponse, QueuedMessageRef, WorktreeSwitchOffer } from '@qlan-ro/mainframe-types';
 import type { AcpChatController } from '../controller/acp-chat-controller';
 import type { ChatThreadState, ChatPermissionEntry } from '../controller/chat-thread-state';
@@ -21,6 +21,12 @@ const symbolMfExtras = Symbol('mainframe-chat-extras');
 
 export interface ChatRuntimeExtras {
   readonly [symbolMfExtras]: true;
+  /**
+   * The reducer state minus transcript churn: `useChatExtrasState` holds the
+   * last snapshot whose non-`messages` fields changed, so a streamed chunk
+   * never re-renders the composer, gates, or session panel. Read the
+   * transcript through assistant-ui's thread state, never `state.messages`.
+   */
   readonly state: ChatThreadState;
   readonly permissions: Readonly<Record<string, ChatPermissionEntry>>;
   readonly queued: Readonly<Record<string, QueuedMessageRef>>;
@@ -68,6 +74,33 @@ export function buildChatExtras(
     dismissWorktreeOffer: (worktreePath) => controller.dismissWorktreeOffer(worktreePath),
     clearWorktreeSwitch: () => controller.clearWorktreeSwitch(),
   };
+}
+
+function sameExceptMessages(a: ChatThreadState, b: ChatThreadState): boolean {
+  const keys = Object.keys(b) as Array<keyof ChatThreadState>;
+  if (keys.length !== Object.keys(a).length) return false;
+  for (const key of keys) {
+    if (key === 'messages') continue;
+    if (!Object.is(a[key], b[key])) return false;
+  }
+  return true;
+}
+
+/**
+ * The state snapshot `extras` is built from: identity-stable across updates
+ * that only replaced `messages` (every streamed chunk), fresh as soon as any
+ * other field moves. Every `useChatExtras()` consumer — the composer
+ * toolbar, the gate mount, the session panel, the skills provider — re-renders
+ * with `extras`, and none of them read the transcript through it.
+ *
+ * The ref is assigned during render on purpose: the held value is a pure
+ * function of the latest `state`, so a discarded concurrent render can only
+ * ever write what the committed one writes too.
+ */
+export function useChatExtrasState(state: ChatThreadState): ChatThreadState {
+  const held = useRef(state);
+  if (held.current !== state && !sameExceptMessages(held.current, state)) held.current = state;
+  return held.current;
 }
 
 /**

@@ -17,6 +17,7 @@ import type { ReactNode } from 'react';
 let __mainThreadId: string | null = '__LOCALID_1';
 let __itemStatus: string | undefined = 'new';
 
+vi.mock('../ProgressiveMessages', () => ({ ProgressiveMessages: () => <div data-testid="tp-messages" /> }));
 vi.mock('@assistant-ui/react', () => ({
   ThreadPrimitive: {
     Root: ({ children }: { children?: ReactNode }) => <div data-testid="tp-root">{children}</div>,

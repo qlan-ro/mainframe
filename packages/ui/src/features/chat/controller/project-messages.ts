@@ -1,14 +1,22 @@
 /**
- * State → ExportedMessageRepository projection.
+ * State → message-list projection.
  *
  * Mirrors react-opencode's `openCodeMessageProjection.ts`. The transcript
  * arrives already converted (`state.messages`, produced by the ACP session
  * plane through `convert-acp-item.ts`); pending and queued user messages
  * follow it. Only legacy daemons need the nearest-assistant running fallback.
+ *
+ * The identity-preserving native projection (`TranscriptProjector`,
+ * `transcript-projector.ts`) is built on the pieces exported here.
  */
-import { normalizeNativeRepository } from '../view-model/normalize-native-messages';
-import type { ThreadMessage, ThreadMessageLike, ThreadUserMessage } from '@assistant-ui/react';
+import type {
+  ExportedMessageRepository,
+  ThreadMessage,
+  ThreadMessageLike,
+  ThreadUserMessage,
+} from '@assistant-ui/react';
 import type { QueuedMessageRef } from '@qlan-ro/mainframe-types';
+import { normalizeNativeRepository } from '../view-model/normalize-native-messages';
 import { describeSendError } from './describe-send-error';
 import type { ChatThreadState, PendingUserMessage } from './chat-thread-state';
 
@@ -78,53 +86,100 @@ function projectQueuedMessages(state: ChatThreadState, serverMessageIds: Readonl
     .map(projectQueuedMessage);
 }
 
+/**
+ * Everything that follows the confirmed transcript: queued turns (D1), then
+ * the pending (optimistic) sends sorted by createdAt — always "newest", sent
+ * just now; a reconciled pending no longer appears here.
+ */
+export function projectTrailingMessages(
+  state: ChatThreadState,
+  serverMessageIds: ReadonlySet<string>,
+): ThreadUserMessage[] {
+  const queued = projectQueuedMessages(state, serverMessageIds);
+  const pending = Object.values(state.pendingUserMessages)
+    .filter((p): p is PendingUserMessage => p != null)
+    .sort((a, b) => a.createdAt - b.createdAt)
+    .map(projectPendingMessage);
+  return [...queued, ...pending];
+}
+
 // ---------------------------------------------------------------------------
-// Projection entry
+// Server-message status stamps
 // ---------------------------------------------------------------------------
 
-function projectServerMessages(state: ChatThreadState): ThreadMessage[] {
-  const messages = state.messages.map((message) => message as ThreadMessageLike as ThreadMessage);
+type AssistantStatus = NonNullable<ThreadMessageLike['status']>;
+
+const COMPLETE_STATUS: AssistantStatus = Object.freeze({ type: 'complete', reason: 'unknown' });
+const RUNNING_STATUS: AssistantStatus = Object.freeze({ type: 'running' });
+
+/**
+ * Keeps one stamped variant per (like, status) so re-projecting an unchanged
+ * like yields the same object — a fresh spread per projection would defeat
+ * every identity-based cache downstream of it.
+ */
+export class StatusStampCache {
+  private readonly stamped = new WeakMap<
+    ThreadMessageLike,
+    Partial<Record<AssistantStatus['type'], ThreadMessageLike>>
+  >();
+
+  stamp(like: ThreadMessageLike, status: AssistantStatus): ThreadMessageLike {
+    const variants = this.stamped.get(like) ?? {};
+    const existing = variants[status.type];
+    if (existing) return existing;
+    const stamped: ThreadMessageLike = { ...like, status };
+    variants[status.type] = stamped;
+    this.stamped.set(like, variants);
+    return stamped;
+  }
+}
+
+/**
+ * Message-level status for the confirmed transcript. With authoritative item
+ * streaming every assistant message without its own status is complete; a
+ * legacy daemon instead gets the nearest assistant message stamped running
+ * while the turn runs (`cancelling` counts), unless one already carries its
+ * own `running` status (D6 — never second-guessed).
+ */
+export function stampServerStatuses(
+  messages: readonly ThreadMessageLike[],
+  state: ChatThreadState,
+  cache: StatusStampCache = new StatusStampCache(),
+): ThreadMessageLike[] {
   if (state.authoritativeItemStreaming) {
     return messages.map((message) =>
-      message.role === 'assistant' && message.status === undefined
-        ? { ...message, status: { type: 'complete', reason: 'unknown' } }
-        : message,
+      message.role === 'assistant' && message.status === undefined ? cache.stamp(message, COMPLETE_STATUS) : message,
     );
   }
   const running = state.runState.type === 'running' || state.runState.type === 'cancelling';
   const alreadyRunning = messages.some((message) => message.role === 'assistant' && message.status?.type === 'running');
+  const stamped = [...messages];
   if (running && !alreadyRunning) {
-    for (let index = messages.length - 1; index >= 0; index--) {
-      const message = messages[index]!;
+    for (let index = stamped.length - 1; index >= 0; index--) {
+      const message = stamped[index]!;
       if (message.role === 'assistant') {
-        messages[index] = { ...message, status: { type: 'running' } };
+        stamped[index] = cache.stamp(message, RUNNING_STATUS);
         break;
       }
     }
   }
-  return messages;
+  return stamped;
 }
+
+// ---------------------------------------------------------------------------
+// Projection entry
+// ---------------------------------------------------------------------------
 
 export function projectChatThreadMessages(state: ChatThreadState): ThreadMessage[] {
-  const serverMessages = projectServerMessages(state);
-
-  // Queued turns (D1) — the encoder never sends these as part of the
-  // transcript, so they render from the queue snapshot alone, between the
-  // confirmed transcript and any still-in-flight optimistic send.
+  // Already-converted server messages in order — a single cast suffices
+  // because the native normalizer also accepts ThreadMessageLike[], but
+  // downstream hooks want a consistent ThreadMessage[].
+  const serverMessages = stampServerStatuses(state.messages, state).map((m) => m as ThreadMessageLike as ThreadMessage);
   const serverMessageIds = new Set(serverMessages.map((m) => m.id));
-  const queuedMessages = projectQueuedMessages(state, serverMessageIds);
-
-  // Pending (optimistic) messages sorted by createdAt
-  const pendingMessages: ThreadUserMessage[] = Object.values(state.pendingUserMessages)
-    .filter((p): p is PendingUserMessage => p != null)
-    .sort((a, b) => a.createdAt - b.createdAt)
-    .map(projectPendingMessage);
-
-  // Merge: pending at end (they are always "newest" — sent just now).
-  // If the fingerprint dedup has reconciled them they won't appear here.
-  return [...serverMessages, ...queuedMessages, ...pendingMessages];
+  return [...serverMessages, ...projectTrailingMessages(state, serverMessageIds)];
 }
 
-export function projectChatThreadRepository(state: ChatThreadState) {
+/** One-shot native projection with no identity cache — the mounted runtime uses `TranscriptProjector` instead. */
+export function projectChatThreadRepository(state: ChatThreadState): ExportedMessageRepository {
   return normalizeNativeRepository(projectChatThreadMessages(state));
 }

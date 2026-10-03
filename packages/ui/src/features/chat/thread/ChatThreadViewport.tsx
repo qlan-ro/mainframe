@@ -13,6 +13,7 @@ import { useChatExtras } from '../runtime/chat-extras';
 import { ContextNotPreservedNotice } from './ContextNotPreservedNotice';
 import { DegradedChatCard } from './DegradedChatCard';
 import { useThreadBottomPin } from './use-thread-bottom-pin';
+import { ProgressiveMessages } from './ProgressiveMessages';
 import { TranscriptScrollProvider } from './transcript-scroll-context';
 import {
   ChatThreadLoadingSpinner,
@@ -32,7 +33,7 @@ function TranscriptMessages() {
       <CompactTranscript />
     </Suspense>
   ) : (
-    <ThreadPrimitive.Messages components={boundedMessageComponents} />
+    <ProgressiveMessages components={boundedMessageComponents} />
   );
 }
 function ThreadFooterInput({ variant }: { variant: ChatThreadVariant }) {
@@ -94,7 +95,10 @@ export function ChatThreadViewport({ emptyState, variant }: { emptyState?: React
           <LoadErrorBanner />
           {variant !== 'side' && <ContextNotPreservedNotice />}
           {messageCount === 0 && emptyState != null ? emptyState : null}
-          <TranscriptMessages />
+          {/* Keyed by thread: the progressive window (and compact mode's caches)
+              restart from the new thread's tail on a switch instead of
+              inheriting the previous thread's state. */}
+          <TranscriptMessages key={threadId ?? ''} />
           <GeneratingIndicator />
           <CompactingIndicator />
         </div>

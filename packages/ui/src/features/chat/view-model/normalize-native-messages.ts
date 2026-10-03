@@ -33,6 +33,12 @@ function remapSources(original: ThreadMessageLike, normalized: ThreadMessage): T
   };
 }
 
+/** One like → its native `ThreadMessage`, presentation sources re-indexed past any part the normalizer dropped. */
+export function normalizeNativeMessage(message: ThreadMessageLike): ThreadMessage {
+  const normalized = ExportedMessageRepository.fromArray([message]).messages[0]!.message;
+  return remapSources(message, normalized);
+}
+
 export function normalizeNativeRepository(messages: readonly ThreadMessageLike[]): ExportedMessageRepository {
   const repository = ExportedMessageRepository.fromArray(messages);
   return {

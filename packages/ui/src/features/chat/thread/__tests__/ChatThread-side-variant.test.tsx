@@ -16,6 +16,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import type { ReactNode } from 'react';
 
+vi.mock('../ProgressiveMessages', () => ({ ProgressiveMessages: () => <div data-testid="tp-messages" /> }));
 vi.mock('@assistant-ui/react', () => ({
   ThreadPrimitive: {
     Root: ({ children }: { children?: ReactNode }) => <div data-testid="tp-root">{children}</div>,

@@ -24,7 +24,7 @@ import { useSessionPanelState } from '@/features/session-panel/use-session-panel
 import { chatControllerRegistry } from '../../sessions/runtime/chat-controller-registry';
 import { useDaemonPort } from '../../sessions/runtime/daemon-port-context';
 import { CHAT_ATTACHMENT_ADAPTER, useControllerState } from '../runtime/use-chat-thread-runtime';
-import { buildChatExtras, isRunningFromState } from '../runtime/chat-extras';
+import { buildChatExtras, isRunningFromState, useChatExtrasState } from '../runtime/chat-extras';
 import { useNativeThreadMessages } from '../runtime/use-native-thread-messages';
 import { ChatCardHeader } from '../thread/ChatCardHeader';
 import { ChatThread } from '../thread/ChatThread';
@@ -59,7 +59,8 @@ export function ChatZone({
 
   const messages = useNativeThreadMessages(state);
   const isRunning = isRunningFromState(state);
-  const extras = useMemo(() => buildChatExtras(controller, port, state), [controller, port, state]);
+  const extrasState = useChatExtrasState(state);
+  const extras = useMemo(() => buildChatExtras(controller, port, extrasState), [controller, port, extrasState]);
 
   // Zones only ever hold sessions with a daemon chat (the reconciler closes the
   // split on a draft), so send needs no createForLocal branch.
