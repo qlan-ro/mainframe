@@ -18,30 +18,28 @@ export async function waitConnected(page: Page, timeout = 20_000): Promise<void>
 }
 
 /**
- * Wait until the assistant is idle (the running indicator is gone) and its text has settled.
+ * Wait until the assistant is idle — the running indicator appeared for this turn and has
+ * now gone again.
  *
- * A turn's final text keeps smooth-streaming for a moment after the run stops: the markdown
- * container (`.aui-md`) carries `data-status="running"` until the reveal catches up. A test
- * that reads or selects that text before then races the reveal's DOM updates.
+ * This used to also wait for the previous assistant message's `.aui-md[data-status="running"]`
+ * to detach, a fallback that relied on the markdown container carrying a `running` status for
+ * the length of a new turn. #754 (todo #382/#376) retired that: with `authoritativeItemStreaming`
+ * advertised, `projectServerMessages` marks every assistant message complete as soon as it
+ * lands, and the mock adapter replays whole messages with no partials, so that selector never
+ * matches at all anymore — the fallback became a permanent no-op.
+ *
+ * A bare "wait for `chat-thread-running` to be hidden" has the same race: right after
+ * `sendMessage`, the indicator may not have mounted yet, so "hidden" is trivially already true
+ * and the wait returns before the turn even reaches the daemon. Waiting for the indicator to
+ * become visible first turns this into a real turn boundary — appeared (a run is in flight),
+ * then gone (it ended) — in both Verbose and Compact, under every adapter the mock suite
+ * exercises.
  */
 export async function waitForIdle(page: Page, timeout = 60_000): Promise<void> {
-  await page
-    .locator('[data-testid="chat-thread-running"]')
-    .waitFor({ state: 'hidden', timeout })
-    .catch(async () => {
-      // If it never appeared, idle is already true — confirm no running indicator.
-      await page
-        .locator('[data-testid="chat-thread-running"]')
-        .waitFor({ state: 'detached', timeout: 1_000 })
-        .catch(() => {});
-    });
-  await waitForTextSettled(page, timeout);
-}
-
-/** Wait until no assistant message is still revealing streamed text. */
-export async function waitForTextSettled(page: Page, timeout = 10_000): Promise<void> {
-  await page
-    .locator('[data-testid="chat-assistant-message"] .aui-md[data-status="running"]')
-    .first()
-    .waitFor({ state: 'detached', timeout });
+  const running = page.locator('[data-testid="chat-thread-running"]');
+  // Bounded well below `timeout`: a turn that never starts should fail on the
+  // `hidden` wait below with a clear timeout, not silently pass here and then
+  // trivially pass `hidden` too because the indicator never showed up.
+  await running.waitFor({ state: 'visible', timeout: Math.min(timeout, 5_000) }).catch(() => {});
+  await running.waitFor({ state: 'hidden', timeout });
 }
