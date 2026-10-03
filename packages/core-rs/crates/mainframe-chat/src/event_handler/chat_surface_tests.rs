@@ -44,11 +44,7 @@ impl ShapeDeps {
         let mut chat = test_chat("chat-surface");
         chat.process_state = Some(Some(process_state));
         Arc::new(Self {
-            cell: Arc::new(Mutex::new(ActiveChat {
-                chat,
-                session: None,
-                turn_started_at: None,
-            })),
+            cell: Arc::new(Mutex::new(ActiveChat::new(chat, None))),
         })
     }
 }

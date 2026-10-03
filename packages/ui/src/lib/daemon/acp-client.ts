@@ -1,20 +1,21 @@
 /** Negotiation is shared across all chat sessions bound to this per-profile client. */
-import type {
-  CancelSessionNotification,
-  InitializeRequest,
-  InitializeResponse,
-  JsonRpcRequestId,
-  MainframeCapabilities,
-  PromptRequest,
-  PromptResponse,
-  RequestPermissionResponse,
-  ResumeSessionRequest,
-  ResumeSessionResponse,
-} from '@qlan-ro/mainframe-types';
 import {
+  type CancelSessionNotification,
   InitializeResponseSchema,
+  type InitializeRequest,
+  type InitializeResponse,
+  type JsonRpcRequestId,
+  MAINFRAME_META_NAMESPACE,
+  type MainframeCapabilities,
   PINNED_PROTOCOL_VERSION,
+  type PromptRequest,
+  type PromptResponse,
   PromptResponseSchema,
+  type ReplayCursor,
+  type RequestPermissionResponse,
+  REVISION_CURSORS_OPT_IN_KEY,
+  type ResumeSessionRequest,
+  type ResumeSessionResponse,
   ResumeSessionResponseSchema,
 } from '@qlan-ro/mainframe-types';
 import { getActiveDaemon } from './active-daemon';
@@ -23,6 +24,7 @@ import { HeartbeatWatchdog } from './acp-heartbeat-watchdog';
 import {
   AcpNotificationRouter,
   type CompactionListener,
+  type CursorListener,
   type GateResolvedListener,
   type PermissionRequestListener,
   type QueueStateListener,
@@ -32,10 +34,8 @@ import {
   type TranscriptClearedListener,
 } from './acp-notification-router';
 import { RpcConnection, type AcpSocketFactory, type AcpSocketLike } from './acp-rpc-connection';
-
-/** Matches `mainframe_acp::resume::ReplayCursor`'s wire shape — opaque on the vendored type by design (session.ts). */
-export type ReplayCursor = { type: 'start' } | { type: 'item'; itemId: string };
-
+/** `mainframe_acp::resume::ReplayCursor`'s wire shape (todo #377 added the `revision` variant) — single-canonical-type in `@qlan-ro/mainframe-types`, re-exported for existing `from './acp-client'` imports. */
+export type { ReplayCursor };
 /** Production default; overridden per-connection by the daemon's advertised `heartbeatIntervalMs`. */
 const FALLBACK_HEARTBEAT_INTERVAL_MS = 15_000;
 const DEFAULT_CLIENT_INFO = { name: 'mainframe-ui', version: '0.0.0' };
@@ -132,9 +132,11 @@ export class AcpFacadeClient {
     try {
       await connection.open();
 
+      // `_meta` opts into revision-versioned resume cursors (todo #377) — ignored by a daemon that doesn't advertise `revisionCursors` back.
       const request: InitializeRequest = {
         protocolVersion: PINNED_PROTOCOL_VERSION,
         info: this.deps.clientInfo ?? DEFAULT_CLIENT_INFO,
+        _meta: { [MAINFRAME_META_NAMESPACE]: { [REVISION_CURSORS_OPT_IN_KEY]: true } },
       };
       let response!: InitializeResponse;
       await connection.sendRequest('initialize', request, (result) => {
@@ -231,6 +233,11 @@ export class AcpFacadeClient {
     return this.router.onReplayComplete(listener);
   }
 
+  /** Advances the durable revision cursor outside a resume round trip (`_mainframe.dev/cursor`, todo #377). */
+  onCursor(listener: CursorListener): () => void {
+    return this.router.onCursor(listener);
+  }
+
   /** Fires when the caller should call `resume()` to converge: a heartbeat gap, silence, or the socket closing. */
   onGap(listener: GapListener): () => void {
     this.gapListeners.add(listener);
@@ -266,14 +273,7 @@ export class AcpFacadeClient {
     this.gapListeners.forEach((fn) => fn());
   }
 
-  /**
-   * Socket death: reconnect with backoff, and only THEN fire the gap
-   * listeners — a gap fired while the socket is down would make every
-   * session's `resume()` throw. The watchdog's silence gap (socket alive)
-   * still fires immediately via `notifyGap`. `connection` identifies WHICH
-   * attempt died — a leaked failed-`connect()` socket closing late must not
-   * tear down a connection that has since replaced it (R3.4).
-   */
+  /** Ignore stale socket closures; reconnect before asking sessions to resume. */
   private handleClose(connection: RpcConnection): void {
     if (this.connection !== connection) return;
     this.watchdog?.stop();

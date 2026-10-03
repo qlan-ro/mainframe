@@ -17,7 +17,7 @@
 //! holding the gate, not every session subscriber, so it is sent directly
 //! rather than queued through this per-session throttle.
 
-use mainframe_types::acp::extensions::{MAINFRAME_META_NAMESPACE, RetryMarker};
+use mainframe_types::acp::extensions::{MAINFRAME_META_NAMESPACE, RetryMarker, RevisionCursor};
 use mainframe_types::acp::update::{
     IdleStateUpdate, SessionState as WireSessionState, SessionUpdate, StopReason, UsageUpdate,
 };
@@ -56,13 +56,28 @@ impl SessionStream {
     /// A display revision for this session: diff, attach any pending retry
     /// marker, and run the result through the throttle. Returns the frames
     /// due now; the rest sit buffered until the next revision or
-    /// [`Self::flush`].
-    pub fn on_revision(&mut self, items: &[EncodedItem], now_ms: i64) -> Vec<ThrottledFrame> {
+    /// [`Self::flush`]. `cursor` (todo #377) is the chat's revision-log
+    /// boundary after recording this same revision — `None` for a
+    /// connection that did not opt into revision cursors, or when the
+    /// revision was a no-op the log did not bump; either way, nothing rides
+    /// the FIFO for it. When present, it is pushed after the diff's own
+    /// frames, so receiving it means every frame up to and including it is
+    /// already applied.
+    pub fn on_revision(
+        &mut self,
+        items: &[EncodedItem],
+        now_ms: i64,
+        cursor: Option<RevisionCursor>,
+    ) -> Vec<ThrottledFrame> {
         let mut updates = self.state.diff(items);
         if self.pending_retry.is_some() {
             self.attach_retry_marker(&mut updates);
         }
-        self.push_all(updates, now_ms)
+        let mut due = self.push_all(updates, now_ms);
+        if let Some(cursor) = cursor {
+            due.extend(self.throttle.push_cursor(now_ms, cursor));
+        }
+        due
     }
 
     pub fn on_retry(&mut self, marker: RetryMarker) {

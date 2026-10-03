@@ -125,18 +125,36 @@ fn handle_session_method(
 /// the two spawned session methods are peeled off: `initialize` and the
 /// malformed/unknown-method errors. None of them touch a session, so all of
 /// them stay inline; a successful `initialize` marks the connection
-/// negotiated.
+/// negotiated, and — todo #377 — also opted into revision cursors when its
+/// params said so. Read from the still-owned `frame` before it moves into
+/// `dispatch_with_prompt`, which only reports whether the handshake
+/// completed, not what the client asked for inside it.
 async fn dispatch_fallback(
     frame: InboundFrame,
     daemon: &DaemonInfo,
     ports: &ManagerPorts,
     connection: &Arc<FacadeConnection>,
 ) -> Option<String> {
+    let opted_into_revision_cursors = initialize_params(&frame)
+        .is_some_and(|params| mainframe_acp::client_opts_into_revision_cursors(Some(params)));
     let outcome = dispatch_with_prompt(frame, daemon, ports, connection.is_negotiated()).await;
     if outcome.negotiated {
         connection.mark_negotiated();
+        if opted_into_revision_cursors {
+            connection.mark_revision_cursors_opted_in();
+        }
     }
     outcome.reply
+}
+
+/// `frame`'s params, only for an `initialize` request — `None` for every
+/// other frame shape, so a caller cannot accidentally read some other
+/// method's params as if they were `initialize`'s.
+fn initialize_params(frame: &InboundFrame) -> Option<&serde_json::Value> {
+    match frame {
+        InboundFrame::Request(request) if request.method == "initialize" => request.params.as_ref(),
+        _ => None,
+    }
 }
 
 /// The session methods run off the socket-loop task (R3.6, plan decision 5):

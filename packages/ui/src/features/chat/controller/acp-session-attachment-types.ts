@@ -12,10 +12,12 @@ import type {
   RequestPermissionRequest,
   RequestPermissionResponse,
   ResumeSessionResponse,
+  RevisionCursor,
   SessionUpdate,
 } from '@qlan-ro/mainframe-types';
 import type {
   CompactionListener,
+  CursorListener,
   GateResolvedListener,
   PermissionRequestListener,
   QueueStateListener,
@@ -41,6 +43,8 @@ export interface AcpSessionClientPort {
   onResync(listener: ResyncListener): () => void;
   /** Closes exactly one `session/resume` replay (D4) — absent on a daemon that predates the capability. */
   onReplayComplete?(listener: ReplayCompleteListener): () => void;
+  /** Advances the durable revision cursor outside a resume round trip (todo #377) — absent on a daemon that predates the capability. */
+  onCursor?(listener: CursorListener): () => void;
   onGap(listener: GapListener): () => void;
   prompt(sessionId: string, text: string, extra?: Pick<PromptRequest, '_meta'>): Promise<PromptResponse>;
   cancel(sessionId: string): void;
@@ -58,8 +62,13 @@ export interface AcpSessionAttachmentHost {
   getChatId(): string;
   dispatch(event: ChatStateEvent): void;
   isDisposed(): boolean;
-  getLastSettledItemId(): string | null;
+  /** The next `session/resume` cursor for this chat (todo #377) — collapses the revision-vs-item-vs-start choice `reactivate()`/`resumeFromGap()` used to each re-derive inline. */
+  nextReplayFrom(capabilities: MainframeCapabilities | null | undefined): ReplayCursor;
   resetSettledCursor(): void;
+  /** `needs-replay`, `transcript_cleared`, and a resync each invalidate the durable revision cursor outright (todo #377) — the next full replay's own reply seeds a fresh one via `completeReplay()`. */
+  clearDurableCursor(): void;
+  /** `_mainframe.dev/cursor` (todo #377) — the tracker itself enforces epoch/revision ordering; call only when no replay window or resume is in flight (the attachment's own gate, not this method's). */
+  advanceCursorFromNotification(cursor: RevisionCursor): void;
   /** Legacy path, and the immediate wipe a real `transcript_cleared` does before its reattach. */
   resetAccumulator(): void;
   hasAccumulatedItems(): boolean;

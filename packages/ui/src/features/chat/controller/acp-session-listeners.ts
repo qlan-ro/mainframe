@@ -16,6 +16,8 @@ export interface AcpSessionListenerDeps {
   replay: ReplayWindowCoordinator;
   /** `AcpSessionAttachment.syncConnectionGeneration()` — called before routing a frame to this chat (re-review LOW). */
   syncConnectionGeneration: () => void;
+  /** True while a resume round trip or any replay window is in flight — `_mainframe.dev/cursor` (todo #377) is ignored while this holds, so it never races a reply's own `commitReplyCursor`. */
+  isResumeOrReplayPending: () => boolean;
 }
 
 /**
@@ -25,7 +27,7 @@ export interface AcpSessionListenerDeps {
  * calls back, so nothing is pushed for it).
  */
 export function wireAcpSessionListeners(client: AcpSessionClientPort, deps: AcpSessionListenerDeps): Array<() => void> {
-  const { getChatId: chatId, host, fullReplay, replay, syncConnectionGeneration } = deps;
+  const { getChatId: chatId, host, fullReplay, replay, syncConnectionGeneration, isResumeOrReplayPending } = deps;
   const unsubscribe: Array<() => void> = [
     client.onSessionUpdate((sessionId, update) => {
       if (sessionId !== chatId()) return;
@@ -56,6 +58,7 @@ export function wireAcpSessionListeners(client: AcpSessionClientPort, deps: AcpS
       // supported, builds off-screen before it pops back in).
       host.dispatch({ type: 'transcript.cleared' });
       host.resetSettledCursor();
+      host.clearDurableCursor();
       host.resetAccumulator();
       fullReplay.requestWipe();
     }),
@@ -69,7 +72,9 @@ export function wireAcpSessionListeners(client: AcpSessionClientPort, deps: AcpS
       if (sessionId !== chatId()) return;
       // Cache eviction, NOT a wipe (spec: distinct from transcript_cleared)
       // — re-replay without blanking the reducer's transcript first, or the
-      // thread flashes empty mid-conversation.
+      // thread flashes empty mid-conversation. Also invalidates the durable
+      // revision cursor (todo #377) — the re-replay's own reply seeds a fresh one.
+      host.clearDurableCursor();
       fullReplay.requestResync();
     }),
   ];
@@ -78,6 +83,16 @@ export function wireAcpSessionListeners(client: AcpSessionClientPort, deps: AcpS
     if (sessionId === chatId()) replay.handleReplayComplete(aborted);
   });
   if (unsubscribeReplayComplete) unsubscribe.push(unsubscribeReplayComplete);
+
+  // `_mainframe.dev/cursor` (todo #377) — ignored while a replay window or
+  // resume is in flight, so it never races a reply's own `commitReplyCursor`
+  // (the attachment's own gate; the tracker enforces epoch/revision ordering).
+  const unsubscribeCursor = client.onCursor?.((sessionId, cursor) => {
+    if (sessionId !== chatId()) return;
+    if (isResumeOrReplayPending()) return;
+    host.advanceCursorFromNotification(cursor);
+  });
+  if (unsubscribeCursor) unsubscribe.push(unsubscribeCursor);
 
   return unsubscribe;
 }

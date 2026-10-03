@@ -29,6 +29,43 @@ pub struct MainframeCapabilities {
     /// When true, item streaming markers describe top-level text/thinking overlays; an absent/false marker means no overlay.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub authoritative_item_streaming: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub revision_cursors: Option<bool>,
+}
+
+/// The `initialize` request `_meta["_mainframe.dev"]` key a client sets to
+/// `true` to opt into revision-versioned resume cursors (todo #377). Absent
+/// or `false` keeps the connection on item cursors only, byte-identical to
+/// today, even when [`MainframeCapabilities::revision_cursors`] advertises
+/// server support.
+pub const REVISION_CURSORS_OPT_IN_KEY: &str = "revisionCursors";
+
+/// The replay boundary a revision-cursor `session/resume` reply returns and
+/// the `_mainframe.dev/cursor` notification advances (todo #377). `epoch`
+/// identifies the log generation — `TranscriptCleared`, `Resync`,
+/// compaction, and a tool-call vanish each rotate it, which invalidates
+/// every cursor from the prior epoch. `revision` is the daemon's monotonic
+/// per-chat counter. Mirrors `packages/types/src/acp/extensions.ts`'
+/// `RevisionCursorSchema`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RevisionCursor {
+    pub epoch: String,
+    pub revision: u64,
+}
+
+/// `_mainframe.dev/cursor`'s params (todo #377): the replay boundary a
+/// reconnecting client now holds every change through. Rides the
+/// per-session throttle FIFO after the frames of the display revision it
+/// describes, so receiving it means the client holds every change up to
+/// and including `revision`. Sent only to connections that opted into
+/// revision cursors via [`REVISION_CURSORS_OPT_IN_KEY`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CursorParams {
+    pub session_id: String,
+    pub epoch: String,
+    pub revision: u64,
 }
 
 #[cfg(test)]
@@ -46,6 +83,7 @@ mod tests {
             item_creation_markers: None,
             replay_complete: None,
             authoritative_item_streaming: None,
+            revision_cursors: None,
         };
         assert_eq!(serde_json::to_value(caps).unwrap(), json!({}));
     }

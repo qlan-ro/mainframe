@@ -14,7 +14,7 @@
  * its frames are routed live by `AcpTranscriptStore.apply()` regardless of
  * status, so nothing ever reads it.
  */
-import type { SessionUpdate } from '@qlan-ro/mainframe-types';
+import type { RevisionCursor, SessionUpdate } from '@qlan-ro/mainframe-types';
 import type { AcpItemAccumulator } from '../view-model/acp-item-accumulator';
 
 export type ReplayStageStatus = 'open' | 'published' | 'discarded';
@@ -27,6 +27,16 @@ export class ReplayStage {
    * stage actually published. Never dispatched live mid-replay.
    */
   pendingState: Extract<SessionUpdate, { sessionUpdate: 'state_update' }> | null = null;
+  /**
+   * THIS stage's own `session/resume` reply cursor (todo #377) — set by
+   * `ReplayWindowCoordinator.openWindow()` right after the stage is created,
+   * from the same reply whose meta decided `full`/`itemCount`. Committed by
+   * `AcpSessionPlane.completeReplay()` only once this stage's own marker
+   * closes normally; never on abort/discard, so an interrupted replay never
+   * advances the durable cursor past what it actually applied. `null` for a
+   * legacy daemon or a reply that carried no cursor meta.
+   */
+  replyCursor: RevisionCursor | null = null;
 
   constructor(
     readonly full: boolean,

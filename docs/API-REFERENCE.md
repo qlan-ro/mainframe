@@ -764,10 +764,21 @@ route uses. `?token=` works exactly as it does on `/`.
 `-32001` error (`data.supported: [2]`) and the connection stays open. The
 response's `_meta["_mainframe.dev"]` carries `MainframeCapabilities`
 (`richPermissionAnswers`, `queuedPrompts`, `retryMarkers`,
-`heartbeatIntervalMs`, `itemCreationMarkers`, `replayComplete`) — a generic
-ACP client that ignores this namespace gets a degraded but coherent
-experience (plain option-only gates, no queued-turn metadata, no staged
-replay).
+`heartbeatIntervalMs`, `itemCreationMarkers`, `replayComplete`,
+`revisionCursors`) — a generic ACP client that ignores this namespace gets a
+degraded but coherent experience (plain option-only gates, no queued-turn
+metadata, no staged replay, item cursors only).
+
+**Revision cursors (todo #377).** A client opts into epoch/revision resume
+cursors with its own `initialize` request `_meta["_mainframe.dev"]`:
+`{revisionCursors: true}`. Only an opted-in connection gets `cursor` meta on
+`session/resume` replies and `_mainframe.dev/cursor` notifications; a
+connection that does not opt in keeps the item-cursor-only wire byte-for-byte,
+even against a daemon that advertises the capability. Opting in lets a
+reconnect recover changes to items it already holds — a late edit, a
+meta-only patch (e.g. a turn duration attached after the turn ended), or a
+deletion — which a plain item cursor (resume strictly after a named item)
+cannot express.
 
 **Methods and notifications (shipped grammar):**
 
@@ -776,7 +787,8 @@ replay).
 | `initialize` | client → daemon | Version negotiation + capability advertisement. |
 | `session/prompt` | client → daemon | Send a turn; the request's `_meta["_mainframe.dev"]` may carry `PromptSendMeta` (`attachmentIds` from the upload REST route, plus the slash-`command` invocation); response is acceptance (immediate or queued via `_meta`), never turn completion — no `queue.*` frame family. |
 | `session/cancel` | client → daemon (notification) | End the turn with a cancelled stop reason; cancels open gates. |
-| `session/resume` | client → daemon | Replay from an opaque `replayFrom` cursor (`{type:"start"}` or `{type:"item",itemId}`); the response's `_meta["_mainframe.dev"].itemCount` is the size of the server's full snapshot (a client holding items refuses an `itemCount: 0` blanking re-seed — the "no history session yet" degenerate read); an unknown/pre-compaction cursor falls back to a full replay adding `fullReplay: true`. |
+| `session/resume` | client → daemon | Replay from an opaque `replayFrom` cursor (`{type:"start"}`, `{type:"item",itemId}`, or — for an opted-in connection, todo #377 — `{type:"revision",epoch,revision}`); the response's `_meta["_mainframe.dev"].itemCount` is the size of the server's full snapshot (a client holding items refuses an `itemCount: 0` blanking re-seed — the "no history session yet" degenerate read); an unknown/pre-compaction cursor, an unknown epoch, or a revision outside the retained range falls back to a full replay adding `fullReplay: true`. An opted-in connection's reply also carries `_meta["_mainframe.dev"].cursor: {epoch, revision}` regardless of which cursor shape the request used — the boundary the reply's updates converge the client to. |
+| `_mainframe.dev/cursor` | daemon → client (notification) | `{sessionId, epoch, revision}` (todo #377) — sent only to a connection that opted into revision cursors, after the `session/update` frames of the display revision it describes (same per-session throttle FIFO, coalesced to the last cursor per flushed batch). Receiving it means the client now holds every change through `revision`; the client advances its durable cursor only then, never ahead of applied data. |
 | `_mainframe.dev/session_detach` | client → daemon (notification) | `{sessionId}` — a connection that follows the active thread (D2) drops the session's stream and any pending gates on itself when the client navigates away; a no-op if the connection was never attached. Switching back re-attaches through the normal `session/prompt`/`session/resume` attach-on-send path. |
 | `session/request_permission` | daemon → client | Mid-turn blocking gate with an adapter-supplied ordered option list (`allow-once`/`allow-always`/`reject-once`); the request's `_meta["_mainframe.dev"].controlRequest` carries the raw `ControlRequest` (input, suggestions, decision reason) the rich desktop gate cards render. A plain `{outcome:"selected", optionId}` answer is always valid; a rich `_meta["_mainframe.dev"].controlResponse` answer carries today's `ControlResponse` semantics (input mutation, execution mode, clear-context) and is validated against the request it claims to resolve before being trusted. |
 | `session/update` | daemon → client (notification) | Item chunks/upserts/patches — `AgentMessage(Chunk)`, `UserMessage(Chunk)`, `AgentThought(Chunk)`, `ToolCallUpdate`, `ToolCallContentChunk`, `StateUpdate`, `UsageUpdate`. Diffed per session (`SessionState`) so no frame after an item's first repeats its full accumulated content. |

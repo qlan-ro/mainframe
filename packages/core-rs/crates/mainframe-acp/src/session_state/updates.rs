@@ -20,7 +20,7 @@ use crate::stream::merge_namespace;
 /// meta (a skill-loaded or compaction pill), which the client must render,
 /// not delete. Should the item later reappear it is a fresh creation; the
 /// clear removed it from state.
-pub(super) fn clear_update(item: &EncodedItem) -> SessionUpdate {
+pub(crate) fn clear_update(item: &EncodedItem) -> SessionUpdate {
     let (id, role, is_thought) = match item {
         EncodedItem::Message { id, role, .. } => (id, *role, false),
         EncodedItem::Thought { id, .. } => (id, ItemRole::Agent, true),
@@ -75,7 +75,7 @@ fn created_meta(meta: &Option<Value>) -> Option<Option<Value>> {
     )))
 }
 
-pub(super) fn create_update(item: &EncodedItem) -> SessionUpdate {
+pub(crate) fn create_update(item: &EncodedItem) -> SessionUpdate {
     match item {
         EncodedItem::Message {
             id,

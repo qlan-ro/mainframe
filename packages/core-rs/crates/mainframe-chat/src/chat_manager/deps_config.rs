@@ -10,8 +10,14 @@ pub(super) struct CmDeps {
 }
 
 impl ConfigManagerDeps for CmDeps {
+    /// Config edits take no lifecycle claim (see `config_api.rs`'s `load_chat`
+    /// rebuild), so this read doubles as a use (todo #381): it touches the
+    /// cell's clock, protecting it from the idle scanner for the rest of the
+    /// edit even though no claim is held across the `.await`s that follow.
     fn get_active_chat(&self, chat_id: &str) -> Option<Arc<Mutex<ActiveChat>>> {
-        self.active_chats.get(chat_id).map(|e| e.value().clone())
+        let cell = self.active_chats.get(chat_id).map(|e| e.value().clone())?;
+        self.lifecycle.touch(chat_id);
+        Some(cell)
     }
     fn chats_update(&self, chat_id: &str, updates: &ChatFieldUpdate) {
         self.deps.chats_update(

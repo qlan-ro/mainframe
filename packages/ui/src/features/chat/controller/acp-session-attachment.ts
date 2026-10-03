@@ -1,4 +1,4 @@
-import { MAINFRAME_META_NAMESPACE } from '@qlan-ro/mainframe-types';
+import { MAINFRAME_META_NAMESPACE, RevisionCursorSchema, type RevisionCursor } from '@qlan-ro/mainframe-types';
 import { z } from 'zod';
 import type { ReplayCursor } from '../../../lib/daemon/acp-client';
 import { AcpSessionCapabilities } from './acp-session-capabilities';
@@ -13,7 +13,11 @@ import type { AcpSessionAttachmentHost, AcpSessionClientPort } from './acp-sessi
 export type { AcpSessionAttachmentHost, AcpSessionClientPort } from './acp-session-attachment-types';
 
 const ResumeMetaSchema = z
-  .object({ itemCount: z.number().int().optional(), fullReplay: z.boolean().optional() })
+  .object({
+    itemCount: z.number().int().optional(),
+    fullReplay: z.boolean().optional(),
+    cursor: RevisionCursorSchema.optional(),
+  })
   .loose();
 
 /**
@@ -41,11 +45,7 @@ export class AcpSessionAttachment {
   });
   private readonly unsubscribe: Array<() => void> = [];
   private subscribed = false;
-  /**
-   * Bumped on every (re)subscribe, `detach()`, `dispose()`, and a genuine
-   * client rebind — `resume()` captures it before its round trip and treats
-   * a mismatch on return as "this attachment moved on; drop the reply."
-   */
+  /** Bumped on every (re)subscribe, `detach()`, `dispose()`, and a genuine client rebind — `resume()` captures it before its round trip and treats a mismatch on return as "this attachment moved on; drop the reply." */
   private generation = 0;
   /** The client's `connectionGeneration` last observed when (re)wiring listeners — tells a live-socket gap (unchanged) apart from a reconnect (bumped); only the latter invalidates a queued window outright (finding 1). */
   private observedConnectionGeneration = 0;
@@ -117,9 +117,7 @@ export class AcpSessionAttachment {
       return;
     }
     this.subscribeIfNeeded();
-    const settled = this.host.getLastSettledItemId();
-    const cursor: ReplayCursor = settled ? { type: 'item', itemId: settled } : { type: 'start' };
-    await this.resume(cursor);
+    await this.resume(this.host.nextReplayFrom(client.mainframeCapabilities ?? null));
   }
 
   /** Drop this session's live stream (D2 dormancy) — tells the daemon, stops listening, keeps `client` bound for prompt/cancel/reply. */
@@ -167,8 +165,7 @@ export class AcpSessionAttachment {
     if (this.requireClient().connectionGeneration === observedBefore) {
       this.replay.abortOpenWindowsOnGap();
     }
-    const settled = this.host.getLastSettledItemId();
-    const cursor: ReplayCursor = settled ? { type: 'item', itemId: settled } : { type: 'start' };
+    const cursor = this.host.nextReplayFrom(this.requireClient().mainframeCapabilities ?? null);
     try {
       await this.resume(cursor);
     } catch (error) {
@@ -193,8 +190,9 @@ export class AcpSessionAttachment {
     return this.client;
   }
 
-  /** D3 routing: an unknown-id frame with no creation marker. Tagged `'needs-replay'` so a steadily-unknown id backs off exponentially instead of firing a full replay per patch (finding 6, `acp-full-replay.ts`). */
+  /** D3 routing: an unknown-id frame with no creation marker. Tagged `'needs-replay'` so a steadily-unknown id backs off exponentially instead of firing a full replay per patch (finding 6, `acp-full-replay.ts`). Also invalidates the durable revision cursor (todo #377) — harmless even when the request below is swallowed (resume already pending), since that resume's own reply recommits a fresh one. */
   routeNeedsReplay(): void {
+    this.host.clearDurableCursor();
     this.replay.routeNeedsReplay(() => this.fullReplay.requestResync('needs-replay'));
   }
 
@@ -244,6 +242,7 @@ export class AcpSessionAttachment {
         fullReplay: this.fullReplay,
         replay: this.replay,
         syncConnectionGeneration: () => this.syncConnectionGeneration(),
+        isResumeOrReplayPending: () => this.resumePendingCount > 0 || this.replay.hasOpenWindow(),
       }),
       client.onGap(() => void this.resumeFromGap()),
     );
@@ -271,11 +270,13 @@ export class AcpSessionAttachment {
       }
       const meta = ResumeMetaSchema.safeParse(response._meta?.[MAINFRAME_META_NAMESPACE]);
       const itemCount = meta.success ? (meta.data.itemCount ?? null) : null;
+      const replyCursor: RevisionCursor | null = meta.success ? (meta.data.cursor ?? null) : null;
       const isFullReplay = cursor.type === 'start' || (meta.success && meta.data.fullReplay === true);
       await this.replay.continueResume(
         this.stagedReplaySupported(),
         isFullReplay,
         itemCount,
+        replyCursor,
         { generation: requestGeneration, connectionGeneration: requestConnectionGeneration },
         opts,
       );

@@ -178,10 +178,10 @@ async fn work_and_final_provenance_survive_full_cursor_and_continued_streaming()
     assert!(cursor.updates.len() < full.updates.len());
     let mut resumed = mainframe_acp::stream::SessionStream::new(0);
     resumed.seed(&full.items);
-    assert!(resumed.on_revision(&items, 0).is_empty());
+    assert!(resumed.on_revision(&items, 0, None).is_empty());
     h.delta(" grows");
     let growing = h.encoded();
-    assert!(!resumed.on_revision(&growing, 1).is_empty());
+    assert!(!resumed.on_revision(&growing, 1, None).is_empty());
     assert_eq!(
         sources(&growing)
             .iter()

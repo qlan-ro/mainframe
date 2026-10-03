@@ -40,7 +40,7 @@ function setup() {
   };
   return { client, start };
 }
-it('dispatches negotiated state before back-to-back session traffic and connect resolution', async () => {
+it('installs both capabilities before back-to-back session and cursor traffic', async () => {
   const { client, start } = setup();
   const bundle = makeHost();
   let state = createChatThreadState('chat');
@@ -57,9 +57,15 @@ it('dispatches negotiated state before back-to-back session traffic and connect 
     expect(client.connectionGeneration).toBe(1);
     events.push('session');
   });
+  client.onCursor(() => {
+    expect(state.authoritativeItemStreaming).toBe(true);
+    expect(client.mainframeCapabilities?.revisionCursors).toBe(true);
+    events.push('cursor');
+  });
   const { socket, done, reply } = await start();
   const completed = done.then(() => events.push('resolved'));
-  reply({ authoritativeItemStreaming: true });
+  expect(socket.sent[0]).toMatchObject({ params: { _meta: { '_mainframe.dev': { revisionCursors: true } } } });
+  reply({ authoritativeItemStreaming: true, revisionCursors: true, replayComplete: true });
   socket.receive({
     jsonrpc: '2.0',
     method: 'session/update',
@@ -68,9 +74,14 @@ it('dispatches negotiated state before back-to-back session traffic and connect 
       update: { sessionUpdate: 'state_update', state: 'running' },
     },
   });
-  expect(events).toEqual(['capabilities.updated', 'session']);
+  socket.receive({
+    jsonrpc: '2.0',
+    method: '_mainframe.dev/cursor',
+    params: { sessionId: 'chat', epoch: 'e1', revision: 1 },
+  });
+  expect(events).toEqual(['capabilities.updated', 'session', 'cursor']);
   await completed;
-  expect(events).toEqual(['capabilities.updated', 'session', 'resolved']);
+  expect(events).toEqual(['capabilities.updated', 'session', 'cursor', 'resolved']);
   attachment.dispose();
 });
 it.each([

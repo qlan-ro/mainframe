@@ -47,11 +47,7 @@ fn ctx_with(
     let deps = StoreDeps::with_chats(vec![chat.clone()]);
     active_chats.insert(
         chat_id.to_string(),
-        Arc::new(Mutex::new(ActiveChat {
-            chat,
-            session: None,
-            turn_started_at: None,
-        })),
+        Arc::new(Mutex::new(ActiveChat::new(chat, None))),
     );
     ChatPlanActionCtx {
         chat_id: chat_id.to_string(),

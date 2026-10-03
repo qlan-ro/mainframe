@@ -71,14 +71,14 @@ fn as_update(frame: &ThrottledFrame) -> &SessionUpdate {
 fn a_growing_message_creates_once_then_chunks_the_delta() {
     let mut stream = stream();
 
-    let first = stream.on_revision(&[message("m1", "Hel")], 0);
+    let first = stream.on_revision(&[message("m1", "Hel")], 0, None);
     assert_eq!(first.len(), 1);
     assert!(matches!(
         as_update(&first[0]),
         SessionUpdate::AgentMessage(_)
     ));
 
-    let second = stream.on_revision(&[message("m1", "Hello")], 10);
+    let second = stream.on_revision(&[message("m1", "Hello")], 10, None);
     assert_eq!(second.len(), 1);
     let SessionUpdate::AgentMessageChunk(chunk) = as_update(&second[0]) else {
         panic!("expected a chunk, got {:?}", second[0]);
@@ -96,7 +96,7 @@ fn seeding_replayed_items_makes_the_next_revision_a_pure_delta() {
 
     // The client already received "Hello" via resume replay — only the
     // suffix may go on the wire.
-    let updates = stream.on_revision(&[message("m1", "Hello world")], 0);
+    let updates = stream.on_revision(&[message("m1", "Hello world")], 0, None);
     assert_eq!(updates.len(), 1);
     let SessionUpdate::AgentMessageChunk(chunk) = as_update(&updates[0]) else {
         panic!("expected a chunk, got {:?}", updates[0]);
@@ -111,8 +111,15 @@ fn seeding_replayed_items_makes_the_next_revision_a_pure_delta() {
 fn lifecycle_frames_share_the_throttle_fifo_so_idle_never_overtakes_content() {
     // A wide window: the chunk after the opening frame is buffered.
     let mut stream = SessionStream::new(1_000);
-    assert_eq!(stream.on_revision(&[message("m1", "Hel")], 0).len(), 1);
-    assert!(stream.on_revision(&[message("m1", "Hello")], 10).is_empty());
+    assert_eq!(
+        stream.on_revision(&[message("m1", "Hel")], 0, None).len(),
+        1
+    );
+    assert!(
+        stream
+            .on_revision(&[message("m1", "Hello")], 10, None)
+            .is_empty()
+    );
 
     // The turn ends inside the window: the Idle frame queues BEHIND the
     // held chunk rather than jumping the socket.
@@ -180,7 +187,10 @@ fn a_gate_cannot_precede_the_tool_call_it_belongs_to() {
     // A wide window: both the tool-call create and the raw gate frame land
     // inside it, buffered behind the opening frame that already flushed.
     let mut stream = SessionStream::new(1_000);
-    assert_eq!(stream.on_revision(&[message("m1", "Hel")], 0).len(), 1);
+    assert_eq!(
+        stream.on_revision(&[message("m1", "Hel")], 0, None).len(),
+        1
+    );
 
     let tool_call = EncodedItem::ToolCall {
         id: "tool-1".to_string(),
@@ -193,7 +203,7 @@ fn a_gate_cannot_precede_the_tool_call_it_belongs_to() {
     };
     assert!(
         stream
-            .on_revision(&[message("m1", "Hel"), tool_call], 10)
+            .on_revision(&[message("m1", "Hel"), tool_call], 10, None)
             .is_empty(),
         "still within the throttle window"
     );

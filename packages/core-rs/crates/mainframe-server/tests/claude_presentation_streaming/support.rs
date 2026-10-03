@@ -116,6 +116,6 @@ pub async fn replay(
     cursor: serde_json::Value,
 ) -> mainframe_acp::resume::ResumeReplay {
     let request=serde_json::from_value(serde_json::json!({"jsonrpc":"2.0","id":1,"method":"session/resume","params":{"sessionId":"chat","cwd":"/tmp","replayFrom":cursor}})).unwrap();
-    let (_, replay) = mainframe_acp::resume::dispatch_resume(request, snapshot).await;
+    let (_, replay) = mainframe_acp::resume::dispatch_resume(request, snapshot, None).await;
     replay
 }

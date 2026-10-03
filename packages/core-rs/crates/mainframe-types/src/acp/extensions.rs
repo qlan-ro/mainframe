@@ -3,10 +3,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 mod capabilities;
-pub use capabilities::MainframeCapabilities;
-
 use crate::adapter::ControlResponse;
 use crate::chat::{DiffHunk, QueuedMessageRef};
+pub use capabilities::{
+    CursorParams, MainframeCapabilities, REVISION_CURSORS_OPT_IN_KEY, RevisionCursor,
+};
 
 /// The `_meta` key every extension value below is namespaced under.
 pub const MAINFRAME_META_NAMESPACE: &str = "_mainframe.dev";

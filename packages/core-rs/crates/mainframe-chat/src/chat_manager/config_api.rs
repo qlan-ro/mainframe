@@ -10,6 +10,13 @@ impl ChatManager {
         permission_mode: Option<ExecutionMode>,
         plan_mode: Option<bool>,
     ) -> Result<(), ConfigError> {
+        // Rebuild an offloaded cell before the edit (todo #381): a chat opened
+        // in the UI but left unsent past the idle threshold has no registry
+        // cell, and `ChatConfigManager::require_active_chat` would otherwise
+        // fail with "Chat {id} not found". `load_chat` skips (and touches)
+        // when the cell already exists, and waits out any in-flight offload
+        // when it does not, so this is a no-op for the common case.
+        self.lifecycle.load_chat(chat_id).await;
         self.config
             .update_chat_config(chat_id, adapter_id, model, permission_mode, plan_mode)
             .await
@@ -23,6 +30,9 @@ impl ChatManager {
         base_branch: &str,
         branch_name: &str,
     ) -> Result<(), ConfigError> {
+        // See `update_chat_config`'s matching call: rebuild before the
+        // `is_chat_working` check sees the cell (todo #381).
+        self.lifecycle.load_chat(chat_id).await;
         if self.is_chat_working(chat_id) {
             return Err(ConfigError::ChatBusy);
         }
@@ -37,6 +47,8 @@ impl ChatManager {
         worktree_path: &str,
         branch_name: Option<&str>,
     ) -> Result<(), ConfigError> {
+        // See `update_chat_config`'s matching call (todo #381).
+        self.lifecycle.load_chat(chat_id).await;
         if self.is_chat_working(chat_id) {
             return Err(ConfigError::ChatBusy);
         }
@@ -64,6 +76,9 @@ impl ChatManager {
         chat_id: &str,
         worktree_path: &str,
     ) -> Result<(), OfferError> {
+        // See `update_chat_config`'s matching call (todo #381): rebuild before
+        // either the working check or the accept claim sees the cell.
+        self.lifecycle.load_chat(chat_id).await;
         // The rebind restarts the CLI, which would kill a turn mid-answer and
         // lose whatever it had not written yet. The offer keeps.
         if self.is_chat_working(chat_id) {
@@ -86,6 +101,10 @@ impl ChatManager {
     }
 
     pub async fn disable_worktree(&self, chat_id: &str) -> Result<(), ConfigError> {
+        // See `update_chat_config`'s matching call (todo #381): without it,
+        // `ChatConfigManager::disable_worktree` silently no-ops on a missing
+        // cell instead of clearing the binding.
+        self.lifecycle.load_chat(chat_id).await;
         if self.is_chat_working(chat_id) {
             return Err(ConfigError::ChatBusy);
         }

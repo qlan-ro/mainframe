@@ -123,11 +123,7 @@ impl EventHandlerDeps for CancelDeps {
 }
 
 fn cell() -> Arc<Mutex<ActiveChat>> {
-    Arc::new(Mutex::new(ActiveChat {
-        chat: test_chat("chat-1"),
-        session: None,
-        turn_started_at: None,
-    }))
+    Arc::new(Mutex::new(ActiveChat::new(test_chat("chat-1"), None)))
 }
 
 fn sink(

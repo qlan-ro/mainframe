@@ -76,3 +76,98 @@ async fn a_panicked_prompt_dispatch_still_answers_the_request() {
     assert_eq!(reply["id"], json!(9));
     assert_eq!(reply["error"]["code"], json!(-32603));
 }
+
+fn initialize_request(id: i64, opt_in: Option<bool>) -> JsonRpcRequest {
+    let mut params = json!({
+        "protocolVersion": mainframe_types::acp::session::PINNED_PROTOCOL_VERSION,
+        "info": { "name": "mainframe-ui", "title": "Mainframe", "version": "2.2.0" },
+        "capabilities": {},
+    });
+    if let Some(opt_in) = opt_in {
+        params["_meta"] = json!({ "_mainframe.dev": { "revisionCursors": opt_in } });
+    }
+    JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(RequestId::Number(id)),
+        method: "initialize".into(),
+        params: Some(params),
+    }
+}
+
+/// todo #377: a successful `initialize` whose `_meta` opts in also marks the
+/// connection — the same call that marks it negotiated.
+#[tokio::test]
+async fn a_successful_initialize_with_the_opt_in_meta_marks_the_connection() {
+    let ctx = AppCtx::test_ctx();
+    let (_id, connection, _rx) = ctx.facade_hub.register("mock-cli".to_string());
+
+    handle_inbound(
+        &serde_json::to_string(&initialize_request(1, Some(true))).unwrap(),
+        &daemon(),
+        &ctx,
+        &connection,
+    )
+    .await;
+
+    assert!(connection.is_negotiated());
+    assert!(connection.is_revision_cursors_opted_in());
+}
+
+/// An `initialize` with no opt-in key negotiates normally but does not mark
+/// revision-cursor support — byte-identical to a pre-#377 client.
+#[tokio::test]
+async fn an_initialize_without_the_opt_in_meta_leaves_revision_cursors_off() {
+    let ctx = AppCtx::test_ctx();
+    let (_id, connection, _rx) = ctx.facade_hub.register("mock-cli".to_string());
+
+    handle_inbound(
+        &serde_json::to_string(&initialize_request(1, None)).unwrap(),
+        &daemon(),
+        &ctx,
+        &connection,
+    )
+    .await;
+
+    assert!(connection.is_negotiated());
+    assert!(!connection.is_revision_cursors_opted_in());
+}
+
+/// `_meta.revisionCursors: false` is explicit opt-out, same as absent.
+#[tokio::test]
+async fn an_explicit_false_opt_in_leaves_revision_cursors_off() {
+    let ctx = AppCtx::test_ctx();
+    let (_id, connection, _rx) = ctx.facade_hub.register("mock-cli".to_string());
+
+    handle_inbound(
+        &serde_json::to_string(&initialize_request(1, Some(false))).unwrap(),
+        &daemon(),
+        &ctx,
+        &connection,
+    )
+    .await;
+
+    assert!(!connection.is_revision_cursors_opted_in());
+}
+
+/// An unsupported protocol version fails to negotiate — the opt-in must not
+/// be marked for a handshake that did not succeed, even if the client asked.
+#[tokio::test]
+async fn a_failed_initialize_does_not_mark_the_opt_in() {
+    let ctx = AppCtx::test_ctx();
+    let (_id, connection, _rx) = ctx.facade_hub.register("mock-cli".to_string());
+    let mut request = initialize_request(1, Some(true));
+    if let Some(params) = request.params.as_mut() {
+        params["protocolVersion"] = json!(999_999);
+    }
+
+    handle_inbound(
+        &serde_json::to_string(&request).unwrap(),
+        &daemon(),
+        &ctx,
+        &connection,
+    )
+    .await;
+
+    assert!(!connection.is_negotiated());
+    assert!(!connection.is_revision_cursors_opted_in());
+}

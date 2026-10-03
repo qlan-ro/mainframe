@@ -17,7 +17,7 @@ use mainframe_types::events::DaemonEvent;
 use tracing::{info, warn};
 
 use crate::event_handler::{EventHandler, EventHandlerDeps};
-use crate::idle_scanner::{ActiveChatRegistry, IDLE_THRESHOLD_MS, IdleOffloader};
+use crate::idle_scanner::{ActiveChatRegistry, IDLE_THRESHOLD_MS, IdleOffloader, idle_since};
 use crate::lifecycle_manager::{ChatLifecycleManager, LifecycleManagerDeps};
 use crate::message_cache::MessageCache;
 use crate::permission_manager::PermissionManager;
@@ -89,14 +89,21 @@ impl<L: LifecycleManagerDeps + 'static, E: EventHandlerDeps + 'static> ChatOfflo
 
         // Step 2: re-check everything now that the slot is claimed (AC4: a
         // race between candidate selection and this claim must resolve in
-        // favor of staying live).
-        let Some(session) = self.recheck(chat_id) else {
+        // favor of staying live). `session_handle` is itself an `Option`
+        // (todo #381): a session-less, never-spawned, or already-exited
+        // handle is a valid, eligible offload — only the OUTER `None` means
+        // "skip".
+        let Some(session_handle) = self.recheck(chat_id) else {
             self.lifecycle.release_offload(chat_id);
             return;
         };
 
-        // Step 3: kill the CLI process.
-        if let Err(err) = session.kill().await {
+        // Step 3: kill the CLI process, if one was ever spawned. Harmless
+        // no-op on an unspawned/already-exited handle (Established facts:
+        // `ClaudeSession::kill`/Codex `kill` both return `Ok` with no child).
+        if let Some(session) = &session_handle
+            && let Err(err) = session.kill().await
+        {
             warn!(?err, chat_id, "idle offload: failed to kill session");
         }
 
@@ -125,27 +132,34 @@ impl<L: LifecycleManagerDeps + 'static, E: EventHandlerDeps + 'static> ChatOfflo
         });
     }
 
-    /// Step 2's re-check. `Some(session)` when every condition still holds
-    /// (spawned, idle past the threshold, no pending permission, no queued
-    /// message); `None` means skip — the caller has already claimed the
-    /// offload slot and must release it itself.
-    fn recheck(&self, chat_id: &str) -> Option<Arc<dyn AdapterSession>> {
+    /// Step 2's re-check (todo #381: extended to session-less/unspawned
+    /// cells). The OUTER `Option` is the skip signal: `None` means some
+    /// condition still blocks offload, and the caller has already claimed
+    /// the offload slot and must release it itself. `Some(handle)` means
+    /// every condition holds (idle past the threshold per `idle_since`, not
+    /// Working, no pending permission, no queued message); `handle` itself
+    /// is `None` for a cell with no session (or one that never spawned) —
+    /// that is a valid, eligible offload, not a skip.
+    fn recheck(&self, chat_id: &str) -> Option<Option<Arc<dyn AdapterSession>>> {
         let cell = self.active_chats.get(chat_id)?.value().clone();
-        let (session, process_state) = {
+        let (session, last_used_at, process_state) = {
             let guard = cell.lock().unwrap_or_else(|e| e.into_inner());
-            (guard.session.clone()?, guard.chat.process_state)
+            (
+                guard.session.clone(),
+                guard.last_used_at,
+                guard.chat.process_state,
+            )
         };
-        if !session.is_spawned() {
-            return None;
-        }
         // A turn whose tool runs silent past the idle threshold must not have
         // its CLI killed mid-turn (finding 4): `is_spawned`/`last_activity_at`
         // alone can't see that, since a long tool call produces no adapter
-        // activity.
+        // activity. This still applies to a session-less cell in the rare
+        // case its persisted `process_state` is Working (e.g. a REST resume
+        // held by a pending gate) — the acceptance criteria require it.
         if process_state == Some(Some(mainframe_types::chat::ProcessState::Working)) {
             return None;
         }
-        let last = session.last_activity_at()?;
+        let last = idle_since(session.as_ref(), last_used_at)?;
         if now_ms() - last <= self.threshold_ms {
             return None;
         }

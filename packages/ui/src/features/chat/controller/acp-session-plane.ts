@@ -26,6 +26,7 @@ import { AcpTranscriptStore } from './acp-transcript-store';
 import type { ReplayStage } from './acp-replay-stage';
 import { AcpGateTracker } from './acp-session-gates';
 import { RunStopSettle } from './acp-run-stop-settle';
+import { ResumeCursorTracker } from './acp-resume-cursor';
 
 export type { AcpSessionClientPort } from './acp-session-attachment';
 
@@ -48,8 +49,8 @@ export class AcpSessionPlane {
   private readonly store = new AcpTranscriptStore(() => ({
     strictCreation: this.attachment?.currentClient?.mainframeCapabilities?.itemCreationMarkers === true,
   }));
-  /** Resume cursor: only advanced when the turn goes idle — a cursor into a still-streaming item would drop its tail (resume.rs replays up to and including the cursor at its CURRENT content). */
-  private lastSettledItemId: string | null = null;
+  /** Owns both the legacy settled-item cursor and the durable revision cursor (todo #377) — see `acp-resume-cursor.ts`. */
+  private readonly cursorTracker = new ResumeCursorTracker();
   /** Item ids already fed to the reconcile matcher — see `takeUnreconciledUserMessages()`. */
   private readonly reconciledUserItemIds = new Set<string>();
   private readonly attachment: AcpSessionAttachment;
@@ -66,10 +67,10 @@ export class AcpSessionPlane {
       getChatId: () => this.host.getChatId(),
       dispatch: (event) => this.host.dispatch(event),
       isDisposed: () => this.host.isDisposed(),
-      getLastSettledItemId: () => this.lastSettledItemId,
-      resetSettledCursor: () => {
-        this.lastSettledItemId = null;
-      },
+      nextReplayFrom: (capabilities) => this.cursorTracker.nextReplayFrom(capabilities),
+      resetSettledCursor: () => this.cursorTracker.resetSettledCursor(),
+      clearDurableCursor: () => this.cursorTracker.clearDurableCursor(),
+      advanceCursorFromNotification: (cursor) => this.cursorTracker.advanceFromNotification(cursor),
       resetAccumulator: () => {
         this.store.resetAll();
         // `reconciledUserItemIds` deliberately survives: the replay that
@@ -233,6 +234,10 @@ export class AcpSessionPlane {
    * call dispatches nothing.
    */
   private completeReplay(stage: ReplayStage): void {
+    // Committed before the full-stage-only `publish` early return (todo
+    // #377): a cursor stage's `completeReplay` call is otherwise a no-op
+    // here, and its reply cursor must still land.
+    this.cursorTracker.commitReplyCursor(stage.replyCursor);
     const items = this.store.publish(stage);
     if (!items) return;
     this.refreshFrom(items);
@@ -276,7 +281,7 @@ export class AcpSessionPlane {
     if (update.state === 'idle') {
       // The settled cursor is computed immediately — the `run.stopped`
       // dispatch itself waits out the settle delay (D7, finding 10).
-      this.lastSettledItemId = items.length > 0 ? items[items.length - 1]!.id : this.lastSettledItemId;
+      if (items.length > 0) this.cursorTracker.recordSettledItem(items[items.length - 1]!.id);
       this.runStop.scheduleStop();
     }
   }

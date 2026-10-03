@@ -140,11 +140,9 @@ pub(super) fn cell(
 ) -> Arc<Mutex<ActiveChat>> {
     let mut chat = test_chat("c1");
     chat.process_state = Some(Some(process_state));
-    Arc::new(Mutex::new(ActiveChat {
-        chat,
-        session: None,
-        turn_started_at,
-    }))
+    let mut active = ActiveChat::new(chat, None);
+    active.turn_started_at = turn_started_at;
+    Arc::new(Mutex::new(active))
 }
 
 fn ids(messages: &Arc<Mutex<MessageCache>>) -> Vec<String> {

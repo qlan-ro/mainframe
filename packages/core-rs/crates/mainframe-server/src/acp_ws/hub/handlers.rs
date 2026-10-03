@@ -47,21 +47,26 @@ impl FacadeHub {
         self.apply_stream_op(chat_id, StreamOp::TurnFinished(stop_reason(reason)));
     }
 
-    /// Encode only when someone is listening: this handler runs on the sink
-    /// path for every chat in the daemon. `encode_revision` (not `encode`)
-    /// so the overlay-backed item, if any, carries `ItemMeta.streaming`
-    /// (spec Decision 39).
+    /// Encode only when someone is listening OR the chat has a revision log
+    /// to record into (todo #377: accounting must not depend on connection
+    /// presence) — a chat with neither pays nothing new. `encode_revision`
+    /// (not `encode`) so the overlay-backed item, if any, carries
+    /// `ItemMeta.streaming` (spec Decision 39).
     pub(super) fn handle_display_revision(
         &self,
         chat_id: &str,
         messages: &[mainframe_types::display::DisplayMessage],
         streaming: Option<mainframe_types::display::StreamingLeafKind>,
     ) {
-        if self.attached_connections(chat_id).is_empty() {
+        let connections = self.attached_connections(chat_id);
+        if connections.is_empty() && !self.has_revision_log(chat_id) {
             return;
         }
         let items = mainframe_acp::encoder::encode_revision(messages, streaming);
-        self.on_display_revision(chat_id, &items);
+        let cursor = self.record_revision(chat_id, &items);
+        if !connections.is_empty() {
+            self.on_display_revision(chat_id, &items, cursor);
+        }
     }
 
     pub(super) fn handle_gate_raised(&self, chat_id: &str, request: ControlRequest) {
@@ -106,14 +111,24 @@ impl FacadeHub {
         self.push_notification(chat_id, &note, RawFrameKind::QueueState);
     }
 
+    /// Rotates the chat's revision-log epoch (todo #377): the daemon wiped
+    /// the transcript, so every cursor issued against the old one would be
+    /// reinterpreting a stale revision against reconstructed state —
+    /// `RevisionLog`'s module doc calls that out as the thing epochs exist
+    /// to prevent.
     pub(super) fn handle_transcript_cleared(&self, chat_id: &str) {
+        self.reset_revision_epoch(chat_id);
         let note = mainframe_acp::transcript_cleared_notification(chat_id);
         self.push_notification(chat_id, &note, RawFrameKind::TranscriptCleared);
     }
 
     /// Same FIFO as content updates (T6, R2.11): a resync must not overtake
-    /// the frames whose loss triggered the eviction.
+    /// the frames whose loss triggered the eviction. Rotates the revision
+    /// epoch too (todo #377) — the daemon's view just diverged from what an
+    /// attached client holds, the same condition that invalidates an old
+    /// cursor.
     pub(super) fn handle_resync(&self, chat_id: &str) {
+        self.reset_revision_epoch(chat_id);
         let note = mainframe_acp::resync_notification(chat_id);
         self.push_notification(chat_id, &note, RawFrameKind::Resync);
     }
@@ -121,7 +136,14 @@ impl FacadeHub {
     pub(super) fn handle_compaction(&self, chat_id: &str, phase: CompactionPhase) {
         let wire_phase = match phase {
             CompactionPhase::Started => CompactionWirePhase::Started,
-            CompactionPhase::Done => CompactionWirePhase::Done,
+            CompactionPhase::Done => {
+                // A finished compaction rewrites history (todo #377): the
+                // items an old cursor named may no longer exist under the
+                // same ids, so the epoch rotates rather than trying to
+                // reinterpret it.
+                self.reset_revision_epoch(chat_id);
+                CompactionWirePhase::Done
+            }
         };
         let note = mainframe_acp::compaction_notification(chat_id, wire_phase);
         self.push_notification(chat_id, &note, RawFrameKind::Compaction);
@@ -132,12 +154,14 @@ impl FacadeHub {
     }
 
     /// Chat teardown: nothing else ever clears the gate registry's per-chat
-    /// bookkeeping or a connection's per-chat session state.
+    /// bookkeeping, a connection's per-chat session state, or (todo #377)
+    /// the chat's revision log.
     pub(super) fn handle_chat_ended(&self, chat_id: &str) {
         self.locked_registry().forget_chat(chat_id);
         for entry in self.connections.iter() {
             entry.value().forget_chat(chat_id);
         }
+        self.drop_revision_log(chat_id);
     }
 }
 

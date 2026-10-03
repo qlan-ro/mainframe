@@ -16,11 +16,7 @@ struct AttentionDeps {
 impl AttentionDeps {
     fn new() -> Arc<Self> {
         Arc::new(Self {
-            cell: Arc::new(Mutex::new(ActiveChat {
-                chat: test_chat("chat-1"),
-                session: None,
-                turn_started_at: None,
-            })),
+            cell: Arc::new(Mutex::new(ActiveChat::new(test_chat("chat-1"), None))),
             events: Mutex::new(Vec::new()),
             pushes: Mutex::new(Vec::new()),
             notify_attention_request: AtomicBool::new(true),
