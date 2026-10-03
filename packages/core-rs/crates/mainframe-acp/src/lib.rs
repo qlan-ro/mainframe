@@ -30,6 +30,7 @@ pub use connection::{
     DaemonInfo, DispatchOutcome, dispatch_with_prompt, handle_frame_with_prompt,
     initialize_required,
 };
+pub use encoder::delta::EncodedDelta;
 pub use encoder::{EncodedItem, ItemRole, encode};
 pub use gate_registry::{AnswerOutcome, GateRegistry};
 pub use gates::{

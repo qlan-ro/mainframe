@@ -42,6 +42,7 @@ use serde_json::{Value, json};
 
 mod accum;
 mod content;
+pub mod delta;
 mod result_content;
 mod tool_call;
 use content::encode_content;
