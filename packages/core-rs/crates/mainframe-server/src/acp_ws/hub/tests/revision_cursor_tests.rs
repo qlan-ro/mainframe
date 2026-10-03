@@ -102,6 +102,75 @@ async fn a_revision_racing_the_resume_window_arrives_as_catch_up_with_its_cursor
     );
 }
 
+/// The companion to the test above, at the reply itself rather than
+/// `revision_boundary()`: the `reply`'s own `cursor` meta — the boundary
+/// `begin_resume` returns alongside the log, which `dispatch_resume` must
+/// carry untouched into the reply (todo #377 review, must-fix #1/#3) — has
+/// to stay strictly below the catch-up frame's cursor, never the log's
+/// post-race boundary. A reply built from a fresh `log.boundary()` read
+/// after the race (the bug) would equal the catch-up cursor instead of
+/// being behind it.
+#[tokio::test]
+async fn the_reply_cursor_itself_never_catches_up_to_a_revision_racing_the_resume_window() {
+    let hub = hub();
+    let (_id, conn, mut rx) = hub.register("mock-cli".to_string());
+    conn.mark_revision_cursors_opted_in();
+
+    let (_log, captured_boundary) = hub
+        .begin_resume(&conn, "chat-1")
+        .expect("opted-in connection gets a log");
+
+    // Races the snapshot await: buffered, not lost.
+    hub.on_chat_surface_event(revision("chat-1", "Hello"));
+    assert!(drain(&mut rx).is_empty());
+
+    // The reply a real `dispatch_resume` would produce for this boundary —
+    // built the same way `resume::success_response` shapes it, so this
+    // exercises the actual wire field the client reads.
+    let reply_with_captured_cursor = mainframe_acp::rpc::success_response(
+        Some(mainframe_types::acp::jsonrpc::RequestId::Number(1)),
+        json!({
+            "_meta": {
+                "_mainframe.dev": {
+                    "itemCount": 0,
+                    "cursor": captured_boundary,
+                }
+            }
+        }),
+    );
+
+    let items = mainframe_acp::encode(&[]);
+    hub.reset_session(
+        &conn,
+        "chat-1",
+        seed(&items, &reply_with_captured_cursor),
+        |_c| {},
+    );
+
+    let frames = drain(&mut rx);
+    let reply_frame = frames
+        .iter()
+        .find(|f| f["id"] == json!(1))
+        .expect("the reply frame");
+    let reply_cursor_revision =
+        reply_frame["result"]["_meta"]["_mainframe.dev"]["cursor"]["revision"]
+            .as_u64()
+            .unwrap();
+    assert_eq!(
+        reply_cursor_revision, captured_boundary.revision,
+        "the reply must carry exactly the pre-snapshot captured boundary"
+    );
+
+    let notes = cursor_notes(&frames);
+    assert_eq!(notes.len(), 1, "{frames:?}");
+    let catch_up_revision = notes[0]["params"]["revision"].as_u64().unwrap();
+    assert!(
+        reply_cursor_revision < catch_up_revision,
+        "the reply's own cursor must never acknowledge the racing revision \
+         that only arrives as catch-up"
+    );
+}
+
 #[tokio::test]
 async fn transcript_cleared_rotates_the_epoch() {
     let hub = hub();

@@ -27,19 +27,28 @@ pub(super) struct Resolved {
 
 /// Resolve one `session/resume` against `items` (the fresh snapshot),
 /// `replay_from` (the request's raw cursor value), and `revision_log` — the
-/// chat's log, already locked for the duration of this call, under which
-/// the log is seeded (if unseeded) and `plan` runs. Locking after the
-/// snapshot read, not before, is the race argument `RevisionLog`'s module
-/// doc and `hub.rs::begin_resume` document: any change recorded above the
-/// boundary this call reads applies after this resume's `AwaitingSeed` claim
-/// exists, so it comes back as buffered catch-up rather than racing ahead of
-/// the snapshot this plan is computed against.
+/// chat's log (already locked for the duration of this call, under which
+/// the log is seeded if unseeded and `plan` runs) paired with the boundary
+/// `hub.rs::begin_resume` captured BEFORE the snapshot was read, right after
+/// this resume's `AwaitingSeed` claim was installed.
+///
+/// That captured boundary, not this call's own `log.boundary()`, is what the
+/// reply's `cursor` carries. `plan` still runs against the live log — its
+/// `log_item != snapshot item` rule already covers anything that changed
+/// between the captured boundary and now — but the reply must never claim
+/// the client holds a revision that landed after the snapshot this call is
+/// replaying against. A revision recorded in that gap (between the captured
+/// boundary and this lock) reaches the client only through the hub's
+/// buffered catch-up, sent after this reply; claiming it in the reply's own
+/// cursor would let a later resume skip it permanently if the catch-up never
+/// arrived (a dropped socket, or a client that commits the reply cursor
+/// before applying catch-up).
 pub(super) fn resolve(
     items: &[EncodedItem],
     replay_from: Option<&Value>,
-    revision_log: Option<&Mutex<RevisionLog>>,
+    revision_log: Option<(&Mutex<RevisionLog>, WireRevisionCursor)>,
 ) -> Resolved {
-    let Some(log_mutex) = revision_log else {
+    let Some((log_mutex, boundary)) = revision_log else {
         let (updates, full_replay) = replay(items, resolve_cursor(items, replay_from));
         return Resolved {
             updates,
@@ -59,21 +68,21 @@ pub(super) fn resolve(
         return Resolved {
             updates,
             full_replay,
-            cursor: Some(log.boundary()),
+            cursor: Some(boundary),
         };
     };
     match log.plan(&cursor, items) {
         ReplayPlan::Incremental(updates) => Resolved {
             updates,
             full_replay: false,
-            cursor: Some(log.boundary()),
+            cursor: Some(boundary),
         },
         ReplayPlan::Full => {
             let (updates, _) = replay(items, ResolvedCursor::Unknown);
             Resolved {
                 updates,
                 full_replay: true,
-                cursor: Some(log.boundary()),
+                cursor: Some(boundary),
             }
         }
     }

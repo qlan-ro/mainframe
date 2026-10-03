@@ -12,6 +12,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use mainframe_acp::resume::ResumePort;
 use mainframe_acp::revision_log::RevisionLog;
 use mainframe_acp::{dispatch_resume, rpc};
+use mainframe_types::acp::extensions::RevisionCursor;
 use mainframe_types::acp::jsonrpc::{JsonRpcRequest, RequestId};
 use tracing::error;
 
@@ -34,11 +35,13 @@ pub(super) fn start_resume(
     let session_id = params_session_id(request.params.as_ref());
     // Mark this session as awaiting its snapshot BEFORE anything awaits, so
     // a live revision that races it is buffered rather than lost (T5, R2.9).
-    // `begin_resume` also hands back the chat's revision log (todo #377),
-    // when this connection opted in — `None` for one that did not.
-    let revision_log = session_id
+    // `begin_resume` also hands back the chat's revision log (todo #377)
+    // paired with its pre-snapshot boundary, which the reply's `cursor`
+    // must carry (see `begin_resume`'s doc for the race argument).
+    let (revision_log, resume_boundary) = session_id
         .as_deref()
-        .and_then(|id| ctx.facade_hub.begin_resume(connection, id));
+        .and_then(|id| ctx.facade_hub.begin_resume(connection, id))
+        .map_or((None, None), |(log, boundary)| (Some(log), Some(boundary)));
     // Queued here, on the socket loop, so arrival order is acquisition order.
     let wait = session_id
         .as_deref()
@@ -51,6 +54,7 @@ pub(super) fn start_resume(
         connection: Arc::clone(connection),
         ports,
         revision_log,
+        resume_boundary,
     };
     tokio::spawn(task.run(wait));
 }
@@ -82,6 +86,9 @@ struct ResumeTask {
     /// The chat's revision log (todo #377), from `begin_resume` — `None`
     /// for a connection that did not opt into revision cursors.
     revision_log: Option<Arc<Mutex<RevisionLog>>>,
+    /// `begin_resume`'s pre-snapshot boundary for `revision_log` — carried
+    /// into the reply's `cursor` untouched.
+    resume_boundary: Option<RevisionCursor>,
 }
 
 impl ResumeTask {
@@ -98,6 +105,7 @@ impl ResumeTask {
             connection,
             ports,
             revision_log,
+            resume_boundary,
         } = self;
         let claimed = session_id.clone();
         let (task_ctx, task_conn) = (Arc::clone(&ctx), Arc::clone(&connection));
@@ -112,13 +120,16 @@ impl ResumeTask {
         // the connection's remaining life, silently. Run it as its own task
         // so `fail_resume` can answer for it.
         let delivery = tokio::spawn(async move {
+            // Zipped here, not threaded as two parameters, so the reply
+            // cursor can never drift from the log it was planned against.
+            let revision_log = revision_log.as_deref().zip(resume_boundary);
             deliver_resume(
                 request,
                 session_id,
                 &task_ctx,
                 &task_conn,
                 ports.as_ref(),
-                revision_log.as_deref(),
+                revision_log,
                 task_progress,
             )
             .await;
@@ -222,7 +233,9 @@ async fn deliver_resume(
     ctx: &Arc<AppCtx>,
     connection: &Arc<FacadeConnection>,
     ports: &dyn ResumePort,
-    revision_log: Option<&Mutex<RevisionLog>>,
+    // The log paired with `begin_resume`'s pre-snapshot boundary (#377):
+    // one tuple, so the reply cursor cannot drift from the planned-against log.
+    revision_log: Option<(&Mutex<RevisionLog>, RevisionCursor)>,
     progress: DeliveryProgress,
 ) {
     let (response, replay) = dispatch_resume(request, ports, revision_log).await;

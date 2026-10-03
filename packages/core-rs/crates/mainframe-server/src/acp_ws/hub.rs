@@ -17,6 +17,7 @@ use mainframe_acp::revision_log::RevisionLog;
 use mainframe_acp::stream::SessionStream;
 use mainframe_acp::{AnswerOutcome, GateRegistry};
 use mainframe_chat::chat_surface::ChatSurface;
+use mainframe_types::acp::extensions::RevisionCursor;
 use mainframe_types::acp::jsonrpc::JsonRpcRequest;
 use mainframe_types::adapter::ControlRequest;
 use tokio::sync::mpsc;
@@ -112,15 +113,24 @@ impl FacadeHub {
     /// already buffered.
     ///
     /// Returns the chat's revision log (todo #377) for an opted-in
-    /// connection, creating one if it has none yet — read AFTER the claim
-    /// above is installed, so any `record` above the boundary
-    /// `dispatch_resume` later reads is buffered here as catch-up, never
-    /// missed outright. `None` for a connection that did not opt in.
+    /// connection, creating one if it has none yet, paired with the log's
+    /// boundary at this exact moment — read under the log's own lock, right
+    /// after the `AwaitingSeed` claim above is installed and strictly
+    /// BEFORE the caller awaits `ResumePort::resume_snapshot`. This is the
+    /// boundary for which "any change at or below it was emitted before the
+    /// snapshot read" actually holds: any `record` racing the snapshot
+    /// await lands after this claim exists, so it is buffered as catch-up
+    /// here, never missed outright, and never silently folded into the
+    /// reply's own cursor either — `dispatch_resume`/`revision::resolve`
+    /// must reply with THIS boundary, not a fresh `log.boundary()` read
+    /// after the snapshot, or the reply could acknowledge a change the
+    /// client never received (see `revision::resolve`'s doc for the full
+    /// argument). `None` for a connection that did not opt in.
     pub fn begin_resume(
         &self,
         connection: &FacadeConnection,
         chat_id: &str,
-    ) -> Option<Arc<Mutex<RevisionLog>>> {
+    ) -> Option<(Arc<Mutex<RevisionLog>>, RevisionCursor)> {
         let mut sessions = connection.locked_sessions();
         let already_awaiting = matches!(
             sessions.get(chat_id),
@@ -135,7 +145,10 @@ impl FacadeHub {
             );
         }
         drop(sessions);
-        self.revision_log_for_resume(connection.is_revision_cursors_opted_in(), chat_id)
+        let log =
+            self.revision_log_for_resume(connection.is_revision_cursors_opted_in(), chat_id)?;
+        let boundary = log.lock().unwrap_or_else(|err| err.into_inner()).boundary();
+        Some((log, boundary))
     }
 
     /// Atomically replace the session's stream state with one seeded to

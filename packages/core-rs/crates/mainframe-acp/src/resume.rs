@@ -98,16 +98,21 @@ pub struct ResumeReplay {
 /// (full replay with the [`MAINFRAME_META_NAMESPACE`] `fullReplay` marker),
 /// not an error (spec edge cases 9).
 ///
-/// `revision_log` (todo #377) is the chat's revision log, when the
-/// connection opted into revision cursors — `None` for a connection that did
-/// not, which gets byte-identical legacy behavior with no `cursor` meta at
-/// all. The caller (`mainframe-server`'s hub) owns the log's lifecycle;
-/// this function only locks it, after its own snapshot read, to seed an
-/// unseeded log and plan against a revision cursor.
+/// `revision_log` (todo #377) is the chat's revision log paired with the
+/// boundary the caller captured BEFORE awaiting the snapshot (`None` for a
+/// connection that did not opt into revision cursors, which gets byte-
+/// identical legacy behavior with no `cursor` meta at all). The caller
+/// (`mainframe-server`'s hub, in `begin_resume`) owns the log's lifecycle
+/// and that capture; this function only locks the log, after its own
+/// snapshot read, to seed an unseeded log and plan against a revision
+/// cursor — but the reply's `cursor` always carries the caller's captured
+/// boundary, never a fresh `log.boundary()` read here, so it never
+/// acknowledges a change recorded in the gap between that capture and this
+/// snapshot (`revision::resolve`'s doc has the full race argument).
 pub async fn dispatch_resume(
     request: JsonRpcRequest,
     port: &dyn ResumePort,
-    revision_log: Option<&Mutex<RevisionLog>>,
+    revision_log: Option<(&Mutex<RevisionLog>, WireRevisionCursor)>,
 ) -> (JsonRpcResponse, ResumeReplay) {
     let id = request.id.clone();
     let resume = match parse_resume_params(request) {
