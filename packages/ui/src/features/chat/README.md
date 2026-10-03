@@ -20,12 +20,12 @@ lib/api (REST)                                                                  
 
 | Dir | What | Key files |
 |-----|------|-----------|
-| **`controller/`** | The stateful seam: a per-chat `AcpChatController` + a **pure reducer** split by plane. `AcpSessionPlane` speaks the facade (transcript items, run frames, gates, `session/resume` on heartbeat gaps); `ChatWsSubscription` + `chat-event-router` handle the side-band (config, background tasks, worktree offers, workflow runs); `chat-environment-state` reduces that slice; `chat-reconcile` owns the optimistic-send pending slice + multiset matcher; `chat-actions` the send/retry/worktree flows; `ChatPlaneLoader` the deduped REST-seed + facade-attach. | `acp-chat-controller.ts`, `acp-session-plane.ts`, `chat-thread-state.ts`, `chat-environment-state.ts`, `chat-reconcile.ts`, `chat-actions.ts`, `chat-plane-loader.ts`, `project-messages.ts` |
+| **`controller/`** | The stateful seam: a per-chat `AcpChatController` + a **pure reducer** split by plane. `AcpSessionPlane` speaks the facade (transcript items, run frames, gates, `session/resume` on heartbeat gaps); `ChatWsSubscription` + `chat-event-router` handle the side-band (config, background tasks, worktree offers, workflow runs); `chat-environment-state` reduces that slice; `chat-reconcile` owns the optimistic-send pending slice + multiset matcher; `chat-actions` the send/retry/worktree flows; `ChatPlaneLoader` the deduped REST-seed + facade-attach. | `acp-chat-controller.ts`, `acp-session-plane.ts`, `chat-thread-state.ts`, `chat-environment-state.ts`, `chat-reconcile.ts`, `chat-actions.ts`, `chat-plane-loader.ts`, `project-messages.ts`, `transcript-projector.ts` |
 | **`runtime/`** | The assistant-ui adapter: the `useExternalStoreRuntime` wiring in `use-chat-thread-runtime.ts`, and the `extras` contract + consumer hooks (`useChatExtras`, `useChatPermissionFront`, …) in `chat-extras.ts`. | `use-chat-thread-runtime.ts`, `chat-extras.ts` |
-| **`view-model/`** | **Pure projection** — facade `session/update`s accumulate into stable-id items (`acp-item-accumulator`), converted to native `ThreadMessage`s (`convert-acp-item`/`convert-acp-user`). No React. | `acp-item-accumulator.ts`, `convert-acp-item.ts`, `convert-acp-user.ts`, `content.ts`, `message-meta.ts`, `tool-group-summary.ts` |
+| **`view-model/`** | **Pure projection** — facade `session/update`s accumulate into stable-id items (`acp-item-accumulator`), converted to native `ThreadMessage`s (`convert-acp-item`/`convert-acp-user`). No React. | `acp-item-accumulator.ts`, `convert-acp-item.ts`, `convert-acp-container.ts`, `convert-acp-user.ts`, `content.ts`, `message-meta.ts`, `tool-group-summary.ts` |
 | **`messages/`** | Per-role message components + their chrome. | `AssistantMessage`, `UserMessage`, `SystemMessage`, `QueuedUserTurn`, `MessageActionBar`, `MessageTiming/Timestamp`, `ReadMoreBubble`, `user-directives` |
 | **`parts/`** | Content-part renderers (the inside of a message). | `markdown-text`, `CodeHeader`, `syntax-highlight`, `markdown-url-transform`, `extract-text` |
-| **`thread/`** | The thread shell — scroll viewport, message list, composer + gate mounts. | `ChatThread.tsx` |
+| **`thread/`** | The thread shell — scroll viewport, the progressively mounted message list, composer + gate mounts. | `ChatThread.tsx`, `ChatThreadViewport.tsx`, `ProgressiveMessages.tsx` |
 | **`tools/`** | The ONE tool-card system: a flat `Record<toolName, card>` registry (`ToolFallback` = catch-all), `mcp__*` resolution, native `GroupedParts` dispatch, and the per-family **display** cards (read-only). | `registry`, `register-cards`, `group-parts`, `tool-dispatch`, `chat-tool-context`, `ToolResultExpand`, `cards/`, `shared/` |
 | **`gates/`** | **Interactive blocking cards** — Permission / AskUserQuestion / Plan — dispatched by `ControlRequest.toolName`, replying out-of-band via `extras`. Queue-front-only. The permission gate renders the daemon's option list verbatim (spec decision 12); answers ride the rich `_mainframe.dev` `ControlResponse` plus the clicked `optionId`. *(Distinct from `tools/cards/`, which are read-only tool displays.)* | `ChatGateMount`, `PermissionGate`, `AskUserQuestionGate`, `PlanGate`, `build-control-response`, `build-acp-permission-response`, `gate-types`, `select-front`, `answers` |
 | **`composer/`** | Input area. Shell + attachments at the root; `config-toolbar/` = the model/effort/features/plan/permission controls (server-authoritative, PATCH-only); `edit/` = queued-message edit mode. | `Composer.tsx`, `attachment-adapter`, `config-toolbar/`, `edit/` |
@@ -44,6 +44,12 @@ lib/api (REST)                                                                  
 - **Config is server-authoritative** (no optimistic edits) — the composer reads
   `state.chatConfig` and PATCHes; the side-band `chat.updated` broadcast updates
   the toolbar.
+- **Identity is load-bearing across frames.** `TranscriptConverter` and
+  `TranscriptProjector` keep every unchanged message — and every unchanged
+  tool-call part — referentially stable, and `useChatExtrasState` holds
+  `extras` across transcript-only updates. assistant-ui memoizes on object
+  identity, so a streamed chunk re-renders only what it touched; a long chat
+  mounts its tail first (`ProgressiveMessages`) and reveals the rest deferred.
 - **Pure logic stays in `view-model/`**, not in components.
 - See `packages/ui/CLAUDE.md` for the assistant-ui-first golden rule + the
   per-area native-vs-ours verdicts.

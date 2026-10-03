@@ -1,22 +1,10 @@
 import { useMemo } from 'react';
-import type { ThreadMessage, ThreadMessageLike } from '@assistant-ui/react';
-import { normalizeNativeRepository } from '../view-model/normalize-native-messages';
+import type { ThreadMessage } from '@assistant-ui/react';
 import type { ChatThreadState } from '../controller/chat-thread-state';
-import { projectChatThreadMessages } from '../controller/project-messages';
+import { TranscriptProjector } from '../controller/transcript-projector';
 
-function nativeMessage(message: ThreadMessageLike, cache: WeakMap<ThreadMessageLike, ThreadMessage>): ThreadMessage {
-  const existing = cache.get(message);
-  if (existing) return existing;
-  const normalized = normalizeNativeRepository([message]).messages[0]!.message;
-  cache.set(message, normalized);
-  return normalized;
-}
-
+/** The native message list for an `ExternalThread({ messages })` mount — one identity-preserving projector per caller. */
 export function useNativeThreadMessages(state: ChatThreadState): ThreadMessage[] {
-  const cache = useMemo(() => new WeakMap<ThreadMessageLike, ThreadMessage>(), []);
-  return useMemo(
-    () =>
-      projectChatThreadMessages({ ...state, messages: state.messages.map((message) => nativeMessage(message, cache)) }),
-    [state, cache],
-  );
+  const projector = useMemo(() => new TranscriptProjector(), []);
+  return useMemo(() => projector.projectMessages(state), [projector, state]);
 }

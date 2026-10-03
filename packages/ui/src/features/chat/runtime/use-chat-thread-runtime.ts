@@ -24,8 +24,8 @@ import type { AppendMessage, AssistantRuntime, ThreadMessage } from '@assistant-
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import type { AcpChatController } from '../controller/acp-chat-controller';
 import type { ChatThreadState } from '../controller/chat-thread-state';
-import { projectChatThreadRepository } from '../controller/project-messages';
-import { buildChatExtras, isRunningFromState } from './chat-extras';
+import { TranscriptProjector } from '../controller/transcript-projector';
+import { buildChatExtras, isRunningFromState, useChatExtrasState } from './chat-extras';
 import { createForLocal } from '../../sessions/runtime/new-thread-coordinator';
 import { chatControllerRegistry } from '../../sessions/runtime/chat-controller-registry';
 import { captureIfMarked, takeStash } from './draft-stash';
@@ -119,9 +119,14 @@ export function useChatThreadRuntime(
 
   const isRunning = isRunningFromState(state);
 
-  const messageRepository = useMemo(() => projectChatThreadRepository(state), [state]);
+  // One projector per mounted thread: it keeps every unchanged message (and
+  // every unchanged tool-call part) referentially stable across frames, which
+  // is what lets assistant-ui skip the rest of the transcript on a chunk.
+  const projector = useMemo(() => new TranscriptProjector(), []);
+  const messageRepository = useMemo(() => projector.projectRepository(state), [projector, state]);
 
-  const extras = useMemo(() => buildChatExtras(controller, port, state), [controller, port, state]);
+  const extrasState = useChatExtrasState(state);
+  const extras = useMemo(() => buildChatExtras(controller, port, extrasState), [controller, port, extrasState]);
 
   // The restore below needs the runtime this hook produces, which doesn't exist
   // yet when onNew is created — the ref closes that loop.

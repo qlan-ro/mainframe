@@ -24,7 +24,7 @@ import { useCallback, useMemo } from 'react';
 import { AuiConfig, AuiProvider, ExternalThread, useAui, type AppendMessage } from '@assistant-ui/react';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { CHAT_ATTACHMENT_ADAPTER, useControllerState } from '@/features/chat/runtime/use-chat-thread-runtime';
-import { buildChatExtras, isRunningFromState } from '@/features/chat/runtime/chat-extras';
+import { buildChatExtras, isRunningFromState, useChatExtrasState } from '@/features/chat/runtime/chat-extras';
 import { useNativeThreadMessages } from '@/features/chat/runtime/use-native-thread-messages';
 import { ChatThread } from '@/features/chat/thread/ChatThread';
 import { cn } from '@/lib/utils';
@@ -42,7 +42,8 @@ function useSideChatThreadConfig(controller: AcpChatController) {
   const state = useControllerState(controller);
   const messages = useNativeThreadMessages(state);
   const isRunning = isRunningFromState(state);
-  const extras = useMemo(() => buildChatExtras(controller, port, state), [controller, port, state]);
+  const extrasState = useChatExtrasState(state);
+  const extras = useMemo(() => buildChatExtras(controller, port, extrasState), [controller, port, extrasState]);
 
   const onNew = useCallback(
     (message: AppendMessage) => {

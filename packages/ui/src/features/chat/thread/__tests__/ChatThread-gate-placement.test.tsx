@@ -20,6 +20,7 @@ const testState = vi.hoisted(() => ({
   },
 }));
 
+vi.mock('../ProgressiveMessages', () => ({ ProgressiveMessages: () => <div data-testid="tp-messages" /> }));
 vi.mock('@assistant-ui/react', () => {
   type DivProps = HTMLAttributes<HTMLDivElement> & { children?: ReactNode };
   return {
