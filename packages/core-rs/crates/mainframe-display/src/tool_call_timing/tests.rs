@@ -39,3 +39,47 @@ fn tool_timing_projection_recurses_without_inheriting_parent_or_wrapper_times() 
     apply_tool_call_timing(&raw, &mut display);
     assert_eq!(serde_json::to_value(&display).unwrap(), out);
 }
+
+#[test]
+fn per_container_variant_patches_only_the_matching_id_leaving_siblings_untouched() {
+    let mut container: DisplayMessage = serde_json::from_value(json!({
+        "id":"container","chatId":"c","type":"assistant","timestamp":"2026-10-02T00:00:00Z",
+        "content":[
+            {"type":"tool_call","id":"a","name":"Bash","input":{},"category":"default",
+                "timing":{"startedAt":1000,"completedAt":1300}},
+            {"type":"tool_call","id":"b","name":"Bash","input":{},"category":"default"}
+        ]
+    }))
+    .unwrap();
+
+    apply_tool_call_timing_to_container(
+        &mut container,
+        "b",
+        Some(serde_json::from_value(json!({"startedAt":1100})).unwrap()),
+    );
+
+    let out = serde_json::to_value(&container).unwrap();
+    assert_eq!(
+        out["content"][0]["timing"],
+        json!({"startedAt":1000,"completedAt":1300}),
+        "sibling id 'a' must keep its own timing"
+    );
+    assert_eq!(out["content"][1]["timing"], json!({"startedAt":1100}));
+}
+
+#[test]
+fn per_container_variant_clears_timing_when_given_none() {
+    let mut container: DisplayMessage = serde_json::from_value(json!({
+        "id":"container","chatId":"c","type":"assistant","timestamp":"2026-10-02T00:00:00Z",
+        "content":[
+            {"type":"tool_call","id":"a","name":"Bash","input":{},"category":"default",
+                "timing":{"startedAt":1000}}
+        ]
+    }))
+    .unwrap();
+
+    apply_tool_call_timing_to_container(&mut container, "a", None);
+
+    let out = serde_json::to_value(&container).unwrap();
+    assert!(out["content"][0].get("timing").is_none());
+}
