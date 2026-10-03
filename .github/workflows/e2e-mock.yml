@@ -20,7 +20,24 @@ on:
   # push:
   #   branches: [main]
   workflow_dispatch: # manual trigger
-  workflow_call: # invoked by release.yml as the auto-publish gate
+    inputs:
+      run:
+        description: Run the suite (false only reports the job as skipped)
+        type: boolean
+        default: true
+  # Invoked by release.yml (auto-publish gate) and ci.yml (version-PR gate).
+  # `run` exists for ci.yml: a caller job skipped by its own `if:` reports a
+  # check named after the caller ("e2e-mock"), while a job that runs reports
+  # the callee's name ("e2e-mock / e2e-mock"). Skipping INSIDE this workflow
+  # keeps one name in both cases, so main's required check is satisfied (as
+  # skipped) on feature PRs and real on the version PR.
+  workflow_call:
+    inputs:
+      run:
+        description: Run the suite; false reports the job as skipped under the same check name
+        type: boolean
+        default: true
+        required: false
 
 # One run per ref; cancel superseded runs so PR pushes don't pile up jobs.
 concurrency:
@@ -29,6 +46,7 @@ concurrency:
 
 jobs:
   e2e-mock:
+    if: ${{ inputs.run }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
