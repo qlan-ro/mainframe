@@ -61,7 +61,24 @@ pub(crate) fn item_phase(item: &Value) -> (Option<PresentationPhase>, bool) {
 }
 impl PresentationStateByThread {
     pub(crate) fn clear(&mut self) {
-        self.turns.clear();
+        // Keep invalid turn membership so late callbacks cannot revive it after exit.
+        self.turns
+            .retain(|_, turn| turn.context.state == PresentationState::Invalid);
+    }
+    pub(crate) fn invalidate_unfinished(&mut self, sink: &dyn SessionSink) {
+        for turn in self.turns.values_mut() {
+            if !matches!(
+                turn.context.state,
+                PresentationState::Running | PresentationState::Unknown
+            ) {
+                continue;
+            }
+            turn.context.state = PresentationState::Invalid;
+            sink.on_presentation_update(PresentationUpdate {
+                presentation: turn.context.clone(),
+                source_message_ids: None,
+            });
+        }
     }
     pub(crate) fn start(
         &mut self,
