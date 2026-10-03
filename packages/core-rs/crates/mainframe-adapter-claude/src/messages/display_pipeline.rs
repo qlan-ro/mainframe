@@ -75,7 +75,10 @@ pub fn prepare_messages_for_client(
     result
 }
 
-fn convert_grouped_to_display(
+/// `pub(crate)` (todo #376): the incremental projector calls this per group
+/// directly, so a patched or freshly refolded group produces byte-identical
+/// `DisplayMessage` content to the full pipeline that calls it here.
+pub(crate) fn convert_grouped_to_display(
     msg: &GroupedMessage,
     categories: Option<&ToolCategories>,
 ) -> Option<DisplayMessage> {
