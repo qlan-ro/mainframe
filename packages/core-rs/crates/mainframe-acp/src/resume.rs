@@ -90,6 +90,12 @@ pub struct ResumeReplay {
     /// this so streaming after a resume deltas against what the client now
     /// holds.
     pub items: Vec<EncodedItem>,
+    /// `items`, grouped back into its per-container shape (todo #376 G2
+    /// task 5) — the same list `encoder::encode_containers` produced.
+    /// `items` stays the flat form `plan`/`itemCount` use; a container-
+    /// aware caller (a seeded `SessionStream`/`RevisionLog`, G4) seeds from
+    /// this instead of re-flattening.
+    pub containers: Vec<Vec<EncodedItem>>,
 }
 
 /// `session/resume` dispatch. Malformed params get the same structured
@@ -121,12 +127,15 @@ pub async fn dispatch_resume(
     };
 
     let snapshot = port.resume_snapshot(&resume.session_id).await;
-    // `encode_revision`, not `encode`: a mid-stream snapshot carries the
+    // `encode_containers`, not `encode`: a mid-stream snapshot carries the
     // in-flight partial overlay's `StreamingLeafKind` (todo #382) — with
     // `streaming: None` this is byte-identical to `encode`'s output (spec
-    // Decision 39).
-    let items = encoder::encode_revision(&snapshot.messages, snapshot.streaming);
-    let resolved = revision::resolve(&items, resume.replay_from.as_ref(), revision_log);
+    // Decision 39). Flattened, it is `encode_revision`'s output (todo #376
+    // G2 task 1); `containers` keeps the per-container shape so
+    // `revision::resolve` can seed a log's container index too.
+    let containers = encoder::encode_containers(&snapshot.messages, snapshot.streaming);
+    let items: Vec<EncodedItem> = containers.iter().flatten().cloned().collect();
+    let resolved = revision::resolve(&items, &containers, resume.replay_from.as_ref(), revision_log);
     let mut updates = resolved.updates;
     updates.push(turn_state_update(port.is_running(&resume.session_id)));
 
@@ -147,6 +156,7 @@ pub async fn dispatch_resume(
             pending_permission_request,
             pending_gate: snapshot.pending,
             items,
+            containers,
         },
     )
 }
@@ -157,6 +167,7 @@ fn empty_replay() -> ResumeReplay {
         pending_permission_request: None,
         pending_gate: None,
         items: Vec::new(),
+        containers: Vec::new(),
     }
 }
 

@@ -118,6 +118,26 @@ async fn a_start_cursor_replays_every_item_as_a_create() {
     ));
 }
 
+/// todo #376 G2 task 5: `ResumeReplay.containers` is the per-container
+/// shape `encode_containers` produced; flattened, it must equal `items`
+/// exactly — the flat form stays the one `plan`/`itemCount` use.
+#[tokio::test]
+async fn containers_flatten_to_items() {
+    let port = FakePort {
+        messages: vec![
+            dmsg("dmsg_1", vec![text("hello")]),
+            dmsg("dmsg_2", vec![thinking("hmm"), text("world")]),
+        ],
+        ..FakePort::default()
+    };
+    let (_response, replay) =
+        dispatch_resume(resume_request(Some(json!({ "type": "start" }))), &port, None).await;
+
+    assert_eq!(replay.containers.len(), 2, "one entry per DisplayMessage");
+    let flattened: Vec<_> = replay.containers.iter().flatten().cloned().collect();
+    assert_eq!(flattened, replay.items);
+}
+
 /// Spec Decision 37: `dispatch_resume` diffs the snapshot against a fresh
 /// `SessionState`, so every replayed item goes through `create_update` —
 /// every item frame in the replay must carry the creation marker.

@@ -3,6 +3,7 @@
 //! (todo #350, plan task 37, R2.13) — it shares this file's fixture
 //! builders via `use super::*`.
 
+mod container_delta_tests;
 mod retry_marker_tests;
 
 use serde_json::json;

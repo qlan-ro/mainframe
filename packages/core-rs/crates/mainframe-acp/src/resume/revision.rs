@@ -45,6 +45,7 @@ pub(super) struct Resolved {
 /// before applying catch-up).
 pub(super) fn resolve(
     items: &[EncodedItem],
+    containers: &[Vec<EncodedItem>],
     replay_from: Option<&Value>,
     revision_log: Option<(&Mutex<RevisionLog>, WireRevisionCursor)>,
 ) -> Resolved {
@@ -57,7 +58,11 @@ pub(super) fn resolve(
         };
     };
     let mut log = log_mutex.lock().unwrap_or_else(|err| err.into_inner());
-    log.seed(items);
+    // `seed_containers`, not `seed` (todo #376 G2 task 5): seeds the same
+    // flat item baseline `seed` would, plus the container index a later
+    // `record_delta` needs — additive here, since nothing in this crate
+    // calls `record_delta` against a chat's log yet (G4 wires the hub).
+    log.seed_containers(containers);
 
     let Some(cursor) = parse_revision_cursor(replay_from) else {
         // A legacy-shaped cursor (start/item/none/malformed) from an
