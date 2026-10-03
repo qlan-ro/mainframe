@@ -111,8 +111,9 @@ jobs:
   # be the first time the suite saw any of a release's merges — a red suite
   # there meant a merged version bump and a failed release. It does not run
   # here even on the version PR: that branch is force-pushed after every merge
-  # to main. `require-manual` fails the check at once instead, and
-  # e2e-gate.yml is the manual run that turns it green on the final head.
+  # to main. `require-manual` fails the check at once instead; e2e-gate.yml
+  # is the manual run on the final head, and it re-runs this job afterwards
+  # so the check turns green here (the merge box only counts this run).
   # Feature PRs get `skip` (a skipped job satisfies the required check). The
   # decision is passed INTO the reusable workflow rather than put on this job:
   # a `uses:` job skipped here reports as "e2e-mock", but when it runs the

@@ -55,10 +55,11 @@ jobs:
       # `require-manual` there. Failing here keeps the PR unmergeable until
       # e2e-gate.yml has run on its current head — that run carries the same
       # check name and, being newer, is the one the ruleset evaluates.
-      # Passes when e2e-gate.yml already succeeded on this exact head: the
-      # ruleset reads the NEWEST check run of a name, so without this a CI
-      # run that lands after the gate (an approval, a re-run) would overwrite
-      # the gate's green with this step's red and force another hour-long run.
+      # Passes when e2e-gate.yml already succeeded on this exact head. The PR
+      # merge box only counts check runs from the PR's own CI run, so the gate
+      # cannot satisfy the required check directly; instead e2e-gate.yml
+      # re-runs this job after its suite is green, and this lookup is what
+      # makes the re-run pass without running the suite a second time.
       - name: Require a manual run on the version PR
         if: ${{ inputs.mode == 'require-manual' }}
         env:
