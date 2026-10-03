@@ -1,12 +1,13 @@
 import { useMemo } from 'react';
-import { ExportedMessageRepository, type ThreadMessage, type ThreadMessageLike } from '@assistant-ui/react';
+import type { ThreadMessage, ThreadMessageLike } from '@assistant-ui/react';
+import { normalizeNativeRepository } from '../view-model/normalize-native-messages';
 import type { ChatThreadState } from '../controller/chat-thread-state';
 import { projectChatThreadMessages } from '../controller/project-messages';
 
 function nativeMessage(message: ThreadMessageLike, cache: WeakMap<ThreadMessageLike, ThreadMessage>): ThreadMessage {
   const existing = cache.get(message);
   if (existing) return existing;
-  const normalized = ExportedMessageRepository.fromArray([message]).messages[0]!.message;
+  const normalized = normalizeNativeRepository([message]).messages[0]!.message;
   cache.set(message, normalized);
   return normalized;
 }

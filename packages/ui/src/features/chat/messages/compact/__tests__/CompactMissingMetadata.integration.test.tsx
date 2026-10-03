@@ -17,7 +17,7 @@ import { createChatThreadState } from '../../../controller/chat-thread-state';
 import { projectChatThreadMessages, projectChatThreadRepository } from '../../../controller/project-messages';
 import { useNativeThreadMessages } from '../../../runtime/use-native-thread-messages';
 import { convertAcpItems } from '../../../view-model/convert-acp-item';
-import { TurnFixture, turnContext } from './turn-fixtures';
+import { TurnFixture, turnContext, turnMessage, turnSource } from './turn-fixtures';
 
 type Variant = 'absent metadata' | 'absent custom' | 'invalid Unicode spans';
 const variants: Variant[] = ['absent metadata', 'absent custom', 'invalid Unicode spans'];
@@ -140,6 +140,44 @@ for (const { split, authoritative } of [
       expectVisibleText(growing, 'complete');
       act(() => useUiPrefs.getState().setTranscriptMode('compact'));
       expectVisibleText(growing, 'complete');
+    },
+  );
+}
+
+for (const split of [false, true]) {
+  it.each(['reasoning', 'text'] as const)(
+    `keeps mapped final text and eligibility after native filtering of blank %s (split=${split})`,
+    (type) => {
+      const sources = {
+        0: [turnSource('blank', 0, 1)],
+        1: [turnSource('answer', 0, 4, { phase: 'final_answer', finalEligible: true })],
+      };
+      const answer = {
+        ...turnMessage('answer', 'Done'),
+        content: [
+          { type, text: ' ' },
+          { type: 'text' as const, text: 'Done' },
+        ],
+        metadata: { custom: { mainframe: { partSources: sources } } },
+      };
+      const state = {
+        ...createChatThreadState('chat'),
+        authoritativeItemStreaming: true,
+        messages: [turnMessage('work', 'Reading sources'), answer],
+      };
+      const before = JSON.stringify(answer);
+      render(
+        <Fixture
+          rootId={`filter-${split}-${type}`}
+          split={split}
+          input={{ state, messages: projectChatThreadMessages(state) }}
+        />,
+      );
+      expect(screen.getAllByText('Done')).toHaveLength(1);
+      expect(screen.getByText('Done')).toBeVisible();
+      expect(screen.getByRole('button', { name: 'Work details' })).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByText('Reading sources')).toBeNull();
+      expect(JSON.stringify(answer)).toBe(before);
     },
   );
 }

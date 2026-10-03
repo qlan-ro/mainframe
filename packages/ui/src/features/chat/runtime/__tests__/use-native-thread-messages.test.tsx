@@ -1,6 +1,7 @@
 import { renderHook } from '@testing-library/react';
-import { expect, it } from 'vitest';
-import type { ThreadMessageLike } from '@assistant-ui/react';
+import { expect, it, vi } from 'vitest';
+import { ExportedMessageRepository, type ThreadMessageLike } from '@assistant-ui/react';
+import { normalizeNativeRepository } from '../../view-model/normalize-native-messages';
 import { createChatThreadState, type ChatThreadState } from '../../controller/chat-thread-state';
 import { projectChatThreadRepository } from '../../controller/project-messages';
 import { useNativeThreadMessages } from '../use-native-thread-messages';
@@ -116,5 +117,87 @@ it('keeps pending and queued user messages in canonical order without assistant 
   for (const message of result.current.slice(1)) {
     expect(message.role).toBe('user');
     expect(message).not.toHaveProperty('status');
+  }
+});
+
+function mappedMessage(): Omit<ThreadMessageLike, 'content'> & {
+  content: Exclude<ThreadMessageLike['content'], string>;
+} {
+  const sources = Object.fromEntries(
+    [0, 1, 2, 3].map((index) => [index, Object.freeze([{ sourceMessageId: `source-${index}` }])]),
+  );
+  return {
+    ...assistant(),
+    status: { type: 'complete', reason: 'stop' },
+    content: [
+      { type: 'image', image: 'invalid-image' },
+      { type: 'reasoning', text: ' ' },
+      {
+        type: 'tool-call',
+        toolCallId: 'read',
+        toolName: 'Read',
+        args: { file_path: 'a.ts' },
+        argsText: '{"file_path":"a.ts"}',
+        result: 'content',
+        providerMetadata: { mainframe: { acpStatus: 'completed' } },
+      },
+      { type: 'text', text: 'Done', status: { type: 'complete' } },
+    ],
+    metadata: { custom: { unrelated: 'retained', mainframe: { cost: 0.01, partSources: sources } } },
+  };
+}
+it('remaps retained tool/final sources using canonical filtering without mutating source metadata', () => {
+  const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  try {
+    const source = mappedMessage();
+    const before = JSON.stringify(source);
+    const sourceMeta = source.metadata!.custom!.mainframe as { partSources: Record<number, unknown> };
+    const result = normalizeNativeRepository([source, ack]);
+    const native = ExportedMessageRepository.fromArray([source, ack]);
+    const message = result.messages[0]!.message;
+    expect(result.messages.map(({ parentId }) => parentId)).toEqual(native.messages.map(({ parentId }) => parentId));
+    expect(result.headId).toBe(native.headId);
+    expect(message.content).toEqual(native.messages[0]!.message.content);
+    expect(message.status).toBe(source.status);
+    expect(message.content[0]).toMatchObject({
+      type: 'tool-call',
+      toolCallId: 'read',
+      result: 'content',
+      providerMetadata: { mainframe: { acpStatus: 'completed' } },
+    });
+    expect(message.content[1]).toMatchObject({ type: 'text', text: 'Done', status: { type: 'complete' } });
+    const meta = message.metadata.custom.mainframe as { partSources: Record<number, unknown> };
+    expect(Object.keys(meta.partSources)).toEqual(['0', '1']);
+    expect(meta.partSources[0]).toBe(sourceMeta.partSources[2]);
+    expect(meta.partSources[1]).toBe(sourceMeta.partSources[3]);
+    expect(message.metadata.custom).toMatchObject({ unrelated: 'retained', mainframe: { cost: 0.01 } });
+    expect(JSON.stringify(source)).toBe(before);
+  } finally {
+    warning.mockRestore();
+  }
+});
+it('keeps canonical retained part objects and cached remapped sources stable', () => {
+  const source = {
+    ...mappedMessage(),
+    content: [{ type: 'text' as const, text: ' ' }, ...mappedMessage().content.slice(1)],
+  };
+  const nativeConvert = ExportedMessageRepository.fromArray;
+  const outputs: ReturnType<typeof nativeConvert>[] = [];
+  const conversion = vi.spyOn(ExportedMessageRepository, 'fromArray').mockImplementation((messages) => {
+    const result = nativeConvert(messages);
+    outputs.push(result);
+    return result;
+  });
+  try {
+    const state = stateFor([source], true);
+    const { result, rerender } = renderHook(({ state }) => useNativeThreadMessages(state), { initialProps: { state } });
+    const first = result.current[0]!;
+    expect(first.content).toBe(outputs[0]!.messages[0]!.message.content);
+    const calls = conversion.mock.calls.length;
+    rerender({ state: { ...state } });
+    expect(result.current[0]).toBe(first);
+    expect(conversion).toHaveBeenCalledTimes(calls);
+  } finally {
+    conversion.mockRestore();
   }
 });

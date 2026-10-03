@@ -6,7 +6,7 @@
  * plane through `convert-acp-item.ts`); pending and queued user messages
  * follow it. Only legacy daemons need the nearest-assistant running fallback.
  */
-import { ExportedMessageRepository } from '@assistant-ui/react';
+import { normalizeNativeRepository } from '../view-model/normalize-native-messages';
 import type { ThreadMessage, ThreadMessageLike, ThreadUserMessage } from '@assistant-ui/react';
 import type { QueuedMessageRef } from '@qlan-ro/mainframe-types';
 import { describeSendError } from './describe-send-error';
@@ -126,5 +126,5 @@ export function projectChatThreadMessages(state: ChatThreadState): ThreadMessage
 }
 
 export function projectChatThreadRepository(state: ChatThreadState) {
-  return ExportedMessageRepository.fromArray(projectChatThreadMessages(state));
+  return normalizeNativeRepository(projectChatThreadMessages(state));
 }
