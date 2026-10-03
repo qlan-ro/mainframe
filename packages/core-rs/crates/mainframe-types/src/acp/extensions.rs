@@ -1,20 +1,13 @@
-//! Mainframe's `_mainframe.dev` extension namespace — everything ACP has no
-//! construct for, riding `_meta` and `_`-prefixed custom methods per the
-//! schema's extensibility discipline (ACP-EVALUATION.md "What to borrow" #6:
-//! "a reserved `_meta` on every frame, `_`-prefixed enum values reserved for
-//! implementations, and the rule that unknown values must not be treated as
-//! approval"). Every type here is opaque to core ACP — a client that doesn't
-//! recognize the namespace ignores it and gets a degraded but coherent
-//! experience (spec: "Generic ACP clients that advertise no Mainframe
-//! capabilities get a degraded but coherent chat experience").
-
-use std::collections::HashMap;
-
+//! Mainframe metadata and custom notification payloads, opaque to generic ACP clients.
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-
+use std::collections::HashMap;
+mod capabilities;
 use crate::adapter::ControlResponse;
 use crate::chat::{DiffHunk, QueuedMessageRef};
+pub use capabilities::{
+    CursorParams, MainframeCapabilities, REVISION_CURSORS_OPT_IN_KEY, RevisionCursor,
+};
 
 /// The `_meta` key every extension value below is namespaced under.
 pub const MAINFRAME_META_NAMESPACE: &str = "_mainframe.dev";
@@ -97,6 +90,12 @@ pub struct ItemMeta {
     /// streaming status from this, never from position.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub streaming: Option<bool>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::transcript_presentation::deserialize_sources"
+    )]
+    pub presentation_sources: Option<crate::transcript_presentation::PresentationSources>,
 }
 
 /// [`ItemMeta::kind`] — `user`/`agent` ride the item role; these mark the
@@ -108,7 +107,6 @@ pub enum ItemContainerKind {
     Error,
 }
 
-/// [`ItemMeta::skill_loaded`] — mirrors `LeafContent::SkillLoaded`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillLoadedMeta {
@@ -128,63 +126,6 @@ pub struct PromptSendMeta {
     pub attachment_ids: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub command: Option<MessageSendCommand>,
-}
-
-/// Mainframe's agent-capabilities extension, advertised in `initialize`'s
-/// response under `_meta["_mainframe.dev"]`. Generic ACP clients see none of
-/// these keys and degrade gracefully (spec: "option-only gates, no
-/// queued-turn metadata").
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MainframeCapabilities {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub rich_permission_answers: Option<bool>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub queued_prompts: Option<bool>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub retry_markers: Option<bool>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub heartbeat_interval_ms: Option<i64>,
-    /// Whether `create_update` stamps [`ITEM_CREATED_META_KEY`] on an item's
-    /// complete first frame (spec Decision 37) — a client gates its strict
-    /// accumulator mode on this rather than assuming it.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub item_creation_markers: Option<bool>,
-    /// Whether every successful `session/resume` reply is followed by
-    /// exactly one `_mainframe.dev/replay_complete` for that session (spec
-    /// Decision 38) — a client stages a full replay off-screen only when
-    /// this is advertised.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub replay_complete: Option<bool>,
-    /// Whether the daemon negotiates revision-versioned resume cursors
-    /// (todo #377): an opted-in connection's `session/resume` reply adds
-    /// `cursor` meta and is followed by `_mainframe.dev/cursor`
-    /// notifications after catch-up. A connection that does not opt in via
-    /// [`REVISION_CURSORS_OPT_IN_KEY`] keeps today's item-cursor-only wire
-    /// regardless of this flag.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub revision_cursors: Option<bool>,
-}
-
-/// The `initialize` request `_meta["_mainframe.dev"]` key a client sets to
-/// `true` to opt into revision-versioned resume cursors (todo #377). Absent
-/// or `false` keeps the connection on item cursors only, byte-identical to
-/// today, even when [`MainframeCapabilities::revision_cursors`] advertises
-/// server support.
-pub const REVISION_CURSORS_OPT_IN_KEY: &str = "revisionCursors";
-
-/// The replay boundary a revision-cursor `session/resume` reply returns and
-/// the `_mainframe.dev/cursor` notification advances (todo #377). `epoch`
-/// identifies the log generation — `TranscriptCleared`, `Resync`,
-/// compaction, and a tool-call vanish each rotate it, which invalidates
-/// every cursor from the prior epoch. `revision` is the daemon's monotonic
-/// per-chat counter. Mirrors `packages/types/src/acp/extensions.ts`'
-/// `RevisionCursorSchema`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RevisionCursor {
-    pub epoch: String,
-    pub revision: u64,
 }
 
 /// `api_retry` modeled as a content-replacing patch plus this marker (spec
@@ -324,20 +265,6 @@ pub struct ReplayCompleteParams {
 /// complete first state".
 pub const ITEM_CREATED_META_KEY: &str = "created";
 
-/// `_mainframe.dev/cursor`'s params (todo #377): the replay boundary a
-/// reconnecting client now holds every change through. Rides the
-/// per-session throttle FIFO after the frames of the display revision it
-/// describes, so receiving it means the client holds every change up to
-/// and including `revision`. Sent only to connections that opted into
-/// revision cursors via [`REVISION_CURSORS_OPT_IN_KEY`].
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CursorParams {
-    pub session_id: String,
-    pub epoch: String,
-    pub revision: u64,
-}
-
 /// [`CompactionParams::phase`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -370,24 +297,4 @@ pub struct GateResolvedParams {
 pub struct TruncationMarker {
     pub truncated: bool,
     pub full_bytes: i64,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    #[test]
-    fn capabilities_omit_all_absent_fields() {
-        let caps = MainframeCapabilities {
-            rich_permission_answers: None,
-            queued_prompts: None,
-            retry_markers: None,
-            heartbeat_interval_ms: None,
-            item_creation_markers: None,
-            replay_complete: None,
-            revision_cursors: None,
-        };
-        assert_eq!(serde_json::to_value(caps).unwrap(), json!({}));
-    }
 }

@@ -141,7 +141,11 @@ impl SessionState {
 /// valid only for a `full` delta, whose `changes` covers every ordinal
 /// `0..len` by construction (`EncodedDelta::full`).
 fn delta_containers(delta: &EncodedDelta) -> Vec<Vec<EncodedItem>> {
-    delta.changes.iter().map(|(_, items)| items.clone()).collect()
+    delta
+        .changes
+        .iter()
+        .map(|(_, items)| items.clone())
+        .collect()
 }
 
 #[cfg(test)]

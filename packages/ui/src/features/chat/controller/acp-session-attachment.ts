@@ -1,24 +1,7 @@
-/**
- * `AcpSessionPlane`'s connect/replay half — split out (todo #350 plan review
- * fixes, group 3 step 0) once the plane crossed 300 lines. Owns the shared
- * client subscription, full/gap replay, and the empty-refresh guard; the
- * plane keeps the accumulator, gates, and dispatch. See `acp-session-plane.ts`'s
- * module doc for the four-mechanism-collapse this replaces.
- *
- * **Staged replay (D4, plan task U2).** Once the daemon advertises
- * `replayComplete`, every successful `session/resume` opens a window
- * (`acp-replay-coordinator.ts`'s `ReplayWindowCoordinator`) that stays open until
- * this session's next `_mainframe.dev/replay_complete` — `resume()` itself
- * now stays pending that whole time, not just for the round trip. A full
- * window tells the host to stage off-screen (`host.beginReplay`) and publish
- * in one swap at the marker (`host.completeReplay`); a cursor window applies
- * straight to the visible transcript, as before. Without the capability,
- * `resume()` keeps the legacy reset-at-reply path unchanged — the
- * coordinator settles synchronously and no window is ever pushed.
- */
 import { MAINFRAME_META_NAMESPACE, RevisionCursorSchema, type RevisionCursor } from '@qlan-ro/mainframe-types';
 import { z } from 'zod';
 import type { ReplayCursor } from '../../../lib/daemon/acp-client';
+import { AcpSessionCapabilities } from './acp-session-capabilities';
 import { FullReplayRetry, type FullReplayTrigger } from './acp-full-replay';
 import { ReplayCancelledError } from './acp-replay-window';
 import { ReplayWindowCoordinator } from './acp-replay-coordinator';
@@ -56,6 +39,10 @@ const ResumeMetaSchema = z
  */
 export class AcpSessionAttachment {
   private client: AcpSessionClientPort | null = null;
+  private readonly capabilities = new AcpSessionCapabilities({
+    dispatch: (event) => this.host.dispatch(event),
+    isDisposed: () => this.host.isDisposed(),
+  });
   private readonly unsubscribe: Array<() => void> = [];
   private subscribed = false;
   /** Bumped on every (re)subscribe, `detach()`, `dispose()`, and a genuine client rebind — `resume()` captures it before its round trip and treats a mismatch on return as "this attachment moved on; drop the reply." */
@@ -92,14 +79,18 @@ export class AcpSessionAttachment {
     return this.subscribed;
   }
 
-  /** Bind (or rebind, e.g. on a daemon switch) the shared client — no wiring, no wire traffic. Safe while dormant. */
+  /** Capability binding survives dormancy independently of transcript subscriptions. */
   bindClient(client: AcpSessionClientPort): void {
-    if (this.client === client) return;
+    if (this.client === client) {
+      this.capabilities.bind(client);
+      return;
+    }
     if (this.subscribed) {
       this.detachListeners();
       this.cancelAllReplays();
     }
     this.client = client;
+    this.capabilities.bind(client);
     this.generation += 1;
     if (this.subscribed) this.wireListeners(client);
   }
@@ -216,6 +207,7 @@ export class AcpSessionAttachment {
   }
 
   dispose(): void {
+    this.capabilities.dispose();
     this.cancelAllReplays();
     this.detachListeners();
     this.subscribed = false;

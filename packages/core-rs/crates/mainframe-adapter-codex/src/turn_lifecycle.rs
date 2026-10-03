@@ -19,6 +19,18 @@ use crate::types::{
 /// child runs its own turns on its own thread, and must not overwrite or clear
 /// the parent's state (todo #247 task 18).
 pub(crate) fn handle_turn_started(params: TurnStartedParams, state: &mut CodexSessionState) {
+    let parent = match resolve_owner(params.thread_id.as_deref(), state) {
+        Owner::Parent => None,
+        Owner::Child(ref t) => state.card_for_thread(t).map(|c| c.card_id.clone()),
+        Owner::Unknown => return,
+    };
+    if let Some(thread) = params.thread_id.as_deref().filter(|t| !t.is_empty())
+        && state.thread_id.is_some()
+    {
+        state
+            .presentation
+            .start(thread, &params.turn.id, parent, &params.turn.timing);
+    }
     if !matches!(
         resolve_owner(params.thread_id.as_deref(), state),
         Owner::Unknown
@@ -39,6 +51,10 @@ pub(crate) fn handle_turn_started(params: TurnStartedParams, state: &mut CodexSe
     state.current_turn_plan = None;
     state.current_turn_id = Some(params.turn.id);
     state.compaction_emitted = false;
+    // A new parent turn starting must not inherit the previous turn's
+    // in-flight agent-message text (todo #378) — a child's own turn/started
+    // never reaches here (the `Owner::Parent` check above returned already).
+    state.agent_message_partial.clear();
 }
 
 pub(crate) fn handle_plan_delta(params: PlanDeltaParams, state: &mut CodexSessionState) {
@@ -55,6 +71,17 @@ pub(crate) fn handle_turn_completed(
     sink: &Arc<dyn SessionSink>,
     state: &mut CodexSessionState,
 ) {
+    if matches!(
+        resolve_owner(params.thread_id.as_deref(), state),
+        Owner::Parent
+    ) && state
+        .current_turn_id
+        .as_ref()
+        .is_some_and(|id| id != &params.turn.id)
+    {
+        return;
+    }
+    settle_presentation(&params, sink, state);
     match resolve_owner(params.thread_id.as_deref(), state) {
         Owner::Child(t) => {
             state.command_state.end_turn(&t, &params.turn.id);
@@ -71,6 +98,13 @@ pub(crate) fn handle_turn_completed(
         Owner::Parent => {}
     }
 
+    finish_parent(params, sink, state);
+}
+fn finish_parent(
+    params: TurnCompletedParams,
+    sink: &Arc<dyn SessionSink>,
+    state: &mut CodexSessionState,
+) {
     // A card the child never resolved itself (no `wait`, no own `turn/completed`)
     // closes here so it does not stay open forever once the parent moves on.
     collab_card::resolve_open_cards_on_parent_turn_end(sink, state);
@@ -86,7 +120,30 @@ pub(crate) fn handle_turn_completed(
     state.command_state.end_parent_turn(thread, &params.turn.id);
     state.current_turn_plan = None;
     state.current_turn_id = None;
+    // Todo #378: any status (completed/failed/interrupted) ends the turn's
+    // in-flight agent-message accumulation — a stale delta for this turn
+    // must find no current_turn_id to match against afterward.
+    state.agent_message_partial.clear();
     emit_parent_turn_result(params.turn, sink, state);
+}
+
+fn settle_presentation(
+    params: &TurnCompletedParams,
+    sink: &Arc<dyn SessionSink>,
+    state: &mut CodexSessionState,
+) {
+    if let Some(thread) = params.thread_id.as_deref() {
+        state
+            .presentation
+            .reconcile(thread, &params.turn.id, &params.turn.items, sink.as_ref());
+        state.presentation.finish(
+            thread,
+            &params.turn.id,
+            &params.turn.status,
+            &params.turn.timing,
+            sink.as_ref(),
+        );
+    }
 }
 
 fn emit_parent_turn_result(

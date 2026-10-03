@@ -81,7 +81,11 @@ impl Harness {
     /// the overlay, when present, is appended as a synthetic tail message
     /// before running the full pipeline — the ground truth this projector
     /// must stay equivalent to.
-    fn assert_matches_full_pipeline(&self, snapshot_now: &[DisplayMessage], overlay: Option<&ChatMessage>) {
+    fn assert_matches_full_pipeline(
+        &self,
+        snapshot_now: &[DisplayMessage],
+        overlay: Option<&ChatMessage>,
+    ) {
         let mut combined: Vec<ChatMessage> = self.raw.clone();
         if let Some(overlay) = overlay {
             combined.push(overlay.clone());
@@ -92,7 +96,8 @@ impl Harness {
             "delta-replayed mirror diverged from the full pipeline"
         );
         assert_eq!(
-            snapshot_now, &expected[..],
+            snapshot_now,
+            &expected[..],
             "projector snapshot diverged from the full pipeline"
         );
     }

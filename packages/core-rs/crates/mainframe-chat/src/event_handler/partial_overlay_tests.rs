@@ -62,17 +62,23 @@ impl EventHandlerDeps for OverlayDeps {
     }
     fn display_projector(&self) -> Box<dyn DisplayProjector> {
         let group_consecutive_flag = self.group_consecutive;
-        Box::new(FullRebuildProjector::new(move |raw, overlay, _categories| {
-            let combined: Vec<ChatMessage> = match overlay {
-                Some(o) => raw.iter().cloned().chain(std::iter::once(o.clone())).collect(),
-                None => raw.to_vec(),
-            };
-            if group_consecutive_flag {
-                group_consecutive(&combined)
-            } else {
-                flat_convert(&combined)
-            }
-        }))
+        Box::new(FullRebuildProjector::new(
+            move |raw, overlay, _categories| {
+                let combined: Vec<ChatMessage> = match overlay {
+                    Some(o) => raw
+                        .iter()
+                        .cloned()
+                        .chain(std::iter::once(o.clone()))
+                        .collect(),
+                    None => raw.to_vec(),
+                };
+                if group_consecutive_flag {
+                    group_consecutive(&combined)
+                } else {
+                    flat_convert(&combined)
+                }
+            },
+        ))
     }
     fn strip_command_tags(&self, text: &str) -> String {
         text.replace("<mainframe-tag/>", "")
@@ -191,9 +197,7 @@ impl RevisionSurface {
 impl ChatSurface for RevisionSurface {
     fn on_chat_surface_event(&self, event: ChatSurfaceEvent) {
         if let ChatSurfaceEvent::DisplayRevision {
-            delta,
-            streaming,
-            ..
+            delta, streaming, ..
         } = event
         {
             // Materialize at receipt (todo #376): the snapshot handle is

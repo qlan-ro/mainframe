@@ -36,7 +36,11 @@ impl RecordingSurface {
 impl ChatSurface for RecordingSurface {
     fn on_chat_surface_event(&self, event: ChatSurfaceEvent) {
         let frozen = match event {
-            ChatSurfaceEvent::DisplayRevision { chat_id, delta, streaming } => {
+            ChatSurfaceEvent::DisplayRevision {
+                chat_id,
+                delta,
+                streaming,
+            } => {
                 let materialized = delta.snapshot.materialize();
                 ChatSurfaceEvent::DisplayRevision {
                     chat_id,

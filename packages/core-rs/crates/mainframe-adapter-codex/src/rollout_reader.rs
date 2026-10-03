@@ -13,11 +13,9 @@
 //! `namespace` starting `mcp__`. The parsing/building logic for both (plus the
 //! pre-existing exec-output parsing) lives in `rollout_reconstruct` to keep this
 //! file under the 300-line ceiling.
-
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
-
-use serde::Deserialize;
 
 use crate::item_types::{AgentMessageItem, ReasoningItem, ThreadItem, UserMessageItem};
 use crate::rollout_fork::forked_child_start_line;
@@ -253,6 +251,8 @@ fn handle_message(p: &RolloutPayload, counter: &mut usize, items: &mut Vec<Threa
             id: next_id(counter),
             text,
             phase: None,
+            delivery: Default::default(),
+            questions: Default::default(),
         })),
         Some("user") => items.push(ThreadItem::UserMessage(UserMessageItem {
             id: next_id(counter),

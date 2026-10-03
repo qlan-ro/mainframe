@@ -115,7 +115,11 @@ pub(crate) fn offset_groups(groups: Vec<Group>, offset: usize) -> Vec<Group> {
 
 /// Rebuild the `tool_owner` index for `groups[from..]` after a rewind and
 /// refold settled a new tail.
-pub(crate) fn rebuild_tool_owner(tool_owner: &mut HashMap<String, usize>, groups: &[Group], from: usize) {
+pub(crate) fn rebuild_tool_owner(
+    tool_owner: &mut HashMap<String, usize>,
+    groups: &[Group],
+    from: usize,
+) {
     for (idx, group) in groups.iter().enumerate().skip(from) {
         for id in &group.claimed_tool_ids {
             tool_owner.insert(id.clone(), idx);
@@ -124,7 +128,11 @@ pub(crate) fn rebuild_tool_owner(tool_owner: &mut HashMap<String, usize>, groups
 }
 
 /// The `display_owner` counterpart of [`rebuild_tool_owner`].
-pub(crate) fn rebuild_display_owner(display_owner: &mut HashMap<String, usize>, groups: &[Group], from: usize) {
+pub(crate) fn rebuild_display_owner(
+    display_owner: &mut HashMap<String, usize>,
+    groups: &[Group],
+    from: usize,
+) {
     for (idx, group) in groups.iter().enumerate().skip(from) {
         if let Some(display) = group.display.as_ref() {
             display_owner.insert(display.id.clone(), idx);

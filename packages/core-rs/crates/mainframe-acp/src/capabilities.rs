@@ -32,6 +32,7 @@ pub fn mainframe_capabilities(heartbeat_interval_ms: u64) -> MainframeCapabiliti
         heartbeat_interval_ms: Some(heartbeat_interval_ms as i64),
         item_creation_markers: Some(true),
         replay_complete: Some(true),
+        authoritative_item_streaming: Some(true),
         // The daemon side landed (todo #377, group G2): a connection that
         // opts in via `REVISION_CURSORS_OPT_IN_KEY` gets cursor meta and
         // `_mainframe.dev/cursor` notifications; one that does not keeps
@@ -202,6 +203,11 @@ mod tests {
         assert_eq!(value["heartbeatIntervalMs"], fixture["heartbeatIntervalMs"]);
         assert_eq!(value["itemCreationMarkers"], fixture["itemCreationMarkers"]);
         assert_eq!(value["replayComplete"], fixture["replayComplete"]);
+        assert_eq!(value["authoritativeItemStreaming"], serde_json::json!(true));
+        assert_eq!(
+            value["authoritativeItemStreaming"],
+            fixture["authoritativeItemStreaming"]
+        );
         assert_eq!(value["revisionCursors"], fixture["revisionCursors"]);
     }
 

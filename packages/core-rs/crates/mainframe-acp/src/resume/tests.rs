@@ -130,8 +130,12 @@ async fn containers_flatten_to_items() {
         ],
         ..FakePort::default()
     };
-    let (_response, replay) =
-        dispatch_resume(resume_request(Some(json!({ "type": "start" }))), &port, None).await;
+    let (_response, replay) = dispatch_resume(
+        resume_request(Some(json!({ "type": "start" }))),
+        &port,
+        None,
+    )
+    .await;
 
     assert_eq!(replay.containers.len(), 2, "one entry per DisplayMessage");
     let flattened: Vec<_> = replay.containers.iter().flatten().cloned().collect();

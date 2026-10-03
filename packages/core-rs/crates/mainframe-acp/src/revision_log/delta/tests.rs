@@ -71,13 +71,21 @@ fn assert_record_delta_matches_record(history: &[Vec<Vec<EncodedItem>>]) {
         let delta = delta_between(before, after);
         let actual_outcome = actual.record_delta(&delta, || unreachable!());
         assert_eq!(ref_outcome, actual_outcome, "step outcome must match");
-        assert_eq!(reference.boundary(), actual.boundary(), "revision stamps must match");
+        assert_eq!(
+            reference.boundary(),
+            actual.boundary(),
+            "revision stamps must match"
+        );
 
         // The later `plan` output, from the cursor just before this step,
         // must agree between the two logs.
         let cursor = RevisionCursor {
             epoch: "ep_1".to_string(),
-            revision: reference.boundary().revision.saturating_sub(1).min(reference.boundary().revision),
+            revision: reference
+                .boundary()
+                .revision
+                .saturating_sub(1)
+                .min(reference.boundary().revision),
         };
         assert_eq!(
             reference.plan(&cursor, &flatten(after)),

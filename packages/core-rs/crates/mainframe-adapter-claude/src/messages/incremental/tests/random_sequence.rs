@@ -81,7 +81,8 @@ fn append_tool_result_for_last_tool_use(h: &mut Harness, tool_seq: &u64) {
     }
     let tool_id = format!("tu{tool_seq}");
     let id = h.next_id();
-    h.raw.push(tool_result_msg(&id, vec![tool_result(&tool_id, "ok")]));
+    h.raw
+        .push(tool_result_msg(&id, vec![tool_result(&tool_id, "ok")]));
     step_appended(h);
 }
 

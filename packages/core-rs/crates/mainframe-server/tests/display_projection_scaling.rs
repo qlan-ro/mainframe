@@ -16,8 +16,8 @@
 //! `mainframe_acp::encoder` functions.
 
 use mainframe_acp::SessionState;
-use mainframe_acp::encoder::delta::EncodedDelta;
 use mainframe_acp::encoder;
+use mainframe_acp::encoder::delta::EncodedDelta;
 use mainframe_acp::revision_log::RevisionLog;
 use mainframe_chat::message_cache::MessageCache;
 use mainframe_display::{DisplayDelta, DisplayProjector};
@@ -44,14 +44,15 @@ fn text_msg(id: &str, kind: ChatMessageType, text: &str) -> ChatMessage {
 
 fn assistant_with_tool_use(id: &str, text: &str, tool_id: &str) -> ChatMessage {
     let mut msg = text_msg(id, ChatMessageType::Assistant, text);
-    msg.content.push(MessageContent::Node(MessageContentNode::ToolUse {
-        timing: None,
-        command_execution: None,
-        id: tool_id.to_string(),
-        name: "Bash".to_string(),
-        input: HashMap::new(),
-        parent_tool_use_id: None,
-    }));
+    msg.content
+        .push(MessageContent::Node(MessageContentNode::ToolUse {
+            timing: None,
+            command_execution: None,
+            id: tool_id.to_string(),
+            name: "Bash".to_string(),
+            input: HashMap::new(),
+            parent_tool_use_id: None,
+        }));
     msg
 }
 
@@ -96,7 +97,10 @@ fn make_projector() -> Box<dyn DisplayProjector> {
 /// (todo #376 G4), duplicated here (see module doc) — `streaming` lands on
 /// ordinal `len - 1`.
 fn encode_changes(delta: &DisplayDelta, streaming: Option<StreamingLeafKind>) -> EncodedDelta {
-    assert!(!delta.full, "the scaling gate only drives incremental partials");
+    assert!(
+        !delta.full,
+        "the scaling gate only drives incremental partials"
+    );
     let streaming_ordinal = delta.len.checked_sub(1);
     let changes = delta
         .changes
@@ -128,8 +132,7 @@ fn run_active_turn(settled_len: usize) -> Vec<PartialCounts> {
     // full rebuild (no prior projector state) — not itself a partial under
     // test, the same way a chat's first emission after load is.
     let baseline = cache.project_display(CHAT_ID, None, None, make_projector);
-    let baseline_containers =
-        encoder::encode_containers(&baseline.snapshot.materialize(), None);
+    let baseline_containers = encoder::encode_containers(&baseline.snapshot.materialize(), None);
 
     let mut state = SessionState::new();
     let mut log = RevisionLog::new("epoch".to_string());
@@ -173,9 +176,18 @@ fn observe_partial(
 /// reply (overlay only — never committed to the cache), then the reply's
 /// tool call and its result land in the raw cache. Calls `on_partial` once
 /// per `project_display` call, in order.
-fn drive_active_turn(cache: &mut MessageCache, mut on_partial: impl FnMut(DisplayDelta, Option<StreamingLeafKind>)) {
-    cache.append(CHAT_ID, text_msg("u-act", ChatMessageType::User, "start the task"));
-    on_partial(cache.project_display(CHAT_ID, None, None, make_projector), None);
+fn drive_active_turn(
+    cache: &mut MessageCache,
+    mut on_partial: impl FnMut(DisplayDelta, Option<StreamingLeafKind>),
+) {
+    cache.append(
+        CHAT_ID,
+        text_msg("u-act", ChatMessageType::User, "start the task"),
+    );
+    on_partial(
+        cache.project_display(CHAT_ID, None, None, make_projector),
+        None,
+    );
 
     for partial in ["I'll", "I'll check", "I'll check the file"] {
         let overlay = text_msg("a-act", ChatMessageType::Assistant, partial);
@@ -189,10 +201,16 @@ fn drive_active_turn(cache: &mut MessageCache, mut on_partial: impl FnMut(Displa
         CHAT_ID,
         assistant_with_tool_use("a-act", "I'll check the file", "tu-act"),
     );
-    on_partial(cache.project_display(CHAT_ID, None, None, make_projector), None);
+    on_partial(
+        cache.project_display(CHAT_ID, None, None, make_projector),
+        None,
+    );
 
     cache.append(CHAT_ID, tool_result_msg("tr-act", "tu-act"));
-    on_partial(cache.project_display(CHAT_ID, None, None, make_projector), None);
+    on_partial(
+        cache.project_display(CHAT_ID, None, None, make_projector),
+        None,
+    );
 }
 
 #[test]
@@ -204,8 +222,14 @@ fn partial_counts_are_identical_regardless_of_settled_history_length() {
     assert_eq!(small.len(), medium.len());
     assert_eq!(small.len(), large.len());
     for i in 0..small.len() {
-        assert_eq!(small[i], medium[i], "step {i}: 100 vs 1,000 settled messages");
-        assert_eq!(small[i], large[i], "step {i}: 100 vs 10,000 settled messages");
+        assert_eq!(
+            small[i], medium[i],
+            "step {i}: 100 vs 1,000 settled messages"
+        );
+        assert_eq!(
+            small[i], large[i],
+            "step {i}: 100 vs 10,000 settled messages"
+        );
     }
 
     // Sanity: the gate is not vacuous — each partial touches a handful of

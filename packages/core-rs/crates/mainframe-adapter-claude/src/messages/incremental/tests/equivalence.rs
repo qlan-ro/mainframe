@@ -41,7 +41,8 @@ fn tool_calls_with_results_match_the_full_pipeline() {
         vec![text("checking"), tool_use("tu1", "Bash")],
     ));
     h.step(appended(), None);
-    h.raw.push(tool_result_msg("r1", vec![tool_result("tu1", "ok")]));
+    h.raw
+        .push(tool_result_msg("r1", vec![tool_result("tu1", "ok")]));
     h.step(appended(), None);
 }
 
@@ -81,11 +82,17 @@ fn a_task_update_many_turns_later_resolves_its_subject_from_an_earlier_create() 
     let mut h = Harness::with_categories(task_categories());
     h.raw.push(assistant(
         "a1",
-        vec![tool_use_with_input("tc1", "TaskCreate", create_input("Ship it"))],
+        vec![tool_use_with_input(
+            "tc1",
+            "TaskCreate",
+            create_input("Ship it"),
+        )],
     ));
     h.step(appended(), None);
-    h.raw
-        .push(tool_result_msg("r1", vec![tool_result("tc1", "Task #5 created successfully: Ship it")]));
+    h.raw.push(tool_result_msg(
+        "r1",
+        vec![tool_result("tc1", "Task #5 created successfully: Ship it")],
+    ));
     h.step(appended(), None);
 
     for i in 0..5 {
@@ -98,8 +105,10 @@ fn a_task_update_many_turns_later_resolves_its_subject_from_an_earlier_create() 
         vec![tool_use_with_input("tu1", "TaskUpdate", update_input("5"))],
     ));
     h.step(appended(), None);
-    h.raw
-        .push(tool_result_msg("r2", vec![tool_result("tu1", "Updated task #5 status")]));
+    h.raw.push(tool_result_msg(
+        "r2",
+        vec![tool_result("tu1", "Updated task #5 status")],
+    ));
     h.step(appended(), None);
 }
 
@@ -138,10 +147,10 @@ fn a_duration_marker_after_a_user_only_turn_patches_the_earlier_assistant_group(
 #[test]
 fn a_timing_completion_on_a_settled_tool_call_patches_only_its_container() {
     let mut h = Harness::new();
-    h.raw
-        .push(assistant("a1", vec![tool_use("tu1", "Bash")]));
+    h.raw.push(assistant("a1", vec![tool_use("tu1", "Bash")]));
     h.step(appended(), None);
-    h.raw.push(tool_result_msg("r1", vec![tool_result("tu1", "ok")]));
+    h.raw
+        .push(tool_result_msg("r1", vec![tool_result("tu1", "ok")]));
     h.step(appended(), None);
     h.raw.push(user("u1", "next")); // settles group 0
     h.step(appended(), None);
@@ -185,13 +194,11 @@ fn a_queued_prompt_dequeue_merges_the_runs_around_it() {
 #[test]
 fn a_duplicate_tool_id_across_appended_groups_is_deduped_like_the_full_pipeline() {
     let mut h = Harness::new();
-    h.raw
-        .push(assistant("a1", vec![tool_use("dup", "Bash")]));
+    h.raw.push(assistant("a1", vec![tool_use("dup", "Bash")]));
     h.step(appended(), None);
     h.raw.push(user("u1", "next"));
     h.step(appended(), None);
-    h.raw
-        .push(assistant("a2", vec![tool_use("dup", "Bash")]));
+    h.raw.push(assistant("a2", vec![tool_use("dup", "Bash")]));
     h.step(appended(), None);
 }
 
@@ -273,11 +280,17 @@ fn a_nested_append_preserves_a_backfilled_subject_in_the_settled_group() {
     let mut h = Harness::with_categories(task_categories());
     h.raw.push(assistant(
         "a1",
-        vec![tool_use_with_input("tc1", "TaskCreate", create_input("Ship it"))],
+        vec![tool_use_with_input(
+            "tc1",
+            "TaskCreate",
+            create_input("Ship it"),
+        )],
     ));
     h.step(appended(), None);
-    h.raw
-        .push(tool_result_msg("r1", vec![tool_result("tc1", "Task #1 created successfully: Ship it")]));
+    h.raw.push(tool_result_msg(
+        "r1",
+        vec![tool_result("tc1", "Task #1 created successfully: Ship it")],
+    ));
     h.step(appended(), None);
 
     h.raw.push(assistant(

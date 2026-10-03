@@ -76,7 +76,11 @@ impl RevisionLog {
             vanished_ids.push(id.clone());
         }
 
-        self.items_compared += delta.changes.iter().map(|(_, items)| items.len() as u64).sum::<u64>();
+        self.items_compared += delta
+            .changes
+            .iter()
+            .map(|(_, items)| items.len() as u64)
+            .sum::<u64>();
         let changed_items: Vec<&EncodedItem> = delta
             .changes
             .iter()

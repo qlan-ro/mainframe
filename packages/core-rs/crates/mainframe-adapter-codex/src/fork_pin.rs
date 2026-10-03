@@ -95,6 +95,7 @@ mod tests {
             id: id.to_string(),
             status: status.to_string(),
             items: Vec::new(),
+            timing: Default::default(),
         }
     }
 

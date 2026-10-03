@@ -36,6 +36,8 @@ pub struct Recorded {
     pub message_vendor_ids: Vec<Option<String>>,
     pub tool_result_vendor_ids: Vec<Option<String>>,
     pub context_usages: Vec<ContextUsage>,
+    /// Every `on_message_partial(id, content)` call, in order (todo #378).
+    pub partials: Vec<(String, Vec<MessageContent>)>,
 }
 
 #[derive(Clone, Default)]
@@ -88,6 +90,9 @@ impl Recorder {
     }
     pub fn context_usages(&self) -> Vec<ContextUsage> {
         self.0.lock().unwrap().context_usages.clone()
+    }
+    pub fn partials(&self) -> Vec<(String, Vec<MessageContent>)> {
+        self.0.lock().unwrap().partials.clone()
     }
     /// Every recorded message/tool-result block whose `parentToolUseId` equals
     /// `card_id`, in emission order.
@@ -150,6 +155,13 @@ impl SessionSink for RecordingSink {
     }
     fn on_context_usage(&self, usage: ContextUsage) {
         self.0.lock().unwrap().context_usages.push(usage);
+    }
+    fn on_message_partial(&self, api_message_id: &str, content: Vec<MessageContent>) {
+        self.0
+            .lock()
+            .unwrap()
+            .partials
+            .push((api_message_id.to_string(), content));
     }
     fn on_plan_file(&self, _file_path: &str) {}
     fn on_skill_file(&self, _entry: SkillFileEntry) {}

@@ -75,7 +75,8 @@ pub fn classify_message(msg: &ChatMessage, prev_mergeable: bool) -> GroupingDeci
 pub fn group_messages(messages: Vec<ChatMessage>) -> Vec<GroupedMessage> {
     let mut result: Vec<GroupedMessage> = Vec::new();
 
-    for msg in messages {
+    for mut msg in messages {
+        super::presentation_grouping::initialize(&mut msg);
         let prev_mergeable = result
             .last()
             .is_some_and(|prev| is_assistant_or_tool_use(prev.base.r#type));
@@ -89,6 +90,7 @@ pub fn group_messages(messages: Vec<ChatMessage>) -> Vec<GroupedMessage> {
             }
             GroupingDecision::Merge => {
                 if let Some(prev) = result.last_mut() {
+                    super::presentation_grouping::append(&mut prev.base, &msg);
                     prev.base.content.extend(msg.content);
                 }
             }
@@ -126,22 +128,30 @@ fn attach_tool_result(prev: Option<&mut GroupedMessage>, msg: &ChatMessage) {
 }
 
 /// Deduplicate tool_use blocks by id across all messages — a global
-/// first-wins post-pass over groups in order.
+/// first-wins post-pass over groups in order. Presentation sources are
+/// pruned and re-indexed alongside the dropped blocks (todo #384), so a
+/// source path never points past the deduped content.
 fn dedupe_tool_use_ids(result: &mut [GroupedMessage]) {
     let mut seen_tool_use_ids: HashSet<String> = HashSet::new();
     for msg in result.iter_mut() {
         if !is_assistant_or_tool_use(msg.base.r#type) {
             continue;
         }
+        let mut index = 0;
+        let mut retained = Vec::new();
         msg.base.content.retain(|block| {
+            let original_index = index;
+            index += 1;
             if let MessageContent::Node(MessageContentNode::ToolUse { id, .. }) = block {
                 if seen_tool_use_ids.contains(id) {
                     return false;
                 }
                 seen_tool_use_ids.insert(id.clone());
             }
+            retained.push(original_index);
             true
         });
+        super::presentation_grouping::retain(&mut msg.base, &retained);
     }
 }
 

@@ -63,7 +63,9 @@ impl EventHandlerDeps for ShapeDeps {
         Vec::new()
     }
     fn display_projector(&self) -> Box<dyn DisplayProjector> {
-        Box::new(FullRebuildProjector::new(|_raw, _overlay, _categories| Vec::new()))
+        Box::new(FullRebuildProjector::new(|_raw, _overlay, _categories| {
+            Vec::new()
+        }))
     }
     fn strip_command_tags(&self, text: &str) -> String {
         text.to_string()
@@ -259,7 +261,9 @@ fn on_message_notifies_display_revision_with_the_legacy_emitter_snapshot() {
     // pipeline injected here), so the revision fires with an empty snapshot
     // — the point under test is that it fires at all, alongside (not
     // instead of) the legacy `display.message.added` path.
-    assert!(surface.events().iter().any(
-        |e| matches!(e, ChatSurfaceEvent::DisplayRevision { delta, .. } if delta.len == 0)
-    ));
+    assert!(
+        surface.events().iter().any(
+            |e| matches!(e, ChatSurfaceEvent::DisplayRevision { delta, .. } if delta.len == 0)
+        )
+    );
 }

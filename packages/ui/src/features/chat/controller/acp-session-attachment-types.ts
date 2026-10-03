@@ -26,12 +26,14 @@ import type {
   SessionUpdateListener,
   TranscriptClearedListener,
 } from '../../../lib/daemon/acp-notification-router';
+import type { CapabilitiesListener } from '../../../lib/daemon/acp-capability-state';
 import type { GapListener, ReplayCursor } from '../../../lib/daemon/acp-client';
 import type { ReplayStage } from './acp-replay-stage';
 import type { ChatStateEvent } from './chat-thread-state';
 
 /** The `AcpFacadeClient` surface the plane needs — narrowed so a test double doesn't reimplement the whole client. */
 export interface AcpSessionClientPort {
+  onCapabilitiesChanged?(listener: CapabilitiesListener): () => void;
   onSessionUpdate(listener: SessionUpdateListener): () => void;
   onPermissionRequest(listener: PermissionRequestListener): () => void;
   onGateResolved(listener: GateResolvedListener): () => void;

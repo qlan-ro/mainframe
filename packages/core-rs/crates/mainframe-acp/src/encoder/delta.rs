@@ -54,8 +54,7 @@ impl EncodedDelta {
         }
         let full = self.full;
         self.changes.retain(|(ordinal, _)| *ordinal < later.len);
-        let mut by_ordinal: BTreeMap<usize, Vec<EncodedItem>> =
-            self.changes.into_iter().collect();
+        let mut by_ordinal: BTreeMap<usize, Vec<EncodedItem>> = self.changes.into_iter().collect();
         for (ordinal, items) in later.changes {
             by_ordinal.insert(ordinal, items);
         }

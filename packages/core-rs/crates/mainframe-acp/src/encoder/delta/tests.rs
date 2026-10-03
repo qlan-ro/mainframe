@@ -30,7 +30,10 @@ fn a_later_full_delta_wins_outright() {
         changes: vec![(0, container(vec![msg("a", "old")]))],
         len: 1,
     };
-    let later = EncodedDelta::full(vec![container(vec![msg("a", "new")]), container(vec![msg("b", "b")])]);
+    let later = EncodedDelta::full(vec![
+        container(vec![msg("a", "new")]),
+        container(vec![msg("b", "b")]),
+    ]);
 
     let merged = earlier.merge(later.clone());
     assert_eq!(merged, later);

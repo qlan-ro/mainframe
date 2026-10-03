@@ -19,7 +19,11 @@ pub struct FullRebuildProjector {
 
 impl FullRebuildProjector {
     pub fn new(
-        prepare: impl FnMut(&[ChatMessage], Option<&ChatMessage>, Option<&ToolCategories>) -> Vec<DisplayMessage>
+        prepare: impl FnMut(
+            &[ChatMessage],
+            Option<&ChatMessage>,
+            Option<&ToolCategories>,
+        ) -> Vec<DisplayMessage>
         + Send
         + 'static,
     ) -> Self {

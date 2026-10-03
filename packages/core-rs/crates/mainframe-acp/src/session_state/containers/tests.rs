@@ -6,8 +6,8 @@
 use mainframe_types::acp::tool_call::{ToolCallStatus, ToolKind};
 
 use super::super::*;
-use crate::encoder::{EncodedItem, ItemRole};
 use crate::encoder::delta::EncodedDelta;
+use crate::encoder::{EncodedItem, ItemRole};
 
 fn msg(id: &str, text: &str) -> EncodedItem {
     EncodedItem::Message {
@@ -95,7 +95,10 @@ fn a_shrink_removing_a_tail_container_matches_diff() {
 fn a_moved_item_id_matches_diff() {
     // "b" moves from container 1 to a new container 0's partner slot — model
     // as container 1 losing it and a new container 2 gaining it.
-    let before = vec![vec![msg("a", "hi")], vec![msg("b", "moved"), msg("c", "stay")]];
+    let before = vec![
+        vec![msg("a", "hi")],
+        vec![msg("b", "moved"), msg("c", "stay")],
+    ];
     let after = vec![
         vec![msg("a", "hi")],
         vec![msg("c", "stay")],

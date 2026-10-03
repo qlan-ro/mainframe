@@ -69,6 +69,13 @@ fn render_agent_message(
     sink: &Arc<dyn SessionSink>,
     state: &mut CodexSessionState,
 ) {
+    // Todo #378: completion is authoritative — mark the item completed (so a
+    // late/duplicate delta for it is dropped) and drop any in-flight overlay
+    // text under this id before the completed message lands, so the two
+    // never both render.
+    state
+        .agent_message_partial
+        .mark_item_completed(id, thread_id);
     sink.on_message(vec![text_block(text)], vendor_metadata(id));
     if let Some(tid) = thread_id {
         collab_card::record_child_message(tid, text, state);

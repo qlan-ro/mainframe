@@ -14,7 +14,9 @@ use serde_json::Value;
 use super::fold::{convert_single_message, fold_merge_group};
 use super::group::{FrozenTracker, Group};
 use crate::messages::display_helpers::is_internal_user_message;
-use crate::messages::message_grouping::{GroupingDecision, classify_message, is_assistant_or_tool_use};
+use crate::messages::message_grouping::{
+    GroupingDecision, classify_message, is_assistant_or_tool_use,
+};
 
 /// The result of one [`refold_range`] call.
 pub(crate) struct RefoldOutcome {

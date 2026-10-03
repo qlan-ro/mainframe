@@ -192,3 +192,46 @@ fn streaming_ids_match_history() {
 
     assert_eq!(without_streaming(live_items), history_items);
 }
+
+#[test]
+fn a_new_turn_wait_keeps_the_previous_answer_settled_until_its_own_overlay() {
+    for (kind, content, expected_id) in [
+        (StreamingLeafKind::Text, text("new partial"), "next-answer"),
+        (
+            StreamingLeafKind::Thinking,
+            thinking("new partial"),
+            "next-answer-thought",
+        ),
+    ] {
+        let mut messages = vec![
+            dmsg(
+                "previous",
+                DisplayMessageType::Assistant,
+                vec![text("done")],
+            ),
+            dmsg(
+                "next-user",
+                DisplayMessageType::User,
+                vec![text("continue")],
+            ),
+        ];
+        let waiting = encode_revision(&messages, None);
+        assert_eq!(ids(&waiting), vec!["previous", "next-user"]);
+        assert!(waiting.iter().all(|item| !item_streaming(item)));
+
+        messages.push(dmsg(
+            "next-answer",
+            DisplayMessageType::Assistant,
+            vec![content],
+        ));
+        let partial = encode_revision(&messages, Some(kind));
+        assert_eq!(ids(&partial), vec!["previous", "next-user", expected_id]);
+        assert_eq!(&partial[..2], &waiting);
+        assert!(item_streaming(&partial[2]));
+
+        let committed = encode_revision(&messages, None);
+        assert!(committed.iter().all(|item| !item_streaming(item)));
+        assert_eq!(without_streaming(partial), committed);
+        assert_eq!(committed, encode(&messages));
+    }
+}

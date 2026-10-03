@@ -34,15 +34,16 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 
 export interface MessageTimingProps {
   className?: string;
+  suppressDuration?: boolean;
   side?: 'top' | 'right' | 'bottom' | 'left';
 }
 
-export const MessageTiming: FC<MessageTimingProps> = ({ className, side = 'top' }) => {
+export const MessageTiming: FC<MessageTimingProps> = ({ className, side = 'top', suppressDuration = false }) => {
   const timing = useMessageTiming();
   const cost = useMainframeMeta().cost;
   const totalMs = timing?.totalStreamTime;
 
-  if (totalMs === undefined) return null;
+  if (suppressDuration ? cost === undefined : totalMs === undefined) return null;
 
   return (
     <Tooltip>
@@ -50,20 +51,20 @@ export const MessageTiming: FC<MessageTimingProps> = ({ className, side = 'top' 
         <button
           type="button"
           data-testid="chat-message-timing"
-          aria-label="Message timing"
+          aria-label={suppressDuration ? 'Message cost' : 'Message timing'}
           className={cn(
             'cursor-default rounded-sm px-1 py-0.5 font-mono text-xs tabular-nums text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
             className,
           )}
         >
-          {formatDurationMs(totalMs)}
+          {suppressDuration ? formatCostUsd(cost!) : formatDurationMs(totalMs!)}
         </button>
       </TooltipTrigger>
       {/* The tooltip's own chrome (fill, radius, ink, padding) comes from the
           primitive; only the detail grid is this component's business. */}
       <TooltipContent side={side} sideOffset={6}>
         <div className="grid min-w-32 gap-1.5">
-          <DetailRow label="Total" value={formatDurationMs(totalMs)} />
+          <DetailRow label="Total" value={suppressDuration ? formatCostUsd(cost!) : formatDurationMs(totalMs!)} />
           {cost !== undefined && <DetailRow label="Cost" value={formatCostUsd(cost)} />}
         </div>
       </TooltipContent>

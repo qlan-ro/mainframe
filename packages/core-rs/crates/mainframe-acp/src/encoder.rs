@@ -43,6 +43,7 @@ use serde_json::{Value, json};
 mod accum;
 mod content;
 pub mod delta;
+mod presentation;
 mod result_content;
 mod tool_call;
 use content::encode_content;
@@ -92,7 +93,10 @@ impl EncodedItem {
 
 /// The per-container context every item inherits: the reaggregation key,
 /// the display timestamp, the raw metadata map, and the parent relation.
+#[derive(Clone)]
 struct Container<'a> {
+    presentation_sources: &'a presentation::SourceMap,
+    path: Vec<usize>,
     id: &'a str,
     timestamp: &'a str,
     kind: Option<ItemContainerKind>,
@@ -119,7 +123,7 @@ impl Container<'_> {
             container_id: Some(self.id.to_string()),
             parent_tool_call_id: self.parent_tool_call_id.map(str::to_string),
             kind: self.kind,
-            message_meta: self.message_meta.cloned(),
+            message_meta: presentation::legacy_meta(self.message_meta),
             ..ItemMeta::default()
         }
     }
@@ -187,7 +191,10 @@ pub fn encode_container(
         return Vec::new();
     }
     let mut out = Vec::new();
+    let sources = presentation::read_sources(message);
     let container = Container {
+        presentation_sources: &sources,
+        path: Vec::new(),
         id: &message.id,
         timestamp: &message.timestamp,
         kind: kind_for(message.r#type),

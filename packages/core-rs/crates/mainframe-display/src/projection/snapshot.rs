@@ -40,7 +40,9 @@ impl DisplaySnapshot {
         // denied by workspace lint): no panic ever runs while this mutex is
         // held, so poisoning should not occur, but a stale snapshot beats a
         // crash in the display path.
-        self.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+        self.0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 }
 

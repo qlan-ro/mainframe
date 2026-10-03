@@ -259,7 +259,11 @@ impl ChatManagerDeps for StoreDeps {
         Box::new(mainframe_display::FullRebuildProjector::new(
             |raw, overlay, categories| {
                 let combined: Vec<ChatMessage> = match overlay {
-                    Some(o) => raw.iter().cloned().chain(std::iter::once(o.clone())).collect(),
+                    Some(o) => raw
+                        .iter()
+                        .cloned()
+                        .chain(std::iter::once(o.clone()))
+                        .collect(),
                     None => raw.to_vec(),
                 };
                 StoreDeps::convert(&combined, categories)

@@ -8,7 +8,9 @@
 
 use mainframe_types::chat::{ChatMessage, MessageContent};
 use mainframe_types::content::LeafContent;
-use mainframe_types::display::{DisplayContent, DisplayMessage, DisplayMessageType, StreamingLeafKind};
+use mainframe_types::display::{
+    DisplayContent, DisplayMessage, DisplayMessageType, StreamingLeafKind,
+};
 
 /// Spec Decision 39's streaming determination: `Some` only when the overlay's
 /// own leaf has non-empty text/thinking after trim AND the prepared display's

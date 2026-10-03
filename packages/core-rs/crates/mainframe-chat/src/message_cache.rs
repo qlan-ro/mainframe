@@ -188,6 +188,33 @@ impl MessageCache {
         true
     }
 
+    /// Run `edit` over every message of `chat_id` in place; `edit` reports
+    /// whether it changed that message. Records one `Structural` entry at the
+    /// earliest changed index (the same journal shape `strip_all_queued`
+    /// uses for its in-place metadata edits), so the display projector
+    /// re-folds from there instead of dropping its slot (todo #376). Returns
+    /// whether any message changed.
+    pub fn update_in_place(
+        &mut self,
+        chat_id: &str,
+        mut edit: impl FnMut(&mut ChatMessage) -> bool,
+    ) -> bool {
+        let Some(msgs) = self.cache.get_mut(chat_id) else {
+            return false;
+        };
+        let mut first_touched: Option<usize> = None;
+        for (idx, m) in msgs.iter_mut().enumerate() {
+            if edit(m) {
+                first_touched.get_or_insert(idx);
+            }
+        }
+        let Some(from) = first_touched else {
+            return false;
+        };
+        self.record_change(chat_id, mainframe_display::RawChange::Structural(from));
+        true
+    }
+
     pub fn create_transient_message(
         &self,
         chat_id: &str,

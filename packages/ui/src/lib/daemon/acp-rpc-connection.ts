@@ -28,7 +28,8 @@ export interface RpcError {
 
 interface PendingEntry {
   resolve: (result: unknown) => void;
-  reject: (error: RpcError) => void;
+  reject: (error: unknown) => void;
+  onSuccess?: (result: unknown) => void;
   deadline: ReturnType<typeof setTimeout>;
 }
 
@@ -104,7 +105,7 @@ export class RpcConnection {
     this.rejectAllPending(CLOSED_ERROR);
   }
 
-  sendRequest(method: string, params?: unknown): Promise<unknown> {
+  sendRequest(method: string, params?: unknown, onSuccess?: (result: unknown) => void): Promise<unknown> {
     const id = this.nextId++;
     const key = String(id);
     return new Promise((resolve, reject) => {
@@ -112,7 +113,7 @@ export class RpcConnection {
         this.pending.delete(key);
         reject({ code: -32000, message: 'request timed out' });
       }, REQUEST_DEADLINE_MS);
-      this.pending.set(key, { resolve, reject, deadline });
+      this.pending.set(key, { resolve, reject, deadline, onSuccess });
       this.write({ jsonrpc: '2.0', id, method, ...(params !== undefined ? { params } : {}) });
     });
   }
@@ -199,7 +200,14 @@ export class RpcConnection {
     // read both optional fields explicitly instead.
     const { error, result } = response as { error?: RpcError; result?: unknown };
     if (error !== undefined) entry.reject(error);
-    else entry.resolve(result);
+    else {
+      try {
+        entry.onSuccess?.(result);
+        entry.resolve(result);
+      } catch (error) {
+        entry.reject(error);
+      }
+    }
   }
 
   private rejectAllPending(error: RpcError): void {

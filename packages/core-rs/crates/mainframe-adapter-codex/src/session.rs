@@ -1,10 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/codex/session.ts`.
-//!
-//! `CodexSession` — a live Codex app-server session implementing `AdapterSession`.
-//! Spawn argv (`codex app-server`), the initialize/initialized handshake (10s),
-//! lazy thread/start vs thread/resume, turn/start config, and the loadHistory
-//! temp-app-server + thread/read recursion are copied from the TS.
-
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
@@ -47,62 +40,15 @@ use crate::types::{ThreadStartResult, TurnStartResult};
 mod model;
 
 const HANDSHAKE_TIMEOUT_MS: u64 = 10_000;
-
-/// A `SessionSink` that ignores every callback (the TS `nullSink`).
-struct NullSink;
-impl SessionSink for NullSink {
-    fn on_init(&self, _session_id: &str) {}
-    fn on_message(
-        &self,
-        _content: Vec<mainframe_types::chat::MessageContent>,
-        _metadata: Option<mainframe_types::adapter::MessageMetadata>,
-    ) {
-    }
-    fn on_tool_result(
-        &self,
-        _content: Vec<mainframe_types::chat::MessageContent>,
-        _vendor_id: Option<String>,
-    ) {
-    }
-    fn on_permission(&self, _request: mainframe_adapter_api::ControlRequest) {}
-    fn on_result(&self, _data: mainframe_types::adapter::SessionResult) {}
-    fn on_exit(&self, _code: Option<i32>) {}
-    fn on_error(&self, _error: AdapterError) {}
-    fn on_compact(&self, _vendor_id: Option<&str>) {}
-    fn on_compact_start(&self) {}
-    fn on_context_usage(&self, _usage: mainframe_types::adapter::ContextUsage) {}
-    fn on_plan_file(&self, _file_path: &str) {}
-    fn on_skill_file(&self, _entry: SkillFileEntry) {}
-    fn on_queued_processed(&self, _uuid: &str) {}
-    fn on_todo_update(&self, _todos: Vec<mainframe_types::chat::TodoItem>) {}
-    fn on_pr_detected(&self, _pr: mainframe_types::adapter::DetectedPr) {}
-    fn on_cli_message(&self, _text: &str) {}
-    fn on_skill_loaded(&self, _entry: mainframe_adapter_api::LoadedSkill) {}
-    fn on_subagent_child(
-        &self,
-        _parent_tool_use_id: &str,
-        _blocks: Vec<mainframe_types::chat::MessageContent>,
-    ) {
-    }
-}
-
-fn null_sink() -> Arc<dyn SessionSink> {
-    Arc::new(NullSink)
-}
-
-/// One-shot on-exit callback (the TS `onExit` ctor arg).
 type OnExitCallback = Box<dyn FnOnce() + Send>;
 
+#[derive(Clone)]
 struct PendingConfig {
     model: Option<String>,
     permission_mode: ExecutionMode,
     plan_mode: bool,
     tuning: Option<ResolvedTuning>,
     codex_provider_tuning: CodexProviderTuning,
-    /// Set only for a temporary chat whose adapter reports the no-persistence
-    /// capability (todo #346). `ensure_thread` reads it to force a fresh
-    /// `thread/start { ephemeral: true }` and to skip `thread/resume` even when
-    /// `resume_thread_id` is set.
     no_persistence: bool,
 }
 
@@ -118,10 +64,6 @@ impl Default for PendingConfig {
         }
     }
 }
-
-/// Test seam for `load_scan_records`: redirects the Codex state DB and the
-/// rollout containment root, neither of which the production entry points
-/// (`lookup_agent_metadata`, `read_rollout_items(.., None)`) can override.
 #[derive(Debug, Clone, Default)]
 pub struct CodexScanDeps {
     pub registry: ThreadRegistryDeps,
@@ -132,9 +74,6 @@ pub struct CodexSession {
     id: String,
     project_path: String,
     resume_thread_id: Option<String>,
-    /// Set only for a fork's spawn (todo #368) — `SessionOptions.fork_source`,
-    /// carried while `chats.pending_fork` exists. `ensure_thread`/`load_history`
-    /// consult it through `fork::resolve_thread_target`.
     fork_source: Option<ForkSource>,
     on_exit_callback: Arc<Mutex<Option<OnExitCallback>>>,
     client: Arc<Mutex<Option<Arc<JsonRpcClient>>>>,
@@ -144,18 +83,9 @@ pub struct CodexSession {
     config: Arc<Mutex<PendingConfig>>,
     pid: AtomicI64,
     status: Arc<Mutex<AdapterProcessStatus>>,
-    /// Boot-resolved login-shell `PATH`, applied to the spawned `codex` CLI so
-    /// packaged builds find it outside the bare launchd `PATH` (mirrors the TS
-    /// `enrichPath` env mutation).
     resolved_path: ResolvedPath,
-    /// Test seam only — `None` in production, which routes `load_scan_records`
-    /// through the real `~/.codex/state_5.sqlite` and `~/.codex/sessions`.
     scan_deps: Arc<Mutex<Option<CodexScanDeps>>>,
-    /// Test seam only (todo #368) — overrides `resolve_target`'s own-transcript
-    /// probe, which in production reads `~/.codex/state_5.sqlite`/
-    /// `~/.codex/sessions` and cannot be safely seeded from an integration test.
     transcript_present_override: Arc<Mutex<Option<bool>>>,
-    /// The configured binary also owns history and model probes.
     history_executable: Arc<Mutex<String>>,
 }
 
@@ -190,177 +120,32 @@ impl CodexSession {
             history_executable: Arc::new(Mutex::new("codex".to_string())),
         }
     }
-
-    /// Test-only override for `load_scan_records`'s registry DB and rollout
-    /// containment root.
     pub fn set_scan_deps(&self, deps: CodexScanDeps) {
         *self.scan_deps.lock().unwrap_or_else(|e| e.into_inner()) = Some(deps);
     }
-
-    /// Test-only override for `resolve_target`'s own-transcript-present probe
-    /// (todo #368) — see the field doc comment.
     pub fn set_transcript_present_override(&self, present: bool) {
         *self
             .transcript_present_override
             .lock()
             .unwrap_or_else(|e| e.into_inner()) = Some(present);
     }
-
-    /// Test-only override for `load_history`'s temp-app-server executable (todo
-    /// #368) — see the field doc comment.
     pub fn set_history_executable(&self, executable: &str) {
         *self
             .history_executable
             .lock()
             .unwrap_or_else(|e| e.into_inner()) = executable.to_string();
     }
-
-    /// Set the one-shot on-exit callback (used by `CodexAdapter::create_session` to
-    /// remove the session from its live set; mirrors the TS `onExit` ctor arg,
-    /// deferred so the adapter can capture the session's own id).
     pub fn set_on_exit(&self, cb: OnExitCallback) {
         *self
             .on_exit_callback
             .lock()
             .unwrap_or_else(|e| e.into_inner()) = Some(cb);
     }
-
-    /// Called by lifecycle-manager (H1) to push Codex-only provider defaults.
     pub fn set_codex_provider_tuning(&self, tuning: CodexProviderTuning) {
         self.config
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .codex_provider_tuning = tuning;
-    }
-
-    fn map_permission_mode(&self, mode: ExecutionMode) -> (String, String) {
-        permission_mode_policy(mode)
-    }
-
-    fn map_sandbox_policy(&self, sandbox: &str) -> Value {
-        let kind = match sandbox {
-            "danger-full-access" => "dangerFullAccess",
-            "read-only" => "readOnly",
-            _ => "workspaceWrite",
-        };
-        json!({ "type": kind })
-    }
-
-    /// `cwd` + the two persist-history flags + the optional model override, shared by
-    /// the `thread/start` and `thread/resume` param builders below.
-    fn thread_params_base(&self, model: Option<&str>) -> Map<String, Value> {
-        let mut p = Map::new();
-        if let Some(m) = model {
-            p.insert("model".into(), json!(m));
-        }
-        p.insert("cwd".into(), json!(self.project_path));
-        p.insert("persistExtendedHistory".into(), json!(true));
-        p.insert("persistFullHistory".into(), json!(true));
-        p
-    }
-
-    /// Resolves which thread this session targets on its first message: its own
-    /// id (`thread/resume`), a pending fork source (`thread/fork`), or neither
-    /// (`thread/start`) — see `fork::resolve_target` (todo #368).
-    async fn resolve_target(&self, no_persistence: bool) -> ThreadTarget {
-        let override_present = *self
-            .transcript_present_override
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        crate::fork::resolve_target(
-            self.resume_thread_id.as_deref(),
-            self.fork_source.as_ref(),
-            no_persistence,
-            override_present,
-        )
-        .await
-    }
-
-    /// Starts, resumes or forks the thread on the first message of a session,
-    /// capturing the app-server's reported model into `state.reported_model` —
-    /// the turn-start fallback tier for a chat with no configured model. No-ops
-    /// once a thread id is already recorded.
-    async fn ensure_thread(
-        &self,
-        client: &Arc<JsonRpcClient>,
-        model: Option<&str>,
-        permission_mode: ExecutionMode,
-        no_persistence: bool,
-    ) -> Result<(), AdapterError> {
-        if self
-            .state
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .thread_id
-            .is_some()
-        {
-            return Ok(());
-        }
-
-        let (approval_policy, sandbox) = self.map_permission_mode(permission_mode);
-        let base = self.thread_params_base(model);
-        let target = self.resolve_target(no_persistence).await;
-        let (request, expected_fork_source) = thread_request_for(
-            target,
-            no_persistence,
-            base,
-            &approval_policy,
-            json!(sandbox),
-        );
-        // `thread/start`, `thread/resume` and `thread/fork` answer with the same
-        // `{ thread: { id }, model }` shape, so one call + one deserialize
-        // covers all three (todo #346 review fix, extended for todo #368).
-        let method = request.method();
-        let params = request.into_params();
-        let res: ThreadStartResult = de(client
-            .request(method, Some(Value::Object(params)))
-            .await
-            .map_err(|e| AdapterError::Message(e.0))?)?;
-        if let Some(expected) = &expected_fork_source
-            && res.thread.forked_from_id.as_deref() != Some(expected.as_str())
-        {
-            tracing::warn!(
-                module = "codex:session",
-                session_id = %self.id,
-                expected,
-                actual = ?res.thread.forked_from_id,
-                "codex: forked thread's forkedFromId does not match the fork source"
-            );
-        }
-        let (new_thread_id, reported_model) = (res.thread.id, res.model);
-
-        {
-            let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-            state.command_state.clear();
-            state.thread_id = Some(new_thread_id.clone());
-            state.reported_model = non_empty(reported_model.as_deref()).map(str::to_string);
-        }
-        // Persist the real Codex thread ID immediately.
-        self.sink
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone()
-            .on_init(&new_thread_id);
-        Ok(())
-    }
-}
-
-/// Codex has no CLI-native `auto` mode, so it coerces to the same
-/// (`on-request`, `workspace-write`) pair as Interactive rather than falling
-/// through to the danger pair meant for Yolo. A free function so the mapping
-/// is unit-testable without constructing a `CodexSession`.
-fn permission_mode_policy(mode: ExecutionMode) -> (String, String) {
-    match mode {
-        ExecutionMode::Yolo => ("never".to_string(), "danger-full-access".to_string()),
-        ExecutionMode::Default | ExecutionMode::AcceptEdits => {
-            ("on-request".to_string(), "workspace-write".to_string())
-        }
-        ExecutionMode::Auto => {
-            tracing::warn!(
-                "chat is set to the Claude-only `auto` permission mode; Codex runs it as Interactive"
-            );
-            ("on-request".to_string(), "workspace-write".to_string())
-        }
     }
 }
 
@@ -368,679 +153,9 @@ pub(crate) fn de<T: DeserializeOwned>(v: Value) -> Result<T, AdapterError> {
     serde_json::from_value(v).map_err(|e| AdapterError::Message(e.to_string()))
 }
 
-fn initialize_params(with_capabilities: bool) -> Value {
-    let mut m = Map::new();
-    m.insert(
-        "clientInfo".into(),
-        json!({ "name": "mainframe", "title": "Mainframe", "version": "1.0.0" }),
-    );
-    if with_capabilities {
-        m.insert("capabilities".into(), json!({ "experimentalApi": true }));
-    }
-    Value::Object(m)
-}
-
-/// Build the configured (unspawned) `codex app-server` command. Extracted so the
-/// spawn-env contract — notably the boot-resolved login-shell `PATH` — is
-/// unit-testable without launching a real CLI.
-fn build_app_server_command(
-    executable: &str,
-    cwd: Option<&Path>,
-    path: &str,
-) -> tokio::process::Command {
-    let mut cmd = tokio::process::Command::new(executable);
-    cmd.arg("app-server")
-        .env("PATH", path)
-        .env("FORCE_COLOR", "0")
-        .env("NO_COLOR", "1")
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .kill_on_drop(true);
-    if let Some(cwd) = cwd {
-        cmd.current_dir(cwd);
-    }
-    cmd
-}
-
-/// Spawn a temporary `<executable> app-server`, perform the handshake, and return
-/// the ready client. Shared by `load_history` and the adapter's model listing;
-/// `executable` is the resolved CLI path (`'codex'` by default, or a configured
-/// binary for `probe_models`).
-pub(crate) async fn spawn_temp_app_server(
-    executable: &str,
-    cwd: Option<&Path>,
-    with_capabilities: bool,
-    path: &str,
-) -> Result<Arc<JsonRpcClient>, AdapterError> {
-    let mut cmd = build_app_server_command(executable, cwd, path);
-    let child = cmd
-        .spawn()
-        .map_err(|e| AdapterError::Message(e.to_string()))?;
-    let client = Arc::new(JsonRpcClient::new(
-        child,
-        JsonRpcHandlers {
-            on_notification: Box::new(|_, _| {}),
-            on_request: Box::new(|_, _, _| {}),
-            on_error: Box::new(|_| {}),
-            on_exit: Box::new(|_| {}),
-        },
-    ));
-    client
-        .request("initialize", Some(initialize_params(with_capabilities)))
-        .await
-        .map_err(|e| AdapterError::Message(e.0))?;
-    client.notify("initialized", None);
-    Ok(client)
-}
-
-/// The rollout half of `CodexSession::load_scan_records`: looks up the
-/// thread's rollout path in the registry DB, re-derives its
-/// `commandExecution`/`fileChange`/`mcpToolCall` items, and converts them to
-/// canonical `ChatMessage`s. Returns `None` when there is no registry row, no
-/// rollout path, or the rollout yields no items — the caller falls back to
-/// `load_history` in that case.
-async fn rollout_scan_records(
-    thread_id: &str,
-    deps: Option<&CodexScanDeps>,
-) -> Option<Vec<ChatMessage>> {
-    let thread_ids = [thread_id.to_string()];
-    let meta = lookup_agent_metadata_with(&thread_ids, deps.map(|d| &d.registry));
-    let rollout_path = meta.get(thread_id)?.rollout_path.clone()?;
-    let items = read_rollout_items(&rollout_path, Some(thread_id), deps.map(|d| &d.rollout)).await;
-    if items.is_empty() {
-        return None;
-    }
-    Some(convert_thread_items(
-        &items,
-        thread_id,
-        &HashMap::new(),
-        &HashMap::new(),
-    ))
-}
-
-impl AdapterSession for CodexSession {
-    fn id(&self) -> &str {
-        &self.id
-    }
-    fn adapter_id(&self) -> &str {
-        "codex"
-    }
-    fn project_path(&self) -> &str {
-        &self.project_path
-    }
-    fn is_spawned(&self) -> bool {
-        self.client
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .is_some()
-    }
-
-    fn get_process_info(&self) -> Option<AdapterProcess> {
-        if self
-            .client
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .is_none()
-        {
-            return None;
-        }
-        let chat_id = self
-            .state
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .thread_id
-            .clone()
-            .unwrap_or_default();
-        Some(AdapterProcess {
-            id: self.id.clone(),
-            adapter_id: "codex".to_string(),
-            chat_id,
-            pid: self.pid.load(Ordering::SeqCst),
-            status: *self.status.lock().unwrap_or_else(|e| e.into_inner()),
-            project_path: self.project_path.clone(),
-            model: self
-                .config
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .model
-                .clone(),
-        })
-    }
-
-    fn spawn(
-        &self,
-        options: Option<SessionSpawnOptions>,
-        sink: Option<Arc<dyn SessionSink>>,
-    ) -> BoxFuture<'_, Result<AdapterProcess, AdapterError>> {
-        Box::pin(async move {
-            let options = options.unwrap_or(SessionSpawnOptions {
-                model: None,
-                permission_mode: None,
-                plan_mode: None,
-                executable_path: None,
-                system_prompt: None,
-                tuning: None,
-                small_fast_model: None,
-                default_model: None,
-                no_persistence: None,
-            });
-            let sink = sink.unwrap_or_else(null_sink);
-            *self.sink.lock().unwrap_or_else(|e| e.into_inner()) = sink.clone();
-            {
-                let mut cfg = self.config.lock().unwrap_or_else(|e| e.into_inner());
-                cfg.model = model::explicit_model(options.model.as_deref());
-                cfg.permission_mode = options.permission_mode.unwrap_or(ExecutionMode::Default);
-                cfg.plan_mode = options.plan_mode.unwrap_or(false);
-                cfg.tuning = options.tuning.clone();
-                cfg.no_persistence = options.no_persistence.unwrap_or(false);
-            }
-
-            if std::fs::metadata(&self.project_path).is_err() {
-                return Err(AdapterError::Message(format!(
-                    "Project directory does not exist or is not accessible: {}",
-                    self.project_path
-                )));
-            }
-
-            let executable = options
-                .executable_path
-                .clone()
-                .unwrap_or_else(|| "codex".to_string());
-            *self
-                .history_executable
-                .lock()
-                .unwrap_or_else(|e| e.into_inner()) = executable.clone();
-            let mut cmd = build_app_server_command(
-                &executable,
-                Some(Path::new(&self.project_path)),
-                self.resolved_path.as_str(),
-            );
-            let child = cmd
-                .spawn()
-                .map_err(|e| AdapterError::Message(e.to_string()))?;
-            self.pid
-                .store(child.id().map(|p| p as i64).unwrap_or(0), Ordering::SeqCst);
-            *self.status.lock().unwrap_or_else(|e| e.into_inner()) = AdapterProcessStatus::Starting;
-
-            let approval = Arc::new(ApprovalHandler::new(sink.clone()));
-            *self
-                .approval_handler
-                .lock()
-                .unwrap_or_else(|e| e.into_inner()) = Some(approval.clone());
-
-            let handlers = self.build_handlers(approval);
-            let client = Arc::new(JsonRpcClient::new(child, handlers));
-            *self.client.lock().unwrap_or_else(|e| e.into_inner()) = Some(client.clone());
-
-            // Handshake — 10s cap covering initialize + initialized.
-            match tokio::time::timeout(
-                Duration::from_millis(HANDSHAKE_TIMEOUT_MS),
-                client.request("initialize", Some(initialize_params(true))),
-            )
-            .await
-            {
-                Ok(Ok(_)) => {
-                    client.notify("initialized", None);
-                    *self.status.lock().unwrap_or_else(|e| e.into_inner()) =
-                        AdapterProcessStatus::Ready;
-                }
-                Ok(Err(e)) => return Err(AdapterError::Message(e.0)),
-                Err(_) => {
-                    tracing::error!(module = "codex:session", session_id = %self.id, "codex handshake timeout");
-                    sink.on_error(AdapterError::Message("handshake timeout".to_string()));
-                    client.close();
-                    return Err(AdapterError::Message("handshake timeout".to_string()));
-                }
-            }
-
-            tracing::info!(
-                module = "codex:session",
-                session_id = %self.id,
-                project_path = %self.project_path,
-                resume = self.resume_thread_id.is_some(),
-                "codex session spawned"
-            );
-
-            // Fire onInit immediately so the UI transitions from 'starting' to 'idle'.
-            sink.on_init(&self.id);
-
-            self.get_process_info()
-                .ok_or_else(|| AdapterError::Message("no process info".to_string()))
-        })
-    }
-
-    fn send_message(
-        &self,
-        message: String,
-        images: Vec<ImageInput>,
-        _uuid: Option<String>,
-    ) -> BoxFuture<'_, Result<(), AdapterError>> {
-        Box::pin(async move {
-            let client = self
-                .client
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .clone();
-            let Some(client) = client else {
-                return Err(AdapterError::Message(format!(
-                    "Session {} not spawned",
-                    self.id
-                )));
-            };
-
-            let crate::user_input::TurnInput {
-                input,
-                undeliverable,
-            } = crate::user_input::build_turn_input(&message, &images);
-            let input =
-                serde_json::to_value(&input).map_err(|e| AdapterError::Message(e.to_string()))?;
-
-            let (model, permission_mode, plan_mode, tuning, codex_tuning, no_persistence) = {
-                let cfg = self.config.lock().unwrap_or_else(|e| e.into_inner());
-                (
-                    cfg.model.clone(),
-                    cfg.permission_mode,
-                    cfg.plan_mode,
-                    cfg.tuning.clone(),
-                    cfg.codex_provider_tuning.clone(),
-                    cfg.no_persistence,
-                )
-            };
-
-            let model = self.model_for_turn(model).await?;
-            self.ensure_thread(&client, model.as_deref(), permission_mode, no_persistence)
-                .await?;
-
-            let (thread_id, resolved_model) = {
-                let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-                let resolved_model =
-                    resolve_turn_model(model.as_deref(), state.reported_model.as_deref())
-                        .inspect_err(|err| {
-                            tracing::error!(
-                                module = "codex:session",
-                                session_id = %self.id,
-                                err = %err,
-                                "codex: cannot start turn without a model"
-                            );
-                        })?;
-                state.resolved_turn_model = Some(resolved_model.clone());
-                (state.thread_id.clone().unwrap_or_default(), resolved_model)
-            };
-
-            let (approval_policy, sandbox) = self.map_permission_mode(permission_mode);
-            let default_resolved = ResolvedTuning {
-                effort: None,
-                fast: false,
-                ultracode: false,
-                adaptive_thinking: false,
-            };
-            let turn_cfg = build_turn_config(
-                tuning.as_ref().unwrap_or(&default_resolved),
-                &codex_tuning,
-                &resolved_model,
-                if plan_mode { "plan" } else { "default" },
-            );
-
-            let mut p = Map::new();
-            p.insert("threadId".into(), json!(thread_id));
-            p.insert("input".into(), input);
-            p.insert("approvalPolicy".into(), json!(approval_policy));
-            p.insert("sandboxPolicy".into(), self.map_sandbox_policy(&sandbox));
-            p.insert(
-                "collaborationMode".into(),
-                serde_json::to_value(&turn_cfg.collaboration_mode)
-                    .map_err(|e| AdapterError::Message(e.to_string()))?,
-            );
-            if let Some(m) = &model {
-                p.insert("model".into(), json!(m));
-            }
-            if let Some(st) = &turn_cfg.service_tier {
-                p.insert("serviceTier".into(), json!(st));
-            }
-            if let Some(pers) = &turn_cfg.personality {
-                p.insert("personality".into(), json!(pers));
-            }
-            if let Some(sum) = &turn_cfg.summary {
-                p.insert("summary".into(), json!(sum));
-            }
-            let _: TurnStartResult = de(client
-                .request("turn/start", Some(Value::Object(p)))
-                .await
-                .map_err(|e| AdapterError::Message(e.0))?)?;
-
-            if let Some(notice) = crate::user_input::undeliverable_notice(&undeliverable) {
-                tracing::warn!(
-                    module = "codex:session",
-                    session_id = %self.id,
-                    count = undeliverable.len(),
-                    "codex: images not delivered"
-                );
-                self.sink
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .clone()
-                    .on_cli_message(&notice);
-            }
-
-            *self.status.lock().unwrap_or_else(|e| e.into_inner()) = AdapterProcessStatus::Running;
-            Ok(())
-        })
-    }
-
-    fn cancel_queued_message(&self, _uuid: String) -> BoxFuture<'_, Result<bool, AdapterError>> {
-        Box::pin(async { Ok(false) })
-    }
-
-    fn kill(&self) -> BoxFuture<'_, Result<(), AdapterError>> {
-        Box::pin(async move {
-            self.state
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .command_state
-                .clear();
-            let client = self
-                .client
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .clone();
-            let Some(client) = client else {
-                return Ok(());
-            };
-            if let Some(approval) = self
-                .approval_handler
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .as_ref()
-            {
-                approval.reject_all();
-            }
-            client.close();
-            let _ = tokio::time::timeout(Duration::from_millis(3000), client.closed()).await;
-            *self.client.lock().unwrap_or_else(|e| e.into_inner()) = None;
-            Ok(())
-        })
-    }
-
-    fn interrupt(&self) -> BoxFuture<'_, Result<(), AdapterError>> {
-        Box::pin(async move {
-            let client = self
-                .client
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .clone();
-            let (thread_id, turn_id) = {
-                let mut st = self.state.lock().unwrap_or_else(|e| e.into_inner());
-                st.command_state.clear();
-                (st.thread_id.clone(), st.current_turn_id.clone())
-            };
-            let (Some(client), Some(thread_id), Some(turn_id)) = (client, thread_id, turn_id)
-            else {
-                return Ok(());
-            };
-            client
-                .request(
-                    "turn/interrupt",
-                    Some(json!({ "threadId": thread_id, "turnId": turn_id })),
-                )
-                .await
-                .map_err(|e| AdapterError::Message(e.0))?;
-            Ok(())
-        })
-    }
-
-    fn respond_to_permission(
-        &self,
-        response: ControlResponse,
-    ) -> BoxFuture<'_, Result<(), AdapterError>> {
-        Box::pin(async move {
-            if let Some(approval) = self
-                .approval_handler
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .as_ref()
-            {
-                approval.resolve(&response);
-            }
-            Ok(())
-        })
-    }
-
-    fn effective_model(&self) -> BoxFuture<'_, Option<String>> {
-        Box::pin(self.read_effective_model())
-    }
-
-    fn set_model(&self, model: String) -> BoxFuture<'_, Result<(), AdapterError>> {
-        Box::pin(async move {
-            let model = match model::explicit_model(Some(&model)) {
-                Some(model) => model,
-                None => self.configured_cli_model().await?,
-            };
-            self.config.lock().unwrap_or_else(|e| e.into_inner()).model = Some(model);
-            Ok(())
-        })
-    }
-
-    fn set_permission_mode(&self, mode: ExecutionMode) -> BoxFuture<'_, Result<(), AdapterError>> {
-        Box::pin(async move {
-            self.config
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .permission_mode = mode;
-            Ok(())
-        })
-    }
-
-    fn set_plan_mode(&self, on: bool) -> BoxFuture<'_, Result<(), AdapterError>> {
-        Box::pin(async move {
-            self.config
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .plan_mode = on;
-            Ok(())
-        })
-    }
-
-    fn apply_tuning(&self, tuning: ResolvedTuning) -> BoxFuture<'_, Result<(), AdapterError>> {
-        Box::pin(async move {
-            self.config.lock().unwrap_or_else(|e| e.into_inner()).tuning = Some(tuning);
-            Ok(())
-        })
-    }
-
-    fn send_command(
-        &self,
-        _command: String,
-        _args: Option<String>,
-    ) -> BoxFuture<'_, Result<(), AdapterError>> {
-        Box::pin(async move {
-            tracing::warn!(module = "codex:session", session_id = %self.id, "codex: sendCommand not supported");
-            Ok(())
-        })
-    }
-
-    fn get_context_files(&self) -> ContextFiles {
-        crate::context_files::collect_codex_context_files(&self.project_path)
-    }
-
-    fn load_history(&self) -> BoxFuture<'_, Result<Vec<ChatMessage>, AdapterError>> {
-        Box::pin(async move {
-            // A no-persistence chat never resumes or forks; its history is always
-            // empty (unchanged from pre-#368 behavior).
-            let (read_thread_id, turn_cap) = match self.resolve_target(false).await {
-                ThreadTarget::Resume(id) => (id, None),
-                ThreadTarget::Fork {
-                    source_id,
-                    last_turn_id,
-                } => (source_id, last_turn_id),
-                ThreadTarget::Start => return Ok(Vec::new()),
-            };
-
-            let executable = self
-                .history_executable
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .clone();
-            let temp = match spawn_temp_app_server(
-                &executable,
-                Some(Path::new(&self.project_path)),
-                true,
-                self.resolved_path.as_str(),
-            )
-            .await
-            {
-                Ok(c) => c,
-                Err(err) => {
-                    tracing::warn!(module = "codex:session", err = %err, thread_id = %read_thread_id, "codex: failed to load history");
-                    return Ok(Vec::new());
-                }
-            };
-
-            let result = load_history_inner(
-                &temp,
-                &read_thread_id,
-                &self.project_path,
-                turn_cap.as_deref(),
-            )
-            .await;
-            temp.close();
-            match result {
-                Ok(msgs) => Ok(msgs),
-                Err(err) => {
-                    tracing::warn!(module = "codex:session", err = %err, thread_id = %read_thread_id, "codex: failed to load history");
-                    Ok(Vec::new())
-                }
-            }
-        })
-    }
-
-    /// PR-detection scan source (todo #339): `thread/read` never returns
-    /// `commandExecution` items on codex-cli 0.147.0, so `load_history`'s
-    /// output has nothing for the PR scan to see. Read the rollout JSONL
-    /// instead — offline, no app-server spawn — and fall back to
-    /// `load_history` only if there is no registry row or no rollout items.
-    fn load_scan_records(&self) -> BoxFuture<'_, Result<Vec<ChatMessage>, AdapterError>> {
-        Box::pin(async move {
-            let Some(thread_id) = self.resume_thread_id.clone() else {
-                return Ok(Vec::new());
-            };
-            let deps = self
-                .scan_deps
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .clone();
-            match rollout_scan_records(&thread_id, deps.as_ref()).await {
-                Some(records) => Ok(records),
-                None => {
-                    tracing::debug!(
-                        module = "codex:session",
-                        thread_id,
-                        "no rollout for PR scan; falling back to thread/read"
-                    );
-                    self.load_history().await
-                }
-            }
-        })
-    }
-
-    fn extract_plan_files(&self) -> BoxFuture<'_, Result<Vec<String>, AdapterError>> {
-        Box::pin(async { Ok(Vec::new()) })
-    }
-
-    fn extract_skill_files(&self) -> BoxFuture<'_, Result<Vec<SkillFileEntry>, AdapterError>> {
-        Box::pin(async { Ok(Vec::new()) })
-    }
-
-    fn stop_background_task(
-        &self,
-        _task_id: String,
-    ) -> BoxFuture<'_, Result<StopBackgroundTaskResult, AdapterError>> {
-        Box::pin(async {
-            Ok(StopBackgroundTaskResult {
-                ok: false,
-                error: Some("unsupported".to_string()),
-            })
-        })
-    }
-}
-
-impl CodexSession {
-    fn build_handlers(&self, approval: Arc<ApprovalHandler>) -> JsonRpcHandlers {
-        let sink_n = self.sink.clone();
-        let state_n = self.state.clone();
-        let state_r = self.state.clone();
-        let state_x = self.state.clone();
-        let config_r = self.config.clone();
-        let client_slot_r = self.client.clone();
-        let approval_r = approval;
-        let sink_e = self.sink.clone();
-        let status_x = self.status.clone();
-        let client_slot_x = self.client.clone();
-        let sink_x = self.sink.clone();
-        let on_exit_cb = self.on_exit_callback.clone();
-
-        JsonRpcHandlers {
-            on_notification: Box::new(move |method, params| {
-                let s = sink_n.lock().unwrap_or_else(|e| e.into_inner()).clone();
-                handle_notification(
-                    &method,
-                    &params,
-                    &s,
-                    &mut state_n.lock().unwrap_or_else(|e| e.into_inner()),
-                );
-            }),
-            on_request: Box::new(move |method, params, id| {
-                let plan_mode = config_r.lock().unwrap_or_else(|e| e.into_inner()).plan_mode;
-                let current_turn_plan = state_r
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .current_turn_plan
-                    .clone();
-                approval_r.set_plan_context(PlanContext {
-                    plan_mode,
-                    current_turn_plan,
-                });
-                let cs = client_slot_r.clone();
-                approval_r.handle_request(
-                    &method,
-                    &params,
-                    id,
-                    Box::new(move |rpc_id, result| {
-                        if let Some(c) = cs.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
-                            c.respond(rpc_id, result);
-                        }
-                    }),
-                );
-            }),
-            on_error: Box::new(move |error| {
-                let s = sink_e.lock().unwrap_or_else(|e| e.into_inner()).clone();
-                s.on_error(AdapterError::Message(error));
-            }),
-            on_exit: Box::new(move |code| {
-                state_x
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .command_state
-                    .clear();
-                *status_x.lock().unwrap_or_else(|e| e.into_inner()) = AdapterProcessStatus::Stopped;
-                *client_slot_x.lock().unwrap_or_else(|e| e.into_inner()) = None;
-                let s = sink_x.lock().unwrap_or_else(|e| e.into_inner()).clone();
-                s.on_exit(code);
-                if let Some(cb) = on_exit_cb.lock().unwrap_or_else(|e| e.into_inner()).take() {
-                    cb();
-                }
-            }),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// The boot-resolved login-shell PATH must land in the spawned `codex`
-    /// app-server command's env (the Phase-5 blocker: packaged apps otherwise
-    /// ENOENT).
     #[test]
     fn app_server_command_carries_the_resolved_path() {
         let cmd = build_app_server_command("codex", None, "/opt/homebrew/bin:/usr/bin");
@@ -1052,10 +167,6 @@ mod tests {
             .map(|v| v.to_string_lossy().into_owned());
         assert_eq!(path.as_deref(), Some("/opt/homebrew/bin:/usr/bin"));
     }
-
-    /// Codex has no `auto` mode of its own; a chat carrying it (spawned on
-    /// Claude, then switched to a Codex step) must coerce to the same policy
-    /// as Interactive rather than falling through to the danger pair.
     #[test]
     fn permission_mode_policy_coerces_auto_to_interactive() {
         let interactive = ("on-request".to_string(), "workspace-write".to_string());
@@ -1068,20 +179,27 @@ mod tests {
     }
 }
 
-// PORT STATUS: src/plugins/builtin/codex/session.ts (445 lines)
-// confidence: medium
-// todos: 3
-// notes: AdapterSession impl. Concurrency per CONCURRENCY.tsv 95: state/client/
-// notes: approval/sink/config/status behind Arc<Mutex<..>> (session actor + the
-// notes: jsonrpc reader task share them); std Mutex guards are never held across an
-// notes: .await (cloned/dropped first). Handshake is a single 10s tokio timeout over
-// notes: initialize (covers the TS handshake-timer + the request). loadHistory
-// notes: spawns a temp app-server, reads the parent thread, then rollout-prefers /
-// notes: thread/read-falls-back for each `wait` child thread, matching the TS.
-// notes: get_context_files/extract_plan_files/extract_skill_files/stop_background_task
-// notes: stay stubs (TODO(port)) with identical TS behavior. set_codex_provider_tuning
-// notes: is an inherent method (no trait slot yet). PendingConfig has a manual
-// notes: Default (ExecutionMode has none). NullSink mirrors the TS nullSink.
-
 #[cfg(test)]
 mod command_metadata_tests;
+
+#[cfg(test)]
+mod presentation_exit_tests;
+
+#[path = "session_adapter.rs"]
+mod adapter;
+#[path = "session_history.rs"]
+mod history;
+#[path = "session_lifecycle.rs"]
+mod lifecycle;
+#[path = "session_prompt.rs"]
+mod prompt;
+#[path = "session_spawn.rs"]
+mod spawn;
+#[path = "session_thread.rs"]
+mod thread;
+use lifecycle::null_sink;
+#[cfg(test)]
+use spawn::build_app_server_command;
+pub(crate) use spawn::spawn_temp_app_server;
+#[cfg(test)]
+use thread::permission_mode_policy;

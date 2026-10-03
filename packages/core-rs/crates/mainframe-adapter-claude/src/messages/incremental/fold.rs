@@ -14,6 +14,7 @@ use super::group::FrozenTracker;
 use crate::messages::display_helpers::is_internal_user_message;
 use crate::messages::display_pipeline::convert_grouped_to_display;
 use crate::messages::message_grouping::{GroupedMessage, GroupingDecision, classify_message};
+use crate::messages::presentation_grouping;
 
 /// Re-derive one mergeable group's content fresh from `raw[raw_range]`,
 /// applying the global first-wins tool-id dedup against `frozen_tool_ids`.
@@ -30,9 +31,12 @@ pub(crate) fn fold_merge_group(
     Vec<String>,
 ) {
     let mut local_seen: HashSet<String> = HashSet::new();
-    let mut content: Vec<MessageContent> = Vec::new();
     let mut tool_results: HashMap<String, MessageContent> = HashMap::new();
     let mut base: Option<ChatMessage> = None;
+    // Indices (into the un-deduped merged content) the tool-id dedup keeps —
+    // the same list `group_messages`'s dedupe pass hands
+    // `presentation_grouping::retain` (todo #384).
+    let mut retained: Vec<usize> = Vec::new();
 
     for idx in raw_range {
         let msg = &raw[idx];
@@ -42,10 +46,23 @@ pub(crate) fn fold_merge_group(
         match classify_message(msg, true) {
             GroupingDecision::AttachResult => collect_tool_results(msg, &mut tool_results),
             GroupingDecision::Merge => {
-                if base.is_none() {
-                    base = Some(msg.clone());
+                let mut msg = msg.clone();
+                presentation_grouping::initialize(&mut msg);
+                let offset = base.as_ref().map_or(0, |b| b.content.len());
+                extend_deduped(
+                    &mut retained,
+                    offset,
+                    &msg.content,
+                    frozen_tool_ids,
+                    &mut local_seen,
+                );
+                match base.as_mut() {
+                    None => base = Some(msg),
+                    Some(prev) => {
+                        presentation_grouping::append(prev, &msg);
+                        prev.content.extend(msg.content);
+                    }
                 }
-                extend_deduped(&mut content, &msg.content, frozen_tool_ids, &mut local_seen);
             }
             GroupingDecision::DurationMarker(_) | GroupingDecision::NewGroup => {}
         }
@@ -54,7 +71,8 @@ pub(crate) fn fold_merge_group(
     let Some(mut base) = base else {
         return (None, Vec::new());
     };
-    base.content = content;
+    keep_indices(&mut base.content, &retained);
+    presentation_grouping::retain(&mut base, &retained);
     base.metadata = merge_duration(base.metadata.take(), duration_override);
     let grouped = GroupedMessage { base, tool_results };
     let display = convert_grouped_to_display(&grouped, categories);
@@ -69,21 +87,39 @@ fn collect_tool_results(msg: &ChatMessage, tool_results: &mut HashMap<String, Me
     }
 }
 
+/// The tool-id dedup for one merged message, recorded as kept indices: a
+/// tool_use block whose id a frozen group or an earlier block of this group
+/// already claimed is dropped (global first-wins, as in `group_messages`).
+/// `offset` is the merged content length before `incoming`, so `retained`
+/// indexes the un-deduped merged content that presentation source paths
+/// address.
 fn extend_deduped(
-    content: &mut Vec<MessageContent>,
+    retained: &mut Vec<usize>,
+    offset: usize,
     incoming: &[MessageContent],
     frozen: &FrozenTracker<'_>,
     local_seen: &mut HashSet<String>,
 ) {
-    for block in incoming {
+    for (index, block) in incoming.iter().enumerate() {
         if let MessageContent::Node(MessageContentNode::ToolUse { id, .. }) = block {
             if frozen.contains(id) || local_seen.contains(id) {
                 continue;
             }
             local_seen.insert(id.clone());
         }
-        content.push(block.clone());
+        retained.push(offset + index);
     }
+}
+
+/// Keep only `content[retained[..]]`, in order (`retained` is ascending).
+fn keep_indices(content: &mut Vec<MessageContent>, retained: &[usize]) {
+    let mut keep = retained.iter().copied().peekable();
+    let mut index = 0;
+    content.retain(|_| {
+        let kept = keep.next_if_eq(&index).is_some();
+        index += 1;
+        kept
+    });
 }
 
 /// `meta.insert("turnDurationMs", duration)` onto whatever metadata the
@@ -111,8 +147,10 @@ pub(crate) fn convert_single_message(
     msg: &ChatMessage,
     categories: Option<&ToolCategories>,
 ) -> Option<mainframe_types::display::DisplayMessage> {
+    let mut base = msg.clone();
+    presentation_grouping::initialize(&mut base);
     let grouped = GroupedMessage {
-        base: msg.clone(),
+        base,
         tool_results: HashMap::new(),
     };
     convert_grouped_to_display(&grouped, categories)

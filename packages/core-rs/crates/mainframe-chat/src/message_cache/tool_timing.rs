@@ -77,7 +77,10 @@ impl MessageCache {
         };
         let now = (self.now_epoch_ms)().min(MAX_EPOCH_MS);
         let changed = store.finish_session(session, now);
-        let timing_changes = self.cache.get_mut(chat_id).map(|messages| store.apply(messages));
+        let timing_changes = self
+            .cache
+            .get_mut(chat_id)
+            .map(|messages| store.apply(messages));
         if let Some(timing_changes) = timing_changes {
             for (id, timing) in timing_changes {
                 self.record_change(chat_id, mainframe_display::RawChange::Timing(id, timing));

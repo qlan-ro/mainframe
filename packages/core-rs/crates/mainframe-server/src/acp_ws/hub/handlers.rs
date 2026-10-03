@@ -266,7 +266,10 @@ fn encode_changes(delta: &DisplayDelta, streaming: Option<StreamingLeafKind>) ->
 /// the `OnceLock` freezes whatever the first call observed — but nothing
 /// here ever calls it outside that window regardless (see `StreamOp::Revision`'s
 /// doc).
-fn lazy_full_encoding(delta: &DisplayDelta, streaming: Option<StreamingLeafKind>) -> LazyFullEncoding {
+fn lazy_full_encoding(
+    delta: &DisplayDelta,
+    streaming: Option<StreamingLeafKind>,
+) -> LazyFullEncoding {
     let snapshot = delta.snapshot.clone();
     let cell: Arc<OnceLock<Vec<Vec<EncodedItem>>>> = Arc::new(OnceLock::new());
     Arc::new(move || {

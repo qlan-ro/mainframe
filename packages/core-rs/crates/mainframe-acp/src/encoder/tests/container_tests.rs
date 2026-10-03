@@ -22,7 +22,10 @@ fn flattened_containers_equal_encode_revision_without_streaming() {
         ),
     ];
 
-    let flattened: Vec<EncodedItem> = encode_containers(&messages, None).into_iter().flatten().collect();
+    let flattened: Vec<EncodedItem> = encode_containers(&messages, None)
+        .into_iter()
+        .flatten()
+        .collect();
     assert_eq!(flattened, encode_revision(&messages, None));
 }
 
@@ -62,7 +65,10 @@ fn queued_containers_encode_to_an_empty_list() {
     let per_container = encode_containers(&messages, None);
     assert_eq!(per_container.len(), 3);
     assert!(!per_container[0].is_empty());
-    assert!(per_container[1].is_empty(), "the queued container encodes nothing");
+    assert!(
+        per_container[1].is_empty(),
+        "the queued container encodes nothing"
+    );
     assert!(!per_container[2].is_empty());
 
     let flattened: Vec<EncodedItem> = per_container.into_iter().flatten().collect();

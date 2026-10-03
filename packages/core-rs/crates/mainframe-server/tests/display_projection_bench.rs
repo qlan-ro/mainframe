@@ -47,7 +47,10 @@ unsafe impl GlobalAlloc for CountingAllocator {
 static GLOBAL: CountingAllocator = CountingAllocator;
 
 fn alloc_snapshot() -> (u64, u64) {
-    (ALLOC_COUNT.load(Ordering::Relaxed), ALLOC_BYTES.load(Ordering::Relaxed))
+    (
+        ALLOC_COUNT.load(Ordering::Relaxed),
+        ALLOC_BYTES.load(Ordering::Relaxed),
+    )
 }
 
 const CHAT_ID: &str = "chat-1";
@@ -64,36 +67,45 @@ fn msg(id: &str, kind: ChatMessageType, content: Vec<MessageContent>) -> ChatMes
 }
 
 fn text_msg(id: &str, kind: ChatMessageType, text: &str) -> ChatMessage {
-    msg(id, kind, vec![MessageContent::Leaf(LeafContent::Text {
-        text: text.to_string(),
-        parent_tool_use_id: None,
-    })])
+    msg(
+        id,
+        kind,
+        vec![MessageContent::Leaf(LeafContent::Text {
+            text: text.to_string(),
+            parent_tool_use_id: None,
+        })],
+    )
 }
 
 fn assistant_with_tool_use(id: &str, text: &str, tool_id: &str) -> ChatMessage {
     let mut m = text_msg(id, ChatMessageType::Assistant, text);
-    m.content.push(MessageContent::Node(MessageContentNode::ToolUse {
-        timing: None,
-        command_execution: None,
-        id: tool_id.to_string(),
-        name: "Bash".to_string(),
-        input: HashMap::new(),
-        parent_tool_use_id: None,
-    }));
+    m.content
+        .push(MessageContent::Node(MessageContentNode::ToolUse {
+            timing: None,
+            command_execution: None,
+            id: tool_id.to_string(),
+            name: "Bash".to_string(),
+            input: HashMap::new(),
+            parent_tool_use_id: None,
+        }));
     m
 }
 
 fn tool_result_msg(id: &str, tool_id: &str) -> ChatMessage {
-    msg(id, ChatMessageType::ToolResult, vec![MessageContent::Node(MessageContentNode::ToolResult {
-        tool_use_id: tool_id.to_string(),
-        content: "done".to_string(),
-        is_error: false,
-        structured_patch: None,
-        original_file: None,
-        modified_file: None,
-        images: Vec::new(),
-        parent_tool_use_id: None,
-    })])
+    msg(
+        id,
+        ChatMessageType::ToolResult,
+        vec![MessageContent::Node(MessageContentNode::ToolResult {
+            tool_use_id: tool_id.to_string(),
+            content: "done".to_string(),
+            is_error: false,
+            structured_patch: None,
+            original_file: None,
+            modified_file: None,
+            images: Vec::new(),
+            parent_tool_use_id: None,
+        })],
+    )
 }
 
 fn settled_messages(count: usize) -> Vec<ChatMessage> {
@@ -138,7 +150,11 @@ fn old_step(
     log: &mut RevisionLog,
 ) {
     let combined: Vec<ChatMessage> = match overlay {
-        Some(o) => raw.iter().cloned().chain(std::iter::once(o.clone())).collect(),
+        Some(o) => raw
+            .iter()
+            .cloned()
+            .chain(std::iter::once(o.clone()))
+            .collect(),
         None => raw.to_vec(),
     };
     let messages = prepare_messages_for_client(&combined, None);
@@ -159,7 +175,9 @@ fn run_old(settled_len: usize) -> Vec<Sample> {
     let mut raw = settled;
     let mut samples = Vec::new();
     let mut step = |raw: &[ChatMessage], overlay: Option<&ChatMessage>, streaming| {
-        samples.push(measure(|| old_step(raw, overlay, streaming, &mut state, &mut log)));
+        samples.push(measure(|| {
+            old_step(raw, overlay, streaming, &mut state, &mut log)
+        }));
     };
 
     raw.push(text_msg("u-act", ChatMessageType::User, "start the task"));
@@ -168,7 +186,11 @@ fn run_old(settled_len: usize) -> Vec<Sample> {
         let overlay = text_msg("a-act", ChatMessageType::Assistant, partial);
         step(&raw, Some(&overlay), Some(StreamingLeafKind::Text));
     }
-    raw.push(assistant_with_tool_use("a-act", "I'll check the file", "tu-act"));
+    raw.push(assistant_with_tool_use(
+        "a-act",
+        "I'll check the file",
+        "tu-act",
+    ));
     step(&raw, None, None);
     raw.push(tool_result_msg("tr-act", "tu-act"));
     step(&raw, None, None);
@@ -223,10 +245,15 @@ fn run_new(settled_len: usize) -> Vec<Sample> {
     let mut step = |cache: &mut MessageCache,
                     overlay: Option<&ChatMessage>,
                     streaming: Option<StreamingLeafKind>| {
-        samples.push(measure(|| new_step(cache, overlay, streaming, &mut state, &mut log)));
+        samples.push(measure(|| {
+            new_step(cache, overlay, streaming, &mut state, &mut log)
+        }));
     };
 
-    cache.append(CHAT_ID, text_msg("u-act", ChatMessageType::User, "start the task"));
+    cache.append(
+        CHAT_ID,
+        text_msg("u-act", ChatMessageType::User, "start the task"),
+    );
     step(&mut cache, None, None);
     for partial in ["I'll", "I'll check", "I'll check the file"] {
         let overlay = text_msg("a-act", ChatMessageType::Assistant, partial);
@@ -282,7 +309,11 @@ fn print_conditions(iterations: usize) {
         "conditions: os={} arch={} profile={} iterations={}",
         std::env::consts::OS,
         std::env::consts::ARCH,
-        if cfg!(debug_assertions) { "debug" } else { "release" },
+        if cfg!(debug_assertions) {
+            "debug"
+        } else {
+            "release"
+        },
         iterations
     );
 }

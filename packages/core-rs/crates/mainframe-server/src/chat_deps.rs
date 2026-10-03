@@ -1622,7 +1622,10 @@ mod scan_loaded_history_tests {
             overlay: None,
             categories: None,
         });
-        assert!(seed.full, "the first call has no prior state, so it is a full rebuild");
+        assert!(
+            seed.full,
+            "the first call has no prior state, so it is a full rebuild"
+        );
 
         let m2 = text_msg("m2", ChatMessageType::Assistant, "hi there");
         let mut changes = RawChanges::new();

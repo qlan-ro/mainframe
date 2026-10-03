@@ -13,7 +13,8 @@ use mainframe_types::chat::ChatMessage;
 use mainframe_types::display::ToolCategories;
 
 use super::group::{
-    FrozenTracker, Group, group_at_raw_index, offset_groups, rebuild_display_owner, rebuild_tool_owner,
+    FrozenTracker, Group, group_at_raw_index, offset_groups, rebuild_display_owner,
+    rebuild_tool_owner,
 };
 use super::ordinals::{renumber_from, sync_snapshot, total_len};
 use super::patches::{NestedPatchOutcome, apply_timing_patch, try_patch_nested};
@@ -108,7 +109,11 @@ impl IncrementalProjector {
         self.initialized = true;
 
         let len = total_len(&self.groups);
-        let materialized: Vec<_> = self.groups.iter().filter_map(|g| g.display.clone()).collect();
+        let materialized: Vec<_> = self
+            .groups
+            .iter()
+            .filter_map(|g| g.display.clone())
+            .collect();
         self.snapshot.replace(materialized);
         self.stats = ProjectionStats {
             raw_folded: input.raw.len(),
@@ -138,9 +143,17 @@ impl IncrementalProjector {
 
         let mut suffix_rebuilds = 0usize;
         let mut patched: Vec<usize> = Vec::new();
-        let r = self.apply_local_patches(raw, entries, categories, r, &mut patched, &mut suffix_rebuilds);
+        let r = self.apply_local_patches(
+            raw,
+            entries,
+            categories,
+            r,
+            &mut patched,
+            &mut suffix_rebuilds,
+        );
 
-        let (groups_rebuilt, raw_folded) = self.refold_and_postprocess(raw, overlay, categories, r, &mut patched);
+        let (groups_rebuilt, raw_folded) =
+            self.refold_and_postprocess(raw, overlay, categories, r, &mut patched);
 
         self.categories = categories.cloned();
         self.had_overlay = overlay_now;
@@ -247,7 +260,14 @@ impl IncrementalProjector {
                     if gi < r {
                         let old_ids = self.groups[gi].claimed_tool_ids.clone();
                         let scope = scope_before(&self.scope_before, gi);
-                        match try_patch_nested(&mut self.groups, raw, *idx, categories, &self.tool_owner, scope) {
+                        match try_patch_nested(
+                            &mut self.groups,
+                            raw,
+                            *idx,
+                            categories,
+                            &self.tool_owner,
+                            scope,
+                        ) {
                             NestedPatchOutcome::Patched(p) => {
                                 for id in &old_ids {
                                     self.tool_owner.remove(id);
@@ -286,4 +306,3 @@ impl IncrementalProjector {
             .collect()
     }
 }
-

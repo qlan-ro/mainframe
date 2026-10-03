@@ -33,7 +33,10 @@ impl RecordingSurface {
 
 impl ChatSurface for RecordingSurface {
     fn on_chat_surface_event(&self, event: ChatSurfaceEvent) {
-        if let ChatSurfaceEvent::DisplayRevision { delta, streaming, .. } = event {
+        if let ChatSurfaceEvent::DisplayRevision {
+            delta, streaming, ..
+        } = event
+        {
             self.revisions
                 .lock()
                 .unwrap()

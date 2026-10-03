@@ -15,8 +15,8 @@ use tokio::sync::mpsc;
 use tracing::warn;
 
 mod slots;
-pub use slots::{PendingGate, SessionLockWait};
 pub(super) use slots::{LazyFullEncoding, SessionSlot, StreamOp};
+pub use slots::{PendingGate, SessionLockWait};
 
 pub struct FacadeConnection {
     pub profile: String,

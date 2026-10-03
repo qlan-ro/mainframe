@@ -8,7 +8,7 @@ it('merges adjacent reads and opens original native details in order', () => {
     fixtureTool({ toolCallId: 'read-b', args: { file_path: '/src/b.ts' }, result: 'const b = 2;' }),
   ]);
   render(<CompactFixture messages={[message]} rootId="merge" />);
-  const toggle = screen.getByRole('button', { name: 'Read 2 files in /src' });
+  const toggle = screen.getByRole('button', { name: 'Read files' });
   expect(toggle).toHaveAttribute('aria-expanded', 'false');
   expect(screen.queryByTestId('read-card-root')).toBeNull();
   fireEvent.click(toggle);
@@ -16,7 +16,7 @@ it('merges adjacent reads and opens original native details in order', () => {
   expect(screen.getAllByTestId('read-card-code-preview')[0]).toHaveTextContent('const a = 1;');
   expect(screen.getAllByTestId('read-card-code-preview')[1]).toHaveTextContent('const b = 2;');
 });
-it('retains prose and reasoning boundaries without mounting hidden output', () => {
+it('retains prose boundaries and includes reasoning inside mixed details without mounting hidden output', () => {
   render(
     <CompactFixture
       rootId="boundaries"
@@ -31,12 +31,12 @@ it('retains prose and reasoning boundaries without mounting hidden output', () =
       ]}
     />,
   );
-  expect(screen.getAllByRole('button', { name: 'Read /src/a.ts' })).toHaveLength(2);
-  expect(screen.getByRole('button', { name: 'Thought' })).toHaveAttribute('aria-expanded', 'false');
+  expect(screen.getAllByRole('button', { name: 'Read files' })).toHaveLength(1);
+  expect(screen.getByRole('button', { name: 'Read files' })).toHaveAttribute('aria-expanded', 'false');
   expect(screen.queryByText('A private thought')).toBeNull();
   expect(screen.getByText('Before tools')).toBeInTheDocument();
   expect(screen.getByText('After tools')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Thought' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Read files' }));
   expect(screen.getByText('A private thought')).toBeInTheDocument();
 });
 it('keeps failed rows collapsed and pending permission status explicit', () => {
@@ -87,7 +87,7 @@ it('keeps images and prose in their original positions between activity groups',
   const before = screen.getByText('Before');
   const after = screen.getByText('After');
   const image = container.querySelector('img')!;
-  const tools = screen.getAllByRole('button', { name: 'Read /src/a.ts' });
+  const tools = screen.getAllByRole('button', { name: 'Read files' });
   expect(before.compareDocumentPosition(tools[0]!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   expect(tools[0]!.compareDocumentPosition(image)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   expect(image.compareDocumentPosition(tools[1]!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);

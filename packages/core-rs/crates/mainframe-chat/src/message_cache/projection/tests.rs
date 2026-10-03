@@ -7,7 +7,9 @@
 
 use std::sync::{Arc, Mutex};
 
-use mainframe_display::{DisplayDelta, DisplayProjector, DisplaySnapshot, ProjectionStats, RawChange};
+use mainframe_display::{
+    DisplayDelta, DisplayProjector, DisplaySnapshot, ProjectionStats, RawChange,
+};
 use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent, MessageContentNode};
 use mainframe_types::content::LeafContent;
 
@@ -110,7 +112,10 @@ fn append_records_an_appended_entry() {
         panic!("the slot already exists; make_projector must not run")
     });
     assert!(!delta.full);
-    assert_eq!(recorder.calls(), vec![Vec::new(), vec![RawChange::Appended]]);
+    assert_eq!(
+        recorder.calls(),
+        vec![Vec::new(), vec![RawChange::Appended]]
+    );
 }
 
 #[test]

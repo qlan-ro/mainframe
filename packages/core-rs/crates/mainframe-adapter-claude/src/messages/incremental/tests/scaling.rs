@@ -3,11 +3,15 @@
 //! 1,000, or 10,000 settled messages. This is the deterministic proxy for
 //! "a partial's cost is independent of settled history length."
 
-use mainframe_display::{DisplayProjector, ProjectionInput, ProjectionStats, RawChange, RawChanges};
+use mainframe_display::{
+    DisplayProjector, ProjectionInput, ProjectionStats, RawChange, RawChanges,
+};
 use mainframe_types::chat::ChatMessage;
 use mainframe_types::tool_call_timing::ToolCallTiming;
 
-use super::harness::{assistant, set_tool_use_timing, text, tool_result, tool_result_msg, tool_use, user};
+use super::harness::{
+    assistant, set_tool_use_timing, text, tool_result, tool_result_msg, tool_use, user,
+};
 use crate::messages::incremental::IncrementalProjector;
 
 fn settled_history(count: usize) -> Vec<ChatMessage> {
@@ -28,7 +32,11 @@ fn appended() -> RawChanges {
     c
 }
 
-fn project(projector: &mut IncrementalProjector, raw: &[ChatMessage], changes: RawChanges) -> ProjectionStats {
+fn project(
+    projector: &mut IncrementalProjector,
+    raw: &[ChatMessage],
+    changes: RawChanges,
+) -> ProjectionStats {
     projector
         .project(ProjectionInput {
             raw,
@@ -57,7 +65,10 @@ fn run_active_turn(settled_len: usize) -> Vec<ProjectionStats> {
     raw[settled_len].content.push(tool_use("tu_act", "Bash"));
     stats.push(project(&mut projector, &raw, appended()));
 
-    raw.push(tool_result_msg("tr_act", vec![tool_result("tu_act", "done")]));
+    raw.push(tool_result_msg(
+        "tr_act",
+        vec![tool_result("tu_act", "done")],
+    ));
     stats.push(project(&mut projector, &raw, appended()));
 
     let timing = ToolCallTiming {
@@ -79,8 +90,14 @@ fn partial_stats_are_identical_regardless_of_settled_history_length() {
     let large = run_active_turn(10_000);
 
     for i in 0..small.len() {
-        assert_eq!(small[i].raw_folded, medium[i].raw_folded, "step {i} raw_folded");
-        assert_eq!(small[i].raw_folded, large[i].raw_folded, "step {i} raw_folded");
+        assert_eq!(
+            small[i].raw_folded, medium[i].raw_folded,
+            "step {i} raw_folded"
+        );
+        assert_eq!(
+            small[i].raw_folded, large[i].raw_folded,
+            "step {i} raw_folded"
+        );
         assert_eq!(
             small[i].groups_rebuilt, medium[i].groups_rebuilt,
             "step {i} groups_rebuilt"

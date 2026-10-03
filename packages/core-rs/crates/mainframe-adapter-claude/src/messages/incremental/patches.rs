@@ -95,7 +95,12 @@ pub(crate) fn try_patch_nested(
 /// group: its own raw range for timing, and the scope entering it (passed
 /// in by the caller from the `scope_before` checkpoint) for subject
 /// backfill.
-fn reapply_post_processing(groups: &mut [Group], raw: &[ChatMessage], g: usize, mut scope: SubjectScope) {
+fn reapply_post_processing(
+    groups: &mut [Group],
+    raw: &[ChatMessage],
+    g: usize,
+    mut scope: SubjectScope,
+) {
     let Some(display) = groups[g].display.as_mut() else {
         return;
     };
@@ -113,7 +118,10 @@ fn reapply_post_processing(groups: &mut [Group], raw: &[ChatMessage], g: usize, 
 /// The ids of top-level `TaskCreate` entries a container registers — a
 /// change here could shift a later group's subject backfill, so it forces a
 /// fallback rather than a silent in-place patch.
-fn task_registrations_changed(before: Option<&DisplayMessage>, after: Option<&DisplayMessage>) -> bool {
+fn task_registrations_changed(
+    before: Option<&DisplayMessage>,
+    after: Option<&DisplayMessage>,
+) -> bool {
     task_create_ids(before) != task_create_ids(after)
 }
 

@@ -128,7 +128,14 @@ impl FacadeHub {
         full: LazyFullEncoding,
         cursor: Option<RevisionCursor>,
     ) {
-        self.apply_stream_op(chat_id, StreamOp::Revision { delta, full, cursor });
+        self.apply_stream_op(
+            chat_id,
+            StreamOp::Revision {
+                delta,
+                full,
+                cursor,
+            },
+        );
     }
 
     /// Serialize one out-of-band notification and fan it out. Serializing a
@@ -229,7 +236,12 @@ pub(super) fn deliver_op(
 /// seeded stream), and the cursor is the later, higher one —
 /// `RevisionLog`'s monotonic revision counter guarantees that ordering.
 fn buffer_op(pending: &mut Vec<StreamOp>, op: StreamOp) {
-    let StreamOp::Revision { delta, full, cursor } = op else {
+    let StreamOp::Revision {
+        delta,
+        full,
+        cursor,
+    } = op
+    else {
         pending.push(op);
         return;
     };
@@ -237,7 +249,11 @@ fn buffer_op(pending: &mut Vec<StreamOp>, op: StreamOp) {
         .iter()
         .position(|held| matches!(held, StreamOp::Revision { .. }))
     else {
-        pending.push(StreamOp::Revision { delta, full, cursor });
+        pending.push(StreamOp::Revision {
+            delta,
+            full,
+            cursor,
+        });
         return;
     };
     let StreamOp::Revision { delta: base, .. } = &pending[index] else {
@@ -268,9 +284,11 @@ pub(super) fn run_op(
     opted_in: bool,
 ) -> Vec<ThrottledFrame> {
     match op {
-        StreamOp::Revision { delta, full, cursor } => {
-            stream.on_revision_delta(&delta, || full(), now, cursor.filter(|_| opted_in))
-        }
+        StreamOp::Revision {
+            delta,
+            full,
+            cursor,
+        } => stream.on_revision_delta(&delta, || full(), now, cursor.filter(|_| opted_in)),
         StreamOp::Raw { payload, .. } => stream.push_raw(payload, now),
         StreamOp::TurnStarted => stream.on_turn_started(now),
         StreamOp::TurnFinished(reason) => stream.on_turn_finished(reason, now),

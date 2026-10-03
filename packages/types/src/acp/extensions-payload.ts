@@ -1,3 +1,4 @@
+import { PresentationSourcesSchema } from '../transcript-presentation.js';
 /**
  * Mainframe's `_mainframe.dev` extension namespace (todo #350) — payloads
  * that ride an in-band message/turn `_meta["_mainframe.dev"]` (as opposed to
@@ -124,6 +125,7 @@ export const ItemMetaSchema = z
      * streaming status from this, never from position.
      */
     streaming: z.boolean().optional(),
+    presentationSources: PresentationSourcesSchema.optional().catch(undefined),
   })
   .loose();
 export type ItemMeta = z.infer<typeof ItemMetaSchema>;

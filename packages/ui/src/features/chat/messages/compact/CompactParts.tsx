@@ -7,9 +7,9 @@ import { ZoomableImage } from '../../parts/ZoomableImage';
 import { useIsNestedTranscript } from '../nested-transcript-context';
 
 export function compactGroupBy(part: PartState): readonly `group-${string}`[] {
-  if (part.type === 'reasoning') return ['group-compact-reasoning'];
-  if (part.type === 'tool-call' && !isFullCard(part.toolName)) return ['group-compact-tools'];
-  if (part.type === 'text' && !part.text.trim()) return ['group-compact-tools'];
+  if (part.type === 'reasoning') return ['group-compact-activity'];
+  if (part.type === 'tool-call' && !isFullCard(part.toolName)) return ['group-compact-activity'];
+  if (part.type === 'text' && !part.text.trim()) return ['group-compact-activity'];
   return [];
 }
 export function CompactParts() {

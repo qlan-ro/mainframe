@@ -26,16 +26,29 @@ pub struct PartialOverlay {
     /// the group it opens) does not drift between partials (spec Decision
     /// 39: "the overlay's timestamp is fixed at its first partial").
     pub started_at: String,
+    pub presentation: Option<mainframe_types::transcript_presentation::TranscriptPresentation>,
 }
 
 fn overlay_message(chat_id: &str, overlay: &PartialOverlay) -> ChatMessage {
+    use mainframe_types::transcript_presentation::{PRESENTATION_CONTEXT_KEY, PresentationState};
+    let metadata = overlay.presentation.as_ref().and_then(|p| {
+        serde_json::to_value(p).ok().map(|value| {
+            HashMap::from([
+                (PRESENTATION_CONTEXT_KEY.into(), value),
+                (
+                    "presentationStreaming".into(),
+                    serde_json::Value::Bool(p.state == PresentationState::Running),
+                ),
+            ])
+        })
+    });
     ChatMessage {
         id: overlay.message_id.clone(),
         chat_id: chat_id.to_string(),
         r#type: ChatMessageType::Assistant,
         content: overlay.content.clone(),
         timestamp: overlay.started_at.clone(),
-        metadata: None,
+        metadata,
     }
 }
 
@@ -58,6 +71,17 @@ impl PartialOverlays {
         message_id: &str,
         content: Vec<MessageContent>,
     ) {
+        self.insert_with_presentation(chat_id, session_id, message_id, content, None);
+    }
+
+    pub fn insert_with_presentation(
+        &self,
+        chat_id: &str,
+        session_id: &str,
+        message_id: &str,
+        content: Vec<MessageContent>,
+        presentation: Option<mainframe_types::transcript_presentation::TranscriptPresentation>,
+    ) {
         let mut overlays = self.0.lock().unwrap_or_else(|e| e.into_inner());
         let key = (chat_id.to_string(), session_id.to_string());
         let started_at = match overlays.get(&key) {
@@ -70,8 +94,34 @@ impl PartialOverlays {
                 message_id: message_id.to_string(),
                 content,
                 started_at,
+                presentation,
             },
         );
+    }
+
+    pub fn update_presentation(
+        &self,
+        chat_id: &str,
+        session_id: &str,
+        update: &mainframe_types::transcript_presentation::PresentationUpdate,
+    ) {
+        let mut overlays = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(overlay) = overlays.get_mut(&(chat_id.to_string(), session_id.to_string()))
+            && update
+                .source_message_ids
+                .as_ref()
+                .is_none_or(|ids| ids.contains(&overlay.message_id))
+            && let Some(current) = overlay.presentation.as_mut()
+        {
+            let eligible = current.same_turn(&update.presentation)
+                && current.state
+                    != mainframe_types::transcript_presentation::PresentationState::Invalid;
+            super::presentation::apply_update(current, &update.presentation);
+            if eligible && update.source_message_ids.is_some() {
+                current.phase = update.presentation.phase;
+                current.final_eligible = update.presentation.final_eligible;
+            }
+        }
     }
 
     /// Remove `(chat_id, session_id)`'s overlay; reports whether one was

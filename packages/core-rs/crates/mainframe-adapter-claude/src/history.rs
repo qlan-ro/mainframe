@@ -1,10 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/history.ts`.
-//!
-//! Reads Claude's own JSONL transcripts (under `~/.claude/projects/<encoded>/`)
-//! to reconstruct a chat's message history for resume, including subagent
-//! (task_group) inlining. Also extracts plan- and skill-file paths from a
-//! session's transcripts.
-
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
@@ -53,113 +46,6 @@ impl DiscoveredFiles {
     }
 }
 
-/// Discovers a session's primary transcript plus its sidechain/subagent files.
-///
-/// The primary file resolves through `locate_claude_transcript`: the stored
-/// `session_file_path` first (it can survive a worktree relocation the derived
-/// path misses), then the path derived from `project_path`. Sidechain and
-/// subagent files are then scanned next to whichever file that resolved to,
-/// not next to the always-derived project directory — a relocated transcript
-/// carries its sidechains with it.
-pub async fn discover_session_jsonl_files(
-    session_id: &str,
-    project_path: &str,
-    session_file_path: Option<&str>,
-) -> DiscoveredFiles {
-    let SessionJsonlPath {
-        jsonl_path: derived_jsonl_path,
-        project_dir: derived_project_dir,
-    } = get_session_jsonl_path(session_id, project_path);
-
-    let jsonl_path =
-        match locate_claude_transcript(session_id, project_path, session_file_path).await {
-            Some(TranscriptLocation::Present(path)) => path,
-            _ => return DiscoveredFiles::missing(derived_jsonl_path),
-        };
-    let project_dir = Path::new(&jsonl_path)
-        .parent()
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or(derived_project_dir);
-    discover_alongside(session_id, jsonl_path, &project_dir).await
-}
-
-/// `discover_session_jsonl_files`, generalized to take the project directory
-/// directly (todo #343 Group 2): a fork's history reads from its snapshot
-/// directory instead, which is not a `project_path` to re-derive — it already
-/// IS the directory.
-pub async fn discover_session_jsonl_files_in_dir(
-    session_id: &str,
-    project_dir: &str,
-) -> DiscoveredFiles {
-    let jsonl_path = Path::new(project_dir)
-        .join(format!("{session_id}.jsonl"))
-        .to_string_lossy()
-        .to_string();
-    if tokio::fs::metadata(&jsonl_path).await.is_err() {
-        return DiscoveredFiles::missing(jsonl_path);
-    }
-    discover_alongside(session_id, jsonl_path, project_dir).await
-}
-
-/// Collects an existing primary transcript plus the sidechain and subagent
-/// files that sit next to it in `project_dir`.
-async fn discover_alongside(
-    session_id: &str,
-    jsonl_path: String,
-    project_dir: &str,
-) -> DiscoveredFiles {
-    let mut jsonl_files = vec![jsonl_path.clone()];
-    let mut subagent_files: HashSet<String> = HashSet::new();
-
-    // Scan sibling .jsonl files (sidechains) with matching sessionId.
-    let self_name = format!("{session_id}.jsonl");
-    if let Ok(mut entries) = tokio::fs::read_dir(project_dir).await {
-        while let Ok(Some(entry)) = entries.next_entry().await {
-            let name = entry.file_name().to_string_lossy().to_string();
-            if !name.ends_with(".jsonl") || name == self_name {
-                continue;
-            }
-            let file_path = Path::new(project_dir)
-                .join(&name)
-                .to_string_lossy()
-                .to_string();
-            if let Some(mut lines) = open_lines(&file_path).await {
-                while let Ok(Some(line)) = lines.next_line().await {
-                    if line.trim().is_empty() {
-                        continue;
-                    }
-                    if let Ok(first) = serde_json::from_str::<Value>(&line)
-                        && first.get("sessionId").and_then(Value::as_str) == Some(session_id)
-                    {
-                        jsonl_files.push(file_path.clone());
-                    }
-                    break; // only the first non-empty line
-                }
-            }
-        }
-    }
-
-    // Scan subagent JSONL files.
-    let subagent_dir = Path::new(project_dir).join(session_id).join("subagents");
-    if let Ok(mut sub_entries) = tokio::fs::read_dir(&subagent_dir).await {
-        while let Ok(Some(entry)) = sub_entries.next_entry().await {
-            let name = entry.file_name().to_string_lossy().to_string();
-            if !name.ends_with(".jsonl") {
-                continue;
-            }
-            let file_path = subagent_dir.join(&name).to_string_lossy().to_string();
-            jsonl_files.push(file_path.clone());
-            subagent_files.insert(file_path);
-        }
-    }
-
-    DiscoveredFiles {
-        primary_path: jsonl_path,
-        all_files: jsonl_files,
-        subagent_files,
-    }
-}
-
 pub async fn load_history(
     session_id: &str,
     project_path: &str,
@@ -169,8 +55,6 @@ pub async fn load_history(
         discover_session_jsonl_files(session_id, project_path, session_file_path).await;
     load_discovered_history(session_id, &discovered).await
 }
-
-/// `load_history` over a fork's pinned snapshot directory (todo #343).
 pub async fn load_history_in_dir(session_id: &str, project_dir: &str) -> Vec<ChatMessage> {
     let discovered = discover_session_jsonl_files_in_dir(session_id, project_dir).await;
     load_discovered_history(session_id, &discovered).await
@@ -185,22 +69,10 @@ async fn load_discovered_history(
     }
     let subagent_files = &discovered.subagent_files;
 
-    let mut messages: Vec<ChatMessage> = Vec::new();
-    let mut agent_tools: HashMap<String, Vec<MessageContent>> = HashMap::new();
-    let mut subagent_tool_results: HashMap<String, MessageContent> = HashMap::new();
-    let mut seen_uuids: HashSet<String> = HashSet::new();
-    // First-entry-per-API-message id claims (convert_history_entry doc).
-    let mut seen_api_message_ids: HashSet<String> = HashSet::new();
-    // CLI 2.1.118+ subagent JSONLs omit parentToolUseID; the link lives on the
-    // parent's tool_result via toolUseResult.agentId. Build that map while
-    // walking the parent file so subagent processing can resolve the parent id.
-    let mut agent_id_to_parent_tool_use_id: HashMap<String, String> = HashMap::new();
-
+    let mut load = HistoryLoad::default();
     for file in &discovered.all_files {
         let is_subagent_file = subagent_files.contains(file);
         let Some(mut lines) = open_lines(file).await else {
-            // TODO(port): TS lets a mid-read stream error reject loadHistory; the
-            // port skips an unreadable file (graceful) — files were just discovered.
             continue;
         };
         while let Ok(Some(line)) = lines.next_line().await {
@@ -213,497 +85,125 @@ async fn load_discovered_history(
                 Ok(v) => v,
                 Err(_) => continue, // skip malformed lines
             };
-
-            // isMeta user messages carrying skill content are written to JSONL
-            // only; synthesize a skill_loaded message before the isMeta filter.
-            if is_strict_true(entry.get("isMeta"))
-                && entry.get("type").and_then(Value::as_str) == Some("user")
-                && !is_subagent_file
-                && !is_strict_true(entry.get("isSidechain"))
-                && let Some(synthesized) =
-                    synthesize_skill_loaded_from_user_entry(&entry, session_id)
-            {
-                if !seen_uuids.contains(&synthesized.id) {
-                    seen_uuids.insert(synthesized.id.clone());
-                    messages.push(synthesized);
-                }
-                continue;
-            }
-
-            if is_strict_true(entry.get("isMeta")) {
-                continue;
-            }
-            if is_strict_true(entry.get("isCompactSummary"))
-                || is_strict_true(entry.get("isVisibleInTranscriptOnly"))
-            {
-                continue;
-            }
-
-            if is_subagent_file {
-                collect_subagent_tool_results(&entry, &mut subagent_tool_results);
-                collect_subagent_assistant_blocks(
-                    &entry,
-                    &mut agent_tools,
-                    Some(&agent_id_to_parent_tool_use_id),
-                );
-                continue;
-            }
-
-            if entry.get("type").and_then(Value::as_str) == Some("user") {
-                capture_agent_id_mapping(&entry, &mut agent_id_to_parent_tool_use_id);
-            }
-
-            if is_strict_true(entry.get("isSidechain")) {
-                continue;
-            }
-
-            if entry.get("type").and_then(Value::as_str) == Some("user")
-                && let Some(synthesized) =
-                    synthesize_unknown_command_from_user_entry(&entry, session_id)
-            {
-                for m in synthesized {
-                    if seen_uuids.contains(&m.id) {
-                        continue;
-                    }
-                    seen_uuids.insert(m.id.clone());
-                    messages.push(m);
-                }
-                continue;
-            }
-
-            if entry.get("type").and_then(Value::as_str) == Some("progress")
-                && entry
-                    .get("data")
-                    .and_then(|d| d.get("type"))
-                    .and_then(Value::as_str)
-                    == Some("agent_progress")
-            {
-                collect_agent_progress_tools(&entry, &mut agent_tools);
-                continue;
-            }
-
-            let msg = match convert_history_entry(&entry, session_id, &mut seen_api_message_ids) {
-                Some(m) => m,
-                None => continue,
-            };
-            if seen_uuids.contains(&msg.id) {
-                continue;
-            }
-            seen_uuids.insert(msg.id.clone());
-            messages.push(msg);
+            load.entry(&entry, session_id, is_subagent_file);
         }
     }
 
-    if !agent_tools.is_empty() {
-        inject_agent_children(&mut messages, &agent_tools);
-    }
-    if !subagent_tool_results.is_empty() {
-        attach_subagent_tool_results(&mut messages, &subagent_tool_results);
-    }
-
-    messages
+    load.finish()
 }
 
-pub async fn extract_plan_file_paths(
-    session_id: &str,
-    project_path: &str,
-    session_file_path: Option<&str>,
-) -> Vec<String> {
-    let discovered =
-        discover_session_jsonl_files(session_id, project_path, session_file_path).await;
-    let project_dir = get_session_jsonl_path(session_id, project_path).project_dir;
-    plan_file_paths_from(&discovered, &project_dir).await
-}
-
-/// `extract_plan_file_paths`, generalized to take the project directory
-/// directly (same rationale as `discover_session_jsonl_files_in_dir`): a
-/// fork's plan files resolve relative to its pinned snapshot directory, not a
-/// `project_path` to re-derive.
-pub async fn extract_plan_file_paths_in_dir(session_id: &str, project_dir: &str) -> Vec<String> {
-    let discovered = discover_session_jsonl_files_in_dir(session_id, project_dir).await;
-    plan_file_paths_from(&discovered, project_dir).await
-}
-
-async fn plan_file_paths_from(discovered: &DiscoveredFiles, project_dir: &str) -> Vec<String> {
-    if discovered.all_files.is_empty() {
-        return Vec::new();
-    }
-    let mut plan_files: Vec<String> = Vec::new();
-
-    for file in &discovered.all_files {
-        let Some(mut lines) = open_lines(file).await else {
-            continue;
-        };
-        while let Ok(Some(line)) = lines.next_line().await {
-            if line.trim().is_empty() {
-                continue;
-            }
-            let entry: Value = match serde_json::from_str(&line) {
-                Ok(v) => v,
-                Err(_) => continue,
-            };
-            if entry.get("type").and_then(Value::as_str) != Some("user") {
-                continue;
-            }
-            let tur = entry.get("toolUseResult");
-            let plan_is_string = tur
-                .and_then(|t| t.get("plan"))
-                .map(Value::is_string)
-                .unwrap_or(false);
-            let file_path = tur.and_then(|t| t.get("filePath")).and_then(Value::as_str);
-            if plan_is_string && let Some(fp) = file_path {
-                plan_files.push(path_resolve(project_dir, fp));
-            }
-        }
-    }
-
-    plan_files
-}
-
-pub async fn extract_skill_file_paths(
-    session_id: &str,
-    project_path: &str,
-    session_file_path: Option<&str>,
-) -> Vec<SkillFileEntry> {
-    let discovered =
-        discover_session_jsonl_files(session_id, project_path, session_file_path).await;
-    skill_file_paths_from(&discovered, project_path).await
-}
-
-/// `extract_skill_file_paths`, generalized to take the discovery directory
-/// directly. `project_path` (the real cwd) still resolves each skill's path —
-/// that lookup is unrelated to where the JSONL transcripts live, and a fork
-/// always shares its parent's cwd, so it never changes.
-pub async fn extract_skill_file_paths_in_dir(
-    session_id: &str,
-    project_dir: &str,
-    project_path: &str,
-) -> Vec<SkillFileEntry> {
-    let discovered = discover_session_jsonl_files_in_dir(session_id, project_dir).await;
-    skill_file_paths_from(&discovered, project_path).await
-}
-
-async fn skill_file_paths_from(
-    discovered: &DiscoveredFiles,
-    project_path: &str,
-) -> Vec<SkillFileEntry> {
-    if discovered.all_files.is_empty() {
-        return Vec::new();
-    }
-
-    let mut seen: HashSet<String> = HashSet::new();
-    let mut cache: HashMap<String, String> = HashMap::new();
-    let mut skill_files: Vec<SkillFileEntry> = Vec::new();
-
-    for file in &discovered.all_files {
-        let Some(mut lines) = open_lines(file).await else {
-            continue;
-        };
-        while let Ok(Some(line)) = lines.next_line().await {
-            if line.trim().is_empty() {
-                continue;
-            }
-            let entry: Value = match serde_json::from_str(&line) {
-                Ok(v) => v,
-                Err(_) => continue,
-            };
-            if entry.get("type").and_then(Value::as_str) != Some("assistant") {
-                continue;
-            }
-            let content = match entry
-                .get("message")
-                .and_then(|m| m.get("content"))
-                .and_then(Value::as_array)
-            {
-                Some(c) => c,
-                None => continue,
-            };
-            for block in content {
-                if block.get("type").and_then(Value::as_str) == Some("tool_use")
-                    && block.get("name").and_then(Value::as_str) == Some("Skill")
-                    && let Some(skill) = block
-                        .get("input")
-                        .and_then(|i| i.get("skill"))
-                        .and_then(Value::as_str)
-                        .filter(|s| !s.is_empty())
-                {
-                    push_skill_file(skill, project_path, &mut seen, &mut cache, &mut skill_files);
-                }
-            }
-        }
-    }
-
-    skill_files
-}
-
-fn push_skill_file(
-    name: &str,
-    project_path: &str,
-    seen: &mut HashSet<String>,
-    cache: &mut HashMap<String, String>,
-    skill_files: &mut Vec<SkillFileEntry>,
-) {
-    let trimmed = name.trim();
-    if trimmed.is_empty() || seen.contains(trimmed) {
-        return;
-    }
-    seen.insert(trimmed.to_string());
-    skill_files.push(SkillFileEntry {
-        path: resolve_skill_path(Some(project_path), trimmed, Some(cache)),
-        display_name: trimmed.to_string(),
-    });
-}
-
-/// Lexical `path.resolve(base, p)` for unix paths (no filesystem access):
-/// returns `p` when absolute, else `base/p`, collapsing `.`/`..` segments.
-fn path_resolve(base: &str, p: &str) -> String {
-    let combined = if Path::new(p).is_absolute() {
-        p.to_string()
-    } else {
-        format!("{base}/{p}")
-    };
-    let mut stack: Vec<&str> = Vec::new();
-    for seg in combined.split('/') {
-        match seg {
-            "" | "." => {}
-            ".." => {
-                stack.pop();
-            }
-            s => stack.push(s),
-        }
-    }
-    format!("/{}", stack.join("/"))
-}
-
+#[path = "history_discovery.rs"]
+mod history_discovery;
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
+#[path = "history_tests.rs"]
+mod tests;
+pub use history_discovery::*;
+#[path = "history_paths.rs"]
+mod history_paths;
+pub use history_paths::*;
 
-    #[test]
-    fn path_resolve_absolute_passthrough() {
-        assert_eq!(path_resolve("/proj/dir", "/abs/plan.md"), "/abs/plan.md");
-    }
+#[derive(Default)]
+struct HistoryLoad {
+    messages: Vec<ChatMessage>,
+    agent_tools: HashMap<String, Vec<MessageContent>>,
+    subagent_tool_results: HashMap<String, MessageContent>,
+    seen_uuids: HashSet<String>,
+    seen_api_message_ids: HashSet<String>,
+    agent_id_to_parent_tool_use_id: HashMap<String, String>,
+}
+impl HistoryLoad {
+    fn entry(&mut self, entry: &Value, session_id: &str, is_subagent_file: bool) {
+        if self.filtered(entry, session_id, is_subagent_file) {
+            return;
+        }
+        if entry.get("type").and_then(Value::as_str) == Some("user") {
+            capture_agent_id_mapping(entry, &mut self.agent_id_to_parent_tool_use_id);
+        }
 
-    #[test]
-    fn path_resolve_joins_relative() {
-        assert_eq!(
-            path_resolve("/proj/dir", "plans/x.md"),
-            "/proj/dir/plans/x.md"
-        );
-    }
+        if is_strict_true(entry.get("isSidechain")) {
+            return;
+        }
 
-    #[test]
-    fn path_resolve_collapses_dotdot() {
-        assert_eq!(path_resolve("/proj/dir", "../plan.md"), "/proj/plan.md");
-    }
-
-    #[tokio::test]
-    async fn missing_session_returns_empty() {
-        assert!(
-            load_history("no-such-session-xyz", "/tmp/no-such-project-xyz", None)
-                .await
-                .is_empty()
-        );
-        assert!(
-            extract_plan_file_paths("no-such-session-xyz", "/tmp/no-such-project-xyz", None)
-                .await
-                .is_empty()
-        );
-        assert!(
-            extract_skill_file_paths("no-such-session-xyz", "/tmp/no-such-project-xyz", None)
-                .await
-                .is_empty()
-        );
-    }
-
-    // --- AC8: stored session_file_path resolution (#178 G2) ---
-
-    fn assistant_line(uuid: &str, text: &str, extra: Value) -> String {
-        let mut entry = json!({
-            "type": "assistant",
-            "uuid": uuid,
-            "timestamp": "2026-09-25T00:00:00Z",
-            "message": { "content": [{ "type": "text", "text": text }] },
-        });
-        if let Some(o) = extra.as_object() {
-            for (k, v) in o {
-                entry[k] = v.clone();
+        if entry.get("type").and_then(Value::as_str) == Some("user")
+            && let Some(synthesized) = synthesize_unknown_command_from_user_entry(entry, session_id)
+        {
+            for m in synthesized {
+                if self.seen_uuids.contains(&m.id) {
+                    continue;
+                }
+                self.seen_uuids.insert(m.id.clone());
+                self.messages.push(m);
             }
+            return;
         }
-        entry.to_string()
-    }
 
-    fn assistant_text(msg: &ChatMessage) -> &str {
-        match &msg.content[0] {
-            MessageContent::Leaf(mainframe_types::content::LeafContent::Text { text, .. }) => text,
-            other => panic!("expected a text block, got {other:?}"),
+        if entry.get("type").and_then(Value::as_str) == Some("progress")
+            && entry
+                .get("data")
+                .and_then(|d| d.get("type"))
+                .and_then(Value::as_str)
+                == Some("agent_progress")
+        {
+            collect_agent_progress_tools(entry, &mut self.agent_tools);
+            return;
         }
-    }
 
-    /// `get_session_jsonl_path` always derives under the real `~/.claude/projects`
-    /// tree (mirrors `transcript.rs`'s tests) — cleaned up on drop, even on panic,
-    /// so a failing assertion never leaves a stray directory behind.
-    struct RemoveDirOnDrop(String);
-    impl Drop for RemoveDirOnDrop {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_dir_all(&self.0);
+        let msg = match convert_history_entry(entry, session_id, &mut self.seen_api_message_ids) {
+            Some(m) => m,
+            None => return,
+        };
+        if self.seen_uuids.contains(&msg.id) {
+            return;
         }
+        self.seen_uuids.insert(msg.id.clone());
+        self.messages.push(msg);
     }
+    fn finish(mut self) -> Vec<ChatMessage> {
+        if !self.agent_tools.is_empty() {
+            inject_agent_children(&mut self.messages, &self.agent_tools);
+        }
+        if !self.subagent_tool_results.is_empty() {
+            attach_subagent_tool_results(&mut self.messages, &self.subagent_tool_results);
+        }
 
-    #[tokio::test]
-    async fn stored_session_file_path_wins_over_the_derived_path_when_both_exist() {
-        let dir = tempfile::tempdir().unwrap();
-        let stored_path = dir.path().join("relocated.jsonl");
-        std::fs::write(
-            &stored_path,
-            assistant_line("stored-1", "from the stored path", json!({})),
-        )
-        .unwrap();
-
-        let session_id = format!("mf178-g2-{}-a", std::process::id());
-        let project_path = format!("mf178-g2-project-{}-a", std::process::id());
-        let derived = get_session_jsonl_path(&session_id, &project_path);
-        std::fs::create_dir_all(&derived.project_dir).unwrap();
-        std::fs::write(
-            &derived.jsonl_path,
-            assistant_line("derived-1", "from the derived path", json!({})),
-        )
-        .unwrap();
-        let _cleanup = RemoveDirOnDrop(derived.project_dir.clone());
-
-        let history = load_history(
-            &session_id,
-            &project_path,
-            Some(stored_path.to_str().unwrap()),
-        )
-        .await;
-
-        assert_eq!(history.len(), 1);
-        assert_eq!(assistant_text(&history[0]), "from the stored path");
-    }
-
-    #[tokio::test]
-    async fn falls_back_to_the_derived_path_when_the_stored_path_is_absent() {
-        let dir = tempfile::tempdir().unwrap();
-        let gone = dir.path().join("gone.jsonl");
-
-        let session_id = format!("mf178-g2-{}-b", std::process::id());
-        let project_path = format!("mf178-g2-project-{}-b", std::process::id());
-        let derived = get_session_jsonl_path(&session_id, &project_path);
-        std::fs::create_dir_all(&derived.project_dir).unwrap();
-        std::fs::write(
-            &derived.jsonl_path,
-            assistant_line("derived-2", "from the derived path", json!({})),
-        )
-        .unwrap();
-        let _cleanup = RemoveDirOnDrop(derived.project_dir.clone());
-
-        let history = load_history(&session_id, &project_path, Some(gone.to_str().unwrap())).await;
-
-        assert_eq!(history.len(), 1);
-        assert_eq!(assistant_text(&history[0]), "from the derived path");
-    }
-
-    #[tokio::test]
-    async fn discovers_sidechain_files_next_to_the_resolved_stored_path_not_the_derived_directory()
-    {
-        let dir = tempfile::tempdir().unwrap();
-        let session_id = format!("mf178-g2-{}-c", std::process::id());
-        let stored_path = dir.path().join(format!("{session_id}.jsonl"));
-        std::fs::write(
-            &stored_path,
-            assistant_line("primary-1", "primary message", json!({})),
-        )
-        .unwrap();
-        // A sidechain file matching by sessionId, sitting next to the resolved
-        // (stored) file — not next to the always-derived project directory,
-        // which is never created in this test.
-        let sidechain_path = dir.path().join("sidechain.jsonl");
-        std::fs::write(
-            &sidechain_path,
-            assistant_line(
-                "sidechain-1",
-                "sidechain message",
-                json!({ "sessionId": session_id }),
-            ),
-        )
-        .unwrap();
-
-        let project_path = format!("mf178-g2-project-{}-c-untouched", std::process::id());
-        let discovered = discover_session_jsonl_files(
-            &session_id,
-            &project_path,
-            Some(stored_path.to_str().unwrap()),
-        )
-        .await;
-        assert_eq!(discovered.all_files.len(), 2);
-
-        let history = load_history(
-            &session_id,
-            &project_path,
-            Some(stored_path.to_str().unwrap()),
-        )
-        .await;
-        let texts: HashSet<&str> = history.iter().map(assistant_text).collect();
-        assert!(texts.contains("primary message"));
-        assert!(texts.contains("sidechain message"));
-    }
-
-    /// A fork's pinned snapshot directory is not under `~/.claude/projects/..`,
-    /// so it must load through `_in_dir` rather than re-deriving a project dir
-    /// from a `project_path` — and it must reproduce exactly what the same
-    /// transcript content loads as through the canonical path (todo #343
-    /// Group 2, plan step 3).
-    #[tokio::test]
-    async fn snapshot_dir_loads_the_same_messages_as_the_canonical_path() {
-        let line = serde_json::json!({
-            "type": "assistant",
-            "uuid": "a1",
-            "timestamp": "2026-07-04T00:00:01Z",
-            "message": { "content": [ { "type": "text", "text": "hi from history" } ] }
-        })
-        .to_string();
-
-        // Canonical: a real ~/.claude/projects/<encoded>/<id>.jsonl, cleaned up on drop.
-        let project_path = format!("mainframe-test-fork-history-{}", std::process::id());
-        let canonical = get_session_jsonl_path("session-fork-1", &project_path);
-        tokio::fs::create_dir_all(&canonical.project_dir)
-            .await
-            .unwrap();
-        tokio::fs::write(&canonical.jsonl_path, format!("{line}\n"))
-            .await
-            .unwrap();
-        let _cleanup = RemoveDirOnDrop(canonical.project_dir.clone());
-
-        // Snapshot: an arbitrary tempdir standing in for a fork-snapshots dir.
-        let snapshot_dir = tempfile::tempdir().unwrap();
-        tokio::fs::write(
-            snapshot_dir.path().join("session-fork-1.jsonl"),
-            format!("{line}\n"),
-        )
-        .await
-        .unwrap();
-
-        let canonical_messages = load_history("session-fork-1", &project_path, None).await;
-        let snapshot_messages =
-            load_history_in_dir("session-fork-1", &snapshot_dir.path().to_string_lossy()).await;
-
-        assert!(!canonical_messages.is_empty());
-        assert_eq!(canonical_messages, snapshot_messages);
+        self.messages
     }
 }
 
-// PORT STATUS: src/plugins/builtin/claude/history.ts (285 lines)
-// confidence: high
-// todos: 1
-// notes: createReadStream+readline → tokio BufReader::lines() (CRLF-stripped).
-// Main catch-up (#424): getSessionJsonlPath moved to transcript.rs and imported here
-// (the local session_jsonl_path/encode_project_path + the encode test moved with it).
-// path.resolve is a lexical unix-only resolver (collapses ./..). loadHistory threads
-// seen_uuids/agent_tools/subagent maps exactly as the TS; strict `=== true` vs
-// `!== true` checks mapped to is_strict_true. The 1 TODO(port): TS lets a mid-read
-// stream error reject the promise; the port skips an unreadable file (graceful)
-// instead — files are just-discovered so this is an unlikely race. No TS __tests__
-// file for history.ts (its behavior is covered via history-converters); sanity tests
-// cover path_resolve + the empty-session short-circuit.
+impl HistoryLoad {
+    fn filtered(&mut self, entry: &Value, session_id: &str, is_subagent_file: bool) -> bool {
+        if is_strict_true(entry.get("isMeta"))
+            && entry.get("type").and_then(Value::as_str) == Some("user")
+            && !is_subagent_file
+            && !is_strict_true(entry.get("isSidechain"))
+            && let Some(synthesized) = synthesize_skill_loaded_from_user_entry(entry, session_id)
+        {
+            if !self.seen_uuids.contains(&synthesized.id) {
+                self.seen_uuids.insert(synthesized.id.clone());
+                self.messages.push(synthesized);
+            }
+            return true;
+        }
+
+        if is_strict_true(entry.get("isMeta")) {
+            return true;
+        }
+        if is_strict_true(entry.get("isCompactSummary"))
+            || is_strict_true(entry.get("isVisibleInTranscriptOnly"))
+        {
+            return true;
+        }
+
+        if is_subagent_file {
+            collect_subagent_tool_results(entry, &mut self.subagent_tool_results);
+            collect_subagent_assistant_blocks(
+                entry,
+                &mut self.agent_tools,
+                Some(&self.agent_id_to_parent_tool_use_id),
+            );
+            return true;
+        }
+
+        false
+    }
+}

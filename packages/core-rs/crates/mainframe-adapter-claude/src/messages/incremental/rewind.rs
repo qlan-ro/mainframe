@@ -25,7 +25,11 @@ pub(crate) fn baseline_rewind_point(
 
 /// Lower `r` for every `Structural(from)` entry: the group containing
 /// `from - 1` (group 0 when `from == 0`).
-pub(crate) fn apply_structural_entries(groups: &[Group], entries: &[RawChange], mut r: usize) -> usize {
+pub(crate) fn apply_structural_entries(
+    groups: &[Group],
+    entries: &[RawChange],
+    mut r: usize,
+) -> usize {
     for entry in entries {
         if let RawChange::Structural(from) = entry {
             let target = if *from == 0 {

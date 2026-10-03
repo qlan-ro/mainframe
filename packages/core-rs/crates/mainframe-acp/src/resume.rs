@@ -135,7 +135,12 @@ pub async fn dispatch_resume(
     // `revision::resolve` can seed a log's container index too.
     let containers = encoder::encode_containers(&snapshot.messages, snapshot.streaming);
     let items: Vec<EncodedItem> = containers.iter().flatten().cloned().collect();
-    let resolved = revision::resolve(&items, &containers, resume.replay_from.as_ref(), revision_log);
+    let resolved = revision::resolve(
+        &items,
+        &containers,
+        resume.replay_from.as_ref(),
+        revision_log,
+    );
     let mut updates = resolved.updates;
     updates.push(turn_state_update(port.is_running(&resume.session_id)));
 

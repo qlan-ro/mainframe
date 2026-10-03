@@ -42,17 +42,16 @@ pub(crate) fn apply_timing_tail(groups: &mut [Group], raw: &[ChatMessage], from:
         };
         let end = group.raw_range.end.min(raw.len());
         let start = group.raw_range.start.min(end);
-        mainframe_display::apply_tool_call_timing(
-            &raw[start..end],
-            std::slice::from_mut(display),
-        );
+        mainframe_display::apply_tool_call_timing(&raw[start..end], std::slice::from_mut(display));
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mainframe_types::display::{DisplayContent, DisplayMessage, DisplayMessageType, TaskProgressItem, ToolCategory};
+    use mainframe_types::display::{
+        DisplayContent, DisplayMessage, DisplayMessageType, TaskProgressItem, ToolCategory,
+    };
     use serde_json::json;
     use std::collections::HashMap;
 
@@ -109,11 +108,12 @@ mod tests {
 
     #[test]
     fn backfill_tail_continues_a_scope_seeded_from_the_frozen_prefix() {
-        let mut scope = crate::messages::task_subject_backfill::scope_after(&[
-            task_group("seed", vec![create_item("1", "Seeded task")])
-                .display
-                .unwrap(),
-        ]);
+        let mut scope = crate::messages::task_subject_backfill::scope_after(&[task_group(
+            "seed",
+            vec![create_item("1", "Seeded task")],
+        )
+        .display
+        .unwrap()]);
         let mut groups = vec![task_group("tail", vec![update_item("1")])];
         let mut scope_before = Vec::new();
         backfill_tail(&mut groups, 0, &mut scope, &mut scope_before);

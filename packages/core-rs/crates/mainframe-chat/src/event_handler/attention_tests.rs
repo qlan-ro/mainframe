@@ -59,7 +59,9 @@ impl EventHandlerDeps for AttentionDeps {
         Vec::new()
     }
     fn display_projector(&self) -> Box<dyn DisplayProjector> {
-        Box::new(FullRebuildProjector::new(|_raw, _overlay, _categories| Vec::new()))
+        Box::new(FullRebuildProjector::new(|_raw, _overlay, _categories| {
+            Vec::new()
+        }))
     }
     fn strip_command_tags(&self, text: &str) -> String {
         text.to_string()

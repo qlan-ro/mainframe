@@ -23,13 +23,8 @@
  */
 import type { ThreadMessageLike } from '@assistant-ui/react';
 import type { ControlRequest, PermissionOption, PromptSendMeta, QueuedMessageRef } from '@qlan-ro/mainframe-types';
-import {
-  createEnvironmentSlice,
-  reduceEnvironmentEvent,
-  type ChatEnvironmentSlice,
-  type EnvironmentEvent,
-} from './chat-environment-state';
-import { reduceLocalMessageEvent, type LocalMessageEvent } from './chat-reconcile';
+import { createEnvironmentSlice, type ChatEnvironmentSlice, type EnvironmentEvent } from './chat-environment-state';
+import type { LocalMessageEvent } from './chat-reconcile';
 
 // ---------------------------------------------------------------------------
 // State shape
@@ -82,6 +77,7 @@ export interface ChatThreadState extends ChatEnvironmentSlice {
    * scope) depends on this flip to stop targeting a dead local id after adopt.
    */
   readonly chatId: string;
+  readonly authoritativeItemStreaming: boolean;
   readonly loadState: LoadState;
   readonly runState: RunState;
   /** The converted transcript, projected as-is into the message repository. */
@@ -107,6 +103,7 @@ export interface ChatThreadState extends ChatEnvironmentSlice {
 // ---------------------------------------------------------------------------
 
 export type ChatStateEvent =
+  | { type: 'capabilities.updated'; authoritativeItemStreaming: boolean }
   | { type: 'history.loading' }
   | { type: 'history.refresh.refused' }
   | { type: 'history.ready' }
@@ -140,6 +137,7 @@ export type ChatStateEvent =
 export function createChatThreadState(chatId: string): ChatThreadState {
   return {
     chatId,
+    authoritativeItemStreaming: false,
     loadState: { type: 'idle' },
     runState: { type: 'idle' },
     messages: [],
@@ -154,127 +152,4 @@ export function createChatThreadState(chatId: string): ChatThreadState {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Reducer
-// ---------------------------------------------------------------------------
-
-export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEvent): ChatThreadState {
-  switch (event.type) {
-    case 'history.loading':
-      return { ...state, loadState: { type: 'loading' } };
-
-    // A background re-seed came back empty for a thread that holds messages, and
-    // was refused (see the controller). Only the load state settles — the
-    // transcript is deliberately left alone.
-    case 'history.refresh.refused':
-      return { ...state, loadState: { type: 'ready' } };
-
-    case 'history.ready':
-      return state.loadState.type === 'ready' ? state : { ...state, loadState: { type: 'ready' } };
-
-    case 'transcript.updated':
-      return { ...state, messages: event.messages };
-
-    case 'transcript.cleared':
-      return state.messages.length === 0 ? state : { ...state, messages: [] };
-
-    case 'history.failed':
-      return { ...state, loadState: { type: 'error', error: event.error } };
-
-    case 'run.started':
-      return { ...state, runState: { type: 'running' } };
-
-    case 'run.cancelling':
-      return { ...state, runState: { type: 'cancelling' } };
-
-    // Run-end also clears `compacting`: a run that dies mid-compaction never
-    // sends compact.done, and the pill must not strand.
-    case 'run.stopped':
-      return { ...state, runState: { type: 'idle' }, compacting: false };
-
-    case 'run.failed':
-      return { ...state, runState: { type: 'error', error: event.error }, compacting: false };
-
-    case 'chat.id.adopted':
-      return state.chatId === event.chatId ? state : { ...state, chatId: event.chatId };
-
-    case 'permission.requested': {
-      const entry: ChatPermissionEntry = {
-        requestId: event.requestId,
-        request: event.request,
-        askedAt: Date.now(),
-        options: event.options,
-        synthesizedRequest: event.synthesizedRequest,
-      };
-      return {
-        ...state,
-        interactions: {
-          ...state.interactions,
-          permissions: {
-            ...state.interactions.permissions,
-            [event.requestId]: entry,
-          },
-        },
-      };
-    }
-
-    case 'permission.resolved': {
-      const permissions = { ...state.interactions.permissions };
-      delete permissions[event.requestId];
-      return {
-        ...state,
-        interactions: { ...state.interactions, permissions },
-      };
-    }
-
-    case 'queued.snapshot': {
-      // Rehydrates the queued list on open/reconnect: replace the entire queued
-      // map with a fresh record built from the snapshot refs.
-      const queued: Record<string, QueuedMessageRef> = {};
-      for (const ref of event.refs) {
-        queued[ref.uuid] = ref;
-      }
-      return {
-        ...state,
-        interactions: { ...state.interactions, queued },
-      };
-    }
-
-    case 'context.usage':
-      return {
-        ...state,
-        contextUsage: {
-          percentage: event.percentage,
-          totalTokens: event.totalTokens,
-          maxTokens: event.maxTokens,
-        },
-      };
-
-    case 'compact.started':
-      return state.compacting ? state : { ...state, compacting: true };
-
-    case 'compact.done':
-      return state.compacting ? { ...state, compacting: false } : state;
-
-    case 'local.message.queued':
-    case 'local.message.reconciled':
-    case 'local.message.failed':
-    case 'local.message.attachments_restored':
-    case 'local.message.retrying':
-      return reduceLocalMessageEvent(state, event);
-
-    case 'chat.config.updated':
-    case 'workflow.runs.seeded':
-    case 'workflow.run.updated':
-    case 'background.upsert':
-    case 'background.ended':
-    case 'background.snapshot':
-    case 'worktree.offer.added':
-    case 'worktree.offer.removed':
-    case 'worktree.offer.snapshot':
-    case 'worktree.switch.started':
-    case 'worktree.switch.failed':
-    case 'worktree.switch.cleared':
-      return reduceEnvironmentEvent(state, event);
-  }
-}
+export { reduceChatThreadState } from './chat-thread-reducer';
