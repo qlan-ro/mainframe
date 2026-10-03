@@ -1,10 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/assistant-event.ts`.
-//!
-//! Operates on the raw NDJSON `Value` (as the TS does on loose objects) and calls
-//! the `SessionSink`. Typed `MessageContent` is produced only where a sink method
-//! demands it (via `serde_json::from_value`), matching the TS `MessageContent[]`
-//! passed to `onMessage` / `onSubagentChild`.
-
 use serde_json::Value;
 
 use mainframe_adapter_api::SessionSink;
@@ -15,10 +8,6 @@ use mainframe_types::context::SkillFileEntry;
 
 use crate::session::{ClaudeSession, ClaudeSessionState};
 use crate::skill_path::resolve_skill_path;
-
-/// Deserialize loose content blocks into typed `MessageContent`, skipping (with a
-/// one-line warn) any block the union can't represent — the CLI only emits known
-/// block types, so this is defensive.
 pub(crate) fn blocks_to_message_content(blocks: &[Value]) -> Vec<MessageContent> {
     blocks
         .iter()
@@ -36,13 +25,6 @@ pub(crate) fn blocks_to_message_content(blocks: &[Value]) -> Vec<MessageContent>
         )
         .collect()
 }
-
-/// Mirrors `history_converters.rs::convert_assistant_entry`'s per-block keep
-/// rule (text and tool_use always kept; a thinking block only when its text
-/// is non-empty after trim — hidden-thinking models emit signature-only
-/// blocks with empty prose). Used solely to decide whether this entry may
-/// claim the API message's vendor id (T21, R2.8); it does not filter what
-/// `on_message` itself receives.
 fn has_representable_content(content: &[Value]) -> bool {
     content
         .iter()
@@ -68,10 +50,6 @@ fn tag_block(block: &Value, parent_tool_use_id: &str) -> Value {
     }
     b
 }
-
-/// Claude's `PushNotification` tool call (todo #293), forwarded before any
-/// subagent-tagging or state-lock logic (plan decision P1) — a subagent may
-/// call it too, and the sink alone owns the trim/dedupe rules (P2).
 fn scan_attention_requests(content: &[Value], sink: &dyn SessionSink) {
     for block in content {
         if block.get("type").and_then(Value::as_str) != Some("tool_use") {
@@ -113,8 +91,6 @@ pub fn handle_assistant_event(session: &ClaudeSession, event: &Value, sink: &dyn
     else {
         return;
     };
-
-    // Subagent activity: tag every block and forward via onSubagentChild.
     if let Some(parent) = event
         .get("parent_tool_use_id")
         .and_then(Value::as_str)
@@ -126,91 +102,33 @@ pub fn handle_assistant_event(session: &ClaudeSession, event: &Value, sink: &dyn
         sink.on_subagent_child(parent, blocks);
         return;
     }
-
-    // This top-level event delivers the completed block the partial overlay
-    // was accumulating (`--include-partial-messages`); later blocks of the
-    // same message re-open accumulation via their content_block_start.
     st.partial.clear_block();
 
-    for block in content {
-        if block.get("type").and_then(Value::as_str) != Some("tool_use") {
-            continue;
-        }
-        let name = block.get("name").and_then(Value::as_str).unwrap_or("");
-        let input = block.get("input");
-
-        if name == "TodoWrite"
-            && let Some(todos) = input.and_then(|i| i.get("todos")).and_then(Value::as_array)
-        {
-            let valid: Vec<TodoItem> = todos
-                .iter()
-                .filter(|t| {
-                    t.is_object()
-                        && t.get("content").and_then(Value::as_str).is_some()
-                        && t.get("status").and_then(Value::as_str).is_some()
-                })
-                // The typed TodoItem requires activeForm + a valid status; a
-                // bad/missing field drops the item (same precedent as
-                // mainframe-services::todos::normalize).
-                .filter_map(|t| serde_json::from_value::<TodoItem>(t.clone()).ok())
-                .collect();
-            if !valid.is_empty() {
-                sink.on_todo_update(valid);
-            }
-        }
-
-        if matches!(name, "TaskCreate" | "TaskUpdate" | "TaskStop") {
-            handle_task_v2_event(st, name, input.unwrap_or(&Value::Null), sink);
-        }
-
-        let id = block.get("id").and_then(Value::as_str).unwrap_or("");
-        if !id.is_empty() && !name.is_empty() && !st.mainframe_chat_id.is_empty() {
-            st.task_events.capture_tool_use(id, name, input);
-        }
-
-        if name == "Skill" {
-            let skill_name = input
-                .and_then(|i| i.get("skill"))
-                .and_then(Value::as_str)
-                .map(str::trim)
-                .unwrap_or("");
-            if !skill_name.is_empty() {
-                // Use the cached path from a prior user-event, falling back to the probe.
-                let cached = st.skill_path_cache.get(skill_name).cloned();
-                let resolved = match cached {
-                    Some(p) => p,
-                    None => resolve_skill_path(
-                        Some(&session.project_path),
-                        skill_name,
-                        Some(&mut st.skill_path_cache),
-                    ),
-                };
-                sink.on_skill_file(SkillFileEntry {
-                    path: resolved,
-                    display_name: skill_name.to_string(),
-                });
-            }
-        }
+    tools::scan_tools(session, st, content, sink);
+    let api_message_id = message
+        .and_then(|m| m.get("id"))
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty());
+    let metadata = message_metadata(st, event, message, usage, content);
+    if metadata.vendor_id.is_none() {
+        st.presentation.invalidate(sink);
     }
+    let context = presentation_context(st, event, api_message_id, &metadata, message, sink);
+    let blocks = blocks_to_message_content(content);
+    drop(guard);
+    emit_message(blocks, metadata, context, sink);
+}
 
-    // The first event of each API message adopts `message.id` as its vendor
-    // id; later blocks fall back to the transcript-entry envelope's `uuid`
-    // (present on live stream-json events too — SESSIONS_JSONL.md: stable
-    // across live and on-disk). `message.id` is what makes partial streaming's
-    // item ids stable: it is known at `message_start`, before any block
-    // completes, and history reconstruction derives the same id from the same
-    // field (history_converters.rs).
-    //
-    // A signature-only thinking entry (hidden-thinking models: empty prose,
-    // just a signature) must NOT consume the claim (T21, R2.8): history's
-    // `convert_assistant_entry` drops that entry outright (`content_blocks`
-    // stays empty) without claiming `seen_api_message_ids`, so the NEXT,
-    // content-bearing entry of the same API message is what claims `mid`
-    // there. Live claimed unconditionally on the first entry regardless of
-    // content, so a live-only signature-only entry stole the claim and the
-    // real second entry fell back to its own transcript uuid — disagreeing
-    // with history on that entry's id. Mirroring history's own emptiness
-    // rule here is what keeps them in lockstep.
+#[path = "assistant_event_tools.rs"]
+mod tools;
+
+fn message_metadata(
+    st: &mut ClaudeSessionState,
+    event: &Value,
+    message: Option<&Value>,
+    usage: Option<&Value>,
+    content: &[Value],
+) -> MessageMetadata {
     let api_message_id = message
         .and_then(|m| m.get("id"))
         .and_then(Value::as_str)
@@ -228,46 +146,44 @@ pub fn handle_assistant_event(session: &ClaudeSession, event: &Value, sink: &dyn
             .filter(|s| !s.is_empty())
             .map(str::to_string),
     };
-    let metadata = MessageMetadata {
+    MessageMetadata {
         model: message
             .and_then(|m| m.get("model"))
             .and_then(Value::as_str)
             .map(str::to_string),
         usage: usage.and_then(|u| serde_json::from_value::<MessageUsage>(u.clone()).ok()),
         vendor_id,
-    };
-    let blocks = blocks_to_message_content(content);
-    drop(guard);
-    sink.on_message(blocks, Some(metadata));
-}
-
-/// Accumulate a V2 task event and emit `onTodoUpdate` with the current snapshot.
-fn handle_task_v2_event(
-    st: &mut ClaudeSessionState,
-    tool_name: &str,
-    input: &Value,
-    sink: &dyn SessionSink,
-) {
-    st.task_v2_events.push(serde_json::json!({
-        "toolName": tool_name,
-        "args": input,
-    }));
-    let payload = Value::Array(st.task_v2_events.clone());
-    let todos = normalize_todos(TodoSource::TaskV2, &payload);
-    if !todos.is_empty() {
-        sink.on_todo_update(todos);
     }
 }
 
-// PORT STATUS: src/plugins/builtin/claude/assistant-event.ts (108 lines)
-// confidence: high
-// todos: 0
-// notes: operates on the raw NDJSON Value (loose, like TS), producing typed
-// notes: MessageContent only for onMessage/onSubagentChild via from_value.
-// notes: TodoWrite filter deserializes to TodoItem (drops items missing
-// notes: activeForm / with a bad status) — same precedent as
-// notes: mainframe-services::todos::normalize. handleTaskV2Event routes through
-// notes: normalize_todos(TaskV2, [{toolName,args}...]). The state lock is held
-// notes: across the loop (session sinks are synchronous, non-awaiting, and never
-// notes: re-enter this session's state lock) and dropped before the final
-// notes: onMessage / onSubagentChild for cleanliness.
+fn emit_message(
+    blocks: Vec<MessageContent>,
+    metadata: MessageMetadata,
+    context: Option<mainframe_types::transcript_presentation::TranscriptPresentation>,
+    sink: &dyn SessionSink,
+) {
+    if let Some(context) = context {
+        sink.on_message_with_presentation(blocks, Some(metadata), context);
+    } else {
+        sink.on_message(blocks, Some(metadata));
+    }
+}
+
+fn presentation_context(
+    st: &mut ClaudeSessionState,
+    event: &Value,
+    api_message_id: Option<&str>,
+    metadata: &MessageMetadata,
+    message: Option<&Value>,
+    sink: &dyn SessionSink,
+) -> Option<mainframe_types::transcript_presentation::TranscriptPresentation> {
+    st.presentation.observe(
+        event,
+        api_message_id,
+        metadata.vendor_id.as_deref(),
+        message
+            .and_then(|m| m.get("stop_reason"))
+            .and_then(Value::as_str),
+        sink,
+    )
+}

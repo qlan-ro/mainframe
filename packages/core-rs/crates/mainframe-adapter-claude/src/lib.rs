@@ -47,6 +47,7 @@ pub mod skills;
 pub mod task_events;
 pub mod title_generator;
 pub mod transcript;
+mod transcript_presentation;
 pub mod trust_store;
 pub mod tuning;
 pub mod user_event;
@@ -60,3 +61,8 @@ pub mod workflow_events;
 // notes: mainframe-adapter-api Adapter/AdapterSession/SessionSink traits when ported.
 // notes: `messages` holds the Claude-specific message files (§2.5 split); the
 // notes: adapter-agnostic pieces live in mainframe-display.
+
+#[cfg(test)]
+mod presentation_history;
+#[cfg(test)]
+mod presentation_tests;
