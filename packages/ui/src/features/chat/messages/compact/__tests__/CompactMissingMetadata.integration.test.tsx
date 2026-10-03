@@ -15,6 +15,7 @@ import type { PresentationSource } from '@qlan-ro/mainframe-types';
 import { useUiPrefs } from '@/store/ui-prefs';
 import { createChatThreadState } from '../../../controller/chat-thread-state';
 import { projectChatThreadMessages, projectChatThreadRepository } from '../../../controller/project-messages';
+import { useNativeThreadMessages } from '../../../runtime/use-native-thread-messages';
 import { convertAcpItems } from '../../../view-model/convert-acp-item';
 import { TurnFixture, turnContext } from './turn-fixtures';
 
@@ -31,7 +32,7 @@ function invalidSources(length: number): PresentationSource[] {
     target: { type: 'text', contentBlockIndex: 0, startUtf16: start, endUtf16: end },
   }));
 }
-function projected(variant: Variant, text: string, streaming = false) {
+function projected(variant: Variant, text: string, streaming = false, authoritativeItemStreaming = true) {
   const messages = convertAcpItems(
     [
       {
@@ -57,7 +58,7 @@ function projected(variant: Variant, text: string, streaming = false) {
   );
   expect(messages[0]!.metadata).toBeUndefined();
   if (variant === 'absent custom') messages[0] = { ...messages[0]!, metadata: {} };
-  const state = { ...createChatThreadState('chat'), messages, authoritativeItemStreaming: true };
+  const state = { ...createChatThreadState('chat'), messages, authoritativeItemStreaming };
   const result = projectChatThreadMessages(state);
   expect(result[0]!.content).toBe(messages[0]!.content);
   expect(result[0]!.metadata).toBe(messages[0]!.metadata);
@@ -95,12 +96,12 @@ function Main({ rootId, input }: FixtureProps) {
     </AssistantRuntimeProvider>
   );
 }
+function Split({ rootId, input }: FixtureProps) {
+  const messages = useNativeThreadMessages(input.state);
+  return <TurnFixture rootId={rootId} split messages={messages} />;
+}
 function Fixture(props: FixtureProps) {
-  return props.split ? (
-    <TurnFixture rootId={props.rootId} split messages={props.input.messages} />
-  ) : (
-    <Main {...props} />
-  );
+  return props.split ? <Split {...props} /> : <Main {...props} />;
 }
 function expectVisibleText(text: string, status: 'running' | 'complete') {
   const element = screen.getByText(text);
@@ -110,20 +111,29 @@ function expectVisibleText(text: string, status: 'running' | 'complete') {
   expect(screen.queryByRole('button', { name: 'Work details' })).toBeNull();
 }
 beforeEach(() => useUiPrefs.getState().setTranscriptMode('compact'));
-for (const split of [false, true]) {
+for (const { split, authoritative } of [
+  { split: false, authoritative: true },
+  { split: true, authoritative: true },
+  { split: false, authoritative: false },
+  { split: true, authoritative: false },
+]) {
   it.each(variants)(
-    'keeps %s visible through native updates and mode changes (split=' + split + ')',
+    `keeps %s visible through native updates and mode changes (split=${split}, authoritative=${authoritative})`,
     async (variant) => {
-      const rootId = `missing-${split}-${variant}`;
+      const rootId = `missing-${split}-${authoritative}-${variant}`;
       const initial = 'a😀b';
-      const view = render(<Fixture rootId={rootId} split={split} input={projected(variant, initial)} />);
+      const view = render(
+        <Fixture rootId={rootId} split={split} input={projected(variant, initial, false, authoritative)} />,
+      );
       expectVisibleText(initial, 'complete');
       const frame = view.container.querySelector('[data-message-id="wire"]');
       const growing = initial + ' grows';
-      view.rerender(<Fixture rootId={rootId} split={split} input={projected(variant, growing, true)} />);
+      view.rerender(<Fixture rootId={rootId} split={split} input={projected(variant, growing, true, authoritative)} />);
       await waitFor(() => expectVisibleText(growing, 'running'));
       expect(view.container.querySelector('[data-message-id="wire"]')).toBe(frame);
-      view.rerender(<Fixture rootId={rootId} split={split} input={projected(variant, growing)} />);
+      view.rerender(
+        <Fixture rootId={rootId} split={split} input={projected(variant, growing, false, authoritative)} />,
+      );
       await waitFor(() => expectVisibleText(growing, 'complete'));
       expect(view.container.querySelector('[data-message-id="wire"]')).toBe(frame);
       act(() => useUiPrefs.getState().setTranscriptMode('verbose'));

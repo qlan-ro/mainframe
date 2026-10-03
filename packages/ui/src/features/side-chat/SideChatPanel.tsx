@@ -25,7 +25,7 @@ import { AuiConfig, AuiProvider, ExternalThread, useAui, type AppendMessage } fr
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { CHAT_ATTACHMENT_ADAPTER, useControllerState } from '@/features/chat/runtime/use-chat-thread-runtime';
 import { buildChatExtras, isRunningFromState } from '@/features/chat/runtime/chat-extras';
-import { projectChatThreadMessages } from '@/features/chat/controller/project-messages';
+import { useNativeThreadMessages } from '@/features/chat/runtime/use-native-thread-messages';
 import { ChatThread } from '@/features/chat/thread/ChatThread';
 import { cn } from '@/lib/utils';
 import type { AcpChatController } from '@/features/chat/controller/acp-chat-controller';
@@ -40,7 +40,7 @@ import { MIN_SIDE_CHAT_WIDTH, type SideChatPlacement } from './side-chat-placeme
 function useSideChatThreadConfig(controller: AcpChatController) {
   const port = useDaemonPort();
   const state = useControllerState(controller);
-  const messages = useMemo(() => projectChatThreadMessages(state), [state]);
+  const messages = useNativeThreadMessages(state);
   const isRunning = isRunningFromState(state);
   const extras = useMemo(() => buildChatExtras(controller, port, state), [controller, port, state]);
 
