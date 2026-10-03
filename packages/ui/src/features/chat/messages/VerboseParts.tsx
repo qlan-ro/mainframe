@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
-import { MessagePrimitive } from '@assistant-ui/react';
+import { MessagePrimitive, type ReasoningMessagePartComponent } from '@assistant-ui/react';
 import { makeChatGroupBy, parseToolGroupKey } from '../tools/group-parts';
 import { useMainframeMeta } from '../view-model/message-meta';
 import { MarkdownText } from '../parts/markdown-text';
+import { ReasoningText } from '../parts/ReasoningText';
 import { ReasoningGroup } from './ReasoningGroup';
 import { MessageToolLeaf, MessageToolGroup } from '../tools/tool-dispatch';
 import { ZoomableImage } from '../parts/ZoomableImage';
@@ -17,6 +18,12 @@ function RunningIndicator() {
     />
   );
 }
+
+const VerboseReasoning: ReasoningMessagePartComponent = (part) => (
+  <div className="whitespace-pre-wrap">
+    <ReasoningText {...part} />
+  </div>
+);
 
 export function VerboseParts() {
   const meta = useMainframeMeta();
@@ -46,7 +53,7 @@ export function VerboseParts() {
           case 'text':
             return <MarkdownText {...part} />;
           case 'reasoning':
-            return <div className="whitespace-pre-wrap">{part.text}</div>;
+            return <VerboseReasoning {...part} />;
           case 'tool-call':
             return <MessageToolLeaf part={part} />;
           case 'image':
