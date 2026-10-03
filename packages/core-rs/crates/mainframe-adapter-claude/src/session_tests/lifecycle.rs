@@ -1,4 +1,3 @@
-use super::super::*;
 use super::*;
 #[tokio::test]
 async fn stop_background_task_returns_unavailable_when_stdin_destroyed() {

@@ -1,4 +1,3 @@
-use super::super::*;
 use super::*;
 #[test]
 fn control_cancel_request_forwards_the_request_id_to_the_sink() {

@@ -1,4 +1,3 @@
-use super::super::*;
 use super::*;
 #[test]
 fn a_proxy_session_is_pointed_at_the_endpoint_and_stripped_of_the_real_api_key() {
