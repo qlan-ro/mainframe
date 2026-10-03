@@ -362,7 +362,8 @@ fn project_display_folds_in_a_pending_delta_from_a_prior_display_snapshot() {
     // A resume snapshot read with no raw change in between: its own delta is
     // empty, but stashing it as pending and then folding it into the next
     // live emission must not panic or lose the live delta's own content.
-    let materialized = cache.display_snapshot("c1", None, None, || unreachable!());
+    let raw = cache.get("c1").unwrap().clone();
+    let materialized = cache.display_snapshot("c1", &raw, None, None, || unreachable!());
     assert!(materialized.is_empty(), "the recorder emits no containers");
 
     cache.append("c1", msg("b"));

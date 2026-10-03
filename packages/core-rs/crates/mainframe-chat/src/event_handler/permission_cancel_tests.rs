@@ -84,12 +84,8 @@ impl EventHandlerDeps for CancelDeps {
     fn get_queued_refs(&self, _chat_id: &str) -> Vec<QueuedMessageRef> {
         Vec::new()
     }
-    fn prepare_messages_for_client(
-        &self,
-        _raw: &[ChatMessage],
-        _categories: Option<&ToolCategories>,
-    ) -> Vec<DisplayMessage> {
-        Vec::new()
+    fn display_projector(&self) -> Box<dyn DisplayProjector> {
+        Box::new(FullRebuildProjector::new(|_raw, _overlay, _categories| Vec::new()))
     }
     fn strip_command_tags(&self, text: &str) -> String {
         text.to_string()

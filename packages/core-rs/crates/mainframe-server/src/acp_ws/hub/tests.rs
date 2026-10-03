@@ -43,10 +43,22 @@ fn display_message(id: &str, text: &str) -> DisplayMessage {
     }
 }
 
+/// Wraps `messages` in a `full` `DisplayDelta` over a fresh `DisplaySnapshot`
+/// (todo #376) — the shape `emit_display_for` now emits.
+fn full_delta(messages: Vec<DisplayMessage>) -> mainframe_display::DisplayDelta {
+    mainframe_display::DisplayDelta {
+        full: true,
+        changes: Vec::new(),
+        len: messages.len(),
+        snapshot: mainframe_display::DisplaySnapshot::new(messages),
+        stats: mainframe_display::ProjectionStats::default(),
+    }
+}
+
 fn revision(chat_id: &str, text: &str) -> ChatSurfaceEvent {
     ChatSurfaceEvent::DisplayRevision {
         chat_id: chat_id.to_string(),
-        messages: vec![display_message("m1", text)],
+        delta: full_delta(vec![display_message("m1", text)]),
         streaming: None,
     }
 }
@@ -165,7 +177,7 @@ async fn a_live_revision_with_streaming_wires_the_flag() {
 
     hub.on_chat_surface_event(ChatSurfaceEvent::DisplayRevision {
         chat_id: "chat-1".to_string(),
-        messages: vec![display_message("m1", "Hello")],
+        delta: full_delta(vec![display_message("m1", "Hello")]),
         streaming: Some(mainframe_types::display::StreamingLeafKind::Text),
     });
 

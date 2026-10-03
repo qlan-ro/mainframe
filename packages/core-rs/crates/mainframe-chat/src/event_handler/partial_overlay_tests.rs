@@ -60,31 +60,19 @@ impl EventHandlerDeps for OverlayDeps {
     fn get_queued_refs(&self, _chat_id: &str) -> Vec<QueuedMessageRef> {
         Vec::new()
     }
-    fn prepare_messages_for_client(
-        &self,
-        raw: &[ChatMessage],
-        _categories: Option<&ToolCategories>,
-    ) -> Vec<DisplayMessage> {
-        if self.group_consecutive {
-            return group_consecutive(raw);
-        }
-        raw.iter()
-            .map(|m| DisplayMessage {
-                id: m.id.clone(),
-                chat_id: m.chat_id.clone(),
-                r#type: mainframe_types::display::DisplayMessageType::Assistant,
-                content: m
-                    .content
-                    .iter()
-                    .filter_map(|c| match c {
-                        MessageContent::Leaf(leaf) => Some(DisplayContent::Leaf(leaf.clone())),
-                        MessageContent::Node(_) => None,
-                    })
-                    .collect(),
-                timestamp: "t".to_string(),
-                metadata: None,
-            })
-            .collect()
+    fn display_projector(&self) -> Box<dyn DisplayProjector> {
+        let group_consecutive_flag = self.group_consecutive;
+        Box::new(FullRebuildProjector::new(move |raw, overlay, _categories| {
+            let combined: Vec<ChatMessage> = match overlay {
+                Some(o) => raw.iter().cloned().chain(std::iter::once(o.clone())).collect(),
+                None => raw.to_vec(),
+            };
+            if group_consecutive_flag {
+                group_consecutive(&combined)
+            } else {
+                flat_convert(&combined)
+            }
+        }))
     }
     fn strip_command_tags(&self, text: &str) -> String {
         text.replace("<mainframe-tag/>", "")
@@ -117,6 +105,29 @@ impl EventHandlerDeps for OverlayDeps {
     }
     fn tracker_end_all_running(&self, _chat_id: &str) {}
     fn workflow_runs_stop_all(&self, _chat_id: &str) {}
+}
+
+/// 1:1 raw-to-display conversion (every message becomes its own
+/// `DisplayMessage`, carrying only leaf content) — `OverlayDeps`'s default
+/// projector, used whenever `group_consecutive` is false.
+fn flat_convert(raw: &[ChatMessage]) -> Vec<DisplayMessage> {
+    raw.iter()
+        .map(|m| DisplayMessage {
+            id: m.id.clone(),
+            chat_id: m.chat_id.clone(),
+            r#type: mainframe_types::display::DisplayMessageType::Assistant,
+            content: m
+                .content
+                .iter()
+                .filter_map(|c| match c {
+                    MessageContent::Leaf(leaf) => Some(DisplayContent::Leaf(leaf.clone())),
+                    MessageContent::Node(_) => None,
+                })
+                .collect(),
+            timestamp: "t".to_string(),
+            metadata: None,
+        })
+        .collect()
 }
 
 /// Groups a trailing run of same-type messages into one `DisplayMessage`,
@@ -180,11 +191,14 @@ impl RevisionSurface {
 impl ChatSurface for RevisionSurface {
     fn on_chat_surface_event(&self, event: ChatSurfaceEvent) {
         if let ChatSurfaceEvent::DisplayRevision {
-            messages,
+            delta,
             streaming,
             ..
         } = event
         {
+            // Materialize at receipt (todo #376): the snapshot handle is
+            // only valid during this synchronous call.
+            let messages = delta.snapshot.materialize();
             self.revisions
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())

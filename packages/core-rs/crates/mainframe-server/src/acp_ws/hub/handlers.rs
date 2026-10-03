@@ -52,17 +52,24 @@ impl FacadeHub {
     /// presence) — a chat with neither pays nothing new. `encode_revision`
     /// (not `encode`) so the overlay-backed item, if any, carries
     /// `ItemMeta.streaming` (spec Decision 39).
+    ///
+    /// Minimal todo #376 adaptation (G3): materializes the delta's full
+    /// container list and runs today's full `encode_revision`/`record_revision`
+    /// over it, same as before the chat side started emitting deltas instead
+    /// of a full list — G4 switches this to encode only `delta.changes` and
+    /// call `record_delta`.
     pub(super) fn handle_display_revision(
         &self,
         chat_id: &str,
-        messages: &[mainframe_types::display::DisplayMessage],
+        delta: &mainframe_display::DisplayDelta,
         streaming: Option<mainframe_types::display::StreamingLeafKind>,
     ) {
         let connections = self.attached_connections(chat_id);
         if connections.is_empty() && !self.has_revision_log(chat_id) {
             return;
         }
-        let items = mainframe_acp::encoder::encode_revision(messages, streaming);
+        let messages = delta.snapshot.materialize();
+        let items = mainframe_acp::encoder::encode_revision(&messages, streaming);
         let cursor = self.record_revision(chat_id, &items);
         if !connections.is_empty() {
             self.on_display_revision(chat_id, &items, cursor);
@@ -179,10 +186,10 @@ impl ChatSurface for FacadeHub {
             } => self.handle_turn_finished(&chat_id, reason),
             ChatSurfaceEvent::DisplayRevision {
                 chat_id,
-                messages,
+                delta,
                 streaming,
             } => {
-                self.handle_display_revision(&chat_id, &messages, streaming);
+                self.handle_display_revision(&chat_id, &delta, streaming);
             }
             ChatSurfaceEvent::GateRaised { chat_id, request } => {
                 self.handle_gate_raised(&chat_id, request);

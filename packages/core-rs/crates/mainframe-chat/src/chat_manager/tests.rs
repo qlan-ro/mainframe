@@ -187,15 +187,7 @@ impl StoreDeps {
         }
         chats
     }
-}
 
-impl ChatManagerDeps for StoreDeps {
-    fn emit_event(&self, event: DaemonEvent) {
-        self.events.lock().unwrap().push(event);
-    }
-    fn get_tool_categories(&self, _chat_id: &str) -> Option<ToolCategories> {
-        None
-    }
     /// A trivial 1:1 echo (one `DisplayMessage` per raw `ChatMessage`,
     /// carrying the same id/timestamp/type and its leaf content verbatim,
     /// `Node` content dropped) — real conversion (grouping, tag stripping)
@@ -203,12 +195,10 @@ impl ChatManagerDeps for StoreDeps {
     /// content through (todo #382) is what lets `resume_overlay.rs`'s
     /// streaming-attribution assertions (which need an `Assistant` message
     /// whose own last leaf matches the overlay's) exercise the real
-    /// `project_display` path, not just COUNT/id-order retention checks.
-    fn prepare_messages_for_client(
-        &self,
-        raw: &[ChatMessage],
-        _categories: Option<&ToolCategories>,
-    ) -> Vec<DisplayMessage> {
+    /// projection path, not just COUNT/id-order retention checks. Shared by
+    /// `prepare_messages_for_client` (REST) and `display_projector` (the
+    /// live/resume path), so both answer identically (todo #376).
+    fn convert(raw: &[ChatMessage], _categories: Option<&ToolCategories>) -> Vec<DisplayMessage> {
         raw.iter()
             .map(|m| DisplayMessage {
                 id: m.id.clone(),
@@ -236,6 +226,45 @@ impl ChatManagerDeps for StoreDeps {
                 metadata: None,
             })
             .collect()
+    }
+}
+
+impl ChatManagerDeps for StoreDeps {
+    fn emit_event(&self, event: DaemonEvent) {
+        self.events.lock().unwrap().push(event);
+    }
+    fn get_tool_categories(&self, _chat_id: &str) -> Option<ToolCategories> {
+        None
+    }
+    /// A trivial 1:1 echo (one `DisplayMessage` per raw `ChatMessage`,
+    /// carrying the same id/timestamp/type and its leaf content verbatim,
+    /// `Node` content dropped) — real conversion (grouping, tag stripping)
+    /// lives outside this crate's dep set. Carrying the type and leaf
+    /// content through (todo #382) is what lets `resume_overlay.rs`'s
+    /// streaming-attribution assertions (which need an `Assistant` message
+    /// whose own last leaf matches the overlay's) exercise the real
+    /// `project_display` path, not just COUNT/id-order retention checks.
+    fn prepare_messages_for_client(
+        &self,
+        raw: &[ChatMessage],
+        categories: Option<&ToolCategories>,
+    ) -> Vec<DisplayMessage> {
+        Self::convert(raw, categories)
+    }
+    /// Wraps the same 1:1 echo in a `FullRebuildProjector` (todo #376): the
+    /// closure appends the overlay itself before converting, reproducing
+    /// what the deleted `project_display` free function used to do for
+    /// every `EventHandlerDeps`/`ChatManagerDeps` caller.
+    fn display_projector(&self) -> Box<dyn mainframe_display::DisplayProjector> {
+        Box::new(mainframe_display::FullRebuildProjector::new(
+            |raw, overlay, categories| {
+                let combined: Vec<ChatMessage> = match overlay {
+                    Some(o) => raw.iter().cloned().chain(std::iter::once(o.clone())).collect(),
+                    None => raw.to_vec(),
+                };
+                StoreDeps::convert(&combined, categories)
+            },
+        ))
     }
     fn strip_command_tags(&self, text: &str) -> String {
         text.to_string()

@@ -30,12 +30,8 @@ impl EventHandlerDeps for EhDeps {
     fn get_queued_refs(&self, chat_id: &str) -> Vec<QueuedMessageRef> {
         queued_for_chat(&self.queued_refs, chat_id)
     }
-    fn prepare_messages_for_client(
-        &self,
-        raw: &[ChatMessage],
-        categories: Option<&ToolCategories>,
-    ) -> Vec<DisplayMessage> {
-        self.deps.prepare_messages_for_client(raw, categories)
+    fn display_projector(&self) -> Box<dyn mainframe_display::DisplayProjector> {
+        self.deps.display_projector()
     }
     fn strip_command_tags(&self, text: &str) -> String {
         self.deps.strip_command_tags(text)

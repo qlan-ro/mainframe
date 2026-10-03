@@ -199,22 +199,31 @@ pub async fn spawn_facade_server_with(
 
 /// One chat-surface revision for `chat_id`, pushed straight at the hub by the
 /// tests that check who is (and is not) subscribed to a session's fan-out.
+/// Wraps the single message in a `full` `DisplayDelta` over a fresh
+/// `DisplaySnapshot` (todo #376) — the shape `emit_display_for` now emits.
 pub fn revision_event(chat_id: &str, text: &str) -> mainframe_chat::chat_surface::ChatSurfaceEvent {
+    let messages = vec![mainframe_types::display::DisplayMessage {
+        id: "m1".to_string(),
+        chat_id: chat_id.to_string(),
+        r#type: mainframe_types::display::DisplayMessageType::Assistant,
+        content: vec![mainframe_types::display::DisplayContent::Leaf(
+            mainframe_types::content::LeafContent::Text {
+                text: text.to_string(),
+                parent_tool_use_id: None,
+            },
+        )],
+        timestamp: "2026-09-14T00:00:00.000Z".to_string(),
+        metadata: None,
+    }];
     mainframe_chat::chat_surface::ChatSurfaceEvent::DisplayRevision {
         chat_id: chat_id.to_string(),
-        messages: vec![mainframe_types::display::DisplayMessage {
-            id: "m1".to_string(),
-            chat_id: chat_id.to_string(),
-            r#type: mainframe_types::display::DisplayMessageType::Assistant,
-            content: vec![mainframe_types::display::DisplayContent::Leaf(
-                mainframe_types::content::LeafContent::Text {
-                    text: text.to_string(),
-                    parent_tool_use_id: None,
-                },
-            )],
-            timestamp: "2026-09-14T00:00:00.000Z".to_string(),
-            metadata: None,
-        }],
+        delta: mainframe_display::DisplayDelta {
+            full: true,
+            changes: Vec::new(),
+            len: messages.len(),
+            snapshot: mainframe_display::DisplaySnapshot::new(messages),
+            stats: mainframe_display::ProjectionStats::default(),
+        },
         streaming: None,
     }
 }

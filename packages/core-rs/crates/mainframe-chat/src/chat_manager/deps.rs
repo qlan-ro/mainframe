@@ -9,11 +9,19 @@ use super::*;
 pub trait ChatManagerDeps: Send + Sync {
     fn emit_event(&self, event: DaemonEvent);
     fn get_tool_categories(&self, chat_id: &str) -> Option<ToolCategories>;
+    /// `prepareMessagesForClient`, kept for the REST `get_display_messages`
+    /// path (todo #376): that read is not on the partial path and stays a
+    /// full `prepare` over the whole history every call.
     fn prepare_messages_for_client(
         &self,
         raw: &[ChatMessage],
         categories: Option<&ToolCategories>,
     ) -> Vec<DisplayMessage>;
+    /// A fresh [`mainframe_display::DisplayProjector`] for one chat's live
+    /// display computation (todo #376), bridged to `EventHandlerDeps`'s
+    /// identical method via `deps_event.rs::EhDeps`. Required, not
+    /// defaulted (#273 rule): every deps impl states which projector it is.
+    fn display_projector(&self) -> Box<dyn mainframe_display::DisplayProjector>;
     fn strip_command_tags(&self, text: &str) -> String;
 
     fn chats_get(&self, id: &str) -> Option<Chat>;

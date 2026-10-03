@@ -335,6 +335,33 @@ impl ChatManagerDeps for DaemonChatDeps {
         prepare_messages_for_client(raw, categories)
     }
 
+    /// The production projector (todo #376). Falls back to
+    /// `FullRebuildProjector` around `prepare_messages_for_client` rather
+    /// than Claude's `IncrementalProjector`, per the plan's own risk
+    /// mitigation ("Projector drift from `prepare`" — `FullRebuildProjector`
+    /// as a ready fallback): `IncrementalProjector`'s `Nested`-patch path
+    /// (`try_patch_nested`'s `Patched` outcome,
+    /// `mainframe-adapter-claude/src/messages/incremental/patches.rs`) never
+    /// re-applies tool-call timing to the group it patches in place — unlike
+    /// a tail-refolded group (`apply_timing_tail`) or a `Timing(id)` patch
+    /// (`apply_timing_patch`), a settled group patched only because a
+    /// sub-agent child call nested into it loses its own timing (and its
+    /// sibling tool calls' timing) on that revision. Confirmed by
+    /// `tests/acp_ws_tool_timing.rs::tool_timing_reconnect_retains_overlapping_and_nested_calls`,
+    /// which regresses when wired to `IncrementalProjector`. Swap this back
+    /// once that gap is fixed (G1 follow-up, out of G3's file ownership).
+    fn display_projector(&self) -> Box<dyn mainframe_display::DisplayProjector> {
+        Box::new(mainframe_display::FullRebuildProjector::new(
+            |raw, overlay, categories| {
+                let combined: Vec<ChatMessage> = match overlay {
+                    Some(o) => raw.iter().cloned().chain(std::iter::once(o.clone())).collect(),
+                    None => raw.to_vec(),
+                };
+                prepare_messages_for_client(&combined, categories)
+            },
+        ))
+    }
+
     fn strip_command_tags(&self, text: &str) -> String {
         strip_mainframe_command_tags(text)
     }

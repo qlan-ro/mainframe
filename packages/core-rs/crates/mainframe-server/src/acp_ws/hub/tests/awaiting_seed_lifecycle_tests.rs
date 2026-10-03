@@ -120,10 +120,10 @@ async fn a_retry_raised_during_the_await_marks_the_first_frame_after_the_replay(
     // marker carrier).
     hub.on_chat_surface_event(ChatSurfaceEvent::DisplayRevision {
         chat_id: "chat-1".to_string(),
-        messages: vec![
+        delta: full_delta(vec![
             display_message("m1", "Hello"),
             display_message("m2", "Retried answer"),
-        ],
+        ]),
         streaming: None,
     });
 

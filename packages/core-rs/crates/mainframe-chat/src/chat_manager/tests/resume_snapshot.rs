@@ -14,6 +14,11 @@ use mainframe_types::chat::MessageContentNode;
 use mainframe_types::content::LeafContent;
 
 /// Records every `ChatSurfaceEvent` an attached facade session would see.
+/// A `DisplayRevision`'s snapshot handle is only valid during the
+/// synchronous `notify` call that carries it (todo #376), so it is
+/// materialized at receipt and re-wrapped in a fresh, independent
+/// `DisplaySnapshot` — frozen at that point in time — rather than stored
+/// live; every other variant is cloned as-is.
 #[derive(Default)]
 struct RecordingSurface {
     events: Mutex<Vec<ChatSurfaceEvent>>,
@@ -30,7 +35,24 @@ impl RecordingSurface {
 
 impl ChatSurface for RecordingSurface {
     fn on_chat_surface_event(&self, event: ChatSurfaceEvent) {
-        self.events.lock().unwrap().push(event);
+        let frozen = match event {
+            ChatSurfaceEvent::DisplayRevision { chat_id, delta, streaming } => {
+                let materialized = delta.snapshot.materialize();
+                ChatSurfaceEvent::DisplayRevision {
+                    chat_id,
+                    delta: mainframe_display::DisplayDelta {
+                        full: delta.full,
+                        changes: delta.changes,
+                        len: delta.len,
+                        snapshot: mainframe_display::DisplaySnapshot::new(materialized),
+                        stats: delta.stats,
+                    },
+                    streaming,
+                }
+            }
+            other => other,
+        };
+        self.events.lock().unwrap().push(frozen);
     }
 }
 
@@ -159,7 +181,7 @@ async fn first_live_revision_extends_the_snapshot_prefix() {
         .events()
         .into_iter()
         .find_map(|e| match e {
-            ChatSurfaceEvent::DisplayRevision { messages, .. } => Some(messages),
+            ChatSurfaceEvent::DisplayRevision { delta, .. } => Some(delta.snapshot.materialize()),
             _ => None,
         })
         .expect("on_message emits a display revision");

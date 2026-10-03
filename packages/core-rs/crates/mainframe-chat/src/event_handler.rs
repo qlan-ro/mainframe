@@ -6,6 +6,9 @@ use std::time::Instant;
 
 use mainframe_adapter_api::SessionSink;
 use mainframe_adapter_api::pr_detection::PrDetectionSink;
+use mainframe_display::DisplayProjector;
+#[cfg(test)]
+use mainframe_display::FullRebuildProjector;
 use mainframe_runtime::time::now_iso8601;
 use mainframe_types::adapter::{
     ContextUsage, ControlRequest, DetectedPr, MessageMetadata, ProviderQuota, SessionResult,
@@ -16,7 +19,7 @@ use mainframe_types::chat::{
 };
 use mainframe_types::content::LeafContent;
 use mainframe_types::context::SkillFileEntry;
-use mainframe_types::display::{DisplayMessage, ToolCategories};
+use mainframe_types::display::{DisplayMessage, StreamingLeafKind, ToolCategories};
 use mainframe_types::events::{
     ChatNotificationKind, ChatNotificationLevel, ChatUpdatedReason, DaemonEvent,
 };
@@ -28,7 +31,7 @@ use crate::fork::PendingForkState;
 use crate::message_cache::MessageCache;
 use crate::permission_manager::{CancelOutcome, PermissionManager};
 use crate::types::ActiveChat;
-pub(crate) use display_projection::project_display;
+use display_projection::streaming_leaf_kind;
 use partial_overlay::PartialOverlays;
 use worktree_tool::{creates_worktree, moves_transcript};
 
@@ -78,12 +81,14 @@ pub trait EventHandlerDeps: Send + Sync {
     fn on_queued_processed(&self, chat_id: &str, uuid: &str);
     fn on_queued_cleared(&self, chat_id: &str);
     fn get_queued_refs(&self, chat_id: &str) -> Vec<QueuedMessageRef>;
-    /// `prepareMessagesForClient` (Claude-specific; injected to avoid a cycle).
-    fn prepare_messages_for_client(
-        &self,
-        raw: &[ChatMessage],
-        categories: Option<&ToolCategories>,
-    ) -> Vec<DisplayMessage>;
+    /// A fresh [`DisplayProjector`] for one chat's display computation (todo
+    /// #376; replaces `prepareMessagesForClient`, now internal to the
+    /// projector). Required, not defaulted — the #273 silently-inherited-
+    /// default rule: every deps impl must state which projector it is. The
+    /// production impl (`mainframe-server/src/chat_deps.rs`) returns the
+    /// Claude `IncrementalProjector`; every fake wraps its existing fake
+    /// `prepare` in `FullRebuildProjector`.
+    fn display_projector(&self) -> Box<dyn DisplayProjector>;
     /// `stripMainframeCommandTags` (Claude-specific; injected).
     fn strip_command_tags(&self, text: &str) -> String;
 
@@ -298,15 +303,47 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
     /// The chat's current in-flight overlay message, for `ChatManager`'s
     /// resume snapshot (todo #382) — the same read `emit_display_for` uses
     /// for live revisions, so a snapshot taken mid-stream can project it
-    /// through the identical [`display_projection::project_display`].
+    /// through the identical step.
     pub fn current_overlay_message(&self, chat_id: &str) -> Option<ChatMessage> {
         self.partial_overlays.message_for(chat_id)
+    }
+
+    /// The resume-snapshot read (todo #382, #376): bring the chat's
+    /// projection current the same way a live emission does, but without
+    /// notifying — any non-empty delta this produces is stashed as the
+    /// slot's pending delta and merged into the next live emission
+    /// (`MessageCache::display_snapshot`). Returns the materialized
+    /// container list and the overlay's streaming kind, if any.
+    ///
+    /// `raw` is the caller's own freshly-read history (`ChatManager::get_messages`'s
+    /// return), not re-derived from the cache: a cold load past `MAX_CHATS`
+    /// can evict its own cache entry again immediately
+    /// (`history_eviction.rs`), and the snapshot must still reflect what was
+    /// just loaded.
+    pub fn display_snapshot(
+        &self,
+        chat_id: &str,
+        raw: &[ChatMessage],
+    ) -> (Vec<DisplayMessage>, Option<StreamingLeafKind>) {
+        let categories = self.deps.get_tool_categories(chat_id);
+        let overlay = self.partial_overlays.message_for(chat_id);
+        let mut msgs = self.messages.lock().unwrap_or_else(|e| e.into_inner());
+        let materialized = msgs.display_snapshot(chat_id, raw, overlay.as_ref(), categories.as_ref(), || {
+            self.deps.display_projector()
+        });
+        let streaming = overlay
+            .as_ref()
+            .and_then(|o| streaming_leaf_kind(Some(o), materialized.last()));
+        (materialized, streaming)
     }
 }
 
 /// Shared `emitDisplay` used by both `EventHandler::emit_display` and the
-/// sink: recompute the chat's display snapshot and hand it to the chat-surface
-/// seam (the ACP facade's per-connection `SessionStream` owns all diffing).
+/// sink: advance the chat's display projection and hand the resulting delta
+/// to the chat-surface seam (the ACP facade's per-connection `SessionStream`
+/// owns all diffing). Holds the `MessageCache` guard across `notify` (same
+/// as before todo #376): emissions are serialized and the hub handles each
+/// synchronously.
 fn emit_display_for<D: EventHandlerDeps>(
     chat_id: &str,
     messages: &Arc<Mutex<MessageCache>>,
@@ -315,21 +352,27 @@ fn emit_display_for<D: EventHandlerDeps>(
     deps: &D,
     surface: Option<&Arc<dyn ChatSurface>>,
 ) {
-    let msgs = messages.lock().unwrap_or_else(|e| e.into_inner());
-    let raw: &[ChatMessage] = msgs.get(chat_id).map(Vec::as_slice).unwrap_or(&[]);
     // Append the in-flight partial content as a synthetic tail message: it
     // groups into the current assistant turn (or opens it, under the API
     // message id the completed message will keep), so the surface streams
     // the growing block instead of waiting for its completion.
     let overlay = partial_overlays.message_for(chat_id);
-    let (new_display, streaming) = project_display(raw, overlay, |combined| {
-        deps.prepare_messages_for_client(combined, categories)
+    let mut msgs = messages.lock().unwrap_or_else(|e| e.into_inner());
+    let delta = msgs.project_display(chat_id, overlay.as_ref(), categories, || {
+        deps.display_projector()
+    });
+    // The streaming rule reads only the current last container (ordinal
+    // `len - 1`), via the snapshot's cheap `with_mut` peek — never a full
+    // `materialize()` clone of settled history.
+    let streaming = overlay.as_ref().and_then(|o| {
+        let last = delta.snapshot.with_mut(|list| list.last().cloned());
+        streaming_leaf_kind(Some(o), last.as_ref())
     });
     chat_surface::notify(
         surface,
         ChatSurfaceEvent::DisplayRevision {
             chat_id: chat_id.to_string(),
-            messages: new_display,
+            delta,
             streaming,
         },
     );
@@ -420,17 +463,6 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
             )
     }
 
-    /// `MessageCache` exposes only immutable `get`; in-place message mutation
-    /// (TS `delete m.metadata.queued`) is reproduced by clone → mutate → `set`
-    /// (`set` on an existing key replaces the vec without disturbing its slot).
-    fn mutate_messages<R>(&self, f: impl FnOnce(&mut Vec<ChatMessage>) -> R) -> Option<R> {
-        let mut msgs = self.messages.lock().unwrap_or_else(|e| e.into_inner());
-        let mut v = msgs.get(&self.chat_id)?.clone();
-        let r = f(&mut v);
-        msgs.set(&self.chat_id, v);
-        Some(r)
-    }
-
     /// Emits `PermissionRequested` (plus its push, when notify-worthy) for the
     /// request now at the front of the queue, then a `ChatUpdated` — mirroring
     /// what `on_permission` emits for a freshly enqueued front request.
@@ -458,28 +490,6 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
                 .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
         }
     }
-}
-
-/// Strip `queued`/`uuid` metadata from the message with `id`, then move it to the
-/// end (mirrors `delete m.metadata.queued; messages.moveToEnd(id)`).
-fn strip_queued_and_move(v: &mut Vec<ChatMessage>, id: &str) {
-    let Some(pos) = v.iter().position(|m| m.id == id) else {
-        return;
-    };
-    if let Some(md) = v[pos].metadata.as_mut() {
-        md.remove("queued");
-        md.remove("uuid");
-    }
-    let m = v.remove(pos);
-    v.push(m);
-}
-
-fn is_queued(m: &ChatMessage) -> bool {
-    m.metadata
-        .as_ref()
-        .and_then(|md| md.get("queued"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false)
 }
 
 impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
@@ -908,7 +918,10 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
             if let (true, Some(u)) = (queued, uuid) {
                 cached_queued_uuids.insert(u.clone());
                 if !ref_uuids.contains(&u) {
-                    self.mutate_messages(|v| strip_queued_and_move(v, &id));
+                    self.messages
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .strip_queued_and_move_to_end(&self.chat_id, &id);
                     display_changed = true;
                     warn!(
                         chat_id = self.chat_id,
@@ -1132,7 +1145,10 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
             })
         };
         if let Some(id) = &found_id {
-            self.mutate_messages(|v| strip_queued_and_move(v, id));
+            self.messages
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .strip_queued_and_move_to_end(&self.chat_id, id);
         }
         if found_id.is_some() {
             self.emit_display();
@@ -1184,20 +1200,10 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
         debug!(session_id, chat_id = self.chat_id, "session exited");
 
         let had_queued = self
-            .mutate_messages(|v| {
-                let mut had = false;
-                for m in v.iter_mut() {
-                    if is_queued(m) {
-                        if let Some(md) = m.metadata.as_mut() {
-                            md.remove("queued");
-                            md.remove("uuid");
-                        }
-                        had = true;
-                    }
-                }
-                had
-            })
-            .unwrap_or(false);
+            .messages
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .strip_all_queued(&self.chat_id);
         if had_queued {
             self.emit_display();
         }
@@ -1557,12 +1563,8 @@ mod tests {
         fn get_queued_refs(&self, _chat_id: &str) -> Vec<QueuedMessageRef> {
             self.refs.lock().unwrap().clone()
         }
-        fn prepare_messages_for_client(
-            &self,
-            _raw: &[ChatMessage],
-            _categories: Option<&ToolCategories>,
-        ) -> Vec<DisplayMessage> {
-            Vec::new()
+        fn display_projector(&self) -> Box<dyn DisplayProjector> {
+            Box::new(FullRebuildProjector::new(|_raw, _overlay, _categories| Vec::new()))
         }
         fn strip_command_tags(&self, text: &str) -> String {
             text.to_string()
@@ -2182,12 +2184,8 @@ mod tests {
         fn get_queued_refs(&self, _chat_id: &str) -> Vec<QueuedMessageRef> {
             Vec::new()
         }
-        fn prepare_messages_for_client(
-            &self,
-            _raw: &[ChatMessage],
-            _categories: Option<&ToolCategories>,
-        ) -> Vec<DisplayMessage> {
-            Vec::new()
+        fn display_projector(&self) -> Box<dyn DisplayProjector> {
+            Box::new(FullRebuildProjector::new(|_raw, _overlay, _categories| Vec::new()))
         }
         fn strip_command_tags(&self, text: &str) -> String {
             text.to_string()

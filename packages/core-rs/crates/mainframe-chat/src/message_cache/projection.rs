@@ -39,18 +39,29 @@ impl MessageCache {
     }
 
     /// Bring `chat_id`'s projection current: drain its journal, run the
-    /// projector over the raw cache plus `overlay`, and return the resulting
-    /// delta. Creates a fresh slot via `make_projector` when none exists yet
-    /// (first call, or one dropped by a lifecycle mutation) — a fresh
-    /// projector always emits `Full` on its first `project` call.
+    /// projector over its raw history plus `overlay`, and return the
+    /// resulting delta. Creates a fresh slot via `make_projector` when none
+    /// exists yet (first call, or one dropped by a lifecycle mutation) — a
+    /// fresh projector always emits `Full` on its first `project` call.
+    ///
+    /// `raw_override`, when given, is used in place of the cache's own
+    /// `chat_id` entry: a cold resume snapshot's just-loaded history can be
+    /// evicted again before this call runs (an unpinned chat past
+    /// `MAX_CHATS`, `history_eviction.rs`'s "immediate eviction" cases) —
+    /// the snapshot must still project what it loaded, not an empty cache
+    /// entry. The live emission path (`project_display`) has no such gap
+    /// (every mutation it reacts to already landed in the cache), so it
+    /// passes `None` and reads the cache directly.
     fn advance_projection(
         &mut self,
         chat_id: &str,
+        raw_override: Option<&[ChatMessage]>,
         overlay: Option<&ChatMessage>,
         categories: Option<&ToolCategories>,
         make_projector: impl FnOnce() -> Box<dyn DisplayProjector>,
     ) -> DisplayDelta {
-        let raw: &[ChatMessage] = self.cache.get(chat_id).map(Vec::as_slice).unwrap_or(&[]);
+        let cached: &[ChatMessage] = self.cache.get(chat_id).map(Vec::as_slice).unwrap_or(&[]);
+        let raw = raw_override.unwrap_or(cached);
         let slot = self
             .projections
             .entry(chat_id.to_string())
@@ -79,7 +90,7 @@ impl MessageCache {
         categories: Option<&ToolCategories>,
         make_projector: impl FnOnce() -> Box<dyn DisplayProjector>,
     ) -> DisplayDelta {
-        let delta = self.advance_projection(chat_id, overlay, categories, make_projector);
+        let delta = self.advance_projection(chat_id, None, overlay, categories, make_projector);
         let pending = self
             .projections
             .get_mut(chat_id)
@@ -98,11 +109,13 @@ impl MessageCache {
     pub fn display_snapshot(
         &mut self,
         chat_id: &str,
+        raw: &[ChatMessage],
         overlay: Option<&ChatMessage>,
         categories: Option<&ToolCategories>,
         make_projector: impl FnOnce() -> Box<dyn DisplayProjector>,
     ) -> Vec<DisplayMessage> {
-        let delta = self.advance_projection(chat_id, overlay, categories, make_projector);
+        let delta =
+            self.advance_projection(chat_id, Some(raw), overlay, categories, make_projector);
         let materialized = delta.snapshot.materialize();
         if let Some(slot) = self.projections.get_mut(chat_id) {
             slot.pending = Some(match slot.pending.take() {

@@ -147,30 +147,28 @@ impl ChatManager {
     }
 
     /// Resume-replay snapshot (todo #350, plan task 15; overlay parity added
-    /// todo #382): display history plus any still-open gate for `chat_id`,
-    /// gathered in one call so the ACP facade's `session/resume` doesn't
-    /// have to sequence `get_messages`/`get_pending_permission` itself.
+    /// todo #382; incremental projection added todo #376): display history
+    /// plus any still-open gate for `chat_id`, gathered in one call so the
+    /// ACP facade's `session/resume` doesn't have to sequence
+    /// `get_messages`/`get_pending_permission` itself.
     ///
-    /// Reads the chat's in-flight partial overlay AFTER the single
-    /// `get_messages` call and projects it through the same
-    /// [`crate::event_handler::project_display`] live revisions use, so a
-    /// snapshot taken mid-stream matches a live `DisplayRevision` taken at
-    /// the same moment (spec Decision 39). `on_message` removes the overlay
-    /// before it appends the final message, so this order cannot yield both
-    /// the final message and the overlay — the append's own display
-    /// revision is buffered from `begin_resume` and the catch-up restores it
-    /// (see the plan's "Read order" risk note). The overlay never enters the
-    /// settled cache: this read neither writes the cache nor persists the
-    /// overlay anywhere.
+    /// Keeps its `get_messages` load (so a cold chat's transcript is read
+    /// exactly once), then reads `EventHandler::display_snapshot` instead of
+    /// re-running `prepare`: that call brings the chat's projection current
+    /// under the cache lock, the same step a live emission uses, without
+    /// notifying — so a snapshot taken mid-stream matches a live
+    /// `DisplayRevision` taken at the same moment (spec Decision 39), and
+    /// any delta it produces carries forward to the next live emission
+    /// rather than being lost. `on_message` removes the overlay before it
+    /// appends the final message, so this order cannot yield both the final
+    /// message and the overlay — the append's own display revision is
+    /// buffered from `begin_resume` and the catch-up restores it (see the
+    /// plan's "Read order" risk note). The overlay never enters the settled
+    /// cache: this read neither writes the cache nor persists the overlay
+    /// anywhere.
     pub async fn get_resume_snapshot(&self, chat_id: &str) -> ResumeSnapshot {
         let raw = self.get_messages(chat_id).await;
-        let categories = self.deps.get_tool_categories(chat_id);
-        let overlay = self.event_handler.current_overlay_message(chat_id);
-        let deps = self.deps.as_ref();
-        let (messages, streaming) =
-            crate::event_handler::project_display(&raw, overlay, |combined| {
-                deps.prepare_messages_for_client(combined, categories.as_ref())
-            });
+        let (messages, streaming) = self.event_handler.display_snapshot(chat_id, &raw);
         // Reconcile the persisted `transcriptMissing` flag the same way
         // `get_display_messages` did — the resume snapshot doesn't surface
         // the flag itself, only the side effect (persist + broadcast).
