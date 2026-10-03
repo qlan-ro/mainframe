@@ -1,0 +1,19 @@
+# Manual run of the mock e2e suite for the changesets version PR. ci.yml does
+# not run the suite on that PR (the branch is force-pushed after every merge
+# to main); it fails the "e2e-mock / e2e-mock" check with a pointer here. When
+# the PR is ready to merge, run this on branch changeset-release/main:
+#   gh workflow run e2e-gate.yml --ref changeset-release/main
+# or Actions → "e2e gate (manual)" → Run workflow → changeset-release/main.
+# The job below calls the same reusable workflow, so its check has the same
+# name and, being the newer run on that head, is what the ruleset evaluates.
+# A later update to the branch needs a new run.
+name: e2e gate (manual)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  e2e-mock:
+    uses: ./.github/workflows/e2e-mock.yml
+    with:
+      mode: run
