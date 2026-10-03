@@ -14,7 +14,15 @@ jobs:
       contents: write
       pull-requests: write
     steps:
+      # token: changesets/action pushes the version branch with the CHECKOUT's
+      # credentials and only uses its env GITHUB_TOKEN for the API. With the
+      # default token the push is authored by github-actions[bot], so the
+      # version PR's CI runs end `action_required` (approval needed) and its
+      # required checks never report. GH_PAT here makes the push, and so the
+      # PR's `synchronize` events, come from the PAT owner.
       - uses: actions/checkout@v7
+        with:
+          token: ${{ secrets.GH_PAT }}
 
       - uses: pnpm/action-setup@v6
         with:

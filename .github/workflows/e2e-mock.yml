@@ -55,10 +55,24 @@ jobs:
       # `require-manual` there. Failing here keeps the PR unmergeable until
       # e2e-gate.yml has run on its current head — that run carries the same
       # check name and, being newer, is the one the ruleset evaluates.
+      # Passes when e2e-gate.yml already succeeded on this exact head: the
+      # ruleset reads the NEWEST check run of a name, so without this a CI
+      # run that lands after the gate (an approval, a re-run) would overwrite
+      # the gate's green with this step's red and force another hour-long run.
       - name: Require a manual run on the version PR
         if: ${{ inputs.mode == 'require-manual' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          HEAD_REF: ${{ github.head_ref || github.ref_name }}
         run: |
-          echo "::error::The e2e gate has not run on this head. Run it with: gh workflow run e2e-gate.yml --ref ${GITHUB_HEAD_REF} (Actions → \"e2e gate (manual)\" → branch ${GITHUB_HEAD_REF}). A later push to the branch needs a new run."
+          prior=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?check_name=e2e-mock%20%2F%20e2e-mock&status=completed&per_page=50" \
+            --jq '[.check_runs[] | select(.conclusion == "success")] | length')
+          if [ "${prior:-0}" -gt 0 ]; then
+            echo "e2e gate already green on ${HEAD_SHA} (${prior} successful run(s)); nothing to do."
+            exit 0
+          fi
+          echo "::error::The e2e gate has not run on this head. Run it with: gh workflow run e2e-gate.yml --ref ${HEAD_REF} (Actions → \"e2e gate (manual)\" → branch ${HEAD_REF}). A later push to the branch needs a new run."
           exit 1
 
       - uses: actions/checkout@v7
