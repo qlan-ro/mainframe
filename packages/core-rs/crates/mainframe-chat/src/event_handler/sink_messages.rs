@@ -13,14 +13,11 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
             "assistant message received"
         );
 
-        // A completed block supersedes the partial overlay: it lands in the
-        // cache under the same item id (the API message id for a message's
-        // first block), so the emit below converges the display in place —
-        // no id change, no reset frame.
-        if presentation
-            .as_ref()
-            .and_then(|p| p.parent_tool_use_id.as_ref())
-            .is_none()
+        if !content.iter().any(has_child_owner)
+            && presentation
+                .as_ref()
+                .and_then(|p| p.parent_tool_use_id.as_ref())
+                .is_none()
         {
             self.take_partial_overlay();
         }
@@ -179,4 +176,39 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         }
         (meta, vendor_id)
     }
+}
+
+fn has_child_owner(content: &MessageContent) -> bool {
+    let parent = match content {
+        MessageContent::Leaf(
+            LeafContent::Text {
+                parent_tool_use_id, ..
+            }
+            | LeafContent::Thinking {
+                parent_tool_use_id, ..
+            }
+            | LeafContent::Image {
+                parent_tool_use_id, ..
+            }
+            | LeafContent::SkillLoaded {
+                parent_tool_use_id, ..
+            },
+        ) => parent_tool_use_id,
+        MessageContent::Node(
+            MessageContentNode::ToolUse {
+                parent_tool_use_id, ..
+            }
+            | MessageContentNode::ToolResult {
+                parent_tool_use_id, ..
+            }
+            | MessageContentNode::PermissionRequest {
+                parent_tool_use_id, ..
+            }
+            | MessageContentNode::Error {
+                parent_tool_use_id, ..
+            }
+            | MessageContentNode::Compaction { parent_tool_use_id },
+        ) => parent_tool_use_id,
+    };
+    parent.as_deref().is_some_and(|id| !id.is_empty())
 }

@@ -133,3 +133,29 @@ fn malformed_context_keeps_the_legacy_parent_partial_visible() {
     assert_eq!(overlay.content, text("Visible 🦀"));
     assert!(overlay.metadata.is_none());
 }
+
+#[test]
+fn attributed_child_without_context_preserves_parent_until_parent_completion() {
+    let handler = handler();
+    let sink = handler.build_sink("c1", Some("session".into()));
+    sink.on_message_partial("parent", text("parent partial"));
+    let before = handler.partial_overlays.message_for("c1").unwrap();
+    let child = vec![MessageContent::Leaf(LeafContent::Text {
+        text: "child complete".into(),
+        parent_tool_use_id: Some("tool".into()),
+    })];
+    sink.on_message(child.clone(), metadata("child"));
+    assert_eq!(handler.partial_overlays.message_for("c1"), Some(before));
+    {
+        let cached = handler.messages.lock().unwrap();
+        let message = cached
+            .get("c1")
+            .unwrap()
+            .iter()
+            .find(|m| m.id == "child")
+            .unwrap();
+        assert_eq!(message.content, child);
+    }
+    sink.on_message(text("parent complete"), metadata("parent"));
+    assert!(handler.partial_overlays.message_for("c1").is_none());
+}

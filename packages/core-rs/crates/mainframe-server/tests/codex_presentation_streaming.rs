@@ -125,20 +125,35 @@ fn child_completion_preserves_parent_overlay_and_final_source_identity() {
     );
 }
 #[test]
-fn child_with_explicit_item_turn_but_no_start_cannot_clear_parent_overlay() {
-    let mut h = Harness::new();
-    h.send("item/completed",json!({"threadId":"parent","turnId":"turn","item":{"type":"subAgentActivity","id":"spawn","kind":"started","agentThreadId":"child","agentPath":"/root/child"}}));
-    h.item("item/started", "parent", "answer", "", "final_answer");
-    h.delta("Hello");
-    let before = h.handler.current_overlay_message("chat").unwrap();
-    h.item(
-        "item/completed",
-        "child",
-        "child-answer",
-        "child done",
-        "final_answer",
-    );
-    assert_eq!(h.handler.current_overlay_message("chat"), Some(before));
+fn child_completion_preserves_parent_overlay_with_or_without_item_turn() {
+    for turn in [Some("turn"), None] {
+        let mut h = Harness::new();
+        h.send("item/completed",json!({"threadId":"parent","turnId":"turn","item":{"type":"subAgentActivity","id":"spawn","kind":"started","agentThreadId":"child","agentPath":"/root/child"}}));
+        h.item("item/started", "parent", "answer", "", "final_answer");
+        h.delta("Hello");
+        let before = h.handler.current_overlay_message("chat").unwrap();
+        let mut completed = json!({"threadId":"child","item":{
+            "id":"child-answer","type":"agentMessage","text":"child done","phase":"final_answer"
+        }});
+        if let Some(turn) = turn {
+            completed["turnId"] = json!(turn);
+        }
+        h.send("item/completed", completed);
+        assert_eq!(
+            h.handler.current_overlay_message("chat"),
+            Some(before),
+            "turn: {turn:?}"
+        );
+        h.delta(" world");
+        h.item(
+            "item/completed",
+            "parent",
+            "answer",
+            "Hello world",
+            "final_answer",
+        );
+        assert!(h.handler.current_overlay_message("chat").is_none());
+    }
 }
 #[tokio::test]
 async fn work_and_final_provenance_survive_full_cursor_and_continued_streaming() {
