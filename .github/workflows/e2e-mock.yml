@@ -19,24 +19,25 @@ on:
   #   branches: [main]
   # push:
   #   branches: [main]
-  workflow_dispatch: # manual trigger
-    inputs:
-      run:
-        description: Run the suite (false only reports the job as skipped)
-        type: boolean
-        default: true
-  # Invoked by release.yml (auto-publish gate) and ci.yml (version-PR gate).
-  # `run` exists for ci.yml: a caller job skipped by its own `if:` reports a
-  # check named after the caller ("e2e-mock"), while a job that runs reports
-  # the callee's name ("e2e-mock / e2e-mock"). Skipping INSIDE this workflow
-  # keeps one name in both cases, so main's required check is satisfied (as
-  # skipped) on feature PRs and real on the version PR.
+  workflow_dispatch: # ad-hoc run on any ref (reports as "e2e-mock", not the gate name)
+  # Invoked by release.yml (auto-publish gate), ci.yml (every PR) and
+  # e2e-gate.yml (manual run on the version PR). `mode` exists for ci.yml: a
+  # caller job skipped by its own `if:` reports a check named after the caller
+  # ("e2e-mock"), while a job that runs reports the callee's name
+  # ("e2e-mock / e2e-mock"). Deciding INSIDE this workflow keeps one name in
+  # every case, which is what main's required check matches on:
+  #   run            — the suite runs (default; release.yml and e2e-gate.yml)
+  #   skip           — the job is skipped, which satisfies the required check
+  #                    (feature PRs)
+  #   require-manual — the job fails at once with a pointer to e2e-gate.yml,
+  #                    so the PR cannot merge until someone runs the suite on
+  #                    its current head (the changesets version PR)
   workflow_call:
     inputs:
-      run:
-        description: Run the suite; false reports the job as skipped under the same check name
-        type: boolean
-        default: true
+      mode:
+        description: run | skip | require-manual
+        type: string
+        default: run
         required: false
 
 # One run per ref; cancel superseded runs so PR pushes don't pile up jobs.
@@ -46,9 +47,20 @@ concurrency:
 
 jobs:
   e2e-mock:
-    if: ${{ inputs.run }}
+    if: ${{ inputs.mode != 'skip' }}
     runs-on: ubuntu-latest
     steps:
+      # The changesets version PR is force-pushed after every merge to main;
+      # running the hour-long suite on each update is waste, so ci.yml passes
+      # `require-manual` there. Failing here keeps the PR unmergeable until
+      # e2e-gate.yml has run on its current head — that run carries the same
+      # check name and, being newer, is the one the ruleset evaluates.
+      - name: Require a manual run on the version PR
+        if: ${{ inputs.mode == 'require-manual' }}
+        run: |
+          echo "::error::The e2e gate has not run on this head. Run it with: gh workflow run e2e-gate.yml --ref ${GITHUB_HEAD_REF} (Actions → \"e2e gate (manual)\" → branch ${GITHUB_HEAD_REF}). A later push to the branch needs a new run."
+          exit 1
+
       - uses: actions/checkout@v7
 
       # This job builds the daemon (build:app:tauri), which links libdbus via
