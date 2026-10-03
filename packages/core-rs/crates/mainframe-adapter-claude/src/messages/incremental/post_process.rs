@@ -3,29 +3,34 @@
 //! scoped to only the groups this call actually (re)folded.
 
 use mainframe_types::chat::ChatMessage;
-use mainframe_types::display::DisplayMessage;
 
 use super::group::Group;
 use crate::messages::task_subject_backfill::{SubjectScope, backfill_from};
 
 /// Backfill task subjects across `groups[from..]`, continuing `scope`
 /// (already positioned at "before `from`"). Rewrites each group's display
-/// in place when backfill changed it.
-pub(crate) fn backfill_tail(groups: &mut [Group], from: usize, scope: &mut SubjectScope) {
-    let displays: Vec<DisplayMessage> = groups[from..]
-        .iter()
-        .filter_map(|g| g.display.clone())
-        .collect();
-    if displays.is_empty() {
-        return;
-    }
-    let backfilled = backfill_from(&displays, scope);
-    let mut backfilled = backfilled.into_iter();
+/// in place when backfill changed it, and records a `scope_before`
+/// checkpoint per group so a later call can look up "the scope entering
+/// group `r`" in `O(1)` instead of re-walking `groups[..r]` (todo #376
+/// follow-up). `scope_before[i]` is the scope entering group `i`; entries
+/// from `from` onward are rebuilt here, matching the groups this call
+/// actually touched.
+pub(crate) fn backfill_tail(
+    groups: &mut [Group],
+    from: usize,
+    scope: &mut SubjectScope,
+    scope_before: &mut Vec<SubjectScope>,
+) {
+    scope_before.truncate(from);
     for group in &mut groups[from..] {
-        if group.display.is_some() {
-            group.display = backfilled.next();
-        }
+        scope_before.push(scope.clone());
+        let Some(display) = group.display.take() else {
+            continue;
+        };
+        let backfilled = backfill_from(std::slice::from_ref(&display), scope);
+        group.display = backfilled.into_iter().next();
     }
+    scope_before.push(scope.clone());
 }
 
 /// Apply each newly folded group's own tool-call timing — read only from
@@ -47,7 +52,7 @@ pub(crate) fn apply_timing_tail(groups: &mut [Group], raw: &[ChatMessage], from:
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mainframe_types::display::{DisplayContent, DisplayMessageType, TaskProgressItem, ToolCategory};
+    use mainframe_types::display::{DisplayContent, DisplayMessage, DisplayMessageType, TaskProgressItem, ToolCategory};
     use serde_json::json;
     use std::collections::HashMap;
 
@@ -110,7 +115,8 @@ mod tests {
                 .unwrap(),
         ]);
         let mut groups = vec![task_group("tail", vec![update_item("1")])];
-        backfill_tail(&mut groups, 0, &mut scope);
+        let mut scope_before = Vec::new();
+        backfill_tail(&mut groups, 0, &mut scope, &mut scope_before);
         assert_eq!(
             progress_items(&groups[0])[0].input.get("subject"),
             Some(&json!("Seeded task"))

@@ -3,14 +3,16 @@
 //! re-conversion that falls back to a counted rewind when it cannot stay
 //! local (see the plan's "Update dispatch" step 3).
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
+use mainframe_types::chat::ChatMessage;
 use mainframe_types::display::{DisplayContent, DisplayMessage, DisplayNode, ToolCategories};
 use mainframe_types::tool_call_timing::ToolCallTiming;
 
 use super::fold::fold_merge_group;
-use super::group::{Group, group_at_raw_index};
-use mainframe_display::apply_tool_call_timing_to_container;
+use super::group::{FrozenTracker, Group, group_at_raw_index, owned_after};
+use crate::messages::task_subject_backfill::{SubjectScope, backfill_from};
+use mainframe_display::{apply_tool_call_timing, apply_tool_call_timing_to_container};
 
 /// Patch the owning group's container for a `timing(id)` journal entry.
 /// `O(1)`: a map lookup (the caller resolves `group_idx` from `tool_owner`)
@@ -44,17 +46,27 @@ pub(crate) enum NestedPatchOutcome {
 /// flip, a top-level task-registration change (which could shift later
 /// groups' subject backfill), or a tool id now colliding with a later,
 /// already-settled group.
+///
+/// On success, re-applies the two post-processing passes a tail refold
+/// would have given this group — its own tool-call timing
+/// (`apply_timing_tail`'s per-group pass) and subject backfill continuing
+/// the scope entering it (`backfill_tail`) — so an in-place patch produces
+/// exactly what a rewind through this group would have (todo #376
+/// follow-up: a raw `fold_merge_group` result always carries
+/// `timing: None` and no backfilled subject).
 pub(crate) fn try_patch_nested(
     groups: &mut [Group],
-    raw: &[mainframe_types::chat::ChatMessage],
+    raw: &[ChatMessage],
     idx: usize,
     categories: Option<&ToolCategories>,
+    tool_owner: &HashMap<String, usize>,
+    scope_before_g: SubjectScope,
 ) -> NestedPatchOutcome {
     let g = group_at_raw_index(groups, idx);
     if !groups[g].mergeable {
         return NestedPatchOutcome::FallBack(g);
     }
-    let frozen = claimed_before(groups, g);
+    let frozen = FrozenTracker::new(tool_owner, g);
     let (new_display, claimed) = fold_merge_group(
         raw,
         groups[g].raw_range.clone(),
@@ -66,7 +78,7 @@ pub(crate) fn try_patch_nested(
     if new_display.is_some() != groups[g].display.is_some() {
         return NestedPatchOutcome::FallBack(g);
     }
-    if collides_with_later(groups, g, &claimed) {
+    if owned_after(tool_owner, g, &claimed) {
         return NestedPatchOutcome::FallBack(g);
     }
     if task_registrations_changed(groups[g].display.as_ref(), new_display.as_ref()) {
@@ -75,20 +87,27 @@ pub(crate) fn try_patch_nested(
 
     groups[g].display = new_display;
     groups[g].claimed_tool_ids = claimed;
+    reapply_post_processing(groups, raw, g, scope_before_g);
     NestedPatchOutcome::Patched(g)
 }
 
-fn claimed_before(groups: &[Group], g: usize) -> HashSet<String> {
-    groups[..g]
-        .iter()
-        .flat_map(|group| group.claimed_tool_ids.iter().cloned())
-        .collect()
-}
+/// Mirrors `apply_timing_tail` + `backfill_tail` for exactly this one
+/// group: its own raw range for timing, and the scope entering it (passed
+/// in by the caller from the `scope_before` checkpoint) for subject
+/// backfill.
+fn reapply_post_processing(groups: &mut [Group], raw: &[ChatMessage], g: usize, mut scope: SubjectScope) {
+    let Some(display) = groups[g].display.as_mut() else {
+        return;
+    };
+    let end = groups[g].raw_range.end.min(raw.len());
+    let start = groups[g].raw_range.start.min(end);
+    apply_tool_call_timing(&raw[start..end], std::slice::from_mut(display));
 
-fn collides_with_later(groups: &[Group], g: usize, claimed: &[String]) -> bool {
-    groups[g + 1..]
-        .iter()
-        .any(|group| group.claimed_tool_ids.iter().any(|id| claimed.contains(id)))
+    let Some(display) = groups[g].display.take() else {
+        return;
+    };
+    let backfilled = backfill_from(std::slice::from_ref(&display), &mut scope);
+    groups[g].display = backfilled.into_iter().next();
 }
 
 /// The ids of top-level `TaskCreate` entries a container registers — a

@@ -297,3 +297,30 @@ fn old_vs_new_per_partial_cost() {
         report("new", settled_len, run_new, iterations);
     }
 }
+
+/// Scaling gate (todo #376 follow-up), unlike `old_vs_new_per_partial_cost`
+/// above: this one actually fails. `ProjectionStats` (the existing scaling
+/// gates in `mainframe-adapter-claude`/`mainframe-server`) cannot see
+/// `frozen_state`-style work — rebuilding a `HashSet`/`Vec` over
+/// `groups[..r]` on every call — because that work never shows up in any
+/// counter the stats struct reports. Allocation count does: a partial whose
+/// cost is independent of settled history length allocates roughly the same
+/// number of times whether 100 or 10,000 messages precede it. A `10x`
+/// tolerance (rather than exact equality) absorbs incidental allocator
+/// noise (hashmap resizes, small capacity differences) without hiding an
+/// `O(history)` regression, which would multiply allocations by roughly
+/// 100x between these two sizes.
+#[test]
+fn new_path_allocation_count_is_independent_of_settled_history_length() {
+    let small = run_new(100);
+    let large = run_new(10_000);
+    assert_eq!(small.len(), large.len());
+    for (i, (s, l)) in small.iter().zip(large.iter()).enumerate() {
+        assert!(
+            l.allocs <= s.allocs.saturating_mul(10).max(50),
+            "step {i}: allocations grew with settled history length (100 settled: {} allocs, 10,000 settled: {} allocs) — a partial's cost must not scale with history",
+            s.allocs,
+            l.allocs
+        );
+    }
+}

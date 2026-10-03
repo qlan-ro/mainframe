@@ -4,6 +4,7 @@
 //! [`group_at_raw_index`] binary-search a raw index to its owning group in
 //! `O(log groups)` instead of a linear scan over settled history.
 
+use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 
 use mainframe_types::display::DisplayMessage;
@@ -53,6 +54,82 @@ pub(crate) fn group_at_raw_index(groups: &[Group], idx: usize) -> usize {
         }
     }
     lo
+}
+
+/// An `O(1)`-seeded membership check for "is this id claimed by a frozen
+/// (settled, not-being-refolded) group" — replaces building a fresh
+/// `HashSet` over `groups[..r]` on every call (todo #376 follow-up: that
+/// scan made a partial's cost grow with settled history length).
+///
+/// Backed by a persistent id -> owning-group-index map (`tool_owner` or
+/// `display_owner`, kept up to date by the projector across rewinds) plus a
+/// `local` set for ids claimed by groups folded *during this call*, which
+/// have no global index yet.
+pub(crate) struct FrozenTracker<'a> {
+    owner: &'a HashMap<String, usize>,
+    /// An id is frozen when its owning group index is below this.
+    threshold: usize,
+    local: HashSet<String>,
+}
+
+impl<'a> FrozenTracker<'a> {
+    pub(crate) fn new(owner: &'a HashMap<String, usize>, threshold: usize) -> Self {
+        Self {
+            owner,
+            threshold,
+            local: HashSet::new(),
+        }
+    }
+
+    pub(crate) fn contains(&self, id: &str) -> bool {
+        self.local.contains(id) || self.owner.get(id).is_some_and(|&o| o < self.threshold)
+    }
+
+    pub(crate) fn insert(&mut self, id: String) {
+        self.local.insert(id);
+    }
+
+    pub(crate) fn extend(&mut self, ids: impl IntoIterator<Item = String>) {
+        self.local.extend(ids);
+    }
+}
+
+/// An id is "claimed later" (owned by a group at or above `g + 1`) when its
+/// global owner index exceeds `g` — an `O(1)` lookup per id instead of
+/// scanning every group after `g`.
+pub(crate) fn owned_after(owner: &HashMap<String, usize>, g: usize, ids: &[String]) -> bool {
+    ids.iter().any(|id| owner.get(id).is_some_and(|&o| o > g))
+}
+
+/// Offset every new group's `raw_range` by `offset` — turns a fold over a
+/// `start..` tail slice back into absolute raw indices.
+pub(crate) fn offset_groups(groups: Vec<Group>, offset: usize) -> Vec<Group> {
+    groups
+        .into_iter()
+        .map(|mut g| {
+            g.raw_range = (g.raw_range.start + offset)..(g.raw_range.end + offset);
+            g
+        })
+        .collect()
+}
+
+/// Rebuild the `tool_owner` index for `groups[from..]` after a rewind and
+/// refold settled a new tail.
+pub(crate) fn rebuild_tool_owner(tool_owner: &mut HashMap<String, usize>, groups: &[Group], from: usize) {
+    for (idx, group) in groups.iter().enumerate().skip(from) {
+        for id in &group.claimed_tool_ids {
+            tool_owner.insert(id.clone(), idx);
+        }
+    }
+}
+
+/// The `display_owner` counterpart of [`rebuild_tool_owner`].
+pub(crate) fn rebuild_display_owner(display_owner: &mut HashMap<String, usize>, groups: &[Group], from: usize) {
+    for (idx, group) in groups.iter().enumerate().skip(from) {
+        if let Some(display) = group.display.as_ref() {
+            display_owner.insert(display.id.clone(), idx);
+        }
+    }
 }
 
 #[cfg(test)]

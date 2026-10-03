@@ -2,13 +2,10 @@
 //! re-fold, and the frozen aggregate state (tool ids, display ids, subject
 //! scope) a refold from that point needs to seed with.
 
-use std::collections::HashSet;
-
 use mainframe_display::RawChange;
-use mainframe_types::display::DisplayMessage;
 
 use super::group::{Group, group_at_raw_index};
-use crate::messages::task_subject_backfill::{SubjectScope, scope_after};
+use crate::messages::task_subject_backfill::SubjectScope;
 
 /// The baseline rewind point before any `Structural`/fallback lowers it
 /// further: the last group when anything was appended, or when the overlay
@@ -42,30 +39,37 @@ pub(crate) fn apply_structural_entries(groups: &[Group], entries: &[RawChange], 
     r
 }
 
-/// Aggregate the claims and subject scope for `groups[..r]` — the prefix
-/// that stays frozen across this call. Bounded by `r`, not total history:
-/// in the common hot path `r` sits near `groups.len()`, so this is cheap.
-pub(crate) fn frozen_state(groups: &[Group], r: usize) -> (HashSet<String>, HashSet<String>, SubjectScope) {
-    let frozen = &groups[..r];
-    let tool_ids = frozen
-        .iter()
-        .flat_map(|g| g.claimed_tool_ids.iter().cloned())
-        .collect();
-    let display_ids = frozen
-        .iter()
-        .filter_map(|g| g.display.as_ref().map(|d| d.id.clone()))
-        .collect();
-    let displays: Vec<DisplayMessage> = frozen
-        .iter()
-        .filter_map(|g| g.display.clone())
-        .collect();
-    (tool_ids, display_ids, scope_after(&displays))
+/// The subject scope entering group `r` — an `O(1)` lookup (a clone of a
+/// cached checkpoint) instead of re-walking `groups[..r]` on every call.
+/// `scope_before[i]` is the scope entering group `i`, kept in sync with
+/// `groups.len() + 1` by [`super::post_process::backfill_tail`]; `r` may
+/// legitimately equal `groups.len()` (no rewind), which is why the index is
+/// clamped rather than asserted.
+pub(crate) fn scope_before(scope_before: &[SubjectScope], r: usize) -> SubjectScope {
+    scope_before
+        .get(r)
+        .cloned()
+        .unwrap_or_else(SubjectScope::new)
 }
 
 /// The raw index the refold must start from: group `r`'s own start, or
 /// `raw_len` (fold nothing but a possible overlay) when `r` is past the end.
 pub(crate) fn refold_start(groups: &[Group], r: usize, raw_len: usize) -> usize {
     groups.get(r).map(|g| g.raw_range.start).unwrap_or(raw_len)
+}
+
+/// The raw slice an incremental call must (re)fold: `raw[start..]` plus a
+/// synthetic overlay tail, if present.
+pub(crate) fn combined_tail(
+    raw: &[mainframe_types::chat::ChatMessage],
+    start: usize,
+    overlay: Option<&mainframe_types::chat::ChatMessage>,
+) -> Vec<mainframe_types::chat::ChatMessage> {
+    let mut combined = raw[start.min(raw.len())..].to_vec();
+    if let Some(overlay) = overlay {
+        combined.push(overlay.clone());
+    }
+    combined
 }
 
 /// Tool ids owned by the groups about to be discarded (`groups[r..]`) —
@@ -75,6 +79,15 @@ pub(crate) fn ids_owned_by_discarded(groups: &[Group], r: usize) -> Vec<String> 
     groups[r..]
         .iter()
         .flat_map(|g| g.claimed_tool_ids.iter().cloned())
+        .collect()
+}
+
+/// Display ids owned by the groups about to be discarded — the
+/// `display_owner` equivalent of [`ids_owned_by_discarded`].
+pub(crate) fn display_ids_owned_by_discarded(groups: &[Group], r: usize) -> Vec<String> {
+    groups[r..]
+        .iter()
+        .filter_map(|g| g.display.as_ref().map(|d| d.id.clone()))
         .collect()
 }
 

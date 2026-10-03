@@ -74,6 +74,10 @@ pub(crate) fn backfill_from(
 
 /// The scope after folding `messages` from a fresh namespace — used to seed
 /// a resumed fold over a later suffix without re-walking from index 0.
+/// `pub(crate)` for its unit test below only; production code gets this
+/// from the incremental projector's cached `scope_before` checkpoints
+/// instead (todo #376 follow-up — see `messages/incremental/rewind.rs`).
+#[cfg(test)]
 pub(crate) fn scope_after(messages: &[DisplayMessage]) -> SubjectScope {
     let mut scope = SubjectScope::new();
     let _ = backfill_from(messages, &mut scope);

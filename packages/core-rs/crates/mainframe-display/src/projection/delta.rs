@@ -21,6 +21,14 @@ pub struct ProjectionStats {
     pub full_rebuilds: usize,
     /// 1 if a fallback anomaly forced a counted suffix rebuild, else 0.
     pub suffix_rebuilds: usize,
+    /// Settled groups scanned this call to recompute frozen claim/scope
+    /// state (todo #376 follow-up gate): a projector whose per-call cost is
+    /// independent of history keeps this at (or near) 0 regardless of how
+    /// much settled history precedes `r`. `IncrementalProjector` looks this
+    /// up via persistent indexes instead of rescanning, so it stays flat;
+    /// a projector that rebuilds a `HashSet`/`Vec` over `groups[..r]` on
+    /// every call would make this grow with settled history length.
+    pub frozen_scan_ops: usize,
 }
 
 /// A container-level delta. `full: true` means "ignore `changes`/`len`, take

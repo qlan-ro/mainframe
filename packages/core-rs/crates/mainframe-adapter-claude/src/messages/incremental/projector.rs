@@ -12,17 +12,32 @@ use mainframe_display::{
 use mainframe_types::chat::ChatMessage;
 use mainframe_types::display::ToolCategories;
 
-use super::group::{Group, group_at_raw_index};
+use super::group::{
+    FrozenTracker, Group, group_at_raw_index, offset_groups, rebuild_display_owner, rebuild_tool_owner,
+};
 use super::ordinals::{renumber_from, sync_snapshot, total_len};
 use super::patches::{NestedPatchOutcome, apply_timing_patch, try_patch_nested};
 use super::post_process::{apply_timing_tail, backfill_tail};
 use super::refold::refold_range;
-use super::rewind::{apply_structural_entries, baseline_rewind_point, frozen_state, ids_owned_by_discarded, refold_start};
+use super::rewind::{
+    apply_structural_entries, baseline_rewind_point, combined_tail, display_ids_owned_by_discarded,
+    ids_owned_by_discarded, refold_start, scope_before,
+};
 use crate::messages::task_subject_backfill::SubjectScope;
 
 pub struct IncrementalProjector {
     groups: Vec<Group>,
     tool_owner: HashMap<String, usize>,
+    /// Display-id -> owning-group-index index, the `display_owner`
+    /// counterpart of `tool_owner` (todo #376 follow-up): lets a dedupe
+    /// check against the frozen prefix be an `O(1)` lookup instead of a
+    /// fresh `HashSet` built over `groups[..r]` on every call.
+    display_owner: HashMap<String, usize>,
+    /// `scope_before[i]` is the task-subject scope entering group `i`,
+    /// kept in sync with `groups.len() + 1` by `backfill_tail`. Lets "the
+    /// scope before `r`" be an `O(1)` clone instead of re-walking
+    /// `groups[..r]`.
+    scope_before: Vec<SubjectScope>,
     categories: Option<ToolCategories>,
     had_overlay: bool,
     initialized: bool,
@@ -35,6 +50,8 @@ impl Default for IncrementalProjector {
         Self {
             groups: Vec::new(),
             tool_owner: HashMap::new(),
+            display_owner: HashMap::new(),
+            scope_before: Vec::new(),
             categories: None,
             had_overlay: false,
             initialized: false,
@@ -65,21 +82,26 @@ impl IncrementalProjector {
     fn full_rebuild(&mut self, input: &ProjectionInput<'_>) -> DisplayDelta {
         self.groups.clear();
         self.tool_owner.clear();
+        self.display_owner.clear();
+        self.scope_before.clear();
         let combined = combined_tail(input.raw, 0, input.overlay);
+        let empty_tool_owner = HashMap::new();
+        let empty_display_owner = HashMap::new();
         let outcome = refold_range(
             &combined,
             0..combined.len(),
             input.categories,
             &mut [],
-            &mut Default::default(),
-            &mut Default::default(),
+            &mut FrozenTracker::new(&empty_tool_owner, 0),
+            &mut FrozenTracker::new(&empty_display_owner, 0),
         );
         self.groups = offset_groups(outcome.new_groups, 0);
         let mut scope = SubjectScope::new();
-        backfill_tail(&mut self.groups, 0, &mut scope);
+        backfill_tail(&mut self.groups, 0, &mut scope, &mut self.scope_before);
         apply_timing_tail(&mut self.groups, input.raw, 0);
         renumber_from(&mut self.groups, 0);
         rebuild_tool_owner(&mut self.tool_owner, &self.groups, 0);
+        rebuild_display_owner(&mut self.display_owner, &self.groups, 0);
 
         self.categories = input.categories.cloned();
         self.had_overlay = input.overlay.is_some();
@@ -118,14 +140,65 @@ impl IncrementalProjector {
         let mut patched: Vec<usize> = Vec::new();
         let r = self.apply_local_patches(raw, entries, categories, r, &mut patched, &mut suffix_rebuilds);
 
-        let (mut frozen_tool_ids, mut frozen_display_ids, mut scope) = frozen_state(&self.groups, r);
+        let (groups_rebuilt, raw_folded) = self.refold_and_postprocess(raw, overlay, categories, r, &mut patched);
+
+        self.categories = categories.cloned();
+        self.had_overlay = overlay_now;
+
+        let len = total_len(&self.groups);
+        let changes = self.collect_changes(r, &patched);
+        sync_snapshot(&self.snapshot, len, &changes);
+        self.stats = ProjectionStats {
+            raw_folded,
+            groups_rebuilt,
+            containers_patched: patched.len(),
+            full_rebuilds: 0,
+            suffix_rebuilds,
+            frozen_scan_ops: 0,
+        };
+        DisplayDelta {
+            full: false,
+            changes,
+            len,
+            snapshot: self.snapshot.clone(),
+            stats: self.stats,
+        }
+    }
+
+    /// Truncate `groups` to `r`, refold the combined raw/overlay tail, and
+    /// run the two tail post-processing passes (subject backfill, tool-call
+    /// timing) — the shared body of an incremental call once the rewind
+    /// point and local patches are settled. Returns `(groups_rebuilt,
+    /// raw_folded)` for the caller's `ProjectionStats`.
+    ///
+    /// `O(1)` setup: a cheap clone of a cached `scope_before` checkpoint
+    /// plus two index-backed `FrozenTracker`s, never a rescan of
+    /// `groups[..r]` (todo #376 follow-up).
+    fn refold_and_postprocess(
+        &mut self,
+        raw: &[ChatMessage],
+        overlay: Option<&ChatMessage>,
+        categories: Option<&ToolCategories>,
+        r: usize,
+        patched: &mut Vec<usize>,
+    ) -> (usize, usize) {
+        let mut scope = scope_before(&self.scope_before, r);
         let start = refold_start(&self.groups, r, raw.len());
         let combined = combined_tail(raw, start, overlay);
 
+        // Ids owned by groups[r..] all have owner >= r, so dropping them
+        // before the trackers borrow the maps below doesn't change which
+        // ids read as frozen (owner < r).
         for id in ids_owned_by_discarded(&self.groups, r) {
             self.tool_owner.remove(&id);
         }
+        for id in display_ids_owned_by_discarded(&self.groups, r) {
+            self.display_owner.remove(&id);
+        }
         self.groups.truncate(r);
+
+        let mut frozen_tool_ids = FrozenTracker::new(&self.tool_owner, r);
+        let mut frozen_display_ids = FrozenTracker::new(&self.display_owner, r);
         let outcome = refold_range(
             &combined,
             0..combined.len(),
@@ -138,31 +211,13 @@ impl IncrementalProjector {
         let groups_rebuilt = outcome.new_groups.len();
         self.groups.extend(offset_groups(outcome.new_groups, start));
 
-        backfill_tail(&mut self.groups, r, &mut scope);
+        backfill_tail(&mut self.groups, r, &mut scope, &mut self.scope_before);
         apply_timing_tail(&mut self.groups, raw, r);
         renumber_from(&mut self.groups, r);
         rebuild_tool_owner(&mut self.tool_owner, &self.groups, r);
+        rebuild_display_owner(&mut self.display_owner, &self.groups, r);
 
-        self.categories = categories.cloned();
-        self.had_overlay = overlay_now;
-
-        let len = total_len(&self.groups);
-        let changes = self.collect_changes(r, &patched);
-        sync_snapshot(&self.snapshot, len, &changes);
-        self.stats = ProjectionStats {
-            raw_folded: outcome.raw_folded,
-            groups_rebuilt,
-            containers_patched: patched.len(),
-            full_rebuilds: 0,
-            suffix_rebuilds,
-        };
-        DisplayDelta {
-            full: false,
-            changes,
-            len,
-            snapshot: self.snapshot.clone(),
-            stats: self.stats,
-        }
+        (groups_rebuilt, outcome.raw_folded)
     }
 
     /// Timing and nested patches, applied before the rewind truncates
@@ -191,7 +246,8 @@ impl IncrementalProjector {
                     let gi = group_at_raw_index(&self.groups, *idx);
                     if gi < r {
                         let old_ids = self.groups[gi].claimed_tool_ids.clone();
-                        match try_patch_nested(&mut self.groups, raw, *idx, categories) {
+                        let scope = scope_before(&self.scope_before, gi);
+                        match try_patch_nested(&mut self.groups, raw, *idx, categories, &self.tool_owner, scope) {
                             NestedPatchOutcome::Patched(p) => {
                                 for id in &old_ids {
                                     self.tool_owner.remove(id);
@@ -231,28 +287,3 @@ impl IncrementalProjector {
     }
 }
 
-fn combined_tail(raw: &[ChatMessage], start: usize, overlay: Option<&ChatMessage>) -> Vec<ChatMessage> {
-    let mut combined = raw[start.min(raw.len())..].to_vec();
-    if let Some(overlay) = overlay {
-        combined.push(overlay.clone());
-    }
-    combined
-}
-
-fn offset_groups(groups: Vec<Group>, offset: usize) -> Vec<Group> {
-    groups
-        .into_iter()
-        .map(|mut g| {
-            g.raw_range = (g.raw_range.start + offset)..(g.raw_range.end + offset);
-            g
-        })
-        .collect()
-}
-
-fn rebuild_tool_owner(tool_owner: &mut HashMap<String, usize>, groups: &[Group], from: usize) {
-    for (idx, group) in groups.iter().enumerate().skip(from) {
-        for id in &group.claimed_tool_ids {
-            tool_owner.insert(id.clone(), idx);
-        }
-    }
-}

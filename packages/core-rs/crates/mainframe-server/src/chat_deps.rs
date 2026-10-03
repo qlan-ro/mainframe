@@ -335,31 +335,18 @@ impl ChatManagerDeps for DaemonChatDeps {
         prepare_messages_for_client(raw, categories)
     }
 
-    /// The production projector (todo #376). Falls back to
-    /// `FullRebuildProjector` around `prepare_messages_for_client` rather
-    /// than Claude's `IncrementalProjector`, per the plan's own risk
-    /// mitigation ("Projector drift from `prepare`" — `FullRebuildProjector`
-    /// as a ready fallback): `IncrementalProjector`'s `Nested`-patch path
-    /// (`try_patch_nested`'s `Patched` outcome,
-    /// `mainframe-adapter-claude/src/messages/incremental/patches.rs`) never
-    /// re-applies tool-call timing to the group it patches in place — unlike
-    /// a tail-refolded group (`apply_timing_tail`) or a `Timing(id)` patch
-    /// (`apply_timing_patch`), a settled group patched only because a
-    /// sub-agent child call nested into it loses its own timing (and its
-    /// sibling tool calls' timing) on that revision. Confirmed by
-    /// `tests/acp_ws_tool_timing.rs::tool_timing_reconnect_retains_overlapping_and_nested_calls`,
-    /// which regresses when wired to `IncrementalProjector`. Swap this back
-    /// once that gap is fixed (G1 follow-up, out of G3's file ownership).
+    /// The production projector (todo #376). `IncrementalProjector`'s
+    /// `Nested`-patch path now re-applies both per-group post-processing
+    /// passes a tail refold would have given the patched group — tool-call
+    /// timing and task-subject backfill (`try_patch_nested`'s
+    /// `reapply_post_processing`,
+    /// `mainframe-adapter-claude/src/messages/incremental/patches.rs`) — so
+    /// it no longer drops a sub-agent child call's sibling timing or an
+    /// inherited `subject` the way the earlier raw-`fold_merge_group`
+    /// output did. Confirmed against
+    /// `tests/acp_ws_tool_timing.rs::tool_timing_reconnect_retains_overlapping_and_nested_calls`.
     fn display_projector(&self) -> Box<dyn mainframe_display::DisplayProjector> {
-        Box::new(mainframe_display::FullRebuildProjector::new(
-            |raw, overlay, categories| {
-                let combined: Vec<ChatMessage> = match overlay {
-                    Some(o) => raw.iter().cloned().chain(std::iter::once(o.clone())).collect(),
-                    None => raw.to_vec(),
-                };
-                prepare_messages_for_client(&combined, categories)
-            },
-        ))
+        Box::new(mainframe_adapter_claude::messages::incremental::IncrementalProjector::new())
     }
 
     fn strip_command_tags(&self, text: &str) -> String {
@@ -1611,6 +1598,44 @@ mod scan_loaded_history_tests {
         assert_eq!(
             LogCapture::events_with_reason(&events),
             vec![(tracing::Level::WARN, "unknown_adapter".to_string())]
+        );
+    }
+
+    /// todo #376 follow-up: production must actually ship the incremental
+    /// projector, not just build one in a test harness (the scaling gates
+    /// in `mainframe-adapter-claude` and this crate both construct
+    /// `IncrementalProjector` directly and so cannot catch a
+    /// `display_projector()` that silently falls back to a full rebuild).
+    /// A second `project` call over an appended message must come back
+    /// `full: false`.
+    #[test]
+    fn display_projector_emits_non_full_deltas_on_a_partial() {
+        use mainframe_display::{ProjectionInput, RawChange, RawChanges};
+
+        let deps = test_deps();
+        let mut projector = deps.display_projector();
+
+        let m1 = text_msg("m1", ChatMessageType::User, "hello");
+        let seed = projector.project(ProjectionInput {
+            raw: std::slice::from_ref(&m1),
+            changes: RawChanges::new(),
+            overlay: None,
+            categories: None,
+        });
+        assert!(seed.full, "the first call has no prior state, so it is a full rebuild");
+
+        let m2 = text_msg("m2", ChatMessageType::Assistant, "hi there");
+        let mut changes = RawChanges::new();
+        changes.push(RawChange::Appended);
+        let partial = projector.project(ProjectionInput {
+            raw: &[m1, m2],
+            changes,
+            overlay: None,
+            categories: None,
+        });
+        assert!(
+            !partial.full,
+            "display_projector() must emit incremental deltas on a partial, not fall back to a full rebuild"
         );
     }
 

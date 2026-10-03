@@ -5,7 +5,6 @@
 //! frozen group from an earlier call — both patch in place rather than
 //! rewinding.
 
-use std::collections::HashSet;
 use std::ops::Range;
 
 use mainframe_types::chat::{ChatMessage, ChatMessageType};
@@ -13,7 +12,7 @@ use mainframe_types::display::ToolCategories;
 use serde_json::Value;
 
 use super::fold::{convert_single_message, fold_merge_group};
-use super::group::Group;
+use super::group::{FrozenTracker, Group};
 use crate::messages::display_helpers::is_internal_user_message;
 use crate::messages::message_grouping::{GroupingDecision, classify_message, is_assistant_or_tool_use};
 
@@ -25,13 +24,13 @@ pub(crate) struct RefoldOutcome {
     pub(crate) patched_existing: Vec<usize>,
 }
 
-pub(crate) fn refold_range(
+pub(crate) fn refold_range<'o>(
     raw: &[ChatMessage],
     range: Range<usize>,
     categories: Option<&ToolCategories>,
     existing: &mut [Group],
-    frozen_tool_ids: &mut HashSet<String>,
-    frozen_display_ids: &mut HashSet<String>,
+    frozen_tool_ids: &mut FrozenTracker<'o>,
+    frozen_display_ids: &mut FrozenTracker<'o>,
 ) -> RefoldOutcome {
     let mut walker = Walker {
         raw,
@@ -55,11 +54,11 @@ pub(crate) fn refold_range(
     }
 }
 
-struct Walker<'a> {
+struct Walker<'a, 'o> {
     raw: &'a [ChatMessage],
     categories: Option<&'a ToolCategories>,
-    frozen_tool_ids: &'a mut HashSet<String>,
-    frozen_display_ids: &'a mut HashSet<String>,
+    frozen_tool_ids: &'a mut FrozenTracker<'o>,
+    frozen_display_ids: &'a mut FrozenTracker<'o>,
     new_groups: Vec<Group>,
     /// Start of the currently open mergeable accumulator, if any.
     cur_start: Option<usize>,
@@ -71,7 +70,7 @@ struct Walker<'a> {
     patched_existing: Vec<usize>,
 }
 
-impl Walker<'_> {
+impl Walker<'_, '_> {
     fn step(&mut self, idx: usize, existing: &mut [Group]) {
         let msg = &self.raw[idx];
         if msg.r#type == ChatMessageType::User && is_internal_user_message(&msg.content) {

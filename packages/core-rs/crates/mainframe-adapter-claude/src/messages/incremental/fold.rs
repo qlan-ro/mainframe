@@ -10,6 +10,7 @@ use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent, Messag
 use mainframe_types::display::ToolCategories;
 use serde_json::Value;
 
+use super::group::FrozenTracker;
 use crate::messages::display_helpers::is_internal_user_message;
 use crate::messages::display_pipeline::convert_grouped_to_display;
 use crate::messages::message_grouping::{GroupedMessage, GroupingDecision, classify_message};
@@ -23,7 +24,7 @@ pub(crate) fn fold_merge_group(
     raw_range: Range<usize>,
     duration_override: Option<&Value>,
     categories: Option<&ToolCategories>,
-    frozen_tool_ids: &HashSet<String>,
+    frozen_tool_ids: &FrozenTracker<'_>,
 ) -> (
     Option<mainframe_types::display::DisplayMessage>,
     Vec<String>,
@@ -71,7 +72,7 @@ fn collect_tool_results(msg: &ChatMessage, tool_results: &mut HashMap<String, Me
 fn extend_deduped(
     content: &mut Vec<MessageContent>,
     incoming: &[MessageContent],
-    frozen: &HashSet<String>,
+    frozen: &FrozenTracker<'_>,
     local_seen: &mut HashSet<String>,
 ) {
     for block in incoming {
