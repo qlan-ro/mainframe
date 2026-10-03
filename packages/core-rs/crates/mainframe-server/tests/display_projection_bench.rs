@@ -5,14 +5,11 @@
 //! settled messages. Run `cargo test --release -p mainframe-server --test
 //! display_projection_bench -- --ignored --nocapture` and paste the table
 //! (with machine/OS/rustc/profile/iteration counts) into the PR description
-//! — this file is evidence, not a pass/fail gate. `#[global_allocator]` is
-//! sound here despite the workspace's `#![forbid(unsafe_code)]`, which
-//! lives in `mainframe-server`'s own `src/lib.rs` — this integration test
-//! compiles as its own crate root.
+//! — this file is evidence, not a pass/fail gate. Wall time only: counting
+//! allocations needs a `#[global_allocator]`, and `unsafe` is forbidden
+//! everywhere in these crates, integration tests included (`tools/verify-gate.sh`).
 
-use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
 use mainframe_acp::RevisionLog;
@@ -25,33 +22,6 @@ use mainframe_display::DisplayProjector;
 use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent, MessageContentNode};
 use mainframe_types::content::LeafContent;
 use mainframe_types::display::StreamingLeafKind;
-
-struct CountingAllocator;
-
-static ALLOC_COUNT: AtomicU64 = AtomicU64::new(0);
-static ALLOC_BYTES: AtomicU64 = AtomicU64::new(0);
-
-unsafe impl GlobalAlloc for CountingAllocator {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        ALLOC_COUNT.fetch_add(1, Ordering::Relaxed);
-        ALLOC_BYTES.fetch_add(layout.size() as u64, Ordering::Relaxed);
-        unsafe { System.alloc(layout) }
-    }
-
-    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        unsafe { System.dealloc(ptr, layout) }
-    }
-}
-
-#[global_allocator]
-static GLOBAL: CountingAllocator = CountingAllocator;
-
-fn alloc_snapshot() -> (u64, u64) {
-    (
-        ALLOC_COUNT.load(Ordering::Relaxed),
-        ALLOC_BYTES.load(Ordering::Relaxed),
-    )
-}
 
 const CHAT_ID: &str = "chat-1";
 
@@ -120,24 +90,17 @@ fn settled_messages(count: usize) -> Vec<ChatMessage> {
         .collect()
 }
 
-/// One partial's measured cost.
+/// One partial's measured wall time.
 #[derive(Clone, Copy)]
 struct Sample {
     nanos: u128,
-    allocs: u64,
-    bytes: u64,
 }
 
 fn measure<R>(mut f: impl FnMut() -> R) -> Sample {
-    let (allocs_before, bytes_before) = alloc_snapshot();
     let start = Instant::now();
     let _ = f();
-    let nanos = start.elapsed().as_nanos();
-    let (allocs_after, bytes_after) = alloc_snapshot();
     Sample {
-        nanos,
-        allocs: allocs_after - allocs_before,
-        bytes: bytes_after - bytes_before,
+        nanos: start.elapsed().as_nanos(),
     }
 }
 
@@ -277,28 +240,22 @@ fn median_p95(mut nanos: Vec<u128>) -> (u128, u128) {
     (median, p95)
 }
 
-/// Repeats `run` and reports median/p95 latency (ns) plus the last
-/// iteration's allocation count/bytes (the allocator's counters are
-/// process-cumulative, so only one isolated iteration's delta is
-/// meaningful for allocations).
+/// Repeats `run` and reports median/p95 latency (ns) per step.
 fn report(label: &str, settled_len: usize, run: impl Fn(usize) -> Vec<Sample>, iterations: usize) {
     let mut per_step_nanos: Vec<Vec<u128>> = Vec::new();
-    let mut last = Vec::new();
     for _ in 0..iterations {
-        last = run(settled_len);
+        let samples = run(settled_len);
         if per_step_nanos.is_empty() {
-            per_step_nanos = last.iter().map(|_| Vec::new()).collect();
+            per_step_nanos = samples.iter().map(|_| Vec::new()).collect();
         }
-        for (i, sample) in last.iter().enumerate() {
+        for (i, sample) in samples.iter().enumerate() {
             per_step_nanos[i].push(sample.nanos);
         }
     }
     for (i, nanos) in per_step_nanos.into_iter().enumerate() {
         let (median, p95) = median_p95(nanos);
-        let sample = last[i];
         println!(
-            "{label:<5} settled={settled_len:<6} step={i} median={median:>8}ns p95={p95:>8}ns allocs={:>6} bytes={:>8}",
-            sample.allocs, sample.bytes
+            "{label:<5} settled={settled_len:<6} step={i} median={median:>8}ns p95={p95:>8}ns"
         );
     }
 }
@@ -326,32 +283,5 @@ fn old_vs_new_per_partial_cost() {
     for settled_len in [100usize, 1_000, 10_000] {
         report("old", settled_len, run_old, iterations);
         report("new", settled_len, run_new, iterations);
-    }
-}
-
-/// Scaling gate (todo #376 follow-up), unlike `old_vs_new_per_partial_cost`
-/// above: this one actually fails. `ProjectionStats` (the existing scaling
-/// gates in `mainframe-adapter-claude`/`mainframe-server`) cannot see
-/// `frozen_state`-style work — rebuilding a `HashSet`/`Vec` over
-/// `groups[..r]` on every call — because that work never shows up in any
-/// counter the stats struct reports. Allocation count does: a partial whose
-/// cost is independent of settled history length allocates roughly the same
-/// number of times whether 100 or 10,000 messages precede it. A `10x`
-/// tolerance (rather than exact equality) absorbs incidental allocator
-/// noise (hashmap resizes, small capacity differences) without hiding an
-/// `O(history)` regression, which would multiply allocations by roughly
-/// 100x between these two sizes.
-#[test]
-fn new_path_allocation_count_is_independent_of_settled_history_length() {
-    let small = run_new(100);
-    let large = run_new(10_000);
-    assert_eq!(small.len(), large.len());
-    for (i, (s, l)) in small.iter().zip(large.iter()).enumerate() {
-        assert!(
-            l.allocs <= s.allocs.saturating_mul(10).max(50),
-            "step {i}: allocations grew with settled history length (100 settled: {} allocs, 10,000 settled: {} allocs) — a partial's cost must not scale with history",
-            s.allocs,
-            l.allocs
-        );
     }
 }
