@@ -207,11 +207,10 @@ async fn a_cancel_landing_mid_response_does_not_promote_past_the_new_front() {
         })),
         ..FakeSession::default()
     });
-    let cell = Arc::new(Mutex::new(ActiveChat {
-        chat: test_chat("chat-1"),
-        session: Some(session),
-        turn_started_at: None,
-    }));
+    let cell = Arc::new(Mutex::new(ActiveChat::new(
+        test_chat("chat-1"),
+        Some(session),
+    )));
     let events = Arc::new(Mutex::new(Vec::new()));
     let deps = RaceDeps {
         cell,

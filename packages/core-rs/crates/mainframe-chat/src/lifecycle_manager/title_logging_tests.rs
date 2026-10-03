@@ -63,11 +63,7 @@ async fn disabled_setting_logs_disabled_by_setting() {
     chat.title = Some("Fallback Title".to_string());
     let deps = FakeDeps::title_disabled(chat.clone());
     let mgr = manager(deps.clone());
-    let cell = Arc::new(Mutex::new(ActiveChat {
-        chat,
-        session: None,
-        turn_started_at: None,
-    }));
+    let cell = Arc::new(Mutex::new(ActiveChat::new(chat, None)));
     mgr_insert(&mgr, "c1", cell.clone());
 
     let (subscriber, events) = LogCapture::install();
@@ -87,11 +83,7 @@ async fn none_outcome_logs_no_title_and_keeps_the_fallback() {
     chat.title = Some("Fallback Title".to_string());
     let deps = FakeDeps::new(chat.clone(), Vec::new());
     let mgr = manager(deps.clone());
-    let cell = Arc::new(Mutex::new(ActiveChat {
-        chat,
-        session: None,
-        turn_started_at: None,
-    }));
+    let cell = Arc::new(Mutex::new(ActiveChat::new(chat, None)));
     mgr_insert(&mgr, "c1", cell.clone());
 
     let (subscriber, events) = LogCapture::install();

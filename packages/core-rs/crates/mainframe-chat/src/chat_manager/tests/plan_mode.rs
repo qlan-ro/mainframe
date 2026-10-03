@@ -110,11 +110,7 @@ fn no_session_chat(chat_id: &str) -> (Arc<StoreDeps>, ChatManager) {
     chat.plan_mode = Some(true);
     mgr.active_chats.insert(
         chat_id.to_string(),
-        Arc::new(Mutex::new(ActiveChat {
-            chat,
-            session: None,
-            turn_started_at: None,
-        })),
+        Arc::new(Mutex::new(ActiveChat::new(chat, None))),
     );
     (deps, mgr)
 }

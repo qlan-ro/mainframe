@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use dashmap::DashMap;
-use mainframe_adapter_api::BoxFuture;
+use mainframe_adapter_api::{AdapterSession, BoxFuture};
 use tokio::task::JoinHandle;
 use tracing::info;
 
@@ -111,12 +111,36 @@ impl IdleSessionScanner {
     }
 }
 
+/// The single idle-eligibility rule (todo #381 "Design"), shared by
+/// `select_idle_candidates` and `ChatOffload::recheck`: a spawned session's
+/// idle clock is still `session.last_activity_at()` alone (unchanged —
+/// `None` means "always active", exactly as before). Everything else — no
+/// session at all, or a session handle that never spawned (a failed spawn, a
+/// REST `/resume` that never started, or one whose process already exited) —
+/// is eligible too, timed by `last_used_at` (bumped by `touch` on every use),
+/// widened to the session's own activity time if it happens to report one.
+/// Returns `None` only when the chat must never be considered idle (a
+/// spawned session with no activity tracking).
+pub fn idle_since(session: Option<&Arc<dyn AdapterSession>>, last_used_at: i64) -> Option<i64> {
+    if let Some(session) = session
+        && session.is_spawned()
+    {
+        return session.last_activity_at();
+    }
+    let session_activity = session.and_then(|s| s.last_activity_at());
+    Some(match session_activity {
+        Some(activity) => last_used_at.max(activity),
+        None => last_used_at,
+    })
+}
+
 /// Candidate selection (plan "Design"): a pure read of the registry, no I/O
-/// and no chat-state mutation. A chat qualifies when its session is spawned,
-/// reports an activity time, and has been idle past `threshold_ms`. Every
-/// other check (pending permission, in-flight activity) belongs to the
-/// offload's own re-check, so a race between this read and that re-check
-/// (AC4) always resolves in favor of NOT offloading a chat that woke up.
+/// and no chat-state mutation. A chat qualifies when `idle_since` (which
+/// covers both a spawned session and a session-less/unspawned cell) reports
+/// an idle clock past `threshold_ms`. Every other check (pending permission,
+/// in-flight activity, a Working process) belongs to the offload's own
+/// re-check, so a race between this read and that re-check (AC4) always
+/// resolves in favor of NOT offloading a chat that woke up.
 pub fn select_idle_candidates(
     active_chats: &ActiveChatRegistry,
     now: i64,
@@ -125,14 +149,11 @@ pub fn select_idle_candidates(
     active_chats
         .iter()
         .filter_map(|entry| {
-            let session = {
+            let (session, last_used_at) = {
                 let guard = entry.value().lock().unwrap_or_else(|e| e.into_inner());
-                guard.session.clone()
-            }?;
-            if !session.is_spawned() {
-                return None;
-            }
-            let last = session.last_activity_at()?;
+                (guard.session.clone(), guard.last_used_at)
+            };
+            let last = idle_since(session.as_ref(), last_used_at)?;
             if now - last <= threshold_ms {
                 return None;
             }
@@ -168,13 +189,26 @@ mod tests {
         Arc::new(DashMap::new())
     }
 
-    fn insert(reg: &ActiveChatRegistry, id: &str, session: Arc<FakeSession>) {
+    fn insert(reg: &ActiveChatRegistry, id: &str, session: Arc<FakeSession>, last_used_at: i64) {
         reg.insert(
             id.to_string(),
             Arc::new(Mutex::new(ActiveChat {
                 chat: test_chat(id),
                 session: Some(session),
                 turn_started_at: None,
+                last_used_at,
+            })),
+        );
+    }
+
+    fn insert_sessionless(reg: &ActiveChatRegistry, id: &str, last_used_at: i64) {
+        reg.insert(
+            id.to_string(),
+            Arc::new(Mutex::new(ActiveChat {
+                chat: test_chat(id),
+                session: None,
+                turn_started_at: None,
+                last_used_at,
             })),
         );
     }
@@ -186,8 +220,8 @@ mod tests {
         let idle = FakeSession::with_activity(true, Some(now - threshold_ms - 1));
         let active = FakeSession::with_activity(true, Some(now - 1000));
         let reg = registry();
-        insert(&reg, "idle-chat", idle);
-        insert(&reg, "active-chat", active);
+        insert(&reg, "idle-chat", idle, now);
+        insert(&reg, "active-chat", active, now);
 
         let candidates = select_idle_candidates(&reg, now, threshold_ms);
 
@@ -195,24 +229,58 @@ mod tests {
     }
 
     #[test]
-    fn skips_sessions_that_are_not_spawned() {
-        let now: i64 = 10_000_000;
-        let threshold_ms: i64 = 1000;
-        let dead = FakeSession::with_activity(false, Some(now - 10_000));
-        let reg = registry();
-        insert(&reg, "dead", dead);
-
-        assert!(select_idle_candidates(&reg, now, threshold_ms).is_empty());
-    }
-
-    #[test]
     fn skips_sessions_without_last_activity_at_tracking() {
         let now: i64 = 10_000_000;
         let session = FakeSession::with_activity(true, None);
         let reg = registry();
-        insert(&reg, "x", session);
+        insert(&reg, "x", session, now);
 
         assert!(select_idle_candidates(&reg, now, 100).is_empty());
+    }
+
+    // ── todo #381: unspawned-cell eligibility ──────────────────────────────
+
+    #[test]
+    fn a_session_less_cell_idle_past_the_threshold_is_selected() {
+        let now: i64 = 10_000_000;
+        let threshold_ms: i64 = 2 * 60 * 60 * 1000;
+        let reg = registry();
+        insert_sessionless(&reg, "never-sent", now - threshold_ms - 1);
+
+        let candidates = select_idle_candidates(&reg, now, threshold_ms);
+
+        assert_eq!(candidates, vec!["never-sent".to_string()]);
+    }
+
+    #[test]
+    fn an_unspawned_session_handle_with_an_old_last_used_at_is_selected() {
+        let now: i64 = 10_000_000;
+        let threshold_ms: i64 = 2 * 60 * 60 * 1000;
+        // A failed-spawn or exited handle: `is_spawned()` is false, and its own
+        // `last_activity_at` is ancient too — `last_used_at` alone drives this.
+        let dead = FakeSession::with_activity(false, Some(now - threshold_ms - 1));
+        let reg = registry();
+        insert(&reg, "dead", dead, now - threshold_ms - 1);
+
+        let candidates = select_idle_candidates(&reg, now, threshold_ms);
+
+        assert_eq!(candidates, vec!["dead".to_string()]);
+    }
+
+    /// The new rule (todo #381), replacing the old `skips_sessions_that_are_not_spawned`
+    /// coincidence: an unspawned cell's eligibility comes from `last_used_at`, not
+    /// from `is_spawned()` alone — a FRESH `last_used_at` keeps it out even when the
+    /// session handle (if any) or the persisted chat's own timestamps are ancient.
+    #[test]
+    fn a_fresh_last_used_at_keeps_an_unspawned_cell_out_regardless_of_old_session_activity() {
+        let now: i64 = 10_000_000;
+        let threshold_ms: i64 = 2 * 60 * 60 * 1000;
+        let dead = FakeSession::with_activity(false, Some(now - 999_999_999));
+        let reg = registry();
+        insert(&reg, "fresh", dead, now);
+        insert_sessionless(&reg, "fresh-sessionless", now);
+
+        assert!(select_idle_candidates(&reg, now, threshold_ms).is_empty());
     }
 
     struct RecordingOffloader {
@@ -233,8 +301,8 @@ mod tests {
         let idle = FakeSession::with_activity(true, Some(now - threshold_ms - 1));
         let active = FakeSession::with_activity(true, Some(now - 1000));
         let reg = registry();
-        insert(&reg, "idle-chat", idle);
-        insert(&reg, "active-chat", active);
+        insert(&reg, "idle-chat", idle, now);
+        insert(&reg, "active-chat", active, now);
         let offloader = Arc::new(RecordingOffloader {
             calls: StdMutex::new(Vec::new()),
         });

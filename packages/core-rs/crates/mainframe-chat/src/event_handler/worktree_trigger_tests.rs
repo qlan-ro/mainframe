@@ -94,11 +94,7 @@ impl EventHandlerDeps for TriggerDeps {
 fn cell() -> Arc<Mutex<ActiveChat>> {
     let mut chat = test_chat("chat-wt");
     chat.process_state = Some(Some(ProcessState::Working));
-    Arc::new(Mutex::new(ActiveChat {
-        chat,
-        session: None,
-        turn_started_at: None,
-    }))
+    Arc::new(Mutex::new(ActiveChat::new(chat, None)))
 }
 
 fn sink(deps: Arc<TriggerDeps>) -> Arc<dyn SessionSink> {

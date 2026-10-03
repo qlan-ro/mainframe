@@ -41,11 +41,10 @@ impl OverlayDeps {
 
 impl EventHandlerDeps for OverlayDeps {
     fn get_active_chat(&self, _chat_id: &str) -> Option<Arc<Mutex<ActiveChat>>> {
-        Some(Arc::new(Mutex::new(ActiveChat {
-            chat: test_chat("chat-partial"),
-            session: None,
-            turn_started_at: None,
-        })))
+        Some(Arc::new(Mutex::new(ActiveChat::new(
+            test_chat("chat-partial"),
+            None,
+        ))))
     }
     fn emit_event(&self, event: DaemonEvent) {
         self.events

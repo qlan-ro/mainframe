@@ -14,11 +14,7 @@ struct PrWiringDeps {
 impl PrWiringDeps {
     fn new() -> Arc<Self> {
         Arc::new(Self {
-            cell: Arc::new(Mutex::new(ActiveChat {
-                chat: test_chat("chat-pr"),
-                session: None,
-                turn_started_at: None,
-            })),
+            cell: Arc::new(Mutex::new(ActiveChat::new(test_chat("chat-pr"), None))),
             events: Mutex::new(Vec::new()),
             persisted_prs: Mutex::new(Vec::new()),
         })

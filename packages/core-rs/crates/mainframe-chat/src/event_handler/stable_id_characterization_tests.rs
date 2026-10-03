@@ -22,11 +22,7 @@ pub(super) struct ShapeDeps {
 impl ShapeDeps {
     pub(super) fn new() -> Arc<Self> {
         Arc::new(Self {
-            cell: Arc::new(Mutex::new(ActiveChat {
-                chat: test_chat("chat-shape"),
-                session: None,
-                turn_started_at: None,
-            })),
+            cell: Arc::new(Mutex::new(ActiveChat::new(test_chat("chat-shape"), None))),
         })
     }
 }

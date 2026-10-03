@@ -120,11 +120,7 @@ impl ChatManager {
 
         self.active_chats.insert(
             new_chat.id.clone(),
-            Arc::new(Mutex::new(ActiveChat {
-                chat: new_chat.clone(),
-                session: None,
-                turn_started_at: None,
-            })),
+            Arc::new(Mutex::new(ActiveChat::new(new_chat.clone(), None))),
         );
         self.messages
             .lock()

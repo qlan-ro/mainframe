@@ -193,13 +193,21 @@ async fn ac2_a_pending_permission_blocks_offload_even_at_8_hours_idle() {
 // ── AC3 ───────────────────────────────────────────────────────────────────
 
 /// Three ineligible chats, in one test since each assertion block is
-/// identical: idle less than the threshold, no spawned process, and a
-/// session that reports no activity time at all.
+/// identical: idle less than the threshold, an unspawned session on a cell
+/// whose `last_used_at` is still fresh (todo #381: `seed_active`'s
+/// `ActiveChat::new` stamps "now" — this now proves `last_used_at`, not
+/// `is_spawned()`, is what keeps an unspawned cell live, not the old
+/// "no spawned process ⇒ never a candidate" rule), and a session that reports
+/// no activity time at all.
 #[tokio::test]
 async fn ac3_ineligible_chats_are_untouched() {
     for (label, spawned, activity) in [
         ("idle less than the threshold", true, Some(now_ms() - 1_000)),
-        ("no spawned process", false, Some(long_idle())),
+        (
+            "an unspawned session, but a fresh cell (todo #381)",
+            false,
+            Some(long_idle()),
+        ),
         ("no activity time reported", true, None),
     ] {
         let deps = StoreDeps::arc();
@@ -589,4 +597,386 @@ async fn worktree_missing_error_keeps_the_loaded_history() {
         "the loaded history survives, with the error appended after it"
     );
     assert_eq!(messages[2].r#type, ChatMessageType::Error);
+}
+
+// ── todo #381: idle offload for unspawned registry cells ──────────────────
+//
+// `ActiveChat::new` (every production insertion point) and `touch` (every use
+// path) stamp `last_used_at` with the real clock, so these tests — like the
+// AC1-7 suite above — need no injected fake clock: a cell is backdated once,
+// directly, past the real `IDLE_THRESHOLD_MS`, and stays idle for the test's
+// lifetime unless something re-touches it.
+
+/// Insert `chat_id` with an explicit `session` (any spawn state, or `None`
+/// for a cell that never spawned at all) and an explicit backdated
+/// `last_used_at` — deliberately bypassing the fresh-clock stamp
+/// `ActiveChat::new` normally applies, the same way `seed_idle_chat` bypasses
+/// a spawned session's real `last_activity_at` by injecting it directly.
+fn seed_cell(
+    mgr: &ChatManager,
+    chat_id: &str,
+    chat: Chat,
+    session: Option<Arc<dyn AdapterSession>>,
+    last_used_at: i64,
+) {
+    let mut active = ActiveChat::new(chat, session);
+    active.last_used_at = last_used_at;
+    mgr.active_chats
+        .insert(chat_id.to_string(), Arc::new(Mutex::new(active)));
+}
+
+fn minimal_new_chat() -> NewChat {
+    NewChat {
+        project_id: "p1".to_string(),
+        adapter_id: "claude".to_string(),
+        model: None,
+        permission_mode: None,
+        automation_run_id: None,
+        temporary: false,
+        scratch_root: None,
+    }
+}
+
+/// (a) A never-sent chat (`create_chat`, no session ever attached) backdated
+/// past the threshold is offloaded: the cell, cache entry and pin are gone,
+/// but the chat row survives, unarchived.
+#[tokio::test]
+async fn unspawned_never_sent_cell_offloads_once_backdated_past_the_threshold() {
+    let deps = StoreDeps::arc();
+    let mgr = ChatManager::new(deps.clone());
+    let chat = mgr.create_chat(minimal_new_chat()).await;
+    mgr.messages
+        .lock()
+        .unwrap()
+        .set(&chat.id, vec![history_message("m1")]);
+    {
+        let cell = mgr.active_chats.get(&chat.id).unwrap().value().clone();
+        cell.lock().unwrap().last_used_at = long_idle();
+    }
+
+    mgr.scan_idle_sessions().await;
+
+    assert!(
+        mgr.active_chats.get(&chat.id).is_none(),
+        "the registry cell is gone"
+    );
+    assert!(
+        mgr.messages.lock().unwrap().get(&chat.id).is_none(),
+        "the cache entry is gone"
+    );
+    assert!(
+        !mgr.messages.lock().unwrap().is_pinned(&chat.id),
+        "the pin is released"
+    );
+    let stored = deps.chats_get(&chat.id).expect("the chat row survives");
+    assert_ne!(stored.status, ChatStatus::Archived, "not archived");
+    assert_eq!(offloaded_events(&deps), vec![chat.id.clone()]);
+}
+
+/// (b) A REST-resume-style cell: an unspawned `FakeSession` handle (a failed
+/// spawn, or a resume that never started) plus a transcript already cached.
+/// Backdated and offloaded, a send then succeeds and reloads the exact
+/// pre-offload history under its stable ids, followed by the new message —
+/// the AC7 pattern, for a cell that never had a live process to begin with.
+#[tokio::test]
+async fn unspawned_session_handle_offloads_and_a_later_send_resumes_cleanly() {
+    let mut chat = test_chat("c1");
+    chat.claude_session_id = Some("sess-1".to_string());
+    let history = vec![history_message("m1"), history_message("m2")];
+    let deps = StoreDeps::with_chats(vec![chat.clone()]);
+    *deps.history.lock().unwrap() = Some(history.clone());
+    deps.set_spawn_ok(true);
+    let mgr = ChatManager::new(deps.clone());
+    let session: Arc<dyn AdapterSession> = FakeSession::with_activity(false, None);
+    seed_cell(&mgr, "c1", chat, Some(session), long_idle());
+    mgr.messages.lock().unwrap().set("c1", history);
+
+    mgr.scan_idle_sessions().await;
+    assert!(
+        mgr.active_chats.get("c1").is_none(),
+        "offloaded: no registry cell"
+    );
+    assert!(
+        mgr.messages.lock().unwrap().get("c1").is_none(),
+        "offloaded: no cached messages"
+    );
+    assert_eq!(offloaded_events(&deps), vec!["c1".to_string()]);
+
+    mgr.send_message("c1", "hello again", None, None)
+        .await
+        .expect("the resumed session now spawns successfully");
+
+    assert!(
+        mgr.active_chats.get("c1").is_some(),
+        "the resume path re-registered the chat"
+    );
+    let reloaded = mgr
+        .messages
+        .lock()
+        .unwrap()
+        .get("c1")
+        .cloned()
+        .unwrap_or_default();
+    assert_eq!(
+        reloaded.len(),
+        3,
+        "every pre-offload message, followed by the new user message"
+    );
+    let ids: Vec<&str> = reloaded.iter().map(|m| m.id.as_str()).collect();
+    assert_eq!(
+        &ids[..2],
+        ["m1", "m2"],
+        "history starts with every pre-offload message"
+    );
+}
+
+/// (c) A freshly created or freshly loaded chat is not offloaded by a scan —
+/// the fresh `last_used_at` an insertion stamps keeps it live.
+#[tokio::test]
+async fn a_freshly_created_chat_is_not_offloaded_by_a_scan() {
+    let deps = StoreDeps::arc();
+    let mgr = ChatManager::new(deps.clone());
+    let chat = mgr.create_chat(minimal_new_chat()).await;
+
+    mgr.scan_idle_sessions().await;
+
+    assert!(
+        mgr.active_chats.get(&chat.id).is_some(),
+        "a fresh last_used_at keeps it live"
+    );
+    assert!(offloaded_events(&deps).is_empty());
+}
+
+#[tokio::test]
+async fn a_freshly_loaded_chat_is_not_offloaded_by_a_scan() {
+    let chat = test_chat("c1");
+    let deps = StoreDeps::with_chats(vec![chat]);
+    *deps.history.lock().unwrap() = Some(Vec::new());
+    let mgr = ChatManager::new(deps.clone());
+
+    mgr.load_chat("c1").await;
+    mgr.scan_idle_sessions().await;
+
+    assert!(mgr.active_chats.get("c1").is_some());
+    assert!(offloaded_events(&deps).is_empty());
+}
+
+// ── todo #381 races: selection vs. offload, on an unspawned cell ──────────
+
+/// A send registered after selection (but before the offload's re-check)
+/// keeps an unspawned, backdated cell live — `try_claim_offload`'s busy check
+/// refuses the claim outright, same as the spawned-session AC4 case.
+#[tokio::test]
+async fn an_in_flight_send_injected_after_selection_keeps_an_unspawned_cell_live() {
+    let deps = StoreDeps::arc();
+    let mgr = ChatManager::new(deps.clone());
+    seed_cell(&mgr, "c1", test_chat("c1"), None, long_idle());
+    mgr.messages
+        .lock()
+        .unwrap()
+        .set("c1", vec![history_message("m1")]);
+
+    let candidates = select_idle_candidates(&mgr.active_chats, now_ms(), IDLE_THRESHOLD_MS);
+    assert_eq!(
+        candidates,
+        vec!["c1".to_string()],
+        "selected before the race"
+    );
+
+    let send_guard = mgr.lifecycle.begin_send("c1").await;
+
+    mgr.scan_idle_sessions().await;
+
+    assert!(mgr.active_chats.get("c1").is_some(), "the chat stays live");
+    assert!(offloaded_events(&deps).is_empty());
+    drop(send_guard);
+}
+
+/// A touch (e.g. a claim-free config read) landing after selection but before
+/// the offload's re-check keeps an unspawned cell live — `idle_since` reads
+/// the bumped `last_used_at`, so `recheck` no longer sees it as idle. Driven
+/// directly via `offloader_for`, same reasoning as the spawned-session
+/// activity-race test: `scan_idle_sessions`'s own fresh selection would
+/// otherwise just re-filter the candidate out before `recheck` ever ran.
+#[tokio::test]
+async fn a_touch_injected_after_selection_keeps_an_unspawned_cell_live() {
+    let deps = StoreDeps::arc();
+    let mgr = ChatManager::new(deps.clone());
+    seed_cell(&mgr, "c1", test_chat("c1"), None, long_idle());
+    mgr.messages
+        .lock()
+        .unwrap()
+        .set("c1", vec![history_message("m1")]);
+
+    let candidates = select_idle_candidates(&mgr.active_chats, now_ms(), IDLE_THRESHOLD_MS);
+    assert_eq!(
+        candidates,
+        vec!["c1".to_string()],
+        "selected before the race"
+    );
+
+    // The race: a touch lands after selection, before the offload re-check.
+    mgr.lifecycle.touch("c1");
+
+    let offloader = offloader_for(&mgr);
+    offloader.offload("c1").await;
+
+    assert!(mgr.active_chats.get("c1").is_some(), "the chat stays live");
+    assert!(mgr.messages.lock().unwrap().get("c1").is_some());
+    assert!(offloaded_events(&deps).is_empty());
+}
+
+// ── todo #381: pending/queued/Working still block an unspawned cell ───────
+
+#[tokio::test]
+async fn a_pending_permission_blocks_offload_of_an_unspawned_backdated_cell() {
+    let deps = StoreDeps::arc();
+    let mgr = ChatManager::new(deps.clone());
+    seed_cell(&mgr, "c1", test_chat("c1"), None, long_idle());
+    mgr.messages
+        .lock()
+        .unwrap()
+        .set("c1", vec![history_message("m1")]);
+    enqueue_pending_permission(&mgr);
+
+    mgr.scan_idle_sessions().await;
+
+    assert!(mgr.active_chats.get("c1").is_some(), "stays live");
+    assert!(offloaded_events(&deps).is_empty());
+}
+
+#[tokio::test]
+async fn a_queued_message_blocks_offload_of_an_unspawned_backdated_cell() {
+    let deps = StoreDeps::arc();
+    let mgr = ChatManager::new(deps.clone());
+    seed_cell(&mgr, "c1", test_chat("c1"), None, long_idle());
+    mgr.messages
+        .lock()
+        .unwrap()
+        .set("c1", vec![history_message("m1")]);
+    mgr.queued_refs.lock().unwrap().push(QueuedMessageRef {
+        message_id: "m1".to_string(),
+        chat_id: "c1".to_string(),
+        uuid: "u1".to_string(),
+        content: "queued".to_string(),
+        attachment_ids: None,
+        timestamp: String::new(),
+    });
+
+    mgr.scan_idle_sessions().await;
+
+    assert!(mgr.active_chats.get("c1").is_some(), "stays live");
+    assert!(offloaded_events(&deps).is_empty());
+}
+
+#[tokio::test]
+async fn a_working_process_state_blocks_offload_of_an_unspawned_backdated_cell() {
+    let deps = StoreDeps::arc();
+    let mgr = ChatManager::new(deps.clone());
+    let mut chat = test_chat("c1");
+    chat.process_state = Some(Some(ProcessState::Working));
+    seed_cell(&mgr, "c1", chat, None, long_idle());
+    mgr.messages
+        .lock()
+        .unwrap()
+        .set("c1", vec![history_message("m1")]);
+
+    mgr.scan_idle_sessions().await;
+
+    assert!(mgr.active_chats.get("c1").is_some(), "stays live");
+    assert!(offloaded_events(&deps).is_empty());
+}
+
+// ── todo #381: config entry points rebuild an offloaded cell ──────────────
+
+#[tokio::test]
+async fn update_chat_config_rebuilds_an_offloaded_cell_and_applies_the_new_model() {
+    let mut chat = test_chat("c1");
+    chat.model = Some("old-model".to_string());
+    let deps = StoreDeps::with_chats(vec![chat.clone()]);
+    *deps.history.lock().unwrap() = Some(Vec::new());
+    let mgr = ChatManager::new(deps.clone());
+    seed_cell(&mgr, "c1", chat, None, long_idle());
+    mgr.messages
+        .lock()
+        .unwrap()
+        .set("c1", vec![history_message("m1")]);
+
+    mgr.scan_idle_sessions().await;
+    assert!(
+        mgr.active_chats.get("c1").is_none(),
+        "offloaded before the config edit"
+    );
+
+    mgr.update_chat_config("c1", None, Some("new-model".to_string()), None, None)
+        .await
+        .expect("the edit rebuilds the cell instead of failing not-found");
+
+    assert!(mgr.active_chats.get("c1").is_some(), "the cell is back");
+    assert_eq!(
+        deps.chats_get("c1").unwrap().model,
+        Some("new-model".to_string()),
+        "the stored chat carries the new model"
+    );
+    let active_model = mgr
+        .active_chats
+        .get("c1")
+        .unwrap()
+        .value()
+        .lock()
+        .unwrap()
+        .chat
+        .model
+        .clone();
+    assert_eq!(
+        active_model,
+        Some("new-model".to_string()),
+        "the rebuilt active chat carries the new model too"
+    );
+}
+
+#[tokio::test]
+async fn disable_worktree_rebuilds_an_offloaded_cell_and_clears_the_binding() {
+    let mut chat = test_chat("c1");
+    chat.worktree_path = Some("/tmp/mainframe-test-todo-381-wt".to_string());
+    chat.branch_name = Some("feat/old".to_string());
+    let deps = StoreDeps::with_chats(vec![chat.clone()]);
+    *deps.history.lock().unwrap() = Some(Vec::new());
+    let mgr = ChatManager::new(deps.clone());
+    seed_cell(&mgr, "c1", chat, None, long_idle());
+    mgr.messages
+        .lock()
+        .unwrap()
+        .set("c1", vec![history_message("m1")]);
+
+    mgr.scan_idle_sessions().await;
+    assert!(
+        mgr.active_chats.get("c1").is_none(),
+        "offloaded before the worktree edit"
+    );
+
+    mgr.disable_worktree("c1")
+        .await
+        .expect("the edit rebuilds the cell instead of silently no-oping");
+
+    assert!(mgr.active_chats.get("c1").is_some(), "the cell is back");
+    assert_eq!(
+        deps.chats_get("c1").unwrap().worktree_path,
+        None,
+        "the stored binding is cleared"
+    );
+    let active_worktree = mgr
+        .active_chats
+        .get("c1")
+        .unwrap()
+        .value()
+        .lock()
+        .unwrap()
+        .chat
+        .worktree_path
+        .clone();
+    assert_eq!(
+        active_worktree, None,
+        "the rebuilt active chat's binding is cleared too"
+    );
 }

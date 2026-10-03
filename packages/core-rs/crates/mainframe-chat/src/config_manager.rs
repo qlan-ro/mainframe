@@ -748,11 +748,7 @@ mod tests {
     }
 
     fn cell_with(session: Arc<FakeSession>) -> Arc<Mutex<ActiveChat>> {
-        Arc::new(Mutex::new(ActiveChat {
-            chat: test_chat("c1"),
-            session: Some(session),
-            turn_started_at: None,
-        }))
+        Arc::new(Mutex::new(ActiveChat::new(test_chat("c1"), Some(session))))
     }
 
     // Ports config-manager.test.ts assertion-for-assertion.
@@ -961,11 +957,7 @@ mod tests {
     }
 
     fn cell_with_chat(chat: Chat, session: Arc<FakeSession>) -> Arc<Mutex<ActiveChat>> {
-        Arc::new(Mutex::new(ActiveChat {
-            chat,
-            session: Some(session),
-            turn_started_at: None,
-        }))
+        Arc::new(Mutex::new(ActiveChat::new(chat, Some(session))))
     }
 
     fn test_project() -> Project {

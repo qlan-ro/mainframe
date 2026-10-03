@@ -43,6 +43,10 @@ pub fn is_last_active_chat_for_scope(
 /// Registry of active chats (SHARED_MAP; per-entity values are `Arc<Mutex<ActiveChat>>`).
 pub type ActiveChatRegistry = Arc<DashMap<String, Arc<Mutex<ActiveChat>>>>;
 
+fn now_ms() -> i64 {
+    chrono::Utc::now().timestamp_millis()
+}
+
 /// Partial `db.chats.update` patch for the lifecycle paths. Worktree fields are
 /// tri-state (`Some(None)` clears).
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -258,6 +262,19 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         self.active_chats.get(chat_id).map(|e| e.value().clone())
     }
 
+    /// Bump `chat_id`'s in-memory "last used" clock (todo #381) to now, if its
+    /// registry cell exists; a no-op otherwise. Called on every path that
+    /// counts as use (`load_chat` — including its single-flight `Skip`
+    /// branch, `start_chat`, send begin/end, `release_history`, and a
+    /// claim-free config read) so an unspawned cell's idle clock
+    /// (`idle_scanner::idle_since`) tracks real activity rather than the
+    /// persisted chat's own age.
+    pub(crate) fn touch(&self, chat_id: &str) {
+        if let Some(cell) = self.get_active(chat_id) {
+            cell.lock().unwrap_or_else(|e| e.into_inner()).last_used_at = now_ms();
+        }
+    }
+
     fn chat_or_db(&self, chat_id: &str) -> Option<Chat> {
         self.get_active(chat_id)
             .map(|c| c.lock().unwrap_or_else(|e| e.into_inner()).chat.clone())
@@ -294,11 +311,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         );
         self.active_chats.insert(
             chat.id.clone(),
-            Arc::new(Mutex::new(ActiveChat {
-                chat: chat.clone(),
-                session: None,
-                turn_started_at: None,
-            })),
+            Arc::new(Mutex::new(ActiveChat::new(chat.clone(), None))),
         );
         self.messages
             .lock()
@@ -429,7 +442,13 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
                 join_flight(&self.guards, existing, |g| g.loading.get(chat_id)).await;
                 return false;
             }
-            Flight::Skip => return false,
+            // The cell already exists: no reload needed, but this is still a
+            // use (todo #381) — touch its clock so an unspawned cell left on
+            // screen doesn't look idle just because it was never reloaded.
+            Flight::Skip => {
+                self.touch(chat_id);
+                return false;
+            }
             Flight::Claimed(n) => n,
         };
         let reloaded = self.do_load_chat(chat_id).await;
@@ -477,6 +496,8 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         // See `load_chat`'s matching wait: a start racing an offload must not
         // read the registry mid-teardown.
         self.await_offload(chat_id).await;
+        // A start is a use (todo #381), whether or not it ends up spawning.
+        self.touch(chat_id);
         if let Some(cell) = self.get_active(chat_id) {
             let (spawned, process) = {
                 let guard = cell.lock().unwrap_or_else(|e| e.into_inner());
@@ -911,11 +932,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         };
         self.active_chats.insert(
             chat_id.to_string(),
-            Arc::new(Mutex::new(ActiveChat {
-                chat: chat.clone(),
-                session: None,
-                turn_started_at: None,
-            })),
+            Arc::new(Mutex::new(ActiveChat::new(chat.clone(), None))),
         );
         self.messages
             .lock()
@@ -1558,11 +1575,7 @@ mod tests {
         let session = FakeSession::with_activity(true, None);
         mgr.active_chats.insert(
             "c1".to_string(),
-            Arc::new(Mutex::new(ActiveChat {
-                chat,
-                session: Some(session.clone()),
-                turn_started_at: None,
-            })),
+            Arc::new(Mutex::new(ActiveChat::new(chat, Some(session.clone())))),
         );
 
         mgr.archive_chat("c1", true).await;

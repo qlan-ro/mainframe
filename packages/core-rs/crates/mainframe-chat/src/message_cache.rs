@@ -57,6 +57,14 @@ impl MessageCache {
         self.pinned.remove(chat_id);
     }
 
+    /// Test-only pin query (todo #381): lets a test observe that `release`
+    /// actually dropped the pin, without depending on the eviction-order
+    /// side effect `release_unpins`'s existing assertion uses.
+    #[cfg(test)]
+    pub(crate) fn is_pinned(&self, chat_id: &str) -> bool {
+        self.pinned.contains(chat_id)
+    }
+
     /// `delete` plus `unpin` — the registry-cell-removal paths (offload,
     /// archive, discard) that tear a chat down as one unit.
     pub fn release(&mut self, chat_id: &str) {
