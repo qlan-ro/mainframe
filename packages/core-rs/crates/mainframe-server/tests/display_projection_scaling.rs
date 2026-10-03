@@ -137,33 +137,49 @@ fn run_active_turn(settled_len: usize) -> Vec<PartialCounts> {
     log.seed_containers(&baseline_containers);
 
     let mut counts = Vec::new();
-    let mut observe = |delta: DisplayDelta, streaming: Option<StreamingLeafKind>| {
-        let encoded = encode_changes(&delta, streaming);
+    drive_active_turn(&mut cache, |delta, streaming| {
+        observe_partial(&mut state, &mut log, &delta, streaming, &mut counts);
+    });
+    counts
+}
 
-        let state_before = state.items_compared();
-        state.apply(&encoded, || unreachable!("seeded, incremental delta"));
-        let state_items_compared = state.items_compared() - state_before;
+/// One partial's measurement: encode `delta`'s changes, apply/record them
+/// against the already-seeded `state`/`log`, and push the resulting counts.
+fn observe_partial(
+    state: &mut SessionState,
+    log: &mut RevisionLog,
+    delta: &DisplayDelta,
+    streaming: Option<StreamingLeafKind>,
+    counts: &mut Vec<PartialCounts>,
+) {
+    let encoded = encode_changes(delta, streaming);
 
-        let log_before = log.items_compared();
-        log.record_delta(&encoded, || unreachable!("seeded, incremental delta"));
-        let log_items_compared = log.items_compared() - log_before;
+    let state_before = state.items_compared();
+    state.apply(&encoded, || unreachable!("seeded, incremental delta"));
+    let state_items_compared = state.items_compared() - state_before;
 
-        counts.push(PartialCounts {
-            containers_encoded: encoded.changes.len(),
-            state_items_compared,
-            log_items_compared,
-        });
-    };
+    let log_before = log.items_compared();
+    log.record_delta(&encoded, || unreachable!("seeded, incremental delta"));
+    let log_items_compared = log.items_compared() - log_before;
 
-    // The active turn: a user prompt, three growing partials of the
-    // streaming reply (overlay only — never committed to the cache), then
-    // the reply's tool call and its result land in the raw cache.
+    counts.push(PartialCounts {
+        containers_encoded: encoded.changes.len(),
+        state_items_compared,
+        log_items_compared,
+    });
+}
+
+/// The active turn: a user prompt, three growing partials of the streaming
+/// reply (overlay only — never committed to the cache), then the reply's
+/// tool call and its result land in the raw cache. Calls `on_partial` once
+/// per `project_display` call, in order.
+fn drive_active_turn(cache: &mut MessageCache, mut on_partial: impl FnMut(DisplayDelta, Option<StreamingLeafKind>)) {
     cache.append(CHAT_ID, text_msg("u-act", ChatMessageType::User, "start the task"));
-    observe(cache.project_display(CHAT_ID, None, None, make_projector), None);
+    on_partial(cache.project_display(CHAT_ID, None, None, make_projector), None);
 
     for partial in ["I'll", "I'll check", "I'll check the file"] {
         let overlay = text_msg("a-act", ChatMessageType::Assistant, partial);
-        observe(
+        on_partial(
             cache.project_display(CHAT_ID, Some(&overlay), None, make_projector),
             Some(StreamingLeafKind::Text),
         );
@@ -173,12 +189,10 @@ fn run_active_turn(settled_len: usize) -> Vec<PartialCounts> {
         CHAT_ID,
         assistant_with_tool_use("a-act", "I'll check the file", "tu-act"),
     );
-    observe(cache.project_display(CHAT_ID, None, None, make_projector), None);
+    on_partial(cache.project_display(CHAT_ID, None, None, make_projector), None);
 
     cache.append(CHAT_ID, tool_result_msg("tr-act", "tu-act"));
-    observe(cache.project_display(CHAT_ID, None, None, make_projector), None);
-
-    counts
+    on_partial(cache.project_display(CHAT_ID, None, None, make_projector), None);
 }
 
 #[test]

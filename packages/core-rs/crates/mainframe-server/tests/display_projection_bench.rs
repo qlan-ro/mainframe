@@ -1,19 +1,13 @@
-//! Benchmark (todo #376 G4 task 4, `#[ignore]`d): old vs. new per-partial
-//! cost at 100, 1,000, and 10,000 settled messages, same active turn as
-//! `display_projection_scaling.rs`. "Old" is the pre-#376 pipeline — a full
-//! `prepare_messages_for_client`, `encode_revision`, `SessionState::diff`,
-//! `RevisionLog::record` over the whole snapshot every partial. "New" is
-//! `IncrementalProjector` via `MessageCache::project_display`,
-//! `encode_container` per changed ordinal, `SessionState::apply`,
-//! `RevisionLog::record_delta`.
-//!
-//! Run with `cargo test --release -p mainframe-server --test
-//! display_projection_bench -- --ignored --nocapture` and paste the printed
-//! table (with this run's machine/OS/rustc/profile/iteration counts) into
-//! the PR description — this file is evidence, not a pass/fail gate.
-//! `#[global_allocator]` is sound here despite the workspace's
-//! `#![forbid(unsafe_code)]`: that attribute lives in `mainframe-server`'s
-//! own `src/lib.rs` and does not reach this integration-test binary, which
+//! Benchmark (todo #376 G4 task 4, `#[ignore]`d): old (full `prepare`/
+//! `encode_revision`/`diff`/`record` every partial) vs. new
+//! (`IncrementalProjector` + per-container `encode_container`/`apply`/
+//! `record_delta`) per-partial cost, same active turn at 100/1,000/10,000
+//! settled messages. Run `cargo test --release -p mainframe-server --test
+//! display_projection_bench -- --ignored --nocapture` and paste the table
+//! (with machine/OS/rustc/profile/iteration counts) into the PR description
+//! — this file is evidence, not a pass/fail gate. `#[global_allocator]` is
+//! sound here despite the workspace's `#![forbid(unsafe_code)]`, which
+//! lives in `mainframe-server`'s own `src/lib.rs` — this integration test
 //! compiles as its own crate root.
 
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -23,7 +17,7 @@ use std::time::Instant;
 
 use mainframe_acp::RevisionLog;
 use mainframe_acp::SessionState;
-use mainframe_acp::encoder::{self};
+use mainframe_acp::encoder;
 use mainframe_adapter_claude::messages::display_pipeline::prepare_messages_for_client;
 use mainframe_adapter_claude::messages::incremental::IncrementalProjector;
 use mainframe_chat::message_cache::MessageCache;
@@ -53,31 +47,32 @@ unsafe impl GlobalAlloc for CountingAllocator {
 static GLOBAL: CountingAllocator = CountingAllocator;
 
 fn alloc_snapshot() -> (u64, u64) {
-    (
-        ALLOC_COUNT.load(Ordering::Relaxed),
-        ALLOC_BYTES.load(Ordering::Relaxed),
-    )
+    (ALLOC_COUNT.load(Ordering::Relaxed), ALLOC_BYTES.load(Ordering::Relaxed))
 }
 
 const CHAT_ID: &str = "chat-1";
 
-fn text_msg(id: &str, kind: ChatMessageType, text: &str) -> ChatMessage {
+fn msg(id: &str, kind: ChatMessageType, content: Vec<MessageContent>) -> ChatMessage {
     ChatMessage {
         id: id.to_string(),
         chat_id: CHAT_ID.to_string(),
         r#type: kind,
-        content: vec![MessageContent::Leaf(LeafContent::Text {
-            text: text.to_string(),
-            parent_tool_use_id: None,
-        })],
+        content,
         timestamp: format!("2026-01-01T00:00:00.{id}Z"),
         metadata: None,
     }
 }
 
+fn text_msg(id: &str, kind: ChatMessageType, text: &str) -> ChatMessage {
+    msg(id, kind, vec![MessageContent::Leaf(LeafContent::Text {
+        text: text.to_string(),
+        parent_tool_use_id: None,
+    })])
+}
+
 fn assistant_with_tool_use(id: &str, text: &str, tool_id: &str) -> ChatMessage {
-    let mut msg = text_msg(id, ChatMessageType::Assistant, text);
-    msg.content.push(MessageContent::Node(MessageContentNode::ToolUse {
+    let mut m = text_msg(id, ChatMessageType::Assistant, text);
+    m.content.push(MessageContent::Node(MessageContentNode::ToolUse {
         timing: None,
         command_execution: None,
         id: tool_id.to_string(),
@@ -85,27 +80,20 @@ fn assistant_with_tool_use(id: &str, text: &str, tool_id: &str) -> ChatMessage {
         input: HashMap::new(),
         parent_tool_use_id: None,
     }));
-    msg
+    m
 }
 
 fn tool_result_msg(id: &str, tool_id: &str) -> ChatMessage {
-    ChatMessage {
-        id: id.to_string(),
-        chat_id: CHAT_ID.to_string(),
-        r#type: ChatMessageType::ToolResult,
-        content: vec![MessageContent::Node(MessageContentNode::ToolResult {
-            tool_use_id: tool_id.to_string(),
-            content: "done".to_string(),
-            is_error: false,
-            structured_patch: None,
-            original_file: None,
-            modified_file: None,
-            images: Vec::new(),
-            parent_tool_use_id: None,
-        })],
-        timestamp: format!("2026-01-01T00:00:00.{id}Z"),
-        metadata: None,
-    }
+    msg(id, ChatMessageType::ToolResult, vec![MessageContent::Node(MessageContentNode::ToolResult {
+        tool_use_id: tool_id.to_string(),
+        content: "done".to_string(),
+        is_error: false,
+        structured_patch: None,
+        original_file: None,
+        modified_file: None,
+        images: Vec::new(),
+        parent_tool_use_id: None,
+    })])
 }
 
 fn settled_messages(count: usize) -> Vec<ChatMessage> {
@@ -141,8 +129,24 @@ fn measure<R>(mut f: impl FnMut() -> R) -> Sample {
     }
 }
 
-/// The old pipeline: a full `prepare`/`encode_revision`/`diff`/`record`
-/// over the whole snapshot every partial.
+/// One old-pipeline partial over `raw` plus a synthetic `overlay` tail.
+fn old_step(
+    raw: &[ChatMessage],
+    overlay: Option<&ChatMessage>,
+    streaming: Option<StreamingLeafKind>,
+    state: &mut SessionState,
+    log: &mut RevisionLog,
+) {
+    let combined: Vec<ChatMessage> = match overlay {
+        Some(o) => raw.iter().cloned().chain(std::iter::once(o.clone())).collect(),
+        None => raw.to_vec(),
+    };
+    let messages = prepare_messages_for_client(&combined, None);
+    let items = encoder::encode_revision(&messages, streaming);
+    state.diff(&items);
+    log.record(&items);
+}
+
 fn run_old(settled_len: usize) -> Vec<Sample> {
     let settled = settled_messages(settled_len);
     let mut state = SessionState::new();
@@ -155,16 +159,7 @@ fn run_old(settled_len: usize) -> Vec<Sample> {
     let mut raw = settled;
     let mut samples = Vec::new();
     let mut step = |raw: &[ChatMessage], overlay: Option<&ChatMessage>, streaming| {
-        samples.push(measure(|| {
-            let combined: Vec<ChatMessage> = match overlay {
-                Some(o) => raw.iter().cloned().chain(std::iter::once(o.clone())).collect(),
-                None => raw.to_vec(),
-            };
-            let messages = prepare_messages_for_client(&combined, None);
-            let items = encoder::encode_revision(&messages, streaming);
-            state.diff(&items);
-            log.record(&items);
-        }));
+        samples.push(measure(|| old_step(raw, overlay, streaming, &mut state, &mut log)));
     };
 
     raw.push(text_msg("u-act", ChatMessageType::User, "start the task"));
@@ -185,7 +180,33 @@ fn make_projector() -> Box<dyn DisplayProjector> {
     Box::new(IncrementalProjector::new())
 }
 
-/// The new pipeline: `IncrementalProjector` plus per-container encode/apply.
+/// One new-pipeline partial: per-container encode/apply/record.
+fn new_step(
+    cache: &mut MessageCache,
+    overlay: Option<&ChatMessage>,
+    streaming: Option<StreamingLeafKind>,
+    state: &mut SessionState,
+    log: &mut RevisionLog,
+) {
+    let delta = cache.project_display(CHAT_ID, overlay, None, make_projector);
+    let streaming_ordinal = delta.len.checked_sub(1);
+    let changes = delta
+        .changes
+        .iter()
+        .map(|(ordinal, message)| {
+            let leaf = streaming.filter(|_| Some(*ordinal) == streaming_ordinal);
+            (*ordinal, encoder::encode_container(message, leaf))
+        })
+        .collect();
+    let encoded = mainframe_acp::encoder::delta::EncodedDelta {
+        full: false,
+        changes,
+        len: delta.len,
+    };
+    state.apply(&encoded, || unreachable!("seeded"));
+    log.record_delta(&encoded, || unreachable!("seeded"));
+}
+
 fn run_new(settled_len: usize) -> Vec<Sample> {
     let mut cache = MessageCache::new();
     for msg in settled_messages(settled_len) {
@@ -202,25 +223,7 @@ fn run_new(settled_len: usize) -> Vec<Sample> {
     let mut step = |cache: &mut MessageCache,
                     overlay: Option<&ChatMessage>,
                     streaming: Option<StreamingLeafKind>| {
-        samples.push(measure(|| {
-            let delta = cache.project_display(CHAT_ID, overlay, None, make_projector);
-            let streaming_ordinal = delta.len.checked_sub(1);
-            let changes = delta
-                .changes
-                .iter()
-                .map(|(ordinal, message)| {
-                    let leaf = streaming.filter(|_| Some(*ordinal) == streaming_ordinal);
-                    (*ordinal, encoder::encode_container(message, leaf))
-                })
-                .collect();
-            let encoded = mainframe_acp::encoder::delta::EncodedDelta {
-                full: false,
-                changes,
-                len: delta.len,
-            };
-            state.apply(&encoded, || unreachable!("seeded"));
-            log.record_delta(&encoded, || unreachable!("seeded"));
-        }));
+        samples.push(measure(|| new_step(cache, overlay, streaming, &mut state, &mut log)));
     };
 
     cache.append(CHAT_ID, text_msg("u-act", ChatMessageType::User, "start the task"));
@@ -247,11 +250,10 @@ fn median_p95(mut nanos: Vec<u128>) -> (u128, u128) {
     (median, p95)
 }
 
-/// Repeats `run_active_turn` `iterations` times and reports the per-partial
-/// median/p95 latency (ns) and the allocation count/bytes of the LAST
-/// iteration (allocator counters are cumulative for the process, so only a
-/// single, isolated iteration's delta is meaningful for allocation counts;
-/// timing benefits from repetition to smooth scheduler noise).
+/// Repeats `run` and reports median/p95 latency (ns) plus the last
+/// iteration's allocation count/bytes (the allocator's counters are
+/// process-cumulative, so only one isolated iteration's delta is
+/// meaningful for allocations).
 fn report(label: &str, settled_len: usize, run: impl Fn(usize) -> Vec<Sample>, iterations: usize) {
     let mut per_step_nanos: Vec<Vec<u128>> = Vec::new();
     let mut last = Vec::new();
@@ -274,8 +276,7 @@ fn report(label: &str, settled_len: usize, run: impl Fn(usize) -> Vec<Sample>, i
     }
 }
 
-/// Machine/OS/rustc/profile/iteration conditions, printed once so the PR
-/// description can carry them alongside the table.
+/// Printed once so the PR description can carry it alongside the table.
 fn print_conditions(iterations: usize) {
     println!(
         "conditions: os={} arch={} profile={} iterations={}",
