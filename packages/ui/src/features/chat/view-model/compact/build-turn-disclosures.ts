@@ -94,7 +94,7 @@ function timingKey(
   )
     return undefined;
   const duration = turnDuration(model.timing, false, now);
-  return duration !== undefined && message.metadata.timing?.totalStreamTime === duration ? key : undefined;
+  return duration !== undefined && message.metadata?.timing?.totalStreamTime === duration ? key : undefined;
 }
 function boundaryUnit(index: number, scope: TurnScope): SourceUnit {
   return {

@@ -60,7 +60,7 @@ function unit(message: ThreadMessage, index: number, scope: TurnScope, source?: 
 }
 export function messageSourceUnits(message: ThreadMessage, scope: TurnScope): SourceUnit[] {
   if (message.role !== 'assistant') return [];
-  const meta = message.metadata.custom?.mainframe as MainframeMessageMeta | undefined;
+  const meta = message.metadata?.custom?.mainframe as MainframeMessageMeta | undefined;
   if (meta?.errorText) return [];
   return message.content.flatMap((_, index) => {
     const sources = meta?.partSources?.[index];
