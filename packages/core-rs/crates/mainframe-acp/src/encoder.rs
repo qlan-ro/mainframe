@@ -166,29 +166,62 @@ fn encode_messages(
     messages: &[DisplayMessage],
     streaming: Option<StreamingLeafKind>,
 ) -> Vec<EncodedItem> {
-    let mut out = Vec::new();
-    let last = messages.iter().rposition(|m| !is_queued(m));
-    for (index, message) in messages.iter().enumerate() {
-        if is_queued(message) {
-            continue;
-        }
-        let container = Container {
-            id: &message.id,
-            timestamp: &message.timestamp,
-            kind: kind_for(message.r#type),
-            message_meta: message.metadata.as_ref(),
-            parent_tool_call_id: None,
-        };
-        let leaf_kind = if Some(index) == last { streaming } else { None };
-        encode_content(
-            &message.content,
-            &container,
-            role_for(message.r#type),
-            &mut out,
-            leaf_kind,
-        );
+    encode_containers(messages, streaming)
+        .into_iter()
+        .flatten()
+        .collect()
+}
+
+/// Encode one top-level container (a single `DisplayMessage`) into its items
+/// — empty for a queued message (todo #376 G2 task 1). `streaming`, when
+/// `Some`, marks whichever leaf accumulator segment is still open at
+/// `finish`, exactly as `encode_content` already does for a whole-snapshot
+/// call; the caller (`encode_containers`) is the one that decides WHICH
+/// container gets a non-`None` value here.
+pub fn encode_container(
+    message: &DisplayMessage,
+    streaming: Option<StreamingLeafKind>,
+) -> Vec<EncodedItem> {
+    if is_queued(message) {
+        return Vec::new();
     }
+    let mut out = Vec::new();
+    let container = Container {
+        id: &message.id,
+        timestamp: &message.timestamp,
+        kind: kind_for(message.r#type),
+        message_meta: message.metadata.as_ref(),
+        parent_tool_call_id: None,
+    };
+    encode_content(
+        &message.content,
+        &container,
+        role_for(message.r#type),
+        &mut out,
+        streaming,
+    );
     out
+}
+
+/// Encode every top-level container separately, one item list per input
+/// message, in the same order. `streaming` lands on the last non-queued
+/// container only — the "last non-queued container" rule the chat-side
+/// projector's contract also relies on (todo #376 plan). `encode_messages`
+/// is the flattened form of this, so the full and future incremental paths
+/// share one encoder (G2 task 1).
+pub fn encode_containers(
+    messages: &[DisplayMessage],
+    streaming: Option<StreamingLeafKind>,
+) -> Vec<Vec<EncodedItem>> {
+    let last = messages.iter().rposition(|m| !is_queued(m));
+    messages
+        .iter()
+        .enumerate()
+        .map(|(index, message)| {
+            let leaf_kind = if Some(index) == last { streaming } else { None };
+            encode_container(message, leaf_kind)
+        })
+        .collect()
 }
 
 fn role_for(t: DisplayMessageType) -> ItemRole {
