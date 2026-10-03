@@ -5,10 +5,8 @@ import { CompactToolRow } from './CompactToolRow';
 import { CompactReasoningRow } from './CompactReasoningRow';
 import { disclosureKey } from './disclosure-store';
 import { useTranscriptScope } from './transcript-scope';
+import { ReasoningText } from '../../parts/ReasoningText';
 
-function ReasoningText({ text }: { text: string }) {
-  return <>{text}</>;
-}
 const reasoningComponents = { Reasoning: ReasoningText };
 export function CompactRows({ indices }: { indices: readonly number[] }) {
   const parts = useAuiState((s) => s.message.parts);
