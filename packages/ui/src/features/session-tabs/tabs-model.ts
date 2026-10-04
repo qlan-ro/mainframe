@@ -223,6 +223,44 @@ export function displayedTabIds(
   return [...rest.slice(0, firstAt), ...zoneMembers, ...rest.slice(firstAt)];
 }
 
+/** What the strip renders: lone tabs, and the split pair as ONE fused entry. */
+export type StripEntry =
+  | { kind: 'tab'; id: string }
+  | {
+      kind: 'pair';
+      ids: [string, string];
+      /** Which segment holds `mainThreadId`; meaningful only while `visible`. */
+      focused: 0 | 1;
+      /** The split is on screen — a parked pair renders with neither segment filled. */
+      visible: boolean;
+    };
+
+/**
+ * The displayed order with the pair DERIVED, not owned: `zones-store` stays the
+ * owner, and this just folds its two members into one entry at the first
+ * member's position. ⌘1-9 / ⌃Tab keep counting members individually — they
+ * read `displayedTabIds`, not this.
+ */
+export function stripEntries(state: TabsState, zones: [string, string] | null, active: string | null): StripEntry[] {
+  const displayed = displayedTabIds(state, zones, active);
+  if (zones == null || zones.filter((id) => displayed.includes(id)).length !== 2) {
+    return displayed.map((id) => ({ kind: 'tab', id }));
+  }
+  const entries: StripEntry[] = [];
+  for (const id of displayed) {
+    if (!zones.includes(id)) entries.push({ kind: 'tab', id });
+    else if (id === zones[0]) {
+      entries.push({
+        kind: 'pair',
+        ids: zones,
+        focused: active === zones[1] ? 1 : 0,
+        visible: active != null && zones.includes(active),
+      });
+    }
+  }
+  return entries;
+}
+
 /** The tab at a keyboard index (⌘1…⌘9), or null past the end (AC 10). */
 export function tabAtIndex(displayed: readonly string[], index: number): string | null {
   return displayed[index] ?? null;

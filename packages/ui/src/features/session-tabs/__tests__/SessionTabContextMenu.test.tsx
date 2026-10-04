@@ -1,13 +1,26 @@
 /**
  * SessionTabContextMenu — the tab's right-click menu. Covers the Fork item's
  * placement (AC 17: after the split item and Keep Open, before the Close
- * separator) and its enabled/disabled rendering off `forkAvailability`.
+ * separator) and its enabled/disabled rendering off `forkAvailability`, plus
+ * the surface-wide actions (Split Right/Down, Hide Chat) that moved here from
+ * the retired chat header — rendered after a separator, before Close.
  */
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { SessionTabContextMenu } from '../SessionTabContextMenu';
+import { SessionTabContextMenu, type SurfaceMenuActions } from '../SessionTabContextMenu';
 import type { ForkAvailability } from '@/features/sessions/view-model/fork-availability';
+
+function defaultSurface(overrides: Partial<SurfaceMenuActions> = {}): SurfaceMenuActions {
+  return {
+    canSplit: false,
+    onSplitRight: vi.fn(),
+    onSplitDown: vi.fn(),
+    canHide: true,
+    onHide: vi.fn(),
+    ...overrides,
+  };
+}
 
 function renderMenu(
   overrides: Partial<{
@@ -16,6 +29,7 @@ function renderMenu(
     preview: boolean;
     canOpenSideChat: boolean;
     onOpenSideChat: () => void;
+    surface: SurfaceMenuActions;
   }> = {},
   forkAvailability: ForkAvailability = { enabled: true },
   onFork = vi.fn(),
@@ -34,6 +48,7 @@ function renderMenu(
         onFork={onFork}
         canOpenSideChat={overrides.canOpenSideChat ?? false}
         onOpenSideChat={overrides.onOpenSideChat ?? vi.fn()}
+        surface={overrides.surface ?? defaultSurface()}
       >
         <div>tab</div>
       </SessionTabContextMenu>
@@ -47,14 +62,24 @@ describe('SessionTabContextMenu — Fork placement', () => {
     renderMenu();
 
     const items = screen.getAllByRole('menuitem').map((el) => el.getAttribute('data-testid'));
-    expect(items).toEqual(['session-tab-ctx-open-split', 'session-tab-ctx-fork', 'session-tab-ctx-close']);
+    expect(items).toEqual([
+      'session-tab-ctx-open-split',
+      'session-tab-ctx-fork',
+      'session-tab-ctx-hide-chat',
+      'session-tab-ctx-close',
+    ]);
   });
 
   it('sits after Close Split when the tab is a split member', () => {
     renderMenu({ inSplit: true });
 
     const items = screen.getAllByRole('menuitem').map((el) => el.getAttribute('data-testid'));
-    expect(items).toEqual(['session-tab-ctx-close-split', 'session-tab-ctx-fork', 'session-tab-ctx-close']);
+    expect(items).toEqual([
+      'session-tab-ctx-close-split',
+      'session-tab-ctx-fork',
+      'session-tab-ctx-hide-chat',
+      'session-tab-ctx-close',
+    ]);
   });
 
   it('sits after Keep Open on a preview tab', () => {
@@ -65,6 +90,7 @@ describe('SessionTabContextMenu — Fork placement', () => {
       'session-tab-ctx-open-split',
       'session-tab-ctx-keep-open',
       'session-tab-ctx-fork',
+      'session-tab-ctx-hide-chat',
       'session-tab-ctx-close',
     ]);
   });
@@ -115,5 +141,60 @@ describe('SessionTabContextMenu — Open Side Chat (todo #344)', () => {
     renderMenu({ canOpenSideChat: false });
 
     expect(screen.queryByTestId('session-tab-ctx-side-chat')).toBeNull();
+  });
+});
+
+describe('SessionTabContextMenu — surface actions (moved from the retired chat header)', () => {
+  it('renders Split Right and Split Down between Fork and Hide Chat when the surface can split, and calls each handler', () => {
+    const onSplitRight = vi.fn();
+    const onSplitDown = vi.fn();
+    renderMenu({ surface: defaultSurface({ canSplit: true, onSplitRight, onSplitDown }) });
+
+    const items = screen.getAllByRole('menuitem').map((el) => el.getAttribute('data-testid'));
+    expect(items).toEqual([
+      'session-tab-ctx-open-split',
+      'session-tab-ctx-fork',
+      'session-tab-ctx-split-right',
+      'session-tab-ctx-split-down',
+      'session-tab-ctx-hide-chat',
+      'session-tab-ctx-close',
+    ]);
+
+    fireEvent.click(screen.getByTestId('session-tab-ctx-split-right'));
+    expect(onSplitRight).toHaveBeenCalledTimes(1);
+
+    // Selecting an item closes the menu — reopen it to reach the next one.
+    fireEvent.contextMenu(screen.getByText('tab'));
+    fireEvent.click(screen.getByTestId('session-tab-ctx-split-down'));
+    expect(onSplitDown).toHaveBeenCalledTimes(1);
+  });
+
+  it('omits Split Right and Split Down when the surface cannot split', () => {
+    renderMenu({ surface: defaultSurface({ canSplit: false }) });
+
+    expect(screen.queryByTestId('session-tab-ctx-split-right')).toBeNull();
+    expect(screen.queryByTestId('session-tab-ctx-split-down')).toBeNull();
+  });
+
+  it('enables Hide Chat and calls onHide when the surface is not at the floor', () => {
+    const onHide = vi.fn();
+    renderMenu({ surface: defaultSurface({ canHide: true, onHide }) });
+
+    const hideChat = screen.getByTestId('session-tab-ctx-hide-chat');
+    expect(hideChat).not.toHaveAttribute('data-disabled');
+
+    fireEvent.click(hideChat);
+    expect(onHide).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables Hide Chat and does not call onHide when the surface is the floor', () => {
+    const onHide = vi.fn();
+    renderMenu({ surface: defaultSurface({ canHide: false, onHide }) });
+
+    const hideChat = screen.getByTestId('session-tab-ctx-hide-chat');
+    expect(hideChat).toHaveAttribute('data-disabled');
+
+    fireEvent.click(hideChat);
+    expect(onHide).not.toHaveBeenCalled();
   });
 });
