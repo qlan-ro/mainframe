@@ -263,7 +263,7 @@ describe('Composer — highlight overlay wired + input is text-transparent', () 
 });
 
 // ---------------------------------------------------------------------------
-// Placeholder copy — "Reply to Mainframe…" default, "Add a message…" when the
+// Placeholder copy — "Reply to the agent…" default, "Add a message…" when the
 // live segment has a pending quote (finding 8.3: design 03-content.jsx:747).
 // The rule now reads the segment store's liveQuote, not the native
 // composer.quote (multi-quote composer, #280) — see ComposerSegments.test.tsx
@@ -278,10 +278,10 @@ describe('Composer — placeholder copy switches on pending-quote state', () => 
     useComposerSegments.setState({ byThread: {} });
   });
 
-  it('shows "Reply to Mainframe…" when no quote is pending', () => {
+  it('shows "Reply to the agent…" when no quote is pending', () => {
     renderComposer();
     const input = screen.getByTestId('chat-composer-input');
-    expect(input).toHaveAttribute('placeholder', 'Reply to Mainframe…');
+    expect(input).toHaveAttribute('placeholder', 'Reply to the agent…');
   });
 
   it('shows "Add a message…" when the live segment has a pending quote', () => {

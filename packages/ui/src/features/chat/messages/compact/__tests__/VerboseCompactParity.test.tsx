@@ -42,7 +42,9 @@ it('suppresses duplicate duration only for a matching authoritative interval and
     },
   };
   const view = render(<TurnFixture rootId="timing" messages={[turnMessage('work', 'Work', { timing }), final]} />);
-  expect(screen.getByRole('button', { name: 'Worked for 2.00s' })).toBeVisible();
+  // D18: the disclosure's accessible name is the static "Work details" — the
+  // elapsed text is visible content, not part of the name.
+  expect(screen.getByRole('button', { name: 'Work details' })).toHaveTextContent('Worked for 2.00s');
   expect(screen.getByRole('button', { name: 'Message cost' })).toHaveTextContent('$0.012');
   expect(screen.queryByRole('button', { name: 'Message timing' })).toBeNull();
   view.rerender(
@@ -77,9 +79,7 @@ it('preserves a manually collapsed work choice when a tool reports failure', asy
   fireEvent.click(await screen.findByRole('button', { name: 'Read files' }));
   expect(await screen.findByLabelText('failed')).toBeVisible();
 });
-it('updates a supplied header clock without rebuilding transcript rows or remounting final text', async () => {
-  const model = await import('../../../view-model/compact/build-turn-disclosures');
-  const build = vi.spyOn(model, 'buildTurnDisclosures');
+it('D18: no live clock while running; shows "Worked for X" only once the turn settles', async () => {
   vi.useFakeTimers();
   vi.setSystemTime(10000);
   const timing = { startedAtMs: 8000 };
@@ -93,16 +93,33 @@ it('updates a supplied header clock without rebuilding transcript rows or remoun
     vi.advanceTimersByTime(0);
   });
   const node = view.container.querySelector('[data-message-id="final"] [data-text-part]');
-  const count = build.mock.calls.length;
-  expect(screen.getByRole('button', { name: 'Working for 2.00s' })).toBeVisible();
+  // While running: the disclosure's name is the static "Work details" and it
+  // carries no elapsed text at all — the footer's status line is the one
+  // live timer now, not this one.
+  expect(screen.getByRole('button', { name: 'Work details' })).not.toHaveTextContent(/\d/);
+
+  // The passage of time alone must not reveal a clock — there is no ticking
+  // left here to drive one (D18 suppresses it explicitly).
   await act(async () => {
-    vi.advanceTimersByTime(1000);
+    vi.advanceTimersByTime(2000);
   });
-  expect(screen.getByRole('button', { name: 'Working for 3.00s' })).toBeVisible();
-  expect(build).toHaveBeenCalledTimes(count);
+  expect(screen.getByRole('button', { name: 'Work details' })).not.toHaveTextContent(/\d/);
+
+  // Settling the turn (a real message change, not a tick) reveals the duration,
+  // without remounting the final answer's text node.
+  const settled = { startedAtMs: 8000, completedAtMs: 10000, durationMs: 2000 };
+  view.rerender(
+    <TurnFixture
+      rootId="clock"
+      messages={[turnMessage('work', 'Work', { timing: settled }), finalMessage({ timing: settled })]}
+    />,
+  );
+  await act(async () => {
+    vi.advanceTimersByTime(0);
+  });
+  expect(screen.getByRole('button', { name: 'Work details' })).toHaveTextContent('Worked for 2.00s');
   expect(view.container.querySelector('[data-message-id="final"] [data-text-part]')).toBe(node);
   view.unmount();
-  build.mockRestore();
   vi.useRealTimers();
 });
 it('waits for confirmed Claude completion while preserving its final node', async () => {
@@ -139,7 +156,7 @@ it('shows precise Codex duration and suppresses only the matching native duratio
   const view = render(
     <TurnFixture rootId="precise-duration" messages={[turnMessage('work', 'Work', { timing }), final]} />,
   );
-  expect(screen.getByRole('button', { name: 'Worked for 1.90s' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Work details' })).toHaveTextContent('Worked for 1.90s');
   expect(screen.getByRole('button', { name: 'Message cost' })).toBeVisible();
   view.rerender(
     <TurnFixture

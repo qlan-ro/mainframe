@@ -30,13 +30,15 @@ describe('Setup Advisor — pre-existing data-testid tokens survive the section 
     const host = read(advisorDir, 'SetupAdvisorHost.tsx');
     const sheet = read(advisorDir, 'SetupAdvisorSheet.tsx');
     const evidence = read(advisorDir, 'EvidenceDisclosure.tsx');
-    const toolbar = read(layoutDir, 'MainToolbar.tsx');
+    // D2/phase 2: the advisor button moved out of the dead MainToolbar into
+    // the title bar's own actions cluster.
+    const titleBarActions = read(layoutDir, 'TitleBarActions.tsx');
 
     expect(host).toContain('data-testid="automation-recommender-sheet"');
     expect(sheet).toContain('data-testid="automation-recommender-loading"');
     expect(sheet).toContain('data-testid="automation-recommender-retry"');
     expect(evidence).toContain('data-testid="automation-recommender-evidence-toggle"');
-    expect(toolbar).toContain('data-testid="automation-recommender-open"');
+    expect(titleBarActions).toContain('data-testid="automation-recommender-open"');
   });
 
   it('keeps both template-literal testid prefixes', () => {

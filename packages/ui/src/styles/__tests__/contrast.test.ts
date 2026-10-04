@@ -165,11 +165,28 @@ describe('v2 contrast guardrail', () => {
 
   it.each(THEMES)('warning — the caution ink — clears 4.5:1 as TEXT — %s', (theme) => {
     // Unlike success/destructive this one IS body text: the composer edit banner,
-    // git divergence and worktree rows all render `text-warning`.
+    // git divergence and worktree rows all render `text-warning` — and, since
+    // the redesign, so does a waiting sidebar row's "your turn" label
+    // (SessionRowMetaLine) on the `sidebar` surface.
     const t = resolve(theme);
     const ink = color(t, '--warning');
-    for (const name of ['background', 'card'] as const) {
+    for (const name of ['background', 'card', 'sidebar'] as const) {
       expect(inkOn(ink, backdrops(t)[name]!), `warning on ${name} (${theme})`).toBeGreaterThanOrEqual(WCAG_MIN);
+    }
+  });
+
+  it.each(THEMES)('primary clears the 3:1 UI floor as ink on sidebar and background — %s', (theme) => {
+    // `primary` doubles as running/selected (D26) and, since the redesign,
+    // short glyph-adjacent text too: the sidebar Tasks rows and the panel's
+    // Tasks section render `#<n>` in `text-primary` (TaskSidebarRow,
+    // TasksSection). Same system-blue ceiling as `primary-foreground` on
+    // `primary` below (measured ~3.50 / 3.93, light/dark) — it cannot reach
+    // the 4.5:1 text floor, so this guardrail holds it to the 3:1 UI floor
+    // like the other semantic hues, not full text AA.
+    const t = resolve(theme);
+    const ink = color(t, '--primary');
+    for (const name of ['sidebar', 'background'] as const) {
+      expect(inkOn(ink, backdrops(t)[name]!), `primary on ${name} (${theme})`).toBeGreaterThanOrEqual(UI_COMPONENT_MIN);
     }
   });
 

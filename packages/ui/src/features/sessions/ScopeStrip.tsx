@@ -71,37 +71,41 @@ function ScopeAvatar({
 }) {
   const unavailable = project.available === false;
   const item = (
-    <Hint label={unavailable ? `${project.name} (unavailable)` : project.name}>
-      <ToggleGroupItem
-        value={project.id}
-        data-testid={`sessions-scope-avatar-${project.id}`}
-        aria-label={project.name}
-        onClickCapture={(event) => {
-          if (!event.altKey) return;
-          event.preventDefault();
-          event.stopPropagation();
-          onSolo();
-        }}
-        className={cn(
-          'h-auto min-w-0 flex-none rounded-full p-0 first:rounded-full last:rounded-full data-[state=on]:bg-transparent',
-          selected && 'relative z-10',
-        )}
-      >
-        <ProjectAvatar
-          name={project.name}
-          color={projectColor(project.id)}
-          size={SCOPE_AVATAR_SIZE}
-          ring={selected}
-          dim={dim || unavailable}
-          className="ring-offset-sidebar"
-        />
-      </ToggleGroupItem>
-    </Hint>
+    <ToggleGroupItem
+      value={project.id}
+      data-testid={`sessions-scope-avatar-${project.id}`}
+      aria-label={project.name}
+      onClickCapture={(event) => {
+        if (!event.altKey) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onSolo();
+      }}
+      className={cn(
+        'h-auto min-w-0 flex-none rounded-full p-0 first:rounded-full last:rounded-full data-[state=on]:bg-transparent',
+        selected && 'relative z-10',
+      )}
+    >
+      <ProjectAvatar
+        name={project.name}
+        color={projectColor(project.id)}
+        size={SCOPE_AVATAR_SIZE}
+        ring={selected}
+        dim={dim || unavailable}
+        className="ring-offset-sidebar"
+      />
+    </ToggleGroupItem>
   );
-  if (onRemove == null) return item;
+  const hint = unavailable ? `${project.name} (unavailable)` : project.name;
+  if (onRemove == null) return <Hint label={hint}>{item}</Hint>;
+  // Hint OUTSIDE the context-menu trigger: a Tooltip root never forwards
+  // props to the DOM, so a trigger wrapping the Hint would lose its
+  // onContextMenu; the trigger must wrap the real button.
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild>{item}</ContextMenuTrigger>
+      <Hint label={hint}>
+        <ContextMenuTrigger asChild>{item}</ContextMenuTrigger>
+      </Hint>
       <ContextMenuContent className="w-44">
         <ContextMenuItem data-testid={`sidebar-project-remove-${project.id}`} variant="destructive" onSelect={onRemove}>
           <Trash2Icon />

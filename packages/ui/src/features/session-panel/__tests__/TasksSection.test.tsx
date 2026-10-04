@@ -1,8 +1,11 @@
 /**
- * TasksCard — unit tests.
+ * TasksSection — unit tests.
  *
- * The project's active tasks as a stacked panel (todo item 4). The card owns
- * the project-scoped todos load now that the sidebar section is gone.
+ * The project's active tasks as a section of the docked panel (todo item 4).
+ * The section owns the project-scoped todos load now that the sidebar
+ * section is gone, and the quick-add logic lives in the shared
+ * `useQuickAddTodo` (also used by the sidebar Tasks list) — run for real here
+ * against a mocked `lib/api/todos`.
  *
  * Behaviors covered:
  *  - without an active project: the "No active project" row, no New-task row,
@@ -10,12 +13,11 @@
  *  - with a project but no active tasks: the New-task row plus the empty row
  *  - one row per ACTIVE todo; done todos never appear, and neither does the
  *    done count in the badge
- *  - a row opens the edit modal on that todo; New task opens the create form
- *  - the header X closes the panel
+ *  - a row opens the edit modal on that todo through `useTasksModal().openEdit`
+ *    — there is no dialog mounted here to assert on
  *
  * Follows TasksModalHost.test.tsx: the REAL useTodosStore runs against a mocked
- * lib/api/todos, so the load the card fires is observable. The edit modal is
- * stubbed — it owns its own suite.
+ * lib/api/todos, so the load the section fires is observable.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render as rtlRender, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -40,21 +42,9 @@ vi.mock('@/features/sessions/use-active-identity', () => ({
   useActiveIdentity: () => ({ projectName: 'repo', projectId: mockProjectId, chatId: 'chat-9', isWorktree: false }),
 }));
 
-const startTodoSession = vi.fn();
-vi.mock('@/features/tasks/use-start-todo-session', () => ({
-  useStartTodoSession: () => startTodoSession,
-}));
-
-// The real dialog owns its own suite; here only "which todo did it open on?"
-// matters. `null` is the create form, a Todo is an edit.
-vi.mock('@/features/tasks/sidebar/TaskEditModal', () => ({
-  TaskEditModal: ({ todo }: { todo: { id: string } | null }) => (
-    <div data-testid="task-edit-modal-stub" data-todo={todo ? todo.id : 'new'} />
-  ),
-}));
-
-const { TasksCard } = await import('../TasksCard');
+const { TasksSection } = await import('../TasksSection');
 const { useTodosStore } = await import('@/features/tasks/use-todos-store');
+const { useTasksModal } = await import('@/features/tasks/use-tasks-modal');
 const todosApi = await import('@/lib/api/todos');
 const { mfToast } = await import('@/lib/toast');
 
@@ -121,11 +111,10 @@ function Wrapper({ children }: { children: ReactNode }) {
   );
 }
 
-const onClose = vi.fn();
-const render = () => rtlRender(<TasksCard onClose={onClose} />, { wrapper: Wrapper });
+const render = () => rtlRender(<TasksSection />, { wrapper: Wrapper });
 const badge = () => screen.getByTestId('session-panel-card-tasks').querySelector('[data-slot="badge"]');
 
-/** Renders and waits for the card's own load to land in the store. */
+/** Renders and waits for the section's own load to land in the store. */
 async function renderLoaded(todos: Todo[]) {
   vi.mocked(todosApi.listTodos).mockResolvedValue(todos);
   render();
@@ -136,11 +125,12 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockProjectId = 'proj-1';
   vi.mocked(todosApi.listTodos).mockResolvedValue([]);
-  // The store is a module-level singleton — a previous case's rows would leak.
+  // The stores are module-level singletons — a previous case's state would leak.
   useTodosStore.setState({ entries: {} });
+  useTasksModal.setState({ open: false, quickOpen: false, edit: null });
 });
 
-describe('TasksCard — no active project', () => {
+describe('TasksSection — no active project', () => {
   it('says so instead of rendering an empty list', async () => {
     mockProjectId = undefined;
     render();
@@ -162,7 +152,7 @@ describe('TasksCard — no active project', () => {
   });
 });
 
-describe('TasksCard — empty project', () => {
+describe('TasksSection — empty project', () => {
   it('keeps the quick-add input and shows the empty row', async () => {
     await renderLoaded([]);
     await waitFor(() => expect(screen.getByTestId('session-panel-tasks-empty')).toHaveTextContent('No active tasks'));
@@ -183,7 +173,7 @@ describe('TasksCard — empty project', () => {
   });
 });
 
-describe('TasksCard — rows', () => {
+describe('TasksSection — rows', () => {
   it('renders one row per active task, keyed by its number', async () => {
     await renderLoaded([OPEN_TODO, IN_PROGRESS_TODO, DONE_TODO]);
     await waitFor(() => expect(screen.getByTestId('session-panel-task-row-11')).toHaveTextContent('Fix the rail'));
@@ -194,17 +184,18 @@ describe('TasksCard — rows', () => {
     expect(screen.queryByTestId('session-panel-tasks-empty')).toBeNull();
   });
 
-  it('counts only the active tasks in the card badge', async () => {
+  it('counts only the active tasks in the badge', async () => {
     await renderLoaded([OPEN_TODO, IN_PROGRESS_TODO, DONE_TODO]);
     await waitFor(() => expect(badge()).toHaveTextContent('2'));
   });
 });
 
-describe('TasksCard — the edit modal', () => {
-  it('stays closed until something asks for it', async () => {
-    await renderLoaded([OPEN_TODO]);
-    await waitFor(() => expect(screen.getByTestId('session-panel-task-row-11')).toBeInTheDocument());
-    expect(screen.queryByTestId('task-edit-modal-stub')).toBeNull();
+describe('TasksSection — editing', () => {
+  it('opens the shared edit modal store on the clicked todo', async () => {
+    await renderLoaded([OPEN_TODO, IN_PROGRESS_TODO]);
+    await waitFor(() => expect(screen.getByTestId('session-panel-task-row-12')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('session-panel-task-row-12'));
+    expect(useTasksModal.getState().edit).toEqual({ projectId: 'proj-1', todoId: 'todo-2' });
   });
 
   it('creates a title-only task on Enter and clears the input for the next one', async () => {
@@ -299,25 +290,16 @@ describe('TasksCard — the edit modal', () => {
     await waitFor(() => expect(mfToast.error).toHaveBeenCalledWith('Attachment not added', expect.anything()));
     expect(screen.queryByTestId('session-panel-tasks-attachments')).toBeNull();
   });
-
-  it('opens on the todo whose row was clicked', async () => {
-    await renderLoaded([OPEN_TODO, IN_PROGRESS_TODO]);
-    await waitFor(() => expect(screen.getByTestId('session-panel-task-row-12')).toBeInTheDocument());
-    fireEvent.click(screen.getByTestId('session-panel-task-row-12'));
-    expect(screen.getByTestId('task-edit-modal-stub')).toHaveAttribute('data-todo', 'todo-2');
-  });
 });
 
-describe('TasksCard — card chrome', () => {
-  it('titles the card Tasks and closes from the header X', async () => {
+describe('TasksSection — header', () => {
+  it('labels the section Tasks', async () => {
     await renderLoaded([]);
     expect(screen.getByTestId('session-panel-card-tasks')).toHaveTextContent('Tasks');
-    fireEvent.click(screen.getByTestId('session-panel-card-close-tasks'));
-    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
 
-describe('TasksCard — row order', () => {
+describe('TasksSection — row order', () => {
   const rowOrder = () => screen.getAllByTestId(/^session-panel-task-row-/).map((el) => el.getAttribute('data-testid'));
 
   it('lists in-progress tasks newest-first, then open tasks newest-first', async () => {

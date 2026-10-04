@@ -83,11 +83,11 @@ describe('ContextSection — memory files', () => {
     const global = screen.getByTestId('session-panel-context-file-/Users/dev/.claude/CLAUDE.md');
     expect(global).toHaveTextContent('CLAUDE.md');
     expect(global).toHaveTextContent('global');
-    expect(global).toHaveTextContent('~3.2k');
+    expect(global).toHaveTextContent('~3.2K');
 
     const project = screen.getByTestId('session-panel-context-file-CLAUDE.md');
     expect(project).toHaveTextContent('project');
-    expect(project).toHaveTextContent('~1k');
+    expect(project).toHaveTextContent('~1K');
   });
 
   it('opens a file on click', () => {

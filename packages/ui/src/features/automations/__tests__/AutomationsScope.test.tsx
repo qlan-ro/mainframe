@@ -37,6 +37,7 @@ import userEvent from '@testing-library/user-event';
 import type { AutomationCreateInput, AutomationSummary } from '../contract';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { AutomationsHost } from '../AutomationsHost';
+import { AutomationsRuntime } from '../AutomationsRuntime';
 import { useAutomationsNav } from '../data/use-automations-nav';
 import { useAutomationsStore } from '../data/use-automations-store';
 import { createFixtureGateway } from '../fixtures/fixture-gateway';
@@ -293,11 +294,16 @@ describe('AutomationsHost — creating an automation', () => {
 // 7. AC14 — the pending badge is global, unaffected by an in-modal scope
 // ---------------------------------------------------------------------------
 
-describe('AutomationsHost — the sidebar’s pending badge', () => {
+describe('AutomationsRuntime — the sidebar’s pending badge, mounted alongside AutomationsHost', () => {
   it('is populated on mount with the modal never opened, and unchanged by a scope change', async () => {
     useAutomationsNav.setState({ open: false });
 
-    renderHost();
+    render(
+      <TooltipProvider>
+        <AutomationsRuntime />
+        <AutomationsHost />
+      </TooltipProvider>,
+    );
 
     await waitFor(() => expect(useAutomationsStore.getState().interactions.length).toBeGreaterThan(0));
     const countAtBoot = useAutomationsStore.getState().interactions.length;

@@ -33,7 +33,7 @@ export function PullRequestsSection() {
             >
               <GitPullRequest className="size-3.5 shrink-0 text-success" aria-hidden />
               <span className="min-w-0 flex-1 truncate text-sm">
-                {pr.repo}#{pr.number}
+                {pr.owner}/{pr.repo}#{pr.number}
               </span>
               <span className="shrink-0 font-mono text-xs text-muted-foreground">{pr.source}</span>
             </button>

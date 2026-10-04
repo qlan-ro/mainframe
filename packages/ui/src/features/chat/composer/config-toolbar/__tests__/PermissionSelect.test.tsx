@@ -129,22 +129,25 @@ describe('PermissionSelect — Auto is gated on the adapter capability (todo #32
   });
 });
 
-describe('PermissionSelect — Auto reads as caution, Unattended stays destructive (todo #325)', () => {
-  it('tints the trigger text-warning when Auto is the current mode', () => {
+describe('PermissionSelect — D19: reverses #325 — Auto and Unattended both read as warning, not destructive', () => {
+  it('tints the trigger text-warning when Auto is the current mode, with no chip tint', () => {
     renderSelect(makeChat({ permissionMode: 'auto' }));
     const trigger = screen.getByTestId('composer-permission-mode-select');
     expect(trigger.className).toContain('text-warning');
     expect(trigger.className).not.toContain('text-destructive');
+    expect(trigger.className).not.toContain('bg-warning/10');
   });
 
-  it('keeps the trigger text-destructive when Unattended is the current mode', () => {
+  it('tints the trigger text-warning AND gives it a warning-tinted chip when Unattended is the current mode', () => {
     renderSelect(makeChat({ permissionMode: 'yolo' }));
     const trigger = screen.getByTestId('composer-permission-mode-select');
-    expect(trigger.className).toContain('text-destructive');
-    expect(trigger.className).not.toContain('text-warning');
+    expect(trigger.className).toContain('text-warning');
+    expect(trigger.className).toContain('border-warning/40');
+    expect(trigger.className).toContain('bg-warning/10');
+    expect(trigger.className).not.toContain('text-destructive');
   });
 
-  it('gives the Auto option the warning tint and Unattended the destructive one', async () => {
+  it('gives both the Auto and Unattended option labels the same warning ink — the chip only distinguishes the trigger', async () => {
     renderSelect(makeChat(), undefined, makeAdapter({ planMode: true, autoMode: true }));
     await openMenu();
 
@@ -153,7 +156,7 @@ describe('PermissionSelect — Auto reads as caution, Unattended stays destructi
     expect(autoLabel.className).not.toContain('text-destructive');
 
     const yoloLabel = within(screen.getByTestId('composer-permission-mode-select-option-yolo')).getByText('Unattended');
-    expect(yoloLabel.className).toContain('text-destructive');
-    expect(yoloLabel.className).not.toContain('text-warning');
+    expect(yoloLabel.className).toContain('text-warning');
+    expect(yoloLabel.className).not.toContain('text-destructive');
   });
 });

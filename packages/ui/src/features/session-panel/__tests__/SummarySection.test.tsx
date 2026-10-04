@@ -5,7 +5,6 @@
  *  - the branch row shows the live branch, and the `wt` badge only for worktrees
  *  - the context row shows the percentage and carries the token detail as its
  *    accessible description; it disappears when the percentage is unknown
- *  - one row per detected PR, labelled `PR #<n> · <source>`, opening the URL
  *  - the changes row shows the file count and the +/− totals, and clicking it
  *    emits `open-review`
  *  - the changes row is absent while loading and on error — a fabricated zero
@@ -24,7 +23,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render as rtlRender, screen, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
-import type { ContextUsage, DetectedPr } from '@qlan-ro/mainframe-types';
+import type { ContextUsage } from '@qlan-ro/mainframe-types';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { HostProvider } from '@/lib/host';
 import { FakeHostBridge } from '@/lib/host/fake-adapter';
@@ -100,12 +99,6 @@ vi.mock('@/features/review/use-working-changes', async (importOriginal) => ({
   },
 }));
 
-let mockPrs: DetectedPr[] = [];
-vi.mock('@assistant-ui/react', () => ({
-  useAuiState: (selector: (state: unknown) => unknown) =>
-    selector({ threadListItem: { custom: { detectedPrs: mockPrs } }, threads: { threadItems: [] } }),
-}));
-
 const emitSurfaceIntent = vi.fn();
 vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: (...args: unknown[]) => emitSurfaceIntent(...args) }));
 
@@ -121,14 +114,6 @@ function Wrapper({ children }: { children: ReactNode }) {
 }
 const render = (ui: Parameters<typeof rtlRender>[0]) => rtlRender(ui, { wrapper: Wrapper });
 
-const pr = (number: number, source: DetectedPr['source']): DetectedPr => ({
-  url: `https://github.com/acme/repo/pull/${number}`,
-  owner: 'acme',
-  repo: 'repo',
-  number,
-  source,
-});
-
 beforeEach(() => {
   mockIdentity = { projectId: 'proj-1', chatId: 'chat-9', noProject: false };
   mockIsWorktree = false;
@@ -143,7 +128,6 @@ beforeEach(() => {
     loading: false,
     error: false,
   };
-  mockPrs = [];
   emitSurfaceIntent.mockReset();
   useDisplayBranchSpy.mockReset();
   useWorkingChangesSpy.mockReset();
@@ -181,37 +165,13 @@ describe('SummarySection — context', () => {
     expect(row).toHaveTextContent('73%');
 
     await user.hover(row);
-    expect((await screen.findAllByRole('tooltip'))[0]).toHaveTextContent('146k / 200k tokens');
+    expect((await screen.findAllByRole('tooltip'))[0]).toHaveTextContent('146K / 200K tokens');
   });
 
   it('omits the row when the usage cannot be derived', () => {
     mockPercent = null;
     render(<SummarySection port={31415} />);
     expect(screen.queryByTestId('session-panel-summary-context')).toBeNull();
-  });
-});
-
-describe('SummarySection — detected PRs', () => {
-  it('renders one row per PR with its source word', () => {
-    mockPrs = [pr(41, 'created'), pr(42, 'mentioned')];
-    render(<SummarySection port={31415} />);
-    expect(screen.getByTestId('session-panel-summary-pr-41')).toHaveTextContent('PR #41');
-    expect(screen.getByTestId('session-panel-summary-pr-41')).toHaveTextContent('created');
-    expect(screen.getByTestId('session-panel-summary-pr-42')).toHaveTextContent('mentioned');
-  });
-
-  it('renders no PR row when none was detected', () => {
-    render(<SummarySection port={31415} />);
-    expect(screen.queryByTestId('session-panel-summary-pr-41')).toBeNull();
-  });
-
-  it('opens the PR externally on click', () => {
-    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
-    mockPrs = [pr(41, 'created')];
-    render(<SummarySection port={31415} />);
-    fireEvent.click(screen.getByTestId('session-panel-summary-pr-41'));
-    expect(open).toHaveBeenCalledWith('https://github.com/acme/repo/pull/41', '_blank', 'noopener,noreferrer');
-    open.mockRestore();
   });
 });
 

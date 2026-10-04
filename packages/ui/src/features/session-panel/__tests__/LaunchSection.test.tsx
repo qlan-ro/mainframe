@@ -1,5 +1,5 @@
 /**
- * LaunchCard — unit tests.
+ * LaunchSection — unit tests.
  *
  * Behaviors covered:
  *  - one row per launch configuration, with the preview-vs-console glyph and a
@@ -7,8 +7,7 @@
  *  - the live row is marked and offers STOP; a stopped row offers START
  *  - a row click starts or stops THAT config, always passing the chatId — the
  *    daemon derives the effective worktree path from it
- *  - the card's count badge is the number of live configs
- *  - the header X closes the panel
+ *  - the section's count badge is the number of live configs
  *  - no configs renders the empty row, and no rows
  *  - rows are inert without a chatId
  *
@@ -75,7 +74,7 @@ vi.mock('@/features/sessions/use-active-identity', () => ({
   }),
 }));
 
-const { LaunchCard } = await import('../LaunchCard');
+const { LaunchSection } = await import('../LaunchSection');
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
 const configs: LaunchConfiguration[] = [
@@ -93,12 +92,11 @@ const configs: LaunchConfiguration[] = [
 /** buildLaunchScope('proj-1', '/repo'); '/repo' comes from the statuses mock. */
 const SCOPE_KEY = 'proj-1:/repo';
 
-const onClose = vi.fn();
 const render = (ui: Parameters<typeof rtlRender>[0]) => rtlRender(ui, { wrapper: TooltipProvider });
 const badge = () => screen.getByTestId('session-panel-card-launch').querySelector('[data-slot="badge"]');
 
-async function renderCard() {
-  render(<LaunchCard port={31415} onClose={onClose} />);
+async function renderSection() {
+  render(<LaunchSection port={31415} />);
   await waitFor(() => screen.getByTestId('session-panel-launch-row-dev server'));
 }
 
@@ -110,7 +108,6 @@ beforeEach(() => {
   addRunTab.mockReset().mockReturnValue(true);
   setSelectedConfig.mockReset();
   toastError.mockReset();
-  onClose.mockReset();
   mockProcessStatuses = {};
   mockSelectedByScope = {};
   mockChatId = 'chat-9';
@@ -118,31 +115,29 @@ beforeEach(() => {
   mockNoProject = false;
 });
 
-describe('LaunchCard — card chrome', () => {
-  it('titles the card Launch and closes from the header X', async () => {
-    await renderCard();
+describe('LaunchSection — header', () => {
+  it('labels the section Launch', async () => {
+    await renderSection();
     expect(screen.getByTestId('session-panel-card-launch')).toHaveTextContent('Launch');
-    fireEvent.click(screen.getByTestId('session-panel-card-close-launch'));
-    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
 
-describe('LaunchCard — rows', () => {
+describe('LaunchSection — rows', () => {
   it('renders one row per configuration', async () => {
-    await renderCard();
+    await renderSection();
     expect(screen.getByTestId('session-panel-launch-row-dev server')).toHaveTextContent('dev server');
     expect(screen.getByTestId('session-panel-launch-row-preview-app')).toHaveTextContent('preview-app');
   });
 
   it('distinguishes a preview config from a console one by glyph', async () => {
-    await renderCard();
+    await renderSection();
     expect(screen.getByTestId('session-panel-launch-row-preview-app').querySelector('.lucide-eye')).toBeTruthy();
     expect(screen.getByTestId('session-panel-launch-row-dev server').querySelector('.lucide-terminal')).toBeTruthy();
   });
 
   it('offers START on a stopped row and STOP on a live one, and marks the live row', async () => {
     mockProcessStatuses = { [SCOPE_KEY]: { 'dev server': 'running' } };
-    await renderCard();
+    await renderSection();
     expect(screen.getByTestId('session-panel-launch-stop-dev server')).toBeInTheDocument();
     expect(screen.getByTestId('session-panel-launch-row-dev server')).toHaveAttribute('data-live', 'true');
     expect(screen.getByTestId('session-panel-launch-start-preview-app')).toBeInTheDocument();
@@ -151,26 +146,26 @@ describe('LaunchCard — rows', () => {
 
   it('spins while a config is starting', async () => {
     mockProcessStatuses = { [SCOPE_KEY]: { 'dev server': 'starting' } };
-    await renderCard();
+    await renderSection();
     expect(screen.getByTestId('session-panel-launch-spinner-dev server')).toBeInTheDocument();
     expect(screen.queryByTestId('session-panel-launch-spinner-preview-app')).toBeNull();
   });
 
-  it('counts the live configs in the card badge', async () => {
+  it('counts the live configs in the badge', async () => {
     mockProcessStatuses = { [SCOPE_KEY]: { 'dev server': 'running' } };
-    await renderCard();
+    await renderSection();
     expect(badge()).toHaveTextContent('1');
   });
 
   it('shows no count badge when nothing is live', async () => {
-    await renderCard();
+    await renderSection();
     expect(badge()).toBeNull();
   });
 });
 
-describe('LaunchCard — start and stop', () => {
+describe('LaunchSection — start and stop', () => {
   it('starts the config the row belongs to, passing the chatId', async () => {
-    await renderCard();
+    await renderSection();
     fireEvent.click(screen.getByTestId('session-panel-launch-row-preview-app'));
     await waitFor(() => expect(startLaunchConfig).toHaveBeenCalledWith(31415, 'proj-1', 'preview-app', 'chat-9'));
     expect(stopLaunchConfig).not.toHaveBeenCalled();
@@ -180,21 +175,21 @@ describe('LaunchCard — start and stop', () => {
 
   it('stops a live config rather than restarting it', async () => {
     mockProcessStatuses = { [SCOPE_KEY]: { 'dev server': 'running' } };
-    await renderCard();
+    await renderSection();
     fireEvent.click(screen.getByTestId('session-panel-launch-row-dev server'));
     await waitFor(() => expect(stopLaunchConfig).toHaveBeenCalledWith(31415, 'proj-1', 'dev server', 'chat-9'));
     expect(startLaunchConfig).not.toHaveBeenCalled();
   });
 
   it('acts from the trailing affordance too — it is part of the row', async () => {
-    await renderCard();
+    await renderSection();
     fireEvent.click(screen.getByTestId('session-panel-launch-start-dev server'));
     await waitFor(() => expect(startLaunchConfig).toHaveBeenCalledWith(31415, 'proj-1', 'dev server', 'chat-9'));
   });
 
   it('is inert without a chatId — the daemon resolves the worktree from it', async () => {
     mockChatId = undefined;
-    await renderCard();
+    await renderSection();
     const row = screen.getByTestId('session-panel-launch-row-dev server');
     expect(row).toBeDisabled();
     fireEvent.click(row);
@@ -204,7 +199,7 @@ describe('LaunchCard — start and stop', () => {
   it('stops a running NON-selected config rather than the selected one (#206)', async () => {
     mockSelectedByScope = { [SCOPE_KEY]: 'dev server' };
     mockProcessStatuses = { [SCOPE_KEY]: { 'preview-app': 'running' } };
-    await renderCard();
+    await renderSection();
     fireEvent.click(screen.getByTestId('session-panel-launch-row-preview-app'));
     await waitFor(() => expect(stopLaunchConfig).toHaveBeenCalledWith(31415, 'proj-1', 'preview-app', 'chat-9'));
     expect(startLaunchConfig).not.toHaveBeenCalled();
@@ -213,9 +208,9 @@ describe('LaunchCard — start and stop', () => {
 
 // ── ported from ToolbarLaunchControls.test.tsx (:190, :202) ───────────────────
 
-describe('LaunchCard — the Run tab a start opens', () => {
+describe('LaunchSection — the Run tab a start opens', () => {
   it('opens a console tab with a space-free tabId for a non-preview config', async () => {
-    await renderCard();
+    await renderSection();
     fireEvent.click(screen.getByTestId('session-panel-launch-row-dev server'));
 
     await waitFor(() => expect(startLaunchConfig).toHaveBeenCalled());
@@ -228,7 +223,7 @@ describe('LaunchCard — the Run tab a start opens', () => {
   });
 
   it('opens a preview tab for a preview config', async () => {
-    await renderCard();
+    await renderSection();
     fireEvent.click(screen.getByTestId('session-panel-launch-row-preview-app'));
 
     await waitFor(() => expect(startLaunchConfig).toHaveBeenCalled());
@@ -236,23 +231,23 @@ describe('LaunchCard — the Run tab a start opens', () => {
   });
 });
 
-describe('LaunchCard — no configurations', () => {
+describe('LaunchSection — no configurations', () => {
   it('shows the empty row and no config rows', async () => {
     fetchLaunchConfigs.mockResolvedValue([]);
-    render(<LaunchCard port={31415} onClose={onClose} />);
+    render(<LaunchSection port={31415} />);
     await waitFor(() => screen.getByTestId('session-panel-launch-empty'));
     expect(screen.getByTestId('session-panel-launch-empty')).toHaveTextContent('No Launch Configurations');
     expect(screen.queryByTestId('session-panel-launch-row-dev server')).toBeNull();
   });
 });
 
-describe('LaunchCard — no project (todo #346)', () => {
+describe('LaunchSection — no project (todo #346)', () => {
   it('fires no launch config request and shows the no-project explanation, not "No Launch Configurations"', async () => {
     mockProjectId = undefined;
     mockNoProject = true;
     fetchLaunchConfigs.mockClear();
     fetchLaunchStatuses.mockClear();
-    render(<LaunchCard port={31415} onClose={onClose} />);
+    render(<LaunchSection port={31415} />);
     await waitFor(() => screen.getByTestId('session-panel-launch-empty'));
     expect(fetchLaunchConfigs).not.toHaveBeenCalled();
     expect(fetchLaunchStatuses).not.toHaveBeenCalled();

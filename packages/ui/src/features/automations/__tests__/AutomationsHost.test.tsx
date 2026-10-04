@@ -51,20 +51,6 @@ it('renders nothing while closed', () => {
   expect(container).toBeEmptyDOMElement();
 });
 
-it('loads interactions even while closed, so the sidebar badge is populated on boot', async () => {
-  useAutomationsStore.setState({ interactions: [] });
-  useAutomationsNav.setState({ open: false, editorTarget: null, runId: null });
-  render(
-    <TooltipProvider>
-      <AutomationsHost />
-    </TooltipProvider>,
-  );
-
-  await vi.waitFor(() => {
-    expect(useAutomationsStore.getState().interactions.length).toBeGreaterThan(0);
-  });
-});
-
 it('renders the view once opened and loads the seeded project’s library', async () => {
   const calls: (string | null | undefined)[] = [];
   useAutomationsStore.setState({ libraries: {}, gateway: spyGateway(calls) });
@@ -109,8 +95,10 @@ it('holds no scope while closed, whatever the active session does, and takes the
     </TooltipProvider>,
   );
 
-  // The badge load proves the host's effects have flushed.
-  await vi.waitFor(() => expect(useAutomationsStore.getState().interactions.length).toBeGreaterThan(0));
+  // Lets the host's effects (useModalProjectScope, useAutomationsLibrary) flush.
+  await act(async () => {
+    await Promise.resolve();
+  });
   act(() => {
     vi.mocked(useActiveIdentity).mockReturnValue({ projectId: 'proj-1' } as ReturnType<typeof useActiveIdentity>);
     useSessionFilters.setState({ filterProjectIds: new Set(['proj-1']) });

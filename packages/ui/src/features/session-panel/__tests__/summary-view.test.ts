@@ -63,7 +63,7 @@ describe('deriveSummaryRows — context', () => {
       kind: 'context',
       label: 'Context',
       value: '42%',
-      tooltip: '84.4k / 200k tokens',
+      tooltip: '84.4K / 200K tokens',
       percent: 42,
     });
   });

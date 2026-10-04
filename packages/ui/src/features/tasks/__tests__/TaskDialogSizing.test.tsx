@@ -4,7 +4,6 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useUiPrefs } from '@/store/ui-prefs';
 import * as todosApi from '@/lib/api/todos';
-import { TaskEditModal } from '../TaskEditModal';
 import { TaskEditModal as SidebarTaskEditModal } from '../sidebar/TaskEditModal';
 import { QuickTaskDialog } from '../QuickTaskDialog';
 
@@ -17,14 +16,10 @@ vi.mock('@/lib/api/todos', () => ({
 
 const sizes = {
   tasks: { width: 900, height: 700 },
-  'tasks-board-edit': { width: 620, height: 610 },
   'tasks-sidebar-edit': { width: 650, height: 640 },
   'tasks-quick': { width: 580, height: 510 },
 };
-const editors = [
-  { name: 'board', key: 'tasks-board-edit', Component: TaskEditModal },
-  { name: 'sidebar', key: 'tasks-sidebar-edit', Component: SidebarTaskEditModal },
-] as const;
+const editors = [{ name: 'sidebar', key: 'tasks-sidebar-edit', Component: SidebarTaskEditModal }] as const;
 const longDescription = Array.from({ length: 100 }, (_, index) => `Description line ${index + 1}`).join('\n');
 const todo: todosApi.Todo = {
   id: 'task-1',

@@ -39,7 +39,7 @@ describe('useSessionPanelState — mode', () => {
     act(() => rendered.result.current.hostRef(h.host));
     expect(h.observed).toEqual([h.host]);
     setWidth(1000);
-    expect(rendered.result.current.mode).toBe('rail');
+    expect(rendered.result.current.mode).toBe('hidden');
   });
 
   it('re-attaches to a replacement host and disconnects from the old one', () => {
@@ -50,10 +50,10 @@ describe('useSessionPanelState — mode', () => {
     expect(h.observed).toEqual([h.host, nextHost]);
   });
 
-  it('starts in rail mode on a narrow surface', () => {
+  it('starts hidden on a narrow surface — no overlay has been asked for', () => {
     const { result } = renderPanelState();
     setWidth(1000);
-    expect(result.current.mode).toBe('rail');
+    expect(result.current.mode).toBe('hidden');
     expect(result.current.surfaceWidth).toBe(1000);
   });
 
@@ -63,12 +63,12 @@ describe('useSessionPanelState — mode', () => {
     expect(result.current.mode).toBe('inline');
   });
 
-  it('keeps the rail at a very narrow width — the rail has no minimum', () => {
+  it('keeps hidden at a very narrow width — there is no minimum', () => {
     const { result } = renderPanelState();
     setWidth(800);
-    expect(result.current.mode).toBe('rail');
+    expect(result.current.mode).toBe('hidden');
     setWidth(400);
-    expect(result.current.mode).toBe('rail');
+    expect(result.current.mode).toBe('hidden');
   });
 
   it('drops the overlay when the surface grows back to inline', () => {
@@ -80,7 +80,7 @@ describe('useSessionPanelState — mode', () => {
     expect(result.current.mode).toBe('inline');
     // …and it does not come back when the surface narrows again.
     setWidth(1000);
-    expect(result.current.mode).toBe('rail');
+    expect(result.current.mode).toBe('hidden');
   });
 
   it('keeps a floated stack while the surface stays short', () => {
@@ -138,13 +138,13 @@ describe('useSessionPanelState — panel open state (D8: one bit for the whole p
 });
 
 describe('useSessionPanelState — togglePanel', () => {
-  it('closes an open panel on a wide surface, and writes it through', () => {
+  it('closes an open panel on a wide surface, and writes it through — mode goes hidden, not rail', () => {
     const { result } = renderPanelState();
     setWidth(1600);
     act(() => result.current.togglePanel());
     expect(result.current.isPanelOpen()).toBe(false);
     expect(useUiPrefs.getState().sessionPanelOpen).toBe(false);
-    expect(result.current.mode).toBe('inline');
+    expect(result.current.mode).toBe('hidden');
   });
 
   it('opens a closed panel on a wide surface without floating anything', () => {

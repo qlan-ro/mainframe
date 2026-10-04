@@ -13,7 +13,6 @@ import { resolveTourPlan, TOUR_STEP_COUNT } from '../steps';
 const ARMED_ANCHORS = [
   'add-project',
   'new-session',
-  'new-session-row',
   'new-session-tab',
   'sessions-list',
   'session-tabs',
@@ -60,7 +59,9 @@ describe('resolveTourPlan', () => {
   it('marks the secondary locations for the affordances that have more than one', () => {
     const plan = resolveTourPlan(anchors(...ARMED_ANCHORS));
     const byTarget = Object.fromEntries(plan.map((s) => [s.target, s]));
-    expect(byTarget['new-session']?.also).toEqual(['new-session-row', 'new-session-tab']);
+    // D24: the New session row carries the primary ring; the title bar's "+"
+    // tab gets ONE secondary ring (`window-states.spec.ts` asserts one, not two).
+    expect(byTarget['new-session']?.also).toEqual(['new-session-tab']);
     expect(byTarget['sessions-list']?.also).toEqual(['session-tabs']);
     // A single-location step must not claim ghosts it has no anchors for.
     expect(byTarget['kanban']?.also).toBeUndefined();
