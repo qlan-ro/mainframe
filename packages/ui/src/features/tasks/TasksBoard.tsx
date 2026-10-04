@@ -6,14 +6,14 @@
  * the host owns the scope, and the sidebar filter is never written.
  * Body: TasksFilterBar + TaskListView or TaskBoardView.
  *
- * Loads the todos store itself: the always-mounted sidebar section that used to
- * own the load effect is gone (Tasks moved to the session-panel rail), and the
- * rail's TasksCard mounts only while its panel is open. The store's sequence
- * guard makes the two loaders safe, not racy.
+ * Loads the todos store itself: the sidebar Tasks list and the panel's Tasks
+ * card each load their own scope too; the store's sequence guard makes the
+ * loaders safe, not racy. The task edit modal is NOT mounted here — it is the
+ * one modal `TasksModalHost` owns, opened through `useTasksModal.openEdit`.
  *
  * data-testid="tasks-board-modal".
  */
-import React, { useState } from 'react';
+import React from 'react';
 import type { Project } from '@qlan-ro/mainframe-types';
 import { LayoutList, LayoutGrid, Plus, ListChecks, X } from 'lucide-react';
 import { ModalProjectPicker } from '@/features/project-scope/ModalProjectPicker';
@@ -26,7 +26,7 @@ import type { TodoFilters } from './todos-filters';
 import { TasksFilterBar } from './TasksFilterBar';
 import { TaskListView } from './TaskListView';
 import { TaskBoardView } from './TaskBoardView';
-import { TaskEditModal } from './TaskEditModal';
+import { useTasksModal } from './use-tasks-modal';
 import { GitHubSyncControl } from './github/GitHubSyncControl';
 import { SyncRunBanner } from './github/SyncRunBanner';
 import { LinkRepoDialog } from './github/LinkRepoDialog';
@@ -58,17 +58,13 @@ export function TasksBoard({
   const { todos, loading } = useTodosStore(selectProjectTodos(projectId));
   const { load, filters, sort, view, move, remove, setFilters, setSort, setView } = useTodosStore();
   const { init: initSync, load: loadSync, dialog: syncDialog } = useGitHubSyncStore();
-  const [editTodo, setEditTodo] = useState<Todo | null | undefined>(undefined);
+  const openEdit = useTasksModal((s) => s.openEdit);
 
   React.useEffect(() => {
     void load(port, projectId);
     initSync(port, projectId);
     void loadSync();
   }, [port, projectId, load, initSync, loadSync]);
-
-  // An edit modal must not survive a re-scope holding the previous project's
-  // todo (the same reason TasksCard resets on the active project).
-  React.useEffect(() => setEditTodo(undefined), [projectId]);
 
   const allLabels = extractAllLabels(todos);
   const filtered = sortTodos(
@@ -85,11 +81,11 @@ export function TasksBoard({
   const doneCount = todos.filter((t) => t.status === 'done').length;
 
   function handleEdit(todo: Todo) {
-    setEditTodo(todo);
+    openEdit({ projectId, todoId: todo.id });
   }
 
   function handleNew() {
-    setEditTodo(null);
+    openEdit({ projectId, todoId: null });
   }
 
   function handleDelete(id: string) {
@@ -200,23 +196,6 @@ export function TasksBoard({
           onDelete={handleDelete}
           onStartSession={handleStart}
           onMove={handleMove}
-        />
-      )}
-
-      {/* Edit / Create modal */}
-      {editTodo !== undefined && (
-        <TaskEditModal
-          port={port}
-          projectId={projectId}
-          todo={editTodo}
-          allTodos={todos}
-          allLabels={allLabels}
-          onClose={() => setEditTodo(undefined)}
-          onStartSession={(id) => {
-            const todo = todos.find((t) => t.id === id);
-            if (todo) onStartSession(todo);
-            setEditTodo(undefined);
-          }}
         />
       )}
 
