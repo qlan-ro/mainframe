@@ -12,11 +12,12 @@ it('merges adjacent reads and opens original native details in order', () => {
   expect(toggle).toHaveAttribute('aria-expanded', 'false');
   expect(screen.queryByTestId('read-card-root')).toBeNull();
   fireEvent.click(toggle);
+  fireEvent.click(screen.getByRole('button', { name: 'Read 2 files in /src' }));
   expect(screen.getAllByTestId('read-card-root')).toHaveLength(2);
   expect(screen.getAllByTestId('read-card-code-preview')[0]).toHaveTextContent('const a = 1;');
   expect(screen.getAllByTestId('read-card-code-preview')[1]).toHaveTextContent('const b = 2;');
 });
-it('retains prose boundaries and includes reasoning inside mixed details without mounting hidden output', () => {
+it('retains prose boundaries and omits internal reasoning from mixed activity details', () => {
   render(
     <CompactFixture
       rootId="boundaries"
@@ -37,7 +38,8 @@ it('retains prose boundaries and includes reasoning inside mixed details without
   expect(screen.getByText('Before tools')).toBeInTheDocument();
   expect(screen.getByText('After tools')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Read files' }));
-  expect(screen.getByText('A private thought')).toBeInTheDocument();
+  expect(screen.queryByText('A private thought')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Read /src/a.ts (2 reads)' })).toBeInTheDocument();
 });
 it('keeps failed rows collapsed and pending permission status explicit', () => {
   render(
@@ -64,6 +66,7 @@ it('keeps failed rows collapsed and pending permission status explicit', () => {
       ]}
     />,
   );
+  fireEvent.click(screen.getByRole('button', { name: 'Read files' }));
   expect(screen.getByRole('button', { name: /Failed to read/ })).toHaveAttribute('aria-expanded', 'false');
   expect(screen.getByRole('button', { name: /Waiting for approval/ })).toBeInTheDocument();
   expect(screen.queryByTestId('read-card-root')).toBeNull();

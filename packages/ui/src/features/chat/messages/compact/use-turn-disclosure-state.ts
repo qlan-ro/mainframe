@@ -33,7 +33,7 @@ export function useTurnDisclosureState(
         turn.available &&
         !turn.unsafe &&
         !turnDisclosureStore.isInvalid(key) &&
-        !backgroundAgent &&
+        (!backgroundAgent || automatic.has(key)) &&
         !turn.activeAgent &&
         !blocked.has(key);
       if (turnDisclosureStore.get(key) !== undefined || close === next.has(key)) continue;

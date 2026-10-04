@@ -16,13 +16,14 @@ it('supports keyboard disclosure with a stable accessible name and bounded detai
   await user.keyboard('{Enter}');
   expect(toggle).toHaveAttribute('aria-expanded', 'true');
   const detail = document.getElementById(toggle.getAttribute('aria-controls')!)!;
-  expect(detail.style.maxHeight).toBe('min(24rem, 50cqh)');
+  expect(detail.style.maxHeight).toBe('min(224px, 50cqh)');
   expect(detail).not.toHaveAttribute('data-text-part');
   await user.keyboard(' ');
   expect(toggle).toHaveAttribute('aria-expanded', 'false');
 });
 it('keeps failures muted with an explicit error icon and no mounted body', () => {
   render(<CompactFixture rootId="error-style" messages={[fixtureMessage([fixtureTool({ isError: true })])]} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Read files' }));
   const toggle = screen.getByRole('button', { name: 'Failed to read /src/a.ts' });
   expect(toggle).toHaveClass('text-muted-foreground');
   expect(screen.getByLabelText('failed')).toHaveClass('text-destructive');
@@ -66,6 +67,8 @@ it('ticks a supplied clock without rebuilding compact rows or changing disclosur
         fixtureMessage(
           [
             fixtureTool({
+              toolName: 'Bash',
+              args: { command: 'echo hello' },
               result: 'partial',
               timing: { startedAt: 5000 },
               providerMetadata: { mainframe: { acpStatus: 'in_progress' } },
@@ -77,12 +80,14 @@ it('ticks a supplied clock without rebuilding compact rows or changing disclosur
       ]}
     />,
   );
-  const toggle = screen.getByRole('button', { name: 'Reading /src/a.ts' });
+  const toggle = screen.getByRole('button', { name: 'Running echo' });
   fireEvent.click(toggle);
+  const detailToggle = screen.getAllByRole('button', { name: 'Running echo' })[1]!;
+  fireEvent.click(detailToggle);
   const before = build.mock.calls.length;
   act(() => vi.advanceTimersByTime(2000));
   expect(screen.getByText('0:07')).toBeInTheDocument();
   expect(build).toHaveBeenCalledTimes(before);
   expect(toggle).toHaveAttribute('aria-expanded', 'true');
-  expect(toggle).toHaveAccessibleName('Reading /src/a.ts');
+  expect(toggle).toHaveAccessibleName('Running echo');
 });

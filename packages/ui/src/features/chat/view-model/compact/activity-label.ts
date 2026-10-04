@@ -30,9 +30,6 @@ export function activityLabel(group: ActivityGroup, pending: ReadonlySet<string>
   const running = tools.filter(
     (member) => member.part.type === 'tool-call' && resolveToolStatus(member.part, pending) === 'running',
   );
-  const exploration = running.filter((member) => member.part.type === 'tool-call' && isExploration(member.part));
-  const known = tools.filter((member) => member.part.type === 'tool-call' && isExploration(member.part));
-  const candidates = exploration.length ? exploration : running.length ? running : known;
-  const selected = candidates[candidates.length - 1];
+  const selected = running[running.length - 1];
   return selected ? label(selected) : { identity: 'thinking', text: 'Thinking' };
 }

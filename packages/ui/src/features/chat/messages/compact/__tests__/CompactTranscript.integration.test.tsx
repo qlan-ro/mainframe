@@ -43,12 +43,16 @@ it('switches an active turn through Verbose and back without losing compact disc
   render(<CompactFixture rootId="mode-switch" messages={messages} Message={AssistantMessage} />);
   const toggle = await screen.findByRole('button', { name: 'Running tests' });
   fireEvent.click(toggle);
+  fireEvent.click(screen.getAllByRole('button', { name: 'Running tests' })[1]!);
   expect(screen.getByTestId('chat-bash-output')).toHaveTextContent('partial output');
   act(() => useUiPrefs.getState().setTranscriptMode('verbose'));
   expect(screen.getByTestId('chat-bash-card')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Running tests' })).toBeNull();
   act(() => useUiPrefs.getState().setTranscriptMode('compact'));
-  expect(screen.getByRole('button', { name: 'Running tests' })).toHaveAttribute('aria-expanded', 'true');
+  expect(screen.getAllByRole('button', { name: 'Running tests' })).toHaveLength(2);
+  screen
+    .getAllByRole('button', { name: 'Running tests' })
+    .forEach((button) => expect(button).toHaveAttribute('aria-expanded', 'true'));
   expect(screen.getByTestId('chat-bash-output')).toHaveTextContent('partial output');
 });
 

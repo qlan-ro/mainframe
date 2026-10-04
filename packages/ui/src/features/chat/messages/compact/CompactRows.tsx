@@ -8,6 +8,9 @@ export function CompactRows({ indices }: { indices: readonly number[] }) {
   const parts = useAuiState((s) => s.message.parts);
   const messageId = useAuiState((s) => s.message.id);
   const scope = useTranscriptScope();
+  const isLatestRunning = useAuiState(
+    (s) => s.thread.isRunning && s.thread.messages[s.thread.messages.length - 1]?.id === s.message.id,
+  );
   const groups = useMemo(
     () =>
       buildActivityGroups(
@@ -18,8 +21,9 @@ export function CompactRows({ indices }: { indices: readonly number[] }) {
         ),
         scope.pendingToolIds,
         !parts.slice((indices[indices.length - 1] ?? -1) + 1).some((part) => part.type !== 'text' || part.text.trim()),
+        isLatestRunning,
       ),
-    [indices, parts, messageId, scope.rootThreadId, scope.ancestors, scope.pendingToolIds],
+    [indices, parts, messageId, scope.rootThreadId, scope.ancestors, scope.pendingToolIds, isLatestRunning],
   );
   return (
     <>

@@ -4,7 +4,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { expect, it } from 'vitest';
 import { CompactFixture, fixtureMessage, fixtureTool } from './fixtures';
 
-it('collapses mixed routine work and reasoning into one ordered native disclosure', () => {
+it('shows ordered tool summaries before mounting individual details and omits grouped reasoning', () => {
   render(
     <CompactFixture
       rootId="mixed-activity"
@@ -34,8 +34,12 @@ it('collapses mixed routine work and reasoning into one ordered native disclosur
   expect(screen.queryByText('Compare the implementation')).toBeNull();
   expect(screen.queryByTestId('read-card-root')).toBeNull();
   fireEvent.click(toggle);
+  expect(screen.queryByTestId('read-card-code-preview')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Read /src/a.ts' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Edited /src/b.ts' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Ran echo done' }));
   expect(screen.getByTestId('read-card-code-preview')).toHaveTextContent('const a = 1;');
-  expect(screen.getByText('Compare the implementation')).toBeInTheDocument();
+  expect(screen.queryByText('Compare the implementation')).toBeNull();
   expect(screen.getByTestId('chat-edit-open-diff')).toBeInTheDocument();
   expect(screen.getByTestId('chat-bash-output')).toHaveTextContent('shell detail');
 });
@@ -53,13 +57,17 @@ it('keeps expanded members open through growth, reclassification and splitting',
     'true',
   );
   expect(screen.getByRole('button', { name: 'Read files, ran a command' }).dataset.testid).toBe(identity);
+  fireEvent.click(screen.getByRole('button', { name: 'Ran echo done' }));
   expect(screen.getByTestId('chat-bash-output')).toHaveTextContent('done');
   const failed = { ...read, isError: true };
   view.rerender(<CompactFixture rootId="activity-growth" messages={[fixtureMessage([failed, shell])]} />);
-  expect(await screen.findByRole('button', { name: /Failed to read/ })).toHaveAttribute('aria-expanded', 'true');
-  expect(screen.getByRole('button', { name: 'Ran a command' })).toHaveAttribute('aria-expanded', 'false');
+  expect(await screen.findByRole('button', { name: 'Read files, ran a command' })).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  );
+  expect(screen.getByRole('button', { name: /Failed to read/ })).toBeVisible();
 });
-it('keeps failed, pending and unknown tools visible outside the routine disclosure', () => {
+it('keeps pending and unknown tools standalone while ordinary failures stay grouped', () => {
   render(
     <CompactFixture
       rootId="activity-controls"
@@ -80,7 +88,7 @@ it('keeps failed, pending and unknown tools visible outside the routine disclosu
     />,
   );
   expect(screen.getAllByRole('button', { name: 'Read files' })).toHaveLength(2);
-  expect(screen.getByRole('button', { name: /Failed to read/ })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /Failed to read/ })).toBeNull();
   expect(screen.getByRole('button', { name: /Waiting for approval/ })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Ran CustomAnalytics' })).toBeInTheDocument();
   expect(screen.queryByTestId('read-card-root')).toBeNull();
@@ -110,6 +118,8 @@ it.each([false, true])('renders cross-message references through their original 
     />,
   );
   fireEvent.click(screen.getByRole('button', { name: 'Read files' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Read /src/a.ts' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Read /src/b.ts' }));
   expect(screen.getAllByTestId('read-card-code-preview').map((node) => node.textContent)).toEqual([
     'FIRST SOURCE',
     'SECOND SOURCE',
@@ -138,5 +148,6 @@ it('keeps main and real split native disclosures independent with identical mess
   expect(main).toHaveAttribute('aria-expanded', 'true');
   expect(side).toHaveAttribute('aria-expanded', 'false');
   fireEvent.click(side);
+  fireEvent.click(within(screen.getByTestId('side')).getByRole('button', { name: 'Read /src/a.ts' }));
   expect(within(screen.getByTestId('side')).getByTestId('read-card-code-preview')).toHaveTextContent('const a = 1;');
 });

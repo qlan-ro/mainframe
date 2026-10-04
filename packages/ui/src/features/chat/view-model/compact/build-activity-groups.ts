@@ -9,7 +9,11 @@ function routine(member: ActivityMember, pending: ReadonlySet<string>): boolean 
   if (presentation?.phase && presentation.phase !== 'work') return false;
   if (part.type !== 'tool-call' || isFullCard(part.toolName)) return false;
   const kind = toolKind(part.toolName);
-  return kind !== 'unknown' && kind !== 'subagent' && ['running', 'success'].includes(resolveToolStatus(part, pending));
+  return (
+    kind !== 'unknown' &&
+    kind !== 'subagent' &&
+    ['running', 'success', 'failed'].includes(resolveToolStatus(part, pending))
+  );
 }
 function compatible(a: ActivityMember, b: ActivityMember): boolean {
   if (a.rootThreadId !== b.rootThreadId || JSON.stringify(a.ancestors) !== JSON.stringify(b.ancestors)) return false;
@@ -19,21 +23,49 @@ function compatible(a: ActivityMember, b: ActivityMember): boolean {
   if (!x || !y || x.state === 'invalid' || y.state === 'invalid') return a.messageId === b.messageId && x === y;
   return x.provider === y.provider && x.turnId === y.turnId && x.parentToolUseId === y.parentToolUseId;
 }
-function explicitlyActive(member: ActivityMember, pending: ReadonlySet<string>): boolean {
+function explicitlyActive(member: ActivityMember, pending: ReadonlySet<string>, turnInProgress: boolean): boolean {
   if (member.presentation) return member.presentation.state === 'running';
+  if (turnInProgress) return true;
   return member.part.type === 'tool-call'
     ? resolveToolStatus(member.part, pending) === 'running'
     : member.part.status.type === 'running';
+}
+function appendGroup(entries: ActivityEntry[], members: ActivityMember[], bridgeSubagents: boolean): void {
+  if (!members.length) return;
+  if (bridgeSubagents) {
+    let index = entries.length - 1;
+    while (index >= 0) {
+      const entry = entries[index]!;
+      if (entry.type === 'activity') {
+        if (compatible(entry.members[entry.members.length - 1]!, members[0]!)) {
+          entries[index] = { ...entry, members: [...entry.members, ...members] };
+          return;
+        }
+        break;
+      }
+      if (
+        entry.member.boundary ||
+        !compatible(entry.member, members[0]!) ||
+        entry.member.part.type !== 'tool-call' ||
+        toolKind(entry.member.part.toolName) !== 'subagent'
+      )
+        break;
+      index--;
+    }
+  }
+  entries.push({ type: 'activity', members, active: false });
 }
 export function buildActivityGroups(
   members: readonly ActivityMember[],
   pending: ReadonlySet<string>,
   openSlice = true,
+  turnInProgress = false,
 ): ActivityEntry[] {
   const entries: ActivityEntry[] = [];
   let run: ActivityMember[] = [];
+  const bridgeSubagents = members.every((member) => member.presentation?.state === 'completed');
   const flush = () => {
-    if (run.length) entries.push({ type: 'activity', members: run, active: false });
+    appendGroup(entries, run, bridgeSubagents);
     run = [];
   };
   for (const member of members) {
@@ -48,7 +80,11 @@ export function buildActivityGroups(
   }
   flush();
   const last = entries[entries.length - 1];
-  if (last?.type === 'activity' && openSlice && last.members.some((member) => explicitlyActive(member, pending)))
+  if (
+    last?.type === 'activity' &&
+    openSlice &&
+    last.members.some((member) => explicitlyActive(member, pending, turnInProgress))
+  )
     entries[entries.length - 1] = { ...last, active: true };
   return entries;
 }

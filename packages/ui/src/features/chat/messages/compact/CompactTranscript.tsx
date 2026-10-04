@@ -29,12 +29,16 @@ function AssistantSlice() {
 const components = { ...boundedMessageComponents, AssistantMessage: AssistantSlice };
 export function CompactTranscript() {
   const messages = useAuiState((s) => s.thread.messages);
+  const isRunning = useAuiState((s) => s.thread.isRunning);
   const scope = useTranscriptScope();
   const extras = useChatExtras();
   const backgroundAgent = Object.values(extras?.state.backgroundTasks ?? {}).some((task) => task.kind === 'agent');
   const root = useRef<HTMLDivElement>(null);
   const cache = useMemo(() => new TurnPresentationCache(), []);
-  const model = useMemo(() => buildTurnDisclosures(messages, scope, Date.now(), cache), [messages, scope, cache]);
+  const model = useMemo(
+    () => buildTurnDisclosures(messages, { ...scope, isRunning }, Date.now(), cache),
+    [messages, scope, isRunning, cache],
+  );
   const state = useTurnDisclosureState(model, root, backgroundAgent);
   return (
     <TurnPresentationProvider value={{ model, ...state }}>
