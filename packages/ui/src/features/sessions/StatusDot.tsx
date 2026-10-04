@@ -1,37 +1,19 @@
 /**
- * The row's leading status indicator — its only one, since there is no text pill.
- * Provider shape identifies the adapter, colour carries attention, and lifecycle
- * adds motion.
- *
- * The shipped version tinted across a 4-step v1 ink ramp; stock
- * has two usable inks, so this reads `primary` for anything wanting attention
- * and `muted-foreground` for everything else, per the locked decision. An idle
- * row drops the provider's brand hue with it — a wall of brand marks made every
- * session look equally urgent.
+ * The row's leading status indicator — status ONLY, now that the provider's
+ * mark lives at the end of the meta line. One 24px slot so titles line up
+ * with the draft row; inside it an 8px glyph:
+ *   working            → `primary` spinner
+ *   waiting            → pulsing `primary` dot (incl. a waiting side chat)
+ *   idle + unread      → solid `primary` dot
+ *   idle               → `muted-foreground` ring
+ *   worktree-/transcript-missing → `warning` ring — the session still works,
+ *                        its checkout or history is just gone (not on the
+ *                        board; decided in the adoption plan, D15).
  */
+import { Loader2Icon } from 'lucide-react';
 import type { SessionBadge } from '@/features/sessions/view-model/session-status';
 import { Hint } from '@/components/ui/hint';
 import { cn } from '@/lib/utils';
-import { ProviderLogo } from '../shared/ProviderLogo';
-
-/** Claude's mark is radially symmetric; a plain spin reads wrong on the others. */
-function workingAnimation(adapterId: string): string {
-  return adapterId === 'claude' ? 'animate-[mf-claude-logo-working_1.52s_linear_infinite]' : 'animate-spin';
-}
-
-/** Working, waiting or unread — the three states that have earned the eye. */
-function wantsAttention(badge: SessionBadge): boolean {
-  return badge.unread || badge.base === 'working' || badge.base === 'waiting';
-}
-
-function statusClass(badge: SessionBadge, adapterId: string): string {
-  return cn(
-    'inline-flex size-6 shrink-0 items-center justify-center',
-    wantsAttention(badge) ? 'text-primary' : 'text-muted-foreground',
-    badge.base === 'working' && workingAnimation(adapterId),
-    badge.base === 'waiting' && 'animate-pulse',
-  );
-}
 
 function dotLabel(badge: SessionBadge): string {
   switch (badge.base) {
@@ -48,11 +30,35 @@ function dotLabel(badge: SessionBadge): string {
   }
 }
 
-export function StatusDot({ badge, adapterId = 'claude' }: { badge: SessionBadge; adapterId?: string }) {
+function Glyph({ badge }: { badge: SessionBadge }) {
+  switch (badge.base) {
+    case 'working':
+      return <Loader2Icon aria-hidden className="size-3.5 animate-spin text-primary motion-reduce:animate-none" />;
+    case 'waiting':
+      return <span aria-hidden className="size-2 animate-pulse rounded-full bg-primary motion-reduce:animate-none" />;
+    case 'worktree-missing':
+    case 'transcript-missing':
+      return <span aria-hidden className="size-2 rounded-full border-[1.5px] border-warning" />;
+    case 'idle':
+      return badge.unread ? (
+        <span aria-hidden className="size-2 rounded-full bg-primary" />
+      ) : (
+        <span aria-hidden className="size-2 rounded-full border-[1.5px] border-muted-foreground" />
+      );
+  }
+}
+
+export function StatusDot({ badge }: { badge: SessionBadge }) {
   return (
     <Hint label={dotLabel(badge)}>
-      <span data-testid="sessions-row-status-dot" aria-label={badge.base} className={statusClass(badge, adapterId)}>
-        <ProviderLogo adapterId={adapterId} muted={!wantsAttention(badge)} className="size-5" />
+      <span
+        data-testid="sessions-row-status-dot"
+        data-status={badge.base}
+        data-unread={badge.unread || undefined}
+        aria-label={badge.base}
+        className={cn('inline-flex size-6 shrink-0 items-center justify-center')}
+      >
+        <Glyph badge={badge} />
       </span>
     </Hint>
   );

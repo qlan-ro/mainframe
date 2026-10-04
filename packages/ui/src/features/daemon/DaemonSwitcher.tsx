@@ -42,10 +42,9 @@ function SwitcherTrigger({
   ...props
 }: { meta: DaemonMeta; status: DaemonStatus } & ComponentProps<typeof SidebarMenuButton>) {
   return (
-    <SidebarMenuButton size="lg" data-testid="daemon-footer-trigger" data-tut="daemon" {...props}>
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-sidebar-accent">
-        <DaemonGlyph kind={meta.kind} />
-      </span>
+    <SidebarMenuButton size="lg" data-testid="daemon-footer-trigger" data-tut="daemon" className="h-10" {...props}>
+      {/* The glyph alone, no tile: the row is a device line, not an avatar. */}
+      <DaemonGlyph kind={meta.kind} />
       <span className="grid min-w-0 flex-1 text-left leading-tight">
         <span className="flex items-center gap-1.5">
           <span

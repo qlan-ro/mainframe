@@ -35,7 +35,7 @@ export function SessionSortMenu({ mode, onChange }: SessionSortMenuProps) {
             size="icon-sm"
             data-testid="sessions-sort-button"
             aria-label="Sort sessions"
-            className="size-6"
+            className="size-5"
           >
             <ArrowUpDownIcon />
           </Button>

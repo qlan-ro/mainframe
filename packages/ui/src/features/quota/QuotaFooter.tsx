@@ -7,14 +7,10 @@
  *
  * A footer component, not a section: no label and no `SidebarGroup`, since the
  * footer is already its own region and quota is ambient status rather than a
- * part of the panel's outline. It reads as a `Card` instead, matching the
- * shipped surface's bordered chip. Stock `Card` is a page-level container, so
- * three of its base classes are dialled down here: no shadow, no row gap, and a
- * 4px inset instead of 24px — the rows carry their own padding.
+ * part of the panel's outline. One 22px row per provider, no card around them —
+ * the footer's own hairlines do the separating.
  */
 import { useEffect, useState } from 'react';
-import { Card } from '@/components/ui/card';
-import { SidebarMenu, SidebarMenuItem } from '@/components/ui/sidebar';
 import { QUOTA_PROVIDERS } from '@/features/quota/quota-format';
 import { useProviderQuota } from '@/store/quota';
 import { QuotaProviderRow } from './QuotaProviderRow';
@@ -42,14 +38,10 @@ export function QuotaFooter({ now }: { now?: number }) {
   const effectiveNow = now ?? ticking;
 
   return (
-    <Card data-testid="provider-quota-card" className="gap-0 p-1 shadow-none">
-      <SidebarMenu>
-        {QUOTA_PROVIDERS.map((p) => (
-          <SidebarMenuItem key={p.id}>
-            <ConnectedQuotaRow providerId={p.id} label={p.label} now={effectiveNow} />
-          </SidebarMenuItem>
-        ))}
-      </SidebarMenu>
-    </Card>
+    <div data-testid="provider-quota-card" className="flex flex-col gap-0.5 px-1">
+      {QUOTA_PROVIDERS.map((p) => (
+        <ConnectedQuotaRow key={p.id} providerId={p.id} label={p.label} now={effectiveNow} />
+      ))}
+    </div>
   );
 }

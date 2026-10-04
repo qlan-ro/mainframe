@@ -9,6 +9,7 @@
 import type { ReactNode } from 'react';
 import { GitFork, PinIcon } from 'lucide-react';
 import type { TagColor } from '@qlan-ro/mainframe-types';
+import { FadeLabel } from '@/components/ui/fade-label';
 import { useTabHintIndex } from '@/features/session-tabs/use-tab-hint-index';
 import { ShortcutIndexBadge } from '@/features/shortcuts/ShortcutIndexBadge';
 import { formatCompactTime } from './compact-time';
@@ -47,7 +48,7 @@ export function RowBody({
   const hintIndex = useTabHintIndex(item.id);
   return (
     <>
-      <StatusDot badge={badge} adapterId={custom.adapterId} />
+      <StatusDot badge={badge} />
       <span className="flex min-w-0 flex-1 flex-col gap-1">
         {/* h-4.5 pins the line at text-sm's own 18px line-height: WKWebView
             rounds the bare text line to 17px, so without it the 18px action
@@ -62,12 +63,12 @@ export function RowBody({
           )}
           {renameSlot ?? (
             // No tooltip on the title: the hover card already carries it in full.
-            <span
+            <FadeLabel
               data-testid="sessions-row-title"
-              className="min-w-0 flex-1 truncate-fade text-muted-foreground group-data-active/menu-item:text-primary"
+              className="flex-1 text-muted-foreground group-data-active/menu-item:text-primary"
             >
               {item.title ?? 'Untitled session'}
-            </span>
+            </FadeLabel>
           )}
           {showPinGlyph && <PinIcon data-testid="sessions-row-pin-glyph" className="size-3! shrink-0 text-primary" />}
           {/* Actions sit in front of the time, which stays put — the truncating
@@ -89,6 +90,8 @@ export function RowBody({
         </span>
         <SessionRowMetaLine
           projectName={projectName}
+          waiting={badge.base === 'waiting'}
+          adapterId={custom.adapterId}
           noProject={custom.noProject}
           worktreePath={custom.worktreePath}
           branchName={custom.branchName}

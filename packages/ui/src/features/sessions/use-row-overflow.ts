@@ -47,7 +47,7 @@ export interface RowOverflowConfig {
 export interface RowOverflowResult {
   /** Callback ref for the row container. A callback (not a RefObject) so the
    *  ResizeObserver re-binds whenever the node mounts — load-bearing for bars
-   *  that render null until their data arrives (e.g. TagFilterBar). */
+   *  that render null until their data arrives. */
   containerRef: (el: HTMLDivElement | null) => void;
   /** Leading pills to render when collapsed; equals `itemCount` while measuring. */
   visibleCount: number;
@@ -125,7 +125,7 @@ export function useRowOverflow({
   }, [measuring, itemCount, leadingCount, trailingCount, gapPx]);
 
   // Callback ref: (re)bind the ResizeObserver whenever the node mounts. Bars that
-  // render null until their data loads (TagFilterBar) attach the node AFTER the
+  // render null until their data loads attach the node AFTER the
   // first commit — a one-shot effect would observe a null container and never
   // re-run, so the bar would never react to sidebar resizes.
   const setContainer = useCallback((el: HTMLDivElement | null) => {

@@ -25,7 +25,10 @@ interface SessionGroupHeaderProps {
 
 export function SessionGroupHeader({ label, actions }: SessionGroupHeaderProps) {
   return (
-    <SidebarGroupLabel data-testid={`sessions-group-header-${label}`} className="h-7 bg-sidebar pr-1 pl-2">
+    <SidebarGroupLabel
+      data-testid={`sessions-group-header-${label}`}
+      className="h-7 bg-sidebar pr-1 pl-2 font-semibold"
+    >
       <span className="min-w-0 flex-1 truncate">{label}</span>
       {actions != null && <span className="flex shrink-0 items-center gap-0.5">{actions}</span>}
     </SidebarGroupLabel>

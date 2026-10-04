@@ -43,7 +43,7 @@ export function SessionsMoreMenu() {
               size="icon-sm"
               data-testid="sessions-more-button"
               aria-label="More session actions"
-              className="size-6"
+              className="size-5"
             >
               <MoreHorizontalIcon />
             </Button>

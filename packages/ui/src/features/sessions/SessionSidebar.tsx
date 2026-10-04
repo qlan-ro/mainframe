@@ -1,5 +1,8 @@
 /**
- * The v2 left panel, fed by the real daemon thread list.
+ * The sidebar's Chats view — header, scope strip and the sessions list — fed
+ * by the real daemon thread list. `layout/AppSidebar` owns the `Sidebar`
+ * shell and the shared footer; this is the body it mounts for the rail's
+ * Chats pick.
  *
  * Data flows exactly as it does in the shipped sidebar — subscribe to the stable
  * `threads.threadItems` array, project it once, then filter/group with the pure
@@ -9,87 +12,64 @@
 import { useMemo } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import { SYNTHETIC_TAGS } from '@qlan-ro/mainframe-types';
-import { SettingsIcon } from 'lucide-react';
+import { SearchIcon, SquarePen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
-import { Sidebar, SidebarFooter, SidebarHeader, SidebarRail, SidebarTrigger } from '@/components/ui/sidebar';
+import {
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarTrigger,
+} from '@/components/ui/sidebar';
 import { chordHint } from '@/features/shortcuts/chord-hint';
+import { emitSurfaceIntent } from '@/store/surface-intents';
+import { useStartNewSession } from '@/features/sessions/new-thread/use-start-new-session';
 import type { SessionItem } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { regularThreadItemsToSessionItems } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { arrangeSessions } from '@/features/sessions/view-model/group-sessions';
-import { attentionCount } from '@/features/sessions/view-model/attention-counts';
 import { sortProjectsByRecentActivity } from '@/features/sessions/view-model/project-activity';
 import { applySessionFilters } from '@/features/sessions/filter/apply-session-filters';
 import { hasSynthetic, tagsInUse } from '@/features/sessions/filter/tags-in-use';
 import { SessionLineageProvider } from '@/features/sessions/SessionLineageContext';
 import { useProjects } from '@/features/sessions/use-projects';
 import { useAddProject } from '@/features/sessions/use-add-project';
-import { useSettingsStore } from '@/store/settings';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useDraftRow } from '@/features/sessions/sidebar/use-draft-row';
 import { useTagRegistry } from '@/features/sessions/tags/use-tag-registry';
 import { useSessionFilters } from '@/store/session-filters';
-import { useUnreadStore } from '@/store/unread-store';
-// The auto-updater pill (renders null unless an update exists).
-import { UpdatePill } from '@/layout/UpdatePill';
 import { SidebarScrollRegion } from '../shared/SidebarScrollRegion';
-import { DaemonSwitcher } from '../daemon/DaemonSwitcher';
-import { QuotaFooter } from '../quota/QuotaFooter';
-import { ProjectScopeSelector } from './ProjectScopeSelector';
+import { ScopeStrip } from './ScopeStrip';
 import { SessionsSection } from './SessionsSection';
-import { SidebarActions } from './SidebarActions';
-import { TagFilterBar } from './TagFilterBar';
 import { useRemoveProject } from '@/features/sessions/use-remove-project';
 
-/**
- * Reserves the native macOS traffic-lights cluster (3 buttons + gaps + inset).
- * The cluster's vertical centring is native too: `trafficLightPosition.y` is
- * tuned so the lights centre on this row's midline — SidebarHeader's 8px top
- * pad + the 32px icon-sm row = 24px at UI scale 1.0. Nothing recomputes that
- * y, and the y→centre mapping is SDK-gated: a binary linked against SDK ≤ 15
- * (every packaged build — the release runner is macos-14) renders the classic
- * buttons, centre = y + 2, so tauri.conf.json carries 22; a dev build linked
- * against SDK 26+ renders the new metrics, centre = y − 2, so tauri-dev.mjs
- * patches y to 26. Retune BOTH whenever this row's geometry changes, or when
- * the release runner's Xcode reaches SDK 26.
- */
-const TRAFFIC_LIGHTS_WIDTH = 80;
-
-function HeaderActions() {
-  const openSettings = useSettingsStore((s) => s.open);
-  const settingsHint = chordHint('app.settings');
-
+/** The "New session" row under the header — ONE CLICK, always; the tour's primary anchor. */
+function NewSessionRow() {
+  const newThread = useStartNewSession();
+  const chord = chordHint('sessions.new');
   return (
-    <div className="flex items-center gap-0.5 text-muted-foreground">
-      <Hint label={settingsHint == null ? 'Settings' : `Settings · ${settingsHint}`}>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          data-testid="sidebar-settings"
-          aria-label="Settings"
-          onClick={() => openSettings()}
-        >
-          <SettingsIcon />
-        </Button>
-      </Hint>
-      <Hint label="Hide sidebar">
-        <SidebarTrigger data-testid="sidebar-collapse" />
-      </Hint>
-    </div>
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <SidebarMenuButton size="sm" data-testid="sidebar-action-new-thread" data-tut="new-session" onClick={newThread}>
+          <SquarePen className="text-muted-foreground" />
+          <span className="min-w-0 flex-1 truncate">New session</span>
+          {chord != null && <span className="shrink-0 font-mono text-xs text-muted-foreground">{chord}</span>}
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    </SidebarMenu>
   );
 }
 
-export function SessionSidebar({ className }: { className?: string }) {
+export function SessionSidebar() {
   const threadItems = useAuiState((s) => s.threads.threadItems);
 
   // Project outside the selector — a fresh array inside it would loop useAuiState's Object.is.
   const allItems = useMemo<SessionItem[]>(() => regularThreadItemsToSessionItems(threadItems), [threadItems]);
 
-  const { filterProjectIds, selectedTags, selectedSynthetic, sortMode, toggleFilterProject, clearProjectFilter } =
+  const { filterProjectIds, selectedTags, selectedSynthetic, sortMode, toggleFilterProject, soloFilterProject } =
     useSessionFilters();
 
   const hasFilters = filterProjectIds.size > 0 || selectedTags.size > 0 || selectedSynthetic.size > 0;
-  const isUnread = useUnreadStore((s) => s.isUnread);
   const registry = useTagRegistry(useDaemonPort());
   const { projects, removeProjectFromList, reloadProjects } = useProjects();
   const onRemoveProject = useRemoveProject(removeProjectFromList);
@@ -101,12 +81,6 @@ export function SessionSidebar({ className }: { className?: string }) {
   );
 
   const sortedProjects = useMemo(() => sortProjectsByRecentActivity(projects, allItems), [projects, allItems]);
-
-  const attention = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const project of sortedProjects) map[project.id] = attentionCount(allItems, isUnread, project.id);
-    return map;
-  }, [allItems, sortedProjects, isUnread]);
 
   const groups = useMemo(
     () => arrangeSessions(filteredItems, sortMode, Date.now(), sortedProjects),
@@ -130,35 +104,41 @@ export function SessionSidebar({ className }: { className?: string }) {
 
   const tagNames = useMemo(() => tagsInUse(allItems, filterProjectIds), [allItems, filterProjectIds]);
   const syntheticTags = useMemo(() => SYNTHETIC_TAGS.filter((kind) => hasSynthetic(allItems, kind)), [allItems]);
-  const showTags = tagNames.length > 0 || syntheticTags.length > 0;
+  const searchChord = chordHint('app.search-palette');
 
   return (
-    <Sidebar collapsible="offcanvas" className={className}>
-      {/* The project scope selector lives here, not in the scrolling body:
-          shadcn documents the header as the home for a workspace switcher, and
-          it is the one thing a long session list must not scroll away. */}
-      <SidebarHeader>
-        {/* data-drag-region: the traffic-light strip is title-bar chrome — its
-            empty run drags the window (buttons are auto-excluded by the host
-            handler, so Settings/collapse still click). */}
-        <div data-drag-region className="flex items-center justify-between">
-          {/* The pill rides with the traffic lights: update chrome reads as
-              window chrome, and the row's slack stays a drag region. gap-1.5
-              keeps it clear of the zoom button, whose hit rect ends at 80px
-              under the new-SDK metrics — flush with the reserve. */}
-          <div className="flex min-w-0 items-center gap-1.5">
-            <div aria-hidden className="shrink-0" style={{ width: TRAFFIC_LIGHTS_WIDTH }} />
-            <UpdatePill />
-          </div>
-          <HeaderActions />
+    <>
+      {/* The scope strip lives here, not in the scrolling body: shadcn
+          documents the header as the home for a workspace switcher, and it is
+          the one thing a long session list must not scroll away. */}
+      <SidebarHeader className="gap-1">
+        {/* The title bar owns the traffic lights and the app chrome now; this
+            52px row is the view's own name, search and its collapse. */}
+        <div className="flex h-9 items-center justify-between pl-1">
+          <span className="text-sm font-semibold">Chats</span>
+          <span className="flex items-center text-muted-foreground">
+            <Hint label={searchChord == null ? 'Search' : `Search (${searchChord})`}>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                data-testid="sidebar-search"
+                aria-label="Search"
+                onClick={() => emitSurfaceIntent({ type: 'open-search-palette' })}
+              >
+                <SearchIcon />
+              </Button>
+            </Hint>
+            <Hint label="Hide sidebar">
+              <SidebarTrigger data-testid="sidebar-collapse" />
+            </Hint>
+          </span>
         </div>
-        <SidebarActions />
-        <ProjectScopeSelector
+        <NewSessionRow />
+        <ScopeStrip
           projects={sortedProjects}
-          attention={attention}
           scope={filterProjectIds}
           onToggle={toggleFilterProject}
-          onClear={clearProjectFilter}
+          onSolo={soloFilterProject}
           onRemoveProject={onRemoveProject}
           onAddProject={() => void onAddProject()}
         />
@@ -169,23 +149,14 @@ export function SessionSidebar({ className }: { className?: string }) {
           <SessionsSection
             groups={groups}
             projectNames={projectNames}
-            colorOf={registry.colorOf}
             draft={draft}
             hasFilters={hasFilters}
+            tagNames={tagNames}
+            syntheticTags={syntheticTags}
+            registry={registry}
           />
         </SessionLineageProvider>
       </SidebarScrollRegion>
-
-      {/* The rule is load-bearing, not decoration: the footer butts straight up
-          against a parked section header, and without it the tag chips read as
-          that section's content. */}
-      <SidebarFooter className="border-t border-sidebar-border">
-        {showTags && <TagFilterBar inUse={tagNames} synthetic={syntheticTags} registry={registry} />}
-        <QuotaFooter />
-        <DaemonSwitcher />
-      </SidebarFooter>
-
-      <SidebarRail />
-    </Sidebar>
+    </>
   );
 }
