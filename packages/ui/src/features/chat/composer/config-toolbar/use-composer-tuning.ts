@@ -26,7 +26,7 @@ import { useTuningWarning, type TuningWarningHook } from './use-tuning-warning';
 // ---------------------------------------------------------------------------
 // useAdapters — the shared store selector (seeded/kept fresh at the app root;
 // see @/store/adapters + @/store/adapters-seed). Re-exported here so existing
-// importers (SettingsSidebar, ProvidersPane, ChatModelChip) keep working.
+// importers (SettingsSidebar, ProvidersPane) keep working.
 // ---------------------------------------------------------------------------
 
 export { useAdapters } from '@/store/adapters';

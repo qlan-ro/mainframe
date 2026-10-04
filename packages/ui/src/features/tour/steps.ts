@@ -32,10 +32,10 @@ const TOUR_STEPS: readonly TourStep[] = [
   },
   {
     target: 'new-session',
-    also: ['new-session-row', 'new-session-tab'],
+    also: ['new-session-tab'],
     side: 'right',
     title: 'Start a session',
-    body: 'Three ways in, all the same: this +, the New Thread row above it, or the + on the tab strip. Each session gets its own conversation and worktree.',
+    body: 'Two ways in, both the same: this New session row, or the + on the tab strip. Each session gets its own conversation and worktree.',
   },
   {
     target: 'sessions-list',
@@ -46,9 +46,9 @@ const TOUR_STEPS: readonly TourStep[] = [
   },
   {
     target: 'session-rail',
-    side: 'left',
-    title: 'The session rail',
-    body: 'Pinned to the chat’s right edge: session details, context usage, background activity, the run control, and the session’s tasks.',
+    side: 'below',
+    title: 'Session details',
+    body: 'Opens the panel beside the chat: branch and context usage, pull requests, background activity, the run control, and the session’s tasks.',
   },
   {
     target: 'workspace',
@@ -65,14 +65,14 @@ const TOUR_STEPS: readonly TourStep[] = [
   {
     target: 'kanban',
     side: 'right',
-    title: 'The Kanban board',
-    body: 'The project’s todos, as a board — what’s open, in progress and done.',
+    title: 'Tasks',
+    body: 'Open the Tasks list: the project’s todos — what’s open, in progress and done — with the full board one click away.',
   },
   {
     target: 'automations',
     side: 'right',
     title: 'Automations',
-    body: 'Agent runs that fire on their own. Build a workflow once, then put it on a schedule.',
+    body: 'The Automations list: agent runs that fire on their own. Build a workflow once, then put it on a schedule.',
   },
   {
     target: 'daemon',

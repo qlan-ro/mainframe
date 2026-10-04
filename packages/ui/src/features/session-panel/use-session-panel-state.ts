@@ -1,27 +1,24 @@
 /**
  * use-session-panel-state — the session panel's state machine: which mode the
- * stack is in (inline / rail / overlay) and which panels are open in it.
+ * panel is in (inline / overlay / hidden) for one chat column.
  *
- * Open-state is NOT held here. `store/ui-prefs.ts` is its single owner, so an
- * open panel survives a remount and a session switch; this hook only reads and
- * writes through. A rail click therefore writes a persisted preference —
- * intended, so the panels you work with are still open next session.
+ * No panel state is held here. `store/ui-prefs.ts` owns the ONE open bit (so
+ * an open panel survives a remount and a session switch) and
+ * `panel-control-store` owns the transient per-column float — keyed by
+ * `columnId` so the title bar's details toggle, which lives in shell chrome,
+ * drives the same panel this hook renders. The hook measures the column and
+ * publishes its `fits` verdict to that store for the toggle to read.
  */
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
-import {
-  useUiPrefs,
-  isSessionPanelOpen,
-  isSessionPanelSectionOpen,
-  type SessionPanelId,
-  type SessionPanelOpenSectionId,
-} from '@/store/ui-prefs';
-import { derivePanelMode, gutterFitsPanel, type PanelMode } from './panel-mode';
+import { useUiPrefs, isSessionPanelSectionOpen, type SessionPanelOpenSectionId } from '@/store/ui-prefs';
+import { columnFitsPanel, derivePanelMode, type PanelMode } from './panel-mode';
+import { selectOverlayOpen, usePanelControl, type PanelColumnId } from './panel-control-store';
 
 export interface SessionPanelState {
-  /** Goes on the chat surface's horizontal row — the FULL width, including the
-   *  part the panel floats over, since the mode follows the gutter that width
-   *  leaves beside the centred transcript. Explicit, rather than the panel
-   *  root's `parentElement`, so a split surface measures the row it shrinks.
+  /** Goes on the chat column's horizontal row — the FULL width, before the
+   *  docked panel takes its 300, since the mode decides whether that width can
+   *  be shared. Explicit, rather than the panel root's `parentElement`, so a
+   *  split surface measures the row it shrinks.
    *
    *  A CALLBACK ref backed by state, not a RefObject, and that is load-bearing:
    *  on a cold boot the chat surface shows its initializing branch first, so the
@@ -30,17 +27,17 @@ export interface SessionPanelState {
    *  stayed `hidden` forever in the packaged app, where the daemon spawn always
    *  loses that race (dev servers boot fast enough to always win it). */
   hostRef: (el: HTMLElement | null) => void;
-  /** Goes on the panel + rail root; light dismiss treats it as "inside". */
+  /** Goes on the panel root; light dismiss treats it as "inside". */
   rootRef: RefObject<HTMLDivElement | null>;
   surfaceWidth: number;
   mode: PanelMode;
-  isPanelOpen: (id: SessionPanelId) => boolean;
-  /** Open AND showing — false for an open panel whose stack is not floated on a
-   *  short gutter. The rail's engaged state follows this, not the raw bit. */
-  isPanelVisible: (id: SessionPanelId) => boolean;
-  /** Rail toggle. Opening on a short gutter also floats the stack over the
-   *  transcript — the click asked to see the panel, not just to arm a bit. */
-  togglePanel: (id: SessionPanelId) => void;
+  /** The persisted bit — one for the whole panel. */
+  isPanelOpen: () => boolean;
+  /** Open AND showing — false for an open panel parked on a short column. */
+  isPanelVisible: () => boolean;
+  /** The details toggle. Opening on a short column also floats the panel over
+   *  the transcript — the click asked to see the panel, not just to arm a bit. */
+  togglePanel: () => void;
   isSectionOpen: (id: SessionPanelOpenSectionId) => boolean;
   toggleSection: (id: SessionPanelOpenSectionId) => void;
 }
@@ -59,15 +56,18 @@ function hasOpenDialogOutside(root: HTMLElement | null): boolean {
   return false;
 }
 
-export function useSessionPanelState(): SessionPanelState {
+export function useSessionPanelState(columnId: PanelColumnId = 'main'): SessionPanelState {
   const [hostEl, setHostEl] = useState<HTMLElement | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [surfaceWidth, setSurfaceWidth] = useState(0);
-  const [overlayOpen, setOverlayOpen] = useState(false);
+  const overlayOpen = usePanelControl(selectOverlayOpen(columnId));
+  const setOverlay = usePanelControl((s) => s.setOverlayOpen);
+  const setFits = usePanelControl((s) => s.setFits);
+  const toggleInStore = usePanelControl((s) => s.togglePanel);
+  const setOverlayOpen = useCallback((open: boolean) => setOverlay(columnId, open), [setOverlay, columnId]);
 
-  const openPanels = useUiPrefs((s) => s.sessionPanelOpen);
-  const toggleSessionPanel = useUiPrefs((s) => s.toggleSessionPanel);
-  const openSessionPanel = useUiPrefs((s) => s.openSessionPanel);
+  const panelOpen = useUiPrefs((s) => s.sessionPanelOpen);
+  const setSessionPanelOpen = useUiPrefs((s) => s.setSessionPanelOpen);
   const sections = useUiPrefs((s) => s.sessionPanelSections);
   const toggleSessionPanelSection = useUiPrefs((s) => s.toggleSessionPanelSection);
 
@@ -85,24 +85,30 @@ export function useSessionPanelState(): SessionPanelState {
     return () => observer.disconnect();
   }, [hostEl]);
 
-  const gutterFits = gutterFitsPanel(surfaceWidth);
-  const mode = derivePanelMode({ surfaceWidth, overlayOpen });
+  const gutterFits = columnFitsPanel(surfaceWidth);
+  const mode = derivePanelMode({ columnWidth: surfaceWidth, open: panelOpen, overlayOpen });
 
-  // A floated stack has no reason to survive the gutter opening back up: once
-  // there is room, the panels belong in it.
+  // The title bar's toggle cannot measure this column; it reads the verdict
+  // published here. Unmeasured (width 0) reads as fitting — see the store.
+  useEffect(() => {
+    if (surfaceWidth > 0) setFits(columnId, gutterFits);
+  }, [columnId, gutterFits, surfaceWidth, setFits]);
+
+  // A floated panel has no reason to survive the column widening back up: once
+  // there is room, it docks.
   useEffect(() => {
     if (overlayOpen && gutterFits) setOverlayOpen(false);
-  }, [gutterFits, overlayOpen]);
+  }, [gutterFits, overlayOpen, setOverlayOpen]);
 
-  // The session card is on by default whenever there is room: the first time
-  // the gutter fits after boot, it opens — even over a persisted close from a
+  // The panel is on by default whenever there is room: the first time the
+  // column fits after boot, it opens — even over a persisted close from a
   // previous run. Closing it stays honoured within the run (the ref arms once).
   const bootOpened = useRef(false);
   useEffect(() => {
     if (bootOpened.current || !gutterFits) return;
     bootOpened.current = true;
-    openSessionPanel('session');
-  }, [gutterFits, openSessionPanel]);
+    setSessionPanelOpen(true);
+  }, [gutterFits, setSessionPanelOpen]);
 
   // Light dismiss — Escape, or a pointer outside both the panel and any portal.
   useEffect(() => {
@@ -126,31 +132,19 @@ export function useSessionPanelState(): SessionPanelState {
       document.removeEventListener('keydown', onKeyDown);
       document.removeEventListener('pointerdown', onPointerDown, true);
     };
-  }, [mode]);
+  }, [mode, setOverlayOpen]);
 
   const hostRef = useCallback((el: HTMLElement | null) => setHostEl(el), []);
 
-  const isPanelOpen = useCallback((id: SessionPanelId) => isSessionPanelOpen(openPanels, id), [openPanels]);
+  const isPanelOpen = useCallback(() => panelOpen, [panelOpen]);
 
-  const isPanelVisible = useCallback(
-    (id: SessionPanelId) => (mode === 'inline' || mode === 'overlay') && isSessionPanelOpen(openPanels, id),
-    [mode, openPanels],
-  );
+  const isPanelVisible = useCallback(() => (mode === 'inline' || mode === 'overlay') && panelOpen, [mode, panelOpen]);
 
+  // The float-when-narrow rule lives in the store so the title bar's toggle
+  // and this hook can never disagree about it.
   const togglePanel = useCallback(
-    (id: SessionPanelId) => {
-      const open = isSessionPanelOpen(useUiPrefs.getState().sessionPanelOpen, id);
-      const gutterFits = gutterFitsPanel(surfaceWidth);
-      // Open but not showing (short gutter, stack not floated): the click asked
-      // to SEE the panel, so float the stack rather than silently closing it.
-      if (open && !gutterFits && !overlayOpen) {
-        setOverlayOpen(true);
-        return;
-      }
-      toggleSessionPanel(id);
-      if (!open && !gutterFits) setOverlayOpen(true);
-    },
-    [toggleSessionPanel, surfaceWidth, overlayOpen],
+    () => toggleInStore(columnId, columnFitsPanel(surfaceWidth)),
+    [toggleInStore, columnId, surfaceWidth],
   );
 
   return {

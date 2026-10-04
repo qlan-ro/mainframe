@@ -6,10 +6,11 @@
  * through this mount while split, so a focus click changes only context
  * (`switchToThread`), never a mount — no transcript remount, no scroll jump.
  *
- * The zone is a complete chat column: the regular ChatCardHeader (zone mode —
- * close ✕ instead of the whole-surface controls) and its own session panel +
- * rail, both resolving per zone because `useActiveIdentity` and the panel
- * cards read the rebound `threadListItem`/extras contexts.
+ * The zone is a complete chat column: a 28px `ZoneStrip` (close ✕, side-chat
+ * toggle, fork-parent link) and — for the FOCUSED zone only — the docked
+ * session panel, resolving per zone because `useActiveIdentity` and the panel
+ * sections read the rebound `threadListItem`/extras contexts. The unfocused
+ * zone's panel stays hidden: two docked panels would need ≥ 2 × 1044px.
  *
  * The zone holds its own live-subscription ref; `subscribeLive` is ref-counted
  * on the controller, so the focused zone (also main, whose per-item runtime
@@ -21,13 +22,14 @@ import { Derived } from '@assistant-ui/store';
 import { cn } from '@/lib/utils';
 import { SessionPanel } from '@/features/session-panel/SessionPanel';
 import { useSessionPanelState } from '@/features/session-panel/use-session-panel-state';
+import { zoneColumnId } from '@/features/session-panel/panel-control-store';
 import { chatControllerRegistry } from '../../sessions/runtime/chat-controller-registry';
 import { useDaemonPort } from '../../sessions/runtime/daemon-port-context';
 import { CHAT_ATTACHMENT_ADAPTER, useControllerState } from '../runtime/use-chat-thread-runtime';
 import { buildChatExtras, isRunningFromState, useChatExtrasState } from '../runtime/chat-extras';
 import { useNativeThreadMessages } from '../runtime/use-native-thread-messages';
-import { ChatCardHeader } from '../thread/ChatCardHeader';
 import { ChatThread } from '../thread/ChatThread';
+import { ZoneStrip } from './ZoneStrip';
 import { SideChatHost } from '@/features/side-chat/SideChatHost';
 
 export function ChatZone({
@@ -48,7 +50,7 @@ export function ChatZone({
   const port = useDaemonPort();
   const controller = chatControllerRegistry.getOrCreate(chatId, port);
   const state = useControllerState(controller);
-  const panelState = useSessionPanelState();
+  const panelState = useSessionPanelState(zoneColumnId(chatId));
 
   // Seed once + hold this zone's live ref for as long as it is visible.
   useEffect(() => {
@@ -114,14 +116,14 @@ export function ChatZone({
           if (!focused) onFocus();
         }}
       >
-        <ChatCardHeader zone={{ chatId, onClose }} />
-        <div className="flex min-h-0 flex-1 overflow-hidden">
-          {/* The thread column this zone's panel floats over — measured per
-              zone, so each side derives its own rail/overlay mode from its own width. */}
-          <SideChatHost parentChatId={chatId} threadRef={panelState.hostRef}>
+        <ZoneStrip chatId={chatId} onClose={onClose} />
+        {/* Measured per zone, before the panel takes its width, so each side
+            derives its own inline/overlay mode from its own width. */}
+        <div ref={panelState.hostRef} data-chat-column className="relative flex min-h-0 flex-1 overflow-hidden">
+          <SideChatHost parentChatId={chatId}>
             <ChatThread />
-            <SessionPanel state={panelState} />
           </SideChatHost>
+          {focused && <SessionPanel state={panelState} />}
         </div>
       </div>
     </AuiProvider>

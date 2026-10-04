@@ -1,5 +1,6 @@
 /**
- * The active chat's fork-parent link for `ChatCardHeader` (todo #343). The
+ * The active chat's fork-parent link (todo #343) — rendered in the title bar
+ * for the single view and on each zone's strip in a split. The
  * `threads.threadItems` store scope carries BOTH regular and archived threads
  * (see chat-to-thread-custom.ts's own note on `threadItemsToSessionItems`),
  * so a parent found there resolves directly — 'linked' or 'archived' by its

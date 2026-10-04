@@ -8,8 +8,9 @@
  * surface: with no project resolved the dialog shows the project list instead
  * of the board, so the sidebar entry and ⌘⇧T can no longer be dead clicks.
  *
- * Registers ⌘⇧T → openQuick(). Listens for `mf:open-tasks` (dispatched by
- * SidebarHeader TasksBtn). Mounted once in AppShell's outlet block — so unlike
+ * Also mounts the ONE `TaskEditModal` (behind the store's `edit` target) that
+ * the board, the panel card and the sidebar list all open. Registers ⌘⇧T →
+ * openQuick(). Mounted once in AppShell's outlet block — so unlike
  * `useModalProjectScope`'s own internal instance (reloaded per hook, per
  * open), this component's top-level `useProjects()` never remounts and never
  * refetches on its own. Without an explicit reload here, a project added
@@ -27,16 +28,42 @@ import { useModalProjectScope } from '@/features/project-scope/use-modal-project
 import { ProjectPickList } from '@/features/project-scope/ProjectPickList';
 import { useTasksModal } from './use-tasks-modal';
 import { useStartTodoSession } from './use-start-todo-session';
-import { useTodosStore } from './use-todos-store';
+import { selectProjectTodos, useTodosStore } from './use-todos-store';
 import { TasksBoard } from './TasksBoard';
 import { QuickTaskDialog } from './QuickTaskDialog';
+import { TaskEditModal } from './sidebar/TaskEditModal';
+import { extractAllLabels } from './todos-filters';
+import type { TaskEditTarget } from './use-tasks-modal';
+
+/** The shared edit/create modal, resolved against its project's todos bucket. */
+function TaskEditHost({ port, edit, onClose }: { port: number; edit: TaskEditTarget; onClose: () => void }) {
+  const { todos } = useTodosStore(selectProjectTodos(edit.projectId));
+  const startSession = useStartTodoSession(port, edit.projectId);
+  const todo = edit.todoId == null ? null : (todos.find((t) => t.id === edit.todoId) ?? null);
+  // A todo deleted out from under an open edit has nothing left to edit.
+  if (edit.todoId != null && todo == null) return null;
+  return (
+    <TaskEditModal
+      port={port}
+      projectId={edit.projectId}
+      todo={todo}
+      allTodos={todos}
+      allLabels={extractAllLabels(todos)}
+      onClose={onClose}
+      onStartSession={(id) => {
+        const target = todos.find((t) => t.id === id);
+        if (target) void startSession(target.id, target.status);
+      }}
+    />
+  );
+}
 
 interface Props {
   port: number;
 }
 
 export function TasksModalHost({ port }: Props): React.ReactElement {
-  const { open, quickOpen, closeModal, openModal, openQuick, closeQuick } = useTasksModal();
+  const { open, quickOpen, closeModal, openQuick, closeQuick, edit, closeEdit } = useTasksModal();
   const { projects, reloadProjects } = useProjects();
   const filterProjectId = useSessionFilters((s) => soleProjectId(s.filterProjectIds));
   const board = useModalProjectScope(open);
@@ -65,15 +92,6 @@ export function TasksModalHost({ port }: Props): React.ReactElement {
   const startSession = useStartTodoSession(port, boardProjectId ?? undefined);
 
   useShortcutAction('app.quick-task', openQuick);
-
-  // mf:open-tasks custom event (dispatched by SidebarHeader TasksBtn)
-  useEffect(() => {
-    function handleOpenTasks() {
-      openModal();
-    }
-    window.addEventListener('mf:open-tasks', handleOpenTasks);
-    return () => window.removeEventListener('mf:open-tasks', handleOpenTasks);
-  }, [openModal]);
 
   return (
     <>
@@ -127,6 +145,8 @@ export function TasksModalHost({ port }: Props): React.ReactElement {
           )}
         </DialogContent>
       </Dialog>
+
+      {edit != null && <TaskEditHost port={port} edit={edit} onClose={closeEdit} />}
 
       {/* Quick-add dialog */}
       <QuickTaskDialog
