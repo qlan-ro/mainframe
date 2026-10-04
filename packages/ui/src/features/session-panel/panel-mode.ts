@@ -2,68 +2,53 @@
  * The session panel's width rule, kept pure so the threshold is testable
  * without a DOM.
  *
- * The panel never takes width from the transcript. It floats over the right
- * gutter beside ChatThread's centred message column, so "is there room?" is a
- * question about that gutter, not about the surface as a whole: the column is
- * centred, so each gutter is half of whatever the surface has left over.
+ * The panel DOCKS: it is a 300px flex sibling of the transcript column when
+ * the column has room for both, and an overlay over the transcript's right
+ * edge when it does not. (This reverses the older "the panel never takes
+ * width" rule — a docked panel reads as a normal inspector; the floating stack
+ * competed with the transcript for the same gutter.)
  *
  * The states:
- *   gutter fits                 → `inline`  — open panels stack in the gutter
- *   gutter short                → `rail`    — the rail alone at the surface edge
- *   gutter short, asked for it  → `overlay` — the same stack, over the transcript
- *   unmeasured (width 0)        → `hidden`  — nothing flashes before the first measure
- *
- * The rail has no minimum width and renders in every measured state: it is the
- * session's one constant handle. Which panels the stack holds is the ui-prefs
- * store's business, not the mode's — an empty stack simply renders nothing.
+ *   closed                       → `hidden`
+ *   open, column fits             → `inline`  — docked beside the transcript
+ *   open, column short, floated   → `overlay` — over the transcript's right edge
+ *   open, column short, parked    → `hidden`  — the details toggle floats it
+ *   unmeasured (width 0)          → `hidden`  — nothing flashes before the first measure
  */
 
-/** ChatThread's message column: `max-w-3xl`, border-box, so its `px-5` is inside. */
-const TRANSCRIPT_WIDTH = 768;
-/** SessionPanel's card — `w-72`. */
-const PANEL_WIDTH = 288;
-/** The card's gap from the transcript — its `ml-2`. Its `mr-4` is separate. */
-const PANEL_MARGIN = 8;
-/** SessionPanelRail: a `w-8` control column, `px-1`, and a 1px border each side. */
-const RAIL_WIDTH = 42;
-/** The rail's `ml-1` from the card plus its `mr-2` from the surface edge. */
-const RAIL_MARGINS = 12;
+/** The transcript's capped message column (`max-w-[680px]`) plus the
+ *  viewport's 2 × 20px padding. Conservative by the padding the capped boxes
+ *  carry themselves; accepted in the plan's review. */
+export const TRANSCRIPT_MIN = 720;
+/** The docked panel's width. */
+export const PANEL_WIDTH = 300;
+/** Breathing room between the transcript column and the docked panel. */
+export const GAP = 24;
 
-/**
- * What one gutter must hold for the panel to sit inline.
- *
- * The rail is counted even though inline mode hides it: collapsing must not
- * depend on the surface width, so the gutter that admitted the card has to
- * admit the rail the card collapses into.
- *
- * Deliberately conservative — neither state needs all 350. The stack occupies
- * 300 (`ml-2` + `w-72` + `mr-1`) and the rail 54. Budgeting for both keeps the
- * threshold put when either one's margins are tuned, which is why stepping the
- * card's right inset from 8 to 16 did not move it.
- */
-export const PANEL_BLOCK_WIDTH = PANEL_MARGIN + PANEL_WIDTH + RAIL_MARGINS + RAIL_WIDTH;
+/** Column width at which the panel docks — 1044px. */
+export const INLINE_MIN_WIDTH = TRANSCRIPT_MIN + GAP + PANEL_WIDTH;
 
-/** Surface width at which BOTH gutters clear a panel block — 1468px. */
-export const INLINE_MIN_WIDTH = TRANSCRIPT_WIDTH + 2 * PANEL_BLOCK_WIDTH;
-
-export type PanelMode = 'inline' | 'rail' | 'overlay' | 'hidden';
+export type PanelMode = 'inline' | 'overlay' | 'hidden';
 
 export interface PanelModeInput {
-  /** Width of the host row the panel floats over. */
-  surfaceWidth: number;
+  /** Width of the chat column the panel shares — measured BEFORE the panel takes its 300. */
+  columnWidth: number;
+  /** The persisted open bit. */
+  open: boolean;
+  /** The transient float, per column. */
   overlayOpen: boolean;
 }
 
-/** True when the transcript's right gutter holds the panel block outright. */
-export function gutterFitsPanel(surfaceWidth: number): boolean {
-  return surfaceWidth >= INLINE_MIN_WIDTH;
+/** True when the column holds the transcript and the docked panel side by side. */
+export function columnFitsPanel(columnWidth: number): boolean {
+  return columnWidth >= INLINE_MIN_WIDTH;
 }
 
-export function derivePanelMode({ surfaceWidth, overlayOpen }: PanelModeInput): PanelMode {
+export function derivePanelMode({ columnWidth, open, overlayOpen }: PanelModeInput): PanelMode {
   // Pre-measurement only — the panel never flashes before the first measure.
-  if (surfaceWidth <= 0) return 'hidden';
-  // Room wins: a gutter that fits shows the stack outright — never the overlay,
-  // which exists only to borrow the transcript.
-  if (gutterFitsPanel(surfaceWidth)) return 'inline';
-  return overlayOpen ? 'overlay' : 'rail';
+  if (columnWidth <= 0 || !open) return 'hidden';
+  // Room wins: a column that fits docks outright — never the overlay, which
+  // exists only to borrow the transcript.
+  if (columnFitsPanel(columnWidth)) return 'inline';
+  return overlayOpen ? 'overlay' : 'hidden';
 }

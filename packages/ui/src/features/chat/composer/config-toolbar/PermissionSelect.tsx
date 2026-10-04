@@ -7,7 +7,9 @@
  * the Claude CLI's own mode and shows only for an adapter advertising
  * capabilities.autoMode; the label is still resolved off the unfiltered list so a
  * chat carrying a mode this adapter can't offer never renders the raw wire string.
- * Tone tints the trigger and the option label: Unattended destructive, Auto caution.
+ * Tone tints the trigger and the option label: Unattended `warning` (ink AND a
+ * warning-tinted chip — reverses #325: running unattended needs you, it is not
+ * a destructive act), Auto `caution` (warning ink alone), so the two stay distinct.
  * NOT disabled while the chat is running — can be changed for the next turn.
  *
  * A floating list of choices is a native DropdownMenu (ledger rule, 2026-08-05).
@@ -36,22 +38,27 @@ export interface PermissionSelectProps {
   adapter?: AdapterInfo | null;
 }
 
-type ModeTone = 'caution' | 'destructive' | undefined;
+type ModeTone = 'caution' | 'warning' | undefined;
 
 const PERMISSION_MODES: { id: ExecutionMode; label: string; description: string; tone?: ModeTone }[] = [
   { id: 'default', label: 'Interactive', description: 'Approve every action' },
   { id: 'acceptEdits', label: 'Auto-Edits', description: 'Edits auto-applied; commands ask' },
   { id: 'auto', label: 'Auto', description: 'Claude decides which actions need approval', tone: 'caution' },
-  { id: 'yolo', label: 'Unattended', description: 'Runs without prompts', tone: 'destructive' },
+  { id: 'yolo', label: 'Unattended', description: 'Runs without prompts', tone: 'warning' },
 ];
 
-const TONE_INK: Record<'caution' | 'destructive', string> = {
+const TONE_INK: Record<'caution' | 'warning', string> = {
   caution: 'text-warning',
-  destructive: 'text-destructive',
+  warning: 'text-warning',
 };
 
 function toneInk(tone: ModeTone): string {
   return tone == null ? 'text-muted-foreground' : TONE_INK[tone];
+}
+
+/** The chip tint that separates Unattended from Auto's bare warning ink. */
+function toneChip(tone: ModeTone): string | undefined {
+  return tone === 'warning' ? 'border-warning/40 bg-warning/10' : undefined;
 }
 
 export function PermissionSelect({ chat, setPermissionMode, providerDefaults, adapter }: PermissionSelectProps) {
@@ -78,6 +85,7 @@ export function PermissionSelect({ chat, setPermissionMode, providerDefaults, ad
               'transition-colors',
               'focus-visible:outline-none',
               toneInk(current?.tone),
+              toneChip(current?.tone),
             )}
           >
             <Shield size={12} className="shrink-0" />

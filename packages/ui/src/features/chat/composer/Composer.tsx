@@ -3,16 +3,18 @@
 /**
  * Composer shell — the v2 skin over the native `ComposerPrimitive`.
  *
- * Native ~90%: Root/Input own the draft + submit; Send↔Cancel swaps on
- * `thread.isRunning`. The bottom bar's left slot carries the attachment
- * affordances and the config toolbar (model · plan · permission · worktree).
+ * Native ~90%: Root/Input own the draft + submit. The send slot shows send
+ * only — Stop lives on the status line above the composer (D18) — and a
+ * mid-run Enter still queues. The bottom bar's left slot carries the
+ * attachment affordances and the config toolbar (model · permission · plan ·
+ * temporary · worktree · context).
  *
  * (Decomposed out of ChatThread; mounted inside `ThreadPrimitive.ViewportFooter`
  * so its height registers as scroll inset — the last message never hides behind it.)
  */
 import { useCallback, useRef, type RefObject, type KeyboardEvent } from 'react';
 import { ComposerPrimitive, useAuiState } from '@assistant-ui/react';
-import { ArrowUpIcon, SquareIcon } from 'lucide-react';
+import { ArrowUpIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
@@ -30,38 +32,17 @@ import { useComposerSegments } from './segments/segment-store';
 import { useSubmitComposition, useCanSubmit } from './segments/use-submit-composition';
 
 /**
- * Send (idle, disabled while empty) ↔ Cancel (running) — swapped on
- * thread.isRunning.
+ * Send — a 32px `primary` square, disabled while empty. While a turn runs it
+ * stays a send: Enter queues, and so does this.
  *
  * `useCanSubmit` is subscribed HERE, not in `Composer`: it reads the live
  * draft text, so hoisting it would re-render the whole composer (segments,
  * triggers, toolbar, highlight overlay) on every keystroke.
  */
-function SendOrCancelButton() {
-  const isRunning = useAuiState((s) => s.thread.isRunning);
+function SendButton() {
   const canSubmit = useCanSubmit();
-
-  if (isRunning) {
-    // The composer's Stop gets a soft destructive fill — it swaps in for the
-    // primary Send, so it must read as THE action, unlike the ghost stops on
-    // WorkspaceTabPill / the session panel's Launch rows, which are incidental
-    // chrome.
-    return (
-      <ComposerPrimitive.Cancel asChild>
-        <Button
-          data-testid="chat-composer-cancel"
-          aria-label="Stop"
-          variant="ghost"
-          size="icon-xs"
-          className="bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive"
-        >
-          <SquareIcon fill="currentColor" />
-        </Button>
-      </ComposerPrimitive.Cancel>
-    );
-  }
   return (
-    <Button type="submit" data-testid="chat-composer-send" aria-label="Send" size="icon-xs" disabled={!canSubmit}>
+    <Button type="submit" data-testid="chat-composer-send" aria-label="Send" size="icon-sm" disabled={!canSubmit}>
       <ArrowUpIcon />
     </Button>
   );
@@ -190,7 +171,7 @@ export function Composer({ variant = 'main' }: { variant?: 'main' | 'side' } = {
         // automatic minimum is its content size, so it would overflow the
         // footer's cap instead of shrinking to fit; `overflow-y-auto` clips
         // that content rather than letting it paint past the card's border.
-        className="min-h-0 min-w-60 overflow-y-auto rounded-xl border border-border bg-card shadow-sm transition-colors [scrollbar-width:none] focus-within:border-ring"
+        className="min-h-0 min-w-60 overflow-y-auto rounded-xl border border-input bg-card shadow-xs transition-colors [scrollbar-width:none] focus-within:border-ring"
       >
         <ComposerPrimitive.AttachmentDropzone
           data-testid="composer-dropzone"
@@ -214,7 +195,7 @@ export function Composer({ variant = 'main' }: { variant?: 'main' | 'side' } = {
             <ComposerInputField
               textareaRef={textareaRef}
               onKeyDown={handleInputKeyDown}
-              placeholder={hasLiveQuote ? 'Add a message…' : 'Reply to Mainframe…'}
+              placeholder={hasLiveQuote ? 'Add a message…' : 'Reply to the agent…'}
             />
           </div>
 
@@ -230,7 +211,7 @@ export function Composer({ variant = 'main' }: { variant?: 'main' | 'side' } = {
               <Separator orientation="vertical" className="mx-1 h-3 data-vertical:self-center" />
               <ComposerToolbar variant={variant} />
             </div>
-            <SendOrCancelButton />
+            <SendButton />
           </div>
         </ComposerPrimitive.AttachmentDropzone>
       </ComposerPrimitive.Root>

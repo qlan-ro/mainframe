@@ -22,7 +22,7 @@ afterEach(() => {
 function openOverlay() {
   const rendered = renderPanelState();
   setWidth(1000);
-  act(() => rendered.result.current.togglePanel('session'));
+  act(() => rendered.result.current.togglePanel());
   return rendered;
 }
 
@@ -52,7 +52,7 @@ describe('useSessionPanelState — light dismiss', () => {
     const outside = document.createElement('div');
     document.body.append(outside);
     pointerDownOn(outside);
-    expect(result.current.isPanelOpen('session')).toBe(true);
+    expect(result.current.isPanelOpen()).toBe(true);
   });
 
   it('stays open for a pointerdown inside the panel', () => {

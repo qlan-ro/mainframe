@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Hint } from '@/components/ui/hint';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ProviderDot } from '@/features/shared/ProviderDot';
 import { ProviderLogo } from '@/features/shared/ProviderLogo';
 import { modelSelectionHint } from '@/lib/cli-model';
 import { cn } from '@/lib/utils';
@@ -51,18 +52,6 @@ export interface ProviderModelSelectProps {
    *  chat's adapter is a one-time copy of the parent's and never switches).
    *  The model catalog for the fixed adapter still renders. */
   hideProviderSwitch?: boolean;
-}
-
-/** A small dot color per known provider; neutral fallback for anything else.
- *  Exported for ChatModelChip so the header chip and the picker always agree. */
-const PROVIDER_DOT: Record<string, string> = {
-  claude: 'bg-orange-500',
-  codex: 'bg-emerald-500',
-  gemini: 'bg-blue-500',
-  opencode: 'bg-violet-500',
-};
-export function providerDot(id: string): string {
-  return PROVIDER_DOT[id] ?? 'bg-muted-foreground';
 }
 
 interface ModelSectionProps {
@@ -226,7 +215,7 @@ export function ProviderModelSelect({
                 'disabled:pointer-events-none disabled:opacity-40',
               )}
             >
-              <span className={cn('inline-block size-1.5 flex-shrink-0 rounded-full', providerDot(activeId))} />
+              <ProviderDot adapterId={activeId} testId="composer-model-provider-dot" />
               <span className="max-w-[150px] truncate font-medium @max-[560px]:max-w-[90px] @max-[430px]:max-w-[56px]">
                 {triggerLabel}
               </span>

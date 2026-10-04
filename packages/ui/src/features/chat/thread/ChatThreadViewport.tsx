@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
 import { ArrowDownIcon } from 'lucide-react';
 import { useUiPrefs } from '@/store/ui-prefs';
@@ -49,9 +49,34 @@ function ThreadFooterInput({ variant }: { variant: ChatThreadVariant }) {
     </>
   );
 }
+/**
+ * Publishes the footer's height as `--chat-footer-h` on the enclosing chat
+ * column, so the session panel's overlay can stop above the composer.
+ */
+function useFooterHeightVar() {
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    const column = el?.closest<HTMLElement>('[data-chat-column]');
+    if (!el || !column) return;
+    const publish = () => column.style.setProperty('--chat-footer-h', `${el.offsetHeight}px`);
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      column.style.removeProperty('--chat-footer-h');
+    };
+  }, []);
+  return ref;
+}
 function ThreadFooter({ variant }: { variant: ChatThreadVariant }) {
+  const footerRef = useFooterHeightVar();
   return (
-    <ThreadPrimitive.ViewportFooter className="sticky bottom-0 mt-auto flex max-h-[calc(100cqh-2rem)] shrink-0 flex-col bg-background">
+    <ThreadPrimitive.ViewportFooter
+      ref={footerRef}
+      className="sticky bottom-0 mt-auto flex max-h-[calc(100cqh-2rem)] shrink-0 flex-col bg-background"
+    >
       <ThreadPrimitive.ScrollToBottom asChild>
         <Button
           data-testid="chat-scroll-to-bottom"
@@ -63,10 +88,12 @@ function ThreadFooter({ variant }: { variant: ChatThreadVariant }) {
           <ArrowDownIcon />
         </Button>
       </ThreadPrimitive.ScrollToBottom>
-      <div
-        data-testid="chat-thread-footer"
-        className="mx-auto flex w-full min-h-0 max-w-[min(48rem,100%-116px)] flex-col px-5 pb-4"
-      >
+      {/* 680px, not `min(48rem, 100% − 116px)`: the 116 only ever cleared the
+          floating rail, which is gone; the panel takes real width now. */}
+      <div data-testid="chat-thread-footer" className="mx-auto flex w-full min-h-0 max-w-[680px] flex-col px-5 pb-4">
+        {/* The ONE live timer (D18, reverses #214): the status line sits above
+            the gate slot and the composer, not inside the transcript. */}
+        <GeneratingIndicator />
         <ChatGateMount />
         <div className="flex min-h-0 flex-col">
           {variant !== 'side' && <WorktreeSwitchBanner />}
@@ -91,7 +118,7 @@ export function ChatThreadViewport({ emptyState, variant }: { emptyState?: React
         className="relative flex flex-1 flex-col overflow-y-auto [container-type:size]"
       >
         <ChatThreadLoadingSpinner />
-        <div ref={contentRef} className="mx-auto w-full max-w-[min(48rem,100%-116px)] flex-1 px-5 py-4">
+        <div ref={contentRef} className="mx-auto w-full max-w-[680px] flex-1 px-5 py-4">
           <LoadErrorBanner />
           {variant !== 'side' && <ContextNotPreservedNotice />}
           {messageCount === 0 && emptyState != null ? emptyState : null}
@@ -99,7 +126,6 @@ export function ChatThreadViewport({ emptyState, variant }: { emptyState?: React
               restart from the new thread's tail on a switch instead of
               inheriting the previous thread's state. */}
           <TranscriptMessages key={threadId ?? ''} />
-          <GeneratingIndicator />
           <CompactingIndicator />
         </div>
         <ThreadFooter variant={variant} />

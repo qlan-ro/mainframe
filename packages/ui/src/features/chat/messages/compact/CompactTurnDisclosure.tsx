@@ -19,6 +19,8 @@ export function CompactTurnDisclosure({ turn }: { turn: TurnDisclosure }) {
         variant="ghost"
         size="sm"
         data-testid={`chat-work-toggle-${encodeURIComponent(turn.key)}`}
+        // A static name: the elapsed text is empty while the turn runs and the chevron is aria-hidden.
+        aria-label="Work details"
         aria-expanded={open}
         aria-controls={turn.workKeys.map(workSlotId).join(' ')}
         disabled={turn.unsafe || turnDisclosureStore.isInvalid(turn.key)}

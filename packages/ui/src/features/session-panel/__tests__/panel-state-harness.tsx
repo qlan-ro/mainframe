@@ -42,8 +42,10 @@ export function installPanelHarness(): PanelHarness {
   document.body.append(host, root);
   harness = { host, root, observed: [] };
   // The store is a module-level singleton: an open panel or an expansion written
-  // by one case would otherwise leak into the next.
-  useUiPrefs.setState({ sessionPanelOpen: {}, sessionPanelSections: {} });
+  // by one case would otherwise leak into the next. D8: one boolean for the
+  // whole panel — reset to the store's own declared default (open) so each
+  // case starts from the same place the real app boots into.
+  useUiPrefs.setState({ sessionPanelOpen: true, sessionPanelSections: {} });
   return harness;
 }
 

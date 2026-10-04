@@ -1,19 +1,14 @@
 /**
- * SummarySection — the panel's top section: what this session IS (branch,
- * context fill) and what it has produced (detected PRs, working changes).
+ * SummarySection — the Session section's rows: what this session IS (branch,
+ * context fill) and its working changes. Detected PRs have their own section
+ * (`PullRequestsSection`); the "Session" eyebrow is drawn by the panel.
  *
- * Never collapsible, so its heading is a static row rather than a trigger —
- * same rhythm and ink as the section headers below it, minus the chevron. It
- * carries the panel's own collapse instead, on the trailing edge: the top row is
- * the only fixed place to put it once the title bar went away.
- *
- * The four row kinds come out of `deriveSummaryRows`, which owns every
- * visibility rule (no branch, no PRs, unresolved usage), and one renderer draws
- * them. A row that has nothing to say is not emitted; when nothing is emitted at
- * all the section says so rather than rendering an empty card.
+ * The row kinds come out of `deriveSummaryRows`, which owns every visibility
+ * rule (no branch, unresolved usage), and one renderer draws them. A row that
+ * has nothing to say is not emitted; when nothing is emitted at all the
+ * section says so rather than rendering an empty block.
  */
 import { useState } from 'react';
-import { useAuiState } from '@assistant-ui/react';
 import { Gauge, GitBranch, GitCompare, GitPullRequest } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -23,9 +18,7 @@ import { useChatExtras } from '@/features/chat/runtime/chat-extras';
 import { BranchPopover } from '@/features/git/BranchPopover';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useDisplayBranch } from '@/features/sessions/use-display-branch';
-import { activeSessionCustom } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { toChangesSummary, useWorkingChanges } from '@/features/review/use-working-changes';
-import { useHost } from '@/lib/host';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { deriveSummaryRows, type SummaryRow } from './summary-view';
 import { useContextPercent } from './use-context-percent';
@@ -158,7 +151,6 @@ function SummaryRowView({ row, onActivate }: { row: SummaryRow; onActivate?: () 
 }
 
 export function SummarySection({ port }: { port: number }) {
-  const host = useHost();
   const { projectId, chatId, branchName, isWorktree, noProject } = useActiveIdentity();
   // `refetch` is the popover-write path: a BranchPopover write broadcasts no
   // `chat.updated`, so nothing else invalidates the displayed branch.
@@ -172,23 +164,22 @@ export function SummarySection({ port }: { port: number }) {
   });
   const percent = useContextPercent();
   const usage = useChatExtras()?.state.contextUsage;
-  const prs = useAuiState((s) => activeSessionCustom(s.threadListItem, s.threads.threadItems))?.detectedPrs ?? [];
   const changes = useWorkingChanges({ port, projectId, chatId, noProject });
 
   const rows = deriveSummaryRows({
     branch: { name: branch ?? null, isWorktree },
     context: { percent, usedTokens: usage?.totalTokens, maxTokens: usage?.maxTokens },
-    prs,
+    // PRs render in their own section now.
+    prs: [],
     // Loading and error both mean "unknown", and a zero count would claim the
     // tree is clean. The row waits rather than lying.
     changes: projectId && !changes.loading && !changes.error ? toChangesSummary(changes) : null,
   });
 
-  // No section heading of its own: the card header ("Session") names it, so
-  // the rows start immediately.
+  // No heading of its own: the panel's "Session" eyebrow names it.
   return (
-    <section data-testid="session-panel-section-summary" className="shrink-0 border-b border-border">
-      <div className="flex flex-col gap-0.5 py-2">
+    <div data-testid="session-panel-section-summary" className="shrink-0">
+      <div className="flex flex-col gap-0.5 px-2 pb-2">
         {rows.length === 0 ? (
           <div data-testid="session-panel-summary-empty" className={cn(ROW, 'text-sm text-muted-foreground')}>
             No session details yet
@@ -209,18 +200,12 @@ export function SummarySection({ port }: { port: number }) {
               <SummaryRowView
                 key={rowTestId(row)}
                 row={row}
-                onActivate={
-                  row.kind === 'pr'
-                    ? () => void host.shell.openExternal(row.url)
-                    : row.kind === 'changes'
-                      ? () => emitSurfaceIntent({ type: 'open-review' })
-                      : undefined
-                }
+                onActivate={row.kind === 'changes' ? () => emitSurfaceIntent({ type: 'open-review' }) : undefined}
               />
             ),
           )
         )}
       </div>
-    </section>
+    </div>
   );
 }

@@ -1,12 +1,12 @@
 /**
- * ActivityCard — the live background work of this session: subagents,
- * background bash tasks, and workflow runs, as its own stacked panel.
+ * ActivitySection — the live background work of this session: subagents,
+ * background bash tasks, and workflow runs, as a section of the docked panel.
  *
  * The daemon ships only running work (there is no status field on
  * `BackgroundActivityTask` — see background-task.ts), so every row IS running
  * and the count is the list length. The row's leading glyph says what KIND of
  * work it is — workflow, subagent, task — not its state; liveness is carried
- * by the ticking elapsed column and the rail button's pulse dot.
+ * by the ticking elapsed column and the eyebrow's pulse dot.
  *
  * A workflow row drills in place into its run panel — the level swap the
  * composer's two-level popover used to do, minus the popover.
@@ -14,11 +14,11 @@
  * The section stays mounted across a session switch, so the drill-in is reset
  * on `chatId` explicitly; the popover got that free from Radix unmounting.
  *
- * Empty keeps one muted row: the rail's Activity button is a fixed affordance,
- * and a panel that vanishes when work finishes is worse than a placeholder.
+ * Empty keeps one muted row: a section that vanishes when work finishes is
+ * worse than a placeholder.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { Bot, ChevronLeft, ChevronRight, CircleDashed, Logs, SquareTerminal, Workflow } from 'lucide-react';
+import { Bot, ChevronLeft, ChevronRight, CircleDashed, SquareTerminal, Workflow } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { BackgroundActivityTask, BackgroundWorkKind, ClaudeWorkflowRun } from '@qlan-ro/mainframe-types';
 import { cn } from '@/lib/utils';
@@ -28,7 +28,7 @@ import { useWorkflowRun } from '@/features/chat/workflow/use-workflow-run';
 import { WorkflowRunPanel } from '@/features/chat/workflow/WorkflowRunPanel';
 import { runKey } from '@/features/chat/workflow/workflow-progress';
 import { runningCount } from './activity-view';
-import { PanelCard } from './PanelCard';
+import { PanelEyebrow } from './PanelEyebrow';
 
 const ROW = 'flex items-center gap-2 rounded-md px-2 py-1';
 const ELAPSED = 'shrink-0 font-mono text-xs tabular-nums text-muted-foreground';
@@ -143,7 +143,7 @@ function WorkflowDrillIn({ run, onBack }: { run: ClaudeWorkflowRun; onBack: () =
   );
 }
 
-export function ActivityCard({ onClose }: { onClose: () => void }) {
+export function ActivitySection() {
   const extras = useChatExtras();
   const chatId = extras?.state.chatId;
   const backgroundTasks = extras?.state.backgroundTasks;
@@ -156,8 +156,14 @@ export function ActivityCard({ onClose }: { onClose: () => void }) {
   useEffect(() => setDrillTaskId(null), [chatId]);
 
   return (
-    <PanelCard id="activity" label="Activity" icon={Logs} count={running > 0 ? running : undefined} onClose={onClose}>
-      <div className="flex flex-col gap-0.5 p-2">
+    <section data-testid="session-panel-card-activity" className="shrink-0 border-b border-border">
+      <PanelEyebrow
+        label="Activity"
+        count={running > 0 ? running : undefined}
+        live={running > 0}
+        liveTestId="session-panel-activity-live"
+      />
+      <div className="flex flex-col gap-0.5 px-2 pb-2">
         {drillRun ? (
           <WorkflowDrillIn run={drillRun} onBack={() => setDrillTaskId(null)} />
         ) : tasks.length === 0 ? (
@@ -174,6 +180,6 @@ export function ActivityCard({ onClose }: { onClose: () => void }) {
           )
         )}
       </div>
-    </PanelCard>
+    </section>
   );
 }

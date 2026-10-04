@@ -3,18 +3,23 @@
  *
  * The shell: an always-present rail plus the stack of cards it toggles.
  *
+ * D8 (v8): the panel is ONE bit for the whole stack — there is no per-card
+ * open state anymore. Whenever the bit is on and the mode shows a stack, ALL
+ * FOUR cards render together; whenever it is off, none do.
+ *
  * Behaviors covered:
  *  - the rail renders in EVERY measured mode — it is the switchboard, so it
  *    never hides behind the thing it switches
- *  - one card per open panel, in render order; a closed panel renders nothing
- *  - the stack only shows inline and in overlay: rail mode keeps the bits but
+ *  - the stack renders all four cards together, in order, whenever the bit is
+ *    open and the mode shows a stack
+ *  - the stack only shows inline and in overlay: rail mode keeps the bit but
  *    puts nothing on screen
  *  - the floating stack is a dialog, named for a screen reader since it has no
  *    visible title
  *  - 'hidden' (nothing measured yet) renders nothing at all
  *  - the root floats: absolutely positioned and click-through, so it takes no
  *    width from the transcript and does not eat wheel events over its gutter
- *  - a card's close X toggles that panel off
+ *  - a card's close X toggles the whole panel off
  *  - the session card holds Summary, Plan and Context
  *
  * Mocked dependencies (the rail's data sources — the real rail renders here):
@@ -31,7 +36,6 @@ import { render as rtlRender, screen, fireEvent } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { DaemonPortProvider } from '@/features/sessions/runtime/daemon-port-context';
-import type { SessionPanelId } from '@/store/ui-prefs';
 import type { SessionPanelState } from '../use-session-panel-state';
 import type { PanelMode } from '../panel-mode';
 
@@ -62,7 +66,7 @@ vi.mock('../ContextSection', () => ({ ContextSection: () => <div data-testid="st
 
 // The three list cards are stubbed whole — each carries its own close button so
 // the shell's onClose wiring stays assertable.
-function cardStub(id: SessionPanelId) {
+function cardStub(id: string) {
   return ({ onClose }: { onClose: () => void }) => (
     <div data-testid={`stub-${id}`}>
       <button type="button" data-testid={`stub-close-${id}`} onClick={onClose} />
@@ -87,20 +91,18 @@ const render = (ui: Parameters<typeof rtlRender>[0]) => rtlRender(ui, { wrapper:
 
 const togglePanel = vi.fn();
 
-/** `open` lists the panels whose bit is set; visibility follows the mode. */
-function panelState(mode: PanelMode, open: SessionPanelId[] = ['session']): SessionPanelState {
-  const isOpen = (id: SessionPanelId) => open.includes(id);
+/** `open` is the one bit; visibility follows the mode. */
+function panelState(mode: PanelMode, open = true): SessionPanelState {
   return {
     hostRef: () => {},
     rootRef: { current: null },
     surfaceWidth: mode === 'inline' ? 1600 : 1000,
     mode,
-    isPanelOpen: isOpen,
-    isPanelVisible: (id: SessionPanelId) => (mode === 'inline' || mode === 'overlay') && isOpen(id),
+    isPanelOpen: () => open,
+    isPanelVisible: () => (mode === 'inline' || mode === 'overlay') && open,
     togglePanel,
     isSectionOpen: () => true,
     toggleSection: vi.fn(),
-    closeOverlay: vi.fn(),
   } as unknown as SessionPanelState;
 }
 
@@ -117,8 +119,8 @@ describe('SessionPanel — mode rendering', () => {
     expect(screen.queryByTestId('session-panel-overlay')).toBeNull();
   });
 
-  it('renders no stack at all in rail mode, even with panels open', () => {
-    render(<SessionPanel state={panelState('rail', ['session', 'tasks'])} />);
+  it('renders no stack at all in rail mode, even though the bit is open', () => {
+    render(<SessionPanel state={panelState('rail', true)} />);
     expect(screen.queryByTestId('session-panel')).toBeNull();
     expect(screen.queryByTestId('session-panel-overlay')).toBeNull();
     expect(screen.queryByTestId('session-panel-card-session')).toBeNull();
@@ -146,8 +148,8 @@ describe('SessionPanel — mode rendering', () => {
     expect(screen.queryByTestId('session-panel-overlay')).toBeNull();
   });
 
-  it('renders no stack when every panel is closed, but keeps the rail', () => {
-    render(<SessionPanel state={panelState('inline', [])} />);
+  it('renders no stack when the bit is closed, but keeps the rail', () => {
+    render(<SessionPanel state={panelState('inline', false)} />);
     expect(screen.queryByTestId('session-panel')).toBeNull();
     expect(screen.getByTestId('session-panel-rail')).toBeInTheDocument();
   });
@@ -180,9 +182,9 @@ describe('SessionPanel — the rail is always there', () => {
   });
 });
 
-describe('SessionPanel — the stack', () => {
-  it('renders one card per open panel, matching the rail order', () => {
-    render(<SessionPanel state={panelState('inline', ['session', 'activity', 'launch', 'tasks'])} />);
+describe('SessionPanel — the stack (D8: all four cards together, one bit)', () => {
+  it('renders all four cards together, in order, when open', () => {
+    render(<SessionPanel state={panelState('inline', true)} />);
     const rendered = Array.from(
       screen
         .getByTestId('session-panel')
@@ -193,16 +195,16 @@ describe('SessionPanel — the stack', () => {
     expect(rendered).toEqual(['session-panel-card-session', 'stub-activity', 'stub-launch', 'stub-tasks']);
   });
 
-  it('renders only the panels that are open', () => {
-    render(<SessionPanel state={panelState('inline', ['tasks'])} />);
-    expect(screen.getByTestId('stub-tasks')).toBeInTheDocument();
+  it('renders none of the four cards when the bit is closed', () => {
+    render(<SessionPanel state={panelState('inline', false)} />);
     expect(screen.queryByTestId('session-panel-card-session')).toBeNull();
     expect(screen.queryByTestId('stub-activity')).toBeNull();
     expect(screen.queryByTestId('stub-launch')).toBeNull();
+    expect(screen.queryByTestId('stub-tasks')).toBeNull();
   });
 
   it('puts Summary, Plan and Context inside the session card', () => {
-    render(<SessionPanel state={panelState('inline', ['session'])} />);
+    render(<SessionPanel state={panelState('inline', true)} />);
     const card = screen.getByTestId('session-panel-card-session');
     const rendered = Array.from(card.querySelectorAll('[data-testid^="stub-"]')).map((el) =>
       el.getAttribute('data-testid'),
@@ -211,18 +213,18 @@ describe('SessionPanel — the stack', () => {
   });
 });
 
-describe('SessionPanel — closing a card', () => {
-  it('toggles the session panel off from its header X', () => {
-    render(<SessionPanel state={panelState('inline', ['session'])} />);
+describe('SessionPanel — closing a card closes the whole panel', () => {
+  it('toggles the panel off from the session card header X', () => {
+    render(<SessionPanel state={panelState('inline', true)} />);
     fireEvent.click(screen.getByTestId('session-panel-card-close-session'));
-    expect(togglePanel).toHaveBeenCalledWith('session');
+    expect(togglePanel).toHaveBeenCalledTimes(1);
   });
 
-  it('hands each list card a close that targets its own panel', () => {
-    render(<SessionPanel state={panelState('inline', ['activity', 'launch', 'tasks'])} />);
+  it('every list card closes through the same togglePanel, with no argument', () => {
+    render(<SessionPanel state={panelState('inline', true)} />);
     fireEvent.click(screen.getByTestId('stub-close-activity'));
     fireEvent.click(screen.getByTestId('stub-close-launch'));
     fireEvent.click(screen.getByTestId('stub-close-tasks'));
-    expect(togglePanel.mock.calls).toEqual([['activity'], ['launch'], ['tasks']]);
+    expect(togglePanel.mock.calls).toEqual([[], [], []]);
   });
 });

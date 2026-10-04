@@ -26,7 +26,7 @@ export function PlanSection({ open, onToggle }: PlanSectionProps) {
   const { steps, activeIndex } = todosToPlan(todos);
 
   return (
-    <section data-testid="session-panel-plan" className="shrink-0 border-b border-border px-3 py-3 last:border-b-0">
+    <section data-testid="session-panel-plan" className="shrink-0 px-3 py-3">
       <AgentPlan steps={steps} activeIndex={activeIndex} open={open} onToggle={onToggle} />
     </section>
   );

@@ -22,7 +22,8 @@ export function PreviewRunControl({ status, onRun, onStop, onRestart }: PreviewR
   if (stopped) {
     return (
       <Button data-testid="preview-run-start" variant="outline" size="xs" className="shrink-0" onClick={onRun}>
-        <Play data-icon="inline-start" className="fill-current text-success" />
+        {/* `primary` doubles as "run"; `success` is reserved for connected/healthy (D26). */}
+        <Play data-icon="inline-start" className="fill-current text-primary" />
         Run
       </Button>
     );

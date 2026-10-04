@@ -1,12 +1,12 @@
 import { cn } from '@/lib/utils';
 import { useAdapters } from '@/store/adapters';
 import { useSettingsStore, type SettingsTab } from '../../store/settings';
-import { providerDot } from '../chat/composer/config-toolbar/ProviderModelSelect';
+import { providerDotColor } from '../shared/provider-avatar';
 import { SETTINGS_TABS } from './settings-tabs';
 
-/** The provider's brand colour as a left-border utility (mirrors the composer's provider dot). */
-function providerBorder(id: string): string {
-  return providerDot(id).replace('bg-', 'border-l-');
+/** The provider's brand hue (the same source as `ProviderDot`), or the muted ink for providers without one. */
+function providerHue(id: string): string {
+  return providerDotColor(id) ?? 'var(--muted-foreground)';
 }
 
 interface NavItemProps {
@@ -52,18 +52,18 @@ function ProviderSubItems({ activeProvider }: { activeProvider: string | null })
             type="button"
             data-testid={`settings-nav-provider-${adapter.id}`}
             onClick={() => setSelectedProvider(adapter.id)}
+            // Brand hue inline: it is a literal in provider-avatar.ts, not a token.
+            style={active ? { borderLeftColor: providerHue(adapter.id) } : undefined}
             className={cn(
               'flex items-center gap-2 border-l-2 py-1 pl-6 pr-2 text-left text-sm transition-colors',
               active
-                ? cn('bg-sidebar-selection font-semibold text-foreground', providerBorder(adapter.id))
+                ? 'bg-sidebar-selection font-semibold text-foreground'
                 : 'border-l-transparent text-muted-foreground hover:bg-accent/50 hover:text-foreground',
             )}
           >
             <span
-              className={cn(
-                'inline-flex size-[15px] shrink-0 items-center justify-center rounded-xs text-[10px] font-bold text-white ring-1 ring-inset ring-black/10',
-                providerDot(adapter.id),
-              )}
+              style={{ backgroundColor: providerHue(adapter.id) }}
+              className="inline-flex size-[15px] shrink-0 items-center justify-center rounded-xs text-[10px] font-bold text-white ring-1 ring-inset ring-black/10"
             >
               {name.charAt(0).toUpperCase()}
             </span>

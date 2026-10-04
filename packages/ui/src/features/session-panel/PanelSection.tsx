@@ -12,8 +12,9 @@ import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import type { SessionPanelOpenSectionId } from '@/store/ui-prefs';
+import { EYEBROW } from './PanelEyebrow';
 
-/** The header rhythm the non-collapsible Summary heading shares. The panel is
+/** The header rhythm every section shares (`PanelEyebrow`). The panel is
  *  dense by CHROME, not by type: rows keep the app's `text-sm`, and a 32px
  *  header over 26px rows buys the density that shrinking the type would have. */
 export const SECTION_HEAD = 'flex h-8 items-center gap-2 px-2';
@@ -40,7 +41,7 @@ export function PanelSection({ id, label, icon: Icon, count, open, onToggle, chi
             className={cn(SECTION_HEAD, 'w-full text-left transition-colors hover:bg-foreground/8')}
           >
             <Icon className="size-3.5 shrink-0 text-muted-foreground" />
-            <span className="min-w-0 truncate text-sm font-medium">{label}</span>
+            <span className={cn(EYEBROW, 'min-w-0 truncate')}>{label}</span>
             {count != null && <Badge variant="secondary">{count}</Badge>}
             <span className="flex-1" />
             <ChevronDown

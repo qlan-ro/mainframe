@@ -29,8 +29,6 @@ import { useNativeThreadMessages } from '@/features/chat/runtime/use-native-thre
 import { ChatThread } from '@/features/chat/thread/ChatThread';
 import { cn } from '@/lib/utils';
 import type { AcpChatController } from '@/features/chat/controller/acp-chat-controller';
-import { SessionPanel } from '@/features/session-panel/SessionPanel';
-import { useSessionPanelState } from '@/features/session-panel/use-session-panel-state';
 import { SideChatScopeProvider } from './side-chat-scope';
 import { SideChatPanelHeader } from './SideChatPanelHeader';
 import { MIN_SIDE_CHAT_WIDTH, type SideChatPlacement } from './side-chat-placement';
@@ -87,7 +85,6 @@ export function SideChatPanel({
 }) {
   const aui = useAui();
   const config = useSideChatThreadConfig(controller);
-  const panelState = useSessionPanelState();
 
   const scope = useMemo(() => ({ parentChatId, sideChatId }), [parentChatId, sideChatId]);
 
@@ -105,10 +102,9 @@ export function SideChatPanel({
           style={placement === 'beside' ? { flexGrow: frac, minWidth: MIN_SIDE_CHAT_WIDTH } : undefined}
         >
           <SideChatPanelHeader parentChatId={parentChatId} sideChatId={sideChatId} controller={controller} />
-          {/* Its own session rail, floating over its own column — as a split zone's does. */}
-          <div ref={panelState.hostRef} className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+          {/* No session panel of its own: the parent's docked panel is the session's (capability loss vs #731, accepted). */}
+          <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
             <ChatThread variant="side" />
-            <SessionPanel state={panelState} />
           </div>
         </div>
       </SideChatScopeProvider>
