@@ -135,7 +135,9 @@ describe('TranscriptProjector — identity across projections', () => {
 
   it('queued and pending turns follow the transcript in a linear parent chain, matching the one-shot projection', () => {
     const projector = new TranscriptProjector();
-    let state = withMessages(createChatThreadState('c1'), [assistant('a1', 'answer')]);
+    // A like without `createdAt` is stamped `new Date()` at projection time, so
+    // the two projections below only compare equal with a fixed stamp.
+    let state = withMessages(createChatThreadState('c1'), [assistant('a1', 'answer', { createdAt: stampFor() })]);
     state = reduceChatThreadState(state, {
       type: 'queued.snapshot',
       refs: [{ uuid: 'q1', messageId: 'q1', chatId: 'c1', content: 'queued', timestamp: '2026-10-01T00:00:01.000Z' }],
