@@ -31,7 +31,7 @@ function prune<T>(map: Map<string, T>, visited: ReadonlySet<string>) {
   for (const key of map.keys()) if (!visited.has(key)) map.delete(key);
 }
 type Sources = { message: ThreadMessage; units: readonly SourceUnit[] };
-type Group = { members: readonly SourceUnit[]; open: boolean; units: readonly DisplayUnit[] };
+type Group = { members: readonly SourceUnit[]; open: boolean; running: boolean; units: readonly DisplayUnit[] };
 export class TurnPresentationCache {
   private scope = '';
   private sources = new Map<string, Sources>();
@@ -70,13 +70,24 @@ export class TurnPresentationCache {
     this.sources.set(message.id, { message, units });
     return units;
   }
-  group(members: readonly SourceUnit[], open: boolean, build: () => readonly DisplayUnit[]): readonly DisplayUnit[] {
+  group(
+    members: readonly SourceUnit[],
+    open: boolean,
+    build: () => readonly DisplayUnit[],
+    running = false,
+  ): readonly DisplayUnit[] {
     const key = members[0]!.key;
     this.seen.groups.add(key);
     const previous = this.groups.get(key);
-    if (previous && previous.open === open && sameMembers(previous.members, members)) return previous.units;
+    if (
+      previous &&
+      previous.open === open &&
+      previous.running === (open && running) &&
+      sameMembers(previous.members, members)
+    )
+      return previous.units;
     const units = build();
-    this.groups.set(key, { members, open, units });
+    this.groups.set(key, { members, open, running: open && running, units });
     return units;
   }
   turn(next: TurnDisclosure): TurnDisclosure {

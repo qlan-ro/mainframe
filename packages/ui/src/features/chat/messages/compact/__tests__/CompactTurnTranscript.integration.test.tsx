@@ -50,6 +50,7 @@ it('hides fully consumed work-only frames and restores cross-message native deta
   expect(second.querySelector('[data-testid="chat-message-copy"]')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Work details' }));
   fireEvent.click(screen.getByRole('button', { name: 'Read files' }));
+  for (const row of screen.getAllByRole('button', { name: 'Read /src/a.ts' })) fireEvent.click(row);
   expect(await screen.findAllByTestId('read-card-root')).toHaveLength(2);
   for (const id of ['a', 'b']) {
     const detail = view.container.querySelector(`[data-source-message-id="${id}"]`)!;
@@ -60,32 +61,33 @@ it('hides fully consumed work-only frames and restores cross-message native deta
   expect(view.container.querySelectorAll('[data-slot="message-footer"]')).toHaveLength(3);
   expect(screen.getByText('Final answer')).toBeVisible();
 });
-it('renders coalesced reasoning source ranges exactly once inside the original native scope', async () => {
+it('omits coalesced internal reasoning from expanded work', async () => {
   const { turnSource } = await import('./turn-fixtures');
   const text = 'First thought\nSecond thought';
   const message = turnMessage('thought', text, {}, [turnSource('a', 0, 14), turnSource('b', 14, text.length)]);
   const reasoning = { ...message, content: [{ type: 'reasoning' as const, text }] };
   render(<TurnFixture rootId="coalesced-thought" messages={[reasoning, finalMessage()]} />);
   fireEvent.click(screen.getByRole('button', { name: 'Work details' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Thought' }));
-  expect(screen.getAllByText('First thought')).toHaveLength(1);
-  expect(screen.getAllByText('Second thought')).toHaveLength(1);
-  expect(screen.getByText('First thought').closest('[data-message-id]')).toHaveAttribute('data-message-id', 'thought');
+  expect(screen.queryByRole('button', { name: 'Thought' })).toBeNull();
+  expect(screen.queryByText('First thought')).toBeNull();
+  expect(screen.queryByText('Second thought')).toBeNull();
 });
-it('keeps protected native agents outside hidden work and separates nested disclosure identity', async () => {
+it('folds completed native agents while preserving independent nested disclosure identity', async () => {
   const { turnTool } = await import('./turn-test-support');
   const nested = [turnMessage('work', 'Nested work'), finalMessage()];
   const task = turnTool('agent', { toolName: 'Task', args: { subagent_type: 'explorer' }, messages: nested });
   render(<TurnFixture rootId="nested-turns" messages={[turnMessage('work', 'Root work'), task, finalMessage()]} />);
   const outer = screen.getByRole('button', { name: 'Work details' });
   expect(outer).toHaveAttribute('aria-expanded', 'false');
+  expect(screen.queryByRole('button', { name: /explorer/ })).toBeNull();
+  fireEvent.click(outer);
   fireEvent.click(screen.getByRole('button', { name: /explorer/ }));
   await waitFor(() => expect(screen.getAllByRole('button', { name: 'Work details' })).toHaveLength(2));
   const inner = screen.getAllByRole('button', { name: 'Work details' })[1]!;
   expect(inner.dataset.testid).not.toBe(outer.dataset.testid);
   fireEvent.click(inner);
   expect(await screen.findByText('Nested work')).toBeVisible();
-  expect(screen.queryByText('Root work')).toBeNull();
+  expect(screen.getByText('Root work')).toBeVisible();
 });
 it('folds on first eligible streamed final text and keeps its live native slot through terminal metadata', async () => {
   const work = turnMessage('work', 'Working');
@@ -186,7 +188,7 @@ it('keeps confirmed Claude terminal thinking inside both work and activity discl
   expect(screen.getByText('Claude answer')).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Work details' }));
   expect(screen.queryByText('Terminal thought')).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Thought' }));
-  expect(screen.getAllByText('Terminal thought')).toHaveLength(1);
+  expect(screen.queryByRole('button', { name: 'Thought' })).toBeNull();
+  expect(screen.queryByText('Terminal thought')).toBeNull();
   expect(screen.getAllByText('Claude answer')).toHaveLength(1);
 });

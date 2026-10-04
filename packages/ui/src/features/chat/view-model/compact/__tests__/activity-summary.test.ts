@@ -58,8 +58,10 @@ it('never classifies from output and handles empty and reasoning-only work witho
     activitySummary([{ ...command, part: { type: 'reasoning', text: 'Consider', status: { type: 'complete' } } }]),
   ).toBe('Thought');
 });
-it('chooses a structured running search over a later generic command', () => {
+it('chooses the latest running command over an earlier search', () => {
   const read = member('Bash', { command: 'rg --files src' }, { status: { type: 'running' } });
   const shell = member('Bash', { command: 'pnpm test' }, { toolCallId: 'later', status: { type: 'running' } });
-  expect(activityLabel({ type: 'activity', members: [read, shell], active: true }, new Set()).text).toBe('Listing src');
+  expect(activityLabel({ type: 'activity', members: [read, shell], active: true }, new Set()).text).toBe(
+    'Running tests',
+  );
 });

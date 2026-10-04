@@ -46,7 +46,7 @@ it('folds only explicit eligible final sources and keeps unknown sources visible
   const work = message('work', 'Working');
   expect(first([work, message('final', 'Answer', undefined, { phase: undefined })]).available).toBe(false);
   expect(first([work, message('final', 'Answer', 'final_answer', { state: 'running' })]).available).toBe(true);
-  expect(first([work, message('final', 'Answer', 'final_answer', { finalEligible: false })]).available).toBe(false);
+  expect(first([work, message('final', 'Answer', 'final_answer', { finalEligible: false })]).available).toBe(true);
 });
 it('requires confirmed Claude success and never crosses source turn, provider or ancestor identities', () => {
   const work = message('work', 'Working', 'work', { provider: 'claude' });
@@ -110,4 +110,25 @@ it('does not use adjacent users or system steering to infer a turn and keeps unr
   const model = buildTurnDisclosures([unknown, message('final', 'Answer', 'final_answer')], scope);
   expect([...model.turns.values()][0]!.available).toBe(false);
   expect(model.messages[0]!.units[0]!.work).toBe(false);
+});
+
+it('folds confirmed Codex work at completion without inferring a Claude final boundary', () => {
+  expect(first([message('work', 'Progress')]).available).toBe(true);
+  expect(first([message('work', 'Progress', 'work', { state: 'running' })]).available).toBe(false);
+  expect(first([message('work', 'Progress', 'work', { provider: 'claude' })]).available).toBe(false);
+});
+it('folds completed unfamiliar tools but protects unfamiliar lifecycle states', () => {
+  const base = message('custom', '');
+  const custom = (result: string | undefined): ThreadAssistantMessage => ({
+    ...base,
+    content: [
+      { type: 'tool-call', toolCallId: 'custom', toolName: 'CustomAnalytics', args: {}, argsText: '{}', result },
+    ],
+  });
+  const complete = buildTurnDisclosures([custom('done'), message('final', 'Answer', 'final_answer')], scope);
+  expect(complete.messages[0]!.units[0]).toMatchObject({ work: true, protected: false });
+  expect(complete.messages[0]!.units[0]!.activity).toBeUndefined();
+  expect([...complete.turns.values()][0]!.available).toBe(true);
+  const unknown = buildTurnDisclosures([custom(undefined), message('final', 'Answer', 'final_answer')], scope);
+  expect(unknown.messages[0]!.units[0]).toMatchObject({ work: false, protected: true });
 });

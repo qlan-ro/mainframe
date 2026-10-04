@@ -56,7 +56,7 @@ it('suppresses duplicate duration only for a matching authoritative interval and
   );
   expect(await screen.findByRole('button', { name: 'Message timing' })).toBeVisible();
 });
-it('keeps failed native cards visible even with stale closed turn state', async () => {
+it('preserves a manually collapsed work choice when a tool reports failure', async () => {
   const view = render(<TurnFixture rootId="failed-card" messages={[turnTool(), finalMessage()]} />);
   const toggle = screen.getByRole('button', { name: 'Work details' });
   fireEvent.click(toggle);
@@ -70,6 +70,11 @@ it('keeps failed native cards visible even with stale closed turn state', async 
       ]}
     />,
   );
+  await waitFor(() => expect(toggle).toHaveAttribute('aria-expanded', 'false'));
+  expect(toggle).toBeEnabled();
+  expect(screen.queryByLabelText('failed')).toBeNull();
+  fireEvent.click(toggle);
+  fireEvent.click(await screen.findByRole('button', { name: 'Read files' }));
   expect(await screen.findByLabelText('failed')).toBeVisible();
 });
 it('updates a supplied header clock without rebuilding transcript rows or remounting final text', async () => {

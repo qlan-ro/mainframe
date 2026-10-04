@@ -34,9 +34,10 @@ it('invalidates a stale closed choice permanently and forces cancelled/failed tu
   }
 });
 it('defers automatic folding while focus is inside mapped work', async () => {
-  const work = turnMessage('work', '[Work link](https://example.test)');
+  const work = turnMessage('work', '[Work link](https://example.test)', { state: 'running' });
   const view = render(<TurnFixture rootId="focus" messages={[work]} />);
-  act(() => screen.getByRole('link', { name: 'Work link' }).focus());
+  const link = await screen.findByRole('link', { name: 'Work link' });
+  act(() => link.focus());
   view.rerender(<TurnFixture rootId="focus" messages={[work, finalMessage()]} />);
   expect(await screen.findByRole('button', { name: 'Work details' })).toHaveAttribute('aria-expanded', 'true');
   act(() => (document.activeElement as HTMLElement).blur());
@@ -45,18 +46,18 @@ it('defers automatic folding while focus is inside mapped work', async () => {
   );
 });
 it('defers automatic folding for selection and resumes after it clears', async () => {
-  const work = turnMessage('work', 'Selected work');
+  const work = turnMessage('work', 'Selected work', { state: 'running' });
   const view = render(<TurnFixture rootId="selection" messages={[work]} />);
-  selectText(screen.getByText('Selected work'));
+  selectText(await screen.findByText('Selected work'));
   view.rerender(<TurnFixture rootId="selection" messages={[work, finalMessage()]} />);
   expect(screen.getByText('Selected work')).toBeVisible();
   clearSelection();
   await waitFor(() => expect(screen.queryByText('Selected work')).toBeNull());
 });
 it('defers folding for explicitly expanded activity and collapses after that activity closes', async () => {
-  const work = turnTool();
+  const work = turnTool('tool', {}, { state: 'running' });
   const view = render(<TurnFixture rootId="inner-open" messages={[work]} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Read files' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Thinking' }));
   view.rerender(<TurnFixture rootId="inner-open" messages={[work, finalMessage()]} />);
   expect(await screen.findByRole('button', { name: 'Work details' })).toHaveAttribute('aria-expanded', 'true');
   fireEvent.click(screen.getByRole('button', { name: 'Read files' }));
@@ -88,6 +89,8 @@ it('defers folding while a native scoped agent is active', async () => {
   await waitFor(() =>
     expect(screen.getByRole('button', { name: 'Work details' })).toHaveAttribute('aria-expanded', 'false'),
   );
+  expect(screen.queryByRole('button', { name: /explorer/ })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Work details' }));
   expect(screen.getByRole('button', { name: /explorer/ })).toBeVisible();
 });
 it('coordinates native disclosure scroll locking with the viewport bottom-pin controller', async () => {

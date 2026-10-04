@@ -57,22 +57,19 @@ it.each(['ExitPlanMode', 'AskUserQuestion', 'Workflow', 'RunWorkflow', 'Task', '
     expect(entries[2]).toMatchObject({ active: true });
   },
 );
-it.each(['failed', 'cancelled', 'pending-approval', 'declined', 'unknown'])(
-  'keeps %s tools outside routine groups',
-  (status) => {
-    const part = tool({
-      result: status === 'unknown' ? undefined : '',
-      providerMetadata: { mainframe: { acpStatus: status } },
-      ...(status === 'declined' ? { approval: { id: 'approval', approved: false } } : {}),
-    });
-    const blocked = member(1, '', { part });
-    const entries = buildActivityGroups(
-      [member(0), blocked, member(2)],
-      status === 'pending-approval' ? new Set(['call']) : pending,
-    );
-    expect(entries.map((entry) => entry.type)).toEqual(['activity', 'standalone', 'activity']);
-  },
-);
+it.each(['cancelled', 'pending-approval', 'declined', 'unknown'])('keeps %s tools outside routine groups', (status) => {
+  const part = tool({
+    result: status === 'unknown' ? undefined : '',
+    providerMetadata: { mainframe: { acpStatus: status } },
+    ...(status === 'declined' ? { approval: { id: 'approval', approved: false } } : {}),
+  });
+  const blocked = member(1, '', { part });
+  const entries = buildActivityGroups(
+    [member(0), blocked, member(2)],
+    status === 'pending-approval' ? new Set(['call']) : pending,
+  );
+  expect(entries.map((entry) => entry.type)).toEqual(['activity', 'standalone', 'activity']);
+});
 it('closes active labels at commentary, image, error and explicit phase boundaries', () => {
   for (const boundary of [
     member(1, '', { part: { type: 'text', text: 'Next step', status: { type: 'complete' } } }),
@@ -105,15 +102,15 @@ it('preserves singleton identity while it completes, changes kind or gains neigh
   expect(activityMemberIdentity((grown[0] as ActivityGroup).members[0]!)).toBe(before);
   expect(activityMemberIdentity({ ...first, rootThreadId: 'side' })).not.toBe(before);
 });
-it('prefers running exploration then latest running and retains exploration while authoritative work is open', () => {
+it('shows the latest running operation and Thinking between authoritative work calls', () => {
   const read = active(0);
   const shell = active(1, 'Bash');
   const group = groups([read, shell])[0] as ActivityGroup;
-  expect(activityLabel(group, pending).text).toBe('Reading /src/0.ts');
+  expect(activityLabel(group, pending).text).toBe('Running tests');
   expect(activityLabel(groups([member(0), shell])[0] as ActivityGroup, pending).text).toBe('Running tests');
   const open = groups([member(0, 'Read', { presentation: turn })])[0] as ActivityGroup;
   expect(open.active).toBe(true);
-  expect(activityLabel(open, pending).text).toBe('Reading /src/0.ts');
+  expect(activityLabel(open, pending).text).toBe('Thinking');
   expect(groups([member(0)])[0]).toMatchObject({ active: false });
   expect(buildActivityGroups([active(0)], pending, false)[0]).toMatchObject({ active: false });
 });
@@ -146,4 +143,34 @@ it('keeps invalidated work grouped locally but never active or joined across mes
   const b = member(1, 'Edit', { presentation: { ...invalid } });
   expect(groups([a, b])).toEqual([{ type: 'activity', members: [a, b], active: false }]);
   expect(groups([a, { ...b, messageId: 'next' }])).toHaveLength(2);
+});
+
+it('keeps an ordinary failed call inside the same activity group as successful recovery', () => {
+  const failed = member(1, 'Bash', {
+    part: tool({ toolName: 'Bash', toolCallId: 'failed', isError: true, result: 'failed' }),
+  });
+  const members = [member(0), failed, member(2, 'Bash')];
+  expect(groups(members)).toEqual([{ type: 'activity', members, active: false }]);
+});
+
+it('joins completed work across a standalone subagent while preserving the subagent', () => {
+  const presentation = { ...turn, state: 'completed' as const };
+  const read = member(0, 'Read', { presentation });
+  const agent = member(1, 'Task', { presentation });
+  const edit = member(2, 'Edit', { presentation });
+  expect(groups([read, agent, edit])).toEqual([
+    { type: 'activity', members: [read, edit], active: false },
+    { type: 'standalone', member: agent },
+  ]);
+});
+it.each([
+  { presentation: { ...turn, state: 'completed' as const, turnId: 'other' } },
+  { ancestors: ['child'] },
+  { boundary: true },
+])('does not bridge across a subagent with a different scope or explicit boundary: %j', (patch) => {
+  const presentation = { ...turn, state: 'completed' as const };
+  const read = member(0, 'Read', { presentation });
+  const agent = member(1, 'Task', { presentation, ...patch });
+  const edit = member(2, 'Edit', { presentation });
+  expect(groups([read, agent, edit]).map((entry) => entry.type)).toEqual(['activity', 'standalone', 'activity']);
 });

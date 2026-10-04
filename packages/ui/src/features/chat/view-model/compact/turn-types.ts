@@ -5,6 +5,7 @@ import type { NativePartSource } from '../transcript-presentation';
 import type { ActivityGroup, ActivityMember } from './types';
 
 export interface TurnScope {
+  isRunning?: boolean;
   rootThreadId: string;
   ancestors: readonly string[];
   pendingToolIds: ReadonlySet<string>;

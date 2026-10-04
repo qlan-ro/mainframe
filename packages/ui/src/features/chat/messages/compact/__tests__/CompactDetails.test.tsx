@@ -18,10 +18,10 @@ afterEach(() => {
 });
 
 it.each([
-  ['Bash', { command: 'echo hello' }, 'shell detail', 'chat-bash-output'],
-  ['CustomAnalytics', { input: 'query' }, 'custom detail', 'chat-tool-fallback-result'],
-  ['mcp__server__query', { query: 'a' }, 'mcp failure detail', 'marker-body'],
-])('opens %s details immediately through the existing registry', (toolName, args, result, testId) => {
+  ['Bash', { command: 'echo hello' }, 'shell detail', 'chat-bash-output', 'Ran echo hello'],
+  ['CustomAnalytics', { input: 'query' }, 'custom detail', 'chat-tool-fallback-result', null],
+  ['mcp__server__query', { query: 'a' }, 'mcp failure detail', 'marker-body', 'Failed to run mcp__server__query'],
+])('opens %s details immediately through the existing registry', (toolName, args, result, testId, detailLabel) => {
   render(
     <CompactFixture
       rootId={`detail-${toolName}`}
@@ -30,6 +30,7 @@ it.each([
   );
   const toggle = screen.getAllByRole('button')[0]!;
   fireEvent.click(toggle);
+  if (detailLabel) fireEvent.click(screen.getByRole('button', { name: detailLabel }));
   expect(screen.getByTestId(testId)).toHaveTextContent(result);
   expect(toggle).toHaveAttribute('aria-expanded', 'true');
 });
@@ -53,6 +54,7 @@ it('preserves file and open-diff actions without closing the outer row', () => {
   );
   const toggle = screen.getAllByRole('button')[0]!;
   fireEvent.click(toggle);
+  fireEvent.click(screen.getByRole('button', { name: 'Edited /src/a.ts' }));
   fireEvent.click(screen.getByTestId('tool-card-file-path'));
   fireEvent.click(screen.getByTestId('chat-edit-open-diff'));
   expect(intents).toContainEqual({ type: 'open-file', path: '/src/a.ts', line: undefined, character: undefined });
@@ -83,6 +85,7 @@ it('routes nested full-output requests through the inherited root chat ID', asyn
   fireEvent.click(screen.getAllByRole('button')[0]!);
   const shell = await screen.findByRole('button', { name: 'Ran a command' });
   fireEvent.click(shell);
+  fireEvent.click(screen.getByRole('button', { name: 'Ran echo hello' }));
   await waitFor(() => expect(screen.getByTestId('tool-result-expand-toggle')).toBeEnabled());
   fireEvent.click(screen.getByTestId('tool-result-expand-toggle'));
   await screen.findByText('full daemon output');

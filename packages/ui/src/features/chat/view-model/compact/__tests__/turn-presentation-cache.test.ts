@@ -110,7 +110,7 @@ it('recomputes eligibility after metadata updates and removes absent cached mess
   expect(removed.messagesById.has('b')).toBe(false);
   expect(removed.turns.size).toBe(1);
   const noFinal = buildTurnDisclosures([a, message('b', 'Answer', { finalEligible: false })], scope, 10000, cache);
-  expect([...noFinal.turns.values()][1]!.available).toBe(false);
+  expect([...noFinal.turns.values()][1]!.available).toBe(true);
   expect(noFinal.messagesById.get('b')).not.toBe(first.messagesById.get('b'));
   const invalid = buildTurnDisclosures([message('a', 'Answer', { state: 'invalid' }), b], scope, 10000, cache);
   expect([...invalid.turns.values()][0]).toMatchObject({ invalid: true, unsafe: true });
@@ -126,4 +126,16 @@ it('recomputes interrupted turn membership after reorder without changing source
   expect([...ordered.turns.values()][0]!.unsafe).toBe(false);
   expect(ordered.messages.map((entry) => entry.messageId)).toEqual(['a', 'b', 'other']);
   expect(ordered.messagesById.get('a')!.units[0]!.key).toBe(interrupted.messagesById.get('a')!.units[0]!.key);
+});
+
+it('refreshes cached live state in tool gaps without activating historical groups', () => {
+  const cache = new TurnPresentationCache();
+  const messages = ['old', 'latest'].map((id) => ({ ...message(id, '', {}, false), content: [tool(id)] }));
+  const settled = buildTurnDisclosures(messages, scope, 10000, cache);
+  const live = buildTurnDisclosures(messages, { ...scope, isRunning: true }, 10000, cache);
+  expect(settled.messages[1]!.units[0]!.activity!.group.active).toBe(false);
+  expect(live.messages[0]!.units[0]!.activity!.group.active).toBe(false);
+  expect(live.messages[1]!.units[0]!.activity!.group.active).toBe(true);
+  const finished = buildTurnDisclosures(messages, scope, 10000, cache);
+  expect(finished.messages[1]!.units[0]!.activity!.group.active).toBe(false);
 });

@@ -11,8 +11,8 @@ function protectedPart(part: MessagePartState, scope: TurnScope): boolean {
   if (part.type !== 'tool-call') return true;
   return (
     isFullCard(part.toolName) ||
-    ['subagent', 'unknown'].includes(toolKind(part.toolName)) ||
-    !['running', 'success'].includes(resolveToolStatus(part, scope.pendingToolIds))
+    (toolKind(part.toolName) === 'subagent' && resolveToolStatus(part, scope.pendingToolIds) === 'running') ||
+    ['awaiting-approval', 'unknown'].includes(resolveToolStatus(part, scope.pendingToolIds))
   );
 }
 function sourcePart(part: MessagePartState, source?: NativePartSource): MessagePartState {

@@ -45,21 +45,22 @@ test.describe('compact transcript preference and disclosure', () => {
     await waitForIdle(page, 60_000);
     await expect(page.getByTestId('chat-bash-card').first()).toBeVisible();
     await selectTranscript(page, 'compact');
-    // #754 groups the thinking step and the `ls` Bash call into one "Read
-    // files" activity group (`activity-summary.ts` classifies `ls` as
-    // exploration) — the directory listing is no longer a top-level row.
     const row = page.getByRole('button', { name: 'Read files', exact: true });
     await expect(row).toHaveAttribute('aria-expanded', 'false');
     await row.focus();
     await row.press('Enter');
-    // `BashCard` defaults open inside a compact group's details
-    // (`defaultOpen={compactDetail}`), so expanding the group alone already
-    // reveals the directory listing's output underneath it.
+    await expect(page.getByTestId('chat-bash-output')).toHaveCount(0);
+    const listing = page.getByRole('button', { name: 'Listed directory', exact: true });
+    await expect(listing).toHaveAttribute('aria-expanded', 'false');
+    await listing.focus();
+    await listing.press('Enter');
     await expect(page.getByTestId('chat-bash-output').first()).toBeVisible();
     await selectTranscript(page, 'verbose');
     await expect(page.getByTestId('chat-bash-card').first()).toBeVisible();
     await selectTranscript(page, 'compact');
     await expect(row).toHaveAttribute('aria-expanded', 'true');
+    await expect(listing).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByTestId('chat-bash-output').first()).toBeVisible();
     await page.reload();
     await openAppearance(page);
     await expect(page.getByTestId('settings-appearance-transcript-compact')).toHaveAttribute('aria-checked', 'true');
@@ -99,6 +100,10 @@ test.describe('compact transcript subagents', () => {
     const nested = page.locator('[data-testid^="chat-compact-details-"] [data-testid^="chat-compact-toggle-"]').first();
     await expect(nested).toHaveAttribute('aria-expanded', 'false');
     await nested.click();
+    await expect(page.getByTestId('chat-bash-output')).toHaveCount(0);
+    const search = page.getByRole('button', { name: /Searched for "export const greeting"/ });
+    await expect(search).toHaveAttribute('aria-expanded', 'false');
+    await search.click();
     await expect(page.getByTestId('chat-bash-command').first()).toContainText('export const greeting');
     await expect(page.getByTestId('chat-bash-output').first()).toBeVisible();
   });

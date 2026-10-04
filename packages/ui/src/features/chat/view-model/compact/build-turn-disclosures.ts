@@ -21,22 +21,22 @@ function groupUnits(units: readonly SourceUnit[], scope: TurnScope, cache: TurnP
     else chunks.push([unit]);
   }
   return chunks.flatMap((chunk, index) =>
-    cache.group(chunk, index === chunks.length - 1, () =>
-      buildActivityGroups(chunk, scope.pendingToolIds, index === chunks.length - 1).map((entry) => {
-        if (entry.type === 'standalone') return entry.member as SourceUnit;
-        const members = entry.members as readonly SourceUnit[];
-        return { ...members[0]!, activity: { group: entry, members } };
-      }),
+    cache.group(
+      chunk,
+      index === chunks.length - 1,
+      () =>
+        buildActivityGroups(chunk, scope.pendingToolIds, index === chunks.length - 1, !!scope.isRunning).map(
+          (entry) => {
+            if (entry.type === 'standalone') return entry.member as SourceUnit;
+            const members = entry.members as readonly SourceUnit[];
+            return { ...members[0]!, activity: { group: entry, members } };
+          },
+        ),
+      !!scope.isRunning,
     ),
   );
 }
 
-function unsafePart(unit: SourceUnit, scope: TurnScope): boolean {
-  return (
-    unit.part.type === 'tool-call' &&
-    ['failed', 'stopped', 'declined'].includes(resolveToolStatus(unit.part, scope.pendingToolIds))
-  );
-}
 function turn(
   units: readonly SourceUnit[],
   interrupted: boolean,
@@ -47,16 +47,16 @@ function turn(
   const key = units[0]!.turnKey!;
   const contexts = units.map((unit) => unit.presentation!);
   const unsafe =
-    contexts.some((context) => ['cancelled', 'failed', 'invalid', 'unknown'].includes(context.state)) ||
-    units.some((unit) => unsafePart(unit, scope)) ||
-    interrupted;
+    contexts.some((context) => ['cancelled', 'failed', 'invalid', 'unknown'].includes(context.state)) || interrupted;
   const finals = units.filter((unit) => unit.final);
   const completed = contexts.every((context) => context.state === 'completed');
-  const eligible = finals.some((unit) =>
-    unit.presentation?.provider === 'codex'
-      ? ['running', 'completed'].includes(unit.presentation.state)
-      : unit.presentation?.provider === 'claude' && completed,
-  );
+  const eligible =
+    (completed && contexts.every((context) => context.provider === 'codex' && context.phase !== undefined)) ||
+    finals.some((unit) =>
+      unit.presentation?.provider === 'codex'
+        ? ['running', 'completed'].includes(unit.presentation.state)
+        : unit.presentation?.provider === 'claude' && completed,
+    );
   const work = units.filter((unit) => unit.work && (unit.part.type !== 'text' || unit.part.text.trim()));
   return {
     key,

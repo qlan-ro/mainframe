@@ -2,6 +2,7 @@ import { createContext, memo, useContext, useMemo } from 'react';
 import { MessagePrimitive, ThreadPrimitive, useAuiState, type ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { Message, MessageContent, MessageFooter } from '@/components/ui/message';
 import type { DisplayUnit, SourceUnit, MessagePresentation } from '../../view-model/compact/turn-types';
+import { hasActivityDetail } from '../../view-model/compact/activity-details';
 import { isFullCard } from '../../view-model/compact/tool-kind';
 import { MessageToolLeaf } from '../../tools/tool-dispatch';
 import { ZoomableImage } from '../../parts/ZoomableImage';
@@ -32,11 +33,7 @@ function SourceDetail() {
   return (
     <TranscriptScopeProvider value={scope}>
       <MessagePrimitive.Root data-source-message-id={unit.messageId}>
-        {unit.part.type === 'reasoning' ? (
-          <CompactTextSlice unit={unit} />
-        ) : (
-          <CompactDetailRows indices={indices} expanded />
-        )}
+        <CompactDetailRows indices={indices} nested />
         {footer && (
           <MessageFooter className="min-h-6 gap-2 px-0">
             <MessageActionBar />
@@ -67,10 +64,15 @@ const ScopedDetail = memo(function ScopedDetail({
 });
 function ActivityDetails({ members }: { members: readonly SourceUnit[] }) {
   const { model } = useTurnPresentation();
-  const lastSources = useMemo(() => new Map(members.map((unit) => [unit.messageId, unit])), [members]);
+  const { pendingToolIds } = useTranscriptScope();
+  const visibleMembers = useMemo(
+    () => members.filter((unit) => hasActivityDetail(unit.part, pendingToolIds)),
+    [members, pendingToolIds],
+  );
+  const lastSources = useMemo(() => new Map(visibleMembers.map((unit) => [unit.messageId, unit])), [visibleMembers]);
   return (
     <>
-      {members.map((unit) => {
+      {visibleMembers.map((unit) => {
         const source = model.messagesById.get(unit.messageId);
         return (
           <ScopedDetail
