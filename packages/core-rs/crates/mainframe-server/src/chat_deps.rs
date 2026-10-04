@@ -211,11 +211,13 @@ pub struct DaemonChatDeps {
     /// per-chat workflow-run store (D5's CLI-exit sweep target).
     claude_workflows: Arc<ClaudeWorkflowStore>,
     /// The daemon's data directory (`AppCtx::data_dir`). A non-project chat's
-    /// scratch cwd is `<data_dir>/scratch/<chatId>` (todo #346 rule 2), and
-    /// `fork_snapshots_dir` joins `"fork-snapshots"` onto it (todo #343).
-    /// Threaded in rather than read via `mainframe_runtime::config::get_data_dir()`
-    /// at request time: that helper does synchronous I/O, which a request-path
-    /// deps method must not do.
+    /// scratch cwd is `<data_dir>/scratch/<chatId>` (todo #346 rule 2),
+    /// `fork_snapshots_dir` joins `"fork-snapshots"` onto it (todo #343), and
+    /// `history_cache_dir` joins `"cache/history"` onto it (the history
+    /// snapshot cache's cold-load shortcut). Threaded in rather than read via
+    /// `mainframe_runtime::config::get_data_dir()` at request time: that
+    /// helper does synchronous I/O, which a request-path deps method must
+    /// not do.
     data_dir: std::path::PathBuf,
 }
 
@@ -975,6 +977,14 @@ impl ChatManagerDeps for DaemonChatDeps {
     fn fork_snapshots_dir(&self) -> String {
         self.data_dir
             .join("fork-snapshots")
+            .to_string_lossy()
+            .into_owned()
+    }
+
+    fn history_cache_dir(&self) -> String {
+        self.data_dir
+            .join("cache")
+            .join("history")
             .to_string_lossy()
             .into_owned()
     }

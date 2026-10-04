@@ -44,8 +44,12 @@ pub mod types;
 pub mod worktree_offer;
 pub mod worktree_offer_scan;
 
+mod history_cache;
+
 #[cfg(test)]
 mod test_support;
+#[cfg(test)]
+mod test_support_chat;
 
 // PORT STATUS: src/chat/* — module files pre-created by Task 4.1, ported
 // incrementally since; see each module's own footer for its state.

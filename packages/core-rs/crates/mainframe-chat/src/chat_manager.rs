@@ -53,6 +53,7 @@ use crate::degraded_recovery::{DegradedRecoveryDeps, DegradedRecoveryError, Reco
 use crate::event_handler::{EventChatUpdate, EventHandler, EventHandlerDeps, PushOut};
 use crate::external_session_service::{ExternalSessionDeps, ExternalSessionService};
 use crate::fork::{PendingForkState, fork_title};
+use crate::history_cache::{HistoryFingerprint, HistorySnapshotCache};
 use crate::lifecycle_manager::{
     ChatLifecycleManager, LifecycleChatUpdate, LifecycleError, LifecycleManagerDeps,
 };
@@ -139,6 +140,11 @@ pub struct ChatManager {
     external_sessions: Option<Arc<dyn ExternalSessionFacade>>,
     worktree_offers: Arc<WorktreeOfferRegistry>,
     self_ref: Arc<std::sync::OnceLock<std::sync::Weak<ChatManager>>>,
+    /// Persistent cold-load shortcut for `load_history_into_cache`
+    /// (`history.rs`, `history_cache.rs`) — distinct from `messages` (the
+    /// in-memory per-chat cache above), which stays the source of truth for
+    /// any chat that's actually hot.
+    history_cache: Arc<HistorySnapshotCache>,
 }
 
 #[cfg(test)]

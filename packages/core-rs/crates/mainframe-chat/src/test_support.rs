@@ -14,10 +14,11 @@ use mainframe_adapter_api::{
 use mainframe_types::adapter::{
     AdapterProcess, AdapterProcessStatus, ControlResponse, SessionSpawnOptions,
 };
-use mainframe_types::chat::{Chat, ChatMessage, ChatStatus};
+use mainframe_types::chat::ChatMessage;
 use mainframe_types::context::SkillFileEntry;
 use mainframe_types::settings::ExecutionMode;
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// A configurable `AdapterSession` double that records the calls the chat leaf
@@ -45,6 +46,11 @@ pub struct FakeSession {
     /// When set, every `load_history` call bumps it — how a test proves a
     /// path loads the transcript once rather than twice.
     pub history_loads: Option<Arc<AtomicUsize>>,
+    /// `AdapterSession::history_sources` — empty by default (matching the
+    /// trait's "do not cache" default), so only a test that opts in by
+    /// setting real, stat-able paths here ever exercises the history
+    /// snapshot cache.
+    pub history_sources: Vec<PathBuf>,
     /// Fires synchronously inside `respond_to_permission`, before it resolves —
     /// lets a test land a concurrent mutation (e.g. a cancel) "during" the CLI
     /// round-trip an `.await` on this call represents.
@@ -218,6 +224,10 @@ impl AdapterSession for FakeSession {
         let history = self.history.clone();
         Box::pin(async move { Ok(history) })
     }
+    fn history_sources(&self) -> BoxFuture<'_, Vec<PathBuf>> {
+        let sources = self.history_sources.clone();
+        Box::pin(async move { sources })
+    }
     fn extract_plan_files(&self) -> BoxFuture<'_, Result<Vec<String>, AdapterError>> {
         Box::pin(async { Ok(Vec::new()) })
     }
@@ -237,59 +247,7 @@ impl AdapterSession for FakeSession {
     }
 }
 
-/// A minimal `Chat` for tests that only care about a few fields.
-pub fn test_chat(id: &str) -> Chat {
-    Chat {
-        id: id.to_string(),
-        adapter_id: "claude".to_string(),
-        project_id: "p1".to_string(),
-        title: None,
-        claude_session_id: None,
-        session_file_path: None,
-        model: Some("old-model".to_string()),
-        permission_mode: Some(ExecutionMode::Default),
-        plan_mode: None,
-        status: ChatStatus::Active,
-        created_at: String::new(),
-        updated_at: String::new(),
-        total_cost: 0.0,
-        total_tokens_input: 0,
-        total_tokens_output: 0,
-        last_context_tokens_input: 0,
-        context_files: None,
-        mentions: None,
-        modified_files: None,
-        worktree_path: None,
-        branch_name: None,
-        process_state: None,
-        last_context_total_tokens: None,
-        last_context_max_tokens: None,
-        display_status: None,
-        is_running: None,
-        background_activity: None,
-        worktree_missing: None,
-        directory_missing: None,
-        missing_directory_path: None,
-        transcript_missing: None,
-        todos: None,
-        pinned: None,
-        effort: None,
-        fast: None,
-        ultracode: None,
-        adaptive_thinking: None,
-        detected_prs: None,
-        tags: None,
-        automation_run_id: None,
-        temporary: false,
-        no_project: false,
-        context_lost_at: None,
-        vendor_session_ephemeral: false,
-        scratch_path: None,
-        parent_chat_id: None,
-        side_chat_id: None,
-        side_chat_waiting: None,
-    }
-}
+pub use crate::test_support_chat::test_chat;
 
 /// `mainframe-chat` and `mainframe-server` both depend on `mainframe-runtime`
 /// already, so the tracing capture helper lives there and is re-exported here

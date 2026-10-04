@@ -176,7 +176,7 @@ async fn resolve_rollout_path(
 /// A `spawn_agent(fork_turns: "all")` child rollout opens with a copy of the
 /// parent's own history (todo #247 QA defect) — `forked_child_start_line`
 /// skips that prefix so it doesn't leak into the child's nested card.
-fn parse_rollout_lines(raw: &str) -> Vec<ThreadItem> {
+pub(crate) fn parse_rollout_lines(raw: &str) -> Vec<ThreadItem> {
     let mut items: Vec<ThreadItem> = Vec::new();
     let mut pending_exec: HashMap<String, String> = HashMap::new();
     let mut pending_mcp: HashMap<String, PendingMcp> = HashMap::new();

@@ -110,6 +110,9 @@ impl AdapterSession for ClaudeSession {
     fn load_history(&self) -> BoxFuture<'_, Result<Vec<ChatMessage>, AdapterError>> {
         Box::pin(ClaudeSession::load_history(self))
     }
+    fn history_sources(&self) -> BoxFuture<'_, Vec<std::path::PathBuf>> {
+        Box::pin(ClaudeSession::history_sources(self))
+    }
     fn extract_plan_files(&self) -> BoxFuture<'_, Result<Vec<String>, AdapterError>> {
         Box::pin(ClaudeSession::extract_plan_files(self))
     }

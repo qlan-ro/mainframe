@@ -114,6 +114,33 @@ impl ClaudeSession {
             crate::fork::ResumeTarget::Fresh => Ok(vec![]),
         }
     }
+    /// `load_history`'s own transcript files (main + subagent), resolved the
+    /// same way — the history snapshot cache's freshness fingerprint
+    /// (`mainframe_chat::history_cache`) is only as correct as this list, so
+    /// it must mirror every branch `load_history` takes, not just the common
+    /// one.
+    pub async fn history_sources(&self) -> Vec<std::path::PathBuf> {
+        let discovered = match self.resume_target().await {
+            crate::fork::ResumeTarget::Own(id) => {
+                crate::history::discover_session_jsonl_files(
+                    &id,
+                    &self.project_path,
+                    self.session_file_path.as_deref(),
+                )
+                .await
+            }
+            crate::fork::ResumeTarget::Fork(path) => {
+                let (session_id, dir) = fork_snapshot_lookup(&path, &self.fork_source);
+                crate::history::discover_session_jsonl_files_in_dir(&session_id, &dir).await
+            }
+            crate::fork::ResumeTarget::Fresh => return Vec::new(),
+        };
+        discovered
+            .all_files
+            .into_iter()
+            .map(std::path::PathBuf::from)
+            .collect()
+    }
     pub async fn extract_plan_files(&self) -> Result<Vec<String>, AdapterError> {
         match self.resume_target().await {
             crate::fork::ResumeTarget::Own(id) => Ok(crate::history::extract_plan_file_paths(
