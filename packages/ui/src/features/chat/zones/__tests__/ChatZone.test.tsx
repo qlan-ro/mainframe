@@ -45,8 +45,12 @@ vi.mock('../../runtime/use-chat-thread-runtime', () => ({
   CHAT_ATTACHMENT_ADAPTER: {},
   useControllerState: (c: { getState: () => unknown }) => c.getState(),
 }));
-vi.mock('../../runtime/chat-extras', () => ({ buildChatExtras: () => ({}), isRunningFromState: () => false }));
-vi.mock('../../controller/project-messages', () => ({ projectChatThreadMessages: () => [] }));
+vi.mock('../../runtime/chat-extras', () => ({
+  buildChatExtras: () => ({}),
+  isRunningFromState: () => false,
+  useChatExtrasState: (state: unknown) => state,
+}));
+vi.mock('../../runtime/use-native-thread-messages', () => ({ useNativeThreadMessages: () => [] }));
 vi.mock('@/features/session-panel/SessionPanel', () => ({ SessionPanel: () => <div data-testid="session-panel" /> }));
 vi.mock('@/features/session-panel/use-session-panel-state', () => ({
   useSessionPanelState: () => ({ hostRef: () => undefined, mode: 'hidden' }),

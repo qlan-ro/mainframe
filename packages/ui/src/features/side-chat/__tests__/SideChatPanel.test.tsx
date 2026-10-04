@@ -45,9 +45,10 @@ vi.mock('@/features/chat/runtime/use-chat-thread-runtime', () => ({
 vi.mock('@/features/chat/runtime/chat-extras', () => ({
   buildChatExtras: () => ({}),
   isRunningFromState: () => false,
+  useChatExtrasState: (state: unknown) => state,
 }));
-vi.mock('@/features/chat/controller/project-messages', () => ({
-  projectChatThreadMessages: () => [],
+vi.mock('@/features/chat/runtime/use-native-thread-messages', () => ({
+  useNativeThreadMessages: () => [],
 }));
 
 let capturedVariant: string | undefined;

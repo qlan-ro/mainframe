@@ -33,8 +33,15 @@ vi.mock('../../composer/attachment-adapter', () => ({
   createAttachmentAdapter: () => ({}),
 }));
 
-vi.mock('../../controller/project-messages', () => ({
-  projectChatThreadRepository: () => ({ getMessages: () => [] }),
+vi.mock('../../controller/transcript-projector', () => ({
+  TranscriptProjector: class {
+    projectRepository() {
+      return { messages: [] };
+    }
+    projectMessages() {
+      return [];
+    }
+  },
 }));
 
 vi.mock('../../gates/select-front', () => ({

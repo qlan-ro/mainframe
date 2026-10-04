@@ -18,7 +18,7 @@
  */
 import type { ControlResponse, PromptSendMeta, SessionUpdate } from '@qlan-ro/mainframe-types';
 import { MAINFRAME_META_NAMESPACE, UsageMetaSchema } from '@qlan-ro/mainframe-types';
-import { convertAcpItems } from '../view-model/convert-acp-item';
+import { TranscriptConverter } from '../view-model/convert-acp-item';
 import type { AccumulatedItem } from '../view-model/acp-item-accumulator';
 import type { ChatStateEvent } from './chat-thread-state';
 import { AcpSessionAttachment, type AcpSessionClientPort } from './acp-session-attachment';
@@ -51,6 +51,8 @@ export class AcpSessionPlane {
   }));
   /** Owns both the legacy settled-item cursor and the durable revision cursor (todo #377) — see `acp-resume-cursor.ts`. */
   private readonly cursorTracker = new ResumeCursorTracker();
+  /** Per-chat conversion cache: a frame re-converts only the container it touched, every other message keeps its identity. */
+  private readonly converter = new TranscriptConverter();
   /** Item ids already fed to the reconcile matcher — see `takeUnreconciledUserMessages()`. */
   private readonly reconciledUserItemIds = new Set<string>();
   private readonly attachment: AcpSessionAttachment;
@@ -292,7 +294,7 @@ export class AcpSessionPlane {
 
   private refreshFrom(items: AccumulatedItem[]): void {
     const now = () => new Date();
-    const messages = convertAcpItems(items, (id) => this.store.firstSeenAtOf(id, now));
+    const messages = this.converter.convert(items, (id) => this.store.firstSeenAtOf(id, now));
     this.host.dispatch({ type: 'transcript.updated', messages });
   }
 }

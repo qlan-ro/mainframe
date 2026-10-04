@@ -1,6 +1,7 @@
 import { useMemo, useRef } from 'react';
-import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
+import { useAuiState } from '@assistant-ui/react';
 import { useChatExtras } from '../../runtime/chat-extras';
+import { ProgressiveMessages } from '../../thread/ProgressiveMessages';
 import { TurnPresentationCache } from '../../view-model/compact/turn-presentation-cache';
 import { buildTurnDisclosures } from '../../view-model/compact/build-turn-disclosures';
 import { boundedMessageComponents } from '../bounded-messages';
@@ -38,7 +39,7 @@ export function CompactTranscript() {
   return (
     <TurnPresentationProvider value={{ model, ...state }}>
       <div ref={root} data-testid="chat-compact-transcript">
-        <ThreadPrimitive.Messages components={components} />
+        <ProgressiveMessages components={components} />
       </div>
     </TurnPresentationProvider>
   );
