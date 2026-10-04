@@ -24,6 +24,7 @@ import {
   QueuedPromptStateSchema,
   CompactionParamsSchema,
   QueueStateParamsSchema,
+  ReplayBatchParamsSchema,
   ReplayCompleteParamsSchema,
   ResyncParamsSchema,
   SessionDetachParamsSchema,
@@ -72,6 +73,8 @@ function schemaFor(name: string): z.ZodType {
   if (name === 'resync.notification.json') return JsonRpcNotificationSchema;
   if (name === 'resync.params.json') return ResyncParamsSchema;
   if (name === 'replay-complete.notification.json') return JsonRpcNotificationSchema;
+  if (name === 'replay-batch.notification.json') return JsonRpcNotificationSchema;
+  if (name === 'replay-batch.params.json') return ReplayBatchParamsSchema;
   if (name.startsWith('replay-complete.params')) return ReplayCompleteParamsSchema;
   if (name === 'compaction.notification.json') return JsonRpcNotificationSchema;
   if (name === 'compaction.params.json') return CompactionParamsSchema;

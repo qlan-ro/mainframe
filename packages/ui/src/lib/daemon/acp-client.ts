@@ -13,6 +13,7 @@ import {
   PromptResponseSchema,
   type ReplayCursor,
   type RequestPermissionResponse,
+  COMPRESSED_REPLAY_OPT_IN_KEY,
   REPLAY_RESULT_PREVIEWS_OPT_IN_KEY,
   REVISION_CURSORS_OPT_IN_KEY,
   type ResumeSessionRequest,
@@ -133,9 +134,10 @@ export class AcpFacadeClient {
     try {
       await connection.open();
 
-      // `_meta` opts into revision-versioned resume cursors (todo #377) and
-      // replay result previews (spec Decision 41) — both ignored by a daemon
-      // that doesn't advertise the matching capability back.
+      // `_meta` opts into revision-versioned resume cursors (todo #377), replay
+      // result previews (spec Decision 41) and compressed replay batches
+      // (Decision 42) — all ignored by a daemon that doesn't advertise the
+      // matching capability back.
       const request: InitializeRequest = {
         protocolVersion: PINNED_PROTOCOL_VERSION,
         info: this.deps.clientInfo ?? DEFAULT_CLIENT_INFO,
@@ -143,6 +145,7 @@ export class AcpFacadeClient {
           [MAINFRAME_META_NAMESPACE]: {
             [REVISION_CURSORS_OPT_IN_KEY]: true,
             [REPLAY_RESULT_PREVIEWS_OPT_IN_KEY]: true,
+            [COMPRESSED_REPLAY_OPT_IN_KEY]: true,
           },
         },
       };

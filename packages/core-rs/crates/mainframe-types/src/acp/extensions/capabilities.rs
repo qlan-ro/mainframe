@@ -37,6 +37,12 @@ pub struct MainframeCapabilities {
     /// (spec Decision 41).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub replay_result_previews: Option<bool>,
+    /// Whether a `session/resume` replay can travel as
+    /// `_mainframe.dev/replay_batch` notifications (zlib-deflated JSON in
+    /// base64) for a connection that opted in with
+    /// [`COMPRESSED_REPLAY_OPT_IN_KEY`] (spec Decision 42).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub compressed_replay: Option<bool>,
 }
 
 /// The `initialize` request `_meta["_mainframe.dev"]` key a client sets to
@@ -52,6 +58,13 @@ pub const REVISION_CURSORS_OPT_IN_KEY: &str = "revisionCursors";
 /// even when [`MainframeCapabilities::replay_result_previews`] advertises
 /// server support.
 pub const REPLAY_RESULT_PREVIEWS_OPT_IN_KEY: &str = "replayResultPreviews";
+
+/// The `initialize` request `_meta["_mainframe.dev"]` key a client sets to
+/// `true` to receive resume replays as compressed batches (spec Decision 42).
+/// Absent or `false` keeps the per-update replay, byte-identical to today,
+/// even when [`MainframeCapabilities::compressed_replay`] advertises server
+/// support.
+pub const COMPRESSED_REPLAY_OPT_IN_KEY: &str = "compressedReplay";
 
 /// The replay boundary a revision-cursor `session/resume` reply returns and
 /// the `_mainframe.dev/cursor` notification advances (todo #377). `epoch`
@@ -98,6 +111,7 @@ mod tests {
             authoritative_item_streaming: None,
             revision_cursors: None,
             replay_result_previews: None,
+            compressed_replay: None,
         };
         assert_eq!(serde_json::to_value(caps).unwrap(), json!({}));
     }

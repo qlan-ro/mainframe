@@ -120,6 +120,13 @@ export const MainframeCapabilitiesSchema = z
      * full-result REST route.
      */
     replayResultPreviews: z.boolean().optional(),
+    /**
+     * Whether a `session/resume` replay can travel as
+     * `_mainframe.dev/replay_batch` notifications (zlib-deflated JSON in
+     * base64) for a connection that opted in with
+     * `COMPRESSED_REPLAY_OPT_IN_KEY` (spec Decision 42).
+     */
+    compressedReplay: z.boolean().optional(),
   })
   .loose();
 export type MainframeCapabilities = z.infer<typeof MainframeCapabilitiesSchema>;
@@ -140,6 +147,14 @@ export const REVISION_CURSORS_OPT_IN_KEY = 'revisionCursors';
  * `MainframeCapabilities.replayResultPreviews` advertises server support.
  */
 export const REPLAY_RESULT_PREVIEWS_OPT_IN_KEY = 'replayResultPreviews';
+
+/**
+ * The `initialize` request `_meta["_mainframe.dev"]` key a client sets to
+ * `true` to receive resume replays as compressed batches (spec Decision 42).
+ * Absent or `false` keeps the per-update replay, even when
+ * `MainframeCapabilities.compressedReplay` advertises server support.
+ */
+export const COMPRESSED_REPLAY_OPT_IN_KEY = 'compressedReplay';
 
 /**
  * The replay boundary a revision-cursor `session/resume` reply returns and

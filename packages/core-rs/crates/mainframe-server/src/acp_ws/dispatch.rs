@@ -139,6 +139,8 @@ async fn dispatch_fallback(
         .is_some_and(|params| mainframe_acp::client_opts_into_revision_cursors(Some(params)));
     let opted_into_result_previews = initialize_params(&frame)
         .is_some_and(|params| mainframe_acp::client_opts_into_replay_result_previews(Some(params)));
+    let opted_into_compressed_replay = initialize_params(&frame)
+        .is_some_and(|params| mainframe_acp::client_opts_into_compressed_replay(Some(params)));
     let outcome = dispatch_with_prompt(frame, daemon, ports, connection.is_negotiated()).await;
     if outcome.negotiated {
         connection.mark_negotiated();
@@ -147,6 +149,9 @@ async fn dispatch_fallback(
         }
         if opted_into_result_previews {
             connection.mark_replay_result_previews_opted_in();
+        }
+        if opted_into_compressed_replay {
+            connection.mark_compressed_replay_opted_in();
         }
     }
     outcome.reply

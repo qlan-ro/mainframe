@@ -6,10 +6,10 @@
 //! only assembles them.
 
 use mainframe_types::acp::extensions::{
-    CompactionParams, CompactionWirePhase, CursorParams, GateResolvedParams, HeartbeatParams,
-    MAINFRAME_META_NAMESPACE, MainframeCapabilities, QueueStateParams,
-    REPLAY_RESULT_PREVIEWS_OPT_IN_KEY, REVISION_CURSORS_OPT_IN_KEY, ReplayCompleteParams,
-    ResyncParams, RevisionCursor, TranscriptClearedParams,
+    COMPRESSED_REPLAY_OPT_IN_KEY, CompactionParams, CompactionWirePhase, CursorParams,
+    GateResolvedParams, HeartbeatParams, MAINFRAME_META_NAMESPACE, MainframeCapabilities,
+    QueueStateParams, REPLAY_RESULT_PREVIEWS_OPT_IN_KEY, REVISION_CURSORS_OPT_IN_KEY,
+    ReplayCompleteParams, ResyncParams, RevisionCursor, TranscriptClearedParams,
 };
 use mainframe_types::acp::jsonrpc::JsonRpcNotification;
 use mainframe_types::chat::QueuedMessageRef;
@@ -43,6 +43,11 @@ pub fn mainframe_capabilities(heartbeat_interval_ms: u64) -> MainframeCapabiliti
         // `REPLAY_RESULT_PREVIEWS_OPT_IN_KEY` gets old tool results as
         // previews on a full replay; one that does not keeps full results.
         replay_result_previews: Some(true),
+        // Spec Decision 42: a connection that opts in via
+        // `COMPRESSED_REPLAY_OPT_IN_KEY` gets its resume replays as
+        // `_mainframe.dev/replay_batch` frames; one that does not keeps the
+        // per-update replay.
+        compressed_replay: Some(true),
     }
 }
 
@@ -61,6 +66,12 @@ pub fn client_opts_into_revision_cursors(params: Option<&Value>) -> bool {
 /// Decision 41): `params._meta["_mainframe.dev"].replayResultPreviews == true`.
 pub fn client_opts_into_replay_result_previews(params: Option<&Value>) -> bool {
     client_opt_in(params, REPLAY_RESULT_PREVIEWS_OPT_IN_KEY)
+}
+
+/// Whether an `initialize` request opted into compressed replay batches
+/// (spec Decision 42): `params._meta["_mainframe.dev"].compressedReplay == true`.
+pub fn client_opts_into_compressed_replay(params: Option<&Value>) -> bool {
+    client_opt_in(params, COMPRESSED_REPLAY_OPT_IN_KEY)
 }
 
 /// A boolean `_meta["_mainframe.dev"]` opt-in on an `initialize` request —

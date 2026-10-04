@@ -765,10 +765,10 @@ route uses. `?token=` works exactly as it does on `/`.
 response's `_meta["_mainframe.dev"]` carries `MainframeCapabilities`
 (`richPermissionAnswers`, `queuedPrompts`, `retryMarkers`,
 `heartbeatIntervalMs`, `itemCreationMarkers`, `replayComplete`,
-`revisionCursors`, `replayResultPreviews`) — a generic ACP client that ignores
-this namespace gets a degraded but coherent experience (plain option-only
-gates, no queued-turn metadata, no staged replay, item cursors only, full
-replays).
+`revisionCursors`, `replayResultPreviews`, `compressedReplay`) — a generic ACP
+client that ignores this namespace gets a degraded but coherent experience
+(plain option-only gates, no queued-turn metadata, no staged replay, item
+cursors only, full uncompressed replays).
 
 **Revision cursors (todo #377).** A client opts into epoch/revision resume
 cursors with its own `initialize` request `_meta["_mainframe.dev"]`:
@@ -794,6 +794,18 @@ raw input, diffs, images and message text are never trimmed, a cursor replay
 previews nothing new, and a connection that does not opt in is byte-identical
 to before.
 
+**Compressed replay batches (spec Decision 42).** A client opts in with its
+`initialize` request `_meta["_mainframe.dev"]`: `{compressedReplay: true}`.
+An opted-in connection's `session/resume` replay updates arrive as
+`_mainframe.dev/replay_batch` notifications instead of one `session/update`
+per item: `{sessionId, encoding: "deflate+base64", count, data}`, with
+`data` the standard base64 of a zlib-deflated JSON array of up to 256
+`session/update` payloads in replay order. The gate, `queue_state`,
+`replay_complete` and the buffered catch-up follow exactly as before; live
+frames are never batched. The daemon's WebSocket stack has no
+permessage-deflate, so this is where the replay's five-to-tenfold
+compression lives.
+
 **Methods and notifications (shipped grammar):**
 
 | Method / notification | Direction | Purpose |
@@ -813,6 +825,7 @@ to before.
 | `_mainframe.dev/transcript_cleared` | daemon → client (notification) | `{sessionId}` — the server wiped the session's transcript (plan-mode clear-context); the client re-resumes to converge. |
 | `_mainframe.dev/resync` | daemon → client (notification) | `{sessionId}` — the daemon's view of the chat diverged from what an attached client may hold: `do_load_chat` rebuilt the chat's cache from the transcript and the result changed (a #178 idle-offload reload), or a resume delivery failed after its reply. Cache retention alone never raises it — there is no per-chat cap (spec Decision 36). The client treats it as a staged full replay with no reducer wipe (spec Decision 38), rather than trusting the next delta. |
 | `_mainframe.dev/replay_complete` | daemon → client (notification) | `{sessionId, aborted?: true}` — closes exactly one `session/resume` replay (spec Decision 38), sent after `queue_state` and before any buffered live catch-up, in every arm that sent a successful reply (seeded, session-gone, and a delivery failure after the reply). `aborted` is present only on the failure arm; a normal close omits the key. Replies and markers for a session pair up in FIFO order, so a client can build a full replay off-screen and publish it on a marker with no `aborted`, discarding it otherwise. Advertised as `replayComplete`. |
+| `_mainframe.dev/replay_batch` | daemon → client (notification) | `{sessionId, encoding: "deflate+base64", count, data}` (spec Decision 42) — sent only to a connection that opted into `compressedReplay`, in place of a resume replay's per-update `session/update` frames: `data` is the standard base64 of a zlib-deflated JSON array of up to 256 `session/update` payloads in replay order, `count` their number. Batches for one reply arrive in order and all precede that reply's gate, `queue_state` and `replay_complete`. A client inflates synchronously and applies each update as if it had arrived alone; a batch it cannot decode is dropped whole, never applied in part. |
 
 **Reply ordering.** `session/prompt` is the one method dispatched off the
 socket-loop task (a cold-chat adapter spawn can take seconds, and inlining

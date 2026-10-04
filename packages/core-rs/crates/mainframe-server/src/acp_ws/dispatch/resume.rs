@@ -264,8 +264,16 @@ async fn deliver_resume(
     };
     let hub = &ctx.facade_hub;
     hub.reset_session(connection, &session_id, seed, |conn| {
-        for update in replay.updates {
-            conn.send_update(&session_id, update);
+        // Spec Decision 42: an opted-in connection takes the replay as a few
+        // compressed batches; every other arm below is unchanged either way.
+        if conn.is_compressed_replay_opted_in() {
+            for note in mainframe_acp::replay_batch_notifications(&session_id, &replay.updates) {
+                conn.send_json(&note);
+            }
+        } else {
+            for update in replay.updates {
+                conn.send_update(&session_id, update);
+            }
         }
         if let (Some(frame), Some(control)) =
             (&replay.pending_permission_request, &replay.pending_gate)

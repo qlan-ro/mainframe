@@ -103,6 +103,28 @@ export const ReplayCompleteParamsSchema = z
   .loose();
 export type ReplayCompleteParams = z.infer<typeof ReplayCompleteParamsSchema>;
 
+/** The one `encoding` `ReplayBatchParams` ships today: standard base64 of a zlib-deflated JSON array of `SessionUpdate`s. */
+export const REPLAY_BATCH_ENCODING = 'deflate+base64';
+
+/**
+ * `_mainframe.dev/replay_batch`'s params (spec Decision 42): one slice of a
+ * `session/resume` replay for a connection that opted in with
+ * `COMPRESSED_REPLAY_OPT_IN_KEY`. `count` is the number of `session/update`
+ * payloads inside `data`, in replay order; batches for one reply arrive in
+ * order and all precede the reply's gate, `queue_state` and
+ * `replay_complete`. A client that cannot decode `encoding` must treat the
+ * replay as failed, never apply a partial batch.
+ */
+export const ReplayBatchParamsSchema = z
+  .object({
+    sessionId: z.string(),
+    encoding: z.string(),
+    count: z.number().int().nonnegative(),
+    data: z.string(),
+  })
+  .loose();
+export type ReplayBatchParams = z.infer<typeof ReplayBatchParamsSchema>;
+
 /**
  * Params for the daemon's custom `_mainframe.dev/heartbeat` notification
  * (spec decision 13). `sequence` lets a client detect a gap and resume

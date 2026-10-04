@@ -6,8 +6,8 @@ mod capabilities;
 use crate::adapter::ControlResponse;
 use crate::chat::{DiffHunk, QueuedMessageRef};
 pub use capabilities::{
-    CursorParams, MainframeCapabilities, REPLAY_RESULT_PREVIEWS_OPT_IN_KEY,
-    REVISION_CURSORS_OPT_IN_KEY, RevisionCursor,
+    COMPRESSED_REPLAY_OPT_IN_KEY, CursorParams, MainframeCapabilities,
+    REPLAY_RESULT_PREVIEWS_OPT_IN_KEY, REVISION_CURSORS_OPT_IN_KEY, RevisionCursor,
 };
 
 /// The `_meta` key every extension value below is namespaced under.
@@ -258,6 +258,26 @@ pub struct ReplayCompleteParams {
     pub session_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub aborted: Option<bool>,
+}
+
+/// The one `encoding` [`ReplayBatchParams`] ships today: `data` is the
+/// standard base64 of a zlib-deflated JSON array of `SessionUpdate`s.
+pub const REPLAY_BATCH_ENCODING: &str = "deflate+base64";
+
+/// `_mainframe.dev/replay_batch`'s params (spec Decision 42): one slice of a
+/// `session/resume` replay for a connection that opted in with
+/// [`COMPRESSED_REPLAY_OPT_IN_KEY`]. `count` is the number of `session/update`
+/// payloads inside `data`, in replay order; batches for one reply arrive in
+/// order and all precede the reply's gate, `queue_state` and
+/// `replay_complete`. A client that cannot decode `encoding` must treat the
+/// replay as failed, never apply a partial batch.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplayBatchParams {
+    pub session_id: String,
+    pub encoding: String,
+    pub count: usize,
+    pub data: String,
 }
 
 /// The `_meta["_mainframe.dev"]` key `create_update` stamps on an item's

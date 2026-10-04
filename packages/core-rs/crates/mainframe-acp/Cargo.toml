@@ -11,6 +11,9 @@ workspace = true
 serde = { workspace = true }
 serde_json = { workspace = true }
 mainframe-types = { workspace = true }
+flate2 = { workspace = true }
+base64 = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }

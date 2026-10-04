@@ -8,5 +8,6 @@
   "replayComplete": true,
   "authoritativeItemStreaming": true,
   "revisionCursors": true,
-  "replayResultPreviews": true
+  "replayResultPreviews": true,
+  "compressedReplay": true
 }

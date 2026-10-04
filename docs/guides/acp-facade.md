@@ -304,6 +304,25 @@ On every full replay (`start`, an unknown cursor, a revision fallback) an opted-
 
 Render the preview, and fetch the full text with `GET /api/chats/{chatId}/tool-result/{toolCallId}` when the user asks for it. Raw input, diffs, images and message text are never trimmed; the newest 20 containers always replay in full; a cursor replay previews nothing new. The daemon keeps trimming those ids on every later revision of this connection, so a live re-encode of a settled container never pushes you the full text you did not ask for. Without the opt-in the wire is byte-identical to before, even against a daemon that advertises `replayResultPreviews`.
 
+### Compressed replay batches
+
+The replay is the only large transfer on this socket, and its JSON deflates five to ten times. The daemon's WebSocket stack has no permessage-deflate, so the compression lives in the payload. Opt in with your `initialize` request:
+
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "initialize",
+  "params": { "protocolVersion": 2, "info": { "name": "my-client", "version": "1.0.0" },
+              "_meta": { "_mainframe.dev": { "compressedReplay": true } } } }
+```
+
+An opted-in connection then receives each resume's replay updates (the item frames and the trailing `state_update`) as a few `_mainframe.dev/replay_batch` notifications instead of one `session/update` per item:
+
+```json
+{ "jsonrpc": "2.0", "method": "_mainframe.dev/replay_batch",
+  "params": { "sessionId": "chat_9f2a3b1c", "encoding": "deflate+base64", "count": 256, "data": "eJy…" } }
+```
+
+`data` is the standard base64 of a zlib-deflated JSON array of `count` `session/update` payloads in replay order; batches for one reply arrive in order, and all of them precede that reply's gate, `queue_state` and `replay_complete`. Inflate, parse, and apply each update exactly as you would a single `session/update`. Inflate synchronously, or otherwise make sure a batch is fully applied before you handle the frames behind it — `replay_complete` is next on the wire. A batch you cannot decode must be dropped whole, never applied in part. Live frames are never batched. Without the opt-in the wire is byte-identical to before.
+
 Three more notifications ask you to resync:
 
 | Notification | Params | What to do |
