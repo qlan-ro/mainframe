@@ -20,9 +20,18 @@ function renderView(overrides: Partial<React.ComponentProps<typeof AutomationsVi
 }
 import { useAutomationsNav } from '../data/use-automations-nav';
 import { useAutomationsStore } from '../data/use-automations-store';
+import { EMPTY_LIBRARY, type LibraryEntry } from '../data/library-cache';
+
+/** AutomationsView reads the modal's scope entry (`selectModalLibrary`), 'all' since no test here sets `scopeProjectId`. */
+function seedLibrary(patch: Partial<LibraryEntry>) {
+  useAutomationsStore.setState((s) => ({
+    libraries: { ...s.libraries, all: { ...EMPTY_LIBRARY, ...s.libraries.all, ...patch } },
+  }));
+}
 
 it('renders the header, the count, and closes via the close button', () => {
-  useAutomationsStore.setState({ definitions: [], interactions: [] });
+  seedLibrary({ definitions: [] });
+  useAutomationsStore.setState({ interactions: [] });
   useAutomationsNav.setState({ open: true, editorTarget: null, runId: null });
   renderView();
 
@@ -35,7 +44,7 @@ it('renders the header, the count, and closes via the close button', () => {
 
 it('shows the library section by default, listing loaded definitions', () => {
   useAutomationsNav.setState({ editorTarget: null, runId: null });
-  useAutomationsStore.setState({
+  seedLibrary({
     definitions: [
       {
         id: 'a1',
@@ -56,7 +65,7 @@ it('shows the library section by default, listing loaded definitions', () => {
 });
 
 it('shows the (lazy-loaded) editor section when an editor target is open', async () => {
-  useAutomationsStore.setState({ definitions: [] });
+  seedLibrary({ definitions: [] });
   useAutomationsNav.setState({ editorTarget: { mode: 'new' }, runId: null });
   renderView();
   // AutomationEditor is React.lazy — the Suspense boundary swaps its whole
@@ -66,7 +75,7 @@ it('shows the (lazy-loaded) editor section when an editor target is open', async
 });
 
 it('shows the (lazy-loaded) run section when a run id is open, taking precedence over the editor', async () => {
-  useAutomationsStore.setState({ definitions: [], runs: [] });
+  seedLibrary({ definitions: [], runs: [] });
   useAutomationsNav.setState({ editorTarget: { mode: 'new' }, runId: 'r1' });
   renderView();
   // RunView is React.lazy too — same Suspense-swap reasoning as the editor test above.
@@ -74,14 +83,15 @@ it('shows the (lazy-loaded) run section when a run id is open, taking precedence
 });
 
 it('shows the describe section when describeOpen is set, below run/editor precedence', () => {
-  useAutomationsStore.setState({ definitions: [], runs: [], catalog: [] });
+  seedLibrary({ definitions: [], runs: [] });
+  useAutomationsStore.setState({ catalog: [] });
   useAutomationsNav.setState({ editorTarget: null, runId: null, describeOpen: true, detailsAutomationId: null });
   renderView();
   expect(screen.getByTestId('automations-section-describe')).toBeInTheDocument();
 });
 
 it('shows the (lazy-loaded) details section when a details target is open, below run/editor/describe precedence', async () => {
-  useAutomationsStore.setState({
+  seedLibrary({
     definitions: [
       {
         id: 'a1',
@@ -95,8 +105,8 @@ it('shows the (lazy-loaded) details section when a details target is open, below
       },
     ],
     runs: [],
-    catalog: [],
   });
+  useAutomationsStore.setState({ catalog: [] });
   useAutomationsNav.setState({
     editorTarget: null,
     runId: null,
@@ -108,7 +118,8 @@ it('shows the (lazy-loaded) details section when a details target is open, below
 });
 
 it('names the scoped project in the header and hands a pick back to the host', () => {
-  useAutomationsStore.setState({ definitions: [], interactions: [] });
+  seedLibrary({ definitions: [] });
+  useAutomationsStore.setState({ interactions: [] });
   useAutomationsNav.setState({
     open: true,
     editorTarget: null,
@@ -131,7 +142,8 @@ it('names the scoped project in the header and hands a pick back to the host', (
 });
 
 it('leaves the picker inoperable while a sub-view owns the modal', async () => {
-  useAutomationsStore.setState({ definitions: [], catalog: [] });
+  seedLibrary({ definitions: [] });
+  useAutomationsStore.setState({ catalog: [] });
   useAutomationsNav.setState({
     open: true,
     editorTarget: { mode: 'new' },

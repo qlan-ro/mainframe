@@ -48,7 +48,7 @@ describe('useUiPrefs v5 → v6 migration', () => {
     expect(parsed.state.rightClickHintDismissed).toBeUndefined();
   });
 
-  it('leaves a v6 payload untouched', async () => {
+  it('a v6 payload still collapses through to the v8 boolean bit (v6 is no longer terminal)', async () => {
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
@@ -58,7 +58,9 @@ describe('useUiPrefs v5 → v6 migration', () => {
     );
     const fresh = await reloadStore();
     expect(fresh.getState().sidebarWidth).toBe(300);
-    expect(fresh.getState().sessionPanelOpen).toEqual({ tasks: true });
+    // D8 (v8): the per-card map collapses to one boolean — open because a card was open.
+    // See ui-prefs-migration-v8.test.ts for the full collapse-rule matrix.
+    expect(fresh.getState().sessionPanelOpen).toBe(true);
   });
 });
 
@@ -78,7 +80,8 @@ describe('useUiPrefs v4 → v5 migration', () => {
     const fresh = await reloadStore();
     // Proves hydration actually ran, so the next assertions aren't vacuous.
     expect(fresh.getState().sidebarWidth).toBe(300);
-    expect(fresh.getState().sessionPanelOpen).toEqual({ activity: true, launch: false, session: false });
+    // D8 (v8): the per-card map collapses to one boolean, open because 'activity' was open.
+    expect(fresh.getState().sessionPanelOpen).toBe(true);
     // Only the session card's own sections survive in the sections map.
     expect(fresh.getState().sessionPanelSections).toEqual({ plan: true });
     const state = fresh.getState() as unknown as Record<string, unknown>;
@@ -87,7 +90,7 @@ describe('useUiPrefs v4 → v5 migration', () => {
     fresh.getState().setSidebarWidth(320);
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
     expect(parsed.state.sessionPanelCollapsed).toBeUndefined();
-    expect(parsed.state.sessionPanelOpen).toEqual({ activity: true, launch: false, session: false });
+    expect(parsed.state.sessionPanelOpen).toBe(true);
   });
 
   it('leaves the session card open when the old payload was not collapsed', async () => {
@@ -100,11 +103,13 @@ describe('useUiPrefs v4 → v5 migration', () => {
     );
     const fresh = await reloadStore();
     expect(fresh.getState().sidebarWidth).toBe(300);
-    expect(fresh.getState().sessionPanelOpen).toEqual({});
+    // No card was ever marked closed, so the v8 collapse opens the panel
+    // (the session card's old default was open).
+    expect(fresh.getState().sessionPanelOpen).toBe(true);
     expect(fresh.getState().sessionPanelSections).toEqual({ context: false });
   });
 
-  it('leaves a v5 payload untouched', async () => {
+  it('a v5 payload still collapses through to the v8 boolean bit (v5 is no longer terminal)', async () => {
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
@@ -113,7 +118,8 @@ describe('useUiPrefs v4 → v5 migration', () => {
       }),
     );
     const fresh = await reloadStore();
-    expect(fresh.getState().sessionPanelOpen).toEqual({ tasks: true, session: false });
+    // tasks was open, so the v8 collapse opens the panel even though session was closed.
+    expect(fresh.getState().sessionPanelOpen).toBe(true);
   });
 });
 
@@ -175,7 +181,8 @@ describe('useUiPrefs v1 → v2 migration', () => {
     );
     const fresh = await reloadStore();
     expect(fresh.getState().sidebarVisible).toBe(false);
-    expect(fresh.getState().sessionPanelOpen).toEqual({ launch: true });
+    // D8 (v8): the per-card map collapses to one boolean, open because 'launch' was open.
+    expect(fresh.getState().sessionPanelOpen).toBe(true);
     expect(fresh.getState().sessionPanelSections).toEqual({});
   });
 });

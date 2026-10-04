@@ -23,7 +23,7 @@ import { mfToast } from '@/lib/toast';
 import { openSessionById } from '@/lib/session-nav';
 import type { AutomationRunSummary, AutomationTimelineEntry } from '../contract';
 import { useAutomationsNav } from '../data/use-automations-nav';
-import { useAutomationsStore } from '../data/use-automations-store';
+import { selectAutomationById, selectRunById, useAutomationsStore } from '../data/use-automations-store';
 import { RUN_STATUS_DOT_CLASS, RUN_STATUS_LABEL } from '../library/LastRunPill';
 import { RunStepRow } from './RunStepRow';
 import { TRIGGER_LABEL } from './run-trigger-label';
@@ -58,8 +58,6 @@ export function RunView() {
   const runId = useAutomationsNav((s) => s.runId);
   const closeRun = useAutomationsNav((s) => s.closeRun);
   const openRun = useAutomationsNav((s) => s.openRun);
-  const definitions = useAutomationsStore((s) => s.definitions);
-  const runs = useAutomationsStore((s) => s.runs);
   const interactions = useAutomationsStore((s) => s.interactions);
   const catalog = useAutomationsStore((s) => s.catalog);
   const gateway = useAutomationsStore((s) => s.gateway);
@@ -67,8 +65,8 @@ export function RunView() {
 
   const runRev = useAutomationsStore((s) => (runId ? (s.runRevisions[runId] ?? 0) : 0));
 
-  const run = runs.find((r) => r.id === runId);
-  const automation = run ? definitions.find((d) => d.id === run.automationId) : undefined;
+  const run = useAutomationsStore(selectRunById(runId));
+  const automation = useAutomationsStore(selectAutomationById(run?.automationId ?? null));
 
   const [timeline, setTimeline] = useState<AutomationTimelineEntry[]>([]);
   const [cancelling, setCancelling] = useState(false);

@@ -20,7 +20,20 @@ vi.mock('@/lib/daemon/ws-client', () => ({
 }));
 
 import { useAutomationEvents } from '../use-automation-events';
-import { useAutomationsStore } from '../use-automations-store';
+import { selectRunById, useAutomationsStore } from '../use-automations-store';
+import { EMPTY_LIBRARY } from '../library-cache';
+import type { AutomationSummary } from '../../contract';
+
+const DEF_BASE: AutomationSummary = {
+  id: 'auto-1',
+  name: 'Daily standup',
+  scope: 'global',
+  projectId: null,
+  enabled: true,
+  definition: { triggers: [], steps: [] },
+  createdAt: 1,
+  updatedAt: 1,
+};
 
 const RUN_BASE = {
   id: 'run-1',
@@ -44,23 +57,29 @@ const INTERACTION_BASE = {
 
 beforeEach(() => {
   handler = () => {};
-  useAutomationsStore.setState({ runs: [], interactions: [] });
+  // patchRun only lands a run in an entry that already holds its automation's
+  // definition (library-cache.ts's `belongsTo`) — seed `all` with it.
+  useAutomationsStore.setState({
+    libraries: { all: { ...EMPTY_LIBRARY, definitions: [DEF_BASE] } },
+    interactions: [],
+  });
 });
 
 describe('useAutomationEvents — automation.run.updated', () => {
   it('adds a new run to the store', () => {
     renderHook(() => useAutomationEvents());
     handler({ type: 'automation.run.updated', run: { ...RUN_BASE, status: 'running' } });
-    expect(useAutomationsStore.getState().runs).toHaveLength(1);
-    expect(useAutomationsStore.getState().runs[0]!.status).toBe('running');
+    expect(selectRunById('run-1')(useAutomationsStore.getState())?.status).toBe('running');
   });
 
   it('patches an existing run in place rather than duplicating it', () => {
-    useAutomationsStore.setState({ runs: [{ ...RUN_BASE, status: 'running' }] });
+    useAutomationsStore.setState((s) => ({
+      libraries: { ...s.libraries, all: { ...s.libraries.all!, runs: [{ ...RUN_BASE, status: 'running' }] } },
+    }));
     renderHook(() => useAutomationEvents());
     handler({ type: 'automation.run.updated', run: { ...RUN_BASE, status: 'succeeded', finishedAt: 2 } });
-    expect(useAutomationsStore.getState().runs).toHaveLength(1);
-    expect(useAutomationsStore.getState().runs[0]!.status).toBe('succeeded');
+    expect(useAutomationsStore.getState().libraries.all!.runs).toHaveLength(1);
+    expect(selectRunById('run-1')(useAutomationsStore.getState())?.status).toBe('succeeded');
   });
 });
 
@@ -101,7 +120,7 @@ describe('useAutomationEvents — automation.completed / automation.notification
       links: { runId: 'run-1', chatIds: [] },
     });
 
-    expect(useAutomationsStore.getState().runs).toHaveLength(0);
+    expect(useAutomationsStore.getState().libraries.all!.runs).toHaveLength(0);
     expect(useAutomationsStore.getState().interactions).toHaveLength(0);
   });
 
@@ -110,7 +129,7 @@ describe('useAutomationEvents — automation.completed / automation.notification
 
     handler({ type: 'notification.created', title: '#12 lane', body: 'pipeline:qa' });
 
-    expect(useAutomationsStore.getState().runs).toHaveLength(0);
+    expect(useAutomationsStore.getState().libraries.all!.runs).toHaveLength(0);
     expect(useAutomationsStore.getState().interactions).toHaveLength(0);
   });
 });

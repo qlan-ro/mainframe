@@ -135,7 +135,7 @@ beforeEach(() => {
     describeOpen: false,
     detailsAutomationId: null,
   });
-  useAutomationsStore.setState({ scopeProjectId: null, definitions: [], interactions: [], gateway: stubGateway() });
+  useAutomationsStore.setState({ scopeProjectId: null, libraries: {}, interactions: [], gateway: stubGateway() });
   useTasksModal.setState({ open: false, quickOpen: false });
   useTodosStore.setState({ entries: {} });
   vi.mocked(todosApi.listTodos).mockClear();

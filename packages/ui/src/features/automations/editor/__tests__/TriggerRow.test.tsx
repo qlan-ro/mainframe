@@ -13,7 +13,15 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { AutomationSummary, AutomationTrigger } from '../../contract';
 import { useAutomationsStore } from '../../data/use-automations-store';
+import { EMPTY_LIBRARY } from '../../data/library-cache';
 import { TriggerRow } from '../TriggerRow';
+
+/** TriggerRow reads the modal's scope entry (`selectModalLibrary`), 'all' when `scopeProjectId` is unset. */
+function setDefinitions(definitions: AutomationSummary[]) {
+  useAutomationsStore.setState((s) => ({
+    libraries: { ...s.libraries, all: { ...EMPTY_LIBRARY, ...s.libraries.all, definitions } },
+  }));
+}
 
 function automation(id: string, name: string): AutomationSummary {
   return {
@@ -49,13 +57,11 @@ describe('TriggerRow — schedule', () => {
 
 describe('TriggerRow — event', () => {
   beforeEach(() => {
-    useAutomationsStore.setState({
-      definitions: [automation('auto-1', 'Nightly digest'), automation('auto-2', 'Triage')],
-    });
+    setDefinitions([automation('auto-1', 'Nightly digest'), automation('auto-2', 'Triage')]);
   });
 
   afterEach(() => {
-    useAutomationsStore.setState({ definitions: [] });
+    setDefinitions([]);
   });
 
   it('offers the three curated events and nothing else', async () => {

@@ -43,13 +43,13 @@ describe('design token audit', () => {
   // WfStepLibrary.tsx/glyphs.ts (pre-existing offenders below, left failing — see
   // the classification note at the end of this file). task-palettes.ts used to be
   // here too but now routes through --mf-task-type-*/--mf-priority-* tokens.
-  // ProviderLogo: brand identity, not theme — the Anthropic/OpenAI hues are
-  // literals BY DESIGN (its own docstring: a preset swap must not re-tint a
-  // brand). Scanned since the 2026-08-09 v2 fold removed the tree-level skip.
+  // provider-avatar: brand identity, not theme — the Anthropic/OpenAI/Google
+  // hues are literals BY DESIGN (its own docstring: a preset swap must not
+  // re-tint a brand). It is the one source ProviderLogo and ProviderDot read.
   const COLOR_LITERAL_ALLOWLIST = new Set([
     'features/terminal/terminal-cache.ts',
     'features/chat/gates/shared/GateShell.tsx',
-    'features/shared/ProviderLogo.tsx',
+    'features/shared/provider-avatar.ts',
   ]);
 
   it('keeps production UI free of raw color literals outside the token contract', () => {
@@ -81,13 +81,10 @@ describe('design token audit', () => {
     'features/session-panel/AgentPlan.tsx',
     // Scanned since the 2026-08-09 v2 fold removed the tree-level skip:
     // tracking-widest is the STOCK radix-vega shortcut-kbd treatment shipped
-    // by the registry primitives, and ProjectScopeSelector's text-[10px]
-    // (inherited from the deleted ProjectRow) is the tiny-avatar idiom
-    // already documented for SettingsSidebar above.
+    // by the registry primitives.
     'components/ui/command.tsx',
     'components/ui/context-menu.tsx',
     'components/ui/dropdown-menu.tsx',
-    'features/sessions/ProjectScopeSelector.tsx',
   ]);
 
   // Stock text-xs/sm/base/… ARE the app's typography scale since the v2 body

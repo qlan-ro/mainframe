@@ -1,10 +1,11 @@
 /**
- * The adapter's mark. Cloned rather than imported: the shipped one paints its
- * avatar from `--mf-provider-*`, which the preset sheet does not define.
+ * The adapter's mark. The avatar paint comes from `provider-avatar.ts`, the one
+ * source the 8px `ProviderDot` shares, so the logo and the dot agree on hue.
  */
 import type { HTMLAttributes } from 'react';
+import { PROVIDER_AVATAR, providerAvatarId, type ProviderAvatarId } from './provider-avatar';
 
-type ProviderLogoId = 'claude' | 'openai' | 'gemini' | 'opencode' | 'unknown';
+type ProviderLogoId = ProviderAvatarId;
 
 interface ProviderLogoProps extends HTMLAttributes<HTMLSpanElement> {
   adapterId: string;
@@ -12,33 +13,6 @@ interface ProviderLogoProps extends HTMLAttributes<HTMLSpanElement> {
   muted?: boolean;
   /** Override the default `sessions-row-provider-logo` testid for other surfaces. */
   testId?: string;
-}
-
-/**
- * Brand identity, not theme: these two hues belong to Anthropic and OpenAI, so
- * they are literals rather than tokens — a preset swap must not re-tint them.
- * The knockout is white in both themes for the same reason. `muted` is the one
- * thing that overrides them, and it does so by dropping brand entirely rather
- * than tinting it.
- */
-const AVATAR_META: Partial<Record<ProviderLogoId, { background: string; color: string }>> = {
-  claude: { background: '#d97757', color: '#ffffff' },
-  openai: { background: '#19c37d', color: '#ffffff' },
-};
-
-function providerLogoId(adapterId: string): ProviderLogoId {
-  switch (adapterId) {
-    case 'claude':
-      return 'claude';
-    case 'codex':
-      return 'openai';
-    case 'gemini':
-      return 'gemini';
-    case 'opencode':
-      return 'opencode';
-    default:
-      return 'unknown';
-  }
 }
 
 function ProviderPath({ id }: { id: ProviderLogoId }) {
@@ -69,8 +43,8 @@ export function ProviderLogo({
   testId = 'sessions-row-provider-logo',
   ...props
 }: ProviderLogoProps) {
-  const id = providerLogoId(adapterId);
-  const avatar = AVATAR_META[id];
+  const id = providerAvatarId(adapterId);
+  const avatar = PROVIDER_AVATAR[id];
   // Muted drops the avatar's paint but not its geometry: the mark keeps its
   // 3/4 size so rows don't shift, and falls back to `currentColor` — the same
   // way the providers that never had an avatar already behave.

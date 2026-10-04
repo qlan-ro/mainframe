@@ -5,10 +5,16 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import type { AutomationSummary } from '../../contract';
+import type { AutomationRunSummary, AutomationSummary } from '../../contract';
 import { useAutomationsStore } from '../../data/use-automations-store';
+import { EMPTY_LIBRARY, type LibraryEntry } from '../../data/library-cache';
 import { useAutomationsNav } from '../../data/use-automations-nav';
 import { LibraryList } from '../LibraryList';
+
+/** Seeds the modal's scope entry ('all' unless `scopeProjectId` is set). */
+function setLibrary(patch: Partial<LibraryEntry>, scope = 'all') {
+  useAutomationsStore.setState((s) => ({ libraries: { ...s.libraries, [scope]: { ...EMPTY_LIBRARY, ...patch } } }));
+}
 
 // The row's project annotation fetches through the daemon port — inert here.
 vi.mock('@/features/sessions/use-projects', () => ({
@@ -43,15 +49,14 @@ describe('LibraryList', () => {
   beforeEach(() => {
     useAutomationsNav.setState({ open: true, editorTarget: null, runId: null });
     useAutomationsStore.setState({
-      loading: false,
-      error: null,
+      libraries: {},
       scopeProjectId: null,
       loadLibrary: DEFAULT_LOAD_LIBRARY,
     });
   });
 
   it('renders a row per definition, keyed by automation id', () => {
-    useAutomationsStore.setState({ definitions: [AUTOMATION_A, AUTOMATION_B], runs: [] });
+    setLibrary({ definitions: [AUTOMATION_A, AUTOMATION_B], runs: [] });
     render(<LibraryList />);
 
     expect(screen.getByTestId('automations-library-row-auto-a')).toBeInTheDocument();
@@ -59,36 +64,34 @@ describe('LibraryList', () => {
   });
 
   it('passes each row its most recent run', () => {
-    useAutomationsStore.setState({
-      definitions: [AUTOMATION_A],
-      runs: [
-        {
-          id: 'run-old',
-          automationId: 'auto-a',
-          status: 'failed',
-          trigger: { kind: 'manual' },
-          startedAt: 1,
-          finishedAt: 2,
-          error: 'boom',
-        },
-        {
-          id: 'run-new',
-          automationId: 'auto-a',
-          status: 'succeeded',
-          trigger: { kind: 'manual' },
-          startedAt: 100,
-          finishedAt: 110,
-          error: null,
-        },
-      ],
-    });
+    const runs: AutomationRunSummary[] = [
+      {
+        id: 'run-old',
+        automationId: 'auto-a',
+        status: 'failed',
+        trigger: { kind: 'manual' },
+        startedAt: 1,
+        finishedAt: 2,
+        error: 'boom',
+      },
+      {
+        id: 'run-new',
+        automationId: 'auto-a',
+        status: 'succeeded',
+        trigger: { kind: 'manual' },
+        startedAt: 100,
+        finishedAt: 110,
+        error: null,
+      },
+    ];
+    setLibrary({ definitions: [AUTOMATION_A], runs });
     render(<LibraryList />);
 
     expect(screen.getByTestId('automations-library-last-run-auto-a')).toHaveTextContent('Done');
   });
 
   it('clicking New opens the editor in "new" mode', () => {
-    useAutomationsStore.setState({ definitions: [AUTOMATION_A], runs: [] });
+    setLibrary({ definitions: [AUTOMATION_A], runs: [] });
     render(<LibraryList />);
 
     fireEvent.click(screen.getByTestId('automations-library-new'));
@@ -97,7 +100,7 @@ describe('LibraryList', () => {
   });
 
   it('shows BlankState with both creation paths when there are no definitions', () => {
-    useAutomationsStore.setState({ definitions: [], runs: [] });
+    setLibrary({ definitions: [], runs: [] });
     render(<LibraryList />);
 
     expect(screen.queryByTestId('automations-library-new')).not.toBeInTheDocument();
@@ -107,10 +110,8 @@ describe('LibraryList', () => {
 
   it('shows an error banner with retry above the rows when a fetch failed but automations exist', () => {
     let retried = 0;
+    setLibrary({ definitions: [AUTOMATION_A], runs: [], error: 'run history unavailable' });
     useAutomationsStore.setState({
-      definitions: [AUTOMATION_A],
-      runs: [],
-      error: 'run history unavailable',
       loadLibrary: async () => {
         retried += 1;
       },
@@ -127,7 +128,7 @@ describe('LibraryList', () => {
   });
 
   it('"Build it" on the blank state opens the editor in "new" mode', () => {
-    useAutomationsStore.setState({ definitions: [], runs: [] });
+    setLibrary({ definitions: [], runs: [] });
     render(<LibraryList />);
 
     fireEvent.click(screen.getByTestId('automations-blank-build'));
@@ -136,7 +137,7 @@ describe('LibraryList', () => {
   });
 
   it('"Describe it" on the blank state is disabled while the describe flow is unshipped', () => {
-    useAutomationsStore.setState({ definitions: [], runs: [] });
+    setLibrary({ definitions: [], runs: [] });
     render(<LibraryList />);
 
     const describeButton = screen.getByTestId('automations-blank-describe');
@@ -147,7 +148,7 @@ describe('LibraryList', () => {
   });
 
   it('shows a loading state instead of BlankState while the initial fetch is in flight', () => {
-    useAutomationsStore.setState({ definitions: [], runs: [], loading: true });
+    setLibrary({ definitions: [], runs: [], loading: true });
     render(<LibraryList />);
 
     expect(screen.getByTestId('automations-library-loading')).toBeInTheDocument();
@@ -157,11 +158,8 @@ describe('LibraryList', () => {
 
   it('shows an inline error with retry instead of BlankState when the fetch fails', () => {
     const loadLibrarySpy = vi.fn().mockResolvedValue(undefined);
+    setLibrary({ definitions: [], runs: [], loading: false, error: 'Network unreachable' }, 'proj-1');
     useAutomationsStore.setState({
-      definitions: [],
-      runs: [],
-      loading: false,
-      error: 'Network unreachable',
       scopeProjectId: 'proj-1',
       loadLibrary: loadLibrarySpy,
     });
@@ -176,7 +174,7 @@ describe('LibraryList', () => {
   });
 
   it('renders the row list, not the loading/error/blank states, once data has loaded', () => {
-    useAutomationsStore.setState({ definitions: [AUTOMATION_A], runs: [], loading: false, error: null });
+    setLibrary({ definitions: [AUTOMATION_A], runs: [], loading: false, error: null });
     render(<LibraryList />);
 
     expect(screen.getByTestId('automations-library-row-auto-a')).toBeInTheDocument();

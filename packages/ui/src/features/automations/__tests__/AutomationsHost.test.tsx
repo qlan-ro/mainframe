@@ -3,7 +3,7 @@ import { act, render, screen, fireEvent } from '@testing-library/react';
 import { AutomationsHost } from '../AutomationsHost';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useAutomationsNav } from '../data/use-automations-nav';
-import { useAutomationsStore } from '../data/use-automations-store';
+import { useAutomationsStore, selectLibrary, selectModalLibrary } from '../data/use-automations-store';
 import { createFixtureGateway } from '../fixtures/fixture-gateway';
 import { useSessionFilters } from '@/store/session-filters';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
@@ -38,7 +38,7 @@ beforeEach(() => {
   useSessionFilters.setState({ filterProjectIds: new Set() });
   // The store is module-global: a spy left installed by one test would answer
   // for every later one.
-  useAutomationsStore.setState({ scopeProjectId: null, gateway: createFixtureGateway() });
+  useAutomationsStore.setState({ scopeProjectId: null, libraries: {}, gateway: createFixtureGateway() });
 });
 
 it('renders nothing while closed', () => {
@@ -67,7 +67,7 @@ it('loads interactions even while closed, so the sidebar badge is populated on b
 
 it('renders the view once opened and loads the seeded project’s library', async () => {
   const calls: (string | null | undefined)[] = [];
-  useAutomationsStore.setState({ definitions: [], gateway: spyGateway(calls) });
+  useAutomationsStore.setState({ libraries: {}, gateway: spyGateway(calls) });
   useAutomationsNav.setState({ open: true, editorTarget: null, runId: null });
   render(
     <TooltipProvider>
@@ -82,11 +82,11 @@ it('renders the view once opened and loads the seeded project’s library', asyn
   // wasted unscoped `listAutomations(null)` before it.
   await vi.waitFor(() => expect(calls).toEqual(['proj-1']));
   // No fixture carries a project, so the scoped read comes back empty.
-  await vi.waitFor(() => expect(useAutomationsStore.getState().definitions).toEqual([]));
+  await vi.waitFor(() => expect(selectModalLibrary(useAutomationsStore.getState()).definitions).toEqual([]));
 });
 
 it('dismissing the dialog closes the host', () => {
-  useAutomationsStore.setState({ definitions: [] });
+  useAutomationsStore.setState({ libraries: {} });
   useAutomationsNav.setState({ open: true, editorTarget: null, runId: null });
   render(
     <TooltipProvider>
@@ -101,7 +101,7 @@ it('dismissing the dialog closes the host', () => {
 
 it('holds no scope while closed, whatever the active session does, and takes the seed on open', async () => {
   const calls: (string | null | undefined)[] = [];
-  useAutomationsStore.setState({ definitions: [], interactions: [], gateway: spyGateway(calls) });
+  useAutomationsStore.setState({ libraries: {}, interactions: [], gateway: spyGateway(calls) });
   useAutomationsNav.setState({ open: false, editorTarget: null, runId: null });
   render(
     <TooltipProvider>
@@ -117,7 +117,7 @@ it('holds no scope while closed, whatever the active session does, and takes the
   });
   expect(useAutomationsStore.getState().scopeProjectId).toBeNull();
   expect(calls).toEqual([]);
-  expect(useAutomationsStore.getState().definitions).toEqual([]);
+  expect(selectLibrary('proj-1')(useAutomationsStore.getState()).definitions).toEqual([]);
 
   act(() => {
     useAutomationsNav.setState({ open: true });

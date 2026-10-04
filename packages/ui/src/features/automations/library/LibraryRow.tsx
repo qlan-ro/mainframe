@@ -27,7 +27,7 @@ import { requestConfirm } from '@/lib/confirm-bridge';
 import { useProjects } from '@/features/sessions/use-projects';
 import type { AutomationRunSummary, AutomationSummary } from '../contract';
 import { useAutomationsNav } from '../data/use-automations-nav';
-import { useAutomationsStore } from '../data/use-automations-store';
+import { selectModalLibrary, useAutomationsStore } from '../data/use-automations-store';
 import { LastRunPill } from './LastRunPill';
 import { TriggerChips } from './TriggerChips';
 
@@ -45,7 +45,9 @@ export function LibraryRow({ automation, lastRun }: LibraryRowProps): React.Reac
   const patchDefinition = useAutomationsStore((s) => s.patchDefinition);
   const patchRun = useAutomationsStore((s) => s.patchRun);
   const removeDefinition = useAutomationsStore((s) => s.removeDefinition);
-  const runCount = useAutomationsStore((s) => s.runs.filter((r) => r.automationId === automation.id).length);
+  const runCount = useAutomationsStore(
+    (s) => selectModalLibrary(s).runs.filter((r) => r.automationId === automation.id).length,
+  );
   const openEditor = useAutomationsNav((s) => s.openEditor);
   const openRun = useAutomationsNav((s) => s.openRun);
   const openDetails = useAutomationsNav((s) => s.openDetails);

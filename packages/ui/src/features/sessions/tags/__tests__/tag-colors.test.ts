@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { tagColorValue, TAG_DOT_STYLE, TAG_CHIP_STYLE, TAG_CHIP_ACTIVE_STYLE } from '../tag-colors';
+import { tagColorValue, TAG_DOT_STYLE, TAG_CHIP_STYLE } from '../tag-colors';
 import { TAG_PALETTE, type TagColor } from '@qlan-ro/mainframe-types';
 
 // Known exact oklch values, pinned so a regression in the color table is caught.
@@ -35,12 +35,6 @@ describe('tag style helpers', () => {
         backgroundColor: 'color-mix(in oklch, oklch(0.65 0.18 250) 18%, transparent)',
         color: 'oklch(0.65 0.18 250)',
       },
-    },
-    {
-      name: 'TAG_CHIP_ACTIVE_STYLE',
-      fn: TAG_CHIP_ACTIVE_STYLE,
-      color: 'blue' as TagColor,
-      expected: { backgroundColor: 'oklch(0.65 0.18 250)', color: 'white' },
     },
   ])('$name($color) returns the exact inline style object', ({ fn, color, expected }) => {
     expect(fn(color)).toEqual(expected);

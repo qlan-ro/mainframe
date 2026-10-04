@@ -2,7 +2,8 @@ import * as React from 'react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
-export const SIDEBAR_WIDTH = '16rem';
+/** 260px — the redesign's sidebar; `store/ui-prefs` `SIDEBAR_DEFAULT_WIDTH` mirrors it in px. */
+export const SIDEBAR_WIDTH = '260px';
 export const SIDEBAR_WIDTH_ICON = '3rem';
 
 /** Below the floor the two-line rows truncate to nothing; above the ceiling the panel stops being chrome. */

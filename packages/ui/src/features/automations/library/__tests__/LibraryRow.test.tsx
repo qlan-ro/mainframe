@@ -13,9 +13,26 @@ import { requestConfirm } from '@/lib/confirm-bridge';
 import { mfToast } from '@/lib/toast';
 import type { AutomationRunSummary, AutomationSummary } from '../../contract';
 import { createFakeGateway as fakeGateway } from '../../data/__tests__/fake-gateway';
-import { useAutomationsStore } from '../../data/use-automations-store';
+import { selectModalLibrary, useAutomationsStore } from '../../data/use-automations-store';
+import { EMPTY_LIBRARY, type LibraryEntry } from '../../data/library-cache';
 import { useAutomationsNav } from '../../data/use-automations-nav';
 import { LibraryRow } from '../LibraryRow';
+
+/** Seeds the modal's scope entry ('all', since no test here sets `scopeProjectId`). */
+function setLibrary(patch: Partial<LibraryEntry>) {
+  useAutomationsStore.setState((s) => ({ libraries: { ...s.libraries, all: { ...EMPTY_LIBRARY, ...patch } } }));
+}
+
+/** Patches the modal's scope entry on top of whatever is already there (e.g. keeps `definitions` while adding `runs`). */
+function patchLibrary(patch: Partial<LibraryEntry>) {
+  useAutomationsStore.setState((s) => ({
+    libraries: { ...s.libraries, all: { ...(s.libraries.all ?? EMPTY_LIBRARY), ...patch } },
+  }));
+}
+
+function modalLibrary(): LibraryEntry {
+  return selectModalLibrary(useAutomationsStore.getState());
+}
 
 vi.mock('@/features/sessions/use-projects', () => ({
   useProjects: () => ({ projects: [{ id: 'proj-1', name: 'Mainframe' }] }),
@@ -50,7 +67,8 @@ const RUN: AutomationRunSummary = {
 
 describe('LibraryRow', () => {
   beforeEach(() => {
-    useAutomationsStore.setState({ definitions: [AUTOMATION], runs: [], gateway: fakeGateway() });
+    useAutomationsStore.setState({ libraries: {}, gateway: fakeGateway() });
+    setLibrary({ definitions: [AUTOMATION], runs: [] });
     useAutomationsNav.setState({ open: true, editorTarget: null, runId: null, detailsAutomationId: null });
     vi.mocked(requestConfirm).mockReset();
     vi.mocked(mfToast.error).mockReset();
@@ -123,7 +141,7 @@ describe('LibraryRow', () => {
     fireEvent.click(screen.getByTestId('automations-library-toggle-auto-1'));
 
     await waitFor(() => {
-      expect(useAutomationsStore.getState().definitions).toEqual([updated]);
+      expect(modalLibrary().definitions).toEqual([updated]);
     });
   });
 
@@ -144,7 +162,7 @@ describe('LibraryRow', () => {
     await waitFor(() => {
       expect(useAutomationsNav.getState().runId).toBe('run-new');
     });
-    expect(useAutomationsStore.getState().runs).toEqual([newRun]);
+    expect(modalLibrary().runs).toEqual([newRun]);
   });
 
   it('Edit navigates to the editor for this automation', () => {
@@ -157,7 +175,7 @@ describe('LibraryRow', () => {
 
   describe('clicking the row (todo #233 — navigate to details)', () => {
     it('opens the run view directly when the automation has exactly one run', () => {
-      useAutomationsStore.setState({ runs: [RUN] });
+      patchLibrary({ runs: [RUN] });
       render(<LibraryRow automation={AUTOMATION} lastRun={RUN} />);
 
       fireEvent.click(screen.getByTestId('automations-library-row-auto-1'));
@@ -168,7 +186,7 @@ describe('LibraryRow', () => {
 
     it('opens details when the automation has more than one run', () => {
       const secondRun: AutomationRunSummary = { ...RUN, id: 'run-2', startedAt: RUN.startedAt - 1000 };
-      useAutomationsStore.setState({ runs: [RUN, secondRun] });
+      patchLibrary({ runs: [RUN, secondRun] });
       render(<LibraryRow automation={AUTOMATION} lastRun={RUN} />);
 
       fireEvent.click(screen.getByTestId('automations-library-row-auto-1'));
@@ -199,7 +217,7 @@ describe('LibraryRow', () => {
 
     it('does not fire row navigation when clicking the last-run pill', () => {
       const secondRun: AutomationRunSummary = { ...RUN, id: 'run-2', startedAt: RUN.startedAt - 1000 };
-      useAutomationsStore.setState({ runs: [RUN, secondRun] });
+      patchLibrary({ runs: [RUN, secondRun] });
       render(<LibraryRow automation={AUTOMATION} lastRun={RUN} />);
 
       fireEvent.click(screen.getByTestId('automations-library-last-run-auto-1'));
@@ -238,7 +256,7 @@ describe('LibraryRow', () => {
       fireEvent.click(screen.getByTestId('automations-library-delete-auto-1'));
 
       await waitFor(() => {
-        expect(useAutomationsStore.getState().definitions).toEqual([]);
+        expect(modalLibrary().definitions).toEqual([]);
       });
       expect(deleteAutomation).toHaveBeenCalledWith('auto-1');
       expect(requestConfirm).toHaveBeenCalledWith(
@@ -258,7 +276,7 @@ describe('LibraryRow', () => {
         expect(requestConfirm).toHaveBeenCalledTimes(1);
       });
       expect(deleteAutomation).not.toHaveBeenCalled();
-      expect(useAutomationsStore.getState().definitions).toEqual([AUTOMATION]);
+      expect(modalLibrary().definitions).toEqual([AUTOMATION]);
     });
 
     it('keeps the row and toasts when the gateway rejects', async () => {
@@ -279,7 +297,7 @@ describe('LibraryRow', () => {
           description: 'daemon offline',
         });
       });
-      expect(useAutomationsStore.getState().definitions).toEqual([AUTOMATION]);
+      expect(modalLibrary().definitions).toEqual([AUTOMATION]);
     });
   });
 

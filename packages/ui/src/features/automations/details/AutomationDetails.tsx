@@ -15,7 +15,8 @@ import { cn } from '@/lib/utils';
 import { Hint } from '@/components/ui/hint';
 import { mfToast } from '@/lib/toast';
 import { useAutomationsNav } from '../data/use-automations-nav';
-import { useAutomationsStore } from '../data/use-automations-store';
+import { selectAutomationById, useAutomationsStore } from '../data/use-automations-store';
+import { runsForAutomation } from '../data/library-cache';
 import { DetailsOverview } from './DetailsOverview';
 import { DetailsRuns } from './DetailsRuns';
 
@@ -30,17 +31,16 @@ export function AutomationDetails() {
   const closeDetails = useAutomationsNav((s) => s.closeDetails);
   const openEditor = useAutomationsNav((s) => s.openEditor);
   const openRun = useAutomationsNav((s) => s.openRun);
-  const definitions = useAutomationsStore((s) => s.definitions);
-  const allRuns = useAutomationsStore((s) => s.runs);
+  const automation = useAutomationsStore(selectAutomationById(automationId));
+  const libraries = useAutomationsStore((s) => s.libraries);
   const catalog = useAutomationsStore((s) => s.catalog);
   const gateway = useAutomationsStore((s) => s.gateway);
   const patchRun = useAutomationsStore((s) => s.patchRun);
   const [starting, setStarting] = useState(false);
 
-  const automation = definitions.find((d) => d.id === automationId);
   const runs = useMemo(
-    () => allRuns.filter((r) => r.automationId === automationId).sort((a, b) => b.startedAt - a.startedAt),
-    [allRuns, automationId],
+    () => (automationId == null ? [] : runsForAutomation(libraries, automationId)),
+    [libraries, automationId],
   );
 
   const [tab, setTab] = useState<DetailsTab>(() => (runs.length > 0 ? 'runs' : 'overview'));

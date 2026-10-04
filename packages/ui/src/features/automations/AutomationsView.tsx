@@ -14,7 +14,7 @@ import { Hint } from '@/components/ui/hint';
 import { ModalProjectPicker } from '@/features/project-scope/ModalProjectPicker';
 import { useProjects } from '@/features/sessions/use-projects';
 import { useAutomationsNav } from './data/use-automations-nav';
-import { useAutomationsStore, selectPendingInteractionCount } from './data/use-automations-store';
+import { useAutomationsStore, selectModalLibrary, selectPendingInteractionCount } from './data/use-automations-store';
 import { DescribeFlow } from './describe/DescribeFlow';
 import { LibraryList } from './library/LibraryList';
 
@@ -40,7 +40,7 @@ export function AutomationsView({ projectId, onProjectChange }: AutomationsViewP
   const runId = useAutomationsNav((s) => s.runId);
   const describeOpen = useAutomationsNav((s) => s.describeOpen);
   const detailsAutomationId = useAutomationsNav((s) => s.detailsAutomationId);
-  const definitions = useAutomationsStore((s) => s.definitions);
+  const { definitions } = useAutomationsStore(selectModalLibrary);
   const pending = useAutomationsStore(selectPendingInteractionCount);
   const { projects } = useProjects();
   // A sub-view has its own project already baked into what it is showing —

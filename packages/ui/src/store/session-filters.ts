@@ -35,6 +35,8 @@ interface SessionFiltersState {
   /** Active sessions-list sort: drives arrangeSessions grouping/ordering. */
   sortMode: SortMode;
   toggleFilterProject: (id: string) => void;
+  /** ⌥-click on the scope strip: this project alone, replacing the set. */
+  soloFilterProject: (id: string) => void;
   clearProjectFilter: () => void;
   /** Drop a deleted project from the scope; the rest of the scope survives. */
   removeFilterProject: (id: string) => void;
@@ -88,6 +90,12 @@ export const useSessionFilters = create<SessionFiltersState>((set) => ({
       persistProjectIds(next);
       return { filterProjectIds: next };
     }),
+
+  soloFilterProject: (id) => {
+    const next = new Set([id]);
+    persistProjectIds(next);
+    set({ filterProjectIds: next });
+  },
 
   clearProjectFilter: () => {
     persistProjectIds(new Set());

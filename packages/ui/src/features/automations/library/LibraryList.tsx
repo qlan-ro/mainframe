@@ -16,7 +16,7 @@ import { Loader2, Plus, TriangleAlert } from 'lucide-react';
 import type { AutomationRunSummary, AutomationSummary } from '../contract';
 import { DESCRIBE_ENABLED } from '../flags';
 import { useAutomationsNav } from '../data/use-automations-nav';
-import { useAutomationsStore } from '../data/use-automations-store';
+import { selectModalLibrary, useAutomationsStore } from '../data/use-automations-store';
 import { LibraryRow } from './LibraryRow';
 import { BlankState } from './BlankState';
 
@@ -30,10 +30,7 @@ function mostRecentRun(runs: AutomationRunSummary[], automationId: string): Auto
 }
 
 export function LibraryList(): React.ReactElement {
-  const definitions = useAutomationsStore((s) => s.definitions);
-  const runs = useAutomationsStore((s) => s.runs);
-  const loading = useAutomationsStore((s) => s.loading);
-  const error = useAutomationsStore((s) => s.error);
+  const { definitions, runs, loading, error } = useAutomationsStore(selectModalLibrary);
   const loadLibrary = useAutomationsStore((s) => s.loadLibrary);
   const scopeProjectId = useAutomationsStore((s) => s.scopeProjectId);
   const openEditor = useAutomationsNav((s) => s.openEditor);

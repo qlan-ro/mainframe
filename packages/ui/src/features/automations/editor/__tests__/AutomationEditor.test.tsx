@@ -18,11 +18,19 @@ import type { AutomationCreateInput, AutomationStep, AutomationSummary } from '.
 import { createFakeGateway as fakeGateway } from '../../data/__tests__/fake-gateway';
 import { useAutomationsNav } from '../../data/use-automations-nav';
 import { useAutomationsStore } from '../../data/use-automations-store';
+import { EMPTY_LIBRARY } from '../../data/library-cache';
 import { AutomationEditor } from '../AutomationEditor';
+
+/** The editor resolves an edit target via `selectAutomationById`, which searches every loaded scope — 'all' is enough here. */
+function setDefinitions(definitions: AutomationSummary[]) {
+  useAutomationsStore.setState((s) => ({
+    libraries: { ...s.libraries, all: { ...EMPTY_LIBRARY, ...s.libraries.all, definitions } },
+  }));
+}
 
 function resetStores() {
   useAutomationsNav.setState({ open: false, editorTarget: null, runId: null });
-  useAutomationsStore.setState({ definitions: [], catalog: [], scopeProjectId: null, gateway: fakeGateway() });
+  useAutomationsStore.setState({ libraries: {}, catalog: [], scopeProjectId: null, gateway: fakeGateway() });
 }
 
 async function fillValidDraft(user: ReturnType<typeof userEvent.setup>) {
@@ -175,7 +183,7 @@ describe('AutomationEditor — new automation', () => {
 
 describe('AutomationEditor — edit existing', () => {
   it("loads the existing automation's name into the field", () => {
-    useAutomationsStore.setState({ definitions: [EXISTING] });
+    setDefinitions([EXISTING]);
     useAutomationsNav.setState({ editorTarget: { mode: 'edit', automationId: 'auto-1' } });
     render(<AutomationEditor />);
     expect(screen.getByTestId('automations-editor-name')).toHaveValue('Daily standup');
@@ -183,7 +191,7 @@ describe('AutomationEditor — edit existing', () => {
   });
 
   it('renders the existing step in the recipe', () => {
-    useAutomationsStore.setState({ definitions: [EXISTING] });
+    setDefinitions([EXISTING]);
     useAutomationsNav.setState({ editorTarget: { mode: 'edit', automationId: 'auto-1' } });
     render(<AutomationEditor />);
     expect(screen.getByTestId('automations-step-s1')).toBeInTheDocument();
@@ -203,7 +211,8 @@ describe('AutomationEditor — renaming a value rewrites the steps that use it',
         ],
       },
     };
-    useAutomationsStore.setState({ definitions: [withValue], scopeProjectId: 'proj-1' });
+    setDefinitions([withValue]);
+    useAutomationsStore.setState({ scopeProjectId: 'proj-1' });
     useAutomationsNav.setState({ editorTarget: { mode: 'edit', automationId: withValue.id } });
     render(<AutomationEditor />);
   }
@@ -235,27 +244,25 @@ describe('AutomationEditor — renaming a value rewrites the steps that use it',
   });
 
   it('reports a stale $ref instead of rewriting it when the renamed key belongs to an Ask me field (Decision 9)', () => {
-    useAutomationsStore.setState({
-      definitions: [
-        {
-          ...EXISTING,
-          id: 'auto-3',
-          definition: {
-            triggers: [],
-            steps: [
-              {
-                id: 'q1',
-                kind: 'ask_me',
-                title: 'Check-in',
-                fields: [{ key: 'renamed', label: 'Headline', type: 'text' }],
-              },
-              { id: 'n1', kind: 'notify', message: ['Ship $field_1'] },
-            ],
-          },
+    setDefinitions([
+      {
+        ...EXISTING,
+        id: 'auto-3',
+        definition: {
+          triggers: [],
+          steps: [
+            {
+              id: 'q1',
+              kind: 'ask_me',
+              title: 'Check-in',
+              fields: [{ key: 'renamed', label: 'Headline', type: 'text' }],
+            },
+            { id: 'n1', kind: 'notify', message: ['Ship $field_1'] },
+          ],
         },
-      ],
-      scopeProjectId: 'proj-1',
-    });
+      },
+    ]);
+    useAutomationsStore.setState({ scopeProjectId: 'proj-1' });
     useAutomationsNav.setState({ editorTarget: { mode: 'edit', automationId: 'auto-3' } });
     render(<AutomationEditor />);
 
@@ -273,7 +280,8 @@ describe('AutomationEditor — unresolved $name', () => {
   };
 
   function openUnresolved() {
-    useAutomationsStore.setState({ definitions: [UNRESOLVED], scopeProjectId: 'proj-1' });
+    setDefinitions([UNRESOLVED]);
+    useAutomationsStore.setState({ scopeProjectId: 'proj-1' });
     useAutomationsNav.setState({ editorTarget: { mode: 'edit', automationId: UNRESOLVED.id } });
     render(<AutomationEditor />);
   }
@@ -324,8 +332,8 @@ describe('AutomationEditor — a definition survives the round trip', () => {
 
   function openEditor(steps: AutomationStep[]) {
     sent = undefined;
+    setDefinitions([{ ...EXISTING, id: 'auto-5', definition: { triggers: [], steps } }]);
     useAutomationsStore.setState({
-      definitions: [{ ...EXISTING, id: 'auto-5', definition: { triggers: [], steps } }],
       scopeProjectId: 'proj-1',
       gateway: fakeGateway({
         updateAutomation: async (_id, input) => {
@@ -388,8 +396,8 @@ describe('AutomationEditor — a definition survives the round trip', () => {
 
 describe('AutomationEditor — a rejected save', () => {
   function openValidDraft(rejection: unknown) {
+    setDefinitions([EXISTING]);
     useAutomationsStore.setState({
-      definitions: [EXISTING],
       scopeProjectId: 'proj-1',
       gateway: fakeGateway({
         updateAutomation: async () => {
@@ -470,7 +478,8 @@ describe('AutomationEditor — footer validation summary', () => {
   });
 
   it('appends "ready to save" once valid when editing an existing automation', () => {
-    useAutomationsStore.setState({ definitions: [EXISTING], scopeProjectId: 'proj-1' });
+    setDefinitions([EXISTING]);
+    useAutomationsStore.setState({ scopeProjectId: 'proj-1' });
     useAutomationsNav.setState({ editorTarget: { mode: 'edit', automationId: EXISTING.id } });
     render(<AutomationEditor />);
     expect(screen.getByText('Looks good · ready to save')).toBeInTheDocument();

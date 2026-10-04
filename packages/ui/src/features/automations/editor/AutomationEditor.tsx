@@ -23,7 +23,7 @@ import { Hint } from '@/components/ui/hint';
 import { mfToast } from '@/lib/toast';
 import type { AutomationCreateInput } from '../contract';
 import { useAutomationsNav } from '../data/use-automations-nav';
-import { useAutomationsStore } from '../data/use-automations-store';
+import { selectAutomationById, useAutomationsStore } from '../data/use-automations-store';
 import { builtinTokens, triggerTokens } from '../domain/tokens';
 import { validate, type ValidationIssue } from '../domain/validate';
 import { applyStepsEdit } from './definition-actions';
@@ -64,14 +64,14 @@ function EditorSection({
 export function AutomationEditor() {
   const editorTarget = useAutomationsNav((s) => s.editorTarget);
   const closeEditor = useAutomationsNav((s) => s.closeEditor);
-  const definitions = useAutomationsStore((s) => s.definitions);
   const catalog = useAutomationsStore((s) => s.catalog);
   const gateway = useAutomationsStore((s) => s.gateway);
   const patchDefinition = useAutomationsStore((s) => s.patchDefinition);
   const scopeProjectId = useAutomationsStore((s) => s.scopeProjectId);
 
-  const existing =
-    editorTarget?.mode === 'edit' ? definitions.find((d) => d.id === editorTarget.automationId) : undefined;
+  const existing = useAutomationsStore(
+    selectAutomationById(editorTarget?.mode === 'edit' ? editorTarget.automationId : null),
+  );
   const isNew = editorTarget?.mode !== 'edit';
   const editKey = editorTarget?.mode === 'edit' ? editorTarget.automationId : null;
   const newDraft = editorTarget?.mode === 'new' ? editorTarget.draft : undefined;

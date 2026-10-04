@@ -15,7 +15,13 @@ import type { AutomationRunSummary, AutomationSummary, AutomationTimelineEntry }
 import { createFakeGateway } from '../../data/__tests__/fake-gateway';
 import { useAutomationsNav } from '../../data/use-automations-nav';
 import { useAutomationsStore } from '../../data/use-automations-store';
+import { EMPTY_LIBRARY } from '../../data/library-cache';
 import { RunView } from '../RunView';
+
+/** RunView resolves its run/automation via `selectRunById`/`selectAutomationById`, which search every loaded scope — 'all' is enough here. */
+function seedLibrary(definitions: AutomationSummary[], runs: AutomationRunSummary[]) {
+  useAutomationsStore.setState({ libraries: { all: { ...EMPTY_LIBRARY, definitions, runs } } });
+}
 
 vi.mock('@/lib/session-nav', () => ({
   openSessionById: vi.fn(),
@@ -58,9 +64,8 @@ function setup(overrides: {
   gatewayOverrides?: Parameters<typeof createFakeGateway>[0];
 }) {
   const getRunTimeline = vi.fn().mockResolvedValue(overrides.timeline);
+  seedLibrary(overrides.definitions ?? [AUTOMATION], [overrides.run]);
   useAutomationsStore.setState({
-    definitions: overrides.definitions ?? [AUTOMATION],
-    runs: [overrides.run],
     interactions: [],
     catalog: [],
     gateway: createFakeGateway({ getRunTimeline, ...overrides.gatewayOverrides }),
@@ -71,7 +76,7 @@ function setup(overrides: {
 
 beforeEach(() => {
   useAutomationsNav.setState({ open: true, runId: null, editorTarget: null });
-  useAutomationsStore.setState({ definitions: [], runs: [], interactions: [], catalog: [] });
+  useAutomationsStore.setState({ libraries: {}, interactions: [], catalog: [] });
 });
 
 describe('RunView — header', () => {
@@ -163,7 +168,8 @@ describe('RunView — live updates', () => {
 
 describe('RunView — not found', () => {
   it('renders a not-found state instead of crashing when the run id is unknown', () => {
-    useAutomationsStore.setState({ definitions: [AUTOMATION], runs: [], interactions: [], catalog: [] });
+    seedLibrary([AUTOMATION], []);
+    useAutomationsStore.setState({ interactions: [], catalog: [] });
     useAutomationsNav.setState({ runId: 'missing-run', editorTarget: null });
     render(<RunView />);
     expect(screen.getByTestId('automations-run-not-found')).toBeInTheDocument();
@@ -190,7 +196,8 @@ describe('RunView — timeline states', () => {
   ] as const)(
     'renders a %s run with the matching status pill and cancel-button visibility',
     async (status, label, cancellable) => {
-      useAutomationsStore.setState({ definitions: [AUTOMATION], runs: [], interactions: [], catalog: [] });
+      seedLibrary([AUTOMATION], []);
+      useAutomationsStore.setState({ interactions: [], catalog: [] });
       const timeline: AutomationTimelineEntry[] = [{ stepRef: 'q', stepId: 'q', kind: 'ask_me', status: 'waiting' }];
       const finishedAt = status === 'running' || status === 'waiting' ? null : Date.now();
       setup({ run: run({ id: `run-${status}`, status, finishedAt }), timeline });

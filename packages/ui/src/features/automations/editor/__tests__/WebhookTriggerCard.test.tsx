@@ -21,6 +21,7 @@ vi.mock('@/lib/toast', () => ({
 import type { AutomationSummary, WebhookRegistration, WebhookTrigger } from '../../contract';
 import { createFakeGateway } from '../../data/__tests__/fake-gateway';
 import { useAutomationsStore } from '../../data/use-automations-store';
+import { EMPTY_LIBRARY } from '../../data/library-cache';
 import { WebhookTriggerCard } from '../WebhookTriggerCard';
 
 const TRIGGER: WebhookTrigger = { id: 't1', kind: 'webhook', hookId: 'hook-1' };
@@ -52,8 +53,11 @@ function seedGateway(registerWebhook: () => Promise<WebhookRegistration>) {
   useAutomationsStore.setState({ gateway: createFakeGateway({ registerWebhook }) });
 }
 
+/** selectAutomationById searches every loaded scope — 'all' is enough here. */
 function seedDefinitions(definitions: AutomationSummary[]) {
-  useAutomationsStore.setState({ definitions });
+  useAutomationsStore.setState((s) => ({
+    libraries: { ...s.libraries, all: { ...EMPTY_LIBRARY, ...s.libraries.all, definitions } },
+  }));
 }
 
 const SECRET = 'whsec_test';
@@ -80,7 +84,7 @@ function ControlledCard({ initial, onChange }: { initial: WebhookTrigger; onChan
 }
 
 beforeEach(() => {
-  useAutomationsStore.setState({ gateway: createFakeGateway(), definitions: [] });
+  useAutomationsStore.setState({ gateway: createFakeGateway(), libraries: {} });
 });
 
 afterEach(() => {

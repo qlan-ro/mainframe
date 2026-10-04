@@ -11,7 +11,15 @@ import type { AutomationRunSummary, AutomationSummary } from '../../contract';
 import { createFakeGateway as fakeGateway } from '../../data/__tests__/fake-gateway';
 import { useAutomationsNav } from '../../data/use-automations-nav';
 import { useAutomationsStore } from '../../data/use-automations-store';
+import { EMPTY_LIBRARY } from '../../data/library-cache';
 import { AutomationDetails } from '../AutomationDetails';
+
+/** Patches the 'all' scope entry on top of whatever is already there. */
+function patchLibrary(patch: { definitions?: AutomationSummary[]; runs?: AutomationRunSummary[] }) {
+  useAutomationsStore.setState((s) => ({
+    libraries: { ...s.libraries, all: { ...(s.libraries.all ?? EMPTY_LIBRARY), ...patch } },
+  }));
+}
 
 const AUTOMATION: AutomationSummary = {
   id: 'auto-1',
@@ -42,7 +50,8 @@ function run(id: string, startedAt: number): AutomationRunSummary {
 
 function resetStores() {
   useAutomationsNav.setState({ open: true, editorTarget: null, runId: null, detailsAutomationId: null });
-  useAutomationsStore.setState({ definitions: [AUTOMATION], runs: [], catalog: [], gateway: fakeGateway() });
+  useAutomationsStore.setState({ libraries: {}, catalog: [], gateway: fakeGateway() });
+  patchLibrary({ definitions: [AUTOMATION], runs: [] });
 }
 
 afterEach(() => {
@@ -120,7 +129,7 @@ describe('AutomationDetails — tabs', () => {
 
   it('defaults to Runs when there is run history', () => {
     resetStores();
-    useAutomationsStore.setState({ runs: [run('r1', 1000), run('r2', 500)] });
+    patchLibrary({ runs: [run('r1', 1000), run('r2', 500)] });
     useAutomationsNav.setState({ detailsAutomationId: 'auto-1' });
     render(<AutomationDetails />);
     expect(screen.getByTestId('automations-details-runs')).toBeInTheDocument();
@@ -128,7 +137,7 @@ describe('AutomationDetails — tabs', () => {
 
   it('switches tabs on click', async () => {
     resetStores();
-    useAutomationsStore.setState({ runs: [run('r1', 1000), run('r2', 500)] });
+    patchLibrary({ runs: [run('r1', 1000), run('r2', 500)] });
     useAutomationsNav.setState({ detailsAutomationId: 'auto-1' });
     const user = userEvent.setup();
     render(<AutomationDetails />);
@@ -149,7 +158,7 @@ describe('AutomationDetails — tabs', () => {
 
   it('Runs lists every run for this automation, newest first, and opens one on click', async () => {
     resetStores();
-    useAutomationsStore.setState({ runs: [run('r-old', 500), run('r-new', 1500)] });
+    patchLibrary({ runs: [run('r-old', 500), run('r-new', 1500)] });
     useAutomationsNav.setState({ detailsAutomationId: 'auto-1' });
     const user = userEvent.setup();
     render(<AutomationDetails />);
