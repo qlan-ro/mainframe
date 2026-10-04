@@ -91,5 +91,7 @@ mod presentation_history;
 #[cfg(test)]
 mod presentation_history_tests;
 mod presentation_sink;
+#[cfg(test)]
+mod rollout_profile_test;
 mod thread_read_types;
 mod transcript_presentation;

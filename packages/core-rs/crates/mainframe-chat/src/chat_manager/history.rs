@@ -51,29 +51,55 @@ impl ChatManager {
     }
 
     /// The lead caller's actual disk read behind `claim_history`'s single
-    /// flight: load, remap, and (when non-empty) cache + restore any pending
-    /// permission found in the transcript.
+    /// flight: consult the history snapshot cache first (a hit skips the
+    /// parse entirely), else load + remap as before and write a snapshot for
+    /// next time; either way, cache in memory + restore any pending
+    /// permission found in the transcript (when non-empty).
     async fn load_history_into_cache(&self, chat_id: &str) -> Vec<ChatMessage> {
         let Some(session) = self.history_session(chat_id) else {
             return Vec::new();
         };
+        let sources = session.history_sources().await;
+        let fingerprint = HistoryFingerprint::compute(&sources).await;
+        if let Some(fp) = &fingerprint
+            && let Some(cached) = self.history_cache.read(chat_id, fp).await
+        {
+            return self.finish_history_load(chat_id, cached);
+        }
+
         match session.load_history().await {
             Ok(history) => {
-                let mut remapped = remap_history(history, chat_id);
-                if !remapped.is_empty() {
-                    {
-                        let mut messages = self.messages.lock().unwrap_or_else(|e| e.into_inner());
-                        remapped = messages.set_and_snapshot(chat_id, remapped);
-                    }
-                    self.permissions
-                        .lock()
-                        .unwrap_or_else(|e| e.into_inner())
-                        .restore_pending_permission(chat_id, &remapped);
+                let remapped = remap_history(history, chat_id);
+                if let Some(fp) = fingerprint {
+                    self.history_cache.write_in_background(
+                        chat_id.to_string(),
+                        fp,
+                        remapped.clone(),
+                    );
                 }
-                remapped
+                self.finish_history_load(chat_id, remapped)
             }
             Err(_) => Vec::new(),
         }
+    }
+
+    /// Shared tail of a cache hit and a cache miss: settle `remapped` into
+    /// the in-memory cache and restore any pending permission it carries.
+    /// Skipped for an empty history — same early-out the pre-cache code had,
+    /// so an adapter session with nothing to load never pins an empty entry.
+    fn finish_history_load(&self, chat_id: &str, remapped: Vec<ChatMessage>) -> Vec<ChatMessage> {
+        if remapped.is_empty() {
+            return remapped;
+        }
+        let remapped = {
+            let mut messages = self.messages.lock().unwrap_or_else(|e| e.into_inner());
+            messages.set_and_snapshot(chat_id, remapped)
+        };
+        self.permissions
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .restore_pending_permission(chat_id, &remapped);
+        remapped
     }
 
     /// Load messages from disk, bypassing the in-memory cache (session-files route

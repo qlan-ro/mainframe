@@ -253,6 +253,21 @@ pub trait ChatManagerDeps: Send + Sync {
             .into_owned()
     }
 
+    /// The directory the history snapshot cache (`load_history_into_cache`'s
+    /// cold-load shortcut) keeps `<chat_id>.json` snapshots under
+    /// (`<data_dir>/cache/history`). Defaulted the same way
+    /// `fork_snapshots_dir` is: every deps impl outside the daemon (every
+    /// test double) gets a harmless process-temp path it never has reason to
+    /// read back — the cache only touches disk once `AdapterSession::
+    /// history_sources` reports a non-empty list, which the trait's own
+    /// default (and every pre-existing test fake) never does.
+    fn history_cache_dir(&self) -> String {
+        std::env::temp_dir()
+            .join("mainframe-history-cache")
+            .to_string_lossy()
+            .into_owned()
+    }
+
     // ── side chats (todo #344) ───────────────────────────────────────────────
     /// `db.chats.findOrCreateSideChat(parent)` — a SELECT-then-INSERT that
     /// returns the parent's existing side chat (`created = false`) or seeds and

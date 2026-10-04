@@ -1,4 +1,5 @@
 use super::*;
+use std::path::PathBuf;
 
 /// A live adapter session (mirrors the TS `AdapterSession`). Trait object stored
 /// as `Arc<dyn AdapterSession>`; read-only props are getters, everything async is
@@ -65,6 +66,21 @@ pub trait AdapterSession: Send + Sync {
     }
     fn extract_plan_files(&self) -> BoxFuture<'_, Result<Vec<String>, AdapterError>>;
     fn extract_skill_files(&self) -> BoxFuture<'_, Result<Vec<SkillFileEntry>, AdapterError>>;
+
+    /// The transcript file(s) whose `(path, byte length, mtime)` define this
+    /// session's history-cache freshness (`mainframe_chat`'s persistent
+    /// snapshot cache, built around `load_history`'s cost on a large
+    /// transcript). Resolved exactly as `load_history` resolves its own
+    /// sources, so a fingerprint built from this list misses the moment
+    /// `load_history`'s result would actually change.
+    ///
+    /// Default returns an empty list, meaning "do not cache": an adapter that
+    /// cannot cheaply enumerate its own transcript files (or whose history
+    /// comes from somewhere other than a stat-able local file, e.g. a remote
+    /// protocol round trip) opts out rather than risk a false cache hit.
+    fn history_sources(&self) -> BoxFuture<'_, Vec<PathBuf>> {
+        Box::pin(async { Vec::new() })
+    }
 
     /// Stop a running background task by id. Adapters without bg-task support
     /// resolve `{ ok: false, error: "unsupported" }`.

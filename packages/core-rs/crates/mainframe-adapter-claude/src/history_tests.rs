@@ -193,3 +193,94 @@ async fn snapshot_dir_loads_the_same_messages_as_the_canonical_path() {
     assert!(!canonical_messages.is_empty());
     assert_eq!(canonical_messages, snapshot_messages);
 }
+
+// ── cold-load profiling (history snapshot cache design, not run in CI) ──────
+
+/// Loads a REAL transcript through the production discover → read → parse →
+/// entry → finish pipeline and prints per-phase timings. Opt in with:
+/// `MAINFRAME_PROFILE_CLAUDE_TRANSCRIPT=/path/to/session.jsonl cargo test
+/// --manifest-path packages/core-rs/Cargo.toml -p mainframe-adapter-claude
+/// --release profile_cold_load_from_real_transcript -- --ignored --nocapture`.
+/// The session id and project dir are derived from the path (`<dir>/<id>.jsonl`),
+/// matching how a real Claude transcript is laid out — so `discover_*` finds
+/// the same sibling/subagent files a live cold `get_messages` would.
+#[tokio::test]
+#[ignore]
+async fn profile_cold_load_from_real_transcript() {
+    let Ok(path) = std::env::var("MAINFRAME_PROFILE_CLAUDE_TRANSCRIPT") else {
+        eprintln!(
+            "skipped: set MAINFRAME_PROFILE_CLAUDE_TRANSCRIPT to a real .jsonl path to run this"
+        );
+        return;
+    };
+    let file_path = std::path::Path::new(&path);
+    let session_id = file_path
+        .file_stem()
+        .expect("transcript path needs a file stem")
+        .to_string_lossy()
+        .into_owned();
+    let project_dir = file_path
+        .parent()
+        .expect("transcript path needs a parent dir")
+        .to_string_lossy()
+        .into_owned();
+
+    let total_start = std::time::Instant::now();
+    let discovered = discover_session_jsonl_files_in_dir(&session_id, &project_dir).await;
+    let discover_elapsed = total_start.elapsed();
+
+    let (mut read_elapsed, mut parse_elapsed, mut entry_elapsed) = (
+        std::time::Duration::ZERO,
+        std::time::Duration::ZERO,
+        std::time::Duration::ZERO,
+    );
+    let mut line_count = 0usize;
+    let mut load = HistoryLoad::default();
+    for file in &discovered.all_files {
+        let is_subagent_file = discovered.subagent_files.contains(file);
+        let read_start = std::time::Instant::now();
+        let Ok(raw) = tokio::fs::read_to_string(file).await else {
+            continue;
+        };
+        read_elapsed += read_start.elapsed();
+        for line in raw.lines() {
+            if line.trim().is_empty() {
+                continue;
+            }
+            line_count += 1;
+            let parse_start = std::time::Instant::now();
+            let entry: Value = match serde_json::from_str(line) {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+            parse_elapsed += parse_start.elapsed();
+            let entry_start = std::time::Instant::now();
+            load.entry(&entry, &session_id, is_subagent_file);
+            entry_elapsed += entry_start.elapsed();
+        }
+    }
+    let finish_start = std::time::Instant::now();
+    let messages = load.finish();
+    let finish_elapsed = finish_start.elapsed();
+    let total_elapsed = total_start.elapsed();
+
+    // What the history snapshot cache (`mainframe-chat::history_cache`) would
+    // do instead on the next cold open: decode the already-converted messages
+    // from JSON. Same shape as its on-disk `Snapshot` minus a tiny fingerprint.
+    let snapshot = serde_json::to_vec(&messages).expect("messages serialize");
+    let decode_start = std::time::Instant::now();
+    let decoded: Vec<mainframe_types::chat::ChatMessage> =
+        serde_json::from_slice(&snapshot).expect("snapshot decodes");
+    let decode_elapsed = decode_start.elapsed();
+    assert_eq!(decoded.len(), messages.len());
+
+    eprintln!(
+        "profile claude session_id={session_id} files={} lines={line_count} messages={} \
+         discover={discover_elapsed:?} read={read_elapsed:?} parse={parse_elapsed:?} \
+         entry={entry_elapsed:?} finish={finish_elapsed:?} total={total_elapsed:?} \
+         snapshot_bytes={} snapshot_decode={decode_elapsed:?}",
+        discovered.all_files.len(),
+        messages.len(),
+        snapshot.len(),
+    );
+}

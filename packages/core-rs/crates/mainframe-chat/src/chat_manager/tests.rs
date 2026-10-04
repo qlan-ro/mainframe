@@ -19,6 +19,7 @@ mod fork_history;
 mod fork_sweep;
 mod fork_title;
 mod history_eviction;
+mod history_snapshot;
 mod offload;
 mod plan_mode;
 mod resume_overlay;
@@ -99,6 +100,14 @@ pub(crate) struct StoreDeps {
     /// `fork_snapshots_dir()` override, for the startup-sweep tests (a real
     /// tempdir the sweep can list and remove from).
     fork_snapshots_dir: Mutex<Option<String>>,
+    /// `AdapterSession::history_sources()` for every `FakeSession` this hands
+    /// out — empty by default (the trait's own "do not cache" default), so
+    /// only the history-cache integration test that sets real, stat-able
+    /// paths here ever exercises it.
+    history_sources: Mutex<Vec<std::path::PathBuf>>,
+    /// `history_cache_dir()` override, for the same test (a real tempdir it
+    /// alone owns, so it can't collide with any other test's chat ids).
+    history_cache_dir: Mutex<Option<String>>,
 }
 
 /// `pin_fork_point`'s configurable failure, for fork_chat's status-mapping tests.
@@ -164,6 +173,12 @@ impl StoreDeps {
     }
     pub(crate) fn set_fork_snapshots_dir(&self, dir: &str) {
         *self.fork_snapshots_dir.lock().unwrap() = Some(dir.to_string());
+    }
+    pub(crate) fn set_history_sources(&self, sources: Vec<std::path::PathBuf>) {
+        *self.history_sources.lock().unwrap() = sources;
+    }
+    pub(crate) fn set_history_cache_dir(&self, dir: &str) {
+        *self.history_cache_dir.lock().unwrap() = Some(dir.to_string());
     }
     /// A snapshot of every stored chat, `sideChatId` NOT yet derived (raw DB
     /// row shape). Callers apply `derive_side_chat_id`/`with_derived_side_chat_ids`.
@@ -428,6 +443,7 @@ impl ChatManagerDeps for StoreDeps {
             Arc::new(crate::test_support::FakeSession {
                 history,
                 history_loads: Some(Arc::clone(&self.history_loads)),
+                history_sources: self.history_sources.lock().unwrap().clone(),
                 spawn_ok: *self.spawn_ok.lock().unwrap(),
                 ..Default::default()
             }) as Arc<dyn AdapterSession>
@@ -720,6 +736,18 @@ impl ChatManagerDeps for StoreDeps {
             .unwrap_or_else(|| {
                 std::env::temp_dir()
                     .join("mainframe-fork-snapshots-test-default")
+                    .to_string_lossy()
+                    .into_owned()
+            })
+    }
+    fn history_cache_dir(&self) -> String {
+        self.history_cache_dir
+            .lock()
+            .unwrap()
+            .clone()
+            .unwrap_or_else(|| {
+                std::env::temp_dir()
+                    .join("mainframe-history-cache-test-default")
                     .to_string_lossy()
                     .into_owned()
             })

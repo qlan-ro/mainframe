@@ -155,6 +155,10 @@ impl AdapterSession for CodexSession {
         Box::pin(self.load_history_inner())
     }
 
+    fn history_sources(&self) -> BoxFuture<'_, Vec<std::path::PathBuf>> {
+        Box::pin(self.history_sources_inner())
+    }
+
     fn load_scan_records(&self) -> BoxFuture<'_, Result<Vec<ChatMessage>, AdapterError>> {
         Box::pin(self.load_scan_records_inner())
     }

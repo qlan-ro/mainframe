@@ -99,6 +99,10 @@ impl ChatManager {
             crate::idle_scanner::IdleSessionScanner::new(active_chats.clone(), offloader);
         idle_scanner.start();
 
+        let history_cache = Arc::new(HistorySnapshotCache::new(std::path::PathBuf::from(
+            deps.history_cache_dir(),
+        )));
+
         Self {
             deps,
             active_chats,
@@ -113,6 +117,7 @@ impl ChatManager {
             external_sessions: None,
             worktree_offers: collab.worktree_offers,
             self_ref,
+            history_cache,
         }
     }
 
