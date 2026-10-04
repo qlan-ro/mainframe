@@ -518,12 +518,22 @@ async fn tool_result(
     let Some(file_path) = file_path else {
         return fail(StatusCode::NOT_FOUND, "No session file for chat");
     };
-    match mainframe_adapter_claude::messages::read_tool_result_from_jsonl::read_tool_result_from_jsonl(
-        &file_path,
-        &tool_use_id,
-    )
-    .await
-    {
+    // A Codex chat's session file is a rollout, where the tool call's display
+    // id is the rollout `call_id`; everything else is a Claude JSONL.
+    let content = if chat.adapter_id == "codex" {
+        mainframe_adapter_codex::read_tool_result_from_rollout::read_tool_result_from_rollout(
+            &file_path,
+            &tool_use_id,
+        )
+        .await
+    } else {
+        mainframe_adapter_claude::messages::read_tool_result_from_jsonl::read_tool_result_from_jsonl(
+            &file_path,
+            &tool_use_id,
+        )
+        .await
+    };
+    match content {
         Some(content) => ok(serde_json::json!({ "content": content })),
         None => fail(StatusCode::NOT_FOUND, "Tool result not available"),
     }

@@ -25,12 +25,14 @@ describe('AcpFacadeClient — handshake', () => {
     expect(client.mainframeCapabilities).toEqual({ heartbeatIntervalMs: 15000 });
   });
 
-  it('opts into revision-versioned resume cursors via initialize _meta (todo #377)', async () => {
+  it('opts into revision cursors (#377), replay result previews (Decision 41) and compressed replay (Decision 42) via initialize _meta', async () => {
     const { socket } = await connectedClient();
 
     expect(socket.sent[0]).toMatchObject({
       method: 'initialize',
-      params: { _meta: { '_mainframe.dev': { revisionCursors: true } } },
+      params: {
+        _meta: { '_mainframe.dev': { revisionCursors: true, replayResultPreviews: true, compressedReplay: true } },
+      },
     });
   });
 

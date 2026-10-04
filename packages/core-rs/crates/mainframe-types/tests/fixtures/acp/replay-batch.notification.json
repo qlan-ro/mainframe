@@ -1,0 +1,11 @@
+{
+  "_provenance": "synthetic",
+  "jsonrpc": "2.0",
+  "method": "_mainframe.dev/replay_batch",
+  "params": {
+    "sessionId": "chat_1",
+    "encoding": "deflate+base64",
+    "count": 2,
+    "data": "eJyLrlZKLMhXslJyT1OqBQAWzgOC"
+  }
+}

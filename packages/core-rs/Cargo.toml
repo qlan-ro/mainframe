@@ -57,6 +57,9 @@ keyring = { version = "3", features = ["apple-native", "windows-native", "sync-s
 # async-compression already pulls in, so no second copy compiles.
 flate2 = "1"
 brotli = "8"
+# The ACP facade's compressed replay batches (spec Decision 42): zlib-deflated
+# JSON carried as base64 text frames, so no WebSocket extension is needed.
+base64 = "0.22"
 # Pure-Rust search (PR 1): pinned to the exact versions ripgrep 14.1.1 itself
 # vendors, so regex syntax and gitignore semantics match the search parity
 # oracle (search_with_ripgrep tests) that used to run against the real `rg`.

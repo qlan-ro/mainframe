@@ -188,6 +188,7 @@ impl FacadeHub {
             return;
         };
         let mut stream = SessionStream::new(self.throttle_interval_ms);
+        stream.set_previews(seed.preview_ids.clone());
         stream.seed_containers(seed.containers);
         let catch_up = drain_into(&mut stream, previous, connection, seed.redelivered_gate);
         sessions.insert(chat_id.to_string(), SessionSlot::Live(stream));

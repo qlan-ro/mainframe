@@ -112,6 +112,21 @@ export const MainframeCapabilitiesSchema = z
      * regardless of this flag.
      */
     revisionCursors: z.boolean().optional(),
+    /**
+     * Whether a full `session/resume` replay sends tool results older than
+     * the newest containers as previews carrying the truncation marker, for
+     * a connection that opted in with `REPLAY_RESULT_PREVIEWS_OPT_IN_KEY`
+     * (spec Decision 41). The client expands a preview through the existing
+     * full-result REST route.
+     */
+    replayResultPreviews: z.boolean().optional(),
+    /**
+     * Whether a `session/resume` replay can travel as
+     * `_mainframe.dev/replay_batch` notifications (zlib-deflated JSON in
+     * base64) for a connection that opted in with
+     * `COMPRESSED_REPLAY_OPT_IN_KEY` (spec Decision 42).
+     */
+    compressedReplay: z.boolean().optional(),
   })
   .loose();
 export type MainframeCapabilities = z.infer<typeof MainframeCapabilitiesSchema>;
@@ -124,6 +139,22 @@ export type MainframeCapabilities = z.infer<typeof MainframeCapabilitiesSchema>;
  * server support.
  */
 export const REVISION_CURSORS_OPT_IN_KEY = 'revisionCursors';
+
+/**
+ * The `initialize` request `_meta["_mainframe.dev"]` key a client sets to
+ * `true` to receive replay result previews (spec Decision 41). Absent or
+ * `false` keeps every replayed tool result full, even when
+ * `MainframeCapabilities.replayResultPreviews` advertises server support.
+ */
+export const REPLAY_RESULT_PREVIEWS_OPT_IN_KEY = 'replayResultPreviews';
+
+/**
+ * The `initialize` request `_meta["_mainframe.dev"]` key a client sets to
+ * `true` to receive resume replays as compressed batches (spec Decision 42).
+ * Absent or `false` keeps the per-update replay, even when
+ * `MainframeCapabilities.compressedReplay` advertises server support.
+ */
+export const COMPRESSED_REPLAY_OPT_IN_KEY = 'compressedReplay';
 
 /**
  * The replay boundary a revision-cursor `session/resume` reply returns and

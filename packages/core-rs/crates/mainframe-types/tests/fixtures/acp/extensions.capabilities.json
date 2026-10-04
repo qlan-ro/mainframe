@@ -7,5 +7,7 @@
   "itemCreationMarkers": true,
   "replayComplete": true,
   "authoritativeItemStreaming": true,
-  "revisionCursors": true
+  "revisionCursors": true,
+  "replayResultPreviews": true,
+  "compressedReplay": true
 }

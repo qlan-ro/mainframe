@@ -10,6 +10,9 @@
  *
  * Every notification is one `NOTIFICATIONS` row plus its entry in
  * `ListenerSignatures`; `handleNotification` is a table lookup, not a switch.
+ * The one exception is `_mainframe.dev/replay_batch` (spec Decision 42): it
+ * carries many `session/update` payloads at once and fans out to that
+ * method's listeners, so it has no listener set of its own.
  */
 import type {
   JsonRpcNotification,
@@ -27,12 +30,16 @@ import {
   HeartbeatParamsSchema,
   MAINFRAME_META_NAMESPACE,
   QueueStateParamsSchema,
+  ReplayBatchParamsSchema,
   ReplayCompleteParamsSchema,
   RequestPermissionRequestSchema,
   ResyncParamsSchema,
   TranscriptClearedParamsSchema,
   UpdateSessionNotificationSchema,
 } from '@qlan-ro/mainframe-types';
+import { decodeReplayBatch } from './acp-replay-batch';
+
+const REPLAY_BATCH_METHOD = `${MAINFRAME_META_NAMESPACE}/replay_batch`;
 
 export type SessionUpdateListener = (sessionId: string, update: SessionUpdate) => void;
 export type PermissionRequestListener = (id: JsonRpcRequestId, request: RequestPermissionRequest) => void;
@@ -176,6 +183,10 @@ export class AcpNotificationRouter {
   }
 
   handleNotification(notification: JsonRpcNotification): void {
+    if (notification.method === REPLAY_BATCH_METHOD) {
+      this.handleReplayBatch(notification.params);
+      return;
+    }
     const entry = ROUTES.get(notification.method);
     if (!entry) return;
     const parsed = parseOrWarn(entry.schema, notification.params, warnLabel(entry.method));
@@ -184,6 +195,18 @@ export class AcpNotificationRouter {
     // parsed type feeds its own projection, which matches its listeners' arguments.
     const args = entry.project(parsed as never) as never[];
     this.listeners.get(entry.method)?.forEach((fn) => fn(...args));
+  }
+
+  /** One compressed slice of a resume replay: every update inside reaches the `session/update` listeners in order, as if each had arrived as its own frame. */
+  private handleReplayBatch(params: unknown): void {
+    const parsed = parseOrWarn(ReplayBatchParamsSchema, params, 'replay_batch');
+    if (parsed === undefined) return;
+    const updates = decodeReplayBatch(parsed);
+    const listeners = this.listeners.get('session/update');
+    if (!updates || !listeners) return;
+    for (const update of updates) {
+      listeners.forEach((fn) => (fn as SessionUpdateListener)(parsed.sessionId, update));
+    }
   }
 
   handleRequest(request: JsonRpcRequest): void {

@@ -285,6 +285,44 @@ While attached, a `_mainframe.dev/cursor` notification advances your durable cur
 
 It rides the same per-session order as `session/update`, after the frames of the display revision it describes — receiving it means you have already applied everything through `revision`. Advance your stored cursor only then, and only while no resume or staged replay is in flight for that session; an interrupted replay must not advance past what you actually applied. A `transcript_cleared` or `_mainframe.dev/resync` clears your stored cursor the same way it clears your items — the next resume goes out as `{ "type": "start" }`.
 
+### Replay result previews
+
+A long chat's full replay is mostly tool-result text (one 1958-item chat replayed 31.6 MB, 28.9 MB of it results). If your client can fetch a result on demand, opt into previews in your `initialize` request:
+
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "initialize",
+  "params": { "protocolVersion": 2, "info": { "name": "my-client", "version": "1.0.0" },
+              "_meta": { "_mainframe.dev": { "replayResultPreviews": true } } } }
+```
+
+On every full replay (`start`, an unknown cursor, a revision fallback) an opted-in connection then receives each tool call older than the newest 20 containers with its text result cut to 2 KB and marked exactly like the daemon's own 32 KB truncation:
+
+```json
+{ "type": "content", "content": { "type": "text", "text": "…first 2 KB…",
+  "_meta": { "_mainframe.dev": { "truncated": true, "fullBytes": 48213 } } } }
+```
+
+Render the preview, and fetch the full text with `GET /api/chats/{chatId}/tool-result/{toolCallId}` when the user asks for it. Raw input, diffs, images and message text are never trimmed; the newest 20 containers always replay in full; a cursor replay previews nothing new. The daemon keeps trimming those ids on every later revision of this connection, so a live re-encode of a settled container never pushes you the full text you did not ask for. Without the opt-in the wire is byte-identical to before, even against a daemon that advertises `replayResultPreviews`.
+
+### Compressed replay batches
+
+The replay is the only large transfer on this socket, and its JSON deflates five to ten times. The daemon's WebSocket stack has no permessage-deflate, so the compression lives in the payload. Opt in with your `initialize` request:
+
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "initialize",
+  "params": { "protocolVersion": 2, "info": { "name": "my-client", "version": "1.0.0" },
+              "_meta": { "_mainframe.dev": { "compressedReplay": true } } } }
+```
+
+An opted-in connection then receives each resume's replay updates (the item frames and the trailing `state_update`) as a few `_mainframe.dev/replay_batch` notifications instead of one `session/update` per item:
+
+```json
+{ "jsonrpc": "2.0", "method": "_mainframe.dev/replay_batch",
+  "params": { "sessionId": "chat_9f2a3b1c", "encoding": "deflate+base64", "count": 256, "data": "eJy…" } }
+```
+
+`data` is the standard base64 of a zlib-deflated JSON array of `count` `session/update` payloads in replay order; batches for one reply arrive in order, and all of them precede that reply's gate, `queue_state` and `replay_complete`. Inflate, parse, and apply each update exactly as you would a single `session/update`. Inflate synchronously, or otherwise make sure a batch is fully applied before you handle the frames behind it — `replay_complete` is next on the wire. A batch you cannot decode must be dropped whole, never applied in part. Live frames are never batched. Without the opt-in the wire is byte-identical to before.
+
 Three more notifications ask you to resync:
 
 | Notification | Params | What to do |

@@ -27,7 +27,8 @@ impl SessionState {
         self.seeded = true;
         for items in containers {
             for item in items {
-                self.items.insert(item.id().to_string(), item.clone());
+                self.items
+                    .insert(item.id().to_string(), self.previewed(item).into_owned());
             }
         }
         self.set_container_index(containers);
@@ -91,12 +92,13 @@ impl SessionState {
         for (_, items) in &delta.changes {
             for item in items {
                 self.items_compared += 1;
+                let item = self.previewed(item);
                 match self.items.get(item.id()) {
-                    None => updates.push(create_update(item)),
-                    Some(prev) if prev == item => {}
-                    Some(prev) => updates.extend(revise_update(prev, item)),
+                    None => updates.push(create_update(&item)),
+                    Some(prev) if *prev == *item => {}
+                    Some(prev) => updates.extend(revise_update(prev, &item)),
                 }
-                self.items.insert(item.id().to_string(), item.clone());
+                self.items.insert(item.id().to_string(), item.into_owned());
             }
         }
 
