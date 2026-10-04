@@ -1,6 +1,7 @@
 use std::io::Read;
 
-use base64::Engine as _;
+// `base64::Engine` arrives through `use super::*` below; naming it again here
+// is a redundant import under `-D warnings` on CI's toolchain.
 use base64::engine::general_purpose::STANDARD;
 use flate2::read::ZlibDecoder;
 use mainframe_types::acp::content::{ContentBlock, ContentChunk};
