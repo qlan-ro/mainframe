@@ -60,6 +60,21 @@ already has.
 - **A comment that explains a token's behaviour goes stale when the token moves.** Fix it in the same pass;
   a confidently wrong comment costs more than none.
 
+## Status colours
+
+Four hues, four meanings — never pick by "what looks right here":
+
+- **`primary`** = selected **or** running / wants attention. The working spinner, the pulsing
+  "your turn" dot, an unread dot, a live-run dot on a section eyebrow, the Launch/Run play
+  glyph. Selection and liveness share one hue on purpose: both mean "this is where the
+  action is".
+- **`success`** = connected / healthy / isolated. The daemon's connection dot, a healthy PR
+  row, a done check. Never "running" — a green play glyph reads as a second accent.
+- **`warning`** = needs you / degraded. The Unattended permission chip, a missing worktree
+  or transcript ring, an automation waiting on an answer.
+- **`destructive`** = failed / a destructive action. Error states and the delete/stop actions
+  that cannot be undone — not "powerful", not "unattended".
+
 ## The five rules that catch most of it
 
 1. **Every text node takes an explicit type rung.** There is no default. Unstyled text inherits the 13px
