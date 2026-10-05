@@ -11,7 +11,6 @@ import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { chordHint } from '@/features/shortcuts/chord-hint';
 import { useSetupAdvisor } from '@/features/setup-advisor/use-setup-advisor';
-import { SideChatToggle } from '@/features/side-chat/SideChatToggle';
 import { ChatHeaderParentLink } from '@/features/chat/thread/ChatHeaderParentLink';
 import { SessionPanelToggle } from '@/features/session-panel/SessionPanelToggle';
 import { splitVisible, useZonesStore } from '@/features/chat/zones/zones-store';
@@ -74,12 +73,7 @@ export function TitleBarActions({ projectId }: { projectId?: string }) {
       )}
       <Separator orientation="vertical" className="mx-1 h-4 data-vertical:self-center" />
       {/* Bound to the main thread through the root provider; a split moves both onto the zones' strips. */}
-      {!splitOnScreen && (
-        <>
-          <ChatHeaderParentLink />
-          <SideChatToggle />
-        </>
-      )}
+      {!splitOnScreen && <ChatHeaderParentLink />}
       <SessionPanelToggle />
     </div>
   );
