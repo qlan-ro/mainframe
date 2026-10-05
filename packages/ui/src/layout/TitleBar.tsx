@@ -13,11 +13,16 @@
  *     surface toggle pill sits at its end. Collapsed, the section is 0 wide.
  *   [chat column] — the session tabs, then the right cluster. Collapsed, the
  *     show-sidebar button and the toggle pill re-anchor to its left edge.
+ *
+ * Only the Chats view fills it: in Tasks / Automations / Setup Advisor /
+ * Settings the bar keeps just the lights, the drag region and (collapsed) the
+ * show-sidebar button.
  */
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { useSidebar } from '@/components/ui/sidebar';
 import { SessionTabs } from '@/features/session-tabs/SessionTabs';
+import { useUiPrefs } from '@/store/ui-prefs';
 import { SurfaceRail } from './SurfaceRail';
 import { TitleBarActions } from './TitleBarActions';
 import { SidebarLeftGlyph } from './surface-icons';
@@ -32,6 +37,9 @@ export const SIDEBAR_SECTION_WIDTH = `calc(${NAV_RAIL_WIDTH}px + var(--sidebar-w
 
 export function TitleBar() {
   const { open, setOpen } = useSidebar();
+  // Outside Chats the bar is bare window chrome (Codex-style): the tabs, the
+  // surface toggles and the chat actions all belong to the chat surface.
+  const chats = useUiPrefs((s) => s.sidebarView) === 'chats';
 
   return (
     <div data-testid="title-bar" data-drag-region className="flex h-12 shrink-0 items-center bg-sidebar">
@@ -44,7 +52,7 @@ export function TitleBar() {
         style={{ width: open ? SIDEBAR_SECTION_WIDTH : 0 }}
       >
         {/* One pill instance at a time — it re-anchors to the chat column when collapsed. */}
-        {open && (
+        {open && chats && (
           <>
             <SurfaceRail />
             {/* The rule marks where the sidebar ends under this bar. */}
@@ -69,11 +77,11 @@ export function TitleBar() {
                 <SidebarLeftGlyph size={16} />
               </Button>
             </Hint>
-            <SurfaceRail />
+            {chats && <SurfaceRail />}
           </>
         )}
-        <SessionTabs />
-        <TitleBarActions />
+        {chats && <SessionTabs />}
+        {chats && <TitleBarActions />}
       </div>
     </div>
   );
