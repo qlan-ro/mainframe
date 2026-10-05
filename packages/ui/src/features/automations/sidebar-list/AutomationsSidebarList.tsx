@@ -1,12 +1,12 @@
 /**
  * AutomationsSidebarList — the sidebar's Automations view (the nav rail's
- * third list). Header: "Automations" + New. Rows come from the scope-keyed
+ * third list). Header: "Automations" + Open library + New. Rows come from the scope-keyed
  * library cache under `soleProjectId ?? 'all'` — the modal keeps its own entry,
  * so neither load evicts the other. A row opens the automation's details in
  * the modal; "needs you" rows sort first. The pending dot lives on the rail.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { LayoutList, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { SidebarHeader } from '@/components/ui/sidebar';
@@ -53,18 +53,34 @@ export function AutomationsSidebarList() {
       <SidebarHeader className="gap-1">
         <div className="flex h-9 items-center justify-between pl-1">
           <span className="text-sm font-semibold">Automations</span>
-          <Hint label="New automation">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              data-testid="automations-sidebar-new"
-              aria-label="New automation"
-              className="text-muted-foreground"
-              onClick={openNew}
-            >
-              <Plus />
-            </Button>
-          </Hint>
+          <div className="flex items-center">
+            {/* The bare library (run / toggle / delete per row) has no other
+                production entry point: rows open Details, New opens the editor. */}
+            <Hint label="Open the library">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                data-testid="automations-sidebar-open-library"
+                aria-label="Open the library"
+                className="text-muted-foreground"
+                onClick={openHost}
+              >
+                <LayoutList />
+              </Button>
+            </Hint>
+            <Hint label="New automation">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                data-testid="automations-sidebar-new"
+                aria-label="New automation"
+                className="text-muted-foreground"
+                onClick={openNew}
+              >
+                <Plus />
+              </Button>
+            </Hint>
+          </div>
         </div>
       </SidebarHeader>
       <SidebarScrollRegion>

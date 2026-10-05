@@ -48,7 +48,7 @@ export function TitleBar({ projectId }: { projectId?: string }) {
           <>
             <SurfaceRail />
             {/* The rule marks where the sidebar ends under this bar. */}
-            <span aria-hidden className="mx-2 h-[18px] w-px shrink-0 bg-border" />
+            <span aria-hidden className="ml-2 h-[18px] w-px shrink-0 bg-border" />
           </>
         )}
       </div>

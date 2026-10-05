@@ -10,16 +10,19 @@
  * `recordingKey`.
  *
  * Testid reference (verified against packages/ui/src/features/automations/):
- *   ControlOrMeta+Shift+A             — opens the host straight onto the LIBRARY (no
- *                                       sub-view set yet). The shell redesign retired the
- *                                       sidebar header's own entry point (`sidebar-action-automations`
- *                                       dispatched `openHost()` directly) — the rail's
- *                                       `shell-rail-automations` now switches the sidebar to the
- *                                       Automations LIST instead, whose own rows/`New` button land
- *                                       on Details/the editor, never the bare library. This
- *                                       `dev: true` shortcut (AutomationsHost.tsx's own comment
- *                                       calls it out as surviving alongside the old production entry
- *                                       point) is this spec's most direct remaining path to Library.
+ *   shell-rail-chats / -automations  — nav rail view switches (NavRail.tsx). The shell
+ *                                       redesign retired the sidebar header's own entry point
+ *                                       (`sidebar-action-automations` dispatched `openHost()`
+ *                                       directly); the rail now switches the sidebar to the
+ *                                       Automations LIST, whose rows / `New` land on Details /
+ *                                       the editor. The view is persisted (ui-prefs v8
+ *                                       `sidebarView`), so after a reload the sidebar may come
+ *                                       back on the Automations list — switch to Chats before
+ *                                       touching the scope strip or a session row.
+ *   automations-sidebar-open-library — the list header's "Open the library" button:
+ *                                       `openHost()` with no sub-view, i.e. the bare LIBRARY.
+ *                                       (⌘⇧A does the same but is `dev: true` and filtered out
+ *                                       of the built app the e2e harness runs — never rely on it.)
  *   automations-host                 — the Radix Dialog content root (absent when closed)
  *   automations-view                 — the view root inside the host
  *   automations-close                — the view's close button
@@ -95,6 +98,12 @@ async function openLibraryFor(page: Page, chatId: string): Promise<void> {
   await page.reload();
   await waitConnected(page);
 
+  // The previous pass left the sidebar on the Automations list, and that view
+  // is persisted — the scope strip and the session rows only exist under Chats.
+  const chatsRail = page.getByTestId('shell-rail-chats');
+  await chatsRail.click();
+  await expect(chatsRail).toHaveAttribute('aria-pressed', 'true', { timeout: 5_000 });
+
   await clearScope(page);
 
   const row = sessionsSidebar(page).row(chatId);
@@ -105,9 +114,10 @@ async function openLibraryFor(page: Page, chatId: string): Promise<void> {
     await expect(row).toHaveAttribute('data-active', 'true', { timeout: 5_000 });
   }).toPass({ timeout: 45_000, intervals: [500, 1_000, 2_000] });
 
-  // The rail's Automations list opens Details/the editor, never the bare
-  // library — ⌘⇧A opens the host straight onto it instead (see the header note).
-  await page.keyboard.press('ControlOrMeta+Shift+A');
+  // Rows and New land on Details / the editor; only the list header's
+  // "Open the library" button opens the host on the bare library.
+  await page.getByTestId('shell-rail-automations').click();
+  await page.getByTestId('automations-sidebar-open-library').click({ timeout: 10_000 });
   await expect(page.getByTestId('automations-library')).toBeVisible({ timeout: 10_000 });
   // The loading branch renders the SAME `automations-library` testid with zero
   // rows inside it, so "visible" alone doesn't mean the fetch landed — this is
