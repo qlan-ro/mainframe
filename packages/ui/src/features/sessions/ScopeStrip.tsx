@@ -240,7 +240,7 @@ export function ScopeStrip({ projects, scope, onToggle, onSolo, onRemoveProject,
         <Hint label="Add project">
           <Button
             variant="ghost"
-            size="icon-xs"
+            size="icon-sm"
             data-testid="sessions-scope-add"
             data-tut="add-project"
             aria-label="Add project"

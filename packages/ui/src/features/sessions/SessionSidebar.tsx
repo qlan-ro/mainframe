@@ -12,7 +12,7 @@
 import { useMemo } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import { SYNTHETIC_TAGS } from '@qlan-ro/mainframe-types';
-import { PenLine, SearchIcon } from 'lucide-react';
+import { PenLine, Plus, SearchIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import {
@@ -44,7 +44,6 @@ import { SessionsSection } from './SessionsSection';
 /** The "New session" row under the header — ONE CLICK, always; the tour's primary anchor. */
 function NewSessionRow() {
   const newThread = useStartNewSession();
-  const chord = chordHint('sessions.new');
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -58,7 +57,7 @@ function NewSessionRow() {
         >
           <PenLine />
           <span className="min-w-0 flex-1 truncate">New session</span>
-          {chord != null && <span className="shrink-0 font-mono text-xs text-muted-foreground">{chord}</span>}
+          <Plus aria-hidden className="shrink-0 text-muted-foreground" />
         </SidebarMenuButton>
       </SidebarMenuItem>
     </SidebarMenu>
