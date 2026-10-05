@@ -20,7 +20,7 @@ export function PullRequestsSection() {
   if (prs.length === 0) return null;
 
   return (
-    <section data-testid="session-panel-section-prs" className="shrink-0 border-b border-border">
+    <section data-testid="session-panel-section-prs" className="shrink-0">
       <PanelEyebrow label="Pull requests" />
       <div className="flex flex-col gap-0.5 px-2 pb-2">
         {prs.map((pr) => (

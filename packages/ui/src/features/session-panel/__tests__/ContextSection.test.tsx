@@ -58,15 +58,13 @@ const emptyContext: SessionContext = {
   skillFiles: [],
 };
 
-const onToggle = vi.fn();
-const section = () => <ContextSection port={31415} open onToggle={onToggle} />;
+const section = () => <ContextSection port={31415} />;
 
 beforeEach(() => {
   mockContext = emptyContext;
   openSheet.mockReset();
   emitSurfaceIntent.mockReset();
   getAttachment.mockClear();
-  onToggle.mockReset();
 });
 
 describe('ContextSection — memory files', () => {
@@ -190,8 +188,8 @@ describe('ContextSection — attachments', () => {
   });
 });
 
-describe('ContextSection — section count', () => {
-  it('shows no count in the header, however many items the sub-groups hold', () => {
+describe('ContextSection — first-class sections', () => {
+  it('renders each kind as its own section — no Context wrapper, no counts', () => {
     mockContext = {
       ...emptyContext,
       projectFiles: [{ path: 'CLAUDE.md', content: 'x', source: 'project' }],
@@ -209,8 +207,19 @@ describe('ContextSection — section count', () => {
       skillFiles: [{ path: '/skills/review/SKILL.md', displayName: 'Review' }],
     };
     render(section());
-    const toggle = screen.getByTestId('session-panel-section-toggle-context');
-    expect(toggle).toHaveTextContent('Context');
-    expect(toggle.querySelector('[data-slot="badge"]')).toBeNull();
+    expect(screen.queryByTestId('session-panel-section-toggle-context')).toBeNull();
+    expect(screen.getByTestId('session-panel-section-memory')).toHaveTextContent('Memory files');
+    expect(screen.getByTestId('session-panel-section-mentions')).toHaveTextContent('Mentioned files');
+    expect(screen.getByTestId('session-panel-section-skills')).toHaveTextContent('Skills');
+    expect(screen.getByTestId('session-panel-section-attachments')).toHaveTextContent('Attachments');
+    expect(document.querySelector('[data-slot="badge"]:not([data-variant="outline"])')).toBeNull();
+  });
+
+  it('hides empty sections, but keeps Skills (its Manage is the only route to the catalog)', () => {
+    render(section());
+    expect(screen.queryByTestId('session-panel-section-memory')).toBeNull();
+    expect(screen.queryByTestId('session-panel-section-mentions')).toBeNull();
+    expect(screen.queryByTestId('session-panel-section-attachments')).toBeNull();
+    expect(screen.getByTestId('session-panel-section-skills')).toBeInTheDocument();
   });
 });

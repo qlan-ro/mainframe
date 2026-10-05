@@ -140,7 +140,7 @@ describe('SessionPanel — mode rendering', () => {
 });
 
 describe('SessionPanel — section order', () => {
-  it('renders the Session card, then PRs, Context, Activity, Tasks, Launch, Plan, in that order', () => {
+  it('renders the Session card, then PRs, Context, Activity, Launch, Plan, and Tasks LAST (it grows to the bottom)', () => {
     render(<SessionPanel state={panelState('inline')} />);
     const sections = screen.getByTestId('session-panel-sections');
     const rendered = Array.from(
@@ -152,9 +152,9 @@ describe('SessionPanel — section order', () => {
       'stub-prs',
       'stub-context',
       'stub-activity',
-      'stub-tasks',
       'stub-launch',
       'stub-plan',
+      'stub-tasks',
     ]);
   });
 
@@ -173,12 +173,9 @@ describe('SessionPanel — section wiring', () => {
     expect(callsFor('launch')[0]).toMatchObject({ port: 31415 });
   });
 
-  it("derives ContextSection's open/onToggle from the state's context section", () => {
-    const isSectionOpen = vi.fn((id: string) => id === 'context');
-    render(<SessionPanel state={panelState('inline', { isSectionOpen })} />);
-    expect(callsFor('context')[0]).toMatchObject({ port: 31415, open: true });
-    (callsFor('context')[0] as { onToggle: () => void }).onToggle();
-    expect(toggleSection).toHaveBeenCalledWith('context');
+  it('mounts the context sections with just the port — they are first-class, never collapsed', () => {
+    render(<SessionPanel state={panelState('inline')} />);
+    expect(callsFor('context')[0]).toEqual({ port: 31415 });
   });
 
   it("derives PlanSection's open/onToggle from the state's plan section", () => {

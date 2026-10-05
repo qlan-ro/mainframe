@@ -263,7 +263,7 @@ async function ensurePanelOpen(page: Page): Promise<Locator> {
   });
   if ((await root.count()) === 0) {
     await page
-      .getByTestId('title-bar-details')
+      .getByTestId('session-panel-toggle')
       .click({ timeout: 5_000 })
       .catch(() => undefined /* the re-measure landed first and brought it back */);
   }
@@ -322,15 +322,15 @@ test.describe('§session-panel — docking modes', () => {
     await expect(page.getByTestId('session-panel')).toBeVisible();
     await expect(page.getByTestId('session-panel-overlay')).toHaveCount(0);
     await expect(page.getByTestId('session-panel-card-session')).toBeVisible();
-    await expect(page.getByTestId('title-bar-details')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('session-panel-toggle')).toHaveAttribute('aria-pressed', 'true');
 
     // Clicking the toggle while docked just closes it outright (no float — room was never the issue).
-    await page.getByTestId('title-bar-details').click();
+    await page.getByTestId('session-panel-toggle').click();
     await expect(root).toHaveCount(0, { timeout: 5_000 });
-    await expect(page.getByTestId('title-bar-details')).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByTestId('session-panel-toggle')).toHaveAttribute('aria-pressed', 'false');
 
     // Restore for the tests below.
-    await page.getByTestId('title-bar-details').click();
+    await page.getByTestId('session-panel-toggle').click();
     await expect(root).toBeVisible({ timeout: 5_000 });
   });
 
@@ -343,9 +343,9 @@ test.describe('§session-panel — docking modes', () => {
     // The open bit is true (default), but the column is short of 1044 and
     // nothing has floated it yet — the panel renders nothing.
     await expect(root).toHaveCount(0, { timeout: 10_000 });
-    await expect(page.getByTestId('title-bar-details')).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByTestId('session-panel-toggle')).toHaveAttribute('aria-pressed', 'false');
 
-    await page.getByTestId('title-bar-details').click();
+    await page.getByTestId('session-panel-toggle').click();
     await expect(root).toBeVisible({ timeout: 5_000 });
     await expect(root).toHaveAttribute('data-mode', 'overlay');
     await expect(overlay).toBeVisible();
@@ -354,7 +354,7 @@ test.describe('§session-panel — docking modes', () => {
     await expect(overlay.getByTestId('session-panel-card-session')).toBeVisible();
     // Not the docked form: the inline wrapper never mounts alongside the float.
     await expect(page.getByTestId('session-panel')).toHaveCount(0);
-    await expect(page.getByTestId('title-bar-details')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('session-panel-toggle')).toHaveAttribute('aria-pressed', 'true');
 
     await dismissOverlayWithEscape(page);
     await expect(overlay).toHaveCount(0, { timeout: 5_000 });
@@ -366,7 +366,7 @@ test.describe('§session-panel — docking modes', () => {
     await page.setViewportSize(OVERLAY);
     const overlay = page.getByTestId('session-panel-overlay');
 
-    await page.getByTestId('title-bar-details').click();
+    await page.getByTestId('session-panel-toggle').click();
     await expect(overlay).toBeVisible({ timeout: 5_000 });
 
     // The title bar sits above the host row the panel spans, so its own empty
@@ -376,16 +376,18 @@ test.describe('§session-panel — docking modes', () => {
     await expect(overlay).toHaveCount(0, { timeout: 5_000 });
   });
 
-  test('OVERLAY: re-clicking the toggle that floated the panel closes it', async () => {
+  test('OVERLAY: a click on the scrim closes the floated panel', async () => {
     const { page } = app;
     await page.setViewportSize(OVERLAY);
     const overlay = page.getByTestId('session-panel-overlay');
-    const toggle = page.getByTestId('title-bar-details');
+    const toggle = page.getByTestId('session-panel-toggle');
 
     await toggle.click();
     await expect(overlay).toBeVisible({ timeout: 5_000 });
 
-    await toggle.click();
+    // The full-height float covers the column header (and its toggle), so the
+    // scrim beside it is the close target, alongside Escape.
+    await page.getByTestId('session-panel-scrim').click({ position: { x: 10, y: 200 } });
     await expect(overlay).toHaveCount(0, { timeout: 5_000 });
     await expect(page.getByTestId('session-panel-root')).toHaveCount(0);
   });
@@ -397,7 +399,7 @@ test.describe('§session-panel — docking modes', () => {
     const { page } = app;
     await page.setViewportSize(HIDDEN);
     await expect(page.getByTestId('session-panel-root')).toHaveCount(0, { timeout: 10_000 });
-    const toggle = page.getByTestId('title-bar-details');
+    const toggle = page.getByTestId('session-panel-toggle');
     await expect(toggle).toBeVisible();
     await expect(toggle).toBeEnabled();
 
@@ -665,20 +667,20 @@ test.describe('§session-panel — Context section', () => {
     await closeTauriApp(app);
   });
 
-  test('the section is expanded by default and counts every sub-group row', async () => {
+  test('context kinds are first-class sections — no Context wrapper, no counts', async () => {
     const { page } = app;
     await ensurePanelOpen(page);
-    const header = page.getByTestId('session-panel-section-toggle-context');
-    await expect(header).toBeVisible({ timeout: 15_000 });
-    // 1 mention + 2 attachments; memory files and invoked skills are always 0
-    // under mock-cli (get_context_files / extract_skill_files return defaults).
-    await expect(header).toContainText('3', { timeout: 15_000 });
-    // No memory-file rows exist here: get_context_files() returns the default empty
-    // pair, so the "Context" sub-group has nothing to render.
-    await expect(page.locator('[data-testid^="session-panel-context-file-"]')).toHaveCount(0);
+    // 1 mention + 2 attachments under mock-cli; memory files and invoked skills
+    // come back empty (get_context_files / extract_skill_files return defaults).
+    await expect(page.getByTestId('session-panel-section-mentions')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId('session-panel-section-attachments')).toBeVisible();
+    await expect(page.getByTestId('session-panel-section-skills')).toBeVisible();
+    await expect(page.getByTestId('session-panel-section-toggle-context')).toHaveCount(0);
+    // No memory files here, so that section hides rather than showing empty.
+    await expect(page.getByTestId('session-panel-section-memory')).toHaveCount(0);
   });
 
-  test('the Session sub-group lists the seeded mention with its @ badge', async () => {
+  test('the Mentioned files section lists the seeded mention with its @ badge', async () => {
     const { page } = app;
     await ensurePanelOpen(page);
     const item = page.getByTestId('session-panel-session-item-index.ts');
@@ -687,7 +689,7 @@ test.describe('§session-panel — Context section', () => {
     await expect(item).toContainText('@');
   });
 
-  test('clicking the Session row opens the file as a workspace editor tab', async () => {
+  test('clicking a Mentioned files row opens the file as a workspace editor tab', async () => {
     const { page } = app;
     await ensurePanelOpen(page);
     await page.getByTestId('session-panel-session-item-index.ts').click();
@@ -700,7 +702,7 @@ test.describe('§session-panel — Context section', () => {
   // shape as the memory-file sub-group above. What must hold is that the group
   // still renders: its Manage link is the only route to the advisor's skills
   // sheet, which owns the available-skills catalog this panel stopped listing.
-  test('the Skills sub-group shows its empty state and keeps Manage reachable', async () => {
+  test('the Skills section shows its empty state and keeps Manage reachable', async () => {
     const { page } = app;
     await ensurePanelOpen(page);
     const empty = page.getByTestId('session-panel-skills-empty');
@@ -733,21 +735,6 @@ test.describe('§session-panel — Context section', () => {
     await ensurePanelOpen(page);
     await page.getByTestId(`session-panel-attachment-${fileAttachmentId}`).click();
     await expect(page.getByTestId('image-lightbox-dialog')).toHaveCount(0);
-  });
-
-  test('collapsing the section hides every sub-group; expanding restores them', async () => {
-    const { page } = app;
-    await ensurePanelOpen(page);
-    const header = page.getByTestId('session-panel-section-toggle-context');
-    const item = page.getByTestId('session-panel-session-item-index.ts');
-    await expect(item).toBeVisible();
-
-    await header.click();
-    await expect(item).toHaveCount(0, { timeout: 5_000 });
-    await expect(page.getByTestId('session-panel-attachment-grid')).toHaveCount(0);
-
-    await header.click();
-    await expect(item).toBeVisible({ timeout: 5_000 });
   });
 });
 

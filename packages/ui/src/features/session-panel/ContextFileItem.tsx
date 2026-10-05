@@ -12,7 +12,7 @@ import { FileText } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Hint } from '@/components/ui/hint';
 import { emitSurfaceIntent } from '@/store/surface-intents';
-import { SUB_GROUP_ROW } from './PanelSubGroup';
+import { PANEL_ROW_BUTTON } from './PanelEyebrow';
 
 interface ContextFileItemProps {
   path: string;
@@ -30,7 +30,7 @@ export function ContextFileItem({ path, displayName, badge, testId }: ContextFil
         data-testid={testId ?? `session-panel-session-item-${path}`}
         aria-label={path}
         onClick={() => emitSurfaceIntent({ type: 'open-file', path })}
-        className={SUB_GROUP_ROW}
+        className={PANEL_ROW_BUTTON}
       >
         <FileText className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
         <span className="min-w-0 flex-1 truncate text-sm">{fileName}</span>

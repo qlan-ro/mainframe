@@ -1,6 +1,7 @@
 /**
  * SessionPanel — the session's inspector: ONE scrolling column of sections
- * (Session · Pull requests · Context · Activity · Tasks · Launch · Plan).
+ * (Session · Pull requests · Memory files · Mentioned files · Skills ·
+ * Attachments · Activity · Launch · Plan · Tasks), separated by spacing, not rules.
  *
  * It DOCKS: `inline` is a 300px flex sibling of the transcript column, taking
  * width from it; `overlay` (the column is too narrow to share) sits over the
@@ -30,17 +31,22 @@ import type { SessionPanelState } from './use-session-panel-state';
 function PanelSections({ state, port }: { state: SessionPanelState; port: number }) {
   const { isSectionOpen, toggleSection } = state;
   return (
-    <div data-testid="session-panel-sections" className="flex min-h-0 flex-1 flex-col overflow-y-auto scroll-fade-y">
-      <section data-testid="session-panel-card-session" className="shrink-0 border-b border-border">
+    // No rules between sections — the 12px gap above each eyebrow separates them.
+    // Tasks is LAST so it can grow to the bottom of the column.
+    <div
+      data-testid="session-panel-sections"
+      className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pt-1 pb-3 scroll-fade-y"
+    >
+      <section data-testid="session-panel-card-session" className="shrink-0">
         <PanelEyebrow label="Session" />
         <SummarySection port={port} />
       </section>
       <PullRequestsSection />
-      <ContextSection port={port} open={isSectionOpen('context')} onToggle={() => toggleSection('context')} />
+      <ContextSection port={port} />
       <ActivitySection />
-      <TasksSection />
       <LaunchSection port={port} />
       <PlanSection open={isSectionOpen('plan')} onToggle={() => toggleSection('plan')} />
+      <TasksSection />
     </div>
   );
 }

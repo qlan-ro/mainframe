@@ -156,7 +156,7 @@ export function ActivitySection() {
   useEffect(() => setDrillTaskId(null), [chatId]);
 
   return (
-    <section data-testid="session-panel-card-activity" className="shrink-0 border-b border-border">
+    <section data-testid="session-panel-card-activity" className="shrink-0">
       <PanelEyebrow label="Activity" live={running > 0} liveTestId="session-panel-activity-live" />
       <div className="flex flex-col gap-0.5 px-2 pb-2">
         {drillRun ? (
