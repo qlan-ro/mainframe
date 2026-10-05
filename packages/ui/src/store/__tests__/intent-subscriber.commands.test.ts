@@ -2,7 +2,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { subscribeToFileIntents } from '../intent-subscriber';
 import { emitSurfaceIntent } from '../surface-intents';
-import { useSettingsStore } from '../settings';
 import { useUiPrefs } from '../ui-prefs';
 import { useActiveBasesStore } from '../active-bases-store';
 import { isWorkspaceFilesPanelOpen, useWorkspaceFilesPanel } from '../workspace-files-panel';
@@ -34,10 +33,10 @@ describe('intent-subscriber — command intents', () => {
   });
   afterEach(() => unsub());
 
-  it('open-settings opens the settings store', () => {
-    useSettingsStore.setState({ isOpen: false });
+  it('open-settings shows the Settings rail view', () => {
+    useUiPrefs.setState({ sidebarView: 'chats' });
     emitSurfaceIntent({ type: 'open-settings' });
-    expect(useSettingsStore.getState().isOpen).toBe(true);
+    expect(useUiPrefs.getState().sidebarView).toBe('settings');
   });
 
   it('toggle-sidebar flips sidebarVisible', () => {

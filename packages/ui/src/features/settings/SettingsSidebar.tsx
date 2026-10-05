@@ -1,5 +1,16 @@
+/**
+ * SettingsSidebar — the sidebar's Settings view (the nav rail's Settings
+ * button, D1/D2). Category rows restyled from the old two-pane dialog's own
+ * 184px nav column to the sidebar's row convention — same header pattern as
+ * the other views (`SidebarHeader` + `text-base font-semibold` title), rows
+ * like `TaskSidebarRow`/`AutomationSidebarRow`, the selected row
+ * `bg-sidebar-selection`. "Providers" expands into one sub-row per adapter.
+ * Settings has no project scope, so there is no `SidebarScopeStrip` here.
+ */
 import { cn } from '@/lib/utils';
 import { useAdapters } from '@/store/adapters';
+import { SidebarHeader } from '@/components/ui/sidebar';
+import { SidebarScrollRegion } from '@/features/shared/SidebarScrollRegion';
 import { useSettingsStore, type SettingsTab } from '../../store/settings';
 import { providerDotColor } from '../shared/provider-avatar';
 import { SETTINGS_TABS } from './settings-tabs';
@@ -10,7 +21,6 @@ function providerHue(id: string): string {
 }
 
 interface NavItemProps {
-  id: string;
   label: string;
   icon: React.ElementType;
   active: boolean;
@@ -18,21 +28,21 @@ interface NavItemProps {
   testId: string;
 }
 
-function SettingsNavItem({ id: _id, label, icon: Icon, active, onClick, testId }: NavItemProps) {
+function SettingsNavItem({ label, icon: Icon, active, onClick, testId }: NavItemProps) {
   return (
     <button
       type="button"
       data-testid={testId}
       onClick={onClick}
       className={cn(
-        'flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors',
+        'flex h-7 w-full items-center gap-2.5 rounded-md px-2 text-left text-sm transition-colors',
         active
           ? 'bg-sidebar-selection font-semibold text-foreground'
-          : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+          : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground',
       )}
     >
       <Icon size={14} className={cn('flex-shrink-0', active ? 'text-primary' : 'text-muted-foreground')} />
-      <span>{label}</span>
+      <span className="min-w-0 flex-1 truncate">{label}</span>
     </button>
   );
 }
@@ -42,7 +52,7 @@ function ProviderSubItems({ activeProvider }: { activeProvider: string | null })
   const setSelectedProvider = useSettingsStore((s) => s.setSelectedProvider);
 
   return (
-    <div className="flex flex-col gap-px py-px">
+    <div className="flex flex-col gap-px py-px pl-5">
       {adapters.map((adapter) => {
         const active = activeProvider === adapter.id;
         const name = adapter.name ?? adapter.id;
@@ -55,15 +65,15 @@ function ProviderSubItems({ activeProvider }: { activeProvider: string | null })
             // Brand hue inline: it is a literal in provider-avatar.ts, not a token.
             style={active ? { borderLeftColor: providerHue(adapter.id) } : undefined}
             className={cn(
-              'flex items-center gap-2 border-l-2 py-1 pl-6 pr-2 text-left text-sm transition-colors',
+              'flex h-6.5 items-center gap-2 border-l-2 pl-2 pr-2 text-left text-xs transition-colors',
               active
                 ? 'bg-sidebar-selection font-semibold text-foreground'
-                : 'border-l-transparent text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+                : 'border-l-transparent text-muted-foreground hover:bg-sidebar-accent hover:text-foreground',
             )}
           >
             <span
               style={{ backgroundColor: providerHue(adapter.id) }}
-              className="inline-flex size-[15px] shrink-0 items-center justify-center rounded-xs text-[10px] font-bold text-white ring-1 ring-inset ring-black/10"
+              className="inline-flex size-[14px] shrink-0 items-center justify-center rounded-xs text-[10px] font-bold text-white ring-1 ring-inset ring-black/10"
             >
               {name.charAt(0).toUpperCase()}
             </span>
@@ -93,22 +103,30 @@ export function SettingsSidebar() {
   }
 
   return (
-    <nav className="flex w-[184px] flex-shrink-0 flex-col gap-px overflow-y-auto border-r bg-sidebar p-4">
-      {SETTINGS_TABS.map((tab) => (
-        <div key={tab.id}>
-          <SettingsNavItem
-            id={tab.id}
-            label={tab.label}
-            icon={tab.icon}
-            active={activeTab === tab.id}
-            onClick={() => handleTabClick(tab.id)}
-            testId={`settings-nav-${tab.id}`}
-          />
-          {tab.id === 'providers' && activeTab === 'providers' && (
-            <ProviderSubItems activeProvider={selectedProvider} />
-          )}
+    <>
+      <SidebarHeader className="gap-3">
+        <div className="flex h-9 items-center pl-1">
+          <span className="text-base font-semibold">Settings</span>
         </div>
-      ))}
-    </nav>
+      </SidebarHeader>
+      <SidebarScrollRegion>
+        <div className="flex flex-col gap-0.5 px-2">
+          {SETTINGS_TABS.map((tab) => (
+            <div key={tab.id}>
+              <SettingsNavItem
+                label={tab.label}
+                icon={tab.icon}
+                active={activeTab === tab.id}
+                onClick={() => handleTabClick(tab.id)}
+                testId={`settings-nav-${tab.id}`}
+              />
+              {tab.id === 'providers' && activeTab === 'providers' && (
+                <ProviderSubItems activeProvider={selectedProvider} />
+              )}
+            </div>
+          ))}
+        </div>
+      </SidebarScrollRegion>
+    </>
   );
 }

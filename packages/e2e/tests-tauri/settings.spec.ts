@@ -1,22 +1,29 @@
 /**
- * §settings — the Settings dialog (5 panes: General/Providers/Notifications/Remote Access/About).
+ * §settings — the Settings rail view (5 panes: General/Providers/Notifications/Remote Access/About).
  *
  * Spec: docs/plans/2026-07-03-tauri-e2e-test-plan.md #26 (Cluster D).
  * UI-only for chrome/general/notifications/providers/about/remote-access (no agent turn). The
  * tuning-inheritance scenario needs one mock-cli chat (skips gracefully if the adapter is absent).
  *
- * Source: packages/ui/src/features/settings/{SettingsDialog,SettingsSidebar,SettingsContent,
+ * D2 update: Settings is a rail view now, not a dialog — `shell-rail-settings` sets
+ * `sidebarView` to 'settings' (SidebarInset renders `SettingsSurface`; the sidebar renders
+ * `SettingsSidebar`'s category rows); there is no overlay, no `settings-dialog-close` button,
+ * and Esc does not close anything. "Closing" settings now just means picking another rail view
+ * (`shell-rail-chats`).
+ *
+ * Source: packages/ui/src/features/settings/{SettingsSurface,SettingsSidebar,SettingsContent,
  * settings-tabs}, panes/general/{GeneralPane,AppearanceControls}, panes/notifications/NotificationsPane,
  * panes/about/AboutPane, panes/providers/{ProvidersPane,ProviderConfigForm,ModelDropdown,
  * SessionModeRadio,ProviderTuningDefaults}, panes/remote-access/{RemoteAccessPane,TunnelControl,
  * QuickTunnelSection,NamedTunnelSection,DevicesSection,PairingSection}.
  *
  * Testid reference (verified against source):
- *   shell-rail-settings                  — layout/NavRail.tsx bottom cluster button
- *                                           opens the dialog (the sidebar header's own
+ *   shell-rail-settings                  — layout/NavRail.tsx view button, same selected/
+ *                                           aria-pressed treatment as Chats/Tasks/Automations/
+ *                                           Setup Advisor (the sidebar header's own
  *                                           `sidebar-settings` row is gone with the redesign —
  *                                           Settings lives on the nav rail now)
- *   settings-dialog / settings-dialog-close
+ *   settings-surface                     — the body root (was `settings-dialog`)
  *   settings-nav-<tab>                   — tab ids: general/providers/notifications/remote-access/about
  *                                           (no `settings-nav-keybindings` — S4 dropped the pane)
  *   settings-nav-provider-<adapterId>    — SettingsSidebar ProviderSubItems (providers tab only)
@@ -77,32 +84,28 @@ async function providerSetting(adapterId: string, key: string): Promise<unknown>
   return body.data?.[adapterId]?.[key];
 }
 
-/**
- * Open the dialog via the deterministic sidebar-button path (⌘, covered separately).
- *
- * The scrim wait is not belt-and-braces: this file closes and reopens the dialog
- * several times per test, and a dialog's overlay outlives its content's unmount, so
- * `settings-dialog` reaching count 0 does not mean the `bg-black/10` scrim is gone.
- * Reopen inside that window and Playwright reports
- * `data-slot="dialog-overlay" intercepts pointer events` on controls inside the
- * fresh dialog — measured on `settings-mock-cli-default-effort`.
- */
+/** Shows the Settings rail view via the deterministic rail-button path (⌘, covered separately). */
 async function openSettings(page: Page): Promise<void> {
   await waitForDialogScrimsGone(page);
   await page.getByTestId('shell-rail-settings').click();
-  await page.getByTestId('settings-dialog').waitFor({ timeout: 10_000 });
+  await page.getByTestId('settings-surface').waitFor({ timeout: 10_000 });
 }
 
-/** Close the dialog if still open, so each test starts the next one clean. */
+/** Leaves Settings for Chats — a rail view has no "close", just another pick. Each
+ *  test starts the next one clean by returning to the rail's default view. */
 async function closeSettings(page: Page): Promise<void> {
-  const dialog = page.getByTestId('settings-dialog');
-  if (await dialog.isVisible().catch(() => false)) {
-    await page.getByTestId('settings-dialog-close').click();
-    await expect(dialog).toHaveCount(0, { timeout: 5_000 });
+  if (
+    await page
+      .getByTestId('settings-surface')
+      .isVisible()
+      .catch(() => false)
+  ) {
+    await page.getByTestId('shell-rail-chats').click();
+    await expect(page.getByTestId('settings-surface')).toHaveCount(0, { timeout: 5_000 });
   }
 }
 
-/** Opens the dialog and navigates to a tab. `open()` always resets to the General tab, so every
+/** Shows Settings and navigates to a tab. Opening always resets to the General tab, so every
  *  reopen after a change must re-navigate before re-reading a persisted value. */
 async function openTab(page: Page, tab: SettingsTab): Promise<void> {
   await openSettings(page);
@@ -110,7 +113,7 @@ async function openTab(page: Page, tab: SettingsTab): Promise<void> {
   await page.getByTestId(`settings-pane-${tab}`).waitFor({ timeout: 10_000 });
 }
 
-/** Opens the dialog, the Providers tab, and a specific provider's sub-item + form. */
+/** Shows Settings, the Providers tab, and a specific provider's sub-item + form. */
 async function openProviderPane(page: Page, adapterId: string): Promise<void> {
   await openTab(page, 'providers');
   await page.getByTestId(`settings-nav-provider-${adapterId}`).click();
@@ -130,40 +133,27 @@ test.describe('§settings', () => {
     await closeTauriApp(app);
   });
 
-  // ─── Chrome: open/close, tab nav ──────────────────────────────────────────────
+  // ─── Chrome: show/leave, tab nav ──────────────────────────────────────────────
 
-  test('shell-rail-settings opens the dialog; close button closes it', async () => {
+  test('shell-rail-settings shows the surface; picking Chats leaves it', async () => {
     const { page } = app;
     await openSettings(page);
-    await expect(page.getByTestId('settings-dialog')).toBeVisible();
+    await expect(page.getByTestId('settings-surface')).toBeVisible();
     await closeSettings(page);
   });
 
-  test('⌘, opens the dialog via the global hotkey', async () => {
+  test('⌘, shows the surface via the global hotkey', async () => {
     const { page } = app;
-    await expect(page.getByTestId('settings-dialog')).toHaveCount(0);
+    await expect(page.getByTestId('settings-surface')).toHaveCount(0);
     await page.keyboard.press('ControlOrMeta+,');
-    await expect(page.getByTestId('settings-dialog')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('settings-surface')).toBeVisible({ timeout: 5_000 });
     await closeSettings(page);
-  });
-
-  test('Esc closes the dialog', async () => {
-    const { page } = app;
-    await openSettings(page);
-    await page.keyboard.press('Escape');
-    await expect(page.getByTestId('settings-dialog')).toHaveCount(0, { timeout: 5_000 });
   });
 
   test('all six tabs render their pane, including Keybindings', async () => {
     const { page } = app;
-    // Open the dialog ONCE, then navigate tabs in place. The previous version
-    // called `openTab()` (which itself calls `openSettings()`) on every loop
-    // iteration — after the first tab, the dialog is already open and its
-    // scrim backdrop (`fixed inset-0 z-50 ...`) covers `shell-rail-settings`,
-    // so the re-click never lands and the test hangs to the 120s timeout. Real
-    // usage never re-opens an already-open dialog; every other test in this file
-    // calls `openTab`/`openSettings` exactly once per test, which is why this was
-    // the only one affected.
+    // Show the surface ONCE, then navigate tabs in place — no overlay to
+    // re-click through on a non-general tab (there is no dialog any more).
     await openSettings(page);
     const tabs: SettingsTab[] = ['general', 'providers', 'keybindings', 'notifications', 'remote-access', 'about'];
     for (const tab of tabs) {
