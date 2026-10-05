@@ -81,7 +81,7 @@ export function ProvidersPane({ port }: ProvidersPaneProps) {
   const adapter = adapters.find((a) => a.id === selectedProvider);
 
   return (
-    <div data-testid="settings-pane-providers" className="flex flex-col gap-4 p-4">
+    <div data-testid="settings-pane-providers" className="flex flex-col gap-4">
       <DefaultProviderPicker port={port} />
       {!selectedProvider && (
         <p className="text-sm text-muted-foreground">Select a provider from the sidebar to configure it.</p>

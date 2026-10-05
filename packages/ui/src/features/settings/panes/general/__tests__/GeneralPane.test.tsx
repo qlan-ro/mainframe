@@ -23,9 +23,10 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks());
 
 describe('GeneralPane', () => {
-  it('renders a top-level "General" pane heading (StgHeading parity — was entirely missing)', () => {
+  it('draws no pane title of its own — the settings surface owns the one title', () => {
     render(<GeneralPane port={31415} />);
-    expect(screen.getByRole('heading', { name: 'General', level: 2 })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'General' })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Appearance', level: 3 })).toBeInTheDocument();
   });
   it('Save button appears only when worktreeDir is dirty and PUTs on click', async () => {
     render(<GeneralPane port={31415} />);

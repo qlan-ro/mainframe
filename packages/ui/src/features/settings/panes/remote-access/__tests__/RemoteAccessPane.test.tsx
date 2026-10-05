@@ -26,11 +26,9 @@ function makeTunnel(over: Partial<UseTunnelStatusResult> = {}): UseTunnelStatusR
 }
 
 describe('RemoteAccessPane heading', () => {
-  it('renders "Remote Access" as the v2 pane heading (text-lg/semibold)', () => {
+  it('draws no pane title of its own — the settings surface owns the one title', () => {
     mockUseTunnelStatus.mockReturnValue(makeTunnel());
     render(<RemoteAccessPane port={31415} />);
-    const heading = screen.getByText('Remote Access');
-    expect(heading.className).toContain('text-lg');
-    expect(heading.className).toContain('font-semibold');
+    expect(screen.queryByText('Remote Access')).toBeNull();
   });
 });

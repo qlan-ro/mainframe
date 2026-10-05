@@ -47,7 +47,7 @@ export function PickerRow<T extends string>({
         }}
       >
         {options.map((opt) => (
-          <ToggleGroupItem key={opt.id} value={opt.id} data-testid={`${prefix}-${opt.id}`} className="px-3">
+          <ToggleGroupItem key={opt.id} value={opt.id} data-testid={`${prefix}-${opt.id}`} className="flex-none px-3">
             {opt.label}
           </ToggleGroupItem>
         ))}
