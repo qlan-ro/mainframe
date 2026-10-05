@@ -1,26 +1,37 @@
 /**
- * AutomationEditor — shell: name, WhenCard, Recipe, footer summary, Save
- * (ts153 wf2-editor.jsx `WfEditor`). Reads `use-automations-nav`'s
- * `editorTarget`/`use-automations-store`'s `definitions`/`catalog`/`gateway`
- * directly (mirrors `LibraryRow`'s self-sufficient pattern) rather than
- * taking props — `AutomationsView` only decides WHETHER to mount this, not
- * what to pass it.
+ * AutomationEditor — shell: name, project picker, WhenCard, Recipe, footer
+ * summary, Save (ts153 wf2-editor.jsx `WfEditor`). Reads `use-automations-
+ * nav`'s `editorTarget`/`use-automations-store`'s `definitions`/`catalog`/
+ * `gateway` directly (mirrors `LibraryRow`'s self-sufficient pattern) rather
+ * than taking props — `AutomationsView` only decides WHETHER to mount this,
+ * not what to pass it.
  *
- * Project scoping: the editor has no picker of its own. Every automation saves
- * to `store.scopeProjectId` — the project the open modal is showing, chosen in
- * the library header. Saving is blocked while that scope is "All projects",
- * because an automation belongs to one project. `definitionToSave` also runs every `ask_agent`
- * step through `stampAgentProjectId` (bullet 4) so the step's own
- * `projectId` — which the daemon engine actually reads at run time — always
- * matches, rather than falling back to an arbitrary "first project in the
- * DB".
+ * Project scoping (2026-10 redesign): the editor has its own picker now
+ * (`AutomationProjectPicker`) — a row of avatar chips, "All projects"
+ * included, replacing the old ambient `store.scopeProjectId` gating (saving
+ * used to be blocked outright while the library header's scope was "All
+ * projects"). A global (unscoped) automation is allowed UNLESS its tree
+ * contains an `ask_agent` step (`stepsNeedProject`) — that step's worktree
+ * has nowhere else to go, so it is the one case that still needs a project.
+ * `projectId` is also mirrored into `store.scopeProjectId` for as long as
+ * this editor is open (restored to the ambient scope on close) — the
+ * project-scoped field pickers (skills/files/branches) read that store field,
+ * and the editor's own choice should win over the ambient one while it's
+ * open. `definitionToSave` still runs every `ask_agent` step through
+ * `stampAgentProjectId` (bullet 4) so the step's own `projectId` — which the
+ * daemon engine actually reads at run time — matches the automation's
+ * resolved project, rather than falling back to an arbitrary "first project
+ * in the DB". It is skipped for a global automation (no project to stamp
+ * with), which is fine because `stepsNeedProject` already blocked Save.
  */
 import { Button } from '@/components/ui/button';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Check, ChevronLeft, TriangleAlert, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Hint } from '@/components/ui/hint';
 import { mfToast } from '@/lib/toast';
+import { useProjects } from '@/features/sessions/use-projects';
+import { soleProjectId, useSessionFilters } from '@/store/session-filters';
 import type { AutomationCreateInput } from '../contract';
 import { useAutomationsNav } from '../data/use-automations-nav';
 import { selectAutomationById, useAutomationsStore } from '../data/use-automations-store';
@@ -28,8 +39,10 @@ import { builtinTokens, triggerTokens } from '../domain/tokens';
 import { validate, type ValidationIssue } from '../domain/validate';
 import { applyStepsEdit } from './definition-actions';
 import { draftFrom, definitionToSave, EMPTY_DRAFT, type DraftState } from './draft';
+import { AutomationProjectPicker, resolveDefaultProjectId } from './AutomationProjectPicker';
 import { Recipe } from './Recipe';
 import { saveIssuesFrom } from './save-issues';
+import { stepsNeedProject } from './stamp-agent-project-id';
 import { WhenCard } from './WhenCard';
 
 function errorMessage(err: unknown): string | undefined {
@@ -67,7 +80,14 @@ export function AutomationEditor() {
   const catalog = useAutomationsStore((s) => s.catalog);
   const gateway = useAutomationsStore((s) => s.gateway);
   const patchDefinition = useAutomationsStore((s) => s.patchDefinition);
-  const scopeProjectId = useAutomationsStore((s) => s.scopeProjectId);
+  const setScopeProjectId = useAutomationsStore((s) => s.setScopeProjectId);
+
+  const { projects } = useProjects();
+  const sessionScope = useSessionFilters((s) => s.filterProjectIds);
+  const scopedProjects = sessionScope.size > 0 ? projects.filter((p) => sessionScope.has(p.id)) : projects;
+  const ambientProjectId = soleProjectId(sessionScope);
+  const ambientProjectIdRef = useRef(ambientProjectId);
+  ambientProjectIdRef.current = ambientProjectId;
 
   const existing = useAutomationsStore(
     selectAutomationById(editorTarget?.mode === 'edit' ? editorTarget.automationId : null),
@@ -79,6 +99,9 @@ export function AutomationEditor() {
   const [draft, setDraft] = useState<DraftState>(() =>
     existing ? draftFrom(existing, catalog) : newDraft ? draftFrom(newDraft, catalog) : EMPTY_DRAFT,
   );
+  const [projectId, setProjectId] = useState<string | null>(() =>
+    existing ? existing.projectId : resolveDefaultProjectId(scopedProjects, ambientProjectId),
+  );
   const [saving, setSaving] = useState(false);
   const [saveIssues, setSaveIssues] = useState<ValidationIssue[]>([]);
 
@@ -88,30 +111,45 @@ export function AutomationEditor() {
     setDraft(patch);
   }
 
-  // Re-seed only when the target identity changes (`editKey`), not on every store
-  // tick — mirrors the initializer above so the mount-time run is a harmless no-op
-  // re-render with the same values; real re-seeds happen when `editorTarget`
-  // switches between two `edit` targets (or `edit` ↔ `new`) without this component
-  // unmounting in between.
+  // Re-seed only when the target identity changes (`editKey`), not on every
+  // store tick — mirrors the initializer above so the mount-time run is a
+  // harmless no-op re-render with the same values; real re-seeds happen when
+  // `editorTarget` switches between two `edit` targets (or `edit` ↔ `new`)
+  // without this component unmounting in between.
   useEffect(() => {
     setSaveIssues([]);
     setDraft(existing ? draftFrom(existing, catalog) : newDraft ? draftFrom(newDraft, catalog) : EMPTY_DRAFT);
+    setProjectId(existing ? existing.projectId : resolveDefaultProjectId(scopedProjects, ambientProjectId));
   }, [editKey]);
+
+  // The project-scoped field pickers (skills/files/branches) read
+  // `store.scopeProjectId` — this editor's own choice wins over the ambient
+  // session scope for as long as it's open, and the ambient value comes back
+  // once it closes (not necessarily the one captured at mount: the ref tracks
+  // the latest).
+  useEffect(() => {
+    setScopeProjectId(projectId);
+  }, [projectId, setScopeProjectId]);
+  useEffect(() => {
+    return () => setScopeProjectId(ambientProjectIdRef.current);
+  }, []);
+
+  const needsProject = projectId == null && stepsNeedProject(draft.definition.steps);
 
   const issues = useMemo(() => {
     const base = validate(draft.name, draft.definition, catalog);
-    const withProject = scopeProjectId
-      ? base
-      : [
+    const withProject = needsProject
+      ? [
           {
             stepId: null,
             level: 'error' as const,
-            msg: 'Pick a project in the library header to save this automation.',
+            msg: 'An agent step needs a project — pick one above, or remove the step.',
           },
           ...base,
-        ];
+        ]
+      : base;
     return [...withProject, ...saveIssues];
-  }, [draft.name, draft.definition, catalog, scopeProjectId, saveIssues]);
+  }, [draft.name, draft.definition, catalog, needsProject, saveIssues]);
   const errors = issues.filter((i) => i.level === 'error');
   const ok = errors.length === 0;
 
@@ -121,15 +159,15 @@ export function AutomationEditor() {
   );
 
   async function handleSave() {
-    if (!ok || saving || !scopeProjectId) return;
+    if (!ok || saving) return;
     setSaving(true);
     try {
       const input: AutomationCreateInput = {
         name: draft.name,
         description: draft.description || undefined,
-        scope: 'project',
-        projectId: scopeProjectId,
-        definition: definitionToSave(draft.definition, catalog, scopeProjectId),
+        scope: projectId ? 'project' : 'global',
+        projectId,
+        definition: definitionToSave(draft.definition, catalog, projectId),
       };
       const result =
         editorTarget?.mode === 'edit'
@@ -196,6 +234,10 @@ export function AutomationEditor() {
               placeholder="What does it do? (optional)"
               className="border-none bg-transparent p-0 text-sm text-muted-foreground outline-none placeholder:text-muted-foreground"
             />
+          </div>
+
+          <div className="mb-[24px]">
+            <AutomationProjectPicker projects={scopedProjects} value={projectId} onChange={setProjectId} />
           </div>
 
           <EditorSection

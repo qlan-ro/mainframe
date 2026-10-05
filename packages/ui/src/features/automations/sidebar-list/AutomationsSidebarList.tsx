@@ -1,17 +1,18 @@
 /**
  * AutomationsSidebarList — the sidebar's Automations view (the nav rail's
- * third list). Header: "Automations" + the shared scope strip (D7) + Open
- * library + New. Rows come from the D7 scope-resolution helper
+ * third list). Header: "Automations" + the shared scope strip (D7). "New
+ * automation" is its own action row (`NewAutomationRow`, mirroring Chats'
+ * `NewSessionRow`) — there is no "Open the library" affordance any more
+ * (2026-10 redesign: the body never lists automations, so there is nothing
+ * to open). Rows come from the D7 scope-resolution helper
  * (`useScopedAutomationsLibrary`, shared with the body) — the sole project's
  * library, 'all', or 'all' filtered to the scope. A row opens the
  * automation's details in the body; "needs you" rows sort first. The
  * pending dot lives on the rail.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { LayoutList, Plus } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Hint } from '@/components/ui/hint';
-import { SidebarHeader } from '@/components/ui/sidebar';
+import { Plus, Zap } from 'lucide-react';
+import { SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { SidebarScopeStrip } from '@/features/sessions/SidebarScopeStrip';
 import { SidebarScrollRegion } from '@/features/shared/SidebarScrollRegion';
 import { useScopedAutomationsLibrary } from '../data/use-automations-scope';
@@ -32,11 +33,28 @@ function useTickingNow(): number {
   return now;
 }
 
+/** The "New automation" row under the header — ONE CLICK, always, mirroring Chats' `NewSessionRow`. */
+function NewAutomationRow({ onClick }: { onClick: () => void }) {
+  return (
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <SidebarMenuButton className="pl-1" data-testid="automations-sidebar-new" onClick={onClick}>
+          <Zap />
+          <span className="min-w-0 flex-1 truncate">New automation</span>
+          <Plus aria-hidden className="shrink-0 text-muted-foreground" />
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    </SidebarMenu>
+  );
+}
+
 export function AutomationsSidebarList() {
   const library = useScopedAutomationsLibrary();
   const interactions = useAutomationsStore((s) => s.interactions);
   const openHost = useAutomationsNav((s) => s.openHost);
-  const close = useAutomationsNav((s) => s.close);
+  const editorTarget = useAutomationsNav((s) => s.editorTarget);
+  const describeOpen = useAutomationsNav((s) => s.describeOpen);
+  const detailsAutomationId = useAutomationsNav((s) => s.detailsAutomationId);
   const openEditor = useAutomationsNav((s) => s.openEditor);
   const openDetails = useAutomationsNav((s) => s.openDetails);
   const now = useTickingNow();
@@ -45,12 +63,16 @@ export function AutomationsSidebarList() {
     [library.definitions, library.runs, interactions],
   );
 
-  // Returns the body to the bare library — clears whatever sub-view (editor,
-  // run, describe, details) was left open, rather than resuming it.
-  const openLibrary = () => {
-    openHost();
-    close();
-  };
+  // Highlights the row for whatever the body is actually showing: editing an
+  // existing automation keeps its row lit (details stays open underneath it,
+  // 2026-10 redesign); a brand-new draft or Describe lights nothing, even if
+  // some other row's details happened to be open a moment ago.
+  const activeAutomationId =
+    editorTarget?.mode === 'edit'
+      ? editorTarget.automationId
+      : editorTarget != null || describeOpen
+        ? null
+        : detailsAutomationId;
 
   const openNew = () => {
     openHost();
@@ -60,37 +82,10 @@ export function AutomationsSidebarList() {
   return (
     <>
       <SidebarHeader className="gap-3">
-        <div className="flex h-9 items-center justify-between pl-1">
+        <div className="flex h-9 items-center pl-1">
           <span className="text-base font-semibold">Automations</span>
-          <div className="flex items-center">
-            {/* The bare library (run / toggle / delete per row) has no other
-                production entry point: rows open Details, New opens the editor. */}
-            <Hint label="Open the library">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                data-testid="automations-sidebar-open-library"
-                aria-label="Open the library"
-                className="text-muted-foreground"
-                onClick={openLibrary}
-              >
-                <LayoutList />
-              </Button>
-            </Hint>
-            <Hint label="New automation">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                data-testid="automations-sidebar-new"
-                aria-label="New automation"
-                className="text-muted-foreground"
-                onClick={openNew}
-              >
-                <Plus />
-              </Button>
-            </Hint>
-          </div>
         </div>
+        <NewAutomationRow onClick={openNew} />
         <SidebarScopeStrip />
       </SidebarHeader>
       <SidebarScrollRegion>
@@ -119,6 +114,7 @@ export function AutomationsSidebarList() {
                 key={row.id}
                 row={row}
                 now={now}
+                selected={row.id === activeAutomationId}
                 onOpen={() => {
                   openHost();
                   openDetails(row.id);

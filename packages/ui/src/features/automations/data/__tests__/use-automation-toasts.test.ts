@@ -48,7 +48,7 @@ function mountWithHandler() {
 beforeEach(() => {
   handler = () => {};
   vi.clearAllMocks();
-  useAutomationsNav.setState({ runId: null, editorTarget: null });
+  useAutomationsNav.setState({ detailsAutomationId: null, selectedRunId: null, editorTarget: null });
   useUiPrefs.setState({ sidebarView: 'chats' });
 });
 
@@ -87,7 +87,8 @@ describe('useAutomationToasts — automation.notification', () => {
     call.action!.onClick();
 
     expect(useUiPrefs.getState().sidebarView).toBe('automations');
-    expect(useAutomationsNav.getState().runId).toBe('run-2');
+    expect(useAutomationsNav.getState().detailsAutomationId).toBe('auto-1');
+    expect(useAutomationsNav.getState().selectedRunId).toBe('run-2');
   });
 
   it('passes the first chatId (native "Open session" CTA) instead of an action when chat ids are present', () => {
@@ -125,7 +126,8 @@ describe('useAutomationToasts — automation.completed', () => {
     expect(opts?.action?.label).toBe('View run');
 
     opts!.action!.onClick();
-    expect(useAutomationsNav.getState().runId).toBe('run-4');
+    expect(useAutomationsNav.getState().detailsAutomationId).toBe('auto-1');
+    expect(useAutomationsNav.getState().selectedRunId).toBe('run-4');
   });
 
   it('fires an error toast with the result as description on status:failed', () => {

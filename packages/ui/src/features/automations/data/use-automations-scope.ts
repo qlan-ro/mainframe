@@ -13,9 +13,10 @@
  *    `AutomationsHost`).
  *  - `useAutomationsLibraryView` reads the already-loaded entry (keyed off
  *    the store's `scopeProjectId`, which `AutomationsSurface` owns) WITHOUT
- *    triggering a second fetch of its own — `LibraryList` and the body
- *    header's count. Calling the loading hook from both the surface and
- *    the list it renders would double-fetch on every mount.
+ *    triggering a second fetch of its own — `AutomationsView`'s empty-state
+ *    branch (BlankState vs "Select an automation") is its last caller since
+ *    the 2026-10 redesign retired the body-wide library. Calling the loading
+ *    hook from both the surface and this would double-fetch on every mount.
  */
 import { soleProjectId, useSessionFilters } from '@/store/session-filters';
 import type { AutomationSummary } from '../contract';

@@ -46,16 +46,28 @@ function StatusDot({ status }: { status: AutomationRowStatus }) {
   );
 }
 
-export function AutomationSidebarRow({ row, now, onOpen }: { row: AutomationRowVm; now: number; onOpen: () => void }) {
+export function AutomationSidebarRow({
+  row,
+  now,
+  selected = false,
+  onOpen,
+}: {
+  row: AutomationRowVm;
+  now: number;
+  selected?: boolean;
+  onOpen: () => void;
+}) {
   const Icon = TRIGGER_ICON[row.trigger];
   const lastRun = formatLastRun(row.lastRunAt, now);
   return (
     <button
       type="button"
       data-testid={`automations-sidebar-row-${row.id}`}
+      aria-pressed={selected}
       onClick={onOpen}
       className={cn(
         'flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm hover:bg-sidebar-accent',
+        selected && 'bg-sidebar-selection',
         row.status === 'disabled' && 'text-muted-foreground',
       )}
     >

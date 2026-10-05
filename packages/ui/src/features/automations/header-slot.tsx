@@ -1,9 +1,10 @@
 /**
- * The Automations view's ONE header row hosts its sub-views' crumb and actions:
- * `AutomationsView` renders a slot element after the "Workflows" crumb and
- * provides it here; a sub-view (details today) portals "› <name>", its tabs and
- * its actions into that row instead of drawing a second title row of its own.
- * A portal, not lifted state, so a sub-view keeps owning its own handlers.
+ * The Automations view's header row (details only, 2026-10 redesign):
+ * `AutomationsView` renders a slot element and provides it here; `AutomationDetails`
+ * portals the open automation's name, run-status suffix and actions into it
+ * instead of drawing a second title row of its own. A portal, not lifted
+ * state, so Details keeps owning its own handlers. The editor and Describe
+ * draw their own self-contained header bars and never use this slot.
  */
 import { createContext, useContext, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';

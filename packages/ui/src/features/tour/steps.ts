@@ -72,7 +72,7 @@ const TOUR_STEPS: readonly TourStep[] = [
     target: 'automations',
     side: 'right',
     title: 'Automations',
-    body: 'The Automations list: agent runs that fire on their own. Build a workflow once, then put it on a schedule.',
+    body: 'The Automations list: agent runs that fire on their own. Build an automation once, then put it on a schedule.',
   },
   {
     target: 'daemon',

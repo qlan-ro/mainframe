@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { AutomationStep } from '../../contract';
-import { stampAgentProjectId } from '../stamp-agent-project-id';
+import { stampAgentProjectId, stepsNeedProject } from '../stamp-agent-project-id';
 
 describe('stampAgentProjectId', () => {
   it('sets projectId on a top-level ask_agent step, overwriting any existing value', () => {
@@ -61,5 +61,41 @@ describe('stampAgentProjectId', () => {
         steps: [{ id: 'a3', kind: 'ask_agent', prompt: [], projectId: 'proj-9' }],
       },
     ]);
+  });
+});
+
+describe('stepsNeedProject', () => {
+  it('is false for a tree with no ask_agent step', () => {
+    const steps: AutomationStep[] = [{ id: 'n', kind: 'notify', message: ['hi'] }];
+    expect(stepsNeedProject(steps)).toBe(false);
+  });
+
+  it('is true for a top-level ask_agent step', () => {
+    const steps: AutomationStep[] = [{ id: 'a', kind: 'ask_agent', prompt: [] }];
+    expect(stepsNeedProject(steps)).toBe(true);
+  });
+
+  it('is true for an ask_agent step nested in an if branch or a repeat body', () => {
+    const inIf: AutomationStep[] = [
+      {
+        id: 'i',
+        kind: 'if',
+        match: 'all',
+        conditions: [],
+        then: [{ id: 'a1', kind: 'ask_agent', prompt: [] }],
+        otherwise: [],
+      },
+    ];
+    expect(stepsNeedProject(inIf)).toBe(true);
+
+    const inRepeat: AutomationStep[] = [
+      {
+        id: 'r',
+        kind: 'repeat',
+        items: { stepId: 'builtin', output: 'today' },
+        steps: [{ id: 'a2', kind: 'ask_agent', prompt: [] }],
+      },
+    ];
+    expect(stepsNeedProject(inRepeat)).toBe(true);
   });
 });

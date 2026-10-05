@@ -79,3 +79,27 @@ describe('AutomationSidebarRow — click', () => {
     expect(onOpen).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('AutomationSidebarRow — selected state (2026-10 redesign)', () => {
+  it('is unselected by default', () => {
+    render(
+      <TooltipProvider>
+        <AutomationSidebarRow row={row()} now={Date.now()} onOpen={vi.fn()} />
+      </TooltipProvider>,
+    );
+    const el = screen.getByTestId('automations-sidebar-row-auto-1');
+    expect(el).toHaveAttribute('aria-pressed', 'false');
+    expect(el.className).not.toContain('bg-sidebar-selection');
+  });
+
+  it('highlights like the session rows when selected', () => {
+    render(
+      <TooltipProvider>
+        <AutomationSidebarRow row={row()} now={Date.now()} selected onOpen={vi.fn()} />
+      </TooltipProvider>,
+    );
+    const el = screen.getByTestId('automations-sidebar-row-auto-1');
+    expect(el).toHaveAttribute('aria-pressed', 'true');
+    expect(el.className).toContain('bg-sidebar-selection');
+  });
+});

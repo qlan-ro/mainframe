@@ -1,20 +1,13 @@
 /**
- * LastRunPill — status dot + relative time for an automation's most recent
- * run; clicking it opens that run in the run view. `null`/`undefined` renders
- * "Never run" (inert). Ink policy: the semantic status hue lives on the dot
- * only — the label and time stay on `foreground`/`muted-foreground`, never
- * colored text (typography audit §1).
- *
- * Stops click propagation — its sole caller, `LibraryRow`, is itself
- * clickable (todo #233's row → details/run navigation), and this pill's
- * click should open the specific run it shows, not the row's routing.
+ * Run-status vocabulary — label + dot color per `AutomationRunStatus`, one
+ * source of truth shared by `details/RunsColumn`, `details/AutomationDetails`'s
+ * header suffix, and `run/RunTrace`. Originally lived on a `LastRunPill`
+ * component here (the old `LibraryRow`'s last-run indicator); that component
+ * is retired with the library in the 2026-10 redesign — only the vocabulary
+ * survives, since every remaining caller draws its own status glyph.
  */
-import React from 'react';
-import { cn } from '@/lib/utils';
-import type { AutomationRunStatus, AutomationRunSummary } from '../contract';
-import { formatRelativeTime } from '@/features/sessions/view-model/relative-time';
+import type { AutomationRunStatus } from '../contract';
 
-/** Exported so RunView's header status pill uses the exact same run-status vocabulary — one source of truth. */
 export const RUN_STATUS_LABEL: Record<AutomationRunStatus, string> = {
   running: 'Running',
   waiting: 'Waiting',
@@ -30,44 +23,3 @@ export const RUN_STATUS_DOT_CLASS: Record<AutomationRunStatus, string> = {
   failed: 'bg-destructive',
   cancelled: 'bg-muted-foreground',
 };
-
-interface LastRunPillProps {
-  automationId: string;
-  run?: AutomationRunSummary;
-  onOpen: (runId: string) => void;
-}
-
-export function LastRunPill({ automationId, run, onOpen }: LastRunPillProps): React.ReactElement {
-  const testId = `automations-library-last-run-${automationId}`;
-
-  if (!run) {
-    return (
-      <span data-testid={testId} className="text-xs text-muted-foreground">
-        Never run
-      </span>
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      data-testid={testId}
-      onClick={(e) => {
-        e.stopPropagation();
-        onOpen(run.id);
-      }}
-      className="inline-flex items-center gap-[5px] rounded text-xs hover:underline"
-    >
-      {run.status === 'running' ? (
-        <span
-          aria-hidden
-          className="size-[8px] shrink-0 animate-spin rounded-full border-[1.5px] border-primary border-t-transparent"
-        />
-      ) : (
-        <span aria-hidden className={cn('size-[7px] shrink-0 rounded-full', RUN_STATUS_DOT_CLASS[run.status])} />
-      )}
-      <span className="font-medium text-foreground">{RUN_STATUS_LABEL[run.status]}</span>
-      <span className="text-muted-foreground">· {formatRelativeTime(run.startedAt, Date.now())}</span>
-    </button>
-  );
-}

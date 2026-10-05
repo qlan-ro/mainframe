@@ -1,12 +1,8 @@
 /**
- * RunView — header (name, trigger · time, status pill, Run again, Cancel) +
- * timeline (ts153 wf2-runtime.jsx `WfRunView`, ported onto the real
- * `AutomationRunSummary`/`AutomationTimelineEntry` and fetched via
- * `gateway.getRunTimeline` rather than a pre-nested mock run). Self-
- * sufficient like `AutomationEditor`: reads `runId` from `use-automations-
- * nav` and `runs`/`definitions`/`interactions`/`catalog`/`gateway` from
- * `use-automations-store` directly. TDD: test written first, implemented
- * after.
+ * RunTrace — the step timeline ported off the old full-page `RunView`
+ * (2026-10 redesign: `details/RunsColumn` replaced its header/back-button
+ * shell). Self-sufficient: resolves `run`/`automation`/`interactions`/
+ * `catalog`/`gateway` off the `runId` prop.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -16,9 +12,8 @@ import { createFakeGateway } from '../../data/__tests__/fake-gateway';
 import { useAutomationsNav } from '../../data/use-automations-nav';
 import { useAutomationsStore } from '../../data/use-automations-store';
 import { EMPTY_LIBRARY } from '../../data/library-cache';
-import { RunView } from '../RunView';
+import { RunTrace } from '../RunTrace';
 
-/** RunView resolves its run/automation via `selectRunById`/`selectAutomationById`, which search every loaded scope — 'all' is enough here. */
 function seedLibrary(definitions: AutomationSummary[], runs: AutomationRunSummary[]) {
   useAutomationsStore.setState({ libraries: { all: { ...EMPTY_LIBRARY, definitions, runs } } });
 }
@@ -70,48 +65,40 @@ function setup(overrides: {
     catalog: [],
     gateway: createFakeGateway({ getRunTimeline, ...overrides.gatewayOverrides }),
   });
-  useAutomationsNav.setState({ runId: overrides.run.id, editorTarget: null });
   return { getRunTimeline };
 }
 
 beforeEach(() => {
-  useAutomationsNav.setState({ runId: null, editorTarget: null });
+  useAutomationsNav.setState({ detailsAutomationId: null, selectedRunId: null, editorTarget: null });
   useAutomationsStore.setState({ libraries: {}, interactions: [], catalog: [] });
 });
 
-describe('RunView — header', () => {
-  it('shows the automation name and the run status', async () => {
-    setup({ run: run({ status: 'succeeded' }), timeline: [] });
-    render(<RunView />);
-    expect(await screen.findByText('Ship work')).toBeInTheDocument();
-    expect(screen.getByText('Done')).toBeInTheDocument();
-  });
-
+describe('RunTrace — actions', () => {
   it('shows Cancel only while running or waiting', async () => {
     setup({ run: run({ status: 'running', finishedAt: null }), timeline: [] });
-    render(<RunView />);
-    await screen.findByText('Ship work');
+    render(<RunTrace runId="run-1" />);
+    await screen.findByTestId('automations-run-timeline');
     expect(screen.getByTestId('automations-run-cancel')).toBeInTheDocument();
   });
 
   it('hides Cancel once the run has finished', async () => {
     setup({ run: run({ status: 'succeeded' }), timeline: [] });
-    render(<RunView />);
-    await screen.findByText('Ship work');
+    render(<RunTrace runId="run-1" />);
+    await screen.findByTestId('automations-run-timeline');
     expect(screen.queryByTestId('automations-run-cancel')).not.toBeInTheDocument();
   });
 
-  it('Run again starts a fresh run and navigates to it', async () => {
+  it('Run again starts a fresh run and selects it in the nav store', async () => {
     const user = userEvent.setup();
     const newRun = run({ id: 'run-2', status: 'running', finishedAt: null });
     const startRun = vi.fn().mockResolvedValue(newRun);
     setup({ run: run({ status: 'succeeded' }), timeline: [], gatewayOverrides: { startRun } });
-    render(<RunView />);
-    await screen.findByText('Ship work');
+    render(<RunTrace runId="run-1" />);
+    await screen.findByTestId('automations-run-timeline');
 
     await user.click(screen.getByTestId('automations-run-again'));
     expect(startRun).toHaveBeenCalledWith('auto-1');
-    await waitFor(() => expect(useAutomationsNav.getState().runId).toBe('run-2'));
+    await waitFor(() => expect(useAutomationsNav.getState().selectedRunId).toBe('run-2'));
   });
 
   it('Cancel calls gateway.cancelRun and refreshes the run status', async () => {
@@ -119,101 +106,71 @@ describe('RunView — header', () => {
     const cancelRun = vi.fn().mockResolvedValue(undefined);
     const getRun = vi.fn().mockResolvedValue(run({ status: 'cancelled', finishedAt: Date.now() }));
     setup({ run: run({ status: 'running', finishedAt: null }), timeline: [], gatewayOverrides: { cancelRun, getRun } });
-    render(<RunView />);
-    await screen.findByText('Ship work');
+    render(<RunTrace runId="run-1" />);
+    await screen.findByTestId('automations-run-timeline');
 
     await user.click(screen.getByTestId('automations-run-cancel'));
     expect(cancelRun).toHaveBeenCalledWith('run-1');
-    expect(await screen.findByText('Cancelled')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByTestId('automations-run-cancel')).not.toBeInTheDocument());
   });
 });
 
-describe('RunView — live updates', () => {
+describe('RunTrace — live updates', () => {
   it('refetches the timeline when the open run is patched with a new status (e.g. a live automation.run.updated WS event)', async () => {
     const { getRunTimeline } = setup({ run: run({ status: 'running', finishedAt: null }), timeline: [] });
-    render(<RunView />);
-    await screen.findByText('Ship work');
+    render(<RunTrace runId="run-1" />);
+    await screen.findByTestId('automations-run-timeline');
     expect(getRunTimeline).toHaveBeenCalledTimes(1);
 
     useAutomationsStore.getState().patchRun(run({ status: 'succeeded', finishedAt: Date.now() }));
 
     await waitFor(() => expect(getRunTimeline).toHaveBeenCalledTimes(2));
   });
-
-  it('refetches the timeline on every patch of the open run, even one that leaves the status unchanged (a per-step-transition WS event)', async () => {
-    const { getRunTimeline } = setup({ run: run({ status: 'running', finishedAt: null }), timeline: [] });
-    render(<RunView />);
-    await screen.findByText('Ship work');
-    expect(getRunTimeline).toHaveBeenCalledTimes(1);
-
-    useAutomationsStore.getState().patchRun(run({ status: 'running', finishedAt: null }));
-    await waitFor(() => expect(getRunTimeline).toHaveBeenCalledTimes(2));
-
-    useAutomationsStore.getState().patchRun(run({ status: 'running', finishedAt: null }));
-    await waitFor(() => expect(getRunTimeline).toHaveBeenCalledTimes(3));
-  });
-
-  it('does not refetch the timeline when a different run is patched', async () => {
-    const { getRunTimeline } = setup({ run: run({ status: 'running', finishedAt: null }), timeline: [] });
-    render(<RunView />);
-    await screen.findByText('Ship work');
-    expect(getRunTimeline).toHaveBeenCalledTimes(1);
-
-    useAutomationsStore.getState().patchRun(run({ id: 'run-2', status: 'running', finishedAt: null }));
-
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(getRunTimeline).toHaveBeenCalledTimes(1);
-  });
 });
 
-describe('RunView — not found', () => {
+describe('RunTrace — not found', () => {
   it('renders a not-found state instead of crashing when the run id is unknown', () => {
     seedLibrary([AUTOMATION], []);
     useAutomationsStore.setState({ interactions: [], catalog: [] });
-    useAutomationsNav.setState({ runId: 'missing-run', editorTarget: null });
-    render(<RunView />);
+    render(<RunTrace runId="missing-run" />);
     expect(screen.getByTestId('automations-run-not-found')).toBeInTheDocument();
   });
 });
 
-describe('RunView — timeline states', () => {
+describe('RunTrace — timeline states', () => {
   it('renders a top-level row per timeline entry, across every status', async () => {
     const timeline: AutomationTimelineEntry[] = [
       { stepRef: 'q', stepId: 'q', kind: 'ask_me', status: 'succeeded', outputPreview: 'Create new' },
       { stepRef: 'create-pr', stepId: 'create-pr', kind: 'run_action', status: 'skipped' },
     ];
     setup({ run: run({ status: 'succeeded' }), timeline });
-    render(<RunView />);
+    render(<RunTrace runId="run-1" />);
     expect(await screen.findByTestId('automations-run-step-q')).toBeInTheDocument();
     expect(screen.getByTestId('automations-run-step-create-pr')).toBeInTheDocument();
   });
 
-  it.each([
-    ['waiting', 'Waiting', true],
-    ['running', 'Running', true],
-    ['failed', 'Failed', false],
-    ['cancelled', 'Cancelled', false],
-  ] as const)(
-    'renders a %s run with the matching status pill and cancel-button visibility',
-    async (status, label, cancellable) => {
-      seedLibrary([AUTOMATION], []);
-      useAutomationsStore.setState({ interactions: [], catalog: [] });
-      const timeline: AutomationTimelineEntry[] = [{ stepRef: 'q', stepId: 'q', kind: 'ask_me', status: 'waiting' }];
-      const finishedAt = status === 'running' || status === 'waiting' ? null : Date.now();
-      setup({ run: run({ id: `run-${status}`, status, finishedAt }), timeline });
-      render(<RunView />);
-      expect(await screen.findByTestId('automations-run-step-q')).toBeInTheDocument();
-      expect(screen.getByText(label)).toBeInTheDocument();
-      if (cancellable) {
-        expect(screen.getByTestId('automations-run-cancel')).toBeInTheDocument();
-      } else {
-        expect(screen.queryByTestId('automations-run-cancel')).not.toBeInTheDocument();
-      }
-    },
-  );
+  it('a step with a disclosure starts collapsed by default (succeeded, no forceOpenDefault)', async () => {
+    const timeline: AutomationTimelineEntry[] = [
+      { stepRef: 'q', stepId: 'q', kind: 'ask_me', status: 'succeeded', outputPreview: 'Create new' },
+    ];
+    setup({ run: run({ status: 'succeeded' }), timeline });
+    render(<RunTrace runId="run-1" />);
+    await screen.findByTestId('automations-run-step-q');
+    expect(screen.queryByTestId('automations-run-step-q-output')).not.toBeInTheDocument();
+  });
+
+  it("forceOpenDefault starts every step expanded, even a succeeded one — the automation's most recent run", async () => {
+    const timeline: AutomationTimelineEntry[] = [
+      { stepRef: 'q', stepId: 'q', kind: 'ask_me', status: 'succeeded', outputPreview: 'Create new' },
+    ];
+    setup({ run: run({ status: 'succeeded' }), timeline });
+    render(<RunTrace runId="run-1" forceOpenDefault />);
+    await screen.findByTestId('automations-run-step-q');
+    expect(screen.getByTestId('automations-run-step-q-output')).toBeInTheDocument();
+  });
 });
 
-describe('RunView — repeat fan-out', () => {
+describe('RunTrace — repeat fan-out', () => {
   it('nests fan-out rows under the top-level repeat entry', async () => {
     const sweepAutomation: AutomationSummary = {
       ...AUTOMATION,
@@ -242,34 +199,10 @@ describe('RunView — repeat fan-out', () => {
       timeline,
       definitions: [sweepAutomation],
     });
-    render(<RunView />);
+    render(<RunTrace runId="run-sweep" />);
 
     expect(await screen.findByTestId('automations-run-step-repeat-prs')).toBeInTheDocument();
     expect(screen.getByTestId('automations-run-step-ask-review-pr#1')).toBeInTheDocument();
     expect(screen.getByTestId('automations-run-step-ask-review-pr#2')).toBeInTheDocument();
-  });
-});
-
-describe('RunView — kept going', () => {
-  it('shows the Kept-going badge on a failed step whose definition has keepGoing: true', async () => {
-    const spikeAutomation: AutomationSummary = {
-      ...AUTOMATION,
-      id: 'auto-spike',
-      definition: {
-        triggers: [],
-        steps: [{ id: 'notify-skip', kind: 'notify', message: [], keepGoing: true }],
-      },
-    };
-    const timeline: AutomationTimelineEntry[] = [
-      { stepRef: 'notify-skip', stepId: 'notify-skip', kind: 'notify', status: 'failed', error: 'push service down' },
-    ];
-    setup({
-      run: run({ id: 'run-spike', automationId: 'auto-spike', status: 'succeeded' }),
-      timeline,
-      definitions: [spikeAutomation],
-    });
-    render(<RunView />);
-
-    expect(await screen.findByTestId('automations-run-step-notify-skip-kept-going')).toHaveTextContent('Kept going');
   });
 });

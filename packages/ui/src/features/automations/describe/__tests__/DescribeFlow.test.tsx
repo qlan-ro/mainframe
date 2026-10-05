@@ -16,7 +16,7 @@ import { useAutomationsStore } from '../../data/use-automations-store';
 import { DescribeFlow } from '../DescribeFlow';
 
 beforeEach(() => {
-  useAutomationsNav.setState({ editorTarget: null, runId: null, describeOpen: true });
+  useAutomationsNav.setState({ editorTarget: null, detailsAutomationId: null, describeOpen: true });
   useAutomationsStore.setState({ catalog: [] });
 });
 
@@ -28,7 +28,7 @@ describe('DescribeFlow — before drafting', () => {
     expect(screen.queryByTestId('automations-draft-preview')).not.toBeInTheDocument();
   });
 
-  it('Back returns to the library', () => {
+  it('Back closes the describe flow', () => {
     render(<DescribeFlow />);
     screen.getByTestId('automations-describe-back').click();
     expect(useAutomationsNav.getState().describeOpen).toBe(false);

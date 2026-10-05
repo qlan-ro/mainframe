@@ -34,7 +34,10 @@
  *   shell-rail-appearance      — theme toggle (was `main-toolbar-theme`)
  *   sessions-scope-avatar-<id> — the shared ScopeStrip's per-project avatar (D7)
  *   tasks-board / tasks-surface-pick — features/tasks/TasksBoard.tsx / TasksSurface.tsx (body)
- *   automations-view / automations-section-library — features/automations/AutomationsView.tsx (body)
+ *   automations-view / automations-blank / automations-empty — features/automations/AutomationsView.tsx (body);
+ *                                 2026-10 redesign retired the body-wide library — the body shows
+ *                                 BlankState (automations-blank, zero automations in scope) or a
+ *                                 quiet "Select an automation" prompt (automations-empty, one or more)
  *   settings-surface            — features/settings/SettingsSurface.tsx (body)
  *   [data-slot="sidebar"]      — the panel root (components/ui/sidebar/sidebar.tsx). There is no
  *                                `sessions-sidebar` testid and no unmount: `collapsible="offcanvas"`
@@ -105,13 +108,18 @@ test.describe('§sidebar-chrome', () => {
     await page.getByTestId('shell-rail-chats').click();
   });
 
-  test('the Automations rail button switches the body to the Automations surface, which shows the library', async () => {
+  test('the Automations rail button switches the body to the Automations surface, which shows an empty state (no library any more)', async () => {
     const { page } = app;
     const automationsRail = page.getByTestId('shell-rail-automations');
     await automationsRail.click();
     await expect(automationsRail).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByTestId('automations-view')).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByTestId('automations-section-library')).toBeVisible({ timeout: 10_000 });
+    // 2026-10 redesign: the body never lists automations — it's BlankState
+    // (zero automations in scope) or a quiet "Select an automation" prompt
+    // (one or more); either is fine here, this just proves the body switched.
+    await expect(page.getByTestId('automations-blank').or(page.getByTestId('automations-empty'))).toBeVisible({
+      timeout: 10_000,
+    });
 
     // Back to Chats for the tests that follow.
     await page.getByTestId('shell-rail-chats').click();

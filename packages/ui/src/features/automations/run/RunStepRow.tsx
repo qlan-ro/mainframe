@@ -48,6 +48,8 @@ export interface RunStepRowProps {
   onInteractionSubmitted: () => void;
   isLast?: boolean;
   spine?: boolean;
+  /** Starts this row expanded regardless of status — `AutomationDetails` passes this for the automation's single MOST RECENT run (its default column selection), so opening an automation that already ran shows its outcome with no extra click. */
+  defaultOpen?: boolean;
 }
 
 export function RunStepRow({
@@ -60,13 +62,14 @@ export function RunStepRow({
   onInteractionSubmitted,
   isLast = true,
   spine = true,
+  defaultOpen,
 }: RunStepRowProps) {
   const testId = `automations-run-step-${entry.stepRef}`;
   const verbMeta = VERB_META[entry.kind];
   const VerbIcon = verbMeta.icon;
   const statusMeta = STEP_STATUS_META[entry.status];
   const StatusIcon = statusMeta.Icon;
-  const [open, setOpen] = useState(entry.status === 'waiting' || entry.status === 'failed');
+  const [open, setOpen] = useState(defaultOpen ?? (entry.status === 'waiting' || entry.status === 'failed'));
 
   const duration = formatDuration(entry.startedAt, entry.finishedAt);
   const keptGoing = isKeptGoing(entry, steps);

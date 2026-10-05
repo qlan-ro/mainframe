@@ -37,12 +37,17 @@ export function draftFrom(
   };
 }
 
-/** The draft's definition as it goes on the wire. */
+/**
+ * The draft's definition as it goes on the wire. `projectId` is `null` for a
+ * global (unscoped) automation — `ask_agent` steps aren't stamped in that
+ * case (there is no project to stamp them WITH); `AutomationEditor` blocks
+ * saving a global draft that contains one instead (`stepsNeedProject`).
+ */
 export function definitionToSave(
   definition: AutomationDefinition,
   catalog: ActionCatalogEntry[],
-  projectId: string,
+  projectId: string | null,
 ): AutomationDefinition {
   const saved = definitionTextToRefs(definition, catalog);
-  return { ...saved, steps: stampAgentProjectId(saved.steps, projectId) };
+  return { ...saved, steps: projectId ? stampAgentProjectId(saved.steps, projectId) : saved.steps };
 }

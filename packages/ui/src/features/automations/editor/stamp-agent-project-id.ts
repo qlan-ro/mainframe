@@ -30,3 +30,25 @@ export function stampAgentProjectId(steps: AutomationStep[], projectId: string):
     }
   });
 }
+
+/**
+ * Whether any step in the tree needs a real project to run (today, only
+ * `ask_agent` — its worktree/chat has nowhere else to go). Drives
+ * `AutomationEditor`'s one remaining project-related save guard: a draft can
+ * go unscoped ("All projects") UNLESS it contains one of these, mirroring the
+ * same recursion `stampAgentProjectId` already walks.
+ */
+export function stepsNeedProject(steps: AutomationStep[]): boolean {
+  return steps.some((step) => {
+    switch (step.kind) {
+      case 'ask_agent':
+        return true;
+      case 'if':
+        return stepsNeedProject(step.then) || stepsNeedProject(step.otherwise);
+      case 'repeat':
+        return stepsNeedProject(step.steps);
+      default:
+        return false;
+    }
+  });
+}

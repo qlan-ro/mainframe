@@ -3,7 +3,7 @@ import { render as rtlRender, screen, fireEvent } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { AutomationsView } from '../AutomationsView';
 
-// The library row's project annotation fetches through the daemon port — inert here.
+// The editor's project picker fetches through the daemon port — inert here.
 vi.mock('@/features/sessions/use-projects', () => ({
   useProjects: () => ({ projects: [{ id: 'proj-1', name: 'Mainframe' }] }),
 }));
@@ -28,32 +28,24 @@ function seedLibrary(patch: Partial<LibraryEntry>) {
 
 function reset() {
   useSessionFilters.setState({ filterProjectIds: new Set() });
-  useAutomationsNav.setState({ editorTarget: null, runId: null, describeOpen: false, detailsAutomationId: null });
+  useAutomationsNav.setState({
+    editorTarget: null,
+    describeOpen: false,
+    detailsAutomationId: null,
+    selectedRunId: null,
+  });
 }
 
-it('renders the header and the count; no back button at the bare library', () => {
+it('shows the two creation cards when the scope has no automations at all', () => {
   reset();
   seedLibrary({ definitions: [] });
-  useAutomationsStore.setState({ interactions: [] });
   render(<AutomationsView />);
 
-  expect(screen.getByText('Workflows')).toBeInTheDocument();
-  expect(screen.getByTestId('automations-title-count')).toHaveTextContent('0 automations');
-  expect(screen.queryByTestId('automations-close')).toBeNull();
+  expect(screen.getByTestId('automations-blank')).toBeInTheDocument();
+  expect(screen.queryByTestId('automations-empty')).toBeNull();
 });
 
-it('back button appears in a sub-view and returns to the library without leaving the surface', () => {
-  reset();
-  seedLibrary({ definitions: [] });
-  useAutomationsNav.setState({ editorTarget: { mode: 'new' } });
-  render(<AutomationsView />);
-
-  fireEvent.click(screen.getByTestId('automations-close'));
-  const nav = useAutomationsNav.getState();
-  expect(nav.editorTarget).toBeNull();
-});
-
-it('shows the library section by default, listing loaded definitions', () => {
+it('shows a quiet "select an automation" prompt (not the cards) once the scope has at least one', () => {
   reset();
   seedLibrary({
     definitions: [
@@ -71,11 +63,40 @@ it('shows the library section by default, listing loaded definitions', () => {
   });
   render(<AutomationsView />);
 
-  expect(screen.getByTestId('automations-section-library')).toBeInTheDocument();
-  expect(screen.getByTestId('automations-library-row-a1')).toHaveTextContent('Daily standup');
+  expect(screen.getByTestId('automations-empty')).toBeInTheDocument();
+  expect(screen.queryByTestId('automations-blank')).toBeNull();
 });
 
-it('shows the (lazy-loaded) editor section when an editor target is open', async () => {
+it('"New automation" in the empty state opens the editor', () => {
+  reset();
+  seedLibrary({
+    definitions: [
+      {
+        id: 'a1',
+        name: 'Daily standup',
+        scope: 'global',
+        projectId: null,
+        enabled: true,
+        definition: { triggers: [], steps: [] },
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ],
+  });
+  render(<AutomationsView />);
+
+  fireEvent.click(screen.getByTestId('automations-empty-new'));
+  expect(useAutomationsNav.getState().editorTarget).toEqual({ mode: 'new' });
+});
+
+it('renders no header row at the empty state', () => {
+  reset();
+  seedLibrary({ definitions: [] });
+  render(<AutomationsView />);
+  expect(screen.queryByTestId('automations-close')).toBeNull();
+});
+
+it('shows the (lazy-loaded) editor section when an editor target is open, with no outer header row', async () => {
   reset();
   seedLibrary({ definitions: [] });
   useAutomationsNav.setState({ editorTarget: { mode: 'new' } });
@@ -86,16 +107,7 @@ it('shows the (lazy-loaded) editor section when an editor target is open', async
   expect(await screen.findByTestId('automations-section-editor')).toBeInTheDocument();
 });
 
-it('shows the (lazy-loaded) run section when a run id is open, taking precedence over the editor', async () => {
-  reset();
-  seedLibrary({ definitions: [], runs: [] });
-  useAutomationsNav.setState({ editorTarget: { mode: 'new' }, runId: 'r1' });
-  render(<AutomationsView />);
-  // RunView is React.lazy too — same Suspense-swap reasoning as the editor test above.
-  expect(await screen.findByTestId('automations-section-run')).toBeInTheDocument();
-});
-
-it('shows the describe section when describeOpen is set, below run/editor precedence', () => {
+it('shows the describe section when describeOpen is set, below the editor precedence', () => {
   reset();
   seedLibrary({ definitions: [], runs: [] });
   useAutomationsStore.setState({ catalog: [] });
@@ -104,7 +116,7 @@ it('shows the describe section when describeOpen is set, below run/editor preced
   expect(screen.getByTestId('automations-section-describe')).toBeInTheDocument();
 });
 
-it('shows the (lazy-loaded) details section when a details target is open, below run/editor/describe precedence', async () => {
+it('shows the (lazy-loaded) details section when a details target is open, below editor/describe precedence', async () => {
   reset();
   seedLibrary({
     definitions: [

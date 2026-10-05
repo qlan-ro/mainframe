@@ -30,12 +30,12 @@ import type { DaemonEvent } from '../contract';
 import { useAutomationsNav } from './use-automations-nav';
 import { useAutomationsStore } from './use-automations-store';
 
-function viewRunAction(runId: string) {
+function viewRunAction(automationId: string, runId: string) {
   return {
     label: 'View run',
     onClick: () => {
       useAutomationsNav.getState().openHost();
-      useAutomationsNav.getState().openRun(runId);
+      useAutomationsNav.getState().openDetails(automationId, runId);
     },
   };
 }
@@ -52,7 +52,7 @@ export function useAutomationToasts(): void {
             type: 'info',
             title: event.title,
             description: event.body,
-            ...(chatId ? { chatId } : { action: viewRunAction(event.links.runId) }),
+            ...(chatId ? { chatId } : { action: viewRunAction(event.automationId, event.links.runId) }),
           });
           break;
         }
@@ -60,7 +60,7 @@ export function useAutomationToasts(): void {
           const fire = event.status === 'succeeded' ? mfToast.success : mfToast.error;
           fire(`${event.automationName} ${event.status === 'succeeded' ? 'finished' : 'failed'}`, {
             description: event.status === 'failed' ? event.result : undefined,
-            action: viewRunAction(event.runId),
+            action: viewRunAction(event.automationId, event.runId),
           });
           break;
         }
