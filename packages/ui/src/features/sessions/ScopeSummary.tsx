@@ -1,7 +1,8 @@
 /**
  * ScopeSummary — the scope strip's two-line label ("N projects" over the faded
  * names). Hovering it lists the projects in scope (every project when the
- * scope is empty) in a tooltip, each with its avatar, since the names line
+ * scope is empty) in a tooltip, each with its avatar — no heading, the label
+ * already says what the list is — since the names line
  * fades long before a multi-project scope fits.
  */
 import type { Project } from '@qlan-ro/mainframe-types';
@@ -35,17 +36,21 @@ export function ScopeSummary({ projects, scoped }: { projects: Project[]; scoped
           </FadeLabel>
         </div>
       </TooltipTrigger>
-      <TooltipContent side="bottom" align="start" data-testid="sessions-scope-tooltip" className="max-w-64">
-        <div className="mb-1 font-medium">{scoped.length === 0 ? 'All projects' : 'In scope'}</div>
-        <ul className="flex flex-col gap-1">
+      <TooltipContent
+        side="bottom"
+        align="start"
+        data-testid="sessions-scope-tooltip"
+        className="max-w-72 py-2 text-sm"
+      >
+        <ul className="flex flex-col gap-1.5">
           {shown.map((project) => (
-            <li key={project.id} className="flex min-w-0 items-center gap-1.5">
-              <ProjectAvatar name={project.name} color={projectColor(project.id)} size={14} />
+            <li key={project.id} className="flex min-w-0 items-center gap-2">
+              <ProjectAvatar name={project.name} color={projectColor(project.id)} size={18} />
               <span className="truncate">{project.name}</span>
             </li>
           ))}
         </ul>
-        {more > 0 && <div className="mt-1 opacity-70">+{more} more</div>}
+        {more > 0 && <div className="mt-1.5 opacity-70">+{more} more</div>}
       </TooltipContent>
     </Tooltip>
   );
