@@ -53,7 +53,9 @@ export function TitleBar({ projectId }: { projectId?: string }) {
         )}
       </div>
 
-      <div data-testid="title-bar-chat-column" className="flex h-full min-w-0 flex-1 items-center gap-2 pr-3">
+      {/* `pl-1` + the tab strip's own `px-1` = 8px from the rule to the first pill,
+          matching the rule's `ml-2` from the surface toggle pill on its other side. */}
+      <div data-testid="title-bar-chat-column" className="flex h-full min-w-0 flex-1 items-center gap-2 pr-3 pl-1">
         {!open && (
           <>
             <Hint label="Show sidebar">
