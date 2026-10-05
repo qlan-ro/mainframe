@@ -8,7 +8,6 @@
 import { Sidebar, SidebarFooter, SidebarRail } from '@/components/ui/sidebar';
 import { AutomationsSidebarList } from '@/features/automations/sidebar-list/AutomationsSidebarList';
 import { AdvisorSidebarList } from '@/features/setup-advisor/AdvisorSidebarList';
-import { DaemonSwitcher } from '@/features/daemon/DaemonSwitcher';
 import { QuotaFooter } from '@/features/quota/QuotaFooter';
 import { SessionSidebar } from '@/features/sessions/SessionSidebar';
 import { SettingsSidebar } from '@/features/settings/SettingsSidebar';
@@ -43,13 +42,12 @@ export function AppSidebar() {
       style={{ '--sidebar': 'var(--background)' } as React.CSSProperties}
     >
       <SidebarViewBody view={view} />
-      {/* Usage rows, a hairline, then the device: the rule is load-bearing, not
-          decoration — the footer butts straight up against a parked section
-          header, and without it the rows read as that section's content. */}
+      {/* Usage rows under a hairline (the device switcher lives in the nav
+          rail): the rule is load-bearing, not decoration — the footer butts
+          straight up against a parked section header, and without it the rows
+          read as that section's content. */}
       <SidebarFooter className="gap-1 border-t border-sidebar-border">
         <QuotaFooter />
-        <div className="border-t border-sidebar-border" />
-        <DaemonSwitcher />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

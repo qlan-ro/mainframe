@@ -46,7 +46,7 @@
  *                                which no header carries — the other collapse
  *                                affordance is ⌘B (SidebarProvider owns the shortcut).
  *   show-sidebar-button        — layout/TitleBar.tsx (rendered only when the sidebar is collapsed)
- *   daemon-footer-trigger      — features/daemon/DaemonSwitcher.tsx trigger; its ConnDot carries
+ *   shell-rail-daemon          — features/daemon/DaemonSwitcher.tsx trigger (nav rail); its ConnDot carries
  *                                aria-label="Connected" (features/daemon/daemon-status.tsx)
  *
  * The bottom Context/Skills/Agents panel and its drag-resize handle
@@ -145,7 +145,7 @@ test.describe('§sidebar-chrome', () => {
     // ConnDot renders <span aria-label="Connected"> for DaemonStatus 'connected'
     // (features/daemon/daemon-status.ts DAEMON_STATUS.connected.label) — the dot itself has
     // no dedicated testid, so we scope the aria-label lookup to the trigger's own testid.
-    await expect(page.getByTestId('daemon-footer-trigger').locator('[aria-label="Connected"]')).toBeVisible({
+    await expect(page.getByTestId('shell-rail-daemon').locator('[aria-label="Connected"]')).toBeVisible({
       timeout: 15_000,
     });
   });

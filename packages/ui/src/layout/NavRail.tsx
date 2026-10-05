@@ -4,8 +4,9 @@
  * Tasks, Automations, Setup Advisor, Settings — all five are view buttons
  * with the same selected/aria-pressed treatment; picking one shows that
  * view's list in the sidebar and its content in the body (D1). The bottom
- * cluster is now just the app's ambient chrome that ISN'T a view: the
- * updater (null while idle) and appearance.
+ * cluster is the app's ambient chrome that ISN'T a view: the updater (null
+ * while idle), the daemon switcher (device + connection dot, opens the picker),
+ * and appearance — then Settings.
  *
  * Not `SidebarRail`, which is the sidebar primitive's resize handle.
  */
@@ -16,6 +17,7 @@ import { chordHint } from '@/features/shortcuts/chord-hint';
 import { selectPendingInteractionCount, useAutomationsStore } from '@/features/automations/data/use-automations-store';
 import { NavRailButton } from './NavRailButton';
 import { RailUpdateButton } from './RailUpdateButton';
+import { DaemonSwitcher } from '@/features/daemon/DaemonSwitcher';
 
 interface ViewDef {
   id: SidebarView;
@@ -69,6 +71,7 @@ export function NavRail() {
       <div className="flex-1" />
       <div className="flex flex-col items-center gap-1">
         <RailUpdateButton />
+        <DaemonSwitcher />
         <NavRailButton
           testId="shell-rail-appearance"
           label={isDark ? 'Switch to light' : 'Switch to dark'}

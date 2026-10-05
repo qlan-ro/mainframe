@@ -27,6 +27,10 @@ vi.mock('@/lib/host', () => ({
 
 import { NavRail } from '../NavRail';
 
+// The daemon switcher needs the daemon registry/connection providers; the
+// rail test only cares that it is mounted in the bottom group.
+vi.mock('@/features/daemon/DaemonSwitcher', () => ({ DaemonSwitcher: () => <div data-testid="shell-rail-daemon" /> }));
+
 const render_ = () =>
   render(
     <TooltipProvider>

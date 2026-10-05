@@ -31,7 +31,7 @@
  *   import-session-btn            — Import button on each external-session row
  *   sessions-welcome / welcome-project — the projectless draft's welcome screen and
  *                                   its project picker (see the note below)
- *   daemon-footer-trigger         — sidebar footer daemon status (used for readiness waits)
+ *   shell-rail-daemon             — nav rail daemon status (used for readiness waits)
  *   sessions-archive-keep-worktree   — ArchiveWorktreeDialog "Keep worktree" button
  *   sessions-archive-delete-worktree — ArchiveWorktreeDialog "Delete worktree" button
  *   sessions-import-load-more     — ImportSessionList paging sentinel (IntersectionObserver),

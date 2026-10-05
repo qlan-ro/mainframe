@@ -3,7 +3,7 @@
 export const T = {
   // `app-status-bar` was retired (~2026-06-23, App.integration.test.tsx asserts it's absent);
   // connection status now lives in the sidebar footer — see `waitConnected()` in wait.ts.
-  daemonFooterTrigger: 'daemon-footer-trigger',
+  daemonFooterTrigger: 'shell-rail-daemon',
   sessionRow: 'sessions-row',
   composerInput: 'chat-composer-input',
   composerSend: 'chat-composer-send',
