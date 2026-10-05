@@ -27,7 +27,15 @@ function SidebarViewBody({ view }: { view: SidebarView }) {
 export function AppSidebar() {
   const view = useUiPrefs((s) => s.sidebarView);
   return (
-    <Sidebar collapsible="offcanvas" data-view={view}>
+    // The panel sits on the content card's ground, not the chrome's: only the
+    // rail and the title bar keep `sidebar`. Re-pointing the variable here (not
+    // swapping classes) carries every `bg-sidebar` / `var(--sidebar)` inside
+    // with it — sticky group headers, the scope avatars' cut-out borders.
+    <Sidebar
+      collapsible="offcanvas"
+      data-view={view}
+      style={{ '--sidebar': 'var(--background)' } as React.CSSProperties}
+    >
       <SidebarViewBody view={view} />
       {/* Usage rows, a hairline, then the device: the rule is load-bearing, not
           decoration — the footer butts straight up against a parked section
