@@ -42,7 +42,7 @@ import { useShortcutAction } from '@/features/shortcuts/action-store';
 import { focusVisibleComposer } from '@/features/chat/composer/focus-composer';
 import { ZoneDropLayer } from '@/features/chat/zones/ZoneDropLayer';
 import { ChatThread } from '../../chat/thread/ChatThread';
-import { ChatForkBanner } from '../../chat/thread/ChatForkBanner';
+import { ChatColumnHeader } from '../../chat/thread/ChatColumnHeader';
 import { SideChatHost } from '@/features/side-chat/SideChatHost';
 import { ChatEmptyState } from './ChatEmptyState';
 import { useNewThreadAutoConfig } from './use-new-thread-auto-config';
@@ -182,9 +182,8 @@ export function ChatSurface() {
 
   return (
     <div ref={measureSurface} className="flex min-h-0 flex-1 flex-col">
-      {/* No chat header: the surface starts at the transcript (a fork adds its
-          "Forked from" row INSIDE the transcript column, so the docked panel
-          runs the full height beside it). Its old controls
+      {/* The chat's title row (ChatColumnHeader) sits INSIDE the transcript
+          column, so the docked panel runs the full height beside it. Its old controls
           live in the title bar (D7). `hostRef` is the hook's state-backed
           callback ref: on a cold boot the initializing branch renders first and
           this row arrives on a later commit, so a RefObject would measure null
@@ -193,7 +192,7 @@ export function ChatSurface() {
           footer publishes its height for the overlay. */}
       <div ref={panelState.hostRef} data-chat-column className="relative flex min-h-0 flex-1 overflow-hidden">
         <SideChatHost parentChatId={mainThreadId}>
-          <ChatForkBanner />
+          <ChatColumnHeader columnId="main" toggleTestId="session-panel-toggle" tourAnchor />
           {/* The thread is h-full: it needs a box that is "the rest", not the column. */}
           <div className="min-h-0 flex-1">
             <ChatThread emptyState={welcome} />

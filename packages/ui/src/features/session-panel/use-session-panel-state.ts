@@ -5,14 +5,14 @@
  * No panel state is held here. `store/ui-prefs.ts` owns the ONE open bit (so
  * an open panel survives a remount and a session switch) and
  * `panel-control-store` owns the transient per-column float — keyed by
- * `columnId` so the title bar's details toggle, which lives in shell chrome,
+ * `columnId` so the column's details toggle (chat column / zone strip)
  * drives the same panel this hook renders. The hook measures the column and
  * publishes its `fits` verdict to that store for the toggle to read.
  */
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import { useUiPrefs, isSessionPanelSectionOpen, type SessionPanelOpenSectionId } from '@/store/ui-prefs';
 import { columnFitsPanel, derivePanelMode, type PanelMode } from './panel-mode';
-import { selectOverlayOpen, usePanelControl, type PanelColumnId } from './panel-control-store';
+import { selectOverlayOpen, usePanelControl, usePanelOpen, type PanelColumnId } from './panel-control-store';
 
 export interface SessionPanelState {
   /** Goes on the chat column's horizontal row — the FULL width, before the
@@ -66,8 +66,8 @@ export function useSessionPanelState(columnId: PanelColumnId = 'main'): SessionP
   const toggleInStore = usePanelControl((s) => s.togglePanel);
   const setOverlayOpen = useCallback((open: boolean) => setOverlay(columnId, open), [setOverlay, columnId]);
 
-  const panelOpen = useUiPrefs((s) => s.sessionPanelOpen);
-  const setSessionPanelOpen = useUiPrefs((s) => s.setSessionPanelOpen);
+  const panelOpen = usePanelOpen(columnId);
+  const setPanelOpen = usePanelControl((s) => s.setPanelOpen);
   const sections = useUiPrefs((s) => s.sessionPanelSections);
   const toggleSessionPanelSection = useUiPrefs((s) => s.toggleSessionPanelSection);
 
@@ -107,8 +107,8 @@ export function useSessionPanelState(columnId: PanelColumnId = 'main'): SessionP
   useEffect(() => {
     if (bootOpened.current || !gutterFits) return;
     bootOpened.current = true;
-    setSessionPanelOpen(true);
-  }, [gutterFits, setSessionPanelOpen]);
+    setPanelOpen(columnId, true);
+  }, [gutterFits, setPanelOpen, columnId]);
 
   // Light dismiss — Escape, or a pointer outside both the panel and any portal.
   useEffect(() => {
@@ -140,8 +140,8 @@ export function useSessionPanelState(columnId: PanelColumnId = 'main'): SessionP
 
   const isPanelVisible = useCallback(() => (mode === 'inline' || mode === 'overlay') && panelOpen, [mode, panelOpen]);
 
-  // The float-when-narrow rule lives in the store so the title bar's toggle
-  // and this hook can never disagree about it.
+  // The float-when-narrow rule lives in the store so the column's toggle and
+  // this hook can never disagree about it.
   const togglePanel = useCallback(
     () => toggleInStore(columnId, columnFitsPanel(surfaceWidth)),
     [toggleInStore, columnId, surfaceWidth],

@@ -1,7 +1,7 @@
 /**
  * TitleBarActions — the title bar's right cluster: search │ side-chat toggle
  * (the focused chat's) · the session-details toggle. The "Forked from" link
- * lives in the chat column (ChatForkBanner / ZoneStrip). The Setup Advisor
+ * lives in each chat column's header (ChatColumnHeader). The Setup Advisor
  * button moved to the nav rail (D8) — it's a rail view now, not a sheet.
  */
 import { Search } from 'lucide-react';
@@ -11,7 +11,6 @@ import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { chordHint } from '@/features/shortcuts/chord-hint';
 import { SideChatToggle } from '@/features/side-chat/SideChatToggle';
-import { SessionPanelToggle } from '@/features/session-panel/SessionPanelToggle';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useLayoutStore } from '@/store/layout';
 import { useActiveBasesStore } from '@/store/active-bases-store';
@@ -55,7 +54,6 @@ export function TitleBarActions() {
       <Separator orientation="vertical" className="mx-1 h-4 data-vertical:self-center" />
       {/* The focused chat's side chat (the root provider follows the focused zone). */}
       <SideChatToggle />
-      <SessionPanelToggle />
     </div>
   );
 }

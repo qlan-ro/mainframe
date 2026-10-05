@@ -6,11 +6,11 @@
  * through this mount while split, so a focus click changes only context
  * (`switchToThread`), never a mount — no transcript remount, no scroll jump.
  *
- * The zone is a complete chat column: a 28px `ZoneStrip` (close ✕, side-chat
- * toggle, fork-parent link) and — for the FOCUSED zone only — the docked
- * session panel, resolving per zone because `useActiveIdentity` and the panel
- * sections read the rebound `threadListItem`/extras contexts. The unfocused
- * zone's panel stays hidden: two docked panels would need ≥ 2 × 1044px.
+ * The zone is a complete chat column: a `ChatColumnHeader` (name, fork-parent
+ * link, its own session-details toggle, close ✕) and its OWN session panel, resolving
+ * per zone because `useActiveIdentity` and the panel sections read the rebound
+ * `threadListItem`/extras contexts. Each half opens/closes its panel
+ * independently (per-column open state); a half too narrow to dock floats it.
  *
  * The zone holds its own live-subscription ref and an activation hold (both
  * counted on the controller), so the focused zone — also main, whose per-item
@@ -29,7 +29,7 @@ import { CHAT_ATTACHMENT_ADAPTER, useControllerState } from '../runtime/use-chat
 import { buildChatExtras, isRunningFromState, useChatExtrasState } from '../runtime/chat-extras';
 import { useNativeThreadMessages } from '../runtime/use-native-thread-messages';
 import { ChatThread } from '../thread/ChatThread';
-import { ZoneStrip } from './ZoneStrip';
+import { ChatColumnHeader } from '../thread/ChatColumnHeader';
 import { SideChatHost } from '@/features/side-chat/SideChatHost';
 
 export function ChatZone({
@@ -124,16 +124,20 @@ export function ChatZone({
         }}
       >
         {/* Measured per zone, before the panel takes its width, so each side
-            derives its own inline/overlay mode from its own width. The strip
+            derives its own inline/overlay mode from its own width. The header
             sits INSIDE the transcript column so the panel runs full height. */}
         <div ref={panelState.hostRef} data-chat-column className="relative flex min-h-0 flex-1 overflow-hidden">
           <SideChatHost parentChatId={chatId}>
-            <ZoneStrip chatId={chatId} onClose={onClose} />
+            <ChatColumnHeader
+              columnId={zoneColumnId(chatId)}
+              toggleTestId={`session-panel-toggle-${chatId}`}
+              zone={{ chatId, onClose }}
+            />
             <div className="min-h-0 flex-1">
               <ChatThread />
             </div>
           </SideChatHost>
-          {focused && <SessionPanel state={panelState} />}
+          <SessionPanel state={panelState} />
         </div>
       </div>
     </AuiProvider>

@@ -170,7 +170,7 @@ async function waitForMenusClosed(page: Page): Promise<void> {
  * per-card step any more.
  */
 async function openSessionPanel(page: Page) {
-  const toggle = page.getByTestId('title-bar-details');
+  const toggle = page.getByTestId('session-panel-toggle');
   if ((await toggle.getAttribute('aria-pressed')) !== 'true') await toggle.click();
   const root = page.getByTestId('session-panel-root');
   await expect(root).toBeVisible({ timeout: 5_000 });
@@ -184,7 +184,7 @@ async function openSessionPanel(page: Page) {
  * rail) — `title-bar-details` is the only switch, for every section together.
  */
 async function closeSessionPanel(page: Page): Promise<void> {
-  await page.getByTestId('title-bar-details').click();
+  await page.getByTestId('session-panel-toggle').click();
   await expect(page.getByTestId('session-panel-root')).toHaveCount(0, { timeout: 5_000 });
 }
 

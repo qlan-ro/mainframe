@@ -64,11 +64,13 @@ vi.mock('@/features/side-chat/SideChatHost', () => ({
     <div data-testid={`side-chat-host-stub-${parentChatId}`}>{children}</div>
   ),
 }));
-// ZoneStrip reads the zone's rebound `threadListItem` through
+// ChatColumnHeader reads the zone's rebound `threadListItem` through
 // ChatHeaderParentLink/SideChatToggle — out of scope for this suite, which is
 // about where SideChatHost mounts, not the strip's own content.
-vi.mock('../ZoneStrip', () => ({
-  ZoneStrip: ({ chatId }: { chatId: string }) => <div data-testid={`chat-zone-strip-${chatId}`} />,
+vi.mock('../../thread/ChatColumnHeader', () => ({
+  ChatColumnHeader: ({ zone }: { zone?: { chatId: string } }) => (
+    <div data-testid={`chat-zone-strip-${zone?.chatId}`} />
+  ),
 }));
 
 import { ChatZone } from '../ChatZone';

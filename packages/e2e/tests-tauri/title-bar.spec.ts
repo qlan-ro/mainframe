@@ -60,7 +60,7 @@ test.describe('§title-bar — session-details toggle', () => {
 
   test('toggles the session panel open and closed; aria-pressed mirrors the state', async () => {
     const { page } = app;
-    const toggle = page.getByTestId('title-bar-details');
+    const toggle = page.getByTestId('session-panel-toggle');
     const panel = page.getByTestId('session-panel-root');
 
     // The panel auto-opens the first time the column fits (default true), so

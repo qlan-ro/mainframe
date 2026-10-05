@@ -151,7 +151,7 @@ async function openQuickDialog(page: Page): Promise<void> {
  */
 async function openTasksCard(page: Page): Promise<void> {
   const card = page.getByTestId('session-panel-card-tasks');
-  if ((await card.count()) === 0) await page.getByTestId('title-bar-details').click();
+  if ((await card.count()) === 0) await page.getByTestId('session-panel-toggle').click();
   await expect(card).toBeVisible({ timeout: 10_000 });
 }
 
