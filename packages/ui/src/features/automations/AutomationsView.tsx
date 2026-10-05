@@ -46,7 +46,7 @@ export function AutomationsView(): React.ReactElement {
   const inSubView = runId != null || editorTarget != null || describeOpen || detailsAutomationId != null;
 
   return (
-    <div data-testid="automations-view" className="flex h-full min-h-0 flex-col bg-card font-sans">
+    <div data-testid="automations-view" className="flex h-full min-h-0 flex-col bg-background font-sans">
       {/* Header band. Close sits at the far RIGHT — every dialog closes on the
           right (stock shadcn position); the old left-side X predates the port. */}
       <div className="flex h-[52px] flex-shrink-0 items-center gap-2.5 border-b px-4">
