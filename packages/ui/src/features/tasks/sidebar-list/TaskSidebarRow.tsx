@@ -11,7 +11,9 @@ import { Button } from '@/components/ui/button';
 import { FadeLabel } from '@/components/ui/fade-label';
 import { Hint } from '@/components/ui/hint';
 import { cn } from '@/lib/utils';
+import type { Project } from '@qlan-ro/mainframe-types';
 import type { Todo, TodoStatus } from '@/lib/api/todos';
+import { TaskProjectBadge } from '../TaskProjectBadge';
 
 /** open → in progress → done → open. */
 export function nextTodoStatus(status: TodoStatus): TodoStatus {
@@ -38,12 +40,14 @@ function StatusGlyph({ status }: { status: TodoStatus }) {
 
 interface TaskSidebarRowProps {
   todo: Todo;
+  /** Set only when Tasks has more than one project in scope. */
+  project?: Project;
   onCycle: (todo: Todo) => void;
   onEdit: (todo: Todo) => void;
   onStart: (todo: Todo) => void;
 }
 
-export function TaskSidebarRow({ todo, onCycle, onEdit, onStart }: TaskSidebarRowProps) {
+export function TaskSidebarRow({ todo, project, onCycle, onEdit, onStart }: TaskSidebarRowProps) {
   const done = todo.status === 'done';
   return (
     <div
@@ -74,6 +78,7 @@ export function TaskSidebarRow({ todo, onCycle, onEdit, onStart }: TaskSidebarRo
         </button>
       </Hint>
       <span className="w-8 shrink-0 font-mono text-xs text-primary tabular-nums">#{todo.number}</span>
+      {project != null && <TaskProjectBadge project={project} testId={`tasks-sidebar-row-project-${todo.number}`} />}
       <FadeLabel className={cn('flex-1', done ? 'text-muted-foreground line-through' : 'text-foreground')}>
         {todo.title}
       </FadeLabel>

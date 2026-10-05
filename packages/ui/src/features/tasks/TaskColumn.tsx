@@ -5,9 +5,18 @@
  * drop events; reads the dragged todo.number from dataTransfer and calls
  * onDrop(number, status) → useTodosStore.move.
  *
+ * Lane ground is `bg-background` — the board lives in the BODY now (it used
+ * to be a dialog, ground `bg-card`/`bg-popover`), so a lane painted `bg-muted`
+ * read lighter than the body in dark mode while the card (`bg-background`)
+ * matched it exactly — cards looked sunk into the lanes instead of lifted.
+ * `TaskBoardView`'s `gap-px bg-border` grid now reads as hairline lane
+ * separators against that shared ground, and `TaskCard`'s own `bg-card` +
+ * shadow does the actual lifting.
+ *
  * data-testid="tasks-column-${status}".
  */
 import React, { useState } from 'react';
+import type { Project } from '@qlan-ro/mainframe-types';
 import { cn } from '@/lib/utils';
 import { CountBadge } from '@/components/ui/count-badge';
 import { TaskCard } from './TaskCard';
@@ -23,6 +32,9 @@ interface Props {
   status: TodoStatus;
   todos: Todo[];
   filtersActive?: boolean;
+  /** Only needed when `multi` is true — resolves each card's project avatar. */
+  projects?: Project[];
+  multi?: boolean;
   onDrop: (number: number, status: TodoStatus) => void;
   onEdit: (todo: Todo) => void;
   onDelete: (id: string) => void;
@@ -33,6 +45,8 @@ export function TaskColumn({
   status,
   todos,
   filtersActive,
+  projects = [],
+  multi = false,
   onDrop,
   onEdit,
   onDelete,
@@ -60,7 +74,7 @@ export function TaskColumn({
       data-testid={`tasks-column-${status}`}
       className={cn(
         'flex flex-col min-h-0 rounded-md transition-colors',
-        dragOver ? 'bg-sidebar-selection ring-1 ring-inset ring-primary' : 'bg-muted',
+        dragOver ? 'bg-sidebar-selection ring-1 ring-inset ring-primary' : 'bg-background',
       )}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -79,7 +93,14 @@ export function TaskColumn({
           min-height is needed here. */}
       <div className="flex min-h-0 flex-1 flex-col gap-[9px] overflow-y-auto px-5 pb-5">
         {todos.map((todo) => (
-          <TaskCard key={todo.id} todo={todo} onEdit={onEdit} onDelete={onDelete} onStartSession={onStartSession} />
+          <TaskCard
+            key={todo.id}
+            todo={todo}
+            project={multi ? projects.find((p) => p.id === todo.project_id) : undefined}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onStartSession={onStartSession}
+          />
         ))}
         {todos.length === 0 && (
           <div

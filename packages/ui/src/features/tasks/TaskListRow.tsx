@@ -11,14 +11,18 @@ import { Button } from '@/components/ui/button';
 import React from 'react';
 import { ChevronDown, ChevronRight, Play, Edit, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { Project } from '@qlan-ro/mainframe-types';
 import type { Todo } from '@/lib/api/todos';
 import { priorityTint, priorityDotClass, typeTint } from './task-palettes';
+import { TaskProjectBadge } from './TaskProjectBadge';
 import { TaskRowActions } from './TaskRowActions';
 import { PairGlyph } from './github/PairGlyph';
 import { useGitHubSyncStore } from './github/use-github-sync-store';
 
 interface Props {
   todo: Todo;
+  /** Set only when Tasks has more than one project in scope. */
+  project?: Project;
   selected: boolean;
   expanded: boolean;
   onToggle: (number: number) => void;
@@ -118,6 +122,7 @@ function PriorityPill({ todo }: { todo: Todo }): React.ReactElement {
 
 export function TaskListRow({
   todo,
+  project,
   selected,
   expanded,
   onToggle,
@@ -159,6 +164,9 @@ export function TaskListRow({
 
         {/* Number */}
         <span className="shrink-0 font-mono text-xs font-medium text-primary w-10 text-right">#{todo.number}</span>
+
+        {/* Project avatar — multi-project scope only */}
+        {project != null && <TaskProjectBadge project={project} testId={`tasks-list-row-project-${todo.number}`} />}
 
         {/* Title */}
         <span

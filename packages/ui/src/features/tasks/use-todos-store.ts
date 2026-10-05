@@ -17,6 +17,7 @@
  * discarded when a newer load for that same project has been issued since,
  * which keeps a slow response for one project from landing in another's bucket.
  */
+import { useMemo } from 'react';
 import { create } from 'zustand';
 import {
   listTodos,
@@ -69,6 +70,35 @@ interface TodosState {
 /** Read one project's bucket. `null` — no scope picked yet — reads as empty. */
 export function selectProjectTodos(projectId: string | null): (state: TodosState) => TodosEntry {
   return (state) => (projectId === null ? EMPTY_ENTRY : (state.entries[projectId] ?? EMPTY_ENTRY));
+}
+
+/**
+ * Merges one or more projects' buckets — the multi-project Tasks read seam.
+ * Concatenates in the CALLER's order (scope-strip order, per
+ * `useTasksProjects`), which is what gives the merged list its project-order
+ * tie-break once a status/priority/etc. sort is layered on top (stable sort
+ * preserves this relative order for equal keys).
+ *
+ * Memoised against the store's `entries` (so it only recomputes when some
+ * project's bucket actually changed, not on every unrelated store update —
+ * filters/sort/view live in the same store) and the caller's `projectIds`
+ * array — pass a stable (e.g. `useMemo`'d) array, or this recomputes every
+ * render.
+ */
+export function useMergedTodos(projectIds: readonly string[]): TodosEntry {
+  const entries = useTodosStore((s) => s.entries);
+  return useMemo(() => {
+    let loading = false;
+    let error: string | null = null;
+    const todos: Todo[] = [];
+    for (const id of projectIds) {
+      const entry = entries[id] ?? EMPTY_ENTRY;
+      todos.push(...entry.todos);
+      if (entry.loading) loading = true;
+      if (entry.error != null && error === null) error = entry.error;
+    }
+    return { todos, loading, error };
+  }, [entries, projectIds]);
 }
 
 export const useTodosStore = create<TodosState>((set, get) => ({

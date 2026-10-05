@@ -5,11 +5,14 @@
  * Keyboard nav: ↑/↓ (j/k) select row; ↵ start session; E edit;
  * Space cycle status; →/← expand/collapse row.
  *
- * Receives todos + handlers from TasksBoard; no data loading here.
+ * Receives todos + handlers from TasksBoard; no data loading here. A todo's
+ * own `project_id` drives every mutation (multi-project Tasks) — there is no
+ * board-level `projectId` to fall back on any more.
  */
 import React, { useState, useCallback, useRef } from 'react';
 import { ChevronDown, ChevronRight, ListChecks } from 'lucide-react';
 import { CountBadge } from '@/components/ui/count-badge';
+import type { Project } from '@qlan-ro/mainframe-types';
 import type { Todo, TodoStatus } from '@/lib/api/todos';
 import type { TodoFilters } from './todos-filters';
 import { useTodosStore } from './use-todos-store';
@@ -24,16 +27,26 @@ const GROUP_LABEL: Record<TodoStatus, string> = {
 
 interface Props {
   port: number;
-  projectId: string;
   todos: Todo[];
   filters?: TodoFilters;
+  /** Only needed when `multi` is true — resolves each row's project avatar. */
+  projects?: Project[];
+  multi?: boolean;
   onEdit: (todo: Todo) => void;
   onStartSession: (todo: Todo) => void;
 }
 
 type GroupKey = TodoStatus;
 
-export function TaskListView({ port, projectId, todos, filters, onEdit, onStartSession }: Props): React.ReactElement {
+export function TaskListView({
+  port,
+  todos,
+  filters,
+  projects = [],
+  multi = false,
+  onEdit,
+  onStartSession,
+}: Props): React.ReactElement {
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [collapsedGroups, setCollapsedGroups] = useState<Set<GroupKey>>(new Set(['done']));
   const [selectedNumber, setSelectedNumber] = useState<number | null>(null);
@@ -69,16 +82,18 @@ export function TaskListView({ port, projectId, todos, filters, onEdit, onStartS
       if (!todo) return;
       const nextStatus: TodoStatus =
         todo.status === 'open' ? 'in_progress' : todo.status === 'in_progress' ? 'done' : 'open';
-      void move(port, id, nextStatus, projectId);
+      void move(port, id, nextStatus, todo.project_id);
     },
-    [todos, move, port, projectId],
+    [todos, move, port],
   );
 
   const handleDelete = useCallback(
     (id: string) => {
-      void remove(port, id, projectId);
+      const todo = todos.find((t) => t.id === id);
+      if (!todo) return;
+      void remove(port, id, todo.project_id);
     },
-    [remove, port, projectId],
+    [todos, remove, port],
   );
 
   const handleKeyDown = useCallback(
@@ -175,6 +190,7 @@ export function TaskListView({ port, projectId, todos, filters, onEdit, onStartS
                   <TaskListRow
                     key={todo.id}
                     todo={todo}
+                    project={multi ? projects.find((p) => p.id === todo.project_id) : undefined}
                     selected={selectedNumber === todo.number}
                     expanded={expanded.has(todo.number)}
                     onToggle={toggleRow}

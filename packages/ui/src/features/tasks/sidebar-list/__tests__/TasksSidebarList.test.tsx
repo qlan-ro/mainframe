@@ -1,16 +1,18 @@
 /**
  * TasksSidebarList — unit tests.
  *
- * D7: header "Tasks" + the shared scope strip + quick-add. Project: the
- * session scope's sole project (`useTasksProject`) — with none, a pick list
- * narrows the SHARED scope via `soloFilterProject` (no local pick any more,
- * and no "Open board" button — the board lives in the body now). Groups
- * In progress / Open / Done (Done collapsed by default). A row cycles
- * through `useTodosStore.move` and opens the shared edit modal through
- * `useTasksModal.openEdit`.
+ * Header: "Tasks" + the shared scope strip + quick-add. Projects: the
+ * session scope's project SET (`useTasksProjects`, multi-project — same
+ * scope semantics as Chats/Automations). An empty OR multi-project scope
+ * merges every project's todos — there is no pick-list fallback any more.
+ * Groups In progress / Open / Done (Done collapsed by default). A row opens
+ * the shared edit modal and cycles/starts a session scoped to ITS OWN
+ * project, and a multi-project scope shows each row's project avatar plus a
+ * project chooser chip on the quick-add row.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import type { Todo } from '@/lib/api/todos';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -40,6 +42,9 @@ vi.mock('@/features/sessions/use-projects', () => ({
     reloadProjects: vi.fn(),
     removeProjectFromList: vi.fn(),
   }),
+}));
+vi.mock('@/features/sessions/use-active-identity', () => ({
+  useActiveIdentity: () => ({ projectId: null }),
 }));
 vi.mock('@/features/sessions/use-add-project', () => ({ useAddProject: () => vi.fn() }));
 vi.mock('@/features/sessions/use-remove-project', () => ({ useRemoveProject: () => vi.fn() }));
@@ -88,20 +93,39 @@ beforeEach(() => {
   useTodosStore.setState({ entries: {} });
 });
 
-describe('TasksSidebarList — no sole project in scope', () => {
-  it('shows the shared scope strip and a project pick list, loading nothing', () => {
+describe('TasksSidebarList — empty scope (no pick list any more)', () => {
+  it('shows the shared scope strip and loads EVERY known project', async () => {
     render_();
     expect(screen.getByTestId('sessions-scope-strip')).toBeInTheDocument();
-    expect(screen.getByTestId('tasks-sidebar-project-pick')).toBeInTheDocument();
-    expect(todosApi.listTodos).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('tasks-sidebar-project-pick')).toBeNull();
+    await waitFor(() => {
+      expect(todosApi.listTodos).toHaveBeenCalledWith(31415, 'proj-1');
+      expect(todosApi.listTodos).toHaveBeenCalledWith(31415, 'proj-2');
+    });
   });
 
-  it('narrows the SHARED scope when a project is picked (D7 — no local pick)', async () => {
+  it('merges both projects’ todos and shows a project avatar per row', async () => {
+    vi.mocked(todosApi.listTodos).mockImplementation((_port, projectId) =>
+      Promise.resolve([
+        makeTodo({
+          id: `t-${projectId}`,
+          number: projectId === 'proj-1' ? 1 : 2,
+          project_id: projectId,
+          title: `Task in ${projectId}`,
+        }),
+      ]),
+    );
     render_();
-    fireEvent.click(screen.getByTestId('tasks-sidebar-project-proj-2'));
 
-    await waitFor(() => expect(todosApi.listTodos).toHaveBeenCalledWith(31415, 'proj-2'));
-    expect(useSessionFilters.getState().filterProjectIds).toEqual(new Set(['proj-2']));
+    await screen.findByTestId('tasks-sidebar-row-1');
+    expect(screen.getByTestId('tasks-sidebar-row-2')).toBeInTheDocument();
+    expect(screen.getByTestId('tasks-sidebar-row-project-1')).toBeInTheDocument();
+    expect(screen.getByTestId('tasks-sidebar-row-project-2')).toBeInTheDocument();
+  });
+
+  it('shows a project chooser chip on the quick-add row', () => {
+    render_();
+    expect(screen.getByTestId('tasks-sidebar-new-project')).toBeInTheDocument();
   });
 });
 
@@ -110,10 +134,15 @@ describe('TasksSidebarList — a sole scoped project', () => {
     useSessionFilters.setState({ filterProjectIds: new Set(['proj-1']) });
   });
 
-  it('shows no pick list, and loads that project’s tasks', async () => {
+  it('loads only that project’s tasks, with no project chooser chip or avatars', async () => {
+    vi.mocked(todosApi.listTodos).mockResolvedValue([makeTodo({ id: 't-1', number: 1 })]);
     render_();
-    expect(screen.queryByTestId('tasks-sidebar-project-pick')).toBeNull();
+
     await waitFor(() => expect(todosApi.listTodos).toHaveBeenCalledWith(31415, 'proj-1'));
+    expect(todosApi.listTodos).not.toHaveBeenCalledWith(31415, 'proj-2');
+    expect(screen.queryByTestId('tasks-sidebar-new-project')).toBeNull();
+    await screen.findByTestId('tasks-sidebar-row-1');
+    expect(screen.queryByTestId('tasks-sidebar-row-project-1')).toBeNull();
   });
 
   it('groups rows into In progress / Open / Done, with Done collapsed by default', async () => {
@@ -133,8 +162,8 @@ describe('TasksSidebarList — a sole scoped project', () => {
     expect(screen.getByTestId('tasks-sidebar-row-3')).toBeInTheDocument();
   });
 
-  it('cycles a row’s status through useTodosStore.move', async () => {
-    const base = makeTodo({ id: 't-1', number: 1, status: 'open' });
+  it('cycles a row’s status through useTodosStore.move, scoped to the row’s own project', async () => {
+    const base = makeTodo({ id: 't-1', number: 1, status: 'open', project_id: 'proj-1' });
     vi.mocked(todosApi.listTodos).mockResolvedValue([base]);
     vi.mocked(todosApi.moveTodo).mockResolvedValue({ ...base, status: 'in_progress' });
     render_();
@@ -155,13 +184,28 @@ describe('TasksSidebarList — a sole scoped project', () => {
     expect(useTasksModal.getState().edit).toEqual({ projectId: 'proj-1', todoId: 't-1' });
   });
 
-  it('starts a session from the row’s Start action', async () => {
+  it('starts a session from the row’s Start action, using the row’s own project', async () => {
     vi.mocked(todosApi.listTodos).mockResolvedValue([makeTodo({ id: 't-1', number: 1, status: 'open' })]);
     render_();
 
     await screen.findByTestId('tasks-sidebar-row-1');
     fireEvent.click(screen.getByTestId('tasks-sidebar-start-1'));
 
-    expect(startTodoSession).toHaveBeenCalledWith('t-1', 'open');
+    expect(startTodoSession).toHaveBeenCalledWith('t-1', 'proj-1', 'open');
+  });
+});
+
+describe('TasksSidebarList — quick-add targets the chosen project when multi-scope', () => {
+  it('defaults the quick-add target to the first project and writes new tasks to the chosen one', async () => {
+    render_();
+
+    await userEvent.click(screen.getByTestId('tasks-sidebar-new-project'));
+    await userEvent.click(screen.getByTestId('tasks-sidebar-new-project-proj-2'));
+
+    await userEvent.type(screen.getByTestId('tasks-sidebar-new'), 'A new task{Enter}');
+
+    await waitFor(() =>
+      expect(todosApi.createTodo).toHaveBeenCalledWith(31415, { title: 'A new task', projectId: 'proj-2' }),
+    );
   });
 });

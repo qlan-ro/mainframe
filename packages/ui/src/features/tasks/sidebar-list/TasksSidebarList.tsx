@@ -1,28 +1,31 @@
 /**
  * TasksSidebarList — the sidebar's Tasks view (the nav rail's second list).
  * Header: "Tasks", the shared scope strip (D7), and the quick-add row. The
- * project is the session scope's sole project (`useTasksProject`, shared
- * with the body's `TasksSurface`); with none, a pick list narrows the
- * shared scope instead of recording a local override. Groups: In progress /
+ * projects are the session scope's project SET (multi-project, same scope
+ * semantics as Chats/Automations; `useTasksProjects`, shared with the body's
+ * `TasksSurface`) — an empty or multi-project scope merges every project's
+ * todos, there is no pick-list fallback any more. Groups: In progress /
  * Open / Done (Done collapsed). A row opens the shared edit modal, Start
- * opens a session.
+ * opens a session, both scoped to the ROW's own project.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronRight, Plus } from 'lucide-react';
+import type { Project } from '@qlan-ro/mainframe-types';
 import { SidebarHeader } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
 import type { Todo } from '@/lib/api/todos';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useProjects } from '@/features/sessions/use-projects';
+import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { SidebarScopeStrip } from '@/features/sessions/SidebarScopeStrip';
-import { ProjectPickList } from '@/features/project-scope/ProjectPickList';
-import { projectsInScopeOrAll, useSessionFilters } from '@/store/session-filters';
 import { SidebarScrollRegion } from '@/features/shared/SidebarScrollRegion';
 import { useQuickAddTodo } from '../use-quick-add-todo';
 import { useStartTodoSession } from '../use-start-todo-session';
 import { useTasksModal } from '../use-tasks-modal';
-import { selectProjectTodos, useTodosStore } from '../use-todos-store';
-import { useTasksProject } from '../use-tasks-project';
+import { useMergedTodos, useTodosStore } from '../use-todos-store';
+import { useTasksProjects } from '../use-tasks-projects';
+import { resolveDefaultTaskProject } from '../resolve-default-project';
+import { TaskProjectPicker } from '../TaskProjectPicker';
 import { TaskSidebarRow, nextTodoStatus } from './TaskSidebarRow';
 
 const GROUPS: { status: Todo['status']; label: string; collapsedByDefault: boolean }[] = [
@@ -31,11 +34,38 @@ const GROUPS: { status: Todo['status']; label: string; collapsedByDefault: boole
   { status: 'done', label: 'Done', collapsedByDefault: true },
 ];
 
-function QuickAddRow({ port, projectId }: { port: number; projectId: string }) {
-  const quick = useQuickAddTodo(port, projectId);
+function QuickAddRow({ port, projectIds, projects }: { port: number; projectIds: string[]; projects: Project[] }) {
+  const activeProjectId = useActiveIdentity().projectId ?? null;
+  const multi = projectIds.length > 1;
+  const [targetProjectId, setTargetProjectId] = useState(
+    () => resolveDefaultTaskProject(projectIds, activeProjectId) ?? projectIds[0] ?? '',
+  );
+
+  // Keep the target valid as the scope's project set changes — falling back
+  // to the same default rule a quick-add that never touched the picker would
+  // have started from.
+  useEffect(() => {
+    if (!projectIds.includes(targetProjectId)) {
+      setTargetProjectId(resolveDefaultTaskProject(projectIds, activeProjectId) ?? projectIds[0] ?? '');
+    }
+  }, [projectIds, activeProjectId, targetProjectId]);
+
+  const quick = useQuickAddTodo(port, targetProjectId);
+  const scopedProjects = useMemo(() => projects.filter((p) => projectIds.includes(p.id)), [projects, projectIds]);
+
   return (
     <div className="flex h-8 items-center gap-2 rounded-md px-2 transition-colors focus-within:bg-sidebar-accent">
-      <Plus className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+      {multi ? (
+        <TaskProjectPicker
+          surface="tasks-sidebar-new"
+          projects={scopedProjects}
+          value={targetProjectId}
+          onChange={setTargetProjectId}
+          compact
+        />
+      ) : (
+        <Plus className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+      )}
       <input
         ref={quick.inputRef}
         data-testid="tasks-sidebar-new"
@@ -83,19 +113,20 @@ function TaskGroup({
   );
 }
 
-function TaskList({ port, projectId }: { port: number; projectId: string }) {
+function TaskList({ port, projectIds, projects }: { port: number; projectIds: string[]; projects: Project[] }) {
   const load = useTodosStore((s) => s.load);
   const move = useTodosStore((s) => s.move);
-  const { todos, loading } = useTodosStore(selectProjectTodos(projectId));
+  const { todos, loading } = useMergedTodos(projectIds);
   const openEdit = useTasksModal((s) => s.openEdit);
-  const startSession = useStartTodoSession(port, projectId);
+  const startSession = useStartTodoSession(port);
+  const multi = projectIds.length > 1;
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(GROUPS.map((g) => [g.status, g.collapsedByDefault])),
   );
 
   useEffect(() => {
-    void load(port, projectId);
-  }, [port, projectId, load]);
+    for (const id of projectIds) void load(port, id);
+  }, [port, projectIds, load]);
 
   const byStatus = useMemo(() => {
     const map: Record<Todo['status'], Todo[]> = { open: [], in_progress: [], done: [] };
@@ -132,9 +163,10 @@ function TaskList({ port, projectId }: { port: number; projectId: string }) {
               <TaskSidebarRow
                 key={todo.id}
                 todo={todo}
-                onCycle={(t) => void move(port, t.id, nextTodoStatus(t.status), projectId)}
-                onEdit={(t) => openEdit({ projectId, todoId: t.id })}
-                onStart={(t) => void startSession(t.id, t.status)}
+                project={multi ? projects.find((p) => p.id === todo.project_id) : undefined}
+                onCycle={(t) => void move(port, t.id, nextTodoStatus(t.status), t.project_id)}
+                onEdit={(t) => openEdit({ projectId: t.project_id, todoId: t.id })}
+                onStart={(t) => void startSession(t.id, t.project_id, t.status)}
               />
             ))}
           </TaskGroup>
@@ -147,9 +179,7 @@ function TaskList({ port, projectId }: { port: number; projectId: string }) {
 export function TasksSidebarList() {
   const port = useDaemonPort();
   const { projects } = useProjects();
-  const filterProjectIds = useSessionFilters((s) => s.filterProjectIds);
-  const soloFilterProject = useSessionFilters((s) => s.soloFilterProject);
-  const projectId = useTasksProject();
+  const projectIds = useTasksProjects();
 
   return (
     <>
@@ -158,20 +188,11 @@ export function TasksSidebarList() {
           <span className="text-base font-semibold">Tasks</span>
         </div>
         <SidebarScopeStrip />
-        {projectId != null && <QuickAddRow port={port} projectId={projectId} />}
+        {projectIds.length > 0 && <QuickAddRow port={port} projectIds={projectIds} projects={projects} />}
       </SidebarHeader>
       <SidebarScrollRegion>
         <div className="px-2">
-          {projectId == null ? (
-            <ProjectPickList
-              surface="tasks-sidebar"
-              projects={projectsInScopeOrAll(projects, filterProjectIds)}
-              filterProjectId={null}
-              onSelect={soloFilterProject}
-            />
-          ) : (
-            <TaskList port={port} projectId={projectId} />
-          )}
+          <TaskList port={port} projectIds={projectIds} projects={projects} />
         </div>
       </SidebarScrollRegion>
     </>

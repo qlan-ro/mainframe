@@ -9,9 +9,12 @@
  *  4.  Renders tasks-board-new button.
  *  5.  Loading does not blank the board on a refetch (todo #225).
  *
- * D7 dropped the board's own project picker — the project is the session
- * scope's sole project, resolved by the caller (`TasksSurface`); there is no
- * `projects`/`onProjectChange` prop any more.
+ * The board takes the session scope's project SET now (multi-project,
+ * `projectIds`), resolved by the caller (`TasksSurface`) — there is no
+ * board-local project picker. Multi-project-specific behaviors (merge,
+ * per-row avatars, GitHub control visibility, mutations hitting a row's own
+ * project) live in TasksBoard.multi.test.tsx, which doesn't stub the child
+ * views; this file stays focused on the header.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -47,9 +50,17 @@ vi.mock('../use-todos-store', () => ({
     };
     return selector ? selector(state) : state;
   }),
-  // The board reads its own project's bucket through this; a factory that omits
-  // it resolves the import to undefined and every case here throws on render.
+  // The board reads the merged bucket through this; a factory that omits it
+  // resolves the import to undefined and every case here throws on render.
+  useMergedTodos: () => ({ todos: mockTodos, loading: mockLoading, error: null }),
   selectProjectTodos: () => () => ({ todos: mockTodos, loading: mockLoading, error: null }),
+}));
+
+vi.mock('@/features/sessions/use-projects', () => ({
+  useProjects: () => ({ projects: [], loading: false, reloadProjects: vi.fn(), removeProjectFromList: vi.fn() }),
+}));
+vi.mock('@/features/sessions/use-active-identity', () => ({
+  useActiveIdentity: () => ({ projectId: null }),
 }));
 
 // Stub the heavy child views — this file exercises TasksBoard's own header only.
@@ -94,8 +105,8 @@ function makeTodo(overrides: Partial<Todo> & { id: string; number: number }): To
 // Render helper
 // ---------------------------------------------------------------------------
 
-function renderBoard(onClose?: () => void) {
-  render(<TasksBoard port={31415} projectId="proj-1" onStartSession={vi.fn()} onClose={onClose} />);
+function renderBoard(onClose?: () => void, projectIds: string[] = ['proj-1']) {
+  render(<TasksBoard port={31415} projectIds={projectIds} onStartSession={vi.fn()} onClose={onClose} />);
 }
 
 beforeEach(() => {
