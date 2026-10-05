@@ -1,17 +1,20 @@
 /**
- * A project's coloured initial. Shared by the scope strip, the pickers and the
- * session hover card, so a project reads the same way everywhere: avatar +
- * plain name, never coloured text.
+ * A project's identity disc: a FILLED circle in the project's hue with a white
+ * initial, so a project is recognisable by colour at a glance (and the colour
+ * is learned once, everywhere it appears). Shared by the scope strip, the
+ * pickers, the draft row and the session hover card.
  *
- * `ground` is the stacked mode (the scope strip): the avatar sits in an
- * overlapping row on that surface, so its fill is OPAQUE (the tint is mixed
- * into the ground rather than over transparency — a translucent disc shows its
- * neighbour through it) and it wears a 2px border in the ground colour, which
- * reads as a clean cut-out where avatars overlap. In that mode:
+ * The fill is the palette hue darkened toward black (`FILL_MIX`), so even the
+ * light hues (amber, cyan) carry a white initial in both themes.
+ *
+ * `ground` is the stacked mode (the scope strip): avatars overlap on that
+ * surface, so each wears a 2px border in the ground colour (a clean cut-out),
+ * and in that mode:
  *   - `ring` is "in scope": a 2px `primary` halo outside the cut-out, plus a
  *     `check` badge in the corner when asked for;
- *   - `dim` recedes by colour, not opacity (opacity would see-through again).
- * Without `ground` it is the plain tinted disc the pickers and cards use.
+ *   - `dim` recedes by mixing toward the ground, not opacity (opacity would let
+ *     the neighbour show through the overlap).
+ * Without `ground`, `ring`/`dim` fall back to a ring utility / opacity.
  */
 import { CheckIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -34,11 +37,18 @@ interface ProjectAvatarProps {
   className?: string;
 }
 
+/** How much of the palette hue survives the darkening (the rest is black). */
+const FILL_MIX = 78;
+
+function fillOf(color: string): string {
+  return `color-mix(in oklch, ${color} ${FILL_MIX}%, black)`;
+}
+
 function stackedStyle(color: string, ground: string, ring: boolean, dim: boolean): React.CSSProperties {
   const surface = `var(${ground})`;
   return {
-    backgroundColor: `color-mix(in oklch, ${color} ${dim ? 10 : 24}%, ${surface})`,
-    color: dim ? `color-mix(in oklch, ${color} 50%, ${surface})` : color,
+    backgroundColor: dim ? `color-mix(in oklch, ${fillOf(color)} 40%, ${surface})` : fillOf(color),
+    color: dim ? `color-mix(in oklch, white 70%, ${surface})` : 'white',
     border: `2px solid ${surface}`,
     boxShadow: ring ? '0 0 0 2px var(--primary)' : undefined,
   };
@@ -72,9 +82,7 @@ export function ProjectAvatar({
         width: size,
         height: size,
         fontSize: Math.round(size * 0.46),
-        ...(stacked
-          ? stackedStyle(color, ground, ring, dim)
-          : { backgroundColor: `color-mix(in oklch, ${color} 18%, transparent)`, color }),
+        ...(stacked ? stackedStyle(color, ground, ring, dim) : { backgroundColor: fillOf(color), color: 'white' }),
       }}
     >
       {initial}
