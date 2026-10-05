@@ -127,7 +127,7 @@ beforeEach(() => {
   vi.mocked(todosApi.listTodos).mockResolvedValue([]);
   // The stores are module-level singletons — a previous case's state would leak.
   useTodosStore.setState({ entries: {} });
-  useTasksModal.setState({ open: false, quickOpen: false, edit: null });
+  useTasksModal.setState({ quickOpen: false, edit: null });
 });
 
 describe('TasksSection — no active project', () => {

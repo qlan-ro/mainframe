@@ -32,6 +32,7 @@ import { useAutomationsNav } from '../use-automations-nav';
 import { useAutomationsStore } from '../use-automations-store';
 import { useAutomationToasts } from '../use-automation-toasts';
 import { mfToast } from '@/lib/toast';
+import { useUiPrefs } from '@/store/ui-prefs';
 
 let handler: (event: DaemonEvent) => void = () => {};
 
@@ -47,7 +48,8 @@ function mountWithHandler() {
 beforeEach(() => {
   handler = () => {};
   vi.clearAllMocks();
-  useAutomationsNav.setState({ open: false, runId: null, editorTarget: null });
+  useAutomationsNav.setState({ runId: null, editorTarget: null });
+  useUiPrefs.setState({ sidebarView: 'chats' });
 });
 
 describe('useAutomationToasts — automation.notification', () => {
@@ -84,7 +86,7 @@ describe('useAutomationToasts — automation.notification', () => {
     const [call] = vi.mocked(mfToast).mock.calls[0]!;
     call.action!.onClick();
 
-    expect(useAutomationsNav.getState().open).toBe(true);
+    expect(useUiPrefs.getState().sidebarView).toBe('automations');
     expect(useAutomationsNav.getState().runId).toBe('run-2');
   });
 

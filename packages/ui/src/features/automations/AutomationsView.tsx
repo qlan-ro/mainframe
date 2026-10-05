@@ -6,15 +6,20 @@
  * behind `DESCRIBE_ENABLED`, no heavy deps, reachable only from the empty-
  * library `BlankState`); todo #233 lazy-loads `details/AutomationDetails`,
  * reached by clicking a library row.
+ *
+ * Project scope is D7's shared session scope now, shown in the SIDEBAR
+ * header (`AutomationsSidebarList`'s `ScopeStrip`) — there is no picker here
+ * any more; the header just names the count. The close button doubles as
+ * "back to the library" and only renders while a sub-view owns the body —
+ * at the bare library there is nothing to go back to.
  */
 import React, { lazy, Suspense } from 'react';
-import { X, Zap } from 'lucide-react';
+import { ArrowLeft, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
-import { ModalProjectPicker } from '@/features/project-scope/ModalProjectPicker';
-import { useProjects } from '@/features/sessions/use-projects';
 import { useAutomationsNav } from './data/use-automations-nav';
-import { useAutomationsStore, selectModalLibrary, selectPendingInteractionCount } from './data/use-automations-store';
+import { selectPendingInteractionCount, useAutomationsStore } from './data/use-automations-store';
+import { useAutomationsLibraryView } from './data/use-automations-scope';
 import { DescribeFlow } from './describe/DescribeFlow';
 import { LibraryList } from './library/LibraryList';
 
@@ -28,21 +33,14 @@ function SectionFallback(): React.ReactElement {
   return <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">Loading…</div>;
 }
 
-interface AutomationsViewProps {
-  /** The open modal's scope, owned by `AutomationsHost`'s `useModalProjectScope`. */
-  projectId: string | null;
-  onProjectChange: (id: string | null) => void;
-}
-
-export function AutomationsView({ projectId, onProjectChange }: AutomationsViewProps): React.ReactElement {
+export function AutomationsView(): React.ReactElement {
   const close = useAutomationsNav((s) => s.close);
   const editorTarget = useAutomationsNav((s) => s.editorTarget);
   const runId = useAutomationsNav((s) => s.runId);
   const describeOpen = useAutomationsNav((s) => s.describeOpen);
   const detailsAutomationId = useAutomationsNav((s) => s.detailsAutomationId);
-  const { definitions } = useAutomationsStore(selectModalLibrary);
+  const { definitions } = useAutomationsLibraryView();
   const pending = useAutomationsStore(selectPendingInteractionCount);
-  const { projects } = useProjects();
   // A sub-view has its own project already baked into what it is showing —
   // re-scoping underneath it would strand the user's work.
   const inSubView = runId != null || editorTarget != null || describeOpen || detailsAutomationId != null;
@@ -54,24 +52,24 @@ export function AutomationsView({ projectId, onProjectChange }: AutomationsViewP
       <div className="flex h-[52px] flex-shrink-0 items-center gap-2.5 border-b px-4">
         <Zap size={16} className="text-primary" aria-hidden />
         <span className="text-base font-semibold text-foreground">Workflows</span>
-        <ModalProjectPicker
-          surface="automations"
-          projectId={projectId}
-          projects={projects}
-          onSelect={onProjectChange}
-          allowAllProjects
-          disabled={inSubView}
-        />
         <span data-testid="automations-title-count" className="text-xs text-muted-foreground">
           {definitions.length} automation{definitions.length === 1 ? '' : 's'}
           {pending > 0 ? ` · ${pending} need you` : ''}
         </span>
         <div className="flex-1" />
-        <Hint label="Close">
-          <Button variant="ghost" size="icon-sm" data-testid="automations-close" onClick={close} aria-label="Close">
-            <X aria-hidden />
-          </Button>
-        </Hint>
+        {inSubView && (
+          <Hint label="Back to library">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              data-testid="automations-close"
+              onClick={close}
+              aria-label="Back to library"
+            >
+              <ArrowLeft aria-hidden />
+            </Button>
+          </Hint>
+        )}
       </div>
 
       <Suspense fallback={<SectionFallback />}>

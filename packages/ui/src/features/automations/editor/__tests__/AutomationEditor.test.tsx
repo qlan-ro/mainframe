@@ -29,7 +29,7 @@ function setDefinitions(definitions: AutomationSummary[]) {
 }
 
 function resetStores() {
-  useAutomationsNav.setState({ open: false, editorTarget: null, runId: null });
+  useAutomationsNav.setState({ editorTarget: null, runId: null });
   useAutomationsStore.setState({ libraries: {}, catalog: [], scopeProjectId: null, gateway: fakeGateway() });
 }
 

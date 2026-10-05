@@ -5,10 +5,13 @@
  * reserved for the empty, first-run experience (plan `library/LibraryList.tsx`
  * comment: "BlankState when empty").
  *
- * Loading and error are distinct from "empty": `AutomationsHost` kicks off
- * `loadLibrary()` for the scoped project, so an empty `definitions` array is
- * ambiguous between "still fetching," "the fetch failed," and "genuinely none."
- * BlankState only renders once loading has finished without an error.
+ * Loading and error are distinct from "empty": `AutomationsSurface` (D7)
+ * kicks off `loadLibrary()` for the resolved scope and keeps
+ * `scopeProjectId` in sync; this just reads the result
+ * (`useAutomationsLibraryView`, filtered to the scope) without a fetch of
+ * its own, so an empty `definitions` array is ambiguous between "still
+ * fetching," "the fetch failed," and "genuinely none." BlankState only
+ * renders once loading has finished without an error.
  */
 import { Button } from '@/components/ui/button';
 import React from 'react';
@@ -16,7 +19,8 @@ import { Loader2, Plus, TriangleAlert } from 'lucide-react';
 import type { AutomationRunSummary, AutomationSummary } from '../contract';
 import { DESCRIBE_ENABLED } from '../flags';
 import { useAutomationsNav } from '../data/use-automations-nav';
-import { selectModalLibrary, useAutomationsStore } from '../data/use-automations-store';
+import { useAutomationsStore } from '../data/use-automations-store';
+import { useAutomationsLibraryView } from '../data/use-automations-scope';
 import { LibraryRow } from './LibraryRow';
 import { BlankState } from './BlankState';
 
@@ -30,7 +34,7 @@ function mostRecentRun(runs: AutomationRunSummary[], automationId: string): Auto
 }
 
 export function LibraryList(): React.ReactElement {
-  const { definitions, runs, loading, error } = useAutomationsStore(selectModalLibrary);
+  const { definitions, runs, loading, error } = useAutomationsLibraryView();
   const loadLibrary = useAutomationsStore((s) => s.loadLibrary);
   const scopeProjectId = useAutomationsStore((s) => s.scopeProjectId);
   const openEditor = useAutomationsNav((s) => s.openEditor);

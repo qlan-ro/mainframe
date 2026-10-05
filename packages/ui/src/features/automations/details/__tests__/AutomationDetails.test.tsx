@@ -49,7 +49,7 @@ function run(id: string, startedAt: number): AutomationRunSummary {
 }
 
 function resetStores() {
-  useAutomationsNav.setState({ open: true, editorTarget: null, runId: null, detailsAutomationId: null });
+  useAutomationsNav.setState({ editorTarget: null, runId: null, detailsAutomationId: null });
   useAutomationsStore.setState({ libraries: {}, catalog: [], gateway: fakeGateway() });
   patchLibrary({ definitions: [AUTOMATION], runs: [] });
 }

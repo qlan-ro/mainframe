@@ -47,7 +47,7 @@ const AUTOMATION_B: AutomationSummary = {
 
 describe('LibraryList', () => {
   beforeEach(() => {
-    useAutomationsNav.setState({ open: true, editorTarget: null, runId: null });
+    useAutomationsNav.setState({ editorTarget: null, runId: null });
     useAutomationsStore.setState({
       libraries: {},
       scopeProjectId: null,

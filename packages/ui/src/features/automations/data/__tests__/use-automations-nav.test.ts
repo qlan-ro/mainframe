@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useAutomationsNav } from '../use-automations-nav';
+import { useUiPrefs } from '@/store/ui-prefs';
 
 type AutomationsNavState = ReturnType<typeof useAutomationsNav.getState>;
 
@@ -12,16 +13,10 @@ type SetterCase = {
 
 const SETTER_CASES: SetterCase[] = [
   {
-    name: 'openHost opens the host',
-    setup: {},
-    act: (s) => s.openHost(),
-    expected: { open: true },
-  },
-  {
-    name: 'close resets open, editorTarget, and runId together',
-    setup: { open: true, editorTarget: { mode: 'new' }, runId: 'r1' },
+    name: 'close resets editorTarget and runId together',
+    setup: { editorTarget: { mode: 'new' }, runId: 'r1' },
     act: (s) => s.close(),
-    expected: { open: false, editorTarget: null, runId: null },
+    expected: { editorTarget: null, runId: null },
   },
   {
     name: 'openEditor sets the target and clears any open run',
@@ -49,15 +44,31 @@ const SETTER_CASES: SetterCase[] = [
   },
 ];
 
-describe('useAutomationsNav', () => {
-  beforeEach(() => {
-    useAutomationsNav.setState({ open: false, editorTarget: null, runId: null });
-  });
+beforeEach(() => {
+  useAutomationsNav.setState({ editorTarget: null, runId: null, describeOpen: false, detailsAutomationId: null });
+  useUiPrefs.setState({ sidebarView: 'chats' });
+});
 
+describe('useAutomationsNav', () => {
   it.each(SETTER_CASES)('$name', ({ setup, act, expected }) => {
     useAutomationsNav.setState(setup);
     act(useAutomationsNav.getState());
     expect(useAutomationsNav.getState()).toMatchObject(expected);
+  });
+
+  it('openHost shows the Automations rail view without touching any open sub-view', () => {
+    useAutomationsNav.setState({ runId: 'r1' });
+    useAutomationsNav.getState().openHost();
+    expect(useUiPrefs.getState().sidebarView).toBe('automations');
+    expect(useAutomationsNav.getState().runId).toBe('r1');
+  });
+
+  it('close does not leave the Automations view (D5) — only ui-prefs can do that', () => {
+    useUiPrefs.setState({ sidebarView: 'automations' });
+    useAutomationsNav.setState({ editorTarget: { mode: 'new' } });
+    useAutomationsNav.getState().close();
+    expect(useUiPrefs.getState().sidebarView).toBe('automations');
+    expect(useAutomationsNav.getState().editorTarget).toBeNull();
   });
 
   it('openEditor accepts an optional draft on the new-mode target (Describe-it → Open in editor)', () => {
@@ -67,10 +78,6 @@ describe('useAutomationsNav', () => {
   });
 
   describe('describe flow', () => {
-    beforeEach(() => {
-      useAutomationsNav.setState({ open: false, editorTarget: null, runId: null, describeOpen: false });
-    });
-
     it('openDescribe opens describe and clears any open editor/run', () => {
       useAutomationsNav.setState({ editorTarget: { mode: 'new' }, runId: 'r1' });
       useAutomationsNav.getState().openDescribe();
@@ -99,17 +106,13 @@ describe('useAutomationsNav', () => {
     });
 
     it('close resets describeOpen too', () => {
-      useAutomationsNav.setState({ open: true, describeOpen: true });
+      useAutomationsNav.setState({ describeOpen: true });
       useAutomationsNav.getState().close();
       expect(useAutomationsNav.getState().describeOpen).toBe(false);
     });
   });
 
   describe('details flow (todo #233)', () => {
-    beforeEach(() => {
-      useAutomationsNav.setState({ open: false, editorTarget: null, runId: null, detailsAutomationId: null });
-    });
-
     it('openDetails sets the automation id and clears any open editor/run/describe', () => {
       useAutomationsNav.setState({ editorTarget: { mode: 'new' }, runId: 'r1', describeOpen: true });
       useAutomationsNav.getState().openDetails('auto-1');
@@ -143,7 +146,7 @@ describe('useAutomationsNav', () => {
     });
 
     it('close resets detailsAutomationId too', () => {
-      useAutomationsNav.setState({ open: true, detailsAutomationId: 'auto-1' });
+      useAutomationsNav.setState({ detailsAutomationId: 'auto-1' });
       useAutomationsNav.getState().close();
       expect(useAutomationsNav.getState().detailsAutomationId).toBeNull();
     });

@@ -75,7 +75,7 @@ function setup(overrides: {
 }
 
 beforeEach(() => {
-  useAutomationsNav.setState({ open: true, runId: null, editorTarget: null });
+  useAutomationsNav.setState({ runId: null, editorTarget: null });
   useAutomationsStore.setState({ libraries: {}, interactions: [], catalog: [] });
 });
 

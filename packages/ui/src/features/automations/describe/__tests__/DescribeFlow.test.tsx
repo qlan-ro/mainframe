@@ -16,7 +16,7 @@ import { useAutomationsStore } from '../../data/use-automations-store';
 import { DescribeFlow } from '../DescribeFlow';
 
 beforeEach(() => {
-  useAutomationsNav.setState({ open: true, editorTarget: null, runId: null, describeOpen: true });
+  useAutomationsNav.setState({ editorTarget: null, runId: null, describeOpen: true });
   useAutomationsStore.setState({ catalog: [] });
 });
 

@@ -10,22 +10,22 @@
  * `recordingKey`.
  *
  * Testid reference (verified against packages/ui/src/features/automations/):
- *   shell-rail-chats / -automations  — nav rail view switches (NavRail.tsx). The shell
- *                                       redesign retired the sidebar header's own entry point
- *                                       (`sidebar-action-automations` dispatched `openHost()`
- *                                       directly); the rail now switches the sidebar to the
- *                                       Automations LIST, whose rows / `New` land on Details /
- *                                       the editor. The view is persisted (ui-prefs v8
- *                                       `sidebarView`), so after a reload the sidebar may come
- *                                       back on the Automations list — switch to Chats before
- *                                       touching the scope strip or a session row.
- *   automations-sidebar-open-library — the list header's "Open the library" button:
- *                                       `openHost()` with no sub-view, i.e. the bare LIBRARY.
- *                                       (⌘⇧A does the same but is `dev: true` and filtered out
- *                                       of the built app the e2e harness runs — never rely on it.)
- *   automations-host                 — the Radix Dialog content root (absent when closed)
- *   automations-view                 — the view root inside the host
- *   automations-close                — the view's close button
+ *   shell-rail-chats / -automations  — nav rail view switches (NavRail.tsx), D1/D5/D7: the
+ *                                       rail switches BOTH the sidebar (AutomationsSidebarList)
+ *                                       AND the body (AutomationsSurface/AutomationsView,
+ *                                       the SidebarInset content) to Automations. The view is
+ *                                       persisted (ui-prefs v8 `sidebarView`), so after a reload
+ *                                       the sidebar/body may come back on Automations — switch
+ *                                       to Chats before touching the scope strip.
+ *   automations-sidebar-open-library — the list header's "Open the library" button: shows
+ *                                       Automations AND clears any open sub-view, landing on
+ *                                       the bare LIBRARY. (⌘⇧A does the same but is `dev: true`
+ *                                       and filtered out of the built app the e2e harness runs
+ *                                       — never rely on it.)
+ *   automations-view                 — the view root (now body content, not a dialog —
+ *                                       `automations-host` is gone, there is no Radix Dialog)
+ *   automations-close                — "back to library"; renders ONLY while a sub-view
+ *                                       (editor/run/describe/details) owns the body
  *   automations-section-library      — the library's section container
  *   automations-library              — the library list root (ALSO the loading
  *                                       container — see the refresh recipe below)
@@ -35,22 +35,26 @@
  *   automations-library-project-<id> — a row's project badge
  *   automations-delete-confirm       — the shared ConfirmDialog root the row raises
  *   automations-delete-confirm-confirm / -cancel — its derived button pair
- *   sessions-scope-avatar-<id>       — a project's avatar in the scope strip (ScopeStrip.tsx,
- *                                       shell redesign D14, replaced the project-scope dropdown);
- *                                       `aria-pressed` is "true"/"false" (`data-state` is the tooltip's). Multi-select
- *                                       scope; never switches the active session
+ *   sessions-scope-avatar-<id>       — a project's avatar in the shared scope strip
+ *                                       (ScopeStrip.tsx via SidebarScopeStrip, D7 — now the ONE
+ *                                       project-scope control for Chats/Tasks/Automations/
+ *                                       Setup Advisor, rendered in the Automations sidebar
+ *                                       header too, not just under Chats); `aria-pressed` is
+ *                                       "true"/"false" (`data-state` is the tooltip's).
+ *                                       ⌥-click solos the scope to that one project — never
+ *                                       switches the active session.
  *   sessions-scope-label             — "All projects" (empty scope) or "N project(s)"
  *
  * Three facts every test here leans on — read before "simplifying" a scenario:
  *
- * 1. Reopening the host does NOT re-fetch the library. `AutomationsHost`'s
- *    load effect depends on `[projectId, setActiveProjectId, loadAll]` — `open`
- *    is absent — and `LibraryList` has no mount-time fetch of its own. The only
- *    refresh triggers are an active-project-id change or a page reload.
- * 2. The library's scope is the active SESSION's project
- *    (`useActiveIdentity().projectId`), not the sidebar filter row. The two
- *    usually move together but can desync across a reload, so every scenario
- *    pins scope by selecting the target project's seeded chat directly.
+ * 1. Reopening the library does NOT re-fetch by itself — `useAutomationsLibraryView`
+ *    (LibraryList) only READS; `AutomationsSurface`'s `useScopedAutomationsLibrary`
+ *    is the one mount that loads, keyed on the resolved scope. The only refresh
+ *    triggers are a scope change or a page reload.
+ * 2. The library's scope is D7's shared session scope (`useSessionFilters` →
+ *    `ScopeStrip`/`SidebarScopeStrip`) now, NOT the active session's project —
+ *    every scenario pins scope by ⌥-clicking the target project's avatar
+ *    directly (`soloScope` below), independent of which chat (if any) is active.
  * 3. Nothing broadcasts an automation create or delete over the WS event bus,
  *    so a REST seed or delete is invisible until the next refresh — assertions
  *    that need to observe a mutation always go through the refresh recipe
@@ -67,55 +71,37 @@ import {
   cleanupTauriProject,
   type TauriProject,
 } from '../helpers/tauri/setup.js';
-import { sessionsSidebar } from '../helpers/tauri/page-objects.js';
 import { waitConnected } from '../helpers/tauri/wait.js';
 
 /**
- * Bring the UI to a freshly fetched library for the project that owns
- * `chatId`. Selecting that chat's row is what pins `useActiveIdentity().projectId`
- * — the library's actual scope — deterministically, independent of whatever the
- * sidebar filter row last showed.
- *
- * Row clicks in the sessions sidebar get eaten by `SessionRow`'s HoverCard
- * (500ms openDelay), so this parks the pointer and retries the whole
- * click-then-assert step as a unit, mirroring `sessions-filters.spec.ts`'s
- * `selectRow`.
+ * D7: solo the shared session scope to exactly `projectId` — the ONE project
+ * scope control now, shared by Chats/Tasks/Automations/Setup Advisor. ⌥-click
+ * REPLACES whatever the scope held, so this is also how a later call switches
+ * from project A to B — no separate "clear" step needed.
  */
-/** Toggle every scoped project avatar off, so the sidebar widens to every
- *  project's rows (scope changes never switch the active session). */
-async function clearScope(page: Page): Promise<void> {
-  const label = page.getByTestId('sessions-scope-label');
-  await expect(async () => {
-    const text = (await label.textContent())?.trim();
-    if (text === 'All projects') return;
-    const selected = page.locator('[data-testid^="sessions-scope-avatar-"][aria-pressed="true"]').first();
-    await selected.click({ timeout: 2_000 });
-    expect((await label.textContent())?.trim()).toBe('All projects');
-  }).toPass({ timeout: 10_000, intervals: [250, 500] });
+async function soloScope(page: Page, projectId: string): Promise<void> {
+  const avatar = page.getByTestId(`sessions-scope-avatar-${projectId}`);
+  await avatar.click({ modifiers: ['Alt'], timeout: 5_000 });
+  await expect(avatar).toHaveAttribute('aria-pressed', 'true', { timeout: 5_000 });
 }
 
-async function openLibraryFor(page: Page, chatId: string): Promise<void> {
+/** Bring the UI to a freshly fetched library scoped to `projectId`. */
+async function openLibraryFor(page: Page, projectId: string): Promise<void> {
   await page.reload();
   await waitConnected(page);
 
-  // The previous pass left the sidebar on the Automations list, and that view
-  // is persisted — the scope strip and the session rows only exist under Chats.
+  // The previous pass left the sidebar/body on the Automations view, and that
+  // view is persisted — the scope strip's avatars render under Chats too
+  // (SidebarScopeStrip is shared, D7), but Chats is the deterministic place to
+  // touch it before switching views.
   const chatsRail = page.getByTestId('shell-rail-chats');
   await chatsRail.click();
   await expect(chatsRail).toHaveAttribute('aria-pressed', 'true', { timeout: 5_000 });
 
-  await clearScope(page);
-
-  const row = sessionsSidebar(page).row(chatId);
-  await expect(async () => {
-    await page.mouse.move(0, 0);
-    await expect(page.locator('[data-slot="hover-card-content"]')).toHaveCount(0, { timeout: 2_000 });
-    await row.click({ timeout: 5_000 });
-    await expect(row).toHaveAttribute('data-active', 'true', { timeout: 5_000 });
-  }).toPass({ timeout: 45_000, intervals: [500, 1_000, 2_000] });
+  await soloScope(page, projectId);
 
   // Rows and New land on Details / the editor; only the list header's
-  // "Open the library" button opens the host on the bare library.
+  // "Open the library" button returns the body to the bare library.
   await page.getByTestId('shell-rail-automations').click();
   await page.getByTestId('automations-sidebar-open-library').click({ timeout: 10_000 });
   await expect(page.getByTestId('automations-library')).toBeVisible({ timeout: 10_000 });
@@ -132,17 +118,17 @@ test.describe('§automations-library', () => {
   let app: TauriAppFixture;
   let projectA: TauriProject;
   let projectB: TauriProject;
-  let chatIdA: string;
-  let chatIdB: string;
 
   test.beforeAll(async () => {
     app = await launchTauriApp();
     projectA = await createTauriProject(app.page);
-    chatIdA = await createTauriChat(app.page, projectA.projectId, 'default');
+    // A seeded chat per project so neither is a boot dead-end; the library's
+    // scope comes from the shared ScopeStrip now (D7), not from either chat.
+    await createTauriChat(app.page, projectA.projectId, 'default');
     // createTauriProject reloads the page — the chat just created is
     // REST-seeded and survives that reload.
     projectB = await createTauriProject(app.page);
-    chatIdB = await createTauriChat(app.page, projectB.projectId, 'default');
+    await createTauriChat(app.page, projectB.projectId, 'default');
   });
 
   test.afterAll(async () => {
@@ -159,7 +145,7 @@ test.describe('§automations-library', () => {
     const anchorId = await createTauriAutomation({ name: 'delete-confirmed anchor', projectId: projectA.projectId });
     const targetId = await createTauriAutomation({ name: 'delete-confirmed target', projectId: projectA.projectId });
 
-    await openLibraryFor(page, chatIdA);
+    await openLibraryFor(page, projectA.projectId);
 
     await expect(page.getByTestId(`automations-library-row-${targetId}`)).toBeVisible();
     await page.getByTestId(`automations-library-delete-${targetId}`).click();
@@ -172,7 +158,7 @@ test.describe('§automations-library', () => {
     await expect(confirmDialog).toHaveCount(0);
     await expect(page.getByTestId(`automations-library-row-${targetId}`)).toHaveCount(0);
 
-    await openLibraryFor(page, chatIdA);
+    await openLibraryFor(page, projectA.projectId);
 
     // Order matters: the anchor row can only appear from a landed re-fetch
     // (definitions starts empty after the reload), which is what makes the
@@ -186,7 +172,7 @@ test.describe('§automations-library', () => {
     const { page } = app;
     const targetId = await createTauriAutomation({ name: 'delete-cancelled target', projectId: projectA.projectId });
 
-    await openLibraryFor(page, chatIdA);
+    await openLibraryFor(page, projectA.projectId);
 
     await expect(page.getByTestId(`automations-library-row-${targetId}`)).toBeVisible();
     await page.getByTestId(`automations-library-delete-${targetId}`).click();
@@ -198,7 +184,7 @@ test.describe('§automations-library', () => {
     await expect(confirmDialog).toHaveCount(0);
     await expect(page.getByTestId(`automations-library-row-${targetId}`)).toBeVisible();
 
-    await openLibraryFor(page, chatIdA);
+    await openLibraryFor(page, projectA.projectId);
 
     // The automation was never deleted server-side, so the row survives a
     // landed re-fetch too, not just the un-refreshed DOM from before the
@@ -210,7 +196,7 @@ test.describe('§automations-library', () => {
     const { page } = app;
     const targetId = await createTauriAutomation({ name: 'badge scoped target', projectId: projectA.projectId });
 
-    await openLibraryFor(page, chatIdA);
+    await openLibraryFor(page, projectA.projectId);
 
     await expect(page.getByTestId(`automations-library-project-${targetId}`)).toHaveText(
       path.basename(projectA.projectPath),
@@ -221,7 +207,7 @@ test.describe('§automations-library', () => {
     const { page } = app;
     const targetId = await createTauriAutomation({ name: 'badge unscoped target' });
 
-    await openLibraryFor(page, chatIdA);
+    await openLibraryFor(page, projectA.projectId);
 
     await expect(page.getByTestId(`automations-library-project-${targetId}`)).toHaveText('All projects');
   });
@@ -231,7 +217,7 @@ test.describe('§automations-library', () => {
     const scopedId = await createTauriAutomation({ name: 'scoping negative scoped', projectId: projectA.projectId });
     const unscopedId = await createTauriAutomation({ name: 'scoping negative unscoped' });
 
-    await openLibraryFor(page, chatIdB);
+    await openLibraryFor(page, projectB.projectId);
 
     // Guard against an empty-library false pass: the library must actually be
     // showing rows (the unscoped automation) for the scoped row's absence to
@@ -245,10 +231,10 @@ test.describe('§automations-library', () => {
     const { page } = app;
     const unscopedId = await createTauriAutomation({ name: 'scoping positive unscoped' });
 
-    await openLibraryFor(page, chatIdB);
+    await openLibraryFor(page, projectB.projectId);
     await expect(page.getByTestId(`automations-library-row-${unscopedId}`)).toBeVisible();
 
-    await openLibraryFor(page, chatIdA);
+    await openLibraryFor(page, projectA.projectId);
     await expect(page.getByTestId(`automations-library-row-${unscopedId}`)).toBeVisible();
   });
 });

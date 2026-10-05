@@ -1,18 +1,20 @@
 /**
  * AutomationsSidebarList — the sidebar's Automations view (the nav rail's
- * third list). Header: "Automations" + Open library + New. Rows come from the scope-keyed
- * library cache under `soleProjectId ?? 'all'` — the modal keeps its own entry,
- * so neither load evicts the other. A row opens the automation's details in
- * the modal; "needs you" rows sort first. The pending dot lives on the rail.
+ * third list). Header: "Automations" + the shared scope strip (D7) + Open
+ * library + New. Rows come from the D7 scope-resolution helper
+ * (`useScopedAutomationsLibrary`, shared with the body) — the sole project's
+ * library, 'all', or 'all' filtered to the scope. A row opens the
+ * automation's details in the body; "needs you" rows sort first. The
+ * pending dot lives on the rail.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { LayoutList, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { SidebarHeader } from '@/components/ui/sidebar';
-import { soleProjectId, useSessionFilters } from '@/store/session-filters';
+import { SidebarScopeStrip } from '@/features/sessions/SidebarScopeStrip';
 import { SidebarScrollRegion } from '@/features/shared/SidebarScrollRegion';
-import { useAutomationsLibrary } from '../data/use-automations-library';
+import { useScopedAutomationsLibrary } from '../data/use-automations-scope';
 import { useAutomationsNav } from '../data/use-automations-nav';
 import { useAutomationsStore } from '../data/use-automations-store';
 import { AutomationSidebarRow } from './AutomationSidebarRow';
@@ -31,10 +33,10 @@ function useTickingNow(): number {
 }
 
 export function AutomationsSidebarList() {
-  const scopedProject = useSessionFilters((s) => soleProjectId(s.filterProjectIds));
-  const library = useAutomationsLibrary(scopedProject);
+  const library = useScopedAutomationsLibrary();
   const interactions = useAutomationsStore((s) => s.interactions);
   const openHost = useAutomationsNav((s) => s.openHost);
+  const close = useAutomationsNav((s) => s.close);
   const openEditor = useAutomationsNav((s) => s.openEditor);
   const openDetails = useAutomationsNav((s) => s.openDetails);
   const now = useTickingNow();
@@ -42,6 +44,13 @@ export function AutomationsSidebarList() {
     () => deriveAutomationRows(library.definitions, library.runs, interactions),
     [library.definitions, library.runs, interactions],
   );
+
+  // Returns the body to the bare library — clears whatever sub-view (editor,
+  // run, describe, details) was left open, rather than resuming it.
+  const openLibrary = () => {
+    openHost();
+    close();
+  };
 
   const openNew = () => {
     openHost();
@@ -63,7 +72,7 @@ export function AutomationsSidebarList() {
                 data-testid="automations-sidebar-open-library"
                 aria-label="Open the library"
                 className="text-muted-foreground"
-                onClick={openHost}
+                onClick={openLibrary}
               >
                 <LayoutList />
               </Button>
@@ -82,6 +91,7 @@ export function AutomationsSidebarList() {
             </Hint>
           </div>
         </div>
+        <SidebarScopeStrip />
       </SidebarHeader>
       <SidebarScrollRegion>
         <div className="flex flex-col gap-0.5 px-2">

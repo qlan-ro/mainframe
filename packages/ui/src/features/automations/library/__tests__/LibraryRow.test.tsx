@@ -69,7 +69,7 @@ describe('LibraryRow', () => {
   beforeEach(() => {
     useAutomationsStore.setState({ libraries: {}, gateway: fakeGateway() });
     setLibrary({ definitions: [AUTOMATION], runs: [] });
-    useAutomationsNav.setState({ open: true, editorTarget: null, runId: null, detailsAutomationId: null });
+    useAutomationsNav.setState({ editorTarget: null, runId: null, detailsAutomationId: null });
     vi.mocked(requestConfirm).mockReset();
     vi.mocked(mfToast.error).mockReset();
   });
