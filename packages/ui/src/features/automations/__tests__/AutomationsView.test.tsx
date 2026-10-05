@@ -103,8 +103,11 @@ it('shows the (lazy-loaded) editor section when an editor target is open, with n
   render(<AutomationsView />);
   // AutomationEditor is React.lazy — the Suspense boundary swaps its whole
   // subtree (including this wrapper div) for the fallback until the chunk
-  // resolves, so this assertion must await it rather than getByTestId.
-  expect(await screen.findByTestId('automations-section-editor')).toBeInTheDocument();
+  // resolves, so this assertion must await it rather than getByTestId. Its
+  // chunk pulls in the project picker (ProjectAvatar/Hint/session-filters)
+  // now, so the default 1s findBy timeout is occasionally too tight under a
+  // full-suite parallel run — a generous explicit timeout, not a longer test.
+  expect(await screen.findByTestId('automations-section-editor', {}, { timeout: 5000 })).toBeInTheDocument();
 });
 
 it('shows the describe section when describeOpen is set, below the editor precedence', () => {
