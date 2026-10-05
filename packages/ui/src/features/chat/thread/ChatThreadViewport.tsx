@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { lazy, Suspense, useMemo, type ReactNode } from 'react';
 import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
 import { ArrowDownIcon } from 'lucide-react';
 import { useUiPrefs } from '@/store/ui-prefs';
@@ -49,34 +49,9 @@ function ThreadFooterInput({ variant }: { variant: ChatThreadVariant }) {
     </>
   );
 }
-/**
- * Publishes the footer's height as `--chat-footer-h` on the enclosing chat
- * column, so the session panel's overlay can stop above the composer.
- */
-function useFooterHeightVar() {
-  const ref = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    const el = ref.current;
-    const column = el?.closest<HTMLElement>('[data-chat-column]');
-    if (!el || !column) return;
-    const publish = () => column.style.setProperty('--chat-footer-h', `${el.offsetHeight}px`);
-    publish();
-    const observer = new ResizeObserver(publish);
-    observer.observe(el);
-    return () => {
-      observer.disconnect();
-      column.style.removeProperty('--chat-footer-h');
-    };
-  }, []);
-  return ref;
-}
 function ThreadFooter({ variant }: { variant: ChatThreadVariant }) {
-  const footerRef = useFooterHeightVar();
   return (
-    <ThreadPrimitive.ViewportFooter
-      ref={footerRef}
-      className="sticky bottom-0 mt-auto flex max-h-[calc(100cqh-2rem)] shrink-0 flex-col bg-background"
-    >
+    <ThreadPrimitive.ViewportFooter className="sticky bottom-0 mt-auto flex max-h-[calc(100cqh-2rem)] shrink-0 flex-col bg-background">
       <ThreadPrimitive.ScrollToBottom asChild>
         <Button
           data-testid="chat-scroll-to-bottom"

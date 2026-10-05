@@ -8,7 +8,6 @@
  * catalog — that catalog belongs to the Setup Advisor, which Manage reaches. It
  * is the only route to that sheet, so the sub-group renders even when empty.
  */
-import { Layers } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
@@ -23,7 +22,8 @@ import { PanelAttachmentsGrid } from './PanelAttachmentsGrid';
 import { PanelSection } from './PanelSection';
 import { PanelSubGroup, SUB_GROUP_ROW } from './PanelSubGroup';
 
-const SUB_NOTE = 'px-1 py-0.5 text-xs text-muted-foreground';
+/** Same shape as every section's empty row (Activity, Launch, Tasks). */
+const SUB_NOTE = 'px-2 py-1 text-sm text-muted-foreground';
 
 function MemoryFileRow({ row }: { row: ContextFileRow }) {
   return (
@@ -59,19 +59,11 @@ export function ContextSection({ port, open, onToggle }: ContextSectionProps) {
   const sessionItems = context ? deriveSessionItems(context) : [];
   const skillFiles = context?.skillFiles ?? [];
   const attachments = context?.attachments ?? [];
-  const count = memoryFiles.length + sessionItems.length + skillFiles.length + attachments.length;
 
   return (
-    <PanelSection
-      id="context"
-      label="Context"
-      icon={Layers}
-      count={count > 0 ? count : undefined}
-      open={open}
-      onToggle={onToggle}
-    >
+    <PanelSection id="context" label="Context" open={open} onToggle={onToggle}>
       {memoryFiles.length > 0 && (
-        <PanelSubGroup label="Context" count={memoryFiles.length}>
+        <PanelSubGroup label="Memory files">
           {memoryFiles.map((row) => (
             <MemoryFileRow key={row.path} row={row} />
           ))}
@@ -79,7 +71,7 @@ export function ContextSection({ port, open, onToggle }: ContextSectionProps) {
       )}
 
       {sessionItems.length > 0 && (
-        <PanelSubGroup label="Session" count={sessionItems.length}>
+        <PanelSubGroup label="Session">
           {sessionItems.map((item) => (
             <ContextFileItem
               key={item.path}
@@ -93,7 +85,6 @@ export function ContextSection({ port, open, onToggle }: ContextSectionProps) {
 
       <PanelSubGroup
         label="Skills"
-        count={skillFiles.length}
         action={
           <Button
             data-testid="session-panel-skills-manage"
@@ -122,7 +113,7 @@ export function ContextSection({ port, open, onToggle }: ContextSectionProps) {
       </PanelSubGroup>
 
       {attachments.length > 0 && chatId != null && (
-        <PanelSubGroup label="Attachments" count={attachments.length}>
+        <PanelSubGroup label="Attachments">
           <PanelAttachmentsGrid port={port} chatId={chatId} attachments={attachments} enabled={open} />
         </PanelSubGroup>
       )}

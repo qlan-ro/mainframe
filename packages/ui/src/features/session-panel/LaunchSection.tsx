@@ -89,12 +89,7 @@ export function LaunchSection({ port }: { port: number }) {
 
   return (
     <section data-testid="session-panel-card-launch" className="shrink-0 border-b border-border">
-      <PanelEyebrow
-        label="Launch"
-        count={liveCount > 0 ? liveCount : undefined}
-        live={liveCount > 0}
-        liveTestId="session-panel-launch-live"
-      />
+      <PanelEyebrow label="Launch" live={liveCount > 0} liveTestId="session-panel-launch-live" />
       <div className="flex flex-col gap-0.5 px-2 pb-2">
         {rows.length === 0 ? (
           <div data-testid="session-panel-launch-empty" className={cn(ROW, 'text-sm text-muted-foreground')}>

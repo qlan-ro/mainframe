@@ -16,13 +16,12 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { ListTodo } from 'lucide-react';
 import { PanelSection } from '../PanelSection';
 
 function renderSection(props: Partial<Parameters<typeof PanelSection>[0]> = {}) {
   const onToggle = vi.fn();
   render(
-    <PanelSection id="plan" label="Plan" icon={ListTodo} open onToggle={onToggle} {...props}>
+    <PanelSection id="plan" label="Plan" open onToggle={onToggle} {...props}>
       <div data-testid="section-body">body</div>
     </PanelSection>,
   );
@@ -62,22 +61,15 @@ describe('PanelSection', () => {
     ).not.toHaveClass('rotate-180');
   });
 
-  it('renders no count badge when count is undefined', () => {
+  it('renders no count badge — section headers carry none', () => {
     renderSection();
     expect(screen.getByTestId('session-panel-section-toggle-plan')).toHaveTextContent('Plan');
     expect(screen.getByTestId('session-panel-section-toggle-plan').querySelector('[data-slot="badge"]')).toBeNull();
   });
 
-  it('renders the count badge when a count is given, including zero', () => {
-    renderSection({ count: 0 });
-    expect(
-      screen.getByTestId('session-panel-section-toggle-plan').querySelector('[data-slot="badge"]'),
-    ).toHaveTextContent('0');
-  });
-
   it('shows the body when open and hides it when closed', () => {
     const { unmount } = render(
-      <PanelSection id="context" label="Context" icon={ListTodo} open onToggle={vi.fn()}>
+      <PanelSection id="context" label="Context" open onToggle={vi.fn()}>
         <div data-testid="section-body">body</div>
       </PanelSection>,
     );
@@ -85,7 +77,7 @@ describe('PanelSection', () => {
     unmount();
 
     render(
-      <PanelSection id="context" label="Context" icon={ListTodo} open={false} onToggle={vi.fn()}>
+      <PanelSection id="context" label="Context" open={false} onToggle={vi.fn()}>
         <div data-testid="section-body">body</div>
       </PanelSection>,
     );

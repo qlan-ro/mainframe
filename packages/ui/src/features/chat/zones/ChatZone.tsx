@@ -123,12 +123,15 @@ export function ChatZone({
           if (!focused) onFocus();
         }}
       >
-        <ZoneStrip chatId={chatId} onClose={onClose} />
         {/* Measured per zone, before the panel takes its width, so each side
-            derives its own inline/overlay mode from its own width. */}
+            derives its own inline/overlay mode from its own width. The strip
+            sits INSIDE the transcript column so the panel runs full height. */}
         <div ref={panelState.hostRef} data-chat-column className="relative flex min-h-0 flex-1 overflow-hidden">
           <SideChatHost parentChatId={chatId}>
-            <ChatThread />
+            <ZoneStrip chatId={chatId} onClose={onClose} />
+            <div className="min-h-0 flex-1">
+              <ChatThread />
+            </div>
           </SideChatHost>
           {focused && <SessionPanel state={panelState} />}
         </div>

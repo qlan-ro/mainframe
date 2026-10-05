@@ -4,9 +4,10 @@
  *
  * It DOCKS: `inline` is a 300px flex sibling of the transcript column, taking
  * width from it; `overlay` (the column is too narrow to share) sits over the
- * transcript's right edge, stops above the composer footer (the footer
- * publishes its height as `--chat-footer-h` on the column), and carries a
- * scrim that joins the existing light-dismiss (Escape / pointer outside).
+ * transcript's right edge. Both run the chat area's FULL height — the fork
+ * banner / zone strip live inside the transcript column, and the overlay
+ * covers the composer too — and the overlay carries a scrim that joins the
+ * existing light-dismiss (Escape / pointer outside).
  * `hidden` renders nothing. The title bar's details toggle is the only switch.
  *
  * The state machine lives with the chat column (it measures the column the
@@ -70,9 +71,8 @@ export function SessionPanel({ state }: { state: SessionPanelState }) {
     <div
       data-testid="session-panel-root"
       data-mode="overlay"
-      // Stops above the composer footer so the panel never covers the input.
-      className="absolute inset-x-0 top-0 z-20 flex justify-end"
-      style={{ bottom: 'var(--chat-footer-h, 0px)' }}
+      // Full height of the chat area, composer included.
+      className="absolute inset-0 z-20 flex justify-end"
     >
       {/* The scrim sits OUTSIDE the dismiss root (`rootRef` is the dialog), so a
           pointerdown on it is "outside" to the light-dismiss listener and closes
@@ -83,9 +83,7 @@ export function SessionPanel({ state }: { state: SessionPanelState }) {
         data-testid="session-panel-overlay"
         role="dialog"
         aria-label="Session panel"
-        className={cn(
-          'relative flex h-full flex-col rounded-bl-[12px] border-b border-l border-border bg-background shadow-mf-pop',
-        )}
+        className={cn('relative flex h-full flex-col border-l border-border bg-background shadow-mf-pop')}
         style={{ width: PANEL_WIDTH }}
       >
         <PanelSections state={state} port={port} />

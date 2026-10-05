@@ -80,11 +80,11 @@ describe('PullRequestsSection — rows', () => {
     expect(screen.getByTestId('session-panel-summary-pr-42')).toHaveTextContent('mentioned');
   });
 
-  it('labels the section header "Pull requests" and counts the PRs in the badge', () => {
+  it('labels the section header "Pull requests", with no count', () => {
     mockPrs = [pr(41, 'created'), pr(42, 'mentioned')];
     render();
     expect(screen.getByTestId('session-panel-section-prs')).toHaveTextContent('Pull requests');
-    expect(badge()).toHaveTextContent('2');
+    expect(badge()).toBeNull();
   });
 
   it('opens the PR externally on click', () => {

@@ -184,9 +184,10 @@ describe('TasksSection — rows', () => {
     expect(screen.queryByTestId('session-panel-tasks-empty')).toBeNull();
   });
 
-  it('counts only the active tasks in the badge', async () => {
+  it('shows no count in the header', async () => {
     await renderLoaded([OPEN_TODO, IN_PROGRESS_TODO, DONE_TODO]);
-    await waitFor(() => expect(badge()).toHaveTextContent('2'));
+    await waitFor(() => expect(screen.getByTestId('session-panel-task-row-12')).toBeInTheDocument());
+    expect(badge()).toBeNull();
   });
 });
 

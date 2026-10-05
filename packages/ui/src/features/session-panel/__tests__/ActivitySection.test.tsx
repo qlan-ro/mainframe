@@ -122,10 +122,10 @@ describe('ActivitySection — task rows', () => {
     expect(screen.queryByTestId('session-panel-activity-empty')).toBeNull();
   });
 
-  it('counts the running work in the badge, and shows the live dot', () => {
+  it('shows the live dot and no count in the header while work runs', () => {
     mockTasks = { 'a-1': task('a-1', 'agent', 'reviewer'), 'b-1': task('b-1', 'bash', 'pnpm dev') };
     render(section());
-    expect(badge()).toHaveTextContent('2');
+    expect(badge()).toBeNull();
     expect(screen.getByTestId('session-panel-activity-live')).toBeInTheDocument();
   });
 

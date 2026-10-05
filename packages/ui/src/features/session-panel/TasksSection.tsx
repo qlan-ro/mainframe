@@ -92,7 +92,7 @@ export function TasksSection() {
 
   return (
     <section data-testid="session-panel-card-tasks" className="shrink-0 border-b border-border">
-      <PanelEyebrow label="Tasks" count={projectId != null && active.length > 0 ? active.length : undefined} />
+      <PanelEyebrow label="Tasks" />
       <div className="flex flex-col gap-0.5 px-2 pb-2">
         {projectId == null ? (
           <div data-testid="session-panel-tasks-no-project" className="px-2 py-1 text-sm text-muted-foreground">

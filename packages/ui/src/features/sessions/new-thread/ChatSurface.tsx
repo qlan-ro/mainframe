@@ -182,9 +182,9 @@ export function ChatSurface() {
 
   return (
     <div ref={measureSurface} className="flex min-h-0 flex-1 flex-col">
-      <ChatForkBanner />
       {/* No chat header: the surface starts at the transcript (a fork adds its
-          "Forked from" row above). Its old controls
+          "Forked from" row INSIDE the transcript column, so the docked panel
+          runs the full height beside it). Its old controls
           live in the title bar (D7). `hostRef` is the hook's state-backed
           callback ref: on a cold boot the initializing branch renders first and
           this row arrives on a later commit, so a RefObject would measure null
@@ -193,7 +193,11 @@ export function ChatSurface() {
           footer publishes its height for the overlay. */}
       <div ref={panelState.hostRef} data-chat-column className="relative flex min-h-0 flex-1 overflow-hidden">
         <SideChatHost parentChatId={mainThreadId}>
-          <ChatThread emptyState={welcome} />
+          <ChatForkBanner />
+          {/* The thread is h-full: it needs a box that is "the rest", not the column. */}
+          <div className="min-h-0 flex-1">
+            <ChatThread emptyState={welcome} />
+          </div>
         </SideChatHost>
         <SessionPanel state={panelState} />
         <ZoneDropLayer canSplit={splitFits} />

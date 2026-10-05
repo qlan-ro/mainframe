@@ -191,7 +191,7 @@ describe('ContextSection — attachments', () => {
 });
 
 describe('ContextSection — section count', () => {
-  it('counts every item across the four sub-groups', () => {
+  it('shows no count in the header, however many items the sub-groups hold', () => {
     mockContext = {
       ...emptyContext,
       projectFiles: [{ path: 'CLAUDE.md', content: 'x', source: 'project' }],
@@ -209,6 +209,8 @@ describe('ContextSection — section count', () => {
       skillFiles: [{ path: '/skills/review/SKILL.md', displayName: 'Review' }],
     };
     render(section());
-    expect(screen.getByTestId('session-panel-section-toggle-context')).toHaveTextContent('4');
+    const toggle = screen.getByTestId('session-panel-section-toggle-context');
+    expect(toggle).toHaveTextContent('Context');
+    expect(toggle.querySelector('[data-slot="badge"]')).toBeNull();
   });
 });

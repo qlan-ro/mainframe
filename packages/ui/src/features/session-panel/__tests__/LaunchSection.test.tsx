@@ -151,10 +151,10 @@ describe('LaunchSection — rows', () => {
     expect(screen.queryByTestId('session-panel-launch-spinner-preview-app')).toBeNull();
   });
 
-  it('counts the live configs in the badge', async () => {
+  it('shows no count in the header even with a live config', async () => {
     mockProcessStatuses = { [SCOPE_KEY]: { 'dev server': 'running' } };
     await renderSection();
-    expect(badge()).toHaveTextContent('1');
+    expect(badge()).toBeNull();
   });
 
   it('shows no count badge when nothing is live', async () => {

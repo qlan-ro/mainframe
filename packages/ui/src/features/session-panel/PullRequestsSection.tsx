@@ -21,7 +21,7 @@ export function PullRequestsSection() {
 
   return (
     <section data-testid="session-panel-section-prs" className="shrink-0 border-b border-border">
-      <PanelEyebrow label="Pull requests" count={prs.length} />
+      <PanelEyebrow label="Pull requests" />
       <div className="flex flex-col gap-0.5 px-2 pb-2">
         {prs.map((pr) => (
           <Hint key={pr.number} label={pr.url}>

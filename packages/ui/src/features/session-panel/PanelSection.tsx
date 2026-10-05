@@ -1,14 +1,13 @@
 /**
- * PanelSection — the collapsible chrome every session-panel section wears: a
- * fixed-height header row (icon, label, optional count) whose whole width is
- * the collapse trigger, with the chevron on the trailing edge.
+ * PanelSection — the collapsible chrome a session-panel section wears: the
+ * SAME eyebrow header as every other section (label only — no icon, no count)
+ * whose whole width is the collapse trigger, with the chevron on the trailing edge.
  *
  * Open-state is a prop, not local state: `store/ui-prefs.ts` owns it so an
  * expansion survives a remount and a session switch.
  */
-import type { ComponentType, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { ChevronDown } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import type { SessionPanelOpenSectionId } from '@/store/ui-prefs';
@@ -22,15 +21,12 @@ export const SECTION_HEAD = 'flex h-8 items-center gap-2 px-2';
 interface PanelSectionProps {
   id: SessionPanelOpenSectionId;
   label: string;
-  icon: ComponentType<{ className?: string }>;
-  /** Omitted renders no badge — a section with nothing to count shows nothing. */
-  count?: number;
   open: boolean;
   onToggle: () => void;
   children: ReactNode;
 }
 
-export function PanelSection({ id, label, icon: Icon, count, open, onToggle, children }: PanelSectionProps) {
+export function PanelSection({ id, label, open, onToggle, children }: PanelSectionProps) {
   return (
     <Collapsible open={open} onOpenChange={onToggle} asChild>
       <section data-testid={`session-panel-section-${id}`} className="shrink-0 border-b border-border last:border-b-0">
@@ -40,9 +36,7 @@ export function PanelSection({ id, label, icon: Icon, count, open, onToggle, chi
             data-testid={`session-panel-section-toggle-${id}`}
             className={cn(SECTION_HEAD, 'w-full text-left transition-colors hover:bg-foreground/8')}
           >
-            <Icon className="size-3.5 shrink-0 text-muted-foreground" />
             <span className={cn(EYEBROW, 'min-w-0 truncate')}>{label}</span>
-            {count != null && <Badge variant="secondary">{count}</Badge>}
             <span className="flex-1" />
             <ChevronDown
               className={cn('size-3 shrink-0 text-muted-foreground transition-transform', open && 'rotate-180')}
