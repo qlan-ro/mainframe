@@ -8,29 +8,46 @@
  *
  * Entry points (verified against source):
  *   ControlOrMeta+Shift+T (window keydown, TasksModalHost.tsx)      → tasks-quick-dialog
- *   sidebar-action-kanban → dispatches `mf:open-tasks` (features/sessions/SidebarActions.tsx;
- *     succeeded the icon-only `sidebar-tasks`, which died with the header icon cluster)
- *     → tasks-board-modal. This sidebar-footer button survived the move below.
- *   session-panel-rail-tasks → the session panel's Tasks CARD
- *     (features/session-panel/TasksCard.tsx) — where the left sidebar's Tasks
- *     section went. It is opt-in: `store/ui-prefs.ts` opens the Session card
- *     only, so the rail button is the way in and a second click closes it again.
+ *   shell-rail-tasks → switches the sidebar to the Tasks LIST (layout/NavRail.tsx,
+ *     shell redesign D3/D4 — succeeded `sidebar-action-kanban`, which dispatched
+ *     `mf:open-tasks` directly; that window event is gone, `useTasksModal().openModal`
+ *     is called directly now) → the list's own "Open board" button
+ *     (`tasks-sidebar-open-board`) → tasks-board-modal.
+ *   title-bar-details → the session panel's ONE switch now (the floating rail
+ *     died with the redesign, D20) — opening the panel renders every section
+ *     together, including the Tasks section (features/session-panel/TasksSection.tsx,
+ *     `session-panel-card-tasks`) — where the left sidebar's OLD Tasks section
+ *     went before this redesign added the sidebar list back as a second, separate
+ *     surface (see below).
  *
- * ── The sidebar section became a panel card ──────────────────────────────────
- * `tasks-sidebar-section` / `-new` / `-empty` / `-row-<n>` / `-overflow` /
- * `-section-jump` are GONE from the product (no `tasks-sidebar` testid is emitted
- * anywhere any more). Their successors live on the card: `session-panel-tasks-new`,
- * `session-panel-tasks-empty`, `session-panel-tasks-no-project` and
- * `session-panel-task-row-<number>`. The card lists EVERY active task — the old
- * VISIBLE_TASKS = 5 cap and its "N more" residual row have no successor, so the
- * overflow scenario below pins the uncapped list instead of being deleted.
+ * ── Three surfaces now, not two — and `tasks-sidebar-*` is reused for a NEW one ──
+ * The pre-redesign history: a left-sidebar Tasks SECTION (`tasks-sidebar-section`
+ * / `-new` / `-empty` / `-row-<n>` / `-overflow` / `-section-jump`) was deleted and
+ * replaced by the session panel's Tasks CARD. Those ids are still gone — do not
+ * revive them. The shell redesign then added a THIRD surface, a compact sidebar
+ * Tasks LIST (`features/tasks/sidebar-list/TasksSidebarList.tsx`, reached via
+ * `shell-rail-tasks`), which happens to reuse the retired `tasks-sidebar-*`
+ * PREFIX for an entirely different, new component tree:
+ * `tasks-sidebar-open-board`, `tasks-sidebar-new` (the list's own quick-add
+ * input, not a dialog), `tasks-sidebar-project-picker`, `tasks-sidebar-row-<n>`,
+ * `tasks-sidebar-cycle-<n>`, `tasks-sidebar-start-<n>`, `tasks-sidebar-edit-<n>`,
+ * `tasks-sidebar-group-toggle-<label>`, `tasks-sidebar-empty`,
+ * `tasks-sidebar-no-project`. None of these is the old section reborn — this
+ * spec does not drive the new list's rows directly (it is covered by its own
+ * unit tests and exercised incidentally via `tasks-sidebar-open-board`); the
+ * session panel's Tasks SECTION (`session-panel-tasks-new`,
+ * `session-panel-tasks-empty`, `session-panel-tasks-no-project`,
+ * `session-panel-task-row-<number>`) is still this file's main board-adjacent
+ * coverage, unchanged by the redesign. The card lists EVERY active task — the
+ * old VISIBLE_TASKS = 5 cap and its "N more" residual row have no successor, so
+ * the overflow scenario below pins the uncapped list instead of being deleted.
  *
- * The card sits on the chat surface's right edge and only stacks inline when the
- * chat host clears `INLINE_MIN_WIDTH` (1468, panel-mode.ts); narrower, a rail
- * click FLOATS it and any outside pointerdown light-dismisses it — which every
- * board/dialog interaction here would do. Hence the explicit wide viewport in
- * `beforeAll`: the card has to be inline to survive the tests that drive other
- * surfaces around it.
+ * The panel sits on the chat surface's right edge and only docks inline when the
+ * chat host clears `INLINE_MIN_WIDTH` (1044, panel-mode.ts); narrower,
+ * `title-bar-details` FLOATS it and any outside pointerdown light-dismisses it —
+ * which every board/dialog interaction here would do. Hence the explicit wide
+ * viewport in `beforeAll`: the panel has to be inline to survive the tests that
+ * drive other surfaces around it.
  *
  * TWO TaskEditModal implementations are still in play, and both are exercised
  * here: the board opens `features/tasks/TaskEditModal.tsx` (the quick dialog is a
@@ -59,15 +76,17 @@
  *   tasks-label-pill-<label> / tasks-label-remove-<label> / tasks-label-input
  *   tasks-dep-pill-<n> / tasks-dep-remove-<n> / tasks-dep-input / tasks-dep-opt-<n>
  *   tasks-attach-add / tasks-attach-<id> (root) / tasks-attach-delete-<id>
- *   session-panel-rail-tasks / session-panel-card-tasks / session-panel-card-close-tasks
- *     — the rail toggle, the card, and its header X (features/session-panel/)
+ *   title-bar-details / session-panel-card-tasks
+ *     — the panel's one switch, and the Tasks section it always renders once
+ *     open (there is no per-card toggle or close any more, D20)
  *   session-panel-tasks-new / session-panel-tasks-empty /
- *     session-panel-tasks-no-project / session-panel-task-row-<n> — the card's body
+ *     session-panel-tasks-no-project / session-panel-task-row-<n> — the section's body
  *
- * Deliberately deleted (do not re-assert): every `tasks-sidebar-*` id. The v2
- * rebuild had already dropped `tasks-sidebar-expand`, `-section-toggle` and
- * `-view-all`; the section itself is gone now, so the remaining five ids went
- * with it. The board is still reached via `sidebar-action-kanban`.
+ * Deliberately deleted (do not re-assert): `tasks-sidebar-expand`,
+ * `-section-toggle`, `-view-all`, `-section`, `-overflow`, `-section-jump` — the
+ * OLD left-sidebar Tasks section's ids, from before either the panel card or the
+ * new sidebar list existed. The board is reached via `shell-rail-tasks` →
+ * `tasks-sidebar-open-board` now (see the header note above).
  *
  * v2 interaction contracts that changed how these controls are driven:
  *   - The List/Board switch is a Radix `Tabs` (TasksBoard.tsx), so the selected
@@ -110,24 +129,32 @@ async function openQuickDialog(page: Page): Promise<void> {
 }
 
 /**
- * Show the session panel's Tasks card. Opt-in (ui-prefs opens the Session card
- * alone), and the rail button TOGGLES — clicking it while the card is up would
- * close it — so this only clicks when the card is absent.
+ * Show the session panel, which always renders the Tasks section once open —
+ * there is no per-card toggle any more (D20). `title-bar-details` TOGGLES the
+ * WHOLE panel — clicking it while the panel is up would close it — so this
+ * only clicks when the panel is absent.
  */
 async function openTasksCard(page: Page): Promise<void> {
   const card = page.getByTestId('session-panel-card-tasks');
-  if ((await card.count()) === 0) await page.getByTestId('session-panel-rail-tasks').click();
+  if ((await card.count()) === 0) await page.getByTestId('title-bar-details').click();
   await expect(card).toBeVisible({ timeout: 10_000 });
 }
 
+/** The board is reached from the sidebar's Tasks LIST now (shell redesign D22):
+ *  the rail switches the sidebar view, and the list's own header opens the board. */
 async function openBoard(page: Page): Promise<void> {
-  await page.getByTestId('sidebar-action-kanban').click();
+  await page.getByTestId('shell-rail-tasks').click();
+  await page.getByTestId('tasks-sidebar-open-board').click();
   await page.getByTestId('tasks-board-modal').waitFor({ timeout: 10_000 });
 }
 
 async function closeBoard(page: Page): Promise<void> {
   await page.getByTestId('tasks-board-close').click();
   await expect(page.getByTestId('tasks-board-modal')).toHaveCount(0, { timeout: 5_000 });
+  // openBoard() leaves the sidebar on the Tasks view — restore Chats so the rest
+  // of the suite (and `sessions-row` lookups elsewhere in this file) see the
+  // session list again.
+  await page.getByTestId('shell-rail-chats').click();
 }
 
 /** Select an option from a shadcn/Radix <Select> by its visible display text. */
@@ -152,8 +179,8 @@ test.describe('§tasks', () => {
 
   test.beforeAll(async () => {
     app = await launchTauriApp();
-    // Wide enough for the session panel's Tasks card to stack INLINE (host must
-    // clear INLINE_MIN_WIDTH = 1468); at the harness default of 1280 the card
+    // Wide enough for the session panel to dock INLINE (host must clear
+    // INLINE_MIN_WIDTH = 1044); at the harness default of 1280 the panel
     // only floats, and the first board click would light-dismiss it.
     await app.page.setViewportSize({ width: 2100, height: 900 });
     project = await createTauriProject(app.page);
@@ -232,9 +259,10 @@ test.describe('§tasks', () => {
     await closeBoard(page);
   });
 
-  test('sidebar tasks button opens the board populated with both seeded tasks', async () => {
+  test("the rail's Tasks list opens the board populated with both seeded tasks", async () => {
     const { page } = app;
-    await page.getByTestId('sidebar-action-kanban').click();
+    await page.getByTestId('shell-rail-tasks').click();
+    await page.getByTestId('tasks-sidebar-open-board').click();
     const modal = page.getByTestId('tasks-board-modal');
     await expect(modal).toBeVisible({ timeout: 10_000 });
     await expect(modal).toContainText('2 active');
@@ -671,6 +699,9 @@ test.describe('§tasks', () => {
     // session asynchronously (useStartTodoSession: create -> reload threads ->
     // switchToThread -> composer().setText(initialMessage)).
     await expect(page.getByTestId('tasks-board-modal')).toHaveCount(0, { timeout: 5_000 });
+    // openBoard() switched the sidebar to the Tasks view — switch back to Chats
+    // so the new session's row is actually in the rendered list.
+    await page.getByTestId('shell-rail-chats').click();
     await expect(page.getByTestId('sessions-row')).toHaveCount(rowsBefore + 1, { timeout: 20_000 });
 
     const composerInput = page.getByTestId('chat-composer-input');

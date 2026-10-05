@@ -1,12 +1,12 @@
 /**
  * §directory-picker — DirectoryPickerModal (plan spec #25) for app-tauri browser mode.
  *
- * Entry point: the Projects section's "+" action in the sidebar header
- * (`sidebar-projects-add`, v2/features/sessions/ProjectSection.tsx) opens the picker
+ * Entry point: the scope strip's "+" action in the sidebar header
+ * (`sessions-scope-add`, features/sessions/ScopeStrip.tsx) opens the picker
  * via `pickDirectory({ mode: 'directory' })` (features/files/use-directory-picker.ts).
- * The v1 dashed "Add project" pill and its `sessions-add-project` id died with
- * ProjectFilterPillBar — the v2 projects switcher is a plain list with a
- * `SidebarGroupAction` instead. This is still the ONLY reachable UI entry point:
+ * The dropdown-era "Add project" row and its `sidebar-projects-add` id died with
+ * `ProjectScopeSelector` — the redesigned scope strip is a row of avatars with its
+ * own trailing "+" button instead. This is still the ONLY reachable UI entry point:
  * `features/sessions/use-add-project.ts` is the sole `pickDirectory` caller and is
  * hardcoded to `mode: 'directory'`, so the file-mode scenario is `test.skip`'d below.
  *
@@ -43,7 +43,7 @@
  *   directory-picker-confirm             — footer Select (confirm) button
  *   directory-picker-recent              — RecentDirs section root (home root only)
  *   directory-picker-recent-<path>       — a Recent row (RecentDirs.tsx)
- *   sidebar-projects-add                 — the Projects section's "+" action (entry point)
+ *   sessions-scope-add                   — the scope strip's "+" action (entry point)
  *   TOAST.root (helpers/tauri/testids.ts) — native sonner toast; WsToastCard is gone
  *
  * TWO STRAY LAYERS make clicks inside this dialog time out on elements Playwright
@@ -94,7 +94,7 @@ async function projectCount(page: Page): Promise<number> {
  */
 async function openPicker(page: Page): Promise<void> {
   await waitForDialogScrimsGone(page);
-  await page.getByTestId('sidebar-projects-add').click();
+  await page.getByTestId('sessions-scope-add').click();
   await expect(page.getByTestId('directory-picker')).toBeVisible({ timeout: 10_000 });
 }
 

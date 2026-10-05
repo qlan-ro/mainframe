@@ -12,11 +12,11 @@
  * packages/ui/src/features/shared/ErrorState.tsx.
  *
  * Testid reference (verified against source):
- *   sidebar-projects-add                — the Projects section's "+" action
- *                                         (v2/features/sessions/ProjectSection.tsx). The v1
- *                                         dashed "Add project" pill and its
- *                                         `sessions-add-project` id died with
- *                                         ProjectFilterPillBar.
+ *   sessions-scope-add                   — the scope strip's "+" action
+ *                                         (features/sessions/ScopeStrip.tsx, shell redesign D14).
+ *                                         The dropdown-era "Add project" row and its
+ *                                         `sidebar-projects-add` id died with
+ *                                         `ProjectScopeSelector`.
  *   directory-picker / -path-input / -row-<path> / -confirm  — DirectoryPickerModal (add-project UI flow)
  *   TOAST.* (helpers/tauri/testids.ts)  — sonner's own attribute contract; WsToastCard's
  *                                         toast-root/status-chip/countdown-rail/dismiss are gone
@@ -52,13 +52,13 @@ function makeTempProjectDir(prefix: string): string {
 }
 
 /**
- * Add a project via the real UI flow (sidebar-projects-add → DirectoryPickerModal),
+ * Add a project via the real UI flow (sessions-scope-add → DirectoryPickerModal),
  * not REST — this is the only path that produces an mfToast (see use-add-project.ts).
  * Navigates the picker to the directory's parent via the path-crumb input, then
  * selects the directory row and confirms.
  */
 async function addProjectViaUi(page: Page, projectPath: string): Promise<void> {
-  await page.getByTestId('sidebar-projects-add').click();
+  await page.getByTestId('sessions-scope-add').click();
   await expect(page.getByTestId('directory-picker')).toBeVisible({ timeout: 10_000 });
 
   const pathInput = page.getByTestId('directory-picker-path-input');
@@ -193,14 +193,19 @@ test.describe('§window-states First-run tour', () => {
   // steps to composer anchors this workspace never mounts, counted "of 4"
   // anyway, and hopped 1 → 4. The label now counts the resolved plan, so a step
   // it cannot point at is never counted (unit-covered in steps.test.ts).
+  // Titles verified against features/tour/steps.ts, retargeted for the shell
+  // redesign (D24): "The session rail" → "Session details" (the step now
+  // anchors on `title-bar-details`, carrying `data-tut="session-rail"` still —
+  // only the copy changed) and "The Kanban board" → "Tasks" (the rail button
+  // opens the Tasks LIST now, not the board directly).
   const STEP_TITLES = [
     'Add a project',
     'Start a session',
     'Sessions and their tabs',
-    'The session rail',
+    'Session details',
     'The workspace',
     'Search anything',
-    'The Kanban board',
+    'Tasks',
     'Automations',
     'Which machine you’re on',
   ];
@@ -227,15 +232,18 @@ test.describe('§window-states First-run tour', () => {
       await expect(spotlight).toBeVisible({ timeout: 5_000 });
     }
 
-    // "Start a session" is the multi-location step: three ways in, three rings,
-    // but only the primary cuts the scrim. Walk back to it and check.
+    // "Start a session" is the multi-location step: two ways in (the sidebar's
+    // New session row, primary; the title bar's tab-strip "+", one secondary
+    // ring), but only the primary cuts the scrim. Walk back to it and check —
+    // the redesign dropped a second secondary ring the old tour carried
+    // (D24: one ring on `session-tabs-new`, not two).
     for (let i = STEP_TITLES.length - 2; i >= 1; i--) {
       await page.getByTestId('tour-back-btn').click();
       await expect(label).toContainText(`Step ${i + 1} of 9`, { timeout: 5_000 });
     }
     await expect(label).toContainText(STEP_TITLES[1]!);
     await expect(page.getByTestId('tour-spotlight-also-0')).toBeVisible();
-    await expect(page.getByTestId('tour-spotlight-also-1')).toBeVisible();
+    await expect(page.getByTestId('tour-spotlight-also-1')).toHaveCount(0);
 
     // Back once more reaches step 1, where Back disappears again.
     await page.getByTestId('tour-back-btn').click();

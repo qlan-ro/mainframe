@@ -17,7 +17,10 @@ export const T = {
   modelSelect: 'composer-model-select',
   permissionModeSelect: 'composer-permission-mode-select',
   adapterSelect: 'composer-adapter-select',
-  sessionsNewButton: 'sessions-new-button',
+  // The redesign retired the standalone `SessionsNewButton` pill — "New
+  // session" is now a full-width row in the sidebar header
+  // (`sidebar-action-new-thread`, SessionSidebar.tsx's `NewSessionRow`).
+  sessionsNewButton: 'sidebar-action-new-thread',
   sessionsMoreButton: 'sessions-more-button',
 } as const;
 

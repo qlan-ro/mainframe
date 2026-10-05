@@ -54,37 +54,47 @@
  *   workspace-surface-close                   — primary-pane hide control
  *   workspace-pane-close-<paneId>             — secondary-pane close (un-split)
  *   run-console-pane                          — full-space ConsolePane (process tabs)
- *   session-panel-rail-launch                 — the session panel's rail launch button. A
- *                                               plain TOGGLE for the Launch card now (its old
- *                                               one-click run/stop and its right-click both
- *                                               went away); its accessible name is the static
- *                                               "Launch"
- *   session-panel-rail-launch-dot             — the rail's run signal: present while any
- *                                               config in the scope is live
- *   session-panel-card-launch / session-panel-card-close-launch — the Launch card and its X
- *   session-panel-overlay                     — the floating card stack (short-gutter mode)
- *   session-panel-launch-row-<name>           — a Launch-card config row
+ *   title-bar-details                         — the title bar's ONE session-panel switch now
+ *                                               (shell redesign D8/D20 — the floating rail and
+ *                                               its per-card toggle/dot are both gone).
+ *                                               `aria-pressed` reports open/closed
+ *   session-panel-root[data-mode]             — "inline" (docked, 300px sibling) or "overlay"
+ *                                               (floated, short gutter); "hidden" renders nothing
+ *   session-panel-overlay                     — the floated panel's own root (role=dialog)
+ *   session-panel-card-launch                 — the Launch section — now permanently part of
+ *                                               the ONE scrolling panel column; there is no
+ *                                               more per-card close (`session-panel-card-close-*`
+ *                                               is gone — the whole panel opens/closes together)
+ *   session-panel-launch-live                 — the Launch section's OWN live dot, in its eyebrow
+ *                                               header (PanelEyebrow) — this is where the run
+ *                                               signal now lives, not on any outside button
+ *   session-panel-launch-row-<name>           — a Launch-section config row
  *   session-panel-launch-start-<name> / -stop-<name> — the row's action glyph. A `span`
  *                                               INSIDE the row `button`, so a click on either
  *                                               acts; presence is the status readout
  *   file-picker-dialog / file-picker-input / file-picker-row-<path>
  *   drop-zone-right / surface-drag-layer      — in-workspace tab→pane-edge drag
- *   chat-header-hide                          — hides Chat (dynamic-floor setup)
+ *   session-tab-<id> / session-tab-ctx-hide-chat — right-click a session tab for "Hide Chat"
+ *                                               (dynamic-floor setup) — `ChatCardHeader` and its
+ *                                               own Hide button are gone; this lives on every
+ *                                               tab's context menu now (D7)
  *
- * ── Launch controls moved off the toolbar (T5.2), then out of the rail ───────
- * `main-toolbar-launch` and its popover are deleted; the panel's Launch card
- * replaced them, and the testids were named to make this a selector swap. The
- * rail button that briefly carried a one-click run/stop is a plain card toggle
- * now — running state survives the move as `session-panel-rail-launch-dot`.
- * Three consequences this file has to respect:
+ * ── Launch controls moved off the toolbar (T5.2), then off the floating rail ──
+ * `main-toolbar-launch` and its popover were deleted first; the panel's Launch
+ * CARD replaced them. The shell redesign then deleted the floating rail itself
+ * (`SessionPanelRail`/`SessionRailButton`) — there is no per-card button or dot
+ * left outside the panel at all. `title-bar-details` is the only switch, for the
+ * WHOLE panel; the Launch section's live dot moved into its own eyebrow header
+ * (`session-panel-launch-live`). Three consequences this file has to respect:
  *   1. The panel lives on the CHAT surface. With chat and workspace both lit,
- *      the chat host never clears `INLINE_MIN_WIDTH` (1468) here, so the Launch
- *      card FLOATS: a rail click opens it inside `session-panel-overlay`.
+ *      the chat host never clears `INLINE_MIN_WIDTH` (1044) here, so the panel
+ *      FLOATS: `title-bar-details` opens it inside `session-panel-overlay`.
  *   2. That float is light-dismissed by any outside pointerdown, so a launch
- *      assertion has to open the card, read it, and get out before touching the
- *      workspace — see `openPanelLaunchCard` / `closePanelLaunchCard`.
- *   3. With chat HIDDEN there is no launch control anywhere (T5.2's accepted
- *      consequence). Chat-visibility, describe by describe:
+ *      assertion has to open the panel, read it, and get out before touching the
+ *      workspace — see `openSessionPanel` / `closeSessionPanel`.
+ *   3. With chat HIDDEN there is no `title-bar-details` toggle at all — it lives
+ *      in `title-bar-actions`, bound to the chat column (T5.2's accepted
+ *      consequence carries forward). Chat-visibility, describe by describe:
  *        §21a  chat lit — no launch assertions (empty-state card only)
  *        §21b  chat lit throughout — owns every launch-lifecycle assertion
  *        §21c  chat lit — launches from the workspace picker, asserts via REST
@@ -148,33 +158,34 @@ async function waitForMenusClosed(page: Page): Promise<void> {
 }
 
 /**
- * Show the Launch card — floated over the transcript at this width — and return
- * the overlay it floats in, so assertions can be scoped to it.
+ * Open the session panel — floated over the transcript at this width — and
+ * return its root, so Launch-section assertions can be scoped to it.
  *
- * A LEFT click on the rail button is the whole gesture now: it toggles the card,
- * and opening a card on a short gutter floats the stack (use-session-panel-state
- * `togglePanel`). The click is conditional because the button TOGGLES — firing it
- * while the card is already up would close it.
+ * `title-bar-details` is the ONE switch now (the floating rail and its
+ * per-card toggle are both gone): a click TOGGLES the whole panel, floating it
+ * when the column is short of `INLINE_MIN_WIDTH` (panel-mode.ts). The click is
+ * conditional on `aria-pressed` because the button toggles — firing it while
+ * the panel is already open would close it. The Launch section is always part
+ * of the one scrolling column once the panel is open, so there is no separate
+ * per-card step any more.
  */
-async function openPanelLaunchCard(page: Page) {
-  const card = page.getByTestId('session-panel-card-launch');
-  if ((await card.count()) === 0) await page.getByTestId('session-panel-rail-launch').click();
-  await expect(card).toBeVisible({ timeout: 5_000 });
-  return page.getByTestId('session-panel-overlay');
+async function openSessionPanel(page: Page) {
+  const toggle = page.getByTestId('title-bar-details');
+  if ((await toggle.getAttribute('aria-pressed')) !== 'true') await toggle.click();
+  const root = page.getByTestId('session-panel-root');
+  await expect(root).toBeVisible({ timeout: 5_000 });
+  return root;
 }
 
 /**
- * Close the Launch card so the next test starts without it.
+ * Close the whole session panel so the next test starts without it.
  *
- * The card's own X, not a second rail click and not Escape: the floating stack
- * also carries the Session card (open by ui-prefs default), so dismissing the
- * whole float would leave the Launch card ARMED — it would reappear on the next
- * rail click for another panel. Closing the card is the state this helper owns;
- * whether the float itself survives belongs to session-panel.spec.ts.
+ * There is no more per-card close (`PanelCard`'s own X died with the floating
+ * rail) — `title-bar-details` is the only switch, for every section together.
  */
-async function closePanelLaunchCard(page: Page): Promise<void> {
-  await page.getByTestId('session-panel-card-close-launch').click();
-  await expect(page.getByTestId('session-panel-card-launch')).toHaveCount(0, { timeout: 5_000 });
+async function closeSessionPanel(page: Page): Promise<void> {
+  await page.getByTestId('title-bar-details').click();
+  await expect(page.getByTestId('session-panel-root')).toHaveCount(0, { timeout: 5_000 });
 }
 
 /** Poll the daemon's launch-status REST endpoint for a config's status. */
@@ -241,11 +252,12 @@ test.describe('§21 workspace-surface — tab strip, add-menu, launch lifecycle,
 
   test.beforeAll(async () => {
     app = await launchTauriApp();
-    // The rail itself survives any width now, but the card it floats does not:
-    // at the default 1280 the workspace halves the chat host to ~500px, and a
-    // 288px card floated over a 500px surface leaves nothing legible to click.
-    // Wide keeps the halved host near ~900 — still short of INLINE_MIN_WIDTH
-    // (1468), so the Launch card floats, with room to read it.
+    // `title-bar-details` itself survives any width now, but the panel it
+    // floats does not: at the default 1280 the workspace halves the chat host
+    // to ~500px, and a 300px panel floated over a 500px surface leaves nothing
+    // legible to click. Wide keeps the halved host near ~900 — still short of
+    // INLINE_MIN_WIDTH (1044, panel-mode.ts), so the panel floats, with room
+    // to read it.
     await app.page.setViewportSize({ width: 2100, height: 900 });
     project = await createTauriProject(app.page);
     seedLaunchConfigs(project.projectPath);
@@ -271,14 +283,14 @@ test.describe('§21 workspace-surface — tab strip, add-menu, launch lifecycle,
     await expect(tab).toHaveAttribute('aria-selected', 'true');
 
     // Status confirmation: the tab pill carries no status glyph, so we read it
-    // from the session panel's Launch card, which shares the same
+    // from the session panel's Launch section, which shares the same
     // useLaunchActions/scopeStatuses source — the row's stop glyph only renders
     // once status is 'running' or 'starting'. Unlike the popover it replaced, the
-    // row is a permanent readout while the card is open.
-    const overlay = await openPanelLaunchCard(page);
-    await expect(overlay.getByTestId('session-panel-launch-stop-sleep-long')).toBeVisible({ timeout: 15_000 });
-    await expect(overlay.getByTestId('session-panel-launch-start-sleep-long')).toHaveCount(0);
-    await closePanelLaunchCard(page);
+    // row is a permanent readout while the panel is open.
+    const panel = await openSessionPanel(page);
+    await expect(panel.getByTestId('session-panel-launch-stop-sleep-long')).toBeVisible({ timeout: 15_000 });
+    await expect(panel.getByTestId('session-panel-launch-start-sleep-long')).toHaveCount(0);
+    await closeSessionPanel(page);
   });
 
   test('the per-pane "+" popover lists New terminal and the launch configs; New terminal is a no-op', async () => {
@@ -401,52 +413,48 @@ test.describe('§21 workspace-surface — tab strip, add-menu, launch lifecycle,
   test('Stop reverts the panel row to Start for sleep-long', async () => {
     const { page } = app;
     await waitForMenusClosed(page);
-    const overlay = await openPanelLaunchCard(page);
+    const panel = await openSessionPanel(page);
 
     // The glyph is a span inside the row button; the whole row is the affordance,
-    // so this click acts and the card stays open — the row flips in place.
-    await overlay.getByTestId('session-panel-launch-stop-sleep-long').click();
-    await expect(overlay.getByTestId('session-panel-launch-start-sleep-long')).toBeVisible({ timeout: 10_000 });
-    await expect(overlay.getByTestId('session-panel-launch-stop-sleep-long')).toHaveCount(0);
-    await closePanelLaunchCard(page);
+    // so this click acts and the panel stays open — the row flips in place.
+    await panel.getByTestId('session-panel-launch-stop-sleep-long').click();
+    await expect(panel.getByTestId('session-panel-launch-start-sleep-long')).toBeVisible({ timeout: 10_000 });
+    await expect(panel.getByTestId('session-panel-launch-stop-sleep-long')).toHaveCount(0);
+    await closeSessionPanel(page);
 
     // The tab itself is not removed on stop, only its status changes.
     await expect(workspace(page).tab('sleep-long')).toBeVisible();
   });
 
-  // Successor to "the rail then runs/stops it in one click" (T6.4). The rail's
-  // quick action is gone: the button is a card toggle with the static accessible
-  // name "Launch", and the run signal it used to carry in its label survives as a
-  // dot. So the run/stop pair is driven from the card's row — the only place that
-  // acts now — and the rail is asserted as the MIRROR of that state, against the
-  // daemon's own status rather than the button's self-report.
-  test('the card row runs and stops a config; the rail mirrors the live state with a dot', async () => {
+  // Successor to "the rail then runs/stops it in one click" (T6.4). The floating
+  // rail and its per-card quick action are both gone: `title-bar-details` opens
+  // the whole panel with a static accessible name ("Show/Hide session
+  // details"), and the run signal it used to carry on the card's own button now
+  // lives on the Launch section's eyebrow header. So the run/stop pair is
+  // driven from the section's row — the only place that acts now — and the
+  // section's live dot is asserted as the MIRROR of that state, against the
+  // daemon's own status rather than any button's self-report.
+  test('the section row runs and stops a config; the eyebrow mirrors the live state with a dot', async () => {
     const { page } = app;
-    const rail = page.getByTestId('session-panel-rail-launch');
-    const dot = page.getByTestId('session-panel-rail-launch-dot');
-    const overlay = await openPanelLaunchCard(page);
+    const dot = page.getByTestId('session-panel-launch-live');
+    const panel = await openSessionPanel(page);
 
     // The preceding test left sleep-long stopped, and nothing else in this
-    // describe is live — so the rail carries no dot yet.
-    await expect(overlay.getByTestId('session-panel-launch-start-sleep-long')).toBeVisible({ timeout: 10_000 });
+    // describe is live — so the eyebrow carries no dot yet.
+    await expect(panel.getByTestId('session-panel-launch-start-sleep-long')).toBeVisible({ timeout: 10_000 });
     await expect(dot).toHaveCount(0);
 
-    await overlay.getByTestId('session-panel-launch-start-sleep-long').click();
-    await expect(overlay.getByTestId('session-panel-launch-stop-sleep-long')).toBeVisible({ timeout: 15_000 });
+    await panel.getByTestId('session-panel-launch-start-sleep-long').click();
+    await expect(panel.getByTestId('session-panel-launch-stop-sleep-long')).toBeVisible({ timeout: 15_000 });
     await expect.poll(() => launchStatus(page, project.projectId, 'sleep-long'), { timeout: 15_000 }).toBe('running');
     await expect(dot).toBeVisible({ timeout: 10_000 });
-    // The button itself says nothing about the target any more — it names the
-    // card it toggles, and reports that card as the one on screen.
-    await expect(rail).toHaveAttribute('aria-label', 'Launch');
-    await expect(rail).toHaveAttribute('aria-pressed', 'true');
 
-    await overlay.getByTestId('session-panel-launch-stop-sleep-long').click();
-    await expect(overlay.getByTestId('session-panel-launch-start-sleep-long')).toBeVisible({ timeout: 15_000 });
+    await panel.getByTestId('session-panel-launch-stop-sleep-long').click();
+    await expect(panel.getByTestId('session-panel-launch-start-sleep-long')).toBeVisible({ timeout: 15_000 });
     await expect.poll(() => launchStatus(page, project.projectId, 'sleep-long'), { timeout: 15_000 }).toBe('stopped');
     await expect(dot).toHaveCount(0, { timeout: 10_000 });
 
-    await closePanelLaunchCard(page);
-    await expect(rail).toHaveAttribute('aria-pressed', 'false');
+    await closeSessionPanel(page);
   });
 });
 
@@ -501,12 +509,13 @@ test.describe('§21 workspace-surface — failed launch config', () => {
 test.describe('§21 workspace-surface — pane split, secondary-pane close, close-at-floor', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
+  let chatId: string;
 
   test.beforeAll(async () => {
     app = await launchTauriApp();
     project = await createTauriProject(app.page);
     seedLaunchConfigs(project.projectPath);
-    await createTauriChat(app.page, project.projectId, 'default');
+    chatId = await createTauriChat(app.page, project.projectId, 'default');
     await turnWorkspaceOn(app.page);
     // Give the pane content so the tab strip (and its split/close controls) mounts
     // — the empty-state card carries no `+`.
@@ -536,8 +545,11 @@ test.describe('§21 workspace-surface — pane split, secondary-pane close, clos
   test('workspace-surface-close is disabled once the workspace is the sole lit surface (the dynamic floor)', async () => {
     const { page } = app;
     // litCount is 2 here (chat + workspace) — hiding chat leaves the workspace alone.
-    await page.getByTestId('chat-header-hide').click();
-    await expect(page.getByTestId('chat-header')).toHaveCount(0);
+    // Hide Chat lives on the session tab's context menu now (ChatCardHeader and
+    // its own Hide button are gone, D7) — right-click the active tab to reach it.
+    await page.getByTestId(`session-tab-${chatId}`).click({ button: 'right' });
+    await page.getByTestId('session-tab-ctx-hide-chat').click();
+    await expect(page.locator('[data-surface="chat"]')).toHaveCount(0);
 
     await expect(page.getByTestId('workspace-surface-close')).toBeDisabled();
     await expect(page.getByTestId('surface-rail-workspace')).toBeDisabled();

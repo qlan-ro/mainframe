@@ -12,9 +12,10 @@
  * QuickTunnelSection,NamedTunnelSection,DevicesSection,PairingSection}.
  *
  * Testid reference (verified against source):
- *   sidebar-settings                     — v2/features/sessions/SessionSidebar.tsx HeaderActions
- *                                           opens the dialog (the v1 SidebarHeader and its
- *                                           `-button` suffixed id are both gone)
+ *   shell-rail-settings                  — layout/NavRail.tsx bottom cluster button
+ *                                           opens the dialog (the sidebar header's own
+ *                                           `sidebar-settings` row is gone with the redesign —
+ *                                           Settings lives on the nav rail now)
  *   settings-dialog / settings-dialog-close
  *   settings-nav-<tab>                   — tab ids: general/providers/notifications/remote-access/about
  *                                           (no `settings-nav-keybindings` — S4 dropped the pane)
@@ -88,7 +89,7 @@ async function providerSetting(adapterId: string, key: string): Promise<unknown>
  */
 async function openSettings(page: Page): Promise<void> {
   await waitForDialogScrimsGone(page);
-  await page.getByTestId('sidebar-settings').click();
+  await page.getByTestId('shell-rail-settings').click();
   await page.getByTestId('settings-dialog').waitFor({ timeout: 10_000 });
 }
 
@@ -131,7 +132,7 @@ test.describe('§settings', () => {
 
   // ─── Chrome: open/close, tab nav ──────────────────────────────────────────────
 
-  test('sidebar-settings opens the dialog; close button closes it', async () => {
+  test('shell-rail-settings opens the dialog; close button closes it', async () => {
     const { page } = app;
     await openSettings(page);
     await expect(page.getByTestId('settings-dialog')).toBeVisible();
@@ -158,7 +159,7 @@ test.describe('§settings', () => {
     // Open the dialog ONCE, then navigate tabs in place. The previous version
     // called `openTab()` (which itself calls `openSettings()`) on every loop
     // iteration — after the first tab, the dialog is already open and its
-    // scrim backdrop (`fixed inset-0 z-50 ...`) covers `sidebar-settings`,
+    // scrim backdrop (`fixed inset-0 z-50 ...`) covers `shell-rail-settings`,
     // so the re-click never lands and the test hangs to the 120s timeout. Real
     // usage never re-opens an already-open dialog; every other test in this file
     // calls `openTab`/`openSettings` exactly once per test, which is why this was
@@ -198,7 +199,7 @@ test.describe('§settings', () => {
     await closeSettings(page);
     // Full reload proves localStorage persistence, not just in-memory zustand state.
     await page.reload();
-    await page.getByTestId('sidebar-settings').waitFor({ timeout: 20_000 });
+    await page.getByTestId('shell-rail-settings').waitFor({ timeout: 20_000 });
 
     await expect(page.locator('html')).toHaveClass(/dark/);
 

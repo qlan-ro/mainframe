@@ -12,10 +12,12 @@
  * lib/git-status-kind.ts, packages/core/src/server/routes/types.ts (getEffectivePath),
  * packages/core/src/git/git-service.ts (workingStat/commitAll).
  *
- * Entry point + worktree note: the global Cmd/Ctrl+Shift+R hotkey IS (the header Review button moved into the session panel)
- * disabled without a worktree (that gating is already fully covered by
- * chat-header.spec.ts's "review button (worktree gate)" describe — not
- * duplicated here). The global `⌘⇧R` hotkey (`use-global-overlay-hotkeys.ts`)
+ * Entry point + worktree note: the Review entry point lives in the session
+ * panel's Changes row now (ChatCardHeader and its own Review button are gone
+ * with the shell redesign — see title-bar.spec.ts, which carries no
+ * replacement describe for that gating; the session panel's own worktree
+ * gating is session-panel.spec.ts's territory). The global `⌘⇧R` hotkey
+ * (`use-global-overlay-hotkeys.ts`)
  * bypasses that button entirely and always opens the panel. `useReviewData`
  * only needs a `projectId`; the daemon's `getEffectivePath(ctx, projectId,
  * chatId)` (routes/types.ts:57) falls back to the *project's own path* whenever

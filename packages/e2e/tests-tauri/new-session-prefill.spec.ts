@@ -18,10 +18,13 @@
  *
  * Testid reference (verified against source, mirrors sessions-draft.spec.ts /
  * composer-advanced.spec.ts):
- *   sessions-new-button        — the sidebar "+" (SessionsNewButton.tsx)
+ *   sidebar-action-new-thread  — the sidebar's "New session" row (the redesign retired
+ *                                 the standalone sessions-new-button pill)
  *   sessions-welcome           — WelcomeState root (the draft empty state)
- *   welcome-project            — the welcome screen's project trigger
- *   chat-header-project        — the header's project chip (draft or real chat)
+ *   welcome-project            — the welcome screen's project trigger — the chat header's
+ *                                 project chip died with ChatCardHeader, so this (already
+ *                                 shown above a prefilled draft, since zero messages are
+ *                                 sent yet) is the one place that still names the project
  *   chat-selection-toolbar     — floating toolbar on a text selection
  *   chat-selection-new-session — its "New session" action
  *   chat-composer-input        — the composer (present only once a draft has a project)
@@ -206,7 +209,7 @@ test.describe('§new-session-prefill', () => {
     // A composer, not "Choose a project" — the draft carries the source
     // chat's project even though the slot it landed on was empty.
     await expect(page.getByTestId('chat-composer-input')).toHaveValue('4', { timeout: 10_000 });
-    await expect(page.getByTestId('chat-header-project')).toContainText(baseName(project.projectPath));
+    await expect(page.getByTestId('welcome-project')).toContainText(baseName(project.projectPath));
     await expect(page.locator(`${TOAST.root}[data-type="error"]`)).toHaveCount(0);
   });
 

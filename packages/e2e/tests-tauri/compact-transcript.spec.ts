@@ -20,7 +20,7 @@ function recordedChat(recordingKey: string, permissionMode: 'default' | 'acceptE
 }
 async function openAppearance(page: Page) {
   await waitForDialogScrimsGone(page);
-  await page.getByTestId('sidebar-settings').click();
+  await page.getByTestId('shell-rail-settings').click();
   await expect(page.getByTestId('settings-dialog')).toBeVisible();
   await page.getByTestId('settings-nav-general').click();
 }

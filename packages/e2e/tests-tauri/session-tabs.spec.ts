@@ -1,6 +1,7 @@
 /**
- * §session-tabs — chrome-style session tabs in the MainToolbar
- * (docs/plans/2026-08-08-session-tabs-and-workspace-files.md).
+ * §session-tabs — chrome-style session tabs in the title bar's chat column
+ * (docs/plans/2026-08-08-session-tabs-and-workspace-files.md, restyled by the
+ * shell redesign, docs/plans/2026-10-04-mainframe-redesign-adoption.md D9).
  *
  * UI-only, no recordings: tabs are pure chrome over the thread list. One
  * project + two chats; every activation path goes through the one membership
@@ -11,8 +12,16 @@
  * ONE tab, not two — the contract pinned below, taken from the store's own
  * unit tests (`session-tabs/__tests__/use-session-tabs-sync.preview.test.tsx`).
  *
+ * Every testid below is unchanged by the redesign (`SessionTabPill.tsx` kept
+ * them through the restyle — content-sized `rounded-md` pill, no more
+ * underline, the 14px lead slot now a `ProviderDot` instead of a
+ * `ProjectAvatar`). The pill's new split-pair form (`SessionTabPair.tsx`,
+ * `session-tabs-zone-group`) and the hover open-beside control
+ * (`session-tab-open-beside-<id>`) have no single-tab scenario here — they
+ * belong to the split/zone specs that actually open a second surface.
+ *
  * Testid reference (verified against packages/ui/src/features/session-tabs/):
- *   session-tabs             — the strip root (inside main-toolbar)
+ *   session-tabs             — the strip root (inside the title bar's chat column)
  *   session-tab-<threadId>   — a tab pill (role=tab, aria-selected, data-preview);
  *                              threadId is the chat id for daemon-created chats
  *   session-tab-close-<id>   — a tab's hover close button

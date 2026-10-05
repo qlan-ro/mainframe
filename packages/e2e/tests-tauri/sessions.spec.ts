@@ -9,7 +9,8 @@
  *
  * Testid reference (verified against packages/ui/src/v2/features/sessions/):
  *   sessions-row                  — each session row (data-chat-id attr)
- *   sessions-new-button           — + new session button
+ *   sidebar-action-new-thread     — the sidebar header's "New session" row (the shell
+ *                                   redesign retired the standalone sessions-new-button pill)
  *   sessions-more-button          — ⋯ overflow menu trigger
  *   sessions-more-archived        — dropdown item: Archived sessions
  *   sessions-more-import          — dropdown item: Import external sessions

@@ -4,6 +4,8 @@ import { T, WORKSPACE } from './testids.js';
 export function sessionsSidebar(page: Page) {
   return {
     row: (chatId: string) => page.locator(`[data-testid="${T.sessionRow}"][data-chat-id="${chatId}"]`),
+    /** The "New session" row (`sidebar-action-new-thread`) — the standalone
+     *  `SessionsNewButton` pill this replaced is gone with the shell redesign. */
     newButton: () => page.getByTestId(T.sessionsNewButton),
     async openMore() {
       await page.getByTestId(T.sessionsMoreButton).click();
@@ -17,18 +19,18 @@ export function sessionsSidebar(page: Page) {
       await page.getByTestId('sessions-more-archived').click();
     },
     importProjectOption: (projectId: string) => page.getByTestId(`sessions-import-project-${projectId}`),
-    /** Open the header's project scope dropdown (`ProjectScopeSelector.tsx`,
-     *  2026-08-27) — its checkbox items only exist in the DOM while open. */
-    async openProjectScope() {
-      await page.getByTestId('sidebar-project-scope-trigger').click();
+    /** A project's avatar in the scope strip (`ScopeStrip.tsx`, shell redesign D14) —
+     *  always mounted, no menu to open first. Click toggles it in/out of scope;
+     *  toggling never switches the active session (scope, not switcher). This
+     *  replaced the `ProjectScopeSelector` dropdown and its `sidebar-project-<id>`
+     *  checkbox items. */
+    scopeAvatar: (projectId: string) => page.getByTestId(`sessions-scope-avatar-${projectId}`),
+    /** ⌥-click a scope avatar: scope to that project alone. */
+    async soloScope(projectId: string) {
+      await this.scopeAvatar(projectId).click({ modifiers: ['Alt'] });
     },
-    /** A project's checkbox item inside the (open) project scope menu. The
-     *  inline row list this replaced (`ProjectFilterPillBar`/`ProjectSection`,
-     *  a standalone `sidebar-project-<id>` row) is gone; toggling this item
-     *  never switches the active session (scope, not switcher). */
-    projectRow: (projectId: string) => page.getByTestId(`sidebar-project-${projectId}`),
-    /** "All projects" checkbox item inside the menu; clears the scope. */
-    allProjectsRow: () => page.getByTestId('sidebar-project-all'),
+    /** The strip's own summary — "All projects" (empty scope) or "N of M". */
+    scopeLabel: () => page.getByTestId('sessions-scope-label'),
   };
 }
 

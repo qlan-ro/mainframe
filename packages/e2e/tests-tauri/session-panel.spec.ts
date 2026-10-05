@@ -1,147 +1,149 @@
 /**
- * §session-panel — the right-hand session panel: the always-present rail and the
- * STACK of cards it toggles (inline beside the transcript, or floated over it).
+ * §session-panel — the session panel: ONE scrolling column of sections
+ * (Session · Pull requests · Context · Activity · Tasks · Launch · Plan),
+ * docked beside the transcript or floated over it.
  *
- * Replaces `context-panel.spec.ts`, which covered the bottom Context/Skills/Agents
- * panel deleted in the right-sidebar revamp (T5.4). Scenarios are retargeted, not
- * rewritten: the Session sub-group's mention/attachment/lightbox coverage comes
- * straight from that spec. Its available-skills-catalog coverage did NOT survive
- * — the Skills sub-group lists session-invoked skills now, and the catalog moved
- * to the Setup Advisor (see the ground-truth note below).
+ * Rewritten whole for the shell redesign (docs/plans/2026-10-04-mainframe-redesign-adoption.md
+ * D20/D21): the floating RAIL (`SessionPanelRail`/`SessionRailButton`) and its
+ * per-card toggle/dot/close are ALL gone. There is no more stack of
+ * independently-opened cards — every section renders together, in one column,
+ * and the title bar's `title-bar-details` toggle is the panel's ONLY switch.
+ * Scenarios are retargeted, not deleted, except where the capability itself
+ * (a per-card open/close, a per-card live dot, the rail's own context meter)
+ * no longer exists — those are called out and dropped at the point they used
+ * to live, with a reason.
  *
- * Source read: packages/ui/src/features/session-panel/{SessionPanel,SessionPanelRail,
- * SessionRailButton,PanelCard,PanelSection,PanelSubGroup,SummarySection,PlanSection,
- * AgentPlan,ActivityCard,LaunchCard,TasksCard,ContextSection,ContextFileItem,
- * PanelAttachmentsGrid,panel-mode,use-session-panel-state,summary-view,plan-view,
+ * Source read: packages/ui/src/features/session-panel/{SessionPanel,SessionPanelToggle,
+ * panel-mode,panel-control-store,use-session-panel-state,SummarySection,PullRequestsSection,
+ * ContextSection,ActivitySection,TasksSection,LaunchSection,PlanSection,AgentPlan,
+ * PanelEyebrow,PanelSection,ContextFileItem,PanelAttachmentsGrid,summary-view,plan-view,
  * launch-view,context-groups,derive-session-items}.tsx,
  * packages/ui/src/store/{ui-prefs,session-todos}.ts,
  * packages/ui/src/features/sessions/new-thread/ChatSurface.tsx,
  * packages/core-rs/crates/mainframe-adapter-mock/src/session_trait.rs.
  *
- * ── The rail is permanent; the stack is what comes and goes ──────────────────
- * The panel is a switchboard (the rail) plus zero or more open cards (the stack).
- * `SessionPanel.tsx` renders the rail in EVERY measured mode — it never hides
- * behind the thing it switches — so `hidden` now means only "not yet measured"
- * (width 0). The old "the card and the rail never show together" doctrine, and
- * the hidden-below-876px regime that went with it, are both gone.
+ * ── Docking, not a rail-and-stack ─────────────────────────────────────────────
+ * `panel-mode.ts`: `derivePanelMode({columnWidth, open, overlayOpen})` →
+ * `'inline' | 'overlay' | 'hidden'`. `INLINE_MIN_WIDTH = 1044` (a 720px capped
+ * transcript column + 24px gap + the 300px panel). `open` is ONE persisted bit
+ * (`ui-prefs` v8 `sessionPanelOpen`, default `true`) that auto-opens the first
+ * time the column fits after boot, even over a persisted close from a previous
+ * run (`use-session-panel-state.ts`'s `bootOpened` ref) — so a WIDE viewport
+ * docks the panel with no click at all. `overlayOpen` is transient, per chat
+ * column (`panel-control-store.ts`), and `title-bar-details`'s click goes
+ * through `togglePanel(columnId, fits)`: open-and-fitting → close; open-but-
+ * narrow-and-not-floating → float (the click asked to SEE the panel, not to
+ * silently close it); anything else → the plain open/close toggle.
  *
  * ── Viewport is explicit here, unlike every other spec ───────────────────────
  * `fixtures/app-tauri.ts` calls `browser.newContext()` with no `viewport`, so the
- * suite runs at Playwright's 1280×720 default. The stack floats over the gutter
- * beside the transcript instead of taking width from it, so inline needs the host
- * row to clear `INLINE_MIN_WIDTH = 1468` (panel-mode.ts: a 768px centred column
- * plus a 350px panel block in EACH gutter — the file's prose still quotes the
- * older 1532/382 pair, the constants are authoritative). A 1280 viewport, minus
- * the 256px sidebar and the AppShell `p-2 gap-2` insets, leaves a ~1000px host:
- * rail-only, with no ambiguity. Every describe therefore calls
- * `page.setViewportSize()` explicitly: WIDE (2100 → host ~1820, ~350px of
- * headroom) for the card-content tests, NARROW (1200 → host ~920) for the
- * rail/float tests, and TINY (900 → host ~620) to prove the rail survives a width
- * that fits nothing else. Mode is asserted by `session-panel` vs
- * `session-panel-overlay` presence with the rail alongside, never by measuring
- * boxes.
- *
- * ── Open-state is persisted, and shared across the tests in a describe ───────
- * `store/ui-prefs.ts` (v5, `mf:ui-prefs`) owns which cards are open —
- * `sessionPanelOpen`, defaulting to `{session:true}` and nothing else. A rail
- * click writes that preference, so a test that opens a card closes it again
- * before finishing, the same discipline the old file used for the collapse.
- * Nothing here seeds localStorage: the defaults are the contract under test.
+ * suite runs at Playwright's 1280×720 default — ambiguous for docking, so every
+ * describe sets one explicitly: DOCKED (2100 → chat column clears 1044, panel
+ * docks with no interaction), OVERLAY (1150 → column is short, panel starts
+ * `hidden`, `title-bar-details` floats it), HIDDEN (900 → column fits nothing;
+ * proves the toggle itself survives rather than that it floats). Mode is
+ * asserted by `session-panel-root`'s `data-mode` attribute and testid presence,
+ * never by measuring boxes.
  *
  * ── Ground truth under mock-cli (read before adding assertions) ──────────────
- * Inherited verbatim from the deleted spec and re-verified against the Rust mock
- * adapter (`mainframe-adapter-mock/src/session_trait.rs`):
+ * Inherited verbatim from the predecessor spec and re-verified against the Rust
+ * mock adapter (`mainframe-adapter-mock/src/session_trait.rs`):
  *   - `get_context_files()` returns `ContextFiles::default()` — globalFiles and
  *     projectFiles are ALWAYS empty, seeded CLAUDE.md or not. The Context
  *     section's memory-file sub-group therefore never renders here; its absence
  *     is asserted (with this reason) rather than left unstated.
  *   - `extract_plan_files()` returns `[]` — the Session sub-group's 'plan' badge
  *     is unreachable.
- *   - `extract_skill_files()` returns `[]`, and the Skills sub-group now lists
- *     the skills the SESSION INVOKED (`SessionContext.skillFiles`) rather than
- *     the adapter's available-skills catalog. So no skill row is reachable here;
+ *   - `extract_skill_files()` returns `[]`, and the Skills sub-group lists the
+ *     skills the SESSION INVOKED (`SessionContext.skillFiles`) rather than the
+ *     adapter's available-skills catalog. So no skill row is reachable here;
  *     the empty-state row + the Manage link are asserted instead, the same way
  *     the memory-file sub-group's absence is. Seeding `.claude/skills` no longer
  *     affects this panel — `listSkills` feeds the Setup Advisor, not the panel.
  *   - The mock adapter derives `background_task.*` events from replayed tool_use /
  *     tool_result blocks (todo #327's `task_bridge.rs`) rather than emitting them
- *     itself, so most recordings still carry none and Background Activity reads
- *     empty for them. `task-subagent.0` is the one exception (below) — its Task
- *     tool_use resolves only on a second turn, giving Background Activity's
- *     running state a real, reachable fixture.
+ *     itself, so most recordings still carry none and Activity reads empty for
+ *     them. `task-subagent.0` is the one exception (below) — its Task tool_use
+ *     resolves only on a second turn, giving Activity's running state a real,
+ *     reachable fixture.
  * The two adapter-independent seeds survive: `POST /api/chats/:id/mentions` and
  * `POST /api/chats/:id/attachments` write straight to the daemon.
  *
- * AGENTS ARE GONE (D15): the deleted spec's agent-row test has no successor —
- * `AgentsList` was removed and no surface lists `AgentConfig`. A deliberate,
- * documented capability loss, not an oversight.
+ * AGENTS ARE GONE (D15 of the PRECEDING right-sidebar revamp, T5.4): the
+ * predecessor spec's agent-row test has no successor — `AgentsList` was removed
+ * and no surface lists `AgentConfig`. A deliberate, documented capability loss,
+ * not an oversight.
  *
  * The context-window coverage below (Summary's `session-panel-summary-context`)
- * is the successor to chat-header.spec.ts's retired `chat-header-context` /
- * `chat-header-context-pct` meter (T5.5), which is why this file uses the
- * `chat-status` recording that spec used.
+ * is the successor to the now-deleted `ChatCardHeader`'s context meter (T5.5,
+ * then D7 of the shell redesign), which is why this file uses the `chat-status`
+ * recording that meter's own spec used.
  *
  * Testid reference (verified against packages/ui/src):
- *   session-panel-root            — SessionPanel.tsx wrapper (rail + stack); mounted
- *                                   in every measured mode
- *   session-panel                 — the INLINE stack container (wide gutter only)
- *   session-panel-overlay         — the FLOATING stack (role=dialog), after a rail
- *                                   click on a short gutter
- *   session-panel-rail            — SessionPanelRail root pill; ALWAYS present,
- *                                   vertically centred
- *   session-panel-rail-open / -activity / -tasks / -launch — one toggle per card;
- *                                   `aria-pressed` mirrors the card being VISIBLE,
- *                                   so an open card whose stack is not floated
- *                                   reads false
- *   session-panel-rail-activity-dot / -launch-dot — live-work markers (running
- *                                   background work / a running launch config)
- *   session-panel-rail-context    — rail context meter (only when percent != null);
- *                                   opens the Session card AND expands Context
- *   session-panel-card-<session|activity|launch|tasks> — one open card
- *   session-panel-card-close-<id> — that card's header X
- *   session-panel-section-summary — SummarySection root, inside the Session card
- *                                   (never collapsible → no toggle)
- *   session-panel-section-<plan|context> — the two collapsible sections that stayed
- *                                   inside the Session card
+ *   title-bar-details             — the panel's ONE switch (layout/TitleBar.tsx's right
+ *                                    cluster); `aria-pressed` mirrors the persisted open bit
+ *   session-panel-root[data-mode] — "inline" | "overlay" | "hidden" ("hidden" renders null)
+ *   session-panel                 — the INLINE column's own wrapper (docked mode only)
+ *   session-panel-overlay         — the FLOATING column's own root (role=dialog), with
+ *                                    `session-panel-scrim` behind it
+ *   session-panel-sections        — the one scrolling column, present in BOTH modes
+ *   session-panel-card-session    — the Session section (SummarySection + the panel's own
+ *                                    "Session" eyebrow); always rendered, never closable alone
+ *   session-panel-section-prs     — Pull requests section; absent when the session has none
+ *   session-panel-section-summary — SummarySection root, inside the Session section
+ *                                    (never collapsible → no toggle)
+ *   session-panel-section-<plan|context> — the two sections that stayed collapsible
+ *                                    (`PanelSection`)
  *   session-panel-section-toggle-<id>  — its header row (the whole width is the
- *                                   trigger); `data-state` reports open/closed
+ *                                    trigger); `data-state` reports open/closed
  *   session-panel-summary-branch  — branch row; a BUTTON opening BranchPopover now
- *                                   (see git-branch.spec.ts). -branch-wt is its
- *                                   worktree badge (absent on a main-repo session)
- *   session-panel-summary-context — context-fill row ("42%")
+ *                                    (see git-branch.spec.ts). -branch-wt is its
+ *                                    worktree badge (absent on a main-repo session)
+ *   session-panel-summary-context — context-fill row ("42%") — the ONLY context readout
+ *                                    left in the panel; there is no separate rail meter any more
  *   session-panel-summary-changes — working-changes row; click emits open-review
- *   session-panel-summary-pr-<number> — a detected-PR row (unseedable; see chat-header.spec.ts)
+ *   session-panel-summary-pr-<number> — a detected-PR row, now inside `session-panel-section-prs`
+ *                                    (unseedable in browser mode; see title-bar.spec.ts's
+ *                                    identical note)
  *   session-panel-summary-empty   — no rows at all
+ *   session-panel-card-activity   — Activity section; ALWAYS rendered once the panel is open
+ *                                    (no per-card toggle any more)
+ *   session-panel-activity-live   — its eyebrow's live dot (present while anything is running)
  *   session-panel-plan            — PlanSection root (absent when there are no todos)
  *   session-panel-plan-toggle     — AgentPlan header ("{done} of {total}") + collapse trigger
  *   session-panel-plan-progress   — the progress track; its fill carries style="width: N%"
  *   session-panel-plan-step-<i>   — one plan step, keyed by position
  *   session-panel-activity-empty  — "Nothing running"
  *   session-panel-task-<id> / session-panel-workflow-<runKey> — live rows; the
- *                                   `agent`-kind row is covered by the task-subagent
- *                                   describe below, `workflow` stays unreachable
- *                                   (out of scope — see the ground-truth note)
+ *                                    `agent`-kind row is covered by the task-subagent
+ *                                    describe below, `workflow` stays unreachable
+ *                                    (out of scope — see the ground-truth note)
+ *   session-panel-card-launch     — Launch section; ALWAYS rendered once the panel is open
+ *   session-panel-launch-live     — its eyebrow's live dot (present while any config runs)
  *   session-panel-launch-row-<name>   — a launch config row (whole row acts)
  *   session-panel-launch-start-<name> / -stop-<name> — the row's action glyph (a span
- *                                   INSIDE the row button; both are clickable)
+ *                                    INSIDE the row button; both are clickable)
  *   session-panel-launch-empty    — "No Launch Configurations"
+ *   session-panel-card-tasks      — Tasks section; ALWAYS rendered once the panel is open
  *   session-panel-tasks-new / -tasks-empty / -tasks-no-project / -task-row-<number>
- *                                 — the Tasks card (its content is tasks.spec.ts's)
+ *                                  — the Tasks section (its content is tasks.spec.ts's)
  *   session-panel-context-file-<path> — a memory-file row (never rendered under mock-cli)
  *   session-panel-session-item-<path> — a Session sub-group row; click emits open-file
  *   session-panel-skill-<path>    — a Skills sub-group row: a skill THIS session
- *                                   invoked; click opens its SKILL.md (unreachable here)
+ *                                    invoked; click opens its SKILL.md (unreachable here)
  *   session-panel-skills-empty / session-panel-skills-manage — its empty state / Manage link
  *   session-panel-attachment-grid / session-panel-attachment-<id> — attachment tiles
  *   image-lightbox-dialog         — ImageLightbox content (opened by an image tile)
  *   review-modal                  — the Review panel the Changes row opens
- *   WORKSPACE.strip               — a workspace pane's tab strip (opened files land here)
+ *   WORKSPACE.strip                — a workspace pane's tab strip (opened files land here)
  *
- * RETIRED testids (do not re-assert): `session-panel-collapse` (close the card
- * instead), `session-panel-section-activity` / `-launch` and their toggles (both
- * are cards now).
+ * RETIRED testids (do not re-assert — the floating rail is gone, D20):
+ * `session-panel-rail*`, `session-panel-card-close-*` (no per-card close — the
+ * whole panel opens/closes together via `title-bar-details`), and every
+ * "rail mirrors the card" assertion that went with them (the Launch/Activity
+ * live dots moved into their own section eyebrows instead).
  */
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Locator, type Page } from '@playwright/test';
 import { execFileSync } from 'child_process';
 import { appendFileSync, mkdirSync, writeFileSync } from 'fs';
 import path from 'path';
@@ -154,11 +156,10 @@ import { DAEMON_PORT } from '../fixtures/daemon.js';
 
 const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
 
-/** Chat-host width comfortably above / below `INLINE_MIN_WIDTH` (1468), plus one
- *  that fits neither the stack nor a gutter — the rail must survive it. */
-const WIDE = { width: 2100, height: 900 };
-const NARROW = { width: 1200, height: 900 };
-const TINY = { width: 900, height: 900 };
+/** Chat-host width comfortably above / between / below `INLINE_MIN_WIDTH` (1044). */
+const DOCKED = { width: 2100, height: 900 };
+const OVERLAY = { width: 1150, height: 900 };
+const HIDDEN = { width: 900, height: 900 };
 
 // A 1x1 transparent PNG — small enough to round-trip instantly through the
 // attachment store, real enough for the grid to render an <img>.
@@ -241,112 +242,187 @@ async function selectChat(page: Page, chatId: string): Promise<void> {
 }
 
 /**
- * Dismiss the floating stack with Escape, retrying the press because a transient
+ * Open the panel if it is not already on screen, and return its root.
+ *
+ * `title-bar-details` TOGGLES — firing it at a panel that is merely a beat
+ * away from re-rendering closes it for good. At DOCKED this is almost always a
+ * no-op (the panel auto-opens on boot), but opening the workspace surface
+ * halves the chat column and can drop the panel below `INLINE_MIN_WIDTH`,
+ * unmounting it entirely — so every content test calls this first rather than
+ * assuming the previous test left it open.
+ */
+async function ensurePanelOpen(page: Page): Promise<Locator> {
+  const workspaceSurface = page.getByTestId('workspace-surface');
+  if (await workspaceSurface.isVisible().catch(() => false)) {
+    await page.keyboard.press('ControlOrMeta+Shift+W');
+    await expect(workspaceSurface).toHaveCount(0, { timeout: 5_000 });
+  }
+  const root = page.getByTestId('session-panel-root');
+  await root.waitFor({ state: 'visible', timeout: 3_000 }).catch(() => {
+    /* expected when the panel really is closed — the toggle below reopens it */
+  });
+  if ((await root.count()) === 0) {
+    await page
+      .getByTestId('title-bar-details')
+      .click({ timeout: 5_000 })
+      .catch(() => undefined /* the re-measure landed first and brought it back */);
+  }
+  await expect(root).toBeVisible({ timeout: 10_000 });
+  return root;
+}
+
+/**
+ * Dismiss a floating panel with Escape, retrying the press because a transient
  * Radix layer can legitimately eat one.
  *
  * ANY open Radix layer consumes an Escape — its DismissableLayer calls
  * `preventDefault`, and the panel's own handler bails on `defaultPrevented` by
- * design ("an open dialog owns Escape", use-session-panel-state.ts). A rail
+ * design ("an open dialog owns Escape", use-session-panel-state.ts). A toggle
  * click leaves the pointer on a `Hint`-wrapped button and focus inside it, so
- * both doors have to be shut before Escape can reach the panel:
- *
- * One real click on the floating Session card's Summary section shuts both doors
- * at once, which merely moving the pointer does not:
- *
- *   - a pointerdown closes an open Radix tooltip outright, instead of racing its
- *     open/close delays.
- *   - it takes hover off the rail without parking on something else that opens a
- *     layer of its own. Parking over the sessions sidebar opens a row's
- *     `SessionMetaCard` hover card, which swallows Escape exactly like a tooltip
- *     would — and that hover card carries no `role`, so a tooltip-only or
- *     dialog-only check reports all-clear while the layer is up (found live).
- *   - the Summary section is a plain `section` of static rows: no card header, no
- *     close X, nothing to toggle. And it is inside the panel root, so light
- *     dismiss reads it as "inside" and the stack stays up.
- *
- * That click cannot guarantee every door is shut, though: a hover-driven layer
- * (a tooltip or hover card whose open timer was already ticking) can still open
- * AFTER the click, inside this helper's own budget, and it would eat the next
- * Escape the same way. So this presses Escape up to 3 times, same shape as
- * `closeMenus` in helpers/tauri/menus.ts — press, give it a short settle to
- * consume, re-read the outcome — and returns as soon as the overlay is gone. A
- * press that gets swallowed by a transient layer just costs one more iteration
- * instead of failing the test; the caller still owns the authoritative
- * `expect(overlay).toHaveCount(0)` assertion, so a genuine regression fails
- * there and names the overlay.
- *
- * The click lands on the Session card's Summary, so the caller must leave that
- * card open — every caller here does.
+ * both doors have to be shut before Escape can reach the panel: one real click
+ * on the floating column's Session section shuts both at once (closes any open
+ * tooltip outright, and takes hover off the toggle without landing on
+ * something that opens a layer of its own), which merely moving the pointer
+ * does not.
  */
 async function dismissOverlayWithEscape(page: Page): Promise<void> {
   const overlay = page.getByTestId('session-panel-overlay');
   await overlay.getByTestId('session-panel-section-summary').click({ position: { x: 4, y: 4 } });
   for (let attempt = 0; attempt < 3 && (await overlay.count()) > 0; attempt++) {
     await page.keyboard.press('Escape');
-    // Each press needs its own settle before the count is read again — firing
-    // them back-to-back sends every Escape into the same animation window,
-    // where Radix has already handled the first and ignores the rest.
     await overlay.waitFor({ state: 'detached', timeout: 1_500 }).catch(() => {
       /* expected when a transient layer ate this press instead of the panel */
     });
   }
 }
 
-/**
- * Put the Session card back on screen before reading its content.
- *
- * Opening a file lights the WORKSPACE surface, which halves the chat host — at
- * WIDE that lands the host near ~900px, below `INLINE_MIN_WIDTH`, so the inline
- * stack unmounts and every card testid disappears (the rail stays, but its cards
- * do not). Found live: the Context describe's file-opening tests silently broke
- * the tests after them. ⌘⇧W toggles the workspace back off; calling this first
- * makes each test independent of what the previous one opened, which also matters
- * on a Playwright retry (hooks re-run, but a mid-describe retry does not).
- *
- * The rail click has to be BOTH conditional and late, and the wait before it is
- * load-bearing. `session-panel-rail-open` TOGGLES: firing it at a card that is
- * merely a beat away from re-rendering closes the card for good, and every later
- * test in the describe then fails on a panel nothing reopened. Hiding the
- * workspace does not restore the card synchronously — the width travels through a
- * ResizeObserver, so there is a window where the workspace is already unmounted
- * and the panel has not re-measured yet. Reading `count()` inside that window and
- * clicking on the strength of it is exactly the race that made this helper's
- * predecessor fail the test after every file-opening one (seen in both the old
- * and the new spec, same test, same shape). So: give the card a bounded chance to
- * come back on its own, and only click when it is genuinely closed.
- */
-async function ensureSessionCard(page: Page): Promise<void> {
-  const workspaceSurface = page.getByTestId('workspace-surface');
-  if (await workspaceSurface.isVisible().catch(() => false)) {
-    await page.keyboard.press('ControlOrMeta+Shift+W');
-    await expect(workspaceSurface).toHaveCount(0, { timeout: 5_000 });
-  }
-  const card = page.getByTestId('session-panel-card-session');
-  await card.waitFor({ state: 'visible', timeout: 3_000 }).catch(() => {
-    /* expected when the card really is closed — the rail click below reopens it */
-  });
-  if ((await card.count()) === 0) {
-    await page
-      .getByTestId('session-panel-rail-open')
-      .click({ timeout: 5_000 })
-      .catch(() => undefined /* the re-measure landed first and brought it back */);
-  }
-  await expect(card).toBeVisible({ timeout: 10_000 });
-}
+// ─── §session-panel — docking modes ───────────────────────────────────────────
 
-// ─── §session-panel — rail, stack, modes ──────────────────────────────────────
-//
-// The only describe that changes viewport mid-run. It also owns the rail's own
-// affordances and the Background Activity + Launch + Tasks cards, whose content
-// is static under mock-cli — folding them here avoids a fixture per card.
-
-test.describe('§session-panel — rail, cards, modes', () => {
+test.describe('§session-panel — docking modes', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
 
   test.beforeAll(async () => {
     app = await launchTauriApp();
-    await app.page.setViewportSize(WIDE);
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'default');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('DOCKED: the panel opens inline on its own, with no click', async () => {
+    const { page } = app;
+    await page.setViewportSize(DOCKED);
+    const root = page.getByTestId('session-panel-root');
+    await expect(root).toBeVisible({ timeout: 10_000 });
+    await expect(root).toHaveAttribute('data-mode', 'inline');
+    await expect(page.getByTestId('session-panel')).toBeVisible();
+    await expect(page.getByTestId('session-panel-overlay')).toHaveCount(0);
+    await expect(page.getByTestId('session-panel-card-session')).toBeVisible();
+    await expect(page.getByTestId('title-bar-details')).toHaveAttribute('aria-pressed', 'true');
+
+    // Clicking the toggle while docked just closes it outright (no float — room was never the issue).
+    await page.getByTestId('title-bar-details').click();
+    await expect(root).toHaveCount(0, { timeout: 5_000 });
+    await expect(page.getByTestId('title-bar-details')).toHaveAttribute('aria-pressed', 'false');
+
+    // Restore for the tests below.
+    await page.getByTestId('title-bar-details').click();
+    await expect(root).toBeVisible({ timeout: 5_000 });
+  });
+
+  test('OVERLAY: starts hidden on a short column; the toggle floats it, and it light-dismisses', async () => {
+    const { page } = app;
+    await page.setViewportSize(OVERLAY);
+    const root = page.getByTestId('session-panel-root');
+    const overlay = page.getByTestId('session-panel-overlay');
+
+    // The open bit is true (default), but the column is short of 1044 and
+    // nothing has floated it yet — the panel renders nothing.
+    await expect(root).toHaveCount(0, { timeout: 10_000 });
+    await expect(page.getByTestId('title-bar-details')).toHaveAttribute('aria-pressed', 'false');
+
+    await page.getByTestId('title-bar-details').click();
+    await expect(root).toBeVisible({ timeout: 5_000 });
+    await expect(root).toHaveAttribute('data-mode', 'overlay');
+    await expect(overlay).toBeVisible();
+    await expect(overlay).toHaveAttribute('role', 'dialog');
+    await expect(page.getByTestId('session-panel-scrim')).toBeVisible();
+    await expect(overlay.getByTestId('session-panel-card-session')).toBeVisible();
+    // Not the docked form: the inline wrapper never mounts alongside the float.
+    await expect(page.getByTestId('session-panel')).toHaveCount(0);
+    await expect(page.getByTestId('title-bar-details')).toHaveAttribute('aria-pressed', 'true');
+
+    await dismissOverlayWithEscape(page);
+    await expect(overlay).toHaveCount(0, { timeout: 5_000 });
+    await expect(root).toHaveCount(0);
+  });
+
+  test('OVERLAY: a pointer outside the floated column dismisses it too', async () => {
+    const { page } = app;
+    await page.setViewportSize(OVERLAY);
+    const overlay = page.getByTestId('session-panel-overlay');
+
+    await page.getByTestId('title-bar-details').click();
+    await expect(overlay).toBeVisible({ timeout: 5_000 });
+
+    // The title bar sits above the host row the panel spans, so its own empty
+    // (aria-hidden) traffic-light reserve is a reliably un-covered outside
+    // target — the floating column overlays only the transcript/composer below it.
+    await page.getByTestId('title-bar').click({ position: { x: 2, y: 2 } });
+    await expect(overlay).toHaveCount(0, { timeout: 5_000 });
+  });
+
+  test('OVERLAY: re-clicking the toggle that floated the panel closes it', async () => {
+    const { page } = app;
+    await page.setViewportSize(OVERLAY);
+    const overlay = page.getByTestId('session-panel-overlay');
+    const toggle = page.getByTestId('title-bar-details');
+
+    await toggle.click();
+    await expect(overlay).toBeVisible({ timeout: 5_000 });
+
+    await toggle.click();
+    await expect(overlay).toHaveCount(0, { timeout: 5_000 });
+    await expect(page.getByTestId('session-panel-root')).toHaveCount(0);
+  });
+
+  // Replaces the old rail's "survives a width that fits neither the stack nor
+  // a gutter" — there is no rail any more, but the title bar's toggle is shell
+  // chrome, not a measured element, so it must survive the same width.
+  test('HIDDEN: the panel renders nothing by default, and the toggle survives the width', async () => {
+    const { page } = app;
+    await page.setViewportSize(HIDDEN);
+    await expect(page.getByTestId('session-panel-root')).toHaveCount(0, { timeout: 10_000 });
+    const toggle = page.getByTestId('title-bar-details');
+    await expect(toggle).toBeVisible();
+    await expect(toggle).toBeEnabled();
+
+    // It still floats the panel at this width, same as OVERLAY.
+    await toggle.click();
+    await expect(page.getByTestId('session-panel-overlay')).toBeVisible({ timeout: 5_000 });
+    await dismissOverlayWithEscape(page);
+    await expect(page.getByTestId('session-panel-root')).toHaveCount(0, { timeout: 5_000 });
+  });
+});
+
+// ─── §session-panel — the panel's sections, all open together ────────────────
+//
+// There is no more per-card toggle: Session, Pull requests, Context, Activity,
+// Tasks and Launch all render as soon as the panel is open. This describe
+// folds what used to be separate rail-button tests into straight content
+// assertions against the one scrolling column.
+
+test.describe('§session-panel — sections', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp();
+    await app.page.setViewportSize(DOCKED);
     project = await createTauriProject(app.page);
     seedLaunchConfigs(project.projectPath);
     await createTauriChat(app.page, project.projectId, 'default');
@@ -357,243 +433,61 @@ test.describe('§session-panel — rail, cards, modes', () => {
     await closeTauriApp(app);
   });
 
-  test('a wide surface shows the rail and the inline stack, holding the Session card alone', async () => {
-    const { page } = app;
-    await page.setViewportSize(WIDE);
-    await expect(page.getByTestId('session-panel-root')).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByTestId('session-panel')).toBeVisible({ timeout: 10_000 });
-    // The rail is the switchboard, not the card's collapsed form: it renders
-    // alongside the stack at every measured width.
-    await expect(page.getByTestId('session-panel-rail')).toBeVisible();
-    await expect(page.getByTestId('session-panel-overlay')).toHaveCount(0);
-
-    // ui-prefs default: session open, everything else opt-in.
-    await expect(page.getByTestId('session-panel-card-session')).toBeVisible();
-    await expect(page.getByTestId('session-panel-card-activity')).toHaveCount(0);
-    await expect(page.getByTestId('session-panel-card-launch')).toHaveCount(0);
-    await expect(page.getByTestId('session-panel-card-tasks')).toHaveCount(0);
-
-    // Engaged state follows the card being visible, not the raw preference bit.
-    await expect(page.getByTestId('session-panel-rail-open')).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByTestId('session-panel-rail-activity')).toHaveAttribute('aria-pressed', 'false');
-  });
-
-  test('closing the Session card empties the stack; the rail stays and reopens it', async () => {
-    const { page } = app;
-    await page.getByTestId('session-panel-card-close-session').click();
-    await expect(page.getByTestId('session-panel-card-session')).toHaveCount(0, { timeout: 5_000 });
-    // An empty stack renders nothing at all — the container goes with the last card.
-    await expect(page.getByTestId('session-panel')).toHaveCount(0);
-    await expect(page.getByTestId('session-panel-rail')).toBeVisible();
-    await expect(page.getByTestId('session-panel-rail-open')).toHaveAttribute('aria-pressed', 'false');
-
-    await page.getByTestId('session-panel-rail-open').click();
-    await expect(page.getByTestId('session-panel-card-session')).toBeVisible({ timeout: 5_000 });
-    // Room decides where the stack goes: this gutter holds it, so it comes back
-    // inline rather than floating over the transcript.
-    await expect(page.getByTestId('session-panel')).toBeVisible();
-    await expect(page.getByTestId('session-panel-overlay')).toHaveCount(0);
-  });
-
   test('Summary is always expanded and carries no collapse trigger', async () => {
     const { page } = app;
+    await ensurePanelOpen(page);
     await expect(page.getByTestId('session-panel-section-summary')).toBeVisible();
     await expect(page.getByTestId('session-panel-section-toggle-summary')).toHaveCount(0);
   });
 
-  test('the rail Activity button toggles its own card beside the Session card', async () => {
+  test('the Activity section renders empty with no live dot when nothing is running', async () => {
     const { page } = app;
-    const activityCard = page.getByTestId('session-panel-card-activity');
-    await expect(activityCard).toHaveCount(0);
-    // Nothing is running, so the button carries no live-work dot.
-    await expect(page.getByTestId('session-panel-rail-activity-dot')).toHaveCount(0);
-
-    await page.getByTestId('session-panel-rail-activity').click();
-    await expect(activityCard).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByTestId('session-panel-rail-activity')).toHaveAttribute('aria-pressed', 'true');
+    await ensurePanelOpen(page);
+    await expect(page.getByTestId('session-panel-card-activity')).toBeVisible();
+    await expect(page.getByTestId('session-panel-activity-live')).toHaveCount(0);
     const empty = page.getByTestId('session-panel-activity-empty');
-    await expect(empty).toBeVisible({ timeout: 5_000 });
+    await expect(empty).toBeVisible();
     await expect(empty).toHaveText('Nothing running');
-    // Cards stack — opening one does not replace the Session card.
-    await expect(page.getByTestId('session-panel-card-session')).toBeVisible();
-
-    // The card's own X closes it and nothing else.
-    await page.getByTestId('session-panel-card-close-activity').click();
-    await expect(activityCard).toHaveCount(0, { timeout: 5_000 });
-    await expect(page.getByTestId('session-panel-card-session')).toBeVisible();
   });
 
-  test('the rail Tasks button toggles the Tasks card', async () => {
+  test('the Tasks section offers quick-add with a project active', async () => {
     const { page } = app;
-    const tasksCard = page.getByTestId('session-panel-card-tasks');
-    await expect(tasksCard).toHaveCount(0);
-
-    await page.getByTestId('session-panel-rail-tasks').click();
-    await expect(tasksCard).toBeVisible({ timeout: 5_000 });
-    // A project is active, so the card offers creation rather than the
+    await ensurePanelOpen(page);
+    await expect(page.getByTestId('session-panel-card-tasks')).toBeVisible();
+    // A project is active, so the section offers creation rather than the
     // no-project note. Row/modal behavior belongs to tasks.spec.ts.
     await expect(page.getByTestId('session-panel-tasks-new')).toBeVisible();
     await expect(page.getByTestId('session-panel-tasks-no-project')).toHaveCount(0);
     await expect(page.getByTestId('session-panel-tasks-empty')).toBeVisible();
-
-    await page.getByTestId('session-panel-card-close-tasks').click();
-    await expect(tasksCard).toHaveCount(0, { timeout: 5_000 });
   });
 
-  test('the Launch card lists every config with a start glyph and no live rows', async () => {
+  test('the Launch section lists every config with a start glyph and no live rows', async () => {
     const { page } = app;
-    await page.getByTestId('session-panel-rail-launch').click();
-    await expect(page.getByTestId('session-panel-card-launch')).toBeVisible({ timeout: 5_000 });
+    await ensurePanelOpen(page);
+    await expect(page.getByTestId('session-panel-card-launch')).toBeVisible();
 
     const sleepRow = page.getByTestId('session-panel-launch-row-sleep-long');
     await expect(sleepRow).toBeVisible({ timeout: 10_000 });
     await expect(sleepRow).toContainText('sleep-long');
     // Nothing started in this describe — every row offers Start, none offers Stop,
-    // and the rail glyph carries no running dot.
+    // and the eyebrow carries no running dot.
     await expect(page.getByTestId('session-panel-launch-start-sleep-long')).toBeVisible();
     await expect(page.getByTestId('session-panel-launch-stop-sleep-long')).toHaveCount(0);
     await expect(page.getByTestId('session-panel-launch-row-echo-once')).toBeVisible();
     await expect(page.getByTestId('session-panel-launch-start-echo-once')).toBeVisible();
     await expect(page.getByTestId('session-panel-launch-empty')).toHaveCount(0);
-    await expect(page.getByTestId('session-panel-rail-launch-dot')).toHaveCount(0);
+    await expect(page.getByTestId('session-panel-launch-live')).toHaveCount(0);
     // Launch lifecycle (start/stop, status, console) belongs to workspace-surface.spec.ts.
-
-    await page.getByTestId('session-panel-card-close-launch').click();
-    await expect(page.getByTestId('session-panel-card-launch')).toHaveCount(0, { timeout: 5_000 });
-  });
-
-  test('narrowing the surface drops the stack and keeps the rail', async () => {
-    const { page } = app;
-    await page.setViewportSize(NARROW);
-    await expect(page.getByTestId('session-panel')).toHaveCount(0, { timeout: 10_000 });
-    await expect(page.getByTestId('session-panel-rail')).toBeVisible();
-    await expect(page.getByTestId('session-panel-overlay')).toHaveCount(0);
-    // The Session card is still OPEN as a preference — it is simply not showing,
-    // and the rail's engaged state reports what is on screen.
-    await expect(page.getByTestId('session-panel-card-session')).toHaveCount(0);
-    await expect(page.getByTestId('session-panel-rail-open')).toHaveAttribute('aria-pressed', 'false');
-  });
-
-  // Replaces the old "a gutter under even the rail hides the panel entirely":
-  // the rail has no minimum width any more, so the honest assertion is that it
-  // survives a surface that fits nothing else.
-  test('the rail survives a width that fits neither the stack nor a gutter', async () => {
-    const { page } = app;
-    await page.setViewportSize(TINY);
-    await expect(page.getByTestId('session-panel-root')).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByTestId('session-panel-rail')).toBeVisible();
-    await expect(page.getByTestId('session-panel-rail-open')).toBeVisible();
-    // Still nothing overlapping the transcript unasked: no stack, no float.
-    await expect(page.getByTestId('session-panel')).toHaveCount(0);
-    await expect(page.getByTestId('session-panel-overlay')).toHaveCount(0);
-  });
-
-  // Each floating test narrows for itself: a mid-describe Playwright retry (and a
-  // solo `-g` run) re-runs the test against a fresh WIDE app, where the stack is
-  // inline and no float exists — depending on the previous test's viewport is a trap.
-  test('a rail click floats the stack; Escape dismisses it', async () => {
-    const { page } = app;
-    await page.setViewportSize(NARROW);
-    const overlay = page.getByTestId('session-panel-overlay');
-
-    await expect(page.getByTestId('session-panel-rail')).toBeVisible({ timeout: 10_000 });
-    await page.getByTestId('session-panel-rail-open').click();
-    await expect(overlay).toBeVisible({ timeout: 5_000 });
-    await expect(overlay).toHaveAttribute('role', 'dialog');
-    await expect(overlay.getByTestId('session-panel-card-session')).toBeVisible();
-    // Not a modal, and not the inline stack: the cards float over the thread.
-    await expect(page.getByTestId('session-panel')).toHaveCount(0);
-
-    await dismissOverlayWithEscape(page);
-    await expect(overlay).toHaveCount(0, { timeout: 5_000 });
-  });
-
-  test('a pointer outside the stack dismisses the floating cards', async () => {
-    const { page } = app;
-    await page.setViewportSize(NARROW);
-    const overlay = page.getByTestId('session-panel-overlay');
-
-    await expect(page.getByTestId('session-panel-rail')).toBeVisible({ timeout: 10_000 });
-    await page.getByTestId('session-panel-rail-open').click();
-    await expect(overlay).toBeVisible({ timeout: 5_000 });
-
-    // The chat header sits ABOVE the host row the panel root spans, so it is the
-    // one reliably un-covered outside target: the floating stack overlays the
-    // thread column (including the composer) at this width. Its top-left corner is
-    // the header's own padding — no child control, and `data-drag-region` is inert
-    // outside Tauri.
-    await page.getByTestId('chat-header').click({ position: { x: 2, y: 2 } });
-    await expect(overlay).toHaveCount(0, { timeout: 5_000 });
-  });
-
-  test('re-clicking the rail button that floated the stack closes its card', async () => {
-    const { page } = app;
-    await page.setViewportSize(NARROW);
-    const overlay = page.getByTestId('session-panel-overlay');
-    const railOpen = page.getByTestId('session-panel-rail-open');
-
-    await expect(page.getByTestId('session-panel-rail')).toBeVisible({ timeout: 10_000 });
-    await railOpen.click();
-    await expect(overlay).toBeVisible({ timeout: 5_000 });
-
-    // The second click closes the CARD; the Session card was the only one open,
-    // so the float has nothing left to show and goes with it.
-    await railOpen.click();
-    await expect(page.getByTestId('session-panel-card-session')).toHaveCount(0, { timeout: 5_000 });
-    await expect(overlay).toHaveCount(0);
-
-    // Restore the default for the tests below (and the next describe's app is
-    // fresh, so this only matters within this one).
-    await railOpen.click();
-    await expect(overlay).toBeVisible({ timeout: 5_000 });
-    await dismissOverlayWithEscape(page);
-    await expect(overlay).toHaveCount(0, { timeout: 5_000 });
-  });
-
-  // The rail launch button no longer runs anything (that moved into the Launch
-  // card's rows, workspace-surface.spec.ts) and no longer answers a right-click:
-  // it is a plain toggle like its neighbours. What is worth pinning here is that
-  // toggling one card in a floated stack leaves the others floating.
-  test('the rail launch button adds and removes its card from the floating stack', async () => {
-    const { page } = app;
-    await page.setViewportSize(NARROW);
-    const railLaunch = page.getByTestId('session-panel-rail-launch');
-    const overlay = page.getByTestId('session-panel-overlay');
-    await expect(railLaunch).toBeVisible({ timeout: 10_000 });
-
-    await railLaunch.click();
-    await expect(overlay).toBeVisible({ timeout: 5_000 });
-    await expect(overlay.getByTestId('session-panel-card-launch')).toBeVisible({ timeout: 5_000 });
-    await expect(overlay.getByTestId('session-panel-launch-row-sleep-long')).toBeVisible({ timeout: 10_000 });
-    await expect(railLaunch).toHaveAttribute('aria-pressed', 'true');
-    // The Session card came along — the float shows the whole stack.
-    await expect(overlay.getByTestId('session-panel-card-session')).toBeVisible();
-
-    await railLaunch.click();
-    await expect(page.getByTestId('session-panel-card-launch')).toHaveCount(0, { timeout: 5_000 });
-    // Closing one card does not dismiss the float: the Session card is still up.
-    await expect(overlay).toBeVisible();
-    await expect(overlay.getByTestId('session-panel-card-session')).toBeVisible();
-
-    await dismissOverlayWithEscape(page);
-    await expect(overlay).toHaveCount(0, { timeout: 5_000 });
-  });
-
-  test('widening the surface restores the inline stack, and the rail stays', async () => {
-    const { page } = app;
-    await page.setViewportSize(WIDE);
-    await expect(page.getByTestId('session-panel')).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByTestId('session-panel-card-session')).toBeVisible();
-    await expect(page.getByTestId('session-panel-rail')).toBeVisible();
-    await expect(page.getByTestId('session-panel-overlay')).toHaveCount(0);
   });
 });
 
 // ─── §session-panel — Summary rows ────────────────────────────────────────────
 //
 // `chat-status` replays an onMessage + onResult carrying real usage numbers, so
-// the context row is reachable. Inherited from chat-header.spec.ts, whose meter
-// this row replaces (T5.5).
+// the context row is reachable. The context percent this row reports is the
+// ONLY context readout the panel carries now — the old rail's own duplicate
+// meter is gone with the rail itself (D20); the composer's own
+// `composer-context-percent` chip (D19) is composer.spec.ts's territory.
 
 test.describe('§session-panel — Summary rows', () => {
   let app: TauriAppFixture;
@@ -601,7 +495,7 @@ test.describe('§session-panel — Summary rows', () => {
 
   test.beforeAll(async () => {
     app = await launchTauriApp({ recordingKey: 'chat-status' });
-    await app.page.setViewportSize(WIDE);
+    await app.page.setViewportSize(DOCKED);
     project = await createTauriProject(app.page);
     dirtyRepo(project.projectPath);
     await createTauriChat(app.page, project.projectId, 'acceptEdits');
@@ -614,6 +508,7 @@ test.describe('§session-panel — Summary rows', () => {
 
   test('the branch row names the live branch and carries no worktree badge', async () => {
     const { page } = app;
+    await ensurePanelOpen(page);
     const row = page.getByTestId('session-panel-summary-branch');
     await expect(row).toBeVisible({ timeout: 15_000 });
     await expect(row).toContainText('main');
@@ -626,11 +521,12 @@ test.describe('§session-panel — Summary rows', () => {
 
   test('the changes row shows the +/- totals, with the file count on the tooltip only', async () => {
     const { page } = app;
+    await ensurePanelOpen(page);
     const row = page.getByTestId('session-panel-summary-changes');
     await expect(row).toBeVisible({ timeout: 15_000 });
     // dirtyRepo(): two pure appends → +2, −0. A clean tree suppresses the +/− pair
     // entirely, so asserting them proves the non-zero branch. The file count left
-    // the row (it widened it for nothing) and lives on the hover tooltip now.
+    // the row (it widened it for nothing) and lives on the hover tooltip only.
     await expect(row).not.toContainText('files');
     await expect(row).toContainText('+2');
     await expect(row).toContainText('−0'); // U+2212 minus sign
@@ -638,6 +534,7 @@ test.describe('§session-panel — Summary rows', () => {
 
   test('the context row is absent before a turn and reports a real percentage after one', async () => {
     const { page } = app;
+    await ensurePanelOpen(page);
     // No usage data yet — deriveSummaryRows drops the row rather than showing 0%.
     await expect(page.getByTestId('session-panel-summary-context')).toHaveCount(0);
 
@@ -652,39 +549,23 @@ test.describe('§session-panel — Summary rows', () => {
     const percent = Number(match![1]);
     expect(percent).toBeGreaterThan(0);
     expect(percent).toBeLessThanOrEqual(100);
-
-    // The rail's meter reads the same number through the same hook, and is
-    // reachable without touching the card — the rail never hides now.
-    await expect(page.getByTestId('session-panel-rail-context')).toContainText(`${percent}%`, { timeout: 10_000 });
-  });
-
-  // The meter is an INDICATOR, not a control (RailMeter: plain chrome, no hover,
-  // no click) — it reads the number and the Session card owns the details, one
-  // click up on the i. Clicking it must therefore change nothing; the rail's
-  // Session button is the route back to the card.
-  test('the rail meter is an indicator: clicking it opens nothing, the Session button does', async () => {
-    const { page } = app;
-    const card = page.getByTestId('session-panel-card-session');
-
-    await page.getByTestId('session-panel-card-close-session').click();
-    await expect(card).toHaveCount(0, { timeout: 5_000 });
-
-    await page.getByTestId('session-panel-rail-context').click();
-    // Deliberately inert: a beat to let a toggle land if the meter had one.
-    await page.waitForTimeout(500);
-    await expect(card).toHaveCount(0);
-
-    await page.getByTestId('session-panel-rail-open').click();
-    await expect(card).toBeVisible({ timeout: 5_000 });
   });
 
   test('clicking the changes row opens the review modal', async () => {
     const { page } = app;
+    await ensurePanelOpen(page);
     await page.getByTestId('session-panel-summary-changes').click();
     await expect(page.getByTestId('review-modal')).toBeVisible({ timeout: 10_000 });
     await page.getByTestId('review-close').click();
     await expect(page.getByTestId('review-modal')).toHaveCount(0, { timeout: 5_000 });
   });
+
+  // DELETED (D20 — capability dropped, not moved): the old rail carried its own
+  // context METER, a plain indicator duplicating the Session card's row one
+  // click away, specifically so the number was reachable without opening the
+  // card. There is no rail any more — the Session section is always part of
+  // the one open column — so there is nothing left to be "an indicator, not a
+  // control" about. The underlying number is still covered by the test above.
 });
 
 // ─── §session-panel — Plan section (todo-write) ───────────────────────────────
@@ -695,7 +576,7 @@ test.describe('§session-panel — Plan section', () => {
 
   test.beforeAll(async () => {
     app = await launchTauriApp({ recordingKey: 'todo-write' });
-    await app.page.setViewportSize(WIDE);
+    await app.page.setViewportSize(DOCKED);
     project = await createTauriProject(app.page);
     await createTauriChat(app.page, project.projectId, 'acceptEdits');
   });
@@ -709,6 +590,7 @@ test.describe('§session-panel — Plan section', () => {
   // transcript, but the Plan section reads only the `todos.updated` store.
   test('the section is hidden until todos exist, then reports progress with the steps collapsed', async () => {
     const { page } = app;
+    await ensurePanelOpen(page);
     await expect(page.getByTestId('session-panel-plan')).toHaveCount(0);
 
     await sendMessage(page, 'Track two todos: write the README, then run the test suite');
@@ -757,7 +639,7 @@ test.describe('§session-panel — Context section', () => {
 
   test.beforeAll(async () => {
     app = await launchTauriApp();
-    await app.page.setViewportSize(WIDE);
+    await app.page.setViewportSize(DOCKED);
     project = await createTauriProject(app.page);
     chatId = await createTauriChat(app.page, project.projectId, 'default');
 
@@ -785,7 +667,7 @@ test.describe('§session-panel — Context section', () => {
 
   test('the section is expanded by default and counts every sub-group row', async () => {
     const { page } = app;
-    await ensureSessionCard(page);
+    await ensurePanelOpen(page);
     const header = page.getByTestId('session-panel-section-toggle-context');
     await expect(header).toBeVisible({ timeout: 15_000 });
     // 1 mention + 2 attachments; memory files and invoked skills are always 0
@@ -798,7 +680,7 @@ test.describe('§session-panel — Context section', () => {
 
   test('the Session sub-group lists the seeded mention with its @ badge', async () => {
     const { page } = app;
-    await ensureSessionCard(page);
+    await ensurePanelOpen(page);
     const item = page.getByTestId('session-panel-session-item-index.ts');
     await expect(item).toBeVisible({ timeout: 15_000 });
     await expect(item).toContainText('index.ts');
@@ -807,7 +689,7 @@ test.describe('§session-panel — Context section', () => {
 
   test('clicking the Session row opens the file as a workspace editor tab', async () => {
     const { page } = app;
-    await ensureSessionCard(page);
+    await ensurePanelOpen(page);
     await page.getByTestId('session-panel-session-item-index.ts').click();
     const strip = page.locator(WORKSPACE.strip);
     await expect(strip.getByRole('tab', { selected: true })).toContainText('index.ts', { timeout: 10_000 });
@@ -820,7 +702,7 @@ test.describe('§session-panel — Context section', () => {
   // sheet, which owns the available-skills catalog this panel stopped listing.
   test('the Skills sub-group shows its empty state and keeps Manage reachable', async () => {
     const { page } = app;
-    await ensureSessionCard(page);
+    await ensurePanelOpen(page);
     const empty = page.getByTestId('session-panel-skills-empty');
     await expect(empty).toBeVisible({ timeout: 15_000 });
     await expect(empty).toContainText('No skills used');
@@ -830,7 +712,7 @@ test.describe('§session-panel — Context section', () => {
 
   test('attachment tiles render; the image tile opens the lightbox', async () => {
     const { page } = app;
-    await ensureSessionCard(page);
+    await ensurePanelOpen(page);
     await expect(page.getByTestId('session-panel-attachment-grid')).toBeVisible({ timeout: 15_000 });
     const imageTile = page.getByTestId(`session-panel-attachment-${imageAttachmentId}`);
     const fileTile = page.getByTestId(`session-panel-attachment-${fileAttachmentId}`);
@@ -848,14 +730,14 @@ test.describe('§session-panel — Context section', () => {
 
   test('the non-image tile does not open the lightbox', async () => {
     const { page } = app;
-    await ensureSessionCard(page);
+    await ensurePanelOpen(page);
     await page.getByTestId(`session-panel-attachment-${fileAttachmentId}`).click();
     await expect(page.getByTestId('image-lightbox-dialog')).toHaveCount(0);
   });
 
   test('collapsing the section hides every sub-group; expanding restores them', async () => {
     const { page } = app;
-    await ensureSessionCard(page);
+    await ensurePanelOpen(page);
     const header = page.getByTestId('session-panel-section-toggle-context');
     const item = page.getByTestId('session-panel-session-item-index.ts');
     await expect(item).toBeVisible();
@@ -869,21 +751,21 @@ test.describe('§session-panel — Context section', () => {
   });
 });
 
-// ─── §session-panel — Activity card, a live agent row (task-subagent) ─────────
+// ─── §session-panel — Activity section, a live agent row (task-subagent) ─────
 //
 // task-subagent.0 is now two turns (todo #327): the first delegates to a
 // subagent and completes the turn with the Task tool_use still unresolved, the
-// second's tool_result closes it. That gap is what gives Background Activity a
-// real "something is running" fixture, mirroring the mainframe-adapter-mock
+// second's tool_result closes it. That gap is what gives Activity a real
+// "something is running" fixture, mirroring the mainframe-adapter-mock
 // `task_bridge.rs` unit coverage at the daemon level.
 
-test.describe('§session-panel — Activity card (task-subagent)', () => {
+test.describe('§session-panel — Activity section (task-subagent)', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
 
   test.beforeAll(async () => {
     app = await launchTauriApp({ recordingKey: 'task-subagent' });
-    await app.page.setViewportSize(WIDE);
+    await app.page.setViewportSize(DOCKED);
     project = await createTauriProject(app.page);
     await createTauriChat(app.page, project.projectId, 'acceptEdits');
   });
@@ -898,8 +780,7 @@ test.describe('§session-panel — Activity card (task-subagent)', () => {
     await sendMessage(page, 'Delegate finding the greeting export to a subagent');
     await waitForIdle(page, 60_000);
 
-    await page.getByTestId('session-panel-rail-activity').click();
-    const card = page.getByTestId('session-panel-card-activity');
+    const card = await ensurePanelOpen(page).then(() => page.getByTestId('session-panel-card-activity'));
     await expect(card).toBeVisible({ timeout: 5_000 });
 
     const row = card.getByTestId('session-panel-task-mock-toolu_task_1');
@@ -907,14 +788,13 @@ test.describe('§session-panel — Activity card (task-subagent)', () => {
     await expect(row.getByTestId('session-panel-kind-agent')).toBeVisible();
     await expect(row).toContainText('Agent');
 
-    await expect(page.getByTestId('session-panel-rail-activity-dot')).toBeVisible();
-    await expect(page.getByTestId('session-panel-rail-activity')).toHaveAttribute('aria-label', '1 task running');
+    await expect(page.getByTestId('session-panel-activity-live')).toBeVisible();
 
     await sendMessage(page, 'Thanks — what did it find?');
     await waitForIdle(page, 60_000);
 
     await expect(row).toHaveCount(0, { timeout: 10_000 });
     await expect(page.getByTestId('session-panel-activity-empty')).toBeVisible();
-    await expect(page.getByTestId('session-panel-rail-activity-dot')).toHaveCount(0);
+    await expect(page.getByTestId('session-panel-activity-live')).toHaveCount(0);
   });
 });

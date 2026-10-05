@@ -1,46 +1,53 @@
 /**
- * §sidebar-chrome — the sidebar's header actions, footer status, collapse
- * affordances, and the inspector's bottom-panel resize.
+ * §sidebar-chrome — the shell's ambient chrome: the nav rail's view switch and
+ * bottom cluster (Settings/appearance/update), the sidebar's collapse
+ * affordances, and the footer's daemon status.
  *
  * Scope: docs/plans/2026-07-03-tauri-e2e-test-plan.md spec #5 (Cluster A).
  * UI-only — none of these scenarios need an agent-turn recording.
  *
- * The whole left panel is the v2 sidebar since the 2026-08 shell integration
- * (`app/AppShell.tsx` mounts `@v2/features/sessions/SessionSidebar` inside a
- * shadcn `SidebarProvider`), so `layout/SidebarHeader.tsx` and `SidebarShell.tsx`
- * are gone with their testids. What replaced them:
+ * Retargeted whole for the shell redesign (docs/plans/2026-10-04-mainframe-redesign-adoption.md
+ * D3/D4): `layout/NavRail.tsx` now owns Settings, appearance and the updater —
+ * moved off the sidebar header's own `HeaderActions` (`sidebar-settings`), which
+ * is gone. The sidebar header's `SidebarActions` Kanban/Automations rows are
+ * also gone: picking a view on the rail switches `sidebarView` (`ui-prefs`) and
+ * the sidebar renders that list in place — the Kanban BOARD and the Automations
+ * HOST modal are each one more click from their list (`tasks-sidebar-open-board`,
+ * `automations-sidebar-new` / `-row-<id>`), not the rail's own affordance.
  *
  * Testid reference (verified against source):
- *   sidebar-settings           — v2/features/sessions/SessionSidebar.tsx HeaderActions (was
- *                                `sidebar-settings-button`)
- *   sidebar-action-kanban      — SidebarActions row (dispatches `mf:open-tasks`; was the
- *                                icon-only `sidebar-tasks`)
- *   sidebar-action-automations — SidebarActions row, opens the Automations v2 host via
- *                                `useAutomationsNav().openHost()` (was `sidebar-workflows`)
- *   sidebar-action-automations-pending  — the pending-interaction dot on that row
+ *   shell-rail                 — layout/NavRail.tsx root
+ *   shell-rail-chats / -tasks / -automations — the view-switch buttons (NavRailButton);
+ *                                 `aria-pressed` mirrors the selected view
+ *   shell-rail-automations-pending — the Automations button's pending-interaction dot
+ *   shell-rail-update          — RailUpdateButton; renders NOTHING while idle (no update)
+ *   shell-rail-appearance      — theme toggle (was `main-toolbar-theme`)
+ *   shell-rail-settings        — opens the Settings dialog (was `sidebar-settings`)
+ *   tasks-sidebar-open-board   — the Tasks list header's "Open board" button
+ *   automations-sidebar-new   — the Automations list header's "New" button (opens the
+ *                                host + the editor, same path a toast click takes)
  *   settings-dialog / settings-dialog-close — features/settings/SettingsDialog.tsx
  *   tasks-board-modal / tasks-board-close   — features/tasks/TasksBoard.tsx (mounted by TasksModalHost)
  *   automations-host / automations-view / automations-close — features/automations/AutomationsHost.tsx +
  *                                AutomationsView.tsx (fullview panel; v1's `workflows-modal` was deleted)
- *   [data-slot="sidebar"]      — the panel root (v2/components/ui/sidebar/sidebar.tsx). There is no
+ *   [data-slot="sidebar"]      — the panel root (components/ui/sidebar/sidebar.tsx). There is no
  *                                `sessions-sidebar` testid and no unmount: `collapsible="offcanvas"`
  *                                animates the width to 0 and publishes
  *                                `data-state="expanded"|"collapsed"`. shadcn primitives stay
  *                                passthrough, so the slot attribute is the contract here.
  *   [data-slot="sidebar-rail"] — the panel's right edge (aria-label "Resize sidebar"): drag to
  *                                resize, click to collapse. This replaced `sidebar-hide-button`,
- *                                which the v2 header does not carry — the other collapse
+ *                                which no header carries — the other collapse
  *                                affordance is ⌘B (SidebarProvider owns the shortcut).
- *   show-sidebar-button        — layout/MainToolbar.tsx (rendered only when `!sidebarVisible`)
- *   daemon-footer-trigger      — v2/features/daemon/DaemonSwitcher.tsx trigger; its ConnDot carries
- *                                aria-label="Connected" (v2/features/daemon/daemon-status.tsx)
- *   main-toolbar-files         — layout/MainToolbar.tsx (toggle-workspace-files intent)
+ *   show-sidebar-button        — layout/TitleBar.tsx (rendered only when the sidebar is collapsed)
+ *   daemon-footer-trigger      — features/daemon/DaemonSwitcher.tsx trigger; its ConnDot carries
+ *                                aria-label="Connected" (features/daemon/daemon-status.tsx)
  *
  * The bottom Context/Skills/Agents panel and its drag-resize handle
  * (`sidebar-bottom-panel` / `sidebar-bottom-resize`) were deleted in the
  * right-sidebar revamp (T5.4) along with `features/context-panel/`. There is no
- * successor to resize: the session panel is a fixed-width card that switches to a
- * rail on width, which session-panel.spec.ts covers. The two resize tests went
+ * successor to resize: the session panel is a fixed-width column that docks or
+ * floats on width, which session-panel.spec.ts covers. The two resize tests went
  * with the surface rather than being retargeted.
  */
 
@@ -65,41 +72,57 @@ test.describe('§sidebar-chrome', () => {
     await closeTauriApp(app);
   });
 
-  test('settings button opens the settings dialog', async () => {
+  test('the Settings rail button opens the settings dialog', async () => {
     const { page } = app;
-    await page.getByTestId('sidebar-settings').click();
+    await page.getByTestId('shell-rail-settings').click();
     await expect(page.getByTestId('settings-dialog')).toBeVisible({ timeout: 10_000 });
     await page.getByTestId('settings-dialog-close').click();
     await expect(page.getByTestId('settings-dialog')).toHaveCount(0, { timeout: 5_000 });
   });
 
-  test('tasks button opens the tasks modal', async () => {
+  test('the Tasks rail button switches the sidebar to the Tasks list, which opens the board', async () => {
     const { page } = app;
-    await page.getByTestId('sidebar-action-kanban').click();
+    const tasksRail = page.getByTestId('shell-rail-tasks');
+    await tasksRail.click();
+    await expect(tasksRail).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('tasks-sidebar-open-board')).toBeVisible({ timeout: 10_000 });
+
+    await page.getByTestId('tasks-sidebar-open-board').click();
     await expect(page.getByTestId('tasks-board-modal')).toBeVisible({ timeout: 10_000 });
     await page.getByTestId('tasks-board-close').click();
     await expect(page.getByTestId('tasks-board-modal')).toHaveCount(0, { timeout: 5_000 });
+
+    // Back to Chats for the tests that follow.
+    await page.getByTestId('shell-rail-chats').click();
   });
 
-  test('workflows button opens the automations panel', async () => {
+  test('the Automations rail button switches the sidebar to the Automations list, which opens the host', async () => {
     const { page } = app;
-    await page.getByTestId('sidebar-action-automations').click();
+    const automationsRail = page.getByTestId('shell-rail-automations');
+    await automationsRail.click();
+    await expect(automationsRail).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('automations-sidebar-new')).toBeVisible({ timeout: 10_000 });
+
+    await page.getByTestId('automations-sidebar-new').click();
     await expect(page.getByTestId('automations-host')).toBeVisible({ timeout: 10_000 });
     await page.getByTestId('automations-close').click();
     await expect(page.getByTestId('automations-host')).toHaveCount(0, { timeout: 5_000 });
+
+    // Back to Chats for the tests that follow.
+    await page.getByTestId('shell-rail-chats').click();
   });
 
-  // TODO(recording): the pending dot (`sidebar-action-automations-pending` in SessionSidebar.tsx
-  // HeaderActions, `pending > 0` from
-  // selectPendingInteractionCount(useAutomationsStore)) is populated by the automations WS
-  // event stream when a run pauses on a needs-you interaction — there's no REST seed for that
-  // state. Needs an automation fixture with a paused run; unskip once one exists.
-  test.skip('workflows button shows a pending dot when a run needs input', async () => {});
+  // TODO(recording): the rail's pending dot (`shell-rail-automations-pending` in
+  // NavRail.tsx, `pending > 0` from selectPendingInteractionCount(useAutomationsStore))
+  // is populated by the automations WS event stream when a run pauses on a
+  // needs-you interaction — there's no REST seed for that state. Needs an
+  // automation fixture with a paused run; unskip once one exists.
+  test.skip('the Automations rail button shows a pending dot when a run needs input', async () => {});
 
   test('footer shows the daemon connected status', async () => {
     const { page } = app;
     // ConnDot renders <span aria-label="Connected"> for DaemonStatus 'connected'
-    // (v2/features/daemon/daemon-status.tsx DAEMON_STATUS.connected.label) — the dot itself has
+    // (features/daemon/daemon-status.ts DAEMON_STATUS.connected.label) — the dot itself has
     // no dedicated testid, so we scope the aria-label lookup to the trigger's own testid.
     await expect(page.getByTestId('daemon-footer-trigger').locator('[aria-label="Connected"]')).toBeVisible({
       timeout: 15_000,
@@ -108,14 +131,13 @@ test.describe('§sidebar-chrome', () => {
 
   // The three per-status footer count chips (idle / working / waiting) are GONE, not
   // flagged off: `layout/SidebarFooter.tsx` and its SHOW_SESSION_COUNTS flag were deleted
-  // with the v2 shell integration, and the v2 footer holds tags, quota and the daemon
-  // switcher only. `useSessionCounts` survives but now feeds the new-session picker's
-  // per-project labels (SessionsNewButton.tsx). Per-session working/waiting state is
-  // covered on the row's status dot in sessions-rows.spec.ts.
+  // with the v2 shell integration, and the footer holds quota rows and the daemon
+  // switcher only now (QuotaFooter + DaemonSwitcher, AppSidebar.tsx). Per-session
+  // working/waiting state is covered on the row's status dot in sessions-rows.spec.ts.
 
-  // The v2 header carries no hide button (SessionSidebar.tsx HeaderActions is
-  // workflows/tasks/settings only). Collapsing is the panel's own edge — clicking
-  // `sidebar-rail` short of the drag slop toggles it (sidebar.tsx SidebarRail) —
+  // The sidebar header carries no hide button of its own (SessionSidebar.tsx's
+  // header is search + collapse only now). Collapsing is the panel's own edge —
+  // clicking `sidebar-rail` short of the drag slop toggles it (sidebar.tsx SidebarRail) —
   // and the panel COLLAPSES rather than unmounting, so the assertion moved from
   // presence to `data-state`.
   test('clicking the sidebar rail collapses the panel and show-sidebar-button restores it', async () => {

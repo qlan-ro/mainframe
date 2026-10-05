@@ -10,7 +10,16 @@
  * `recordingKey`.
  *
  * Testid reference (verified against packages/ui/src/features/automations/):
- *   sidebar-action-automations       — sidebar entry point that opens the host
+ *   ControlOrMeta+Shift+A             — opens the host straight onto the LIBRARY (no
+ *                                       sub-view set yet). The shell redesign retired the
+ *                                       sidebar header's own entry point (`sidebar-action-automations`
+ *                                       dispatched `openHost()` directly) — the rail's
+ *                                       `shell-rail-automations` now switches the sidebar to the
+ *                                       Automations LIST instead, whose own rows/`New` button land
+ *                                       on Details/the editor, never the bare library. This
+ *                                       `dev: true` shortcut (AutomationsHost.tsx's own comment
+ *                                       calls it out as surviving alongside the old production entry
+ *                                       point) is this spec's most direct remaining path to Library.
  *   automations-host                 — the Radix Dialog content root (absent when closed)
  *   automations-view                 — the view root inside the host
  *   automations-close                — the view's close button
@@ -23,15 +32,11 @@
  *   automations-library-project-<id> — a row's project badge
  *   automations-delete-confirm       — the shared ConfirmDialog root the row raises
  *   automations-delete-confirm-confirm / -cancel — its derived button pair
- *   sidebar-project-scope-trigger     — the header's project scope dropdown trigger
- *   sidebar-project-scope-menu       — the dropdown's content root
- *   sidebar-project-<projectId>      — a project's checkbox item inside that menu
- *                                       (multi-select scope; never switches the
- *                                       active session — universal now, not a
- *                                       special case of "All projects")
- *   sidebar-project-all              — "All projects" checkbox item; clears the
- *                                       project scope WITHOUT switching the
- *                                       active session
+ *   sessions-scope-avatar-<id>       — a project's avatar in the scope strip (ScopeStrip.tsx,
+ *                                       shell redesign D14, replaced the project-scope dropdown);
+ *                                       `data-state` is "on"/"off" (a Radix Toggle). Multi-select
+ *                                       scope; never switches the active session
+ *   sessions-scope-label             — "All projects" (empty scope) or "N of M"
  *
  * Three facts every test here leans on — read before "simplifying" a scenario:
  *
@@ -60,7 +65,6 @@ import {
   type TauriProject,
 } from '../helpers/tauri/setup.js';
 import { sessionsSidebar } from '../helpers/tauri/page-objects.js';
-import { closeMenus } from '../helpers/tauri/menus.js';
 import { waitConnected } from '../helpers/tauri/wait.js';
 
 /**
@@ -74,17 +78,24 @@ import { waitConnected } from '../helpers/tauri/wait.js';
  * click-then-assert step as a unit, mirroring `sessions-filters.spec.ts`'s
  * `selectRow`.
  */
+/** Toggle every scoped project avatar off, so the sidebar widens to every
+ *  project's rows (scope changes never switch the active session). */
+async function clearScope(page: Page): Promise<void> {
+  const label = page.getByTestId('sessions-scope-label');
+  await expect(async () => {
+    const text = (await label.textContent())?.trim();
+    if (text === 'All projects') return;
+    const selected = page.locator('[data-testid^="sessions-scope-avatar-"][data-state="on"]').first();
+    await selected.click({ timeout: 2_000 });
+    expect((await label.textContent())?.trim()).toBe('All projects');
+  }).toPass({ timeout: 10_000, intervals: [250, 500] });
+}
+
 async function openLibraryFor(page: Page, chatId: string): Promise<void> {
   await page.reload();
   await waitConnected(page);
 
-  // Widens the sidebar to both projects' rows without switching the active
-  // session — scope changes never switch the active session now, so this is
-  // just the ordinary "clear the scope" path, not a special case.
-  await page.getByTestId('sidebar-project-scope-trigger').click();
-  await expect(page.getByTestId('sidebar-project-scope-menu')).toBeVisible({ timeout: 5_000 });
-  await page.getByTestId('sidebar-project-all').click();
-  await closeMenus(page);
+  await clearScope(page);
 
   const row = sessionsSidebar(page).row(chatId);
   await expect(async () => {
@@ -94,7 +105,9 @@ async function openLibraryFor(page: Page, chatId: string): Promise<void> {
     await expect(row).toHaveAttribute('data-active', 'true', { timeout: 5_000 });
   }).toPass({ timeout: 45_000, intervals: [500, 1_000, 2_000] });
 
-  await page.getByTestId('sidebar-action-automations').click();
+  // The rail's Automations list opens Details/the editor, never the bare
+  // library — ⌘⇧A opens the host straight onto it instead (see the header note).
+  await page.keyboard.press('ControlOrMeta+Shift+A');
   await expect(page.getByTestId('automations-library')).toBeVisible({ timeout: 10_000 });
   // The loading branch renders the SAME `automations-library` testid with zero
   // rows inside it, so "visible" alone doesn't mean the fetch landed — this is
