@@ -16,8 +16,8 @@
  * them through the restyle — content-sized `rounded-md` pill, no more
  * underline, the 14px lead slot now a `ProviderDot` instead of a
  * `ProjectAvatar`). The pill's new split-pair form (`SessionTabPair.tsx`,
- * `session-tabs-zone-group`) and the hover open-beside control
- * (`session-tab-open-beside-<id>`) have no single-tab scenario here — they
+ * `session-tabs-zone-group`) and the menu's "Open in Split"
+ * (`session-tab-ctx-open-split`) have no single-tab scenario here — they
  * belong to the split/zone specs that actually open a second surface.
  *
  * Testid reference (verified against packages/ui/src/features/session-tabs/):
@@ -25,7 +25,8 @@
  *   session-tab-<threadId>   — a tab pill (role=tab, aria-selected, data-preview);
  *                              threadId is the chat id for daemon-created chats
  *   session-tab-close-<id>   — a tab's hover close button
- *   session-tab-pin-<id>     — a preview tab's hover pin ("Keep open")
+ *   session-tab-ctx-keep-open — the tab menu's "Keep open" (pins a preview; the hover
+ *                              pin is gone — a pill shows only its ✕)
  *   session-tabs-new         — the "+" button (the one-click new-session flow)
  *   sessions-row + data-chat-id — a sidebar session row (helpers/tauri/testids)
  *   sessions-welcome / welcome-project — the draft's welcome screen and its
@@ -69,7 +70,8 @@ test.describe('§session-tabs', () => {
 
   test('pinning the preview keeps it; the next activation opens its own preview', async () => {
     const { page } = app;
-    await page.getByTestId(`session-tab-pin-${chatB}`).click({ force: true });
+    await page.getByTestId(`session-tab-${chatB}`).click({ button: 'right' });
+    await page.getByTestId('session-tab-ctx-keep-open').click();
     await expect(page.getByTestId(`session-tab-${chatB}`)).toHaveAttribute('data-preview', 'false', {
       timeout: 10_000,
     });
@@ -105,7 +107,8 @@ test.describe('§session-tabs', () => {
     const { page } = app;
     // Pin what's on screen first — otherwise reopening chatB would just replace
     // the chatA preview and the strip would stay at one tab.
-    await page.getByTestId(`session-tab-pin-${chatA}`).click({ force: true });
+    await page.getByTestId(`session-tab-${chatA}`).click({ button: 'right' });
+    await page.getByTestId('session-tab-ctx-keep-open').click();
     await expect(page.getByTestId(`session-tab-${chatA}`)).toHaveAttribute('data-preview', 'false', {
       timeout: 10_000,
     });

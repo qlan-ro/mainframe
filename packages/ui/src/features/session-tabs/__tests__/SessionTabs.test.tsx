@@ -146,14 +146,16 @@ describe('rendering', () => {
     expect(screen.getByText('Fix the parser').className).not.toContain('italic');
   });
 
-  it('gives only the preview tab a pin button', () => {
+  it('shows only the ✕ on a pill — pin and open-beside live in the right-click menu', () => {
     seed('chat-a');
 
     render();
 
-    expect(screen.getByTestId('session-tab-pin-chat-p')).toBeDefined();
-    expect(screen.queryByTestId('session-tab-pin-chat-a')).toBeNull();
-    expect(screen.queryByTestId('session-tab-pin-chat-b')).toBeNull();
+    for (const id of ['chat-a', 'chat-b', 'chat-p']) {
+      expect(screen.getByTestId(`session-tab-close-${id}`)).toBeDefined();
+      expect(screen.queryByTestId(`session-tab-pin-${id}`)).toBeNull();
+      expect(screen.queryByTestId(`session-tab-open-beside-${id}`)).toBeNull();
+    }
   });
 
   it('marks the active tab selected and every other tab not', () => {
@@ -167,22 +169,24 @@ describe('rendering', () => {
 });
 
 describe('pinning', () => {
-  it('the pin button moves the preview into the pinned set, last', () => {
+  it('"Keep open" in the tab menu moves the preview into the pinned set, last', () => {
     seed('chat-a');
     render();
 
-    fireEvent.click(screen.getByTestId('session-tab-pin-chat-p'));
+    fireEvent.contextMenu(screen.getByTestId('session-tab-chat-p'));
+    fireEvent.click(screen.getByTestId('session-tab-ctx-keep-open'));
 
     const state = useSessionTabsStore.getState();
     expect(state.tabIds).toEqual(['chat-a', 'chat-b', 'chat-p']);
     expect(state.previewId).toBeNull();
   });
 
-  it('the pin button does not switch the active session', () => {
+  it('"Keep open" does not switch the active session', () => {
     seed('chat-a');
     render();
 
-    fireEvent.click(screen.getByTestId('session-tab-pin-chat-p'));
+    fireEvent.contextMenu(screen.getByTestId('session-tab-chat-p'));
+    fireEvent.click(screen.getByTestId('session-tab-ctx-keep-open'));
 
     expect(switchToThread).not.toHaveBeenCalled();
   });

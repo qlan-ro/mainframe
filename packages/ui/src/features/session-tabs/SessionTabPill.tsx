@@ -1,7 +1,8 @@
 /**
  * SessionTabPill — one session tab in the title bar: a 14px lead slot (the
  * provider dot, or the ⌘N badge while the hint modifier is held), the session
- * title, and hover controls (open-beside, pin, close).
+ * title, and a hover ✕ — everything else (open in split, keep open, fork,
+ * side chat) lives in the right-click menu.
  *
  * A content-sized `rounded-md` pill, `h-8`, capped at `max-w-45` and never
  * narrower than `min-w-24`: active is a filled `accent` pill with a soft
@@ -14,17 +15,16 @@
  * Inside a split pair the pill is one SEGMENT (`segment`): the focused one is
  * filled, the other is not, and a parked pair fills neither.
  *
- * A PREVIEW tab (editor-style temporary slot) renders its title italic and
- * grows a hover pin; double-click also pins. Hovering a background tab reveals
- * an open-beside control. While another tab is being dragged, the ACTIVE pill
+ * A PREVIEW tab (editor-style temporary slot) renders its title italic;
+ * double-click or the menu's "Keep open" pins it. While another tab is being dragged, the ACTIVE pill
  * is a drop target (highlight via state, not `:hover` — WKWebView freezes hover
  * matching under a held button) and acts on pointerup, before the drag's
  * rAF-deferred `end()`.
  *
- * data-testid: session-tab-<id> / -close- / -pin- / -open-beside- / -waiting-.
+ * data-testid: session-tab-<id> / -close- / -waiting-.
  */
 import { useRef, useState } from 'react';
-import { Columns2, Pin, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FadeLabel } from '@/components/ui/fade-label';
 import { Hint } from '@/components/ui/hint';
@@ -186,7 +186,7 @@ export function SessionTabPill({ tab, segment, hintIndex = null, canOpenInSplit,
           dropHover && 'ring-2 ring-primary',
         )}
         // One opaque hover ground, shared with the controls cluster below so the
-        // ✕ and open-beside sit on exactly the pill's colour (no patch).
+        // ✕ sits on exactly the pill's colour (no patch).
         style={
           { '--tab-hover': 'color-mix(in oklch, var(--sidebar-accent) 60%, var(--sidebar))' } as React.CSSProperties
         }
@@ -233,38 +233,6 @@ export function SessionTabPill({ tab, segment, hintIndex = null, canOpenInSplit,
             !restingClose && 'opacity-0 group-hover:opacity-100',
           )}
         >
-          {canOpenInSplit && !inPair && (
-            <Hint label="Open beside the current session">
-              <Button
-                data-testid={`session-tab-open-beside-${tab.id}`}
-                variant="ghost"
-                size="icon-2xs"
-                className="opacity-0 group-hover:opacity-100"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  actions.onOpenInSplit(tab.id);
-                }}
-              >
-                <Columns2 />
-              </Button>
-            </Hint>
-          )}
-          {tab.preview && (
-            <Hint label="Keep open">
-              <Button
-                data-testid={`session-tab-pin-${tab.id}`}
-                variant="ghost"
-                size="icon-2xs"
-                className={cn('opacity-0 group-hover:opacity-100', filled && 'opacity-60')}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  actions.onPin(tab.id);
-                }}
-              >
-                <Pin />
-              </Button>
-            </Hint>
-          )}
           <Hint label={`Close ${tab.title}`}>
             <Button
               data-testid={`session-tab-close-${tab.id}`}
