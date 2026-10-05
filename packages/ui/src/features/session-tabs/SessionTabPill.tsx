@@ -175,8 +175,17 @@ export function SessionTabPill({ tab, segment, hintIndex = null, canOpenInSplit,
           filled
             ? 'bg-accent font-semibold text-foreground shadow-sm'
             : 'font-medium text-muted-foreground hover:text-foreground',
+          // A lone background tab tints on hover — quieter than the active pill's
+          // fill + shadow, so "pointed at" never reads as "selected". Pair
+          // segments already sit in their own bordered pill.
+          !filled && !inPair && 'hover:bg-(--tab-hover)',
           dropHover && 'ring-2 ring-primary',
         )}
+        // One opaque hover ground, shared with the controls cluster below so the
+        // ✕ and open-beside sit on exactly the pill's colour (no patch).
+        style={
+          { '--tab-hover': 'color-mix(in oklch, var(--sidebar-accent) 60%, var(--sidebar))' } as React.CSSProperties
+        }
       >
         {/* The badge takes the dot's 14px slot rather than adding one, so
             holding the modifier never reflows the strip under the pointer. */}
@@ -211,7 +220,7 @@ export function SessionTabPill({ tab, segment, hintIndex = null, canOpenInSplit,
               ? 'bg-accent before:to-accent'
               : inPair
                 ? 'bg-popover before:to-popover'
-                : 'bg-sidebar before:to-sidebar',
+                : 'bg-(--tab-hover) before:to-(--tab-hover)',
             // Pair segments are both ON SCREEN, so both keep the resting ✕ the
             // active tab gets — it closes the zone, not a hidden session. Every
             // other pill shows its controls (and their ground) only on hover.
