@@ -6,9 +6,10 @@
  * retargets one, ⌘\ dissolves one, the ✕ closes a tab, ⌘1 hides the chat
  * surface. None of them announces itself, so this menu is where they become
  * discoverable; it deliberately adds no capability of its own. The
- * whole-surface actions (split the surface right/down, hide chat) moved here
- * from the retired chat header — they are about the surface, not the tab, so
- * every tab's menu offers them.
+ * whole-surface "Hide Chat" moved here from the retired chat header — it is
+ * about the surface, not the tab, so every tab's menu offers it. (Placing the
+ * workspace beside / below the chat is not offered: the title bar's surface
+ * toggle lights it.)
  *
  * Wraps its child — the pill is the trigger — so the whole tab responds,
  * including the parts its ✕ and pin overlay (the SessionContextMenu pattern).
@@ -16,17 +17,7 @@
  * data-testid: session-tab-ctx-<action>.
  */
 import type { ReactNode } from 'react';
-import {
-  Columns2,
-  EyeOff,
-  GitFork,
-  LayoutPanelLeft,
-  LayoutPanelTop,
-  MessageSquarePlus,
-  PinIcon,
-  SquareSplitHorizontal,
-  XIcon,
-} from 'lucide-react';
+import { Columns2, EyeOff, GitFork, MessageSquarePlus, PinIcon, SquareSplitHorizontal, XIcon } from 'lucide-react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -39,10 +30,6 @@ import type { ForkAvailability } from '@/features/sessions/view-model/fork-avail
 
 /** The chat SURFACE's actions — the same for every tab. */
 export interface SurfaceMenuActions {
-  /** A second surface can take the other half (`layoutCanSplit`). */
-  canSplit: boolean;
-  onSplitRight: () => void;
-  onSplitDown: () => void;
   /** False while chat is the last lit surface — the dynamic floor. */
   canHide: boolean;
   onHide: () => void;
@@ -128,18 +115,6 @@ export function SessionTabContextMenu({
           </ContextMenuItem>
         )}
         <ContextMenuSeparator />
-        {surface.canSplit && (
-          <>
-            <ContextMenuItem data-testid="session-tab-ctx-split-right" onSelect={surface.onSplitRight}>
-              <LayoutPanelLeft />
-              Split Right
-            </ContextMenuItem>
-            <ContextMenuItem data-testid="session-tab-ctx-split-down" onSelect={surface.onSplitDown}>
-              <LayoutPanelTop />
-              Split Down
-            </ContextMenuItem>
-          </>
-        )}
         <ContextMenuItem data-testid="session-tab-ctx-hide-chat" disabled={!surface.canHide} onSelect={surface.onHide}>
           <EyeOff />
           Hide Chat

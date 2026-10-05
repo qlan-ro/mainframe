@@ -2,7 +2,7 @@
  * SessionTabContextMenu — the tab's right-click menu. Covers the Fork item's
  * placement (AC 17: after the split item and Keep Open, before the Close
  * separator) and its enabled/disabled rendering off `forkAvailability`, plus
- * the surface-wide actions (Split Right/Down, Hide Chat) that moved here from
+ * the surface-wide action (Hide Chat) that moved here from
  * the retired chat header — rendered after a separator, before Close.
  */
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -13,9 +13,6 @@ import type { ForkAvailability } from '@/features/sessions/view-model/fork-avail
 
 function defaultSurface(overrides: Partial<SurfaceMenuActions> = {}): SurfaceMenuActions {
   return {
-    canSplit: false,
-    onSplitRight: vi.fn(),
-    onSplitDown: vi.fn(),
     canHide: true,
     onHide: vi.fn(),
     ...overrides,
@@ -145,37 +142,6 @@ describe('SessionTabContextMenu — Open Side Chat (todo #344)', () => {
 });
 
 describe('SessionTabContextMenu — surface actions (moved from the retired chat header)', () => {
-  it('renders Split Right and Split Down between Fork and Hide Chat when the surface can split, and calls each handler', () => {
-    const onSplitRight = vi.fn();
-    const onSplitDown = vi.fn();
-    renderMenu({ surface: defaultSurface({ canSplit: true, onSplitRight, onSplitDown }) });
-
-    const items = screen.getAllByRole('menuitem').map((el) => el.getAttribute('data-testid'));
-    expect(items).toEqual([
-      'session-tab-ctx-open-split',
-      'session-tab-ctx-fork',
-      'session-tab-ctx-split-right',
-      'session-tab-ctx-split-down',
-      'session-tab-ctx-hide-chat',
-      'session-tab-ctx-close',
-    ]);
-
-    fireEvent.click(screen.getByTestId('session-tab-ctx-split-right'));
-    expect(onSplitRight).toHaveBeenCalledTimes(1);
-
-    // Selecting an item closes the menu — reopen it to reach the next one.
-    fireEvent.contextMenu(screen.getByText('tab'));
-    fireEvent.click(screen.getByTestId('session-tab-ctx-split-down'));
-    expect(onSplitDown).toHaveBeenCalledTimes(1);
-  });
-
-  it('omits Split Right and Split Down when the surface cannot split', () => {
-    renderMenu({ surface: defaultSurface({ canSplit: false }) });
-
-    expect(screen.queryByTestId('session-tab-ctx-split-right')).toBeNull();
-    expect(screen.queryByTestId('session-tab-ctx-split-down')).toBeNull();
-  });
-
   it('enables Hide Chat and calls onHide when the surface is not at the floor', () => {
     const onHide = vi.fn();
     renderMenu({ surface: defaultSurface({ canHide: true, onHide }) });

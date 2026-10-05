@@ -12,23 +12,18 @@ import { useForkChat } from '@/features/sessions/use-fork-chat';
 import { useOpenSideChat } from '@/features/side-chat/use-open-side-chat';
 import { openInSplit } from '@/features/chat/zones/open-in-split';
 import { splitVisible, useZonesStore } from '@/features/chat/zones/zones-store';
-import { isSurfaceFloor, layoutCanSplit, useLayoutStore } from '@/store/layout';
+import { isSurfaceFloor, useLayoutStore } from '@/store/layout';
 import { useUiPrefs } from '@/store/ui-prefs';
 import type { SessionTabPillActions } from './SessionTabPill';
 import type { SurfaceMenuActions } from './SessionTabContextMenu';
 import { useSessionTabsStore } from './store';
 import { nextActiveAfterClose } from './tabs-model';
 
-/** The chat surface's split/hide actions, offered on every tab's context menu (ex-chat-header controls). */
+/** The chat surface's hide action, offered on every tab's context menu (ex-chat-header control). */
 function useSurfaceMenuActions(): SurfaceMenuActions {
-  const canSplit = useLayoutStore((s) => layoutCanSplit(s.layout));
   const canHide = useLayoutStore((s) => !isSurfaceFloor(s.layout, 'chat'));
-  const splitSurface = useLayoutStore((s) => s.splitSurface);
   const toggleSurface = useLayoutStore((s) => s.toggleSurface);
   return {
-    canSplit,
-    onSplitRight: () => splitSurface('v'),
-    onSplitDown: () => splitSurface('h'),
     canHide,
     onHide: () => toggleSurface('chat'),
   };

@@ -39,7 +39,7 @@ function actions(): SessionTabPillActions {
     onFork: vi.fn(),
     onOpenSideChat: vi.fn(),
     onDropTab: vi.fn(),
-    surface: { canSplit: true, onSplitRight: vi.fn(), onSplitDown: vi.fn(), canHide: true, onHide: vi.fn() },
+    surface: { canHide: true, onHide: vi.fn() },
   };
 }
 

@@ -9,9 +9,9 @@
  * their own. Its controls moved:
  *   - the model chip is DROPPED (capability moved to the composer's own model chip,
  *     which already carries model · context · effort — composer.spec.ts's territory);
- *   - Split Right / Split Down / Hide Chat are now items on every session tab's
- *     right-click context menu (`SessionTabContextMenu.tsx`'s `SurfaceMenuActions`),
- *     next to the tab's own `session-tab-ctx-open-split`;
+ *   - Hide Chat is an item on every session tab's right-click context menu
+ *     (`SessionTabContextMenu.tsx`'s `SurfaceMenuActions`); Split Right / Split
+ *     Down were removed — the title bar's surface toggle lights the workspace;
  *   - the Review entry point moved into the session panel's Changes row (its own
  *     worktree-gating coverage lives in session-panel.spec.ts / review-panel.spec.ts);
  *   - the fork-parent link and side-chat toggle moved into `title-bar-actions`
@@ -24,27 +24,18 @@
  * packages/ui/src/features/session-tabs/{SessionTabContextMenu,SessionTabPill,
  * use-session-tab-handlers}.tsx, packages/ui/src/features/session-panel/
  * {SessionPanelToggle,panel-control-store}.ts, packages/ui/src/store/layout.ts,
- * packages/ui/src/store/layout-placement.ts (layoutCanSplit/isSurfaceFloor).
+ * packages/ui/src/store/layout-placement.ts (isSurfaceFloor).
  *
  * Testid reference (all verified against source):
  *   title-bar / title-bar-sidebar-section / title-bar-chat-column / title-bar-actions
  *   title-bar-details        — the session-details toggle; `aria-pressed` mirrors the
  *                               persisted open bit (ui-prefs `sessionPanelOpen`)
  *   session-tab-<id>         — right-click target (role=tab); opens `SessionTabContextMenu`
- *   session-tab-ctx-split-right / -split-down — surface split actions. CONDITIONALLY
- *                               rendered (`surface.canSplit`), not merely disabled — with
- *                               two surfaces lit there is nothing left to split to, so the
- *                               items are absent from the menu entirely until the workspace
- *                               is hidden again
  *   session-tab-ctx-hide-chat — always rendered; `disabled` (Radix `data-disabled`) while
  *                               chat is the only lit surface (the dynamic floor)
  *   surface-rail-<chat|workspace> / workspace-surface / workspace-surface-close — layout.spec.ts's
- *                               own testids, referenced here only to observe split/hide effects
+ *                               own testids, referenced here only to observe hide effects
  *   [data-surface="chat|workspace"] — layout engine's per-surface panel wrapper
- *
- * SurfaceId is 'chat' | 'workspace' since the 2026-08-05 Files+Run merge, so there
- * is exactly one surface to split to and the split items vanish from the menu once
- * it is placed (packages/ui/CLAUDE.md, "Surface model").
  */
 import { test, expect, type Page } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
@@ -137,79 +128,6 @@ test.describe('§title-bar — hide-chat control (dynamic floor, tab context men
     await expect(page.locator('[data-surface="chat"]')).toHaveCount(0);
     // Files remains the sole lit surface.
     await expect(page.getByTestId('workspace-surface')).toBeVisible();
-  });
-});
-
-// ─── Split controls (tab context menu) ────────────────────────────────────────
-
-test.describe('§title-bar — split controls (tab context menu)', () => {
-  let app: TauriAppFixture;
-  let project: TauriProject;
-  let chatId: string;
-
-  test.beforeAll(async () => {
-    app = await launchTauriApp();
-    project = await createTauriProject(app.page);
-    chatId = await createTauriChat(app.page, project.projectId, 'default');
-  });
-
-  test.afterAll(async () => {
-    cleanupTauriProject(project);
-    await closeTauriApp(app);
-  });
-
-  /**
-   * With two surfaces there is exactly one thing to split TO, so `layoutCanSplit`
-   * (store/layout-placement.ts) is false the moment the workspace is placed and the
-   * split items disappear from the tab's context menu entirely. Hiding it
-   * un-places it and brings them back.
-   */
-  async function collapseToChatOnly(page: Page): Promise<void> {
-    const hideWorkspace = page.getByTestId('workspace-surface-close');
-    if ((await hideWorkspace.count()) > 0) await hideWorkspace.first().click();
-    await expect(page.getByTestId('workspace-surface')).toHaveCount(0, { timeout: 5_000 });
-    await page.getByTestId(`session-tab-${chatId}`).click({ button: 'right' });
-    await expect(page.getByTestId('session-tab-ctx-split-right')).toBeVisible();
-    await page.keyboard.press('Escape');
-  }
-
-  test('split-right lights the workspace beside Chat in the top row', async () => {
-    const { page } = app;
-    await collapseToChatOnly(page);
-    await page.getByTestId(`session-tab-${chatId}`).click({ button: 'right' });
-    await page.getByTestId('session-tab-ctx-split-right').click();
-    await expect(page.getByTestId('workspace-surface')).toBeVisible({ timeout: 5_000 });
-
-    const chatBox = await page.locator('[data-surface="chat"]').boundingBox();
-    const workspaceBox = await page.locator('[data-surface="workspace"]').boundingBox();
-    expect(chatBox).not.toBeNull();
-    expect(workspaceBox).not.toBeNull();
-    // Same row: comparable y, Chat stays leftmost.
-    expect(Math.abs(chatBox!.y - workspaceBox!.y)).toBeLessThan(5);
-    expect(chatBox!.x).toBeLessThan(workspaceBox!.x);
-
-    // Nothing left to split to — both items vanish from the menu until the
-    // workspace is hidden again.
-    await page.getByTestId(`session-tab-${chatId}`).click({ button: 'right' });
-    await expect(page.getByTestId('session-tab-ctx-split-right')).toHaveCount(0);
-    await expect(page.getByTestId('session-tab-ctx-split-down')).toHaveCount(0);
-    await page.keyboard.press('Escape');
-  });
-
-  test('split-down docks the workspace in the bottom strip', async () => {
-    const { page } = app;
-    await collapseToChatOnly(page);
-    await page.getByTestId(`session-tab-${chatId}`).click({ button: 'right' });
-    await page.getByTestId('session-tab-ctx-split-down').click();
-    await expect(page.getByTestId('workspace-surface')).toBeVisible({ timeout: 5_000 });
-
-    const chatBox = await page.locator('[data-surface="chat"]').boundingBox();
-    const workspaceBox = await page.locator('[data-surface="workspace"]').boundingBox();
-    expect(chatBox).not.toBeNull();
-    expect(workspaceBox).not.toBeNull();
-    // The strip spans the full width below the top row, so Chat keeps the whole row.
-    expect(workspaceBox!.y).toBeGreaterThan(chatBox!.y + chatBox!.height - 5);
-    expect(Math.abs(workspaceBox!.x - chatBox!.x)).toBeLessThan(5);
   });
 });
 
