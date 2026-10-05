@@ -1,10 +1,7 @@
 /**
  * AutomationEditor — shell: name, project picker, WhenCard, Recipe, footer
- * summary, Save (ts153 wf2-editor.jsx `WfEditor`). Reads `use-automations-
- * nav`'s `editorTarget`/`use-automations-store`'s `definitions`/`catalog`/
- * `gateway` directly (mirrors `LibraryRow`'s self-sufficient pattern) rather
- * than taking props — `AutomationsView` only decides WHETHER to mount this,
- * not what to pass it.
+ * summary, Save (ts153 wf2-editor.jsx `WfEditor`). Self-sufficient: reads the
+ * nav/store directly; `AutomationsView` only decides WHETHER to mount it.
  *
  * Project scoping (2026-10 redesign): the editor has its own picker now
  * (`AutomationProjectPicker`) — a row of avatar chips, "All projects"
