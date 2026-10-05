@@ -169,7 +169,11 @@ export function SessionTabPill({ tab, segment, hintIndex = null, canOpenInSplit,
           if (tab.preview) actions.onPin(tab.id);
         }}
         className={cn(
-          'group relative flex h-8 max-w-45 min-w-24 shrink cursor-pointer items-center gap-1.5 rounded-md px-2 text-xs select-none',
+          'group relative flex max-w-45 min-w-24 shrink cursor-pointer items-center gap-1.5 rounded-md px-2 text-xs select-none',
+          // A pair segment fills the pair pill's content box (32px minus its 1px
+          // border): at h-8 it overflowed by 1px top and bottom, and the hover
+          // controls' ground painted over the pair's border.
+          inPair ? 'h-full' : 'h-8',
           // The dragged pill ghosts so the cursor + drop targets read as the live thing.
           dragging && 'opacity-40',
           filled
