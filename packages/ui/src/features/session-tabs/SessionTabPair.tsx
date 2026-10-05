@@ -1,5 +1,5 @@
 /**
- * SessionTabPair — the split pair as ONE fused pill: a split glyph, then the
+ * SessionTabPair — the split pair as ONE fused pill holding the
  * two member segments. The focused segment is filled; a parked pair (not on
  * screen) fills neither, so the fill only ever means "this is live". Each
  * segment is a full `SessionTabPill` — its own ×, drag, context menu and
@@ -10,7 +10,6 @@
  * replaces the UNFOCUSED segment, the same rule the drag-to-zone layer uses.
  */
 import { useState } from 'react';
-import { Columns2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTabDragStore } from '@/features/chat/zones/tab-drag-store';
 import { SessionTabPill, type SessionTabEntry, type SessionTabPillActions } from './SessionTabPill';
@@ -43,11 +42,10 @@ export function SessionTabPair({ tabs, focused, visible, hintOf, ...actions }: S
         if (draggedId != null) actions.onDropTab(draggedId);
       }}
       className={cn(
-        'flex h-8 max-w-90 shrink items-center gap-0.5 rounded-md border border-border bg-popover pl-1.5',
+        'flex h-8 max-w-90 shrink items-center gap-0.5 rounded-md border border-border bg-popover',
         dropHover && 'ring-2 ring-primary',
       )}
     >
-      <Columns2 aria-hidden className={cn('size-3.5 shrink-0', visible ? 'text-primary' : 'text-muted-foreground')} />
       {tabs.map((tab, index) => (
         <SessionTabPill
           key={tab.id}
