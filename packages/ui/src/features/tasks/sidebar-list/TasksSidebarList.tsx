@@ -157,9 +157,9 @@ export function TasksSidebarList() {
 
   return (
     <>
-      <SidebarHeader className="gap-1">
+      <SidebarHeader className="gap-3">
         <div className="flex h-9 items-center justify-between pl-1">
-          <span className="text-sm font-semibold">Tasks</span>
+          <span className="text-base font-semibold">Tasks</span>
           <Hint label="Open the board">
             <Button
               variant="ghost"

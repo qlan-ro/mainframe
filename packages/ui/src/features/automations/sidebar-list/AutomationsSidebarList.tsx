@@ -50,9 +50,9 @@ export function AutomationsSidebarList() {
 
   return (
     <>
-      <SidebarHeader className="gap-1">
+      <SidebarHeader className="gap-3">
         <div className="flex h-9 items-center justify-between pl-1">
-          <span className="text-sm font-semibold">Automations</span>
+          <span className="text-base font-semibold">Automations</span>
           <div className="flex items-center">
             {/* The bare library (run / toggle / delete per row) has no other
                 production entry point: rows open Details, New opens the editor. */}

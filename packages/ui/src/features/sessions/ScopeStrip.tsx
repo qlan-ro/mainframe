@@ -189,7 +189,7 @@ export function ScopeStrip({ projects, scope, onToggle, onSolo, onRemoveProject,
       data-unstacked={linger.open || undefined}
       onPointerEnter={linger.enter}
       onPointerLeave={linger.leave}
-      className="flex min-h-10 min-w-0 items-center gap-2"
+      className="flex min-h-11 min-w-0 items-center gap-2"
     >
       {/* The scroller pads by 4px all round: the selected halo (2px) and the ✓ badge
           draw outside the avatar and an overflow container would clip them. */}

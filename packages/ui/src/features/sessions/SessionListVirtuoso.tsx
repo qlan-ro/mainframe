@@ -36,7 +36,7 @@ const PINNED_GROUP_LABEL = 'Pinned';
  * it fuse into one fill.
  */
 function SessionsItem(props: ComponentPropsWithoutRef<'ul'>) {
-  return <SidebarMenu {...props} className="gap-0 pb-0.5" />;
+  return <SidebarMenu {...props} className="gap-0 pb-2" />;
 }
 
 /**

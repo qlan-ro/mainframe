@@ -12,7 +12,7 @@
 import { useMemo } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import { SYNTHETIC_TAGS } from '@qlan-ro/mainframe-types';
-import { SearchIcon, SquarePen } from 'lucide-react';
+import { PenLine, SearchIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import {
@@ -50,8 +50,15 @@ function NewSessionRow() {
   return (
     <SidebarMenu>
       <SidebarMenuItem>
-        <SidebarMenuButton size="sm" data-testid="sidebar-action-new-thread" data-tut="new-session" onClick={newThread}>
-          <SquarePen className="text-muted-foreground" />
+        {/* `pl-1`: the pen lines up with "Chats" and the scope avatars (all 12px
+            in); the hover fill still starts on the rows' 8px edge. */}
+        <SidebarMenuButton
+          className="pl-1"
+          data-testid="sidebar-action-new-thread"
+          data-tut="new-session"
+          onClick={newThread}
+        >
+          <PenLine />
           <span className="min-w-0 flex-1 truncate">New session</span>
           {chord != null && <span className="shrink-0 font-mono text-xs text-muted-foreground">{chord}</span>}
         </SidebarMenuButton>
@@ -111,11 +118,11 @@ export function SessionSidebar() {
       {/* The scope strip lives here, not in the scrolling body: shadcn
           documents the header as the home for a workspace switcher, and it is
           the one thing a long session list must not scroll away. */}
-      <SidebarHeader className="gap-1">
+      <SidebarHeader className="gap-3">
         {/* The title bar owns the traffic lights and the app chrome now; this
             52px row is the view's own name, search and its collapse. */}
         <div className="flex h-9 items-center justify-between pl-1">
-          <span className="text-sm font-semibold">Chats</span>
+          <span className="text-base font-semibold">Chats</span>
           <span className="flex items-center text-muted-foreground">
             <Hint label={searchChord == null ? 'Search' : `Search (${searchChord})`}>
               <Button
