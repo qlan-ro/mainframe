@@ -17,8 +17,8 @@
  *   - the fork-parent link and side-chat toggle moved into `title-bar-actions`
  *     (single view) or each zone's `ZoneStrip` (visible split) — side-chat.spec.ts /
  *     fork specs cover those testids at their new mounts;
- *   - the session-details toggle (`title-bar-details`) is new (D8) — the panel's
- *     ONLY switch now that the floating rail is gone.
+ *   - the session-details toggle moved again: it lives in each chat column's
+ *     header (`session-panel-toggle`) — session-panel.spec.ts covers it.
  *
  * Source read: packages/ui/src/layout/{TitleBar,TitleBarActions}.tsx,
  * packages/ui/src/features/session-tabs/{SessionTabContextMenu,SessionTabPill,
@@ -28,8 +28,6 @@
  *
  * Testid reference (all verified against source):
  *   title-bar / title-bar-sidebar-section / title-bar-chat-column / title-bar-actions
- *   title-bar-details        — the session-details toggle; `aria-pressed` mirrors the
- *                               persisted open bit (ui-prefs `sessionPanelOpen`)
  *   session-tab-<id>         — right-click target (role=tab); opens `SessionTabContextMenu`
  *   session-tab-ctx-hide-chat — always rendered; `disabled` (Radix `data-disabled`) while
  *                               chat is the only lit surface (the dynamic floor)
@@ -40,49 +38,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
-
-// ─── Session-details toggle (D8) ──────────────────────────────────────────────
-
-test.describe('§title-bar — session-details toggle', () => {
-  let app: TauriAppFixture;
-  let project: TauriProject;
-
-  test.beforeAll(async () => {
-    app = await launchTauriApp();
-    project = await createTauriProject(app.page);
-    await createTauriChat(app.page, project.projectId, 'default');
-  });
-
-  test.afterAll(async () => {
-    cleanupTauriProject(project);
-    await closeTauriApp(app);
-  });
-
-  test('toggles the session panel open and closed; aria-pressed mirrors the state', async () => {
-    const { page } = app;
-    const toggle = page.getByTestId('session-panel-toggle');
-    const panel = page.getByTestId('session-panel-root');
-
-    // The panel auto-opens the first time the column fits (default true), so
-    // read the starting state rather than assuming either value.
-    const startedOpen = (await toggle.getAttribute('aria-pressed')) === 'true';
-    if (startedOpen) await expect(panel).toBeVisible();
-    else await expect(panel).toHaveCount(0);
-
-    await toggle.click();
-    if (startedOpen) {
-      await expect(toggle).toHaveAttribute('aria-pressed', 'false');
-      await expect(panel).toHaveCount(0, { timeout: 5_000 });
-    } else {
-      await expect(toggle).toHaveAttribute('aria-pressed', 'true');
-      await expect(panel).toBeVisible({ timeout: 5_000 });
-    }
-
-    // Toggle back to the starting state for tests that follow.
-    await toggle.click();
-    await expect(toggle).toHaveAttribute('aria-pressed', String(startedOpen));
-  });
-});
 
 // ─── Hide-Chat control (dynamic floor, tab context menu) ─────────────────────
 

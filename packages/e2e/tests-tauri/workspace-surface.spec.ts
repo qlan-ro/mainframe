@@ -54,7 +54,7 @@
  *   workspace-surface-close                   — primary-pane hide control
  *   workspace-pane-close-<paneId>             — secondary-pane close (un-split)
  *   run-console-pane                          — full-space ConsolePane (process tabs)
- *   title-bar-details                         — the title bar's ONE session-panel switch now
+ *   session-panel-toggle                      — the chat header's session-panel switch
  *                                               (shell redesign D8/D20 — the floating rail and
  *                                               its per-card toggle/dot are both gone).
  *                                               `aria-pressed` reports open/closed
@@ -83,16 +83,16 @@
  * `main-toolbar-launch` and its popover were deleted first; the panel's Launch
  * CARD replaced them. The shell redesign then deleted the floating rail itself
  * (`SessionPanelRail`/`SessionRailButton`) — there is no per-card button or dot
- * left outside the panel at all. `title-bar-details` is the only switch, for the
+ * left outside the panel at all. `session-panel-toggle` is the only switch, for the
  * WHOLE panel; the Launch section's live dot moved into its own eyebrow header
  * (`session-panel-launch-live`). Three consequences this file has to respect:
  *   1. The panel lives on the CHAT surface. With chat and workspace both lit,
  *      the chat host never clears `INLINE_MIN_WIDTH` (1044) here, so the panel
- *      FLOATS: `title-bar-details` opens it inside `session-panel-overlay`.
+ *      FLOATS: `session-panel-toggle` opens it inside `session-panel-overlay`.
  *   2. That float is light-dismissed by any outside pointerdown, so a launch
  *      assertion has to open the panel, read it, and get out before touching the
  *      workspace — see `openSessionPanel` / `closeSessionPanel`.
- *   3. With chat HIDDEN there is no `title-bar-details` toggle at all — it lives
+ *   3. With chat HIDDEN there is no `session-panel-toggle` toggle at all — it lives
  *      in `title-bar-actions`, bound to the chat column (T5.2's accepted
  *      consequence carries forward). Chat-visibility, describe by describe:
  *        §21a  chat lit — no launch assertions (empty-state card only)
@@ -161,8 +161,8 @@ async function waitForMenusClosed(page: Page): Promise<void> {
  * Open the session panel — floated over the transcript at this width — and
  * return its root, so Launch-section assertions can be scoped to it.
  *
- * `title-bar-details` is the ONE switch now (the floating rail and its
- * per-card toggle are both gone): a click TOGGLES the whole panel, floating it
+ * The chat header's `session-panel-toggle` is the panel's switch: a click
+ * TOGGLES the whole panel, floating it
  * when the column is short of `INLINE_MIN_WIDTH` (panel-mode.ts). The click is
  * conditional on `aria-pressed` because the button toggles — firing it while
  * the panel is already open would close it. The Launch section is always part
@@ -180,11 +180,16 @@ async function openSessionPanel(page: Page) {
 /**
  * Close the whole session panel so the next test starts without it.
  *
- * There is no more per-card close (`PanelCard`'s own X died with the floating
- * rail) — `title-bar-details` is the only switch, for every section together.
+ * Docked, the header toggle closes it. Floated, the full-height overlay covers
+ * the header (and its toggle), so the scrim — the overlay's light-dismiss — closes it.
  */
 async function closeSessionPanel(page: Page): Promise<void> {
-  await page.getByTestId('session-panel-toggle').click();
+  const root = page.getByTestId('session-panel-root');
+  // A click on the scrim, not Escape: after a row click a hint tooltip can be
+  // open, and Escape closes that first.
+  if ((await root.getAttribute('data-mode')) === 'overlay') {
+    await page.getByTestId('session-panel-scrim').click({ position: { x: 10, y: 200 } });
+  } else await page.getByTestId('session-panel-toggle').click();
   await expect(page.getByTestId('session-panel-root')).toHaveCount(0, { timeout: 5_000 });
 }
 
@@ -252,7 +257,7 @@ test.describe('§21 workspace-surface — tab strip, add-menu, launch lifecycle,
 
   test.beforeAll(async () => {
     app = await launchTauriApp();
-    // `title-bar-details` itself survives any width now, but the panel it
+    // `session-panel-toggle` itself survives any width now, but the panel it
     // floats does not: at the default 1280 the workspace halves the chat host
     // to ~500px, and a 300px panel floated over a 500px surface leaves nothing
     // legible to click. Wide keeps the halved host near ~900 — still short of
@@ -427,7 +432,7 @@ test.describe('§21 workspace-surface — tab strip, add-menu, launch lifecycle,
   });
 
   // Successor to "the rail then runs/stops it in one click" (T6.4). The floating
-  // rail and its per-card quick action are both gone: `title-bar-details` opens
+  // rail and its per-card quick action are both gone: `session-panel-toggle` opens
   // the whole panel with a static accessible name ("Show/Hide session
   // details"), and the run signal it used to carry on the card's own button now
   // lives on the Launch section's eyebrow header. So the run/stop pair is
