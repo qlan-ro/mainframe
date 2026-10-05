@@ -3,29 +3,59 @@
  * session hover card, so a project reads the same way everywhere: avatar +
  * plain name, never coloured text.
  *
- * `ring` is the scope strip's "this one is in scope" mark: a `primary` ring
- * with a `background` gap so it reads over the overlapping neighbour. The strip
- * stacks avatars at a −6px overlap, so the ring also lifts the selected one
- * visually in front without a z-index.
+ * `ground` is the stacked mode (the scope strip): the avatar sits in an
+ * overlapping row on that surface, so its fill is OPAQUE (the tint is mixed
+ * into the ground rather than over transparency — a translucent disc shows its
+ * neighbour through it) and it wears a 2px border in the ground colour, which
+ * reads as a clean cut-out where avatars overlap. In that mode:
+ *   - `ring` is "in scope": a 2px `primary` halo outside the cut-out, plus a
+ *     `check` badge in the corner when asked for;
+ *   - `dim` recedes by colour, not opacity (opacity would see-through again).
+ * Without `ground` it is the plain tinted disc the pickers and cards use.
  */
+import { CheckIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /** The scope strip's avatar size; pickers and hover cards pass their own. */
-export const SCOPE_AVATAR_SIZE = 22;
+export const SCOPE_AVATAR_SIZE = 26;
 
 interface ProjectAvatarProps {
   name: string;
   color: string;
   size?: number;
-  /** Selected-in-scope mark (scope strip only). */
+  /** Selected-in-scope mark (stacked mode). */
   ring?: boolean;
+  /** Corner ✓ badge on a ringed avatar (stacked mode). */
+  check?: boolean;
   /** Out-of-scope / unavailable: the avatar keeps its hue but recedes. */
   dim?: boolean;
+  /** Stacked mode: the CSS colour variable of the surface underneath, e.g. `--sidebar`. */
+  ground?: string;
   className?: string;
 }
 
-export function ProjectAvatar({ name, color, size = 18, ring = false, dim = false, className }: ProjectAvatarProps) {
+function stackedStyle(color: string, ground: string, ring: boolean, dim: boolean): React.CSSProperties {
+  const surface = `var(${ground})`;
+  return {
+    backgroundColor: `color-mix(in oklch, ${color} ${dim ? 10 : 24}%, ${surface})`,
+    color: dim ? `color-mix(in oklch, ${color} 50%, ${surface})` : color,
+    border: `2px solid ${surface}`,
+    boxShadow: ring ? '0 0 0 2px var(--primary)' : undefined,
+  };
+}
+
+export function ProjectAvatar({
+  name,
+  color,
+  size = 18,
+  ring = false,
+  check = false,
+  dim = false,
+  ground,
+  className,
+}: ProjectAvatarProps) {
   const initial = name.trim().charAt(0).toUpperCase() || '?';
+  const stacked = ground != null;
   return (
     // Inline style, not a utility: the ten-hue palette is hashed from the
     // project id, so it has no token to name.
@@ -33,20 +63,31 @@ export function ProjectAvatar({ name, color, size = 18, ring = false, dim = fals
       data-testid="project-avatar"
       data-ring={ring || undefined}
       className={cn(
-        'inline-flex shrink-0 items-center justify-center rounded-full font-semibold',
-        ring && 'ring-2 ring-primary ring-offset-1 ring-offset-background',
-        dim && 'opacity-60',
+        'relative inline-flex shrink-0 items-center justify-center rounded-full font-semibold',
+        !stacked && ring && 'ring-2 ring-primary ring-offset-1 ring-offset-background',
+        !stacked && dim && 'opacity-60',
         className,
       )}
       style={{
         width: size,
         height: size,
-        fontSize: Math.round(size * 0.55),
-        backgroundColor: `color-mix(in oklch, ${color} 18%, transparent)`,
-        color,
+        fontSize: Math.round(size * 0.46),
+        ...(stacked
+          ? stackedStyle(color, ground, ring, dim)
+          : { backgroundColor: `color-mix(in oklch, ${color} 18%, transparent)`, color }),
       }}
     >
       {initial}
+      {stacked && ring && check && (
+        <span
+          aria-hidden
+          data-testid="project-avatar-check"
+          className="absolute -right-1 -bottom-1 inline-flex size-3 items-center justify-center rounded-full bg-primary text-primary-foreground"
+          style={{ border: `1.5px solid var(${ground})` }}
+        >
+          <CheckIcon className="size-2" strokeWidth={4} />
+        </span>
+      )}
     </span>
   );
 }

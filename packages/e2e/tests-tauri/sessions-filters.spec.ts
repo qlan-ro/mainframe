@@ -18,15 +18,15 @@
  * Testid reference (verified against packages/ui/src/features/sessions/{ScopeStrip,
  * SessionsFilterMenu}.tsx):
  *   sessions-scope-strip              — the strip root (always mounted, in the sidebar header)
- *   sessions-scope-avatar-<projectId> — one project's `ToggleGroupItem`; `data-state`
- *                                       reports "on"/"off" (Radix Toggle, not a checkbox —
- *                                       NOT "checked"/"unchecked"). Click toggles it in/out
+ *   sessions-scope-avatar-<projectId> — one project's `ToggleGroupItem`; `aria-pressed`
+ *                                       reports "true"/"false" (its `data-state` is the Hint
+ *                                       tooltip's "closed"/"delayed-open" — never assert on it). Click toggles it in/out
  *                                       of scope; ⌥-click solos it (toggles every other
  *                                       avatar off); right-click opens a context menu with
  *                                       "Remove project" (`sidebar-project-remove-<id>`)
- *   sessions-scope-more                — "+N" once past six avatars
- *   sessions-scope-label                — "All projects" (empty scope) or "N of M" + the
- *                                       scoped names, faded
+ *   sessions-scope-more                — "+N" once past four avatars at rest
+ *   sessions-scope-label                — the title line: "All projects" (empty scope) or "N project(s)";
+ *                                       the faded scoped names sit under it in `sessions-scope-names`
  *   sessions-scope-add                  — the strip's trailing "+" add-project button
  *   sidebar-project-remove-<id>        — the avatar's context-menu "Remove project" item (id survives)
  *   sessions-remove-project-dialog / -confirm / -cancel — in-app confirm dialog
@@ -99,6 +99,19 @@ function scopeLabel(page: Page): Locator {
   return page.getByTestId('sessions-scope-label');
 }
 
+/**
+ * Assert the strip's resting label. The label only renders while the strip is
+ * STACKED — hovering unstacks it (after a short intent delay) and hides the
+ * label to make room — so park the pointer and wait for the re-stack first.
+ */
+async function expectScopeLabel(page: Page, text: string): Promise<void> {
+  await page.mouse.move(0, 0);
+  await expect(page.getByTestId('sessions-scope-strip')).not.toHaveAttribute('data-unstacked', /.*/, {
+    timeout: 5_000,
+  });
+  await expect(scopeLabel(page)).toHaveText(text);
+}
+
 /** Open the first group header's tag-filter dropdown. */
 async function openTagFilter(page: Page): Promise<void> {
   await page.getByTestId('sessions-filter-button').click();
@@ -161,9 +174,9 @@ test.describe('§sessions-filters Project scope + tag filter menu', () => {
   test('an empty scope ("All projects") shows every session', async () => {
     const { page } = app;
 
-    await expect(scopeAvatar(page, projectA.projectId)).toHaveAttribute('data-state', 'off');
-    await expect(scopeAvatar(page, projectB.projectId)).toHaveAttribute('data-state', 'off');
-    await expect(scopeLabel(page)).toHaveText('All projects');
+    await expect(scopeAvatar(page, projectA.projectId)).toHaveAttribute('aria-pressed', 'false');
+    await expect(scopeAvatar(page, projectB.projectId)).toHaveAttribute('aria-pressed', 'false');
+    await expectScopeLabel(page, 'All projects');
 
     await expect(page.getByTestId('sessions-row')).toHaveCount(2, { timeout: 10_000 });
   });
@@ -177,8 +190,8 @@ test.describe('§sessions-filters Project scope + tag filter menu', () => {
     await expect(sidebar.row(chatIdB)).toHaveAttribute('data-active', 'true', { timeout: 10_000 });
 
     await scopeAvatar(page, projectA.projectId).click();
-    await expect(scopeAvatar(page, projectA.projectId)).toHaveAttribute('data-state', 'on');
-    await expect(scopeLabel(page)).toContainText('1 of 2');
+    await expect(scopeAvatar(page, projectA.projectId)).toHaveAttribute('aria-pressed', 'true');
+    await expectScopeLabel(page, '1 project');
 
     const rows = page.getByTestId('sessions-row');
     await expect(rows).toHaveCount(1, { timeout: 10_000 });
@@ -199,8 +212,8 @@ test.describe('§sessions-filters Project scope + tag filter menu', () => {
     await expect(page.getByTestId('sessions-row')).toHaveCount(1, { timeout: 10_000 });
 
     await scopeAvatar(page, projectA.projectId).click();
-    await expect(scopeAvatar(page, projectA.projectId)).toHaveAttribute('data-state', 'off');
-    await expect(scopeLabel(page)).toHaveText('All projects');
+    await expect(scopeAvatar(page, projectA.projectId)).toHaveAttribute('aria-pressed', 'false');
+    await expectScopeLabel(page, 'All projects');
 
     await expect(page.getByTestId('sessions-row')).toHaveCount(2, { timeout: 10_000 });
     // Definitive proof for the previous test's claim: B was the active thread
@@ -220,9 +233,9 @@ test.describe('§sessions-filters Project scope + tag filter menu', () => {
 
     await scopeAvatar(page, projectA.projectId).click();
     await scopeAvatar(page, projectB.projectId).click();
-    await expect(scopeAvatar(page, projectA.projectId)).toHaveAttribute('data-state', 'on');
-    await expect(scopeAvatar(page, projectB.projectId)).toHaveAttribute('data-state', 'on');
-    await expect(scopeLabel(page)).toContainText('2 of 2');
+    await expect(scopeAvatar(page, projectA.projectId)).toHaveAttribute('aria-pressed', 'true');
+    await expect(scopeAvatar(page, projectB.projectId)).toHaveAttribute('aria-pressed', 'true');
+    await expectScopeLabel(page, '2 projects');
 
     const rows = page.getByTestId('sessions-row');
     await expect(rows).toHaveCount(2, { timeout: 10_000 });
@@ -236,7 +249,7 @@ test.describe('§sessions-filters Project scope + tag filter menu', () => {
     // Clear back to "All projects" for the tests that follow.
     await scopeAvatar(page, projectA.projectId).click();
     await scopeAvatar(page, projectB.projectId).click();
-    await expect(scopeLabel(page)).toHaveText('All projects');
+    await expectScopeLabel(page, 'All projects');
     await expect(rows).toHaveCount(2, { timeout: 10_000 });
   });
 
@@ -246,12 +259,12 @@ test.describe('§sessions-filters Project scope + tag filter menu', () => {
     // Start from a multi-project scope so the solo has something to clear.
     await scopeAvatar(page, projectA.projectId).click();
     await scopeAvatar(page, projectB.projectId).click();
-    await expect(scopeLabel(page)).toContainText('2 of 2');
+    await expectScopeLabel(page, '2 projects');
 
     await scopeAvatar(page, projectB.projectId).click({ modifiers: ['Alt'] });
-    await expect(scopeAvatar(page, projectA.projectId)).toHaveAttribute('data-state', 'off');
-    await expect(scopeAvatar(page, projectB.projectId)).toHaveAttribute('data-state', 'on');
-    await expect(scopeLabel(page)).toContainText('1 of 2');
+    await expect(scopeAvatar(page, projectA.projectId)).toHaveAttribute('aria-pressed', 'false');
+    await expect(scopeAvatar(page, projectB.projectId)).toHaveAttribute('aria-pressed', 'true');
+    await expectScopeLabel(page, '1 project');
 
     const rows = page.getByTestId('sessions-row');
     await expect(rows).toHaveCount(1, { timeout: 10_000 });
@@ -259,7 +272,7 @@ test.describe('§sessions-filters Project scope + tag filter menu', () => {
 
     // Clear back to "All projects" for the tests that follow.
     await scopeAvatar(page, projectB.projectId).click();
-    await expect(scopeLabel(page)).toHaveText('All projects');
+    await expectScopeLabel(page, 'All projects');
     await expect(rows).toHaveCount(2, { timeout: 10_000 });
   });
 

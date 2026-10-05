@@ -37,9 +37,9 @@
  *   automations-delete-confirm-confirm / -cancel — its derived button pair
  *   sessions-scope-avatar-<id>       — a project's avatar in the scope strip (ScopeStrip.tsx,
  *                                       shell redesign D14, replaced the project-scope dropdown);
- *                                       `data-state` is "on"/"off" (a Radix Toggle). Multi-select
+ *                                       `aria-pressed` is "true"/"false" (`data-state` is the tooltip's). Multi-select
  *                                       scope; never switches the active session
- *   sessions-scope-label             — "All projects" (empty scope) or "N of M"
+ *   sessions-scope-label             — "All projects" (empty scope) or "N project(s)"
  *
  * Three facts every test here leans on — read before "simplifying" a scenario:
  *
@@ -88,7 +88,7 @@ async function clearScope(page: Page): Promise<void> {
   await expect(async () => {
     const text = (await label.textContent())?.trim();
     if (text === 'All projects') return;
-    const selected = page.locator('[data-testid^="sessions-scope-avatar-"][data-state="on"]').first();
+    const selected = page.locator('[data-testid^="sessions-scope-avatar-"][aria-pressed="true"]').first();
     await selected.click({ timeout: 2_000 });
     expect((await label.textContent())?.trim()).toBe('All projects');
   }).toPass({ timeout: 10_000, intervals: [250, 500] });

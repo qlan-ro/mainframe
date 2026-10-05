@@ -3,11 +3,11 @@
  *
  * D14: the project scope as a row of stacked avatars. Click toggles a project
  * in/out of scope; ⌥-click solos it; right-click offers Remove project; past
- * six avatars the rest collapse into "+N"; "+" calls onAddProject; the
+ * four avatars the rest collapse into "+N" (in-scope first); hover shows all; "+" calls onAddProject; the
  * ToggleGroup gives roving keyboard focus (←/→, Space).
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Project } from '@qlan-ro/mainframe-types';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -69,18 +69,46 @@ describe('ScopeStrip — ⌥-click solos', () => {
 });
 
 describe('ScopeStrip — overflow', () => {
-  it('shows "+N" past six avatars, and renders only the first six', () => {
+  it('shows "+N" past four avatars at rest, and renders only the first four', () => {
     const projects = Array.from({ length: 8 }, (_, i) => project(`p${i}`, `Project ${i}`));
     renderStrip(projects);
-    for (let i = 0; i < 6; i++) expect(screen.getByTestId(`sessions-scope-avatar-p${i}`)).toBeInTheDocument();
-    expect(screen.queryByTestId('sessions-scope-avatar-p6')).toBeNull();
-    expect(screen.getByTestId('sessions-scope-more')).toHaveTextContent('+2');
+    for (let i = 0; i < 4; i++) expect(screen.getByTestId(`sessions-scope-avatar-p${i}`)).toBeInTheDocument();
+    expect(screen.queryByTestId('sessions-scope-avatar-p4')).toBeNull();
+    expect(screen.getByTestId('sessions-scope-more')).toHaveTextContent('+4');
   });
 
-  it('shows no overflow marker at exactly six', () => {
-    const projects = Array.from({ length: 6 }, (_, i) => project(`p${i}`, `Project ${i}`));
+  it('shows no overflow marker at exactly four', () => {
+    const projects = Array.from({ length: 4 }, (_, i) => project(`p${i}`, `Project ${i}`));
     renderStrip(projects);
     expect(screen.queryByTestId('sessions-scope-more')).toBeNull();
+  });
+
+  it('puts in-scope projects first, so a scoped project past the cap is never hidden', () => {
+    const projects = Array.from({ length: 8 }, (_, i) => project(`p${i}`, `Project ${i}`));
+    renderStrip(projects, new Set(['p7']));
+    const first = screen.getAllByTestId(/^sessions-scope-avatar-/)[0];
+    expect(first).toHaveAttribute('data-testid', 'sessions-scope-avatar-p7');
+    expect(first).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('project-avatar-check')).toBeInTheDocument();
+  });
+
+  it('unstacks every project after the hover intent, not on the first frame', () => {
+    vi.useFakeTimers();
+    try {
+      const projects = Array.from({ length: 8 }, (_, i) => project(`p${i}`, `Project ${i}`));
+      renderStrip(projects);
+      fireEvent.pointerEnter(screen.getByTestId('sessions-scope-strip'));
+      // A click that lands right away still hits the stacked avatar it aimed at.
+      expect(screen.getAllByTestId(/^sessions-scope-avatar-/)).toHaveLength(4);
+      act(() => {
+        vi.advanceTimersByTime(150);
+      });
+      expect(screen.getAllByTestId(/^sessions-scope-avatar-/)).toHaveLength(8);
+      expect(screen.queryByTestId('sessions-scope-more')).toBeNull();
+      expect(screen.queryByTestId('sessions-scope-label')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

@@ -45,8 +45,8 @@
  *                                      replaced `ProjectScopeSelector`'s dropdown) — always
  *                                      mounted, no menu to open first. Click toggles it
  *                                      in/out of scope; never switches the active session.
- *                                      `data-state` is "on"/"off" (a Radix Toggle, not a
- *                                      checkbox)
+ *                                      `aria-pressed` is "true"/"false" (`data-state` is the
+ *                                      Hint tooltip's, not the toggle's)
  *   sessions-scope-label             — the strip's own summary: "All projects" (empty scope)
  *                                      or "N of M"
  *   project-avatar                   — the coloured initial the draft row shows in "All" view.
@@ -406,7 +406,7 @@ test.describe('§sessions-draft — All view welcome picker + draft row', () => 
     // `useActiveIdentity()` yet is exactly the kind of client-side timing this
     // test isn't about.
     await scopeAvatar(page, project.projectId).click();
-    await expect(scopeAvatar(page, project.projectId)).toHaveAttribute('data-state', 'on', {
+    await expect(scopeAvatar(page, project.projectId)).toHaveAttribute('aria-pressed', 'true', {
       timeout: 5_000,
     });
     await sessionsSidebar(page).newButton().click({ timeout: 10_000 });
@@ -467,7 +467,7 @@ test.describe('§sessions-draft — selected-project skip + no leak across New c
     const sidebar = sessionsSidebar(page);
 
     await scopeAvatar(page, projectA.projectId).click();
-    await expect(scopeAvatar(page, projectA.projectId)).toHaveAttribute('data-state', 'on', {
+    await expect(scopeAvatar(page, projectA.projectId)).toHaveAttribute('aria-pressed', 'true', {
       timeout: 5_000,
     });
 
@@ -613,7 +613,7 @@ test.describe('§sessions-draft — ⌘N takes the same one-click path as "+"', 
     const { page } = app;
 
     await scopeAvatar(page, project.projectId).click();
-    await expect(scopeAvatar(page, project.projectId)).toHaveAttribute('data-state', 'on', {
+    await expect(scopeAvatar(page, project.projectId)).toHaveAttribute('aria-pressed', 'true', {
       timeout: 5_000,
     });
 
