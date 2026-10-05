@@ -3,7 +3,8 @@ import { isSurfaceFloor, useLayoutStore } from '@/store/layout';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Hint } from '@/components/ui/hint';
 import { cn } from '@/lib/utils';
-import { ChatGlyph, EditorGlyph } from './surface-icons';
+import { Code } from 'lucide-react';
+import { ChatGlyph } from './surface-icons';
 
 interface SurfaceDef {
   id: SurfaceId;
@@ -14,7 +15,7 @@ interface SurfaceDef {
 
 const SURFACES: SurfaceDef[] = [
   { id: 'chat', label: 'Chat', Icon: ChatGlyph, activeColor: 'text-primary' },
-  { id: 'workspace', label: 'Workspace', Icon: EditorGlyph, activeColor: 'text-primary' },
+  { id: 'workspace', label: 'Workspace', Icon: Code, activeColor: 'text-primary' },
 ];
 
 /**
