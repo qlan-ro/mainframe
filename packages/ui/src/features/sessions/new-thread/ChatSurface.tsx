@@ -41,6 +41,7 @@ import { useShortcutAction } from '@/features/shortcuts/action-store';
 import { focusVisibleComposer } from '@/features/chat/composer/focus-composer';
 import { ZoneDropLayer } from '@/features/chat/zones/ZoneDropLayer';
 import { ChatThread } from '../../chat/thread/ChatThread';
+import { ChatForkBanner } from '../../chat/thread/ChatForkBanner';
 import { SideChatHost } from '@/features/side-chat/SideChatHost';
 import { ChatEmptyState } from './ChatEmptyState';
 import { useNewThreadAutoConfig } from './use-new-thread-auto-config';
@@ -176,7 +177,9 @@ export function ChatSurface() {
 
   return (
     <div ref={measureSurface} className="flex min-h-0 flex-1 flex-col">
-      {/* No chat header: the surface starts at the transcript. Its old controls
+      <ChatForkBanner />
+      {/* No chat header: the surface starts at the transcript (a fork adds its
+          "Forked from" row above). Its old controls
           live in the title bar (D7). `hostRef` is the hook's state-backed
           callback ref: on a cold boot the initializing branch renders first and
           this row arrives on a later commit, so a RefObject would measure null

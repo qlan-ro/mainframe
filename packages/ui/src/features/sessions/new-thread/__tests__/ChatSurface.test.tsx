@@ -71,6 +71,7 @@ vi.mock('../pending-draft-project', () => ({
   usePendingDraftProject: (sel: (s: { projectId: string | null }) => unknown) => sel({ projectId: __pendingProjectId }),
 }));
 vi.mock('../use-new-thread-auto-config', () => ({ useNewThreadAutoConfig: () => undefined }));
+vi.mock('../../../chat/thread/ChatForkBanner', () => ({ ChatForkBanner: () => null }));
 vi.mock('../../../chat/thread/ChatThread', () => ({
   ChatThread: ({ emptyState }: { emptyState?: React.ReactNode }) => <div data-testid="chat-thread">{emptyState}</div>,
 }));

@@ -1,19 +1,17 @@
 /**
  * TitleBarActions — the title bar's right cluster: search · Setup Advisor │
- * fork-parent link · side-chat toggle (single view only — in a split those
- * two live on each zone's `ZoneStrip`) · the session-details toggle.
+ * side-chat toggle (the focused chat's) · the session-details toggle. The
+ * "Forked from" link lives in the chat column (ChatForkBanner / ZoneStrip).
  */
 import { ScanSearch, Search } from 'lucide-react';
-import { useAuiState } from '@assistant-ui/react';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { chordHint } from '@/features/shortcuts/chord-hint';
 import { useSetupAdvisor } from '@/features/setup-advisor/use-setup-advisor';
-import { ChatHeaderParentLink } from '@/features/chat/thread/ChatHeaderParentLink';
+import { SideChatToggle } from '@/features/side-chat/SideChatToggle';
 import { SessionPanelToggle } from '@/features/session-panel/SessionPanelToggle';
-import { splitVisible, useZonesStore } from '@/features/chat/zones/zones-store';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useLayoutStore } from '@/store/layout';
 import { useActiveBasesStore } from '@/store/active-bases-store';
@@ -37,9 +35,6 @@ export function TitleBarActions({ projectId }: { projectId?: string }) {
   const filesScopeKey = useActiveBasesStore((s) => s.scopeKey);
   const filesOpen = useWorkspaceFilesPanel((s) => isWorkspaceFilesPanelOpen(s.openByScope, filesScopeKey));
   const shiftForFilesSidebar = filesOpen && isWorkspaceSidebarAtRightEdge(layout);
-  const zones = useZonesStore((s) => s.zones);
-  const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
-  const splitOnScreen = splitVisible(zones, mainThreadId);
 
   return (
     <div
@@ -72,8 +67,8 @@ export function TitleBarActions({ projectId }: { projectId?: string }) {
         </Hint>
       )}
       <Separator orientation="vertical" className="mx-1 h-4 data-vertical:self-center" />
-      {/* Bound to the main thread through the root provider; a split moves both onto the zones' strips. */}
-      {!splitOnScreen && <ChatHeaderParentLink />}
+      {/* The focused chat's side chat (the root provider follows the focused zone). */}
+      <SideChatToggle />
       <SessionPanelToggle />
     </div>
   );
