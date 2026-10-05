@@ -27,19 +27,28 @@ import { useProjects } from '@/features/sessions/use-projects';
 import { useModalProjectScope } from '@/features/project-scope/use-modal-project-scope';
 import { useTasksModal } from './use-tasks-modal';
 import { selectProjectTodos, useTodosStore } from './use-todos-store';
+import { useTasksProjects } from './use-tasks-projects';
 import { QuickTaskDialog } from './QuickTaskDialog';
 import { TaskEditModal } from './sidebar/TaskEditModal';
 import { extractAllLabels } from './todos-filters';
 import { useStartTodoSession } from './use-start-todo-session';
 import type { TaskEditTarget } from './use-tasks-modal';
 
-/** The shared edit/create modal, resolved against its project's todos bucket. */
+/**
+ * The shared edit/create modal, resolved against its project's todos bucket.
+ * `projects` is the scope's full candidate list — only used (and only
+ * rendered) when CREATING with more than one project in scope, for the
+ * create form's project select.
+ */
 function TaskEditHost({ port, edit, onClose }: { port: number; edit: TaskEditTarget; onClose: () => void }) {
   const { todos } = useTodosStore(selectProjectTodos(edit.projectId));
-  const startSession = useStartTodoSession(port, edit.projectId);
+  const { projects: allProjects } = useProjects();
+  const scopeProjectIds = useTasksProjects();
+  const startSession = useStartTodoSession(port);
   const todo = edit.todoId == null ? null : (todos.find((t) => t.id === edit.todoId) ?? null);
   // A todo deleted out from under an open edit has nothing left to edit.
   if (edit.todoId != null && todo == null) return null;
+  const scopedProjects = allProjects.filter((p) => scopeProjectIds.includes(p.id));
   return (
     <TaskEditModal
       port={port}
@@ -47,10 +56,11 @@ function TaskEditHost({ port, edit, onClose }: { port: number; edit: TaskEditTar
       todo={todo}
       allTodos={todos}
       allLabels={extractAllLabels(todos)}
+      projects={scopedProjects}
       onClose={onClose}
       onStartSession={(id) => {
         const target = todos.find((t) => t.id === id);
-        if (target) void startSession(target.id, target.status);
+        if (target) void startSession(target.id, target.project_id, target.status);
       }}
     />
   );

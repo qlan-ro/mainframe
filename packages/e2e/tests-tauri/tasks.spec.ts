@@ -10,11 +10,15 @@
  *   ControlOrMeta+Shift+T (window keydown, TasksModalHost.tsx)      → tasks-quick-dialog
  *   shell-rail-tasks → switches BOTH the sidebar (`TasksSidebarList`) and the
  *     body (`TasksSurface`, the `SidebarInset` content while `sidebarView` is
- *     'tasks', D1/D7) to Tasks. The board is body content now, not a dialog
- *     opened by a second click — `tasks-board` renders directly once the
- *     session scope names a sole project (the project scope is the ONE shared
- *     `ScopeStrip`, D7: an empty/multi-project scope shows a `tasks-surface-pick`/
- *     `tasks-sidebar-project-pick` list instead, and picking narrows the scope).
+ *     'tasks', D1) to Tasks. The board is body content now, not a dialog
+ *     opened by a second click — `tasks-board` renders directly, merging every
+ *     project in the shared session scope (the ONE shared `ScopeStrip`;
+ *     multi-project, same semantics as Chats/Automations — empty scope = every
+ *     project). There is no project pick-list fallback any more: with more
+ *     than one project in scope, each row/card gets a project avatar
+ *     (`tasks-list-row-project-<n>` / `tasks-card-project-<n>` /
+ *     `tasks-sidebar-row-project-<n>`) and the GitHub sync control
+ *     (`tasks-github-link`/`-pill`) hides (it is a single-repo feature).
  *   title-bar-details → the session panel's ONE switch now (the floating rail
  *     died with the redesign, D20) — opening the panel renders every section
  *     together, including the Tasks section (features/session-panel/TasksSection.tsx,
@@ -30,9 +34,10 @@
  * Tasks LIST (`features/tasks/sidebar-list/TasksSidebarList.tsx`, reached via
  * `shell-rail-tasks`), which happens to reuse the retired `tasks-sidebar-*`
  * PREFIX for an entirely different, new component tree:
- * `tasks-sidebar-new` (the list's own quick-add input, not a dialog),
- * `tasks-sidebar-project-pick`/`-project-<id>` (D7's project pick list — no
- * `tasks-sidebar-open-board` any more, the board is body content),
+ * `tasks-sidebar-new` (the list's own quick-add input, not a dialog) and
+ * `tasks-sidebar-new-project`/`-project-<id>` (the quick-add row's compact
+ * project chooser chip — appears only when more than one project is in
+ * scope; no `tasks-sidebar-open-board` any more, the board is body content),
  * `tasks-sidebar-row-<n>`, `tasks-sidebar-cycle-<n>`, `tasks-sidebar-start-<n>`,
  * `tasks-sidebar-edit-<n>`, `tasks-sidebar-group-toggle-<label>`,
  * `tasks-sidebar-empty`. None of these is the old section reborn — this
@@ -111,6 +116,12 @@
  *   - The hidden `<input type="file">` in TaskAttachments has no data-testid; driven
  *     via `page.waitForEvent('filechooser')` + the `tasks-attach-add` button, matching
  *     composer.spec.ts's existing pattern for the same problem.
+ *   - `tasks-card-<n>`/`tasks-list-row-<n>`/`tasks-sidebar-row-<n>` key by the
+ *     todo's `number` alone, which is unique PER PROJECT, not globally — two
+ *     projects can each have a "#1", and a merged (multi-project) board then
+ *     renders two DOM nodes sharing the same data-testid. The multi-project
+ *     scenario below works around it by asserting on title text and avatar
+ *     PRESENCE (a `^=` prefix locator) rather than a specific numbered testid.
  *
  * Task-numbering note: todo `number` is `MAX(number)+1` PER PROJECT (todos plugin,
  * scoped to remaining rows) — deletions are deferred to the END of this file so
@@ -182,18 +193,13 @@ test.describe('§tasks', () => {
   });
 
   /**
-   * The board is the body now (D1/D7, TasksSurface) — the rail switches
-   * `sidebarView`, and (since the session scope starts empty, so the body
-   * lands on the project pick list until it is narrowed) the project is
-   * picked once; `soloFilterProject` keeps the SHARED scope sole-project
-   * for the rest of this file's tests.
+   * The board is the body now (D1, TasksSurface) — the rail switches
+   * `sidebarView` and the body renders directly, merging every project in
+   * the shared scope (empty throughout this file until the multi-project
+   * scenario at the end, so it is just `project`'s own tasks until then).
    */
   async function openBoard(page: Page): Promise<void> {
     await page.getByTestId('shell-rail-tasks').click();
-    const pick = page.getByTestId('tasks-surface-pick');
-    if (await pick.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await page.getByTestId(`tasks-board-project-${project.projectId}`).click();
-    }
     await page.getByTestId('tasks-board').waitFor({ timeout: 10_000 });
   }
 
@@ -711,5 +717,41 @@ test.describe('§tasks', () => {
 
     const composerInput = page.getByTestId('chat-composer-input');
     await expect(composerInput).toHaveValue(/#3 Alpha bug report/, { timeout: 15_000 });
+  });
+
+  // ─── Multi-project scope ─────────────────────────────────────────────────
+
+  // Placed LAST: `createTauriProject` reloads the page, and the shared scope
+  // is persisted + still empty at this point (narrowing it was never needed
+  // above — `project` was always the only project around), so every test
+  // from here on would otherwise see a merged, two-project board and the
+  // sequential task numbering the earlier tests rely on would no longer hold.
+  test('multi-project scope: an empty scope merges every project, with a project avatar per row', async () => {
+    const { page } = app;
+    const project2 = await createTauriProject(page);
+
+    await page.getByTestId('shell-rail-tasks').click();
+    // More than one project in scope now — the sidebar's quick-add row grows
+    // a compact project chooser chip, defaulted to the first project.
+    await page.getByTestId('tasks-sidebar-new-project').click();
+    await page.getByTestId(`tasks-sidebar-new-project-${project2.projectId}`).click();
+    await page.getByTestId('tasks-sidebar-new').fill('Second project task');
+    await page.getByTestId('tasks-sidebar-new').press('Enter');
+
+    // The merged body board shows the new task alongside `project`'s
+    // survivors (#1/#3/#5) — asserted by title text, not a numbered testid:
+    // todo numbers are per-project, so project2's first task (#1) collides
+    // with `project`'s surviving #1 (see the file-header testid-gaps note).
+    const board = page.getByTestId('tasks-board');
+    await expect(board.getByText('Second project task')).toBeVisible({ timeout: 10_000 });
+    await expect(board.getByText('Zulu security review')).toBeVisible();
+
+    // Every row carries a project avatar now that more than one project is
+    // in scope, and the single-repo GitHub control hides.
+    await expect(page.locator('[data-testid^="tasks-list-row-project-"]').first()).toBeVisible();
+    await expect(page.getByTestId('tasks-github-link')).toHaveCount(0);
+    await expect(page.getByTestId('tasks-github-pill')).toHaveCount(0);
+
+    cleanupTauriProject(project2);
   });
 });

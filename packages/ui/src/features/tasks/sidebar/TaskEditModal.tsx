@@ -1,7 +1,13 @@
 /**
  * Create or edit a task. All state and both write paths live in `use-task-form`;
  * this file is the dialog's shape.
+ *
+ * Project select: when CREATING with more than one project in scope, a
+ * "Project" field lets the user retarget away from the default the caller
+ * seeded (`resolveDefaultTaskProject`). Editing an existing todo never shows
+ * it — its project is fixed.
  */
+import { useState } from 'react';
 import { PlayIcon, Trash2Icon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -16,7 +22,9 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import type { Project } from '@qlan-ro/mainframe-types';
 import type { Todo } from '@/lib/api/todos';
+import { TaskProjectPicker } from '../TaskProjectPicker';
 import { TaskAttachments } from './TaskAttachments';
 import { TaskMetaFields } from './TaskMetaFields';
 import { TaskSelectFields } from './TaskSelectFields';
@@ -75,25 +83,32 @@ function ModalFooter({ todo, saving, canSave, onDelete, onClose, onStartSession 
 
 interface TaskEditModalProps {
   port: number;
+  /** The default target (caller-resolved — `resolveDefaultTaskProject`). */
   projectId: string;
   todo?: Todo | null;
   allTodos: Todo[];
   allLabels: string[];
+  /** The scope's candidate projects — a select renders only when creating
+   *  (`todo == null`) AND there is more than one. Defaults to none. */
+  projects?: Project[];
   onClose: () => void;
   onStartSession?: (todoId: string) => void;
 }
 
 export function TaskEditModal({
   port,
-  projectId,
+  projectId: initialProjectId,
   todo,
   allTodos,
   allLabels,
+  projects = [],
   onClose,
   onStartSession,
 }: TaskEditModalProps) {
+  const [projectId, setProjectId] = useState(initialProjectId);
   const form = useTaskForm({ port, projectId, todo, onClose });
   const { fields, set } = form;
+  const showProjectField = todo == null && projects.length > 1;
 
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>
@@ -121,6 +136,13 @@ export function TaskEditModal({
                 required
               />
             </div>
+
+            {showProjectField && (
+              <div className="flex flex-col gap-1.5">
+                <Label>Project</Label>
+                <TaskProjectPicker surface="tasks-edit" projects={projects} value={projectId} onChange={setProjectId} />
+              </div>
+            )}
 
             <TaskSelectFields
               type={fields.type}
