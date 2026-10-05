@@ -13,10 +13,9 @@
  * "back to the library" and only renders while a sub-view owns the body —
  * at the bare library there is nothing to go back to.
  */
-import React, { lazy, Suspense } from 'react';
-import { ArrowLeft, Zap } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Hint } from '@/components/ui/hint';
+import React, { lazy, Suspense, useState } from 'react';
+import { Zap } from 'lucide-react';
+import { AutomationsHeaderSlot } from './header-slot';
 import { useAutomationsNav } from './data/use-automations-nav';
 import { selectPendingInteractionCount, useAutomationsStore } from './data/use-automations-store';
 import { useAutomationsLibraryView } from './data/use-automations-scope';
@@ -45,58 +44,64 @@ export function AutomationsView(): React.ReactElement {
   // re-scoping underneath it would strand the user's work.
   const inSubView = runId != null || editorTarget != null || describeOpen || detailsAutomationId != null;
 
+  const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
+
   return (
     <div data-testid="automations-view" className="flex h-full min-h-0 flex-col bg-background font-sans">
-      {/* Header band. Close sits at the far RIGHT — every dialog closes on the
-          right (stock shadcn position); the old left-side X predates the port. */}
+      {/* ONE header row, a breadcrumb: "Workflows" (the way back while a
+          sub-view is open), then whatever the sub-view portals in — "› name",
+          its tabs and actions (header-slot.tsx). */}
       <div className="flex h-[52px] flex-shrink-0 items-center gap-2.5 border-b px-4">
         <Zap size={16} className="text-primary" aria-hidden />
-        <span className="text-base font-semibold text-foreground">Workflows</span>
-        <span data-testid="automations-title-count" className="text-xs text-muted-foreground">
-          {definitions.length} automation{definitions.length === 1 ? '' : 's'}
-          {pending > 0 ? ` · ${pending} need you` : ''}
-        </span>
-        <div className="flex-1" />
-        {inSubView && (
-          <Hint label="Back to library">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              data-testid="automations-close"
-              onClick={close}
-              aria-label="Back to library"
-            >
-              <ArrowLeft aria-hidden />
-            </Button>
-          </Hint>
+        {inSubView ? (
+          <button
+            type="button"
+            data-testid="automations-close"
+            onClick={close}
+            aria-label="Back to library"
+            className="text-base font-semibold text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Workflows
+          </button>
+        ) : (
+          <>
+            <span className="text-base font-semibold text-foreground">Workflows</span>
+            <span data-testid="automations-title-count" className="text-xs text-muted-foreground">
+              {definitions.length} automation{definitions.length === 1 ? '' : 's'}
+              {pending > 0 ? ` · ${pending} need you` : ''}
+            </span>
+          </>
         )}
+        <div ref={setHeaderSlot} className="flex min-w-0 flex-1 items-center gap-2.5" />
       </div>
 
-      <Suspense fallback={<SectionFallback />}>
-        <div className="min-h-0 flex-1 overflow-hidden">
-          {runId ? (
-            <div data-testid="automations-section-run" className="h-full overflow-hidden">
-              <RunView />
-            </div>
-          ) : editorTarget ? (
-            <div data-testid="automations-section-editor" className="h-full overflow-hidden">
-              <AutomationEditor />
-            </div>
-          ) : describeOpen ? (
-            <div data-testid="automations-section-describe" className="h-full overflow-hidden">
-              <DescribeFlow />
-            </div>
-          ) : detailsAutomationId ? (
-            <div data-testid="automations-section-details" className="h-full overflow-hidden">
-              <AutomationDetails />
-            </div>
-          ) : (
-            <div data-testid="automations-section-library" className="h-full">
-              <LibraryList />
-            </div>
-          )}
-        </div>
-      </Suspense>
+      <AutomationsHeaderSlot.Provider value={headerSlot}>
+        <Suspense fallback={<SectionFallback />}>
+          <div className="min-h-0 flex-1 overflow-hidden">
+            {runId ? (
+              <div data-testid="automations-section-run" className="h-full overflow-hidden">
+                <RunView />
+              </div>
+            ) : editorTarget ? (
+              <div data-testid="automations-section-editor" className="h-full overflow-hidden">
+                <AutomationEditor />
+              </div>
+            ) : describeOpen ? (
+              <div data-testid="automations-section-describe" className="h-full overflow-hidden">
+                <DescribeFlow />
+              </div>
+            ) : detailsAutomationId ? (
+              <div data-testid="automations-section-details" className="h-full overflow-hidden">
+                <AutomationDetails />
+              </div>
+            ) : (
+              <div data-testid="automations-section-library" className="h-full">
+                <LibraryList />
+              </div>
+            )}
+          </div>
+        </Suspense>
+      </AutomationsHeaderSlot.Provider>
     </div>
   );
 }

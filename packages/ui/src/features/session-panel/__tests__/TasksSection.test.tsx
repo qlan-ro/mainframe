@@ -303,14 +303,14 @@ describe('TasksSection — header', () => {
 describe('TasksSection — row order', () => {
   const rowOrder = () => screen.getAllByTestId(/^session-panel-task-row-/).map((el) => el.getAttribute('data-testid'));
 
-  it('lists in-progress tasks newest-first, then open tasks newest-first', async () => {
+  it('lists active tasks most recent first — highest number first, whatever the status', async () => {
     await renderLoaded([OPEN_TODO, IN_PROGRESS_TODO, OPEN_TODO_2, IN_PROGRESS_TODO_2, DONE_TODO]);
     await waitFor(() => expect(screen.getByTestId('session-panel-task-row-11')).toBeInTheDocument());
 
     expect(rowOrder()).toEqual([
       'session-panel-task-row-15',
-      'session-panel-task-row-12',
       'session-panel-task-row-14',
+      'session-panel-task-row-12',
       'session-panel-task-row-11',
     ]);
   });
@@ -321,8 +321,8 @@ describe('TasksSection — row order', () => {
 
     expect(rowOrder()).toEqual([
       'session-panel-task-row-15',
-      'session-panel-task-row-12',
       'session-panel-task-row-14',
+      'session-panel-task-row-12',
       'session-panel-task-row-11',
     ]);
   });

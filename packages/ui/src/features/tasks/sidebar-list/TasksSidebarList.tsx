@@ -23,6 +23,7 @@ import { useQuickAddTodo } from '../use-quick-add-todo';
 import { useStartTodoSession } from '../use-start-todo-session';
 import { useTasksModal } from '../use-tasks-modal';
 import { useMergedTodos, useTodosStore } from '../use-todos-store';
+import { newestFirst } from '../todos-filters';
 import { useTasksProjects } from '../use-tasks-projects';
 import { resolveDefaultTaskProject } from '../resolve-default-project';
 import { TaskProjectPicker } from '../TaskProjectPicker';
@@ -130,7 +131,7 @@ function TaskList({ port, projectIds, projects }: { port: number; projectIds: st
 
   const byStatus = useMemo(() => {
     const map: Record<Todo['status'], Todo[]> = { open: [], in_progress: [], done: [] };
-    for (const todo of todos) map[todo.status].push(todo);
+    for (const todo of newestFirst(todos)) map[todo.status].push(todo);
     return map;
   }, [todos]);
 

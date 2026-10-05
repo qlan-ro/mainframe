@@ -5,6 +5,7 @@
  * TDD: test written first, implemented after.
  */
 import { afterEach, describe, expect, it } from 'vitest';
+import { useState } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { AutomationRunSummary, AutomationSummary } from '../../contract';
@@ -13,6 +14,20 @@ import { useAutomationsNav } from '../../data/use-automations-nav';
 import { useAutomationsStore } from '../../data/use-automations-store';
 import { EMPTY_LIBRARY } from '../../data/library-cache';
 import { AutomationDetails } from '../AutomationDetails';
+import { AutomationsHeaderSlot } from '../../header-slot';
+
+/** The view's single header row: details portals its crumb, tabs and actions here. */
+function WithHeader() {
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  return (
+    <>
+      <div data-testid="automations-header-slot" ref={setSlot} />
+      <AutomationsHeaderSlot.Provider value={slot}>
+        <AutomationDetails />
+      </AutomationsHeaderSlot.Provider>
+    </>
+  );
+}
 
 /** Patches the 'all' scope entry on top of whatever is already there. */
 function patchLibrary(patch: { definitions?: AutomationSummary[]; runs?: AutomationRunSummary[] }) {
@@ -74,23 +89,20 @@ describe('AutomationDetails — not found / not open', () => {
 });
 
 describe('AutomationDetails — header', () => {
-  it('renders the automation name and closes on Back', async () => {
+  it('puts the automation name in the view header (no second title row)', () => {
     resetStores();
     useAutomationsNav.setState({ detailsAutomationId: 'auto-1' });
-    const user = userEvent.setup();
-    render(<AutomationDetails />);
+    render(<WithHeader />);
 
-    expect(screen.getByTestId('automations-details')).toHaveTextContent('Daily standup');
-
-    await user.click(screen.getByTestId('automations-details-back'));
-    expect(useAutomationsNav.getState().detailsAutomationId).toBeNull();
+    expect(screen.getByTestId('automations-header-slot')).toHaveTextContent('Daily standup');
+    expect(screen.getByTestId('automations-details')).not.toHaveTextContent('Daily standup');
   });
 
   it('Edit navigates to the editor for this automation', async () => {
     resetStores();
     useAutomationsNav.setState({ detailsAutomationId: 'auto-1' });
     const user = userEvent.setup();
-    render(<AutomationDetails />);
+    render(<WithHeader />);
 
     await user.click(screen.getByTestId('automations-details-edit'));
     expect(useAutomationsNav.getState().editorTarget).toEqual({ mode: 'edit', automationId: 'auto-1' });
@@ -109,7 +121,7 @@ describe('AutomationDetails — header', () => {
       }),
     );
     const user = userEvent.setup();
-    render(<AutomationDetails />);
+    render(<WithHeader />);
 
     await user.click(screen.getByTestId('automations-details-run'));
 
@@ -120,18 +132,18 @@ describe('AutomationDetails — header', () => {
 });
 
 describe('AutomationDetails — tabs', () => {
-  it('defaults to Overview when the automation has never run', () => {
+  it('lands on Runs even when the automation has never run (its empty state)', () => {
     resetStores();
     useAutomationsNav.setState({ detailsAutomationId: 'auto-1' });
-    render(<AutomationDetails />);
-    expect(screen.getByTestId('automations-details-overview')).toBeInTheDocument();
+    render(<WithHeader />);
+    expect(screen.getByTestId('automations-details-runs-empty')).toBeInTheDocument();
   });
 
   it('defaults to Runs when there is run history', () => {
     resetStores();
     patchLibrary({ runs: [run('r1', 1000), run('r2', 500)] });
     useAutomationsNav.setState({ detailsAutomationId: 'auto-1' });
-    render(<AutomationDetails />);
+    render(<WithHeader />);
     expect(screen.getByTestId('automations-details-runs')).toBeInTheDocument();
   });
 
@@ -140,17 +152,18 @@ describe('AutomationDetails — tabs', () => {
     patchLibrary({ runs: [run('r1', 1000), run('r2', 500)] });
     useAutomationsNav.setState({ detailsAutomationId: 'auto-1' });
     const user = userEvent.setup();
-    render(<AutomationDetails />);
+    render(<WithHeader />);
 
     expect(screen.getByTestId('automations-details-runs')).toBeInTheDocument();
     await user.click(screen.getByTestId('automations-details-tab-overview'));
     expect(screen.getByTestId('automations-details-overview')).toBeInTheDocument();
   });
 
-  it('Overview shows the trigger and step recipe summary', () => {
+  it('Overview shows the trigger and step recipe summary', async () => {
     resetStores();
     useAutomationsNav.setState({ detailsAutomationId: 'auto-1' });
-    render(<AutomationDetails />);
+    render(<WithHeader />);
+    await userEvent.setup().click(screen.getByTestId('automations-details-tab-overview'));
     const overview = screen.getByTestId('automations-details-overview');
     expect(overview).toHaveTextContent('Every day at 08:00');
     expect(overview).toHaveTextContent('Notify me');
@@ -161,7 +174,7 @@ describe('AutomationDetails — tabs', () => {
     patchLibrary({ runs: [run('r-old', 500), run('r-new', 1500)] });
     useAutomationsNav.setState({ detailsAutomationId: 'auto-1' });
     const user = userEvent.setup();
-    render(<AutomationDetails />);
+    render(<WithHeader />);
 
     const rows = screen.getAllByTestId(/automations-details-run-r-/);
     expect(rows.map((r) => r.getAttribute('data-testid'))).toEqual([

@@ -18,7 +18,7 @@ import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useTodosStore, selectProjectTodos } from '@/features/tasks/use-todos-store';
 import { useTasksModal } from '@/features/tasks/use-tasks-modal';
 import { useQuickAddTodo } from '@/features/tasks/use-quick-add-todo';
-import { orderByStatusThenRecency } from '@/features/tasks/todos-filters';
+import { newestFirst } from '@/features/tasks/todos-filters';
 import { PanelEyebrow } from './PanelEyebrow';
 
 const ROW = 'flex w-full items-center gap-2 rounded-md px-2 py-1 text-left transition-colors hover:bg-foreground/8';
@@ -88,10 +88,10 @@ export function TasksSection() {
     if (projectId != null) void load(port, projectId);
   }, [port, projectId, load]);
 
-  const active = orderByStatusThenRecency(todos.filter((t) => t.status !== 'done'));
+  const active = newestFirst(todos.filter((t) => t.status !== 'done'));
 
   return (
-    <section data-testid="session-panel-card-tasks" className="shrink-0 border-b border-border">
+    <section data-testid="session-panel-card-tasks" className="shrink-0">
       <PanelEyebrow label="Tasks" />
       <div className="flex flex-col gap-0.5 px-2 pb-2">
         {projectId == null ? (
