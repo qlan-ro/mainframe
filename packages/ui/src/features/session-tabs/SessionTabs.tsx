@@ -60,7 +60,8 @@ export function SessionTabs() {
   const tabsState = { tabIds, previewId, draftId };
   const displayIds = displayedTabIds(tabsState, null, activeTabId);
   const ordered = displayedTabIds(tabsState, zones, activeTabId);
-  const entries = stripEntries(tabsState, zones, activeTabId);
+  const splitFits = useZonesStore((s) => s.splitFits);
+  const entries = stripEntries(tabsState, zones, activeTabId, splitFits);
   const entryOf = (id: string): SessionTabEntry =>
     toTabEntry(id, items, projectNames, activeTabId, id === previewId, adaptersById);
 

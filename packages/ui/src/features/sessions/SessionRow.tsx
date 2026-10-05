@@ -62,6 +62,7 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName, depth }: S
   const zoneDimmed = useZonesStore(
     (s) =>
       s.zones != null &&
+      s.splitFits &&
       mainThreadId != null &&
       s.zones.includes(mainThreadId) &&
       s.zones.includes(item.id) &&

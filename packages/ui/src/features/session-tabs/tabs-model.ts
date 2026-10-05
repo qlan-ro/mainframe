@@ -241,7 +241,13 @@ export type StripEntry =
  * member's position. ⌘1-9 / ⌃Tab keep counting members individually — they
  * read `displayedTabIds`, not this.
  */
-export function stripEntries(state: TabsState, zones: [string, string] | null, active: string | null): StripEntry[] {
+export function stripEntries(
+  state: TabsState,
+  zones: [string, string] | null,
+  active: string | null,
+  /** The surface fits two zones (`splitFits`); a pair that can't render reads as parked. */
+  fits = true,
+): StripEntry[] {
   const displayed = displayedTabIds(state, zones, active);
   if (zones == null || zones.filter((id) => displayed.includes(id)).length !== 2) {
     return displayed.map((id) => ({ kind: 'tab', id }));
@@ -254,7 +260,7 @@ export function stripEntries(state: TabsState, zones: [string, string] | null, a
         kind: 'pair',
         ids: zones,
         focused: active === zones[1] ? 1 : 0,
-        visible: active != null && zones.includes(active),
+        visible: fits && active != null && zones.includes(active),
       });
     }
   }

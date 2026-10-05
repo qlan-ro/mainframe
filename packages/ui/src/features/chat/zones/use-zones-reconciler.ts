@@ -27,7 +27,8 @@ registerChatSplitVisibleProbe(() => splitVisibleNow);
 export function useZonesReconciler(): void {
   const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
   const zones = useZonesStore((s) => s.zones);
-  const visible = splitVisible(zones, mainThreadId);
+  const fits = useZonesStore((s) => s.splitFits);
+  const visible = splitVisible(zones, mainThreadId, fits);
   splitVisibleNow = visible;
 
   const wasVisible = useRef(false);

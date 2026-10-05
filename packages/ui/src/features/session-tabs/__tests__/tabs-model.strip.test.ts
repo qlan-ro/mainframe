@@ -78,3 +78,15 @@ describe('stripEntries — no pair when a member is not displayed', () => {
     ]);
   });
 });
+
+describe('stripEntries — a pair the surface cannot fit', () => {
+  it('reads as parked (not visible) when the surface is too narrow for two zones', () => {
+    const entries = stripEntries(state(['a', 'b', 'c']), ['a', 'b'], 'a', false);
+    expect(entries).toContainEqual({ kind: 'pair', ids: ['a', 'b'], focused: 0, visible: false });
+  });
+
+  it('is visible again once the surface fits', () => {
+    const entries = stripEntries(state(['a', 'b', 'c']), ['a', 'b'], 'a', true);
+    expect(entries).toContainEqual({ kind: 'pair', ids: ['a', 'b'], focused: 0, visible: true });
+  });
+});

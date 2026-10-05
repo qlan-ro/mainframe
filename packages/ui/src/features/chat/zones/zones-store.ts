@@ -38,6 +38,11 @@ interface ZonesState {
    *  fork): a zone resolves its row by id, so it can't render before then.
    *  `useZonesReconciler` opens it once listed. */
   pendingPair: [string, string] | null;
+  /** Whether the chat surface is wide enough to render two zones. Published by
+   *  ChatSurface (its width gate); every "is the split on screen" question
+   *  reads it, so the tab strip never shows a live pair the body can't draw. */
+  splitFits: boolean;
+  setSplitFits: (fits: boolean) => void;
   queuePair: (anchorId: string, id: string) => void;
   /** Opens the split with the current chat left and `second` right; focus stays left. */
   openSplit: (first: string, second: string) => void;
@@ -52,6 +57,8 @@ export const useZonesStore = create<ZonesState>((set) => ({
   focusedIndex: 0,
   frac: 0.5,
   pendingPair: null,
+  splitFits: true,
+  setSplitFits: (splitFits) => set((s) => (s.splitFits === splitFits ? s : { splitFits })),
   queuePair: (anchorId, id) => set({ pendingPair: [anchorId, id] }),
   openSplit: (first, second) => {
     // A side chat can never take a zone of its own — it lives inside its
@@ -74,8 +81,14 @@ export function isVisibleZone(zones: [string, string] | null, id: string | null 
   return id != null && zones != null && zones.includes(id);
 }
 
-/** The split RENDERS only while the focused chat is a member; otherwise the
- *  pair is parked behind the normal single-chat view. */
-export function splitVisible(zones: [string, string] | null, mainThreadId: string | null | undefined): boolean {
-  return isVisibleZone(zones, mainThreadId);
+/** The split RENDERS only while the focused chat is a member AND the surface
+ *  fits two zones (`fits`, from `splitFits`); otherwise the pair is parked
+ *  behind the normal single-chat view. Membership-only callers (open-in-split,
+ *  fork placement) omit `fits`. */
+export function splitVisible(
+  zones: [string, string] | null,
+  mainThreadId: string | null | undefined,
+  fits = true,
+): boolean {
+  return fits && isVisibleZone(zones, mainThreadId);
 }

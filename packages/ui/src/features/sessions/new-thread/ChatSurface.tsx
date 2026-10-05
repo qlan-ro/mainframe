@@ -27,6 +27,7 @@
  * column's TOTAL width, before the panel takes its own, which the panel
  * measuring its own box would never see.
  */
+import { useEffect } from 'react';
 import { useAui, useAuiState } from '@assistant-ui/react';
 import { soleProjectId, useSessionFilters } from '@/store/session-filters';
 import { SessionPanel } from '@/features/session-panel/SessionPanel';
@@ -69,6 +70,10 @@ export function ChatSurface() {
   // hostRef only attaches in single mode, so it cannot feed this decision.
   const [surfaceWidth, measureSurface] = useMeasuredWidth();
   const splitFits = surfaceWidth == null || surfaceWidth >= MIN_ZONE_WIDTH * 2 + 1;
+  // Publish the gate: the tab strip, the reconciler and the drop layer must
+  // agree with what this surface actually renders.
+  const setSplitFits = useZonesStore((s) => s.setSplitFits);
+  useEffect(() => setSplitFits(splitFits), [splitFits, setSplitFits]);
 
   const panelState = useSessionPanelState('main');
 

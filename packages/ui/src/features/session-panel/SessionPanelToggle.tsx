@@ -19,14 +19,19 @@ import { splitVisible, useZonesStore } from '@/features/chat/zones/zones-store';
 import { selectFits, usePanelControl, zoneColumnId, type PanelColumnId } from './panel-control-store';
 
 /** The column whose panel the toggle drives: a zone while its split is on screen, else the main surface. */
-export function focusedPanelColumn(zones: [string, string] | null, mainThreadId: string | null): PanelColumnId {
-  return mainThreadId != null && splitVisible(zones, mainThreadId) ? zoneColumnId(mainThreadId) : 'main';
+export function focusedPanelColumn(
+  zones: [string, string] | null,
+  mainThreadId: string | null,
+  fits = true,
+): PanelColumnId {
+  return mainThreadId != null && splitVisible(zones, mainThreadId, fits) ? zoneColumnId(mainThreadId) : 'main';
 }
 
 export function SessionPanelToggle() {
   const zones = useZonesStore((s) => s.zones);
+  const splitFits = useZonesStore((s) => s.splitFits);
   const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
-  const columnId = focusedPanelColumn(zones, mainThreadId);
+  const columnId = focusedPanelColumn(zones, mainThreadId, splitFits);
   const open = useUiPrefs((s) => s.sessionPanelOpen);
   const fits = usePanelControl(selectFits(columnId));
   const togglePanel = usePanelControl((s) => s.togglePanel);

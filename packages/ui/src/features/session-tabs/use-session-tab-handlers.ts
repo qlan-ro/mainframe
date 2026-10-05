@@ -64,7 +64,7 @@ export function useSessionTabHandlers(activeTabId: string | null, displayIds: st
   const onCloseSplit = (id: string) => {
     const zonesStore = useZonesStore.getState();
     if (zonesStore.zones == null) return;
-    const visible = splitVisible(zonesStore.zones, activeTabId);
+    const visible = splitVisible(zonesStore.zones, activeTabId, zonesStore.splitFits);
     zonesStore.closeSplit();
     if (visible && id !== activeTabId) aui.threads.switchToThread(id);
   };
