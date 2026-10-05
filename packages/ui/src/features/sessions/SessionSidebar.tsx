@@ -33,15 +33,13 @@ import { applySessionFilters } from '@/features/sessions/filter/apply-session-fi
 import { hasSynthetic, tagsInUse } from '@/features/sessions/filter/tags-in-use';
 import { SessionLineageProvider } from '@/features/sessions/SessionLineageContext';
 import { useProjects } from '@/features/sessions/use-projects';
-import { useAddProject } from '@/features/sessions/use-add-project';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useDraftRow } from '@/features/sessions/sidebar/use-draft-row';
 import { useTagRegistry } from '@/features/sessions/tags/use-tag-registry';
 import { useSessionFilters } from '@/store/session-filters';
 import { SidebarScrollRegion } from '../shared/SidebarScrollRegion';
-import { ScopeStrip } from './ScopeStrip';
+import { SidebarScopeStrip } from './SidebarScopeStrip';
 import { SessionsSection } from './SessionsSection';
-import { useRemoveProject } from '@/features/sessions/use-remove-project';
 
 /** The "New session" row under the header — ONE CLICK, always; the tour's primary anchor. */
 function NewSessionRow() {
@@ -73,14 +71,11 @@ export function SessionSidebar() {
   // Project outside the selector — a fresh array inside it would loop useAuiState's Object.is.
   const allItems = useMemo<SessionItem[]>(() => regularThreadItemsToSessionItems(threadItems), [threadItems]);
 
-  const { filterProjectIds, selectedTags, selectedSynthetic, sortMode, toggleFilterProject, soloFilterProject } =
-    useSessionFilters();
+  const { filterProjectIds, selectedTags, selectedSynthetic, sortMode } = useSessionFilters();
 
   const hasFilters = filterProjectIds.size > 0 || selectedTags.size > 0 || selectedSynthetic.size > 0;
   const registry = useTagRegistry(useDaemonPort());
-  const { projects, removeProjectFromList, reloadProjects } = useProjects();
-  const onRemoveProject = useRemoveProject(removeProjectFromList);
-  const onAddProject = useAddProject(reloadProjects);
+  const { projects } = useProjects();
 
   const filteredItems = useMemo(
     () => applySessionFilters(allItems, { filterProjectIds, selectedTags, selectedSynthetic }),
@@ -141,14 +136,7 @@ export function SessionSidebar() {
           </span>
         </div>
         <NewSessionRow />
-        <ScopeStrip
-          projects={sortedProjects}
-          scope={filterProjectIds}
-          onToggle={toggleFilterProject}
-          onSolo={soloFilterProject}
-          onRemoveProject={onRemoveProject}
-          onAddProject={() => void onAddProject()}
-        />
+        <SidebarScopeStrip />
       </SidebarHeader>
 
       <SidebarScrollRegion tut="sessions-list">

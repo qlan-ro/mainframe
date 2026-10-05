@@ -20,11 +20,13 @@ import { ArchiveWorktreeDialog } from '@/features/sessions/ArchiveWorktreeDialog
 import { TagPopoverHost } from '@/features/sessions/TagPopoverHost';
 import { FilePickerDialog } from '../features/files/FilePickerDialog';
 import { TasksModalHost } from '../features/tasks/TasksModalHost';
+import { TasksSurface } from '../features/tasks/TasksSurface';
 import { AutomationsHost } from '../features/automations/AutomationsHost';
 import { AutomationsRuntime } from '../features/automations/AutomationsRuntime';
-import { SetupAdvisorHost } from '../features/setup-advisor/SetupAdvisorHost';
+import { AutomationsSurface } from '../features/automations/AutomationsSurface';
+import { AdvisorSurface } from '../features/setup-advisor/AdvisorSurface';
+import { SettingsSurface } from '../features/settings/SettingsSurface';
 import { ConfirmDialogHost } from '../components/overlays/ConfirmDialogHost';
-import { SettingsDialog } from '../features/settings/SettingsDialog';
 import { ReviewPanel } from '../features/review/ReviewPanel';
 import { TutorialOverlay } from '../features/tour/TutorialOverlay';
 import { useFirstRunTour } from '../features/tour/use-first-run-tour';
@@ -41,6 +43,7 @@ import { ContentCard } from '../layout/ContentCard';
 import { NavRail } from '../layout/NavRail';
 import { SurfaceHost } from '../layout/SurfaceHost';
 import { TitleBar } from '../layout/TitleBar';
+import { useReturnToChatsOnActivate } from '../layout/use-return-to-chats-on-activate';
 import { setSessionNavigator } from '../lib/session-nav';
 import { getChat } from '../lib/api/chats';
 import { navigateToSession } from '../features/side-chat/navigate-to-session';
@@ -49,6 +52,35 @@ import { useIndexHintReveal } from '../features/shortcuts/index-hints';
 import { ShortcutsCheatSheet } from '../features/shortcuts/ShortcutsCheatSheet';
 import { useAppShortcutActions } from './use-app-shortcut-actions';
 import { useSandboxWsRouter } from '../features/run/use-sandbox-ws-router';
+
+/**
+ * MainSurface — the body switch (D1): the rail picks the view, this renders
+ * exactly that view's content into the ONE `SidebarInset` chat/tasks/
+ * automations/advisor/settings all share. Only one of the five is ever
+ * mounted, so `<SurfaceHost />` (chat — panes, terminals, a native preview
+ * webview) UNMOUNTS whenever a non-chat view is picked. That's safe because
+ * chat's own state (controllers, layout) lives in stores, not this tree —
+ * "hiding is not closing" — and the preview webview's own unmount effect
+ * (`useWebviewMount`) tears the native child webview down on unmount, so it
+ * never floats above the Kanban board or any other view. Switching back to
+ * Chats remounts `SurfaceHost`, which re-reads the same stores and re-mounts
+ * the webview fresh.
+ */
+function MainSurface({ port }: { port: number }) {
+  const view = useUiPrefs((s) => s.sidebarView);
+  switch (view) {
+    case 'tasks':
+      return <TasksSurface />;
+    case 'automations':
+      return <AutomationsSurface />;
+    case 'advisor':
+      return <AdvisorSurface />;
+    case 'settings':
+      return <SettingsSurface port={port} />;
+    case 'chats':
+      return <SurfaceHost />;
+  }
+}
 
 function RuntimeBody({ port }: { port: number }) {
   useSessionListRouter();
@@ -61,6 +93,10 @@ function RuntimeBody({ port }: { port: number }) {
   useShortcutDispatcher();
   // Hold ⌘ (Ctrl off-mac) to reveal which number each session tab answers to.
   useIndexHintReveal();
+  // D3: a session activation (tab click, ⌘N, a task/automation's "open
+  // session", a toast deep-link) brings Chats back, whatever view the rail
+  // was on.
+  useReturnToChatsOnActivate();
 
   // Register the session navigator so global toasts (mfToast) can deep-link to a
   // session via their "Open session →" CTA without reaching through to the runtime.
@@ -106,13 +142,13 @@ function RuntimeBody({ port }: { port: number }) {
       onWidthChange={setSidebarWidth}
       className="min-h-0 flex-1 flex-col overflow-hidden bg-sidebar"
     >
-      <TitleBar projectId={projectId} />
+      <TitleBar />
       <div className="flex min-h-0 flex-1">
         <NavRail />
         <ContentCard>
           <AppSidebar />
           <SidebarInset data-testid="main-surface-shell" className="overflow-hidden">
-            <SurfaceHost />
+            <MainSurface port={port} />
           </SidebarInset>
         </ContentCard>
       </div>
@@ -127,12 +163,11 @@ function RuntimeBody({ port }: { port: number }) {
       <TagPopoverHost port={port} />
       <TasksModalHost port={port} />
       {/* Automations: the always-on runtime (toasts, WS patches, the rail's
-          pending dot) and the modal host it feeds. */}
+          pending dot) and the ⌘⇧A shortcut wiring. The library itself lives
+          in the body/sidebar now (AutomationsSurface / AutomationsSidebarList). */}
       <AutomationsRuntime />
       <AutomationsHost />
-      <SetupAdvisorHost />
       <ConfirmDialogHost />
-      <SettingsDialog port={port} />
       <ShortcutsCheatSheet />
       {showTour && <TutorialOverlay />}
     </SidebarProvider>

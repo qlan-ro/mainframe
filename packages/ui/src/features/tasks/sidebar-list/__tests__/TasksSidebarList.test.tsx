@@ -1,11 +1,13 @@
 /**
  * TasksSidebarList — unit tests.
  *
- * D22: Header "Tasks" + Open board + quick-add. Scope: the session scope's
- * sole project; with none, a picker row chooses one for this run (not
- * persisted). Groups In progress / Open / Done (Done collapsed by default).
- * A row cycles through `useTodosStore.move` and opens the shared edit modal
- * through `useTasksModal.openEdit`.
+ * D7: header "Tasks" + the shared scope strip + quick-add. Project: the
+ * session scope's sole project (`useTasksProject`) — with none, a pick list
+ * narrows the SHARED scope via `soloFilterProject` (no local pick any more,
+ * and no "Open board" button — the board lives in the body now). Groups
+ * In progress / Open / Done (Done collapsed by default). A row cycles
+ * through `useTodosStore.move` and opens the shared edit modal through
+ * `useTasksModal.openEdit`.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -15,7 +17,6 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { useSessionFilters } from '@/store/session-filters';
 import { useTasksModal } from '../../use-tasks-modal';
 import { useTodosStore } from '../../use-todos-store';
-import { useTasksSidebarScope } from '../use-tasks-sidebar-scope';
 
 vi.mock('@/lib/api/todos', () => ({
   listTodos: vi.fn(),
@@ -33,8 +34,15 @@ let mockProjects: { id: string; name: string }[] = [
   { id: 'proj-2', name: 'Sidecar' },
 ];
 vi.mock('@/features/sessions/use-projects', () => ({
-  useProjects: () => ({ projects: mockProjects, loading: false, reloadProjects: vi.fn() }),
+  useProjects: () => ({
+    projects: mockProjects,
+    loading: false,
+    reloadProjects: vi.fn(),
+    removeProjectFromList: vi.fn(),
+  }),
 }));
+vi.mock('@/features/sessions/use-add-project', () => ({ useAddProject: () => vi.fn() }));
+vi.mock('@/features/sessions/use-remove-project', () => ({ useRemoveProject: () => vi.fn() }));
 
 const startTodoSession = vi.fn();
 vi.mock('../../use-start-todo-session', () => ({
@@ -76,28 +84,24 @@ beforeEach(() => {
   ];
   vi.mocked(todosApi.listTodos).mockResolvedValue([]);
   useSessionFilters.setState({ filterProjectIds: new Set() });
-  useTasksSidebarScope.setState({ projectId: null });
-  useTasksModal.setState({ open: false, quickOpen: false, edit: null });
+  useTasksModal.setState({ quickOpen: false, edit: null });
   useTodosStore.setState({ entries: {} });
 });
 
 describe('TasksSidebarList — no sole project in scope', () => {
-  it('shows the project picker and a "pick a project" placeholder, loading nothing', () => {
+  it('shows the shared scope strip and a project pick list, loading nothing', () => {
     render_();
-    expect(screen.getByTestId('tasks-sidebar-project-picker')).toBeInTheDocument();
-    expect(screen.getByTestId('tasks-sidebar-no-project')).toBeInTheDocument();
+    expect(screen.getByTestId('sessions-scope-strip')).toBeInTheDocument();
+    expect(screen.getByTestId('tasks-sidebar-project-pick')).toBeInTheDocument();
     expect(todosApi.listTodos).not.toHaveBeenCalled();
   });
 
-  it('loads that project’s tasks once picked, without persisting it to the session scope', async () => {
+  it('narrows the SHARED scope when a project is picked (D7 — no local pick)', async () => {
     render_();
-    fireEvent.pointerDown(screen.getByTestId('tasks-sidebar-project-picker'), { button: 0 });
-    fireEvent.pointerUp(screen.getByTestId('tasks-sidebar-project-picker'));
-    fireEvent.click(await screen.findByTestId('tasks-sidebar-project-proj-2'));
+    fireEvent.click(screen.getByTestId('tasks-sidebar-project-proj-2'));
 
     await waitFor(() => expect(todosApi.listTodos).toHaveBeenCalledWith(31415, 'proj-2'));
-    expect(useTasksSidebarScope.getState().projectId).toBe('proj-2');
-    expect(useSessionFilters.getState().filterProjectIds.size).toBe(0);
+    expect(useSessionFilters.getState().filterProjectIds).toEqual(new Set(['proj-2']));
   });
 });
 
@@ -106,9 +110,9 @@ describe('TasksSidebarList — a sole scoped project', () => {
     useSessionFilters.setState({ filterProjectIds: new Set(['proj-1']) });
   });
 
-  it('shows no picker, and loads that project’s tasks', async () => {
+  it('shows no pick list, and loads that project’s tasks', async () => {
     render_();
-    expect(screen.queryByTestId('tasks-sidebar-project-picker')).toBeNull();
+    expect(screen.queryByTestId('tasks-sidebar-project-pick')).toBeNull();
     await waitFor(() => expect(todosApi.listTodos).toHaveBeenCalledWith(31415, 'proj-1'));
   });
 
@@ -159,11 +163,5 @@ describe('TasksSidebarList — a sole scoped project', () => {
     fireEvent.click(screen.getByTestId('tasks-sidebar-start-1'));
 
     expect(startTodoSession).toHaveBeenCalledWith('t-1', 'open');
-  });
-
-  it('opens the full board from "Open board"', () => {
-    render_();
-    fireEvent.click(screen.getByTestId('tasks-sidebar-open-board'));
-    expect(useTasksModal.getState().open).toBe(true);
   });
 });

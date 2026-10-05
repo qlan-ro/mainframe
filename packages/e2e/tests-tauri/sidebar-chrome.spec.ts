@@ -7,29 +7,35 @@
  * UI-only — none of these scenarios need an agent-turn recording.
  *
  * Retargeted whole for the shell redesign (docs/plans/2026-10-04-mainframe-redesign-adoption.md
- * D3/D4): `layout/NavRail.tsx` now owns Settings, appearance and the updater —
- * moved off the sidebar header's own `HeaderActions` (`sidebar-settings`), which
- * is gone. The sidebar header's `SidebarActions` Kanban/Automations rows are
- * also gone: picking a view on the rail switches `sidebarView` (`ui-prefs`) and
- * the sidebar renders that list in place — the Kanban BOARD and the Automations
- * HOST modal are each one more click from their list (`tasks-sidebar-open-board`,
- * `automations-sidebar-new` / `-row-<id>`), not the rail's own affordance.
+ * D1/D3/D4/D5/D8): `layout/NavRail.tsx` now owns FIVE views — Chats, Tasks,
+ * Automations, Setup Advisor, Settings — each a view button with the same
+ * selected/`aria-pressed` treatment; picking one switches `sidebarView`
+ * (`ui-prefs`), which the sidebar AND the body (the `SidebarInset`
+ * `MainSurface` body-switch) both read. Tasks' board, the Automations
+ * library and Settings all render straight in the body now — no modal, no
+ * dialog, no "open board"/"open the host" indirection. The sidebar header's
+ * old `HeaderActions` (`sidebar-settings`) and `SidebarActions` Kanban/
+ * Automations rows are gone.
+ *
+ * D7: the project scope is the one shared `ScopeStrip` (sessions-scope-*
+ * testids) in every project-scoped view's sidebar header — Chats, Tasks,
+ * Automations, Setup Advisor. An empty scope shows a project pick list in
+ * both the sidebar and the body for Tasks/Automations/Advisor; picking one
+ * calls `soloFilterProject`, narrowing the SHARED scope (so every other
+ * project-scoped view follows).
  *
  * Testid reference (verified against source):
  *   shell-rail                 — layout/NavRail.tsx root
- *   shell-rail-chats / -tasks / -automations — the view-switch buttons (NavRailButton);
- *                                 `aria-pressed` mirrors the selected view
+ *   shell-rail-chats / -tasks / -automations / -advisor / -settings — the five
+ *                                 view buttons (NavRailButton); `aria-pressed`
+ *                                 mirrors the selected view
  *   shell-rail-automations-pending — the Automations button's pending-interaction dot
  *   shell-rail-update          — RailUpdateButton; renders NOTHING while idle (no update)
  *   shell-rail-appearance      — theme toggle (was `main-toolbar-theme`)
- *   shell-rail-settings        — opens the Settings dialog (was `sidebar-settings`)
- *   tasks-sidebar-open-board   — the Tasks list header's "Open board" button
- *   automations-sidebar-new   — the Automations list header's "New" button (opens the
- *                                host + the editor, same path a toast click takes)
- *   settings-dialog / settings-dialog-close — features/settings/SettingsDialog.tsx
- *   tasks-board-modal / tasks-board-close   — features/tasks/TasksBoard.tsx (mounted by TasksModalHost)
- *   automations-host / automations-view / automations-close — features/automations/AutomationsHost.tsx +
- *                                AutomationsView.tsx (fullview panel; v1's `workflows-modal` was deleted)
+ *   sessions-scope-avatar-<id> — the shared ScopeStrip's per-project avatar (D7)
+ *   tasks-board / tasks-surface-pick — features/tasks/TasksBoard.tsx / TasksSurface.tsx (body)
+ *   automations-view / automations-section-library — features/automations/AutomationsView.tsx (body)
+ *   settings-surface            — features/settings/SettingsSurface.tsx (body)
  *   [data-slot="sidebar"]      — the panel root (components/ui/sidebar/sidebar.tsx). There is no
  *                                `sessions-sidebar` testid and no unmount: `collapsible="offcanvas"`
  *                                animates the width to 0 and publishes
@@ -72,41 +78,56 @@ test.describe('§sidebar-chrome', () => {
     await closeTauriApp(app);
   });
 
-  test('the Settings rail button opens the settings dialog', async () => {
+  test('the Settings rail button shows the settings body; picking Chats leaves it', async () => {
     const { page } = app;
     await page.getByTestId('shell-rail-settings').click();
-    await expect(page.getByTestId('settings-dialog')).toBeVisible({ timeout: 10_000 });
-    await page.getByTestId('settings-dialog-close').click();
-    await expect(page.getByTestId('settings-dialog')).toHaveCount(0, { timeout: 5_000 });
+    await expect(page.getByTestId('settings-surface')).toBeVisible({ timeout: 10_000 });
+    await page.getByTestId('shell-rail-chats').click();
+    await expect(page.getByTestId('settings-surface')).toHaveCount(0, { timeout: 5_000 });
   });
 
-  test('the Tasks rail button switches the sidebar to the Tasks list, which opens the board', async () => {
+  // D7: the project scope starts empty (no filter persisted), so Tasks/Automations/
+  // Advisor land on a project pick list until the single project here is picked —
+  // which narrows the SHARED scope, so every project-scoped view then agrees.
+  test('the Tasks rail button switches the body to the Tasks surface, which shows the board once scoped', async () => {
     const { page } = app;
     const tasksRail = page.getByTestId('shell-rail-tasks');
     await tasksRail.click();
     await expect(tasksRail).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByTestId('tasks-sidebar-open-board')).toBeVisible({ timeout: 10_000 });
 
-    await page.getByTestId('tasks-sidebar-open-board').click();
-    await expect(page.getByTestId('tasks-board-modal')).toBeVisible({ timeout: 10_000 });
-    await page.getByTestId('tasks-board-close').click();
-    await expect(page.getByTestId('tasks-board-modal')).toHaveCount(0, { timeout: 5_000 });
+    const pick = page.getByTestId('tasks-surface-pick');
+    if (await pick.isVisible({ timeout: 5_000 }).catch(() => false)) {
+      await page.getByTestId(`tasks-board-project-${project.projectId}`).click();
+    }
+    await expect(page.getByTestId('tasks-board')).toBeVisible({ timeout: 10_000 });
 
     // Back to Chats for the tests that follow.
     await page.getByTestId('shell-rail-chats').click();
   });
 
-  test('the Automations rail button switches the sidebar to the Automations list, which opens the host', async () => {
+  test('the Automations rail button switches the body to the Automations surface, which shows the library', async () => {
     const { page } = app;
     const automationsRail = page.getByTestId('shell-rail-automations');
     await automationsRail.click();
     await expect(automationsRail).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByTestId('automations-sidebar-new')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('automations-view')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('automations-section-library')).toBeVisible({ timeout: 10_000 });
 
-    await page.getByTestId('automations-sidebar-new').click();
-    await expect(page.getByTestId('automations-host')).toBeVisible({ timeout: 10_000 });
-    await page.getByTestId('automations-close').click();
-    await expect(page.getByTestId('automations-host')).toHaveCount(0, { timeout: 5_000 });
+    // Back to Chats for the tests that follow.
+    await page.getByTestId('shell-rail-chats').click();
+  });
+
+  test('the Setup Advisor rail button switches the body to the advisor surface', async () => {
+    const { page } = app;
+    const advisorRail = page.getByTestId('shell-rail-advisor');
+    await advisorRail.click();
+    await expect(advisorRail).toHaveAttribute('aria-pressed', 'true');
+
+    const pick = page.getByTestId('advisor-surface-pick');
+    if (await pick.isVisible({ timeout: 5_000 }).catch(() => false)) {
+      await page.getByTestId(`advisor-project-${project.projectId}`).click();
+    }
+    await expect(page.getByTestId('advisor-surface')).toBeVisible({ timeout: 10_000 });
 
     // Back to Chats for the tests that follow.
     await page.getByTestId('shell-rail-chats').click();

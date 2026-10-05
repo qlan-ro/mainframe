@@ -1,29 +1,29 @@
 /**
  * TasksSidebarList — the sidebar's Tasks view (the nav rail's second list).
- * Header: "Tasks", Open board, and the quick-add row. Scope: the session
- * scope's sole project; with none, a picker row chooses one for this run.
- * Groups: In progress / Open / Done (Done collapsed). The detail views stay
- * in the existing modals — a row opens the shared edit modal, Start opens a
- * session, Open board opens the full Kanban.
+ * Header: "Tasks", the shared scope strip (D7), and the quick-add row. The
+ * project is the session scope's sole project (`useTasksProject`, shared
+ * with the body's `TasksSurface`); with none, a pick list narrows the
+ * shared scope instead of recording a local override. Groups: In progress /
+ * Open / Done (Done collapsed). A row opens the shared edit modal, Start
+ * opens a session.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronRight, LayoutGrid, Plus } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Hint } from '@/components/ui/hint';
+import { ChevronRight, Plus } from 'lucide-react';
 import { SidebarHeader } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
 import type { Todo } from '@/lib/api/todos';
-import { ModalProjectPicker } from '@/features/project-scope/ModalProjectPicker';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useProjects } from '@/features/sessions/use-projects';
-import { soleProjectId, useSessionFilters } from '@/store/session-filters';
+import { SidebarScopeStrip } from '@/features/sessions/SidebarScopeStrip';
+import { ProjectPickList } from '@/features/project-scope/ProjectPickList';
+import { projectsInScopeOrAll, useSessionFilters } from '@/store/session-filters';
 import { SidebarScrollRegion } from '@/features/shared/SidebarScrollRegion';
 import { useQuickAddTodo } from '../use-quick-add-todo';
 import { useStartTodoSession } from '../use-start-todo-session';
 import { useTasksModal } from '../use-tasks-modal';
 import { selectProjectTodos, useTodosStore } from '../use-todos-store';
+import { useTasksProject } from '../use-tasks-project';
 import { TaskSidebarRow, nextTodoStatus } from './TaskSidebarRow';
-import { useTasksSidebarScope } from './use-tasks-sidebar-scope';
 
 const GROUPS: { status: Todo['status']; label: string; collapsedByDefault: boolean }[] = [
   { status: 'in_progress', label: 'In progress', collapsedByDefault: false },
@@ -147,50 +147,28 @@ function TaskList({ port, projectId }: { port: number; projectId: string }) {
 export function TasksSidebarList() {
   const port = useDaemonPort();
   const { projects } = useProjects();
-  const scopedProject = useSessionFilters((s) => soleProjectId(s.filterProjectIds));
-  const picked = useTasksSidebarScope((s) => s.projectId);
-  const setPicked = useTasksSidebarScope((s) => s.setProjectId);
-  const openModal = useTasksModal((s) => s.openModal);
-  // The session scope wins; the local pick only fills in when it names no project.
-  const candidate = scopedProject ?? picked;
-  const projectId = candidate != null && projects.some((p) => p.id === candidate) ? candidate : null;
+  const filterProjectIds = useSessionFilters((s) => s.filterProjectIds);
+  const soloFilterProject = useSessionFilters((s) => s.soloFilterProject);
+  const projectId = useTasksProject();
 
   return (
     <>
       <SidebarHeader className="gap-3">
-        <div className="flex h-9 items-center justify-between pl-1">
+        <div className="flex h-9 items-center pl-1">
           <span className="text-base font-semibold">Tasks</span>
-          <Hint label="Open the board">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              data-testid="tasks-sidebar-open-board"
-              aria-label="Open the board"
-              className="text-muted-foreground"
-              onClick={openModal}
-            >
-              <LayoutGrid />
-            </Button>
-          </Hint>
         </div>
-        {scopedProject == null && (
-          <div className="flex h-8 items-center px-1">
-            <ModalProjectPicker
-              surface="tasks-sidebar"
-              projectId={projectId}
-              projects={projects}
-              onSelect={setPicked}
-            />
-          </div>
-        )}
+        <SidebarScopeStrip />
         {projectId != null && <QuickAddRow port={port} projectId={projectId} />}
       </SidebarHeader>
       <SidebarScrollRegion>
         <div className="px-2">
           {projectId == null ? (
-            <div data-testid="tasks-sidebar-no-project" className="px-2 py-6 text-center text-xs text-muted-foreground">
-              Pick a project to see its tasks.
-            </div>
+            <ProjectPickList
+              surface="tasks-sidebar"
+              projects={projectsInScopeOrAll(projects, filterProjectIds)}
+              filterProjectId={null}
+              onSelect={soloFilterProject}
+            />
           ) : (
             <TaskList port={port} projectId={projectId} />
           )}

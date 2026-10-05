@@ -1,6 +1,8 @@
 /**
- * use-tasks-modal — zustand store for the Tasks full-view modal, the quick-add
- * dialog, and the ONE task edit modal.
+ * use-tasks-modal — zustand store for the quick-add dialog and the ONE task
+ * edit modal. (The Kanban/List board used to be a third dialog here; it is
+ * body content now — `TasksSurface`, rendered while `sidebarView` is
+ * 'tasks' — so there is no `open`/`openModal`/`closeModal` any more.)
  *
  * The edit modal used to be local state in both the board and the panel's
  * Tasks card, each with its own `TaskEditModal` implementation. It is one
@@ -18,11 +20,8 @@ export interface TaskEditTarget {
 }
 
 interface TasksModalState {
-  open: boolean;
   quickOpen: boolean;
   edit: TaskEditTarget | null;
-  openModal: () => void;
-  closeModal: () => void;
   openQuick: () => void;
   closeQuick: () => void;
   openEdit: (target: TaskEditTarget) => void;
@@ -30,11 +29,8 @@ interface TasksModalState {
 }
 
 export const useTasksModal = create<TasksModalState>((set) => ({
-  open: false,
   quickOpen: false,
   edit: null,
-  openModal: () => set({ open: true }),
-  closeModal: () => set({ open: false }),
   openQuick: () => set({ quickOpen: true }),
   closeQuick: () => set({ quickOpen: false }),
   openEdit: (edit) => set({ edit }),

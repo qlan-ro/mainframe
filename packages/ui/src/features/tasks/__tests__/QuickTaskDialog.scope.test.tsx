@@ -17,7 +17,6 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, act } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 
 // ---------------------------------------------------------------------------
 // Mocks BEFORE importing the store-backed component
@@ -98,19 +97,11 @@ beforeEach(() => {
   vi.mocked(useActiveIdentity).mockReturnValue(identity('proj-1'));
   localStorage.clear();
   act(() => {
-    useTasksModal.setState({ open: false, quickOpen: false });
+    useTasksModal.setState({ quickOpen: false });
     useSessionFilters.setState({ filterProjectIds: new Set() });
     useTodosStore.setState({ entries: {} });
   });
 });
-
-async function openPicker(testId: string) {
-  const trigger = screen.getByTestId(testId);
-  await act(async () => {
-    trigger.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }));
-    trigger.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, button: 0 }));
-  });
-}
 
 // ---------------------------------------------------------------------------
 // 1. Scoped open — always a dialog, named
@@ -148,28 +139,26 @@ describe('QuickTaskDialog — ⌘⇧T with no project resolvable', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 3. Independence from an open board's in-modal override
+// 3. Independence from the shared session scope's own churn
 // ---------------------------------------------------------------------------
+// (The board's in-modal override this used to pin against is gone with D7 —
+// there is no local pick any more, only the shared session scope. Quick-add's
+// own per-open scope — seeded from that same scope on its OWN rising edge —
+// is covered by test 1 above.)
 
-describe('QuickTaskDialog — independence from the board’s scope (spec decision 11)', () => {
-  it('is unaffected by an override made in the board, and seeds from the filter on its own open', async () => {
-    const user = userEvent.setup();
+describe('QuickTaskDialog — reopening after a background scope change', () => {
+  it('re-seeds from the (now-changed) sidebar filter on its next open', async () => {
     act(() => useSessionFilters.setState({ filterProjectIds: new Set(['proj-2']) }));
 
     render(<Harness />);
-    act(() => useTasksModal.getState().openModal());
-    await waitFor(() => expect(todosApi.listTodos).toHaveBeenCalledWith(PORT, 'proj-2'));
-    expect(screen.getByTestId('tasks-board-project-picker')).toHaveTextContent('Sidecar');
-
-    // Override the board's pick to proj-1 — a purely local, in-modal change.
-    await openPicker('tasks-board-project-picker');
-    await user.click(await screen.findByTestId('tasks-board-project-proj-1'));
-    await waitFor(() => expect(screen.getByTestId('tasks-board-project-picker')).toHaveTextContent('Mainframe'));
-
-    // Quick-add opens alongside the board, still on the sidebar filter's project.
     pressQuickAddShortcut();
-
     expect(await screen.findByTestId('tasks-quick-dialog')).toBeInTheDocument();
     expect(screen.getByTestId('tasks-quick-project')).toHaveTextContent('Sidecar');
+
+    act(() => useTasksModal.getState().closeQuick());
+    act(() => useSessionFilters.setState({ filterProjectIds: new Set(['proj-1']) }));
+    pressQuickAddShortcut();
+
+    expect(await screen.findByTestId('tasks-quick-project')).toHaveTextContent('Mainframe');
   });
 });

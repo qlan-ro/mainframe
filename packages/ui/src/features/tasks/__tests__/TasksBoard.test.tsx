@@ -2,14 +2,16 @@
  * TasksBoard.test.tsx
  *
  * Behaviors covered:
- *  1.  Renders data-testid="tasks-board-modal".
- *  2.  Renders a close button (tasks-board-close) as the header's first
- *      interactive element, to the left of the "Tasks" title (finding 9.1).
- *  3.  Clicking the close button calls the onClose prop.
- *  4.  Renders tasks-view-list / tasks-view-board segmented switch.
- *  5.  Renders tasks-board-new button.
- *  6.  Header names the scoped project through tasks-board-project-picker, and
- *      picking another one re-scopes the modal.
+ *  1.  Renders data-testid="tasks-board".
+ *  2.  `onClose` is optional: body mode (no `onClose`) renders no close
+ *      button; given one, it renders first in the header and calls it.
+ *  3.  Renders tasks-view-list / tasks-view-board segmented switch.
+ *  4.  Renders tasks-board-new button.
+ *  5.  Loading does not blank the board on a refetch (todo #225).
+ *
+ * D7 dropped the board's own project picker — the project is the session
+ * scope's sole project, resolved by the caller (`TasksSurface`); there is no
+ * `projects`/`onProjectChange` prop any more.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -62,7 +64,6 @@ vi.mock('../TaskBoardView', () => ({
 // Imports — after mocks
 // ---------------------------------------------------------------------------
 
-import type { Project } from '@qlan-ro/mainframe-types';
 import { TasksBoard } from '../TasksBoard';
 import type { Todo } from '@/lib/api/todos';
 
@@ -93,24 +94,8 @@ function makeTodo(overrides: Partial<Todo> & { id: string; number: number }): To
 // Render helper
 // ---------------------------------------------------------------------------
 
-const PROJECTS: Project[] = [
-  { id: 'proj-1', name: 'Mainframe', path: '/repos/mainframe' } as Project,
-  { id: 'proj-2', name: 'Sidecar', path: '/repos/sidecar' } as Project,
-];
-
-function renderBoard(onClose = vi.fn()) {
-  const onProjectChange = vi.fn();
-  render(
-    <TasksBoard
-      port={31415}
-      projectId="proj-1"
-      projects={PROJECTS}
-      onProjectChange={onProjectChange}
-      onStartSession={vi.fn()}
-      onClose={onClose}
-    />,
-  );
-  return { onClose, onProjectChange };
+function renderBoard(onClose?: () => void) {
+  render(<TasksBoard port={31415} projectId="proj-1" onStartSession={vi.fn()} onClose={onClose} />);
 }
 
 beforeEach(() => {
@@ -120,21 +105,22 @@ beforeEach(() => {
 });
 
 describe('TasksBoard — root testid', () => {
-  it('renders tasks-board-modal', () => {
+  it('renders tasks-board', () => {
     renderBoard();
-    expect(screen.getByTestId('tasks-board-modal')).toBeTruthy();
+    expect(screen.getByTestId('tasks-board')).toBeTruthy();
   });
 });
 
-describe('TasksBoard — close button (finding 9.1)', () => {
-  it('renders tasks-board-close', () => {
+describe('TasksBoard — close button is optional (body mode passes none)', () => {
+  it('renders no close button when onClose is omitted', () => {
     renderBoard();
-    expect(screen.getByTestId('tasks-board-close')).toBeTruthy();
+    expect(screen.queryByTestId('tasks-board-close')).toBeNull();
   });
 
-  it('positions the close button after the "Tasks" title (dialogs close on the right)', () => {
-    renderBoard();
-    const header = screen.getByTestId('tasks-board-modal').firstElementChild as HTMLElement;
+  it('renders tasks-board-close, after the "Tasks" title, when onClose is given', () => {
+    const onClose = vi.fn();
+    renderBoard(onClose);
+    const header = screen.getByTestId('tasks-board').firstElementChild as HTMLElement;
     const closeBtn = screen.getByTestId('tasks-board-close');
     const title = screen.getByText('Tasks');
     const children = Array.from(header.querySelectorAll('*'));
@@ -142,7 +128,8 @@ describe('TasksBoard — close button (finding 9.1)', () => {
   });
 
   it('calls onClose when clicked', async () => {
-    const { onClose } = renderBoard();
+    const onClose = vi.fn();
+    renderBoard(onClose);
     await userEvent.click(screen.getByTestId('tasks-board-close'));
     expect(onClose).toHaveBeenCalledOnce();
   });
@@ -172,21 +159,5 @@ describe('TasksBoard — loading does not blank the board on refetch (todo #225)
     renderBoard();
     expect(screen.queryByTestId('tasks-board-loading')).toBeNull();
     expect(screen.getByTestId('task-list-view-stub')).toBeTruthy();
-  });
-});
-
-describe('TasksBoard — the header names its project and can change it', () => {
-  it('renders the picker naming the scoped project', () => {
-    renderBoard();
-    expect(screen.getByTestId('tasks-board-project-picker')).toHaveTextContent('Mainframe');
-  });
-
-  it('re-scopes the modal when another project is picked', async () => {
-    const { onProjectChange } = renderBoard();
-
-    await userEvent.click(screen.getByTestId('tasks-board-project-picker'));
-    await userEvent.click(await screen.findByTestId('tasks-board-project-proj-2'));
-
-    expect(onProjectChange).toHaveBeenCalledWith('proj-2');
   });
 });

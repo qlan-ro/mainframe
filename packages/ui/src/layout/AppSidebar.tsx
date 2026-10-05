@@ -7,9 +7,11 @@
  */
 import { Sidebar, SidebarFooter, SidebarRail } from '@/components/ui/sidebar';
 import { AutomationsSidebarList } from '@/features/automations/sidebar-list/AutomationsSidebarList';
+import { AdvisorSidebarList } from '@/features/setup-advisor/AdvisorSidebarList';
 import { DaemonSwitcher } from '@/features/daemon/DaemonSwitcher';
 import { QuotaFooter } from '@/features/quota/QuotaFooter';
 import { SessionSidebar } from '@/features/sessions/SessionSidebar';
+import { SettingsSidebar } from '@/features/settings/SettingsSidebar';
 import { TasksSidebarList } from '@/features/tasks/sidebar-list/TasksSidebarList';
 import { useUiPrefs, type SidebarView } from '@/store/ui-prefs';
 
@@ -19,6 +21,10 @@ function SidebarViewBody({ view }: { view: SidebarView }) {
       return <TasksSidebarList />;
     case 'automations':
       return <AutomationsSidebarList />;
+    case 'advisor':
+      return <AdvisorSidebarList />;
+    case 'settings':
+      return <SettingsSidebar />;
     case 'chats':
       return <SessionSidebar />;
   }

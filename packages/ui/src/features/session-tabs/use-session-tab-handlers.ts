@@ -13,6 +13,7 @@ import { useOpenSideChat } from '@/features/side-chat/use-open-side-chat';
 import { openInSplit } from '@/features/chat/zones/open-in-split';
 import { splitVisible, useZonesStore } from '@/features/chat/zones/zones-store';
 import { isSurfaceFloor, layoutCanSplit, useLayoutStore } from '@/store/layout';
+import { useUiPrefs } from '@/store/ui-prefs';
 import type { SessionTabPillActions } from './SessionTabPill';
 import type { SurfaceMenuActions } from './SessionTabContextMenu';
 import { useSessionTabsStore } from './store';
@@ -41,12 +42,20 @@ export function useSessionTabHandlers(activeTabId: string | null, displayIds: st
   const fork = useForkChat();
   const openSideChat = useOpenSideChat();
   const surface = useSurfaceMenuActions();
+  const setSidebarView = useUiPrefs((s) => s.setSidebarView);
 
   const onActivate = (id: string, split: boolean) => {
     // ⌘-click: open the split (or retarget its unfocused slot). A tab already
     // visible, and any draft, degrades to a plain focus click.
     if (split && openInSplit(activeTabId, id)) return;
-    if (id !== activeTabId) aui.threads.switchToThread(id);
+    if (id !== activeTabId) {
+      aui.threads.switchToThread(id);
+      // D3's seam (AppShell) fires on the resulting `mainThreadId` CHANGE.
+    } else {
+      // Clicking the already-active tab: switchToThread would be a no-op, so
+      // there is no id change for the seam to see — push Chats back directly.
+      setSidebarView('chats');
+    }
   };
 
   // The context-menu twin of ⌘\. Dissolving from a tab's own menu leaves you on

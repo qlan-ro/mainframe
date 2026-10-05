@@ -20,8 +20,13 @@ export const SIDEBAR_DEFAULT_WIDTH = 260;
 /** The default before v8; a persisted copy of it migrates to the new default. */
 const SIDEBAR_LEGACY_DEFAULT_WIDTH = 256;
 
-/** Which list the sidebar hosts; the nav rail selects, the sidebar renders. */
-export type SidebarView = 'chats' | 'tasks' | 'automations';
+/**
+ * Which list the sidebar hosts; the nav rail selects, the sidebar renders.
+ * 'settings' is reachable (⌘, the rail's Settings button, every
+ * `useSettingsStore`-adjacent open path) but never restored on boot — see
+ * `sanitizeBootSidebarView`.
+ */
+export type SidebarView = 'chats' | 'tasks' | 'automations' | 'advisor' | 'settings';
 
 /** The pre-v8 stacked panels — kept only so the v8 migration can name them. */
 type LegacySessionPanelId = 'session' | 'activity' | 'launch' | 'tasks';
@@ -113,15 +118,29 @@ function partializeUiPrefs(s: UiPrefsState) {
 
 type PersistedUiPrefs = ReturnType<typeof partializeUiPrefs>;
 
-function sanitizeTranscriptPreference(persisted: unknown): Partial<PersistedUiPrefs> {
-  const state = persisted !== null && typeof persisted === 'object' ? (persisted as Record<string, unknown>) : {};
-  return { ...state, transcriptMode: state.transcriptMode === 'compact' ? 'compact' : 'verbose' };
-}
-
-const SIDEBAR_VIEWS: readonly SidebarView[] = ['chats', 'tasks', 'automations'];
+const SIDEBAR_VIEWS: readonly SidebarView[] = ['chats', 'tasks', 'automations', 'advisor', 'settings'];
 
 function sanitizeSidebarView(value: unknown): SidebarView {
   return SIDEBAR_VIEWS.includes(value as SidebarView) ? (value as SidebarView) : 'chats';
+}
+
+/**
+ * 'settings' is a view you navigate TO, never one you boot into — applied on
+ * every rehydration (not just a version migration), same as the transcript
+ * sanitizer below, so no version bump is needed for it to take effect.
+ */
+function sanitizeBootSidebarView(value: unknown): SidebarView {
+  const view = sanitizeSidebarView(value);
+  return view === 'settings' ? 'chats' : view;
+}
+
+function sanitizeTranscriptPreference(persisted: unknown): Partial<PersistedUiPrefs> {
+  const state = persisted !== null && typeof persisted === 'object' ? (persisted as Record<string, unknown>) : {};
+  return {
+    ...state,
+    transcriptMode: state.transcriptMode === 'compact' ? 'compact' : 'verbose',
+    sidebarView: sanitizeBootSidebarView(state.sidebarView),
+  };
 }
 
 /** The pre-v8 per-card defaults — the session card alone opened by default. */

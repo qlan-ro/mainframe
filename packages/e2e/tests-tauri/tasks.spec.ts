@@ -8,11 +8,13 @@
  *
  * Entry points (verified against source):
  *   ControlOrMeta+Shift+T (window keydown, TasksModalHost.tsx)      → tasks-quick-dialog
- *   shell-rail-tasks → switches the sidebar to the Tasks LIST (layout/NavRail.tsx,
- *     shell redesign D3/D4 — succeeded `sidebar-action-kanban`, which dispatched
- *     `mf:open-tasks` directly; that window event is gone, `useTasksModal().openModal`
- *     is called directly now) → the list's own "Open board" button
- *     (`tasks-sidebar-open-board`) → tasks-board-modal.
+ *   shell-rail-tasks → switches BOTH the sidebar (`TasksSidebarList`) and the
+ *     body (`TasksSurface`, the `SidebarInset` content while `sidebarView` is
+ *     'tasks', D1/D7) to Tasks. The board is body content now, not a dialog
+ *     opened by a second click — `tasks-board` renders directly once the
+ *     session scope names a sole project (the project scope is the ONE shared
+ *     `ScopeStrip`, D7: an empty/multi-project scope shows a `tasks-surface-pick`/
+ *     `tasks-sidebar-project-pick` list instead, and picking narrows the scope).
  *   title-bar-details → the session panel's ONE switch now (the floating rail
  *     died with the redesign, D20) — opening the panel renders every section
  *     together, including the Tasks section (features/session-panel/TasksSection.tsx,
@@ -28,14 +30,14 @@
  * Tasks LIST (`features/tasks/sidebar-list/TasksSidebarList.tsx`, reached via
  * `shell-rail-tasks`), which happens to reuse the retired `tasks-sidebar-*`
  * PREFIX for an entirely different, new component tree:
- * `tasks-sidebar-open-board`, `tasks-sidebar-new` (the list's own quick-add
- * input, not a dialog), `tasks-sidebar-project-picker`, `tasks-sidebar-row-<n>`,
- * `tasks-sidebar-cycle-<n>`, `tasks-sidebar-start-<n>`, `tasks-sidebar-edit-<n>`,
- * `tasks-sidebar-group-toggle-<label>`, `tasks-sidebar-empty`,
- * `tasks-sidebar-no-project`. None of these is the old section reborn — this
+ * `tasks-sidebar-new` (the list's own quick-add input, not a dialog),
+ * `tasks-sidebar-project-pick`/`-project-<id>` (D7's project pick list — no
+ * `tasks-sidebar-open-board` any more, the board is body content),
+ * `tasks-sidebar-row-<n>`, `tasks-sidebar-cycle-<n>`, `tasks-sidebar-start-<n>`,
+ * `tasks-sidebar-edit-<n>`, `tasks-sidebar-group-toggle-<label>`,
+ * `tasks-sidebar-empty`. None of these is the old section reborn — this
  * spec does not drive the new list's rows directly (it is covered by its own
- * unit tests and exercised incidentally via `tasks-sidebar-open-board`); the
- * session panel's Tasks SECTION (`session-panel-tasks-new`,
+ * unit tests); the session panel's Tasks SECTION (`session-panel-tasks-new`,
  * `session-panel-tasks-empty`, `session-panel-tasks-no-project`,
  * `session-panel-task-row-<number>`) is still this file's main board-adjacent
  * coverage, unchanged by the redesign. The card lists EVERY active task — the
@@ -61,8 +63,9 @@
  * Testid reference (verified against source):
  *   tasks-quick-dialog / tasks-quick-feature / tasks-quick-bug / tasks-quick-title /
  *     tasks-quick-body / tasks-quick-priority-<low|medium|high> / tasks-quick-create
- *   tasks-board-modal / tasks-board-close / tasks-view-list / tasks-view-board /
- *     tasks-board-new / tasks-board-loading
+ *   tasks-board (body content, D1/D7 — no `-modal` suffix, no `-close` button:
+ *     TasksSurface passes TasksBoard no `onClose`) / tasks-view-list /
+ *     tasks-view-board / tasks-board-new / tasks-board-loading
  *   tasks-filter-search / tasks-filter-clear / tasks-filter-<type|priority|label> /
  *     tasks-filter-opt-<value> / tasks-sort-menu / tasks-sort-option-<priority|number|updated|type>
  *   tasks-list-empty / tasks-list-group-<open|in_progress|done> / tasks-list-row-<n> /
@@ -85,8 +88,9 @@
  * Deliberately deleted (do not re-assert): `tasks-sidebar-expand`,
  * `-section-toggle`, `-view-all`, `-section`, `-overflow`, `-section-jump` — the
  * OLD left-sidebar Tasks section's ids, from before either the panel card or the
- * new sidebar list existed. The board is reached via `shell-rail-tasks` →
- * `tasks-sidebar-open-board` now (see the header note above).
+ * new sidebar list existed — and `tasks-sidebar-open-board` / `tasks-board-modal`
+ * / `tasks-board-close`, retired when the board moved into the body (D1/D7;
+ * see the header note above).
  *
  * v2 interaction contracts that changed how these controls are driven:
  *   - The List/Board switch is a Radix `Tabs` (TasksBoard.tsx), so the selected
@@ -140,23 +144,6 @@ async function openTasksCard(page: Page): Promise<void> {
   await expect(card).toBeVisible({ timeout: 10_000 });
 }
 
-/** The board is reached from the sidebar's Tasks LIST now (shell redesign D22):
- *  the rail switches the sidebar view, and the list's own header opens the board. */
-async function openBoard(page: Page): Promise<void> {
-  await page.getByTestId('shell-rail-tasks').click();
-  await page.getByTestId('tasks-sidebar-open-board').click();
-  await page.getByTestId('tasks-board-modal').waitFor({ timeout: 10_000 });
-}
-
-async function closeBoard(page: Page): Promise<void> {
-  await page.getByTestId('tasks-board-close').click();
-  await expect(page.getByTestId('tasks-board-modal')).toHaveCount(0, { timeout: 5_000 });
-  // openBoard() leaves the sidebar on the Tasks view — restore Chats so the rest
-  // of the suite (and `sessions-row` lookups elsewhere in this file) see the
-  // session list again.
-  await page.getByTestId('shell-rail-chats').click();
-}
-
 /** Select an option from a shadcn/Radix <Select> by its visible display text. */
 async function selectOption(page: Page, triggerTestId: string, optionText: string): Promise<void> {
   await page.getByTestId(triggerTestId).click();
@@ -193,6 +180,29 @@ test.describe('§tasks', () => {
     cleanupTauriProject(project);
     await closeTauriApp(app);
   });
+
+  /**
+   * The board is the body now (D1/D7, TasksSurface) — the rail switches
+   * `sidebarView`, and (since the session scope starts empty, so the body
+   * lands on the project pick list until it is narrowed) the project is
+   * picked once; `soloFilterProject` keeps the SHARED scope sole-project
+   * for the rest of this file's tests.
+   */
+  async function openBoard(page: Page): Promise<void> {
+    await page.getByTestId('shell-rail-tasks').click();
+    const pick = page.getByTestId('tasks-surface-pick');
+    if (await pick.isVisible({ timeout: 3_000 }).catch(() => false)) {
+      await page.getByTestId(`tasks-board-project-${project.projectId}`).click();
+    }
+    await page.getByTestId('tasks-board').waitFor({ timeout: 10_000 });
+  }
+
+  /** Tasks is a rail view, not a dialog — there is no close button any more;
+   *  "closing" the board means picking another view. */
+  async function closeBoard(page: Page): Promise<void> {
+    await page.getByTestId('shell-rail-chats').click();
+    await expect(page.getByTestId('tasks-board')).toHaveCount(0, { timeout: 5_000 });
+  }
 
   test('board and the Tasks card show empty state before any tasks exist', async () => {
     const { page } = app;
@@ -259,14 +269,12 @@ test.describe('§tasks', () => {
     await closeBoard(page);
   });
 
-  test("the rail's Tasks list opens the board populated with both seeded tasks", async () => {
+  test("the rail's Tasks view shows the board populated with both seeded tasks", async () => {
     const { page } = app;
-    await page.getByTestId('shell-rail-tasks').click();
-    await page.getByTestId('tasks-sidebar-open-board').click();
-    const modal = page.getByTestId('tasks-board-modal');
-    await expect(modal).toBeVisible({ timeout: 10_000 });
-    await expect(modal).toContainText('2 active');
-    await expect(modal).toContainText('0 done');
+    await openBoard(page);
+    const board = page.getByTestId('tasks-board');
+    await expect(board).toContainText('2 active');
+    await expect(board).toContainText('0 done');
     await expect(page.getByTestId('tasks-list-row-1')).toBeVisible();
     await expect(page.getByTestId('tasks-list-row-2')).toBeVisible();
     await closeBoard(page);
@@ -644,7 +652,7 @@ test.describe('§tasks', () => {
     await page.getByTestId('tasks-list-row-2').hover();
     await page.getByTestId('tasks-list-row-delete-2').click();
     await expect(page.getByTestId('tasks-list-row-2')).toHaveCount(0, { timeout: 5_000 });
-    await expect(page.getByTestId('tasks-board-modal')).toContainText('4 active');
+    await expect(page.getByTestId('tasks-board')).toContainText('4 active');
 
     await closeBoard(page);
   });
@@ -660,7 +668,7 @@ test.describe('§tasks', () => {
 
     await expect(page.getByTestId('tasks-edit-title')).toHaveCount(0, { timeout: 5_000 });
     await expect(page.getByTestId('tasks-list-row-4')).toHaveCount(0, { timeout: 5_000 });
-    await expect(page.getByTestId('tasks-board-modal')).toContainText('3 active');
+    await expect(page.getByTestId('tasks-board')).toContainText('3 active');
 
     await closeBoard(page);
   });
@@ -695,13 +703,10 @@ test.describe('§tasks', () => {
     await page.getByTestId('tasks-list-row-3').hover();
     await page.getByTestId('tasks-list-row-start-3').click();
 
-    // TasksBoard.onStartSession closes the modal immediately, then starts the
-    // session asynchronously (useStartTodoSession: create -> reload threads ->
-    // switchToThread -> composer().setText(initialMessage)).
-    await expect(page.getByTestId('tasks-board-modal')).toHaveCount(0, { timeout: 5_000 });
-    // openBoard() switched the sidebar to the Tasks view — switch back to Chats
-    // so the new session's row is actually in the rendered list.
-    await page.getByTestId('shell-rail-chats').click();
+    // TasksBoard.onStartSession starts the session asynchronously
+    // (useStartTodoSession: create -> reload threads -> switchToThread ->
+    // composer().setText(initialMessage)); the D3 seam then brings Chats back
+    // on its own once the new session activates — no explicit rail click.
     await expect(page.getByTestId('sessions-row')).toHaveCount(rowsBefore + 1, { timeout: 20_000 });
 
     const composerInput = page.getByTestId('chat-composer-input');

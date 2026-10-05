@@ -1,22 +1,26 @@
 /**
- * TasksBoard — the Tasks full-view modal shell.
+ * TasksBoard — the Tasks board shell, filling the body while `sidebarView` is
+ * 'tasks' (D1/D7). The project is the shared session scope's sole project
+ * (resolved by the caller — `TasksSurface`); there is no picker of its own
+ * any more, so the board always agrees with the sidebar list and Chats'
+ * scope strip.
  *
- * Header: checklist glyph + "Tasks" + the project picker + active/done chip +
- * List/Board switch + New. The picker re-scopes this open of the modal only —
- * the host owns the scope, and the sidebar filter is never written.
- * Body: TasksFilterBar + TaskListView or TaskBoardView.
+ * Header: checklist glyph + "Tasks" + active/done chip + List/Board switch +
+ * New. Body: TasksFilterBar + TaskListView or TaskBoardView.
  *
  * Loads the todos store itself: the sidebar Tasks list and the panel's Tasks
  * card each load their own scope too; the store's sequence guard makes the
  * loaders safe, not racy. The task edit modal is NOT mounted here — it is the
  * one modal `TasksModalHost` owns, opened through `useTasksModal.openEdit`.
  *
- * data-testid="tasks-board-modal".
+ * `onClose` is optional: body mode (`TasksSurface`) passes none and the
+ * close button doesn't render — there is nothing to close, Tasks is a rail
+ * view now, not a dialog.
+ *
+ * data-testid="tasks-board".
  */
 import React from 'react';
-import type { Project } from '@qlan-ro/mainframe-types';
 import { LayoutList, LayoutGrid, Plus, ListChecks, X } from 'lucide-react';
-import { ModalProjectPicker } from '@/features/project-scope/ModalProjectPicker';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -40,21 +44,12 @@ import type { Todo } from '@/lib/api/todos';
 interface Props {
   port: number;
   projectId: string;
-  projects: Project[];
-  /** Re-scopes this open of the modal; the sidebar filter is never written. */
-  onProjectChange: (projectId: string) => void;
   onStartSession: (todo: Todo) => void;
-  onClose: () => void;
+  /** Renders the close button only when provided — body mode passes none. */
+  onClose?: () => void;
 }
 
-export function TasksBoard({
-  port,
-  projectId,
-  projects,
-  onProjectChange,
-  onStartSession,
-  onClose,
-}: Props): React.ReactElement {
+export function TasksBoard({ port, projectId, onStartSession, onClose }: Props): React.ReactElement {
   const { todos, loading } = useTodosStore(selectProjectTodos(projectId));
   const { load, filters, sort, view, move, remove, setFilters, setSort, setView } = useTodosStore();
   const { init: initSync, load: loadSync, dialog: syncDialog } = useGitHubSyncStore();
@@ -105,20 +100,12 @@ export function TasksBoard({
     // height), so percentage sizing here doesn't resolve reliably — flex-grow
     // makes this fill available space regardless, threading through to
     // TaskBoardView/TaskListView (already flex-1) and the board's columns.
-    <div data-testid="tasks-board-modal" className="flex flex-1 flex-col min-h-0 overflow-hidden">
+    <div data-testid="tasks-board" className="flex flex-1 flex-col min-h-0 overflow-hidden">
       {/* Header band. Close sits at the far RIGHT — every dialog closes on the
           right (stock shadcn position); the old left-side X predates the port. */}
       <div className="flex h-[52px] shrink-0 items-center gap-4 border-b px-4">
         <ListChecks size={15} className="shrink-0 text-primary" aria-hidden />
         <span className="text-base font-semibold text-foreground">Tasks</span>
-        <ModalProjectPicker
-          surface="tasks-board"
-          projectId={projectId}
-          projects={projects}
-          onSelect={(id) => {
-            if (id !== null) onProjectChange(id);
-          }}
-        />
         <Badge variant="secondary" className="font-mono text-xs font-normal text-muted-foreground">
           {activeCount} active · {doneCount} done
         </Badge>
@@ -145,15 +132,11 @@ export function TasksBoard({
           New task
         </Button>
 
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          data-testid="tasks-board-close"
-          onClick={onClose}
-          aria-label="Close (Esc)"
-        >
-          <X />
-        </Button>
+        {onClose != null && (
+          <Button variant="ghost" size="icon-sm" data-testid="tasks-board-close" onClick={onClose} aria-label="Close">
+            <X />
+          </Button>
+        )}
       </div>
 
       <SyncRunBanner />
