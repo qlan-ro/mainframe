@@ -7,7 +7,8 @@
  * At rest the avatars stack at a −6px overlap, in-scope projects first with a
  * `primary` ring and a ✓ badge, up to four then a "+N" chip; the rest recede once a scope
  * exists. Beside the stack, two lines: "N projects" (or "All projects") over
- * the faded scoped names. Hovering unstacks EVERY project into a 9px-gap row
+ * the faded scoped names, whose hover lists the scope (ScopeSummary). Hovering
+ * the AVATARS (not the label) unstacks EVERY project into a 9px-gap row
  * that scrolls sideways (wheel included), hides the label, keeps the entry
  * order until it re-stacks, and lingers 300ms so a pointer crossing to a
  * neighbour does not re-stack it mid-reach. Click toggles, ⌥-click solos,
@@ -19,12 +20,12 @@ import type { Project } from '@qlan-ro/mainframe-types';
 import { FolderPlus, Trash2Icon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
-import { FadeLabel } from '@/components/ui/fade-label';
 import { Hint } from '@/components/ui/hint';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
 import { projectColor } from '@/features/sessions/sidebar/project-color';
 import { ProjectAvatar, SCOPE_AVATAR_SIZE } from './ProjectAvatar';
+import { ScopeSummary } from './ScopeSummary';
 
 /** Past this many the strip shows "+N" instead of more avatars. */
 const MAX_AVATARS = 4;
@@ -158,11 +159,6 @@ function scrollSideways(event: React.WheelEvent<HTMLDivElement>) {
   el.scrollLeft += event.deltaY;
 }
 
-function scopeTitle(count: number): string {
-  if (count === 0) return 'All projects';
-  return count === 1 ? '1 project' : `${count} projects`;
-}
-
 export function ScopeStrip({ projects, scope, onToggle, onSolo, onRemoveProject, onAddProject }: ScopeStripProps) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   // The hover order is captured on entry and held until the strip re-stacks, so
@@ -187,14 +183,16 @@ export function ScopeStrip({ projects, scope, onToggle, onSolo, onRemoveProject,
     <div
       data-testid="sessions-scope-strip"
       data-unstacked={linger.open || undefined}
-      onPointerEnter={linger.enter}
-      onPointerLeave={linger.leave}
       className="flex min-h-11 min-w-0 items-center gap-2"
     >
       {/* The scroller pads by 4px all round: the selected halo (2px) and the ✓ badge
           draw outside the avatar and an overflow container would clip them. */}
+      {/* Only the avatars (and "+N") unstack the row; the label has its own tooltip. */}
       <div
         ref={scrollerRef}
+        data-testid="sessions-scope-avatars"
+        onPointerEnter={linger.enter}
+        onPointerLeave={linger.leave}
         onWheel={scrollSideways}
         className="flex min-w-0 shrink items-center overflow-x-auto p-1 [scrollbar-width:none] scroll-fade-x"
       >
@@ -236,16 +234,7 @@ export function ScopeStrip({ projects, scope, onToggle, onSolo, onRemoveProject,
           </span>
         )}
       </div>
-      {!linger.open && (
-        <div className="flex min-w-0 flex-1 flex-col justify-center leading-tight">
-          <span data-testid="sessions-scope-label" className="truncate text-sm font-medium text-foreground">
-            {scopeTitle(scoped.length)}
-          </span>
-          <FadeLabel data-testid="sessions-scope-names" className="text-xs text-muted-foreground">
-            {scoped.length === 0 ? `${projects.length} projects` : scoped.map((p) => p.name).join(', ')}
-          </FadeLabel>
-        </div>
-      )}
+      {!linger.open && <ScopeSummary projects={projects} scoped={scoped} />}
       {linger.open && <span className="flex-1" />}
       {onAddProject != null && (
         <Hint label="Add project">

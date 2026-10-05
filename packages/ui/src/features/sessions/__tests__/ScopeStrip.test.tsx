@@ -97,7 +97,7 @@ describe('ScopeStrip — overflow', () => {
     try {
       const projects = Array.from({ length: 8 }, (_, i) => project(`p${i}`, `Project ${i}`));
       renderStrip(projects);
-      fireEvent.pointerEnter(screen.getByTestId('sessions-scope-strip'));
+      fireEvent.pointerEnter(screen.getByTestId('sessions-scope-avatars'));
       // A click that lands right away still hits the stacked avatar it aimed at.
       expect(screen.getAllByTestId(/^sessions-scope-avatar-/)).toHaveLength(4);
       act(() => {
@@ -106,6 +106,24 @@ describe('ScopeStrip — overflow', () => {
       expect(screen.getAllByTestId(/^sessions-scope-avatar-/)).toHaveLength(8);
       expect(screen.queryByTestId('sessions-scope-more')).toBeNull();
       expect(screen.queryByTestId('sessions-scope-label')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('ScopeStrip — label', () => {
+  it('does not unstack when hovering the label — only the avatars do', () => {
+    vi.useFakeTimers();
+    try {
+      const projects = Array.from({ length: 8 }, (_, i) => project(`p${i}`, `Project ${i}`));
+      renderStrip(projects, new Set(['p1', 'p2']));
+      fireEvent.pointerEnter(screen.getByTestId('sessions-scope-summary'));
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      expect(screen.getAllByTestId(/^sessions-scope-avatar-/)).toHaveLength(4);
+      expect(screen.getByTestId('sessions-scope-label')).toHaveTextContent('2 projects');
     } finally {
       vi.useRealTimers();
     }
