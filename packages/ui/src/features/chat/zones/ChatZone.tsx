@@ -12,9 +12,9 @@
  * sections read the rebound `threadListItem`/extras contexts. The unfocused
  * zone's panel stays hidden: two docked panels would need ≥ 2 × 1044px.
  *
- * The zone holds its own live-subscription ref; `subscribeLive` is ref-counted
- * on the controller, so the focused zone (also main, whose per-item runtime
- * hook holds a ref of its own) is safe.
+ * The zone holds its own live-subscription ref and an activation hold (both
+ * counted on the controller), so the focused zone — also main, whose per-item
+ * runtime hook holds its own — is safe, and the unfocused one stays attached.
  */
 import { useCallback, useEffect, useMemo } from 'react';
 import { AuiConfig, AuiProvider, ExternalThread, useAui, type AppendMessage } from '@assistant-ui/react';
@@ -52,11 +52,18 @@ export function ChatZone({
   const state = useControllerState(controller);
   const panelState = useSessionPanelState(zoneColumnId(chatId));
 
-  // Seed once + hold this zone's live ref for as long as it is visible.
+  // Seed once + hold this zone's live ref AND its facade-plane activation for
+  // as long as it is visible: activation otherwise follows the main thread
+  // only, so an unfocused zone never attached its transcript (blank until
+  // clicked) and a zone that lost focus stopped streaming.
   useEffect(() => {
     void controller.load();
     const stop = controller.subscribeLive();
-    return stop;
+    const release = controller.holdActive();
+    return () => {
+      release();
+      stop();
+    };
   }, [controller]);
 
   const messages = useNativeThreadMessages(state);

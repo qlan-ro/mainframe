@@ -32,6 +32,7 @@ vi.mock('../../../sessions/runtime/chat-controller-registry', () => ({
           getState: () => state,
           subscribeState: () => () => undefined,
           subscribeLive: () => () => undefined,
+          holdActive: () => () => undefined,
           load: async () => undefined,
           sendMessage: vi.fn(),
           cancel: vi.fn(),
