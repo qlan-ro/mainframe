@@ -5,16 +5,17 @@
  *  1.  Renders data-testid="tasks-board".
  *  2.  `onClose` is optional: body mode (no `onClose`) renders no close
  *      button; given one, it renders first in the header and calls it.
- *  3.  Renders tasks-view-list / tasks-view-board segmented switch.
- *  4.  Renders tasks-board-new button.
- *  5.  Loading does not blank the board on a refetch (todo #225).
+ *  3.  Loading does not blank the board on a refetch (todo #225).
  *
- * The board takes the session scope's project SET now (multi-project,
+ * Board-only since the 2026-10 redesign: the List/Board switch and the
+ * header's own "New task" button are both gone (the sidebar's "New task"
+ * action row is the one entry point now — TasksSidebarList.test.tsx covers
+ * it). The board takes the session scope's project SET now (multi-project,
  * `projectIds`), resolved by the caller (`TasksSurface`) — there is no
  * board-local project picker. Multi-project-specific behaviors (merge,
- * per-row avatars, GitHub control visibility, mutations hitting a row's own
- * project) live in TasksBoard.multi.test.tsx, which doesn't stub the child
- * views; this file stays focused on the header.
+ * per-card avatars, GitHub control visibility, mutations hitting a card's
+ * own project) live in TasksBoard.multi.test.tsx, which doesn't stub the
+ * child view; this file stays focused on the header.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -24,7 +25,6 @@ import userEvent from '@testing-library/user-event';
 // Mock useTodosStore
 // ---------------------------------------------------------------------------
 
-const mockSetView = vi.fn();
 const mockSetSort = vi.fn();
 const mockSetFilters = vi.fn();
 // Stable identity — the board's load effect depends on it; a per-render vi.fn()
@@ -41,12 +41,10 @@ vi.mock('../use-todos-store', () => ({
       load: mockLoad,
       filters: { types: [], priorities: [], labels: [], search: '' },
       sort: { key: 'priority', dir: 'asc' },
-      view: 'list',
       move: vi.fn(),
       remove: vi.fn(),
       setFilters: mockSetFilters,
       setSort: mockSetSort,
-      setView: mockSetView,
     };
     return selector ? selector(state) : state;
   }),
@@ -59,14 +57,8 @@ vi.mock('../use-todos-store', () => ({
 vi.mock('@/features/sessions/use-projects', () => ({
   useProjects: () => ({ projects: [], loading: false, reloadProjects: vi.fn(), removeProjectFromList: vi.fn() }),
 }));
-vi.mock('@/features/sessions/use-active-identity', () => ({
-  useActiveIdentity: () => ({ projectId: null }),
-}));
 
-// Stub the heavy child views — this file exercises TasksBoard's own header only.
-vi.mock('../TaskListView', () => ({
-  TaskListView: () => <div data-testid="task-list-view-stub" />,
-}));
+// Stub the heavy child view — this file exercises TasksBoard's own header only.
 vi.mock('../TaskBoardView', () => ({
   TaskBoardView: () => <div data-testid="task-board-view-stub" />,
 }));
@@ -146,29 +138,20 @@ describe('TasksBoard — close button is optional (body mode passes none)', () =
   });
 });
 
-describe('TasksBoard — segmented view switch + new button still render', () => {
-  it('renders tasks-view-list, tasks-view-board, tasks-board-new', () => {
-    renderBoard();
-    expect(screen.getByTestId('tasks-view-list')).toBeTruthy();
-    expect(screen.getByTestId('tasks-view-board')).toBeTruthy();
-    expect(screen.getByTestId('tasks-board-new')).toBeTruthy();
-  });
-});
-
 describe('TasksBoard — loading does not blank the board on refetch (todo #225)', () => {
   it('shows the loading placeholder only on the first load (no todos yet)', () => {
     mockLoading = true;
     mockTodos = [];
     renderBoard();
     expect(screen.getByTestId('tasks-board-loading')).toBeTruthy();
-    expect(screen.queryByTestId('task-list-view-stub')).toBeNull();
+    expect(screen.queryByTestId('task-board-view-stub')).toBeNull();
   });
 
-  it('keeps the previous list rendered while a refetch is in flight (todos present)', () => {
+  it('keeps the board rendered while a refetch is in flight (todos present)', () => {
     mockLoading = true;
     mockTodos = [makeTodo({ id: 'todo-1', number: 1, status: 'open' })];
     renderBoard();
     expect(screen.queryByTestId('tasks-board-loading')).toBeNull();
-    expect(screen.getByTestId('task-list-view-stub')).toBeTruthy();
+    expect(screen.getByTestId('task-board-view-stub')).toBeTruthy();
   });
 });

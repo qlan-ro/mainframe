@@ -4,8 +4,9 @@
  * Server state is bucketed by project: the Kanban modal follows its own
  * per-open scope while the session panel's card follows the active session, so
  * the two routinely hold different projects and a single flat list would let
- * whichever loaded last blank the other. View/filter/sort state stays global —
- * it belongs to the user, not to a project.
+ * whichever loaded last blank the other. Filter/sort state stays global — it
+ * belongs to the user, not to a project. (The board is Kanban-only since the
+ * 2026-10 redesign — there is no `view` field any more.)
  *
  * Mutations call lib/api/todos then refresh (refetch-on-mutation;
  * single-window, no WS event for todos).
@@ -55,7 +56,6 @@ interface TodosState {
   entries: Record<string, TodosEntry>;
   filters: TodoFilters;
   sort: TodoSort;
-  view: 'list' | 'board';
   load: (port: number, projectId: string) => Promise<void>;
   create: (port: number, input: CreateTodoInput, projectId: string) => Promise<Todo>;
   update: (port: number, id: string, input: UpdateTodoInput, projectId: string) => Promise<void>;
@@ -63,7 +63,6 @@ interface TodosState {
   remove: (port: number, id: string, projectId: string) => Promise<void>;
   setFilters: (f: TodoFilters) => void;
   setSort: (s: TodoSort) => void;
-  setView: (v: 'list' | 'board') => void;
   resetFilters: () => void;
 }
 
@@ -105,7 +104,6 @@ export const useTodosStore = create<TodosState>((set, get) => ({
   entries: {},
   filters: DEFAULT_FILTERS,
   sort: DEFAULT_SORT,
-  view: 'list',
 
   load: async (port, projectId) => {
     const seq = (_loadSeq.get(projectId) ?? 0) + 1;
@@ -152,6 +150,5 @@ export const useTodosStore = create<TodosState>((set, get) => ({
 
   setFilters: (filters) => set({ filters }),
   setSort: (sort) => set({ sort }),
-  setView: (view) => set({ view }),
   resetFilters: () => set({ filters: DEFAULT_FILTERS, sort: DEFAULT_SORT }),
 }));

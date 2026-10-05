@@ -1,19 +1,19 @@
 /**
  * TasksBoard.multi.test.tsx — multi-project behaviors.
  *
- * Unlike TasksBoard.test.tsx (which stubs TaskListView/TaskBoardView to
- * exercise the header in isolation), this file renders the real list view so
- * it can assert on what actually reaches the DOM: merged todos, per-row
- * project avatars, the GitHub control's visibility, and that a mutation
- * triggered from a merged board acts on the ROW's own project, not some
- * single board-level project that no longer exists.
+ * Unlike TasksBoard.test.tsx (which stubs TaskBoardView to exercise the
+ * header in isolation), this file renders the real board view so it can
+ * assert on what actually reaches the DOM: merged todos, per-card project
+ * avatars, the GitHub control's visibility, and that a mutation triggered
+ * from a merged board acts on the CARD's own project, not some single
+ * board-level project that no longer exists.
  *
  * Behaviors covered:
  *  1. A multi-project scope merges every project's todos.
- *  2. A multi-project scope shows each row's project avatar; a single-project
+ *  2. A multi-project scope shows each card's project avatar; a single-project
  *     scope shows none.
  *  3. The GitHub control renders only for a single-project scope.
- *  4. Deleting a row in a merged board calls `remove` with THAT row's own
+ *  4. Deleting a card in a merged board calls `remove` with THAT card's own
  *     project id, not another project's.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -34,7 +34,6 @@ vi.mock('../use-todos-store', () => ({
       load: mockLoad,
       filters: { types: [], priorities: [], labels: [], search: '' },
       sort: { key: 'priority', dir: 'asc' },
-      view: 'list',
       move: mockMove,
       remove: mockRemove,
       setFilters: vi.fn(),
@@ -101,25 +100,25 @@ describe('TasksBoard — multi-project merge', () => {
     mockTodos = [TODO_A, TODO_B];
     renderBoard(['proj-1', 'proj-2']);
 
-    expect(screen.getByTestId('tasks-list-row-1')).toBeInTheDocument();
-    expect(screen.getByTestId('tasks-list-row-2')).toBeInTheDocument();
+    expect(screen.getByTestId('tasks-card-1')).toBeInTheDocument();
+    expect(screen.getByTestId('tasks-card-2')).toBeInTheDocument();
   });
 });
 
-describe('TasksBoard — per-row project avatars', () => {
-  it('shows a project avatar on every row when more than one project is in scope', () => {
+describe('TasksBoard — per-card project avatars', () => {
+  it('shows a project avatar on every card when more than one project is in scope', () => {
     mockTodos = [TODO_A, TODO_B];
     renderBoard(['proj-1', 'proj-2']);
 
-    expect(screen.getByTestId('tasks-list-row-project-1')).toBeInTheDocument();
-    expect(screen.getByTestId('tasks-list-row-project-2')).toBeInTheDocument();
+    expect(screen.getByTestId('tasks-card-project-1')).toBeInTheDocument();
+    expect(screen.getByTestId('tasks-card-project-2')).toBeInTheDocument();
   });
 
   it('shows no project avatar when only one project is in scope', () => {
     mockTodos = [TODO_A];
     renderBoard(['proj-1']);
 
-    expect(screen.queryByTestId('tasks-list-row-project-1')).toBeNull();
+    expect(screen.queryByTestId('tasks-card-project-1')).toBeNull();
   });
 });
 
@@ -140,12 +139,12 @@ describe('TasksBoard — GitHub control visibility', () => {
   });
 });
 
-describe('TasksBoard — mutations act on the row’s own project', () => {
+describe('TasksBoard — mutations act on the card’s own project', () => {
   it('deletes using the todo’s own project id, not the other project in the merged board', async () => {
     mockTodos = [TODO_A, TODO_B];
     renderBoard(['proj-1', 'proj-2']);
 
-    await userEvent.click(screen.getByTestId('tasks-list-row-delete-2'));
+    await userEvent.click(screen.getByTestId('tasks-card-delete-2'));
 
     expect(mockRemove).toHaveBeenCalledWith(31415, 'todo-b', 'proj-2');
     expect(mockRemove).not.toHaveBeenCalledWith(31415, 'todo-b', 'proj-1');

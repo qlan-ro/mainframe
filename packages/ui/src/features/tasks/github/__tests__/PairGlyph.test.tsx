@@ -2,20 +2,16 @@
 /**
  * PairGlyph.test.tsx
  *
- * Red-phase test for the row/card trailing-glyph-slot component (`../PairGlyph`,
- * not yet created — task 39 of the plan implements it against this file, per the
- * spec's "Pair state on the board" table.
- *
- * Props contract assumed (not frozen elsewhere, chosen to match the frozen testid
- * inventory which lists both `tasks-list-row-*` and `tasks-card-*` variants):
- * `<PairGlyph todo={todo} surface="list" | "card" />`, reading the pair from the
- * store by `todo.id`.
+ * `../PairGlyph` is the card's trailing glyph slot — board-only since the
+ * 2026-10 redesign (the list view's row variant is gone, and with it the
+ * `surface` prop/`tasks-list-row-*` prefix choice; the component is always
+ * `tasks-card-*` now).
  *
  * Behaviors covered (the five states from the spec table):
  *  1. unpaired (no entry in store.pairs) -> renders the publish button
- *     (`${surface}-publish-${number}`); clicking it opens the publish dialog with
+ *     (`tasks-card-publish-${number}`); clicking it opens the publish dialog with
  *     this todo.
- *  2. paired, clean -> renders `${surface}-pair-${number}` showing `#{issueNumber}`,
+ *  2. paired, clean -> renders `tasks-card-pair-${number}` showing `#{issueNumber}`,
  *     not amber.
  *  3. paired, overwritten in the last run -> same testid, amber, and clicking it
  *     opens the report.
@@ -75,43 +71,30 @@ beforeEach(() => {
   pairs = {};
 });
 
+function renderGlyph() {
+  render(
+    <TooltipProvider>
+      <PairGlyph todo={TODO} />
+    </TooltipProvider>,
+  );
+}
+
 describe('PairGlyph — unpaired', () => {
   it('renders the publish button, not the pair testid', () => {
-    render(
-      <TooltipProvider>
-        <PairGlyph todo={TODO} surface="list" />
-      </TooltipProvider>,
-    );
-    expect(screen.getByTestId('tasks-list-row-publish-285')).toBeTruthy();
-    expect(screen.queryByTestId('tasks-list-row-pair-285')).toBeNull();
+    renderGlyph();
+    expect(screen.getByTestId('tasks-card-publish-285')).toBeTruthy();
+    expect(screen.queryByTestId('tasks-card-pair-285')).toBeNull();
   });
 
   it('opens the publish dialog for this todo when clicked', async () => {
-    render(
-      <TooltipProvider>
-        <PairGlyph todo={TODO} surface="list" />
-      </TooltipProvider>,
-    );
-    await userEvent.click(screen.getByTestId('tasks-list-row-publish-285'));
+    renderGlyph();
+    await userEvent.click(screen.getByTestId('tasks-card-publish-285'));
     expect(openDialog).toHaveBeenCalledWith({ kind: 'publish', todo: TODO });
   });
 
   it('is never amber', () => {
-    render(
-      <TooltipProvider>
-        <PairGlyph todo={TODO} surface="list" />
-      </TooltipProvider>,
-    );
-    expect(screen.getByTestId('tasks-list-row-publish-285').getAttribute('data-amber')).not.toBe('true');
-  });
-
-  it('uses the card surface prefix when surface="card"', () => {
-    render(
-      <TooltipProvider>
-        <PairGlyph todo={TODO} surface="card" />
-      </TooltipProvider>,
-    );
-    expect(screen.getByTestId('tasks-card-publish-285')).toBeTruthy();
+    renderGlyph();
+    expect(screen.getByTestId('tasks-card-publish-285').getAttribute('data-amber')).not.toBe('true');
   });
 });
 
@@ -121,12 +104,8 @@ describe('PairGlyph — paired, clean', () => {
   });
 
   it('renders #{issueNumber} and is not amber', () => {
-    render(
-      <TooltipProvider>
-        <PairGlyph todo={TODO} surface="list" />
-      </TooltipProvider>,
-    );
-    const glyph = screen.getByTestId('tasks-list-row-pair-285');
+    renderGlyph();
+    const glyph = screen.getByTestId('tasks-card-pair-285');
     expect(glyph.textContent).toContain('219');
     expect(glyph.getAttribute('data-amber')).not.toBe('true');
   });
@@ -138,21 +117,13 @@ describe('PairGlyph — paired, overwritten in the last run', () => {
   });
 
   it('is amber', () => {
-    render(
-      <TooltipProvider>
-        <PairGlyph todo={TODO} surface="list" />
-      </TooltipProvider>,
-    );
-    expect(screen.getByTestId('tasks-list-row-pair-285').getAttribute('data-amber')).toBe('true');
+    renderGlyph();
+    expect(screen.getByTestId('tasks-card-pair-285').getAttribute('data-amber')).toBe('true');
   });
 
   it('opens the report when clicked', async () => {
-    render(
-      <TooltipProvider>
-        <PairGlyph todo={TODO} surface="list" />
-      </TooltipProvider>,
-    );
-    await userEvent.click(screen.getByTestId('tasks-list-row-pair-285'));
+    renderGlyph();
+    await userEvent.click(screen.getByTestId('tasks-card-pair-285'));
     expect(openDialog).toHaveBeenCalledWith({ kind: 'report' });
   });
 });
@@ -160,23 +131,15 @@ describe('PairGlyph — paired, overwritten in the last run', () => {
 describe('PairGlyph — errored', () => {
   it('is amber', () => {
     pairs = { [TODO.id]: PAIR_FIXTURE({ pairState: 'errored', stateReason: 'issue fetch failed: 502' }) };
-    render(
-      <TooltipProvider>
-        <PairGlyph todo={TODO} surface="list" />
-      </TooltipProvider>,
-    );
-    expect(screen.getByTestId('tasks-list-row-pair-285').getAttribute('data-amber')).toBe('true');
+    renderGlyph();
+    expect(screen.getByTestId('tasks-card-pair-285').getAttribute('data-amber')).toBe('true');
   });
 });
 
 describe('PairGlyph — remotely-unlinked', () => {
   it('is amber', () => {
     pairs = { [TODO.id]: PAIR_FIXTURE({ pairState: 'remotely-unlinked', stateReason: 'issue not found' }) };
-    render(
-      <TooltipProvider>
-        <PairGlyph todo={TODO} surface="list" />
-      </TooltipProvider>,
-    );
-    expect(screen.getByTestId('tasks-list-row-pair-285').getAttribute('data-amber')).toBe('true');
+    renderGlyph();
+    expect(screen.getByTestId('tasks-card-pair-285').getAttribute('data-amber')).toBe('true');
   });
 });

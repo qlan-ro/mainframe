@@ -2,10 +2,10 @@
  * Create or edit a task. All state and both write paths live in `use-task-form`;
  * this file is the dialog's shape.
  *
- * Project select: when CREATING with more than one project in scope, a
- * "Project" field lets the user retarget away from the default the caller
- * seeded (`resolveDefaultTaskProject`). Editing an existing todo never shows
- * it — its project is fixed.
+ * Project chips: when CREATING with more than one project in scope, a
+ * "Project" field (avatar chips, `TaskProjectChips`) lets the user retarget
+ * away from the default the caller seeded (`resolveDefaultTaskProject`).
+ * Editing an existing todo never shows it — its project is fixed.
  */
 import { useState } from 'react';
 import { PlayIcon, Trash2Icon } from 'lucide-react';
@@ -24,7 +24,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import type { Project } from '@qlan-ro/mainframe-types';
 import type { Todo } from '@/lib/api/todos';
-import { TaskProjectPicker } from '../TaskProjectPicker';
+import { TaskProjectChips } from './TaskProjectChips';
 import { TaskAttachments } from './TaskAttachments';
 import { TaskMetaFields } from './TaskMetaFields';
 import { TaskSelectFields } from './TaskSelectFields';
@@ -140,7 +140,7 @@ export function TaskEditModal({
             {showProjectField && (
               <div className="flex flex-col gap-1.5">
                 <Label>Project</Label>
-                <TaskProjectPicker surface="tasks-edit" projects={projects} value={projectId} onChange={setProjectId} />
+                <TaskProjectChips projects={projects} value={projectId} onChange={setProjectId} />
               </div>
             )}
 

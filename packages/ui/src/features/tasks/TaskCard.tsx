@@ -188,10 +188,10 @@ export const TaskCard = React.memo(function TaskCard({
 
         <div className="flex items-center gap-1 shrink-0">
           {/* GitHub pairing — absent entirely until the project is linked */}
-          {linked && <PairGlyph todo={todo} surface="card" />}
+          {linked && <PairGlyph todo={todo} />}
 
           <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-            <UnlinkPairButton todo={todo} surface="card" />
+            <UnlinkPairButton todo={todo} />
             {(todo.status === 'open' || todo.status === 'in_progress') && (
               <Tooltip>
                 <TooltipTrigger asChild>

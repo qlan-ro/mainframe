@@ -6,9 +6,11 @@
  * picker of its own, so the board always agrees with the sidebar list and
  * Chats' scope strip.
  *
- * Header: checklist glyph + "Tasks" + active/done chip + List/Board switch +
- * GitHub control (sole project only) + New. Body: TasksFilterBar + TaskListView
- * or TaskBoardView, over the MERGED todos of every project in `projectIds`.
+ * Header: checklist glyph + "Tasks" + active/done chip + GitHub control (sole
+ * project only). Body: TasksFilterBar + TaskBoardView, over the MERGED todos
+ * of every project in `projectIds`. Board-only now (2026-10 redesign) — the
+ * List view and its switch are gone; the sidebar list IS the list, and "New
+ * task" lives there too (`TasksSidebarList`'s action row), not here.
  *
  * Loads every project's bucket itself (concurrently — the sidebar Tasks list
  * loads its own scope too; the store's per-project sequence guard makes the
@@ -22,18 +24,14 @@
  * data-testid="tasks-board".
  */
 import React from 'react';
-import { LayoutList, LayoutGrid, Plus, ListChecks, X } from 'lucide-react';
+import { ListChecks, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useProjects } from '@/features/sessions/use-projects';
-import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useMergedTodos, useTodosStore } from './use-todos-store';
 import { matchesFilters, sortTodos, extractAllLabels } from './todos-filters';
 import type { TodoFilters } from './todos-filters';
-import { resolveDefaultTaskProject } from './resolve-default-project';
 import { TasksFilterBar } from './TasksFilterBar';
-import { TaskListView } from './TaskListView';
 import { TaskBoardView } from './TaskBoardView';
 import { useTasksModal } from './use-tasks-modal';
 import { GitHubSyncControl } from './github/GitHubSyncControl';
@@ -56,14 +54,13 @@ interface Props {
 
 export function TasksBoard({ port, projectIds, onStartSession, onClose }: Props): React.ReactElement {
   const { projects } = useProjects();
-  const activeProjectId = useActiveIdentity().projectId ?? null;
   const multi = projectIds.length > 1;
   // GitHub sync is a single-project feature — it never had a "several repos"
   // shape, so the control and its init only run when the set resolves to one.
   const singleProjectId = projectIds.length === 1 ? projectIds[0]! : null;
 
   const { todos, loading } = useMergedTodos(projectIds);
-  const { load, filters, sort, view, move, remove, setFilters, setSort, setView } = useTodosStore();
+  const { load, filters, sort, move, remove, setFilters, setSort } = useTodosStore();
   const { init: initSync, load: loadSync } = useGitHubSyncStore();
   const openEdit = useTasksModal((s) => s.openEdit);
 
@@ -100,12 +97,6 @@ export function TasksBoard({ port, projectIds, onStartSession, onClose }: Props)
     openEdit({ projectId: todo.project_id, todoId: todo.id });
   }
 
-  function handleNew() {
-    const target = resolveDefaultTaskProject(projectIds, activeProjectId);
-    if (target == null) return;
-    openEdit({ projectId: target, todoId: null });
-  }
-
   function handleDelete(id: string) {
     const todo = todos.find((t) => t.id === id);
     if (!todo) return;
@@ -124,7 +115,7 @@ export function TasksBoard({ port, projectIds, onStartSession, onClose }: Props)
     // flex-1, not h-full: DialogContent only sets min/max-height (no explicit
     // height), so percentage sizing here doesn't resolve reliably — flex-grow
     // makes this fill available space regardless, threading through to
-    // TaskBoardView/TaskListView (already flex-1) and the board's columns.
+    // TaskBoardView (already flex-1) and the board's columns.
     <div data-testid="tasks-board" className="flex flex-1 flex-col min-h-0 overflow-hidden">
       {/* Header band. Close sits at the far RIGHT — every dialog closes on the
           right (stock shadcn position); the old left-side X predates the port. */}
@@ -135,28 +126,13 @@ export function TasksBoard({ port, projectIds, onStartSession, onClose }: Props)
           {activeCount} active · {doneCount} done
         </Badge>
 
-        {/* List / Board view switch */}
-        <Tabs value={view} onValueChange={(v) => setView(v as 'list' | 'board')} className="ml-auto">
-          <TabsList className="h-8">
-            <TabsTrigger value="list" data-testid="tasks-view-list">
-              <LayoutList />
-              List
-            </TabsTrigger>
-            <TabsTrigger value="board" data-testid="tasks-view-board">
-              <LayoutGrid />
-              Board
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
+        {/* Pushes the GitHub control / close button to the right — the
+            List/Board switch and "New task" button used to do this; both
+            moved out (board-only now; "New task" is the sidebar's action row). */}
+        <span className="ml-auto" />
 
         {/* GitHub sync — a single-repo feature; hidden for an empty/multi scope. */}
         {singleProjectId != null && <GitHubSyncControl />}
-
-        {/* New task */}
-        <Button size="sm" data-testid="tasks-board-new" onClick={handleNew} disabled={projectIds.length === 0}>
-          <Plus />
-          New task
-        </Button>
 
         {onClose != null && (
           <Button variant="ghost" size="icon-sm" data-testid="tasks-board-close" onClick={onClose} aria-label="Close">
@@ -187,16 +163,6 @@ export function TasksBoard({ port, projectIds, onStartSession, onClose }: Props)
         >
           Loading tasks…
         </div>
-      ) : view === 'list' ? (
-        <TaskListView
-          port={port}
-          todos={filtered}
-          filters={filters as TodoFilters}
-          projects={projects}
-          multi={multi}
-          onEdit={handleEdit}
-          onStartSession={handleStart}
-        />
       ) : (
         <TaskBoardView
           port={port}

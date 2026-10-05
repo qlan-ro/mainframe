@@ -1,21 +1,22 @@
 /**
  * TasksSidebarList — unit tests.
  *
- * Header: "Tasks" + the shared scope strip + quick-add. Projects: the
- * session scope's project SET (`useTasksProjects`, multi-project — same
- * scope semantics as Chats/Automations). An empty OR multi-project scope
- * merges every project's todos — there is no pick-list fallback any more.
- * Groups In progress / Open / Done (Done collapsed by default). A row opens
- * the shared edit modal and cycles/starts a session scoped to ITS OWN
- * project, and a multi-project scope shows each row's project avatar plus a
- * project chooser chip on the quick-add row.
+ * Header: "Tasks" + the "New task" action row (opens the shared create form,
+ * seeded with the scope's default project — no inline quick-add input any
+ * more, 2026-10 redesign) + the shared scope strip. Projects: the session
+ * scope's project SET (`useTasksProjects`, multi-project — same scope
+ * semantics as Chats/Automations). An empty OR multi-project scope merges
+ * every project's todos — there is no pick-list fallback any more. Groups In
+ * progress / Open / Done (Done collapsed by default). A row opens the shared
+ * edit modal and cycles/starts a session scoped to ITS OWN project, and a
+ * multi-project scope shows each row's project avatar.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import type { Todo } from '@/lib/api/todos';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { SidebarProvider } from '@/components/ui/sidebar';
 import { useSessionFilters } from '@/store/session-filters';
 import { useTasksModal } from '../../use-tasks-modal';
 import { useTodosStore } from '../../use-todos-store';
@@ -77,7 +78,11 @@ function makeTodo(over: Partial<Todo> & { id: string; number: number }): Todo {
 }
 
 function Wrapper({ children }: { children: ReactNode }) {
-  return <TooltipProvider>{children}</TooltipProvider>;
+  return (
+    <SidebarProvider>
+      <TooltipProvider>{children}</TooltipProvider>
+    </SidebarProvider>
+  );
 }
 const render_ = () => render(<TasksSidebarList />, { wrapper: Wrapper });
 
@@ -123,9 +128,10 @@ describe('TasksSidebarList — empty scope (no pick list any more)', () => {
     expect(screen.getByTestId('tasks-sidebar-row-project-2')).toBeInTheDocument();
   });
 
-  it('shows a project chooser chip on the quick-add row', () => {
+  it('"New task" opens the create form, defaulted to the first scoped project', () => {
     render_();
-    expect(screen.getByTestId('tasks-sidebar-new-project')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('tasks-sidebar-new'));
+    expect(useTasksModal.getState().edit).toEqual({ projectId: 'proj-1', todoId: null });
   });
 });
 
@@ -134,13 +140,12 @@ describe('TasksSidebarList — a sole scoped project', () => {
     useSessionFilters.setState({ filterProjectIds: new Set(['proj-1']) });
   });
 
-  it('loads only that project’s tasks, with no project chooser chip or avatars', async () => {
+  it('loads only that project’s tasks, with no per-row project avatars', async () => {
     vi.mocked(todosApi.listTodos).mockResolvedValue([makeTodo({ id: 't-1', number: 1 })]);
     render_();
 
     await waitFor(() => expect(todosApi.listTodos).toHaveBeenCalledWith(31415, 'proj-1'));
     expect(todosApi.listTodos).not.toHaveBeenCalledWith(31415, 'proj-2');
-    expect(screen.queryByTestId('tasks-sidebar-new-project')).toBeNull();
     await screen.findByTestId('tasks-sidebar-row-1');
     expect(screen.queryByTestId('tasks-sidebar-row-project-1')).toBeNull();
   });
@@ -193,19 +198,10 @@ describe('TasksSidebarList — a sole scoped project', () => {
 
     expect(startTodoSession).toHaveBeenCalledWith('t-1', 'proj-1', 'open');
   });
-});
 
-describe('TasksSidebarList — quick-add targets the chosen project when multi-scope', () => {
-  it('defaults the quick-add target to the first project and writes new tasks to the chosen one', async () => {
+  it('"New task" opens the create form, scoped to the sole project', () => {
     render_();
-
-    await userEvent.click(screen.getByTestId('tasks-sidebar-new-project'));
-    await userEvent.click(screen.getByTestId('tasks-sidebar-new-project-proj-2'));
-
-    await userEvent.type(screen.getByTestId('tasks-sidebar-new'), 'A new task{Enter}');
-
-    await waitFor(() =>
-      expect(todosApi.createTodo).toHaveBeenCalledWith(31415, { title: 'A new task', projectId: 'proj-2' }),
-    );
+    fireEvent.click(screen.getByTestId('tasks-sidebar-new'));
+    expect(useTasksModal.getState().edit).toEqual({ projectId: 'proj-1', todoId: null });
   });
 });

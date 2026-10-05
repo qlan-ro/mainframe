@@ -1,6 +1,8 @@
 /**
  * TasksSidebarList — the sidebar's Tasks view (the nav rail's second list).
- * Header: "Tasks", the shared scope strip (D7), and the quick-add row. The
+ * Header: "Tasks", the shared scope strip (D7), and the "New task" action
+ * row (same shape as Chats' "New session" row — one click opens the create
+ * form; there is no inline quick-add input any more, 2026-10 redesign). The
  * projects are the session scope's project SET (multi-project, same scope
  * semantics as Chats/Automations; `useTasksProjects`, shared with the body's
  * `TasksSurface`) — an empty or multi-project scope merges every project's
@@ -9,9 +11,9 @@
  * opens a session, both scoped to the ROW's own project.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronRight, Plus } from 'lucide-react';
+import { ChevronRight, ListPlus, Plus } from 'lucide-react';
 import type { Project } from '@qlan-ro/mainframe-types';
-import { SidebarHeader } from '@/components/ui/sidebar';
+import { SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
 import type { Todo } from '@/lib/api/todos';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
@@ -19,14 +21,12 @@ import { useProjects } from '@/features/sessions/use-projects';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { SidebarScopeStrip } from '@/features/sessions/SidebarScopeStrip';
 import { SidebarScrollRegion } from '@/features/shared/SidebarScrollRegion';
-import { useQuickAddTodo } from '../use-quick-add-todo';
 import { useStartTodoSession } from '../use-start-todo-session';
 import { useTasksModal } from '../use-tasks-modal';
 import { useMergedTodos, useTodosStore } from '../use-todos-store';
 import { newestFirst } from '../todos-filters';
 import { useTasksProjects } from '../use-tasks-projects';
 import { resolveDefaultTaskProject } from '../resolve-default-project';
-import { TaskProjectPicker } from '../TaskProjectPicker';
 import { TaskSidebarRow, nextTodoStatus } from './TaskSidebarRow';
 
 const GROUPS: { status: Todo['status']; label: string; collapsedByDefault: boolean }[] = [
@@ -35,51 +35,31 @@ const GROUPS: { status: Todo['status']; label: string; collapsedByDefault: boole
   { status: 'done', label: 'Done', collapsedByDefault: true },
 ];
 
-function QuickAddRow({ port, projectIds, projects }: { port: number; projectIds: string[]; projects: Project[] }) {
+/** The "New task" row under the header — ONE CLICK, always; mirrors Chats'
+ *  "New session" row (SessionSidebar.tsx) exactly. Opens the shared create
+ *  form, seeded with the scope's default project. */
+function NewTaskRow({ projectIds }: { projectIds: string[] }) {
   const activeProjectId = useActiveIdentity().projectId ?? null;
-  const multi = projectIds.length > 1;
-  const [targetProjectId, setTargetProjectId] = useState(
-    () => resolveDefaultTaskProject(projectIds, activeProjectId) ?? projectIds[0] ?? '',
-  );
+  const openEdit = useTasksModal((s) => s.openEdit);
 
-  // Keep the target valid as the scope's project set changes — falling back
-  // to the same default rule a quick-add that never touched the picker would
-  // have started from.
-  useEffect(() => {
-    if (!projectIds.includes(targetProjectId)) {
-      setTargetProjectId(resolveDefaultTaskProject(projectIds, activeProjectId) ?? projectIds[0] ?? '');
-    }
-  }, [projectIds, activeProjectId, targetProjectId]);
-
-  const quick = useQuickAddTodo(port, targetProjectId);
-  const scopedProjects = useMemo(() => projects.filter((p) => projectIds.includes(p.id)), [projects, projectIds]);
+  function handleClick() {
+    const target = resolveDefaultTaskProject(projectIds, activeProjectId);
+    if (target == null) return;
+    openEdit({ projectId: target, todoId: null });
+  }
 
   return (
-    <div className="flex h-8 items-center gap-2 rounded-md px-2 transition-colors focus-within:bg-sidebar-accent">
-      {multi ? (
-        <TaskProjectPicker
-          surface="tasks-sidebar-new"
-          projects={scopedProjects}
-          value={targetProjectId}
-          onChange={setTargetProjectId}
-          compact
-        />
-      ) : (
-        <Plus className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-      )}
-      <input
-        ref={quick.inputRef}
-        data-testid="tasks-sidebar-new"
-        data-noring
-        value={quick.draft}
-        disabled={quick.adding}
-        onChange={(event) => quick.setDraft(event.target.value)}
-        onPaste={quick.onPaste}
-        onKeyDown={quick.onKeyDown}
-        placeholder="New task"
-        className="min-w-0 flex-1 appearance-none border-0 bg-transparent p-0 text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-50"
-      />
-    </div>
+    <SidebarMenu>
+      <SidebarMenuItem>
+        {/* `pl-1`: lines up with "Tasks" and the scope avatars, same as
+            Chats' "New session" row. */}
+        <SidebarMenuButton className="pl-1" data-testid="tasks-sidebar-new" onClick={handleClick}>
+          <ListPlus />
+          <span className="min-w-0 flex-1 truncate">New task</span>
+          <Plus aria-hidden className="shrink-0 text-muted-foreground" />
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    </SidebarMenu>
   );
 }
 
@@ -188,8 +168,8 @@ export function TasksSidebarList() {
         <div className="flex h-9 items-center pl-1">
           <span className="text-base font-semibold">Tasks</span>
         </div>
+        {projectIds.length > 0 && <NewTaskRow projectIds={projectIds} />}
         <SidebarScopeStrip />
-        {projectIds.length > 0 && <QuickAddRow port={port} projectIds={projectIds} projects={projects} />}
       </SidebarHeader>
       <SidebarScrollRegion>
         <div className="px-2">

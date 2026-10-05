@@ -85,7 +85,6 @@ beforeEach(() => {
       entries: {},
       filters: { types: [], priorities: [], labels: [], search: '' },
       sort: { key: 'number', dir: 'desc' },
-      view: 'list',
     });
   });
   vi.clearAllMocks();
