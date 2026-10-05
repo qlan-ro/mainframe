@@ -214,7 +214,9 @@ export function SessionTabPill({ tab, segment, hintIndex = null, canOpenInSplit,
         {/* The title owns the whole pill at rest and fades at the pill's end. The
             controls are out of flow: they overlay its tail on hover, on the pill's
             own ground with a short ramp, so a hidden ✕ never reserves label room. */}
-        <FadeLabel className={cn('flex-1', tab.preview && 'italic')}>{tab.title}</FadeLabel>
+        <FadeLabel className={cn('flex-1', tab.preview && 'italic')} tooltipDelay={600}>
+          {tab.title}
+        </FadeLabel>
         <span
           data-testid={`session-tab-controls-${tab.id}`}
           className={cn(
