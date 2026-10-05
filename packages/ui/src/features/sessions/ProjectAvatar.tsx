@@ -45,8 +45,8 @@ function fillOf(color: string): string {
 function stackedStyle(color: string, ground: string, ring: boolean, dim: boolean): React.CSSProperties {
   const surface = `var(${ground})`;
   return {
-    backgroundColor: dim ? `color-mix(in oklch, ${fillOf(color)} 40%, ${surface})` : fillOf(color),
-    color: dim ? `color-mix(in oklch, white 70%, ${surface})` : 'white',
+    backgroundColor: dim ? `color-mix(in oklch, ${fillOf(color)} 80%, ${surface})` : fillOf(color),
+    color: dim ? `color-mix(in oklch, white 85%, ${surface})` : 'white',
     border: `2px solid ${surface}`,
     boxShadow: ring ? '0 0 0 2px var(--primary)' : undefined,
   };

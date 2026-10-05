@@ -33,16 +33,16 @@ const PROJECT_PALETTE: readonly string[] = [
  * drained its chroma and read muddy.
  */
 const PROJECT_FILL_PALETTE: readonly string[] = [
-  'oklch(0.60 0.21 258)', // blue
-  'oklch(0.62 0.23 25)', // red
-  'oklch(0.60 0.25 305)', // purple
-  'oklch(0.56 0.23 285)', // violet
-  'oklch(0.70 0.17 62)', // amber
-  'oklch(0.62 0.14 185)', // teal
-  'oklch(0.63 0.15 225)', // cyan
-  'oklch(0.63 0.19 150)', // green
-  'oklch(0.64 0.23 352)', // pink
-  'oklch(0.67 0.20 45)', // orange
+  'oklch(0.58 0.24 262)', // blue
+  'oklch(0.60 0.25 27)', // red
+  'oklch(0.56 0.28 305)', // purple
+  'oklch(0.53 0.26 285)', // violet
+  'oklch(0.68 0.19 55)', // amber
+  'oklch(0.60 0.15 180)', // teal
+  'oklch(0.62 0.17 230)', // cyan
+  'oklch(0.62 0.22 145)', // green
+  'oklch(0.62 0.26 355)', // pink
+  'oklch(0.65 0.22 40)', // orange
 ];
 
 const FILL_BY_COLOR = new Map(PROJECT_PALETTE.map((color, i) => [color, PROJECT_FILL_PALETTE[i] as string]));
