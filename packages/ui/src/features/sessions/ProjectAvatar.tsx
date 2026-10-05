@@ -81,7 +81,7 @@ export function ProjectAvatar({
       style={{
         width: size,
         height: size,
-        fontSize: Math.round(size * 0.46),
+        fontSize: Math.round(size * 0.4),
         ...(stacked ? stackedStyle(color, ground, ring, dim) : { backgroundColor: fillOf(color), color: 'white' }),
       }}
     >
