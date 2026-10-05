@@ -6,7 +6,10 @@
  * A content-sized `rounded-md` pill, `h-8`, capped at `max-w-45` and never
  * narrower than `min-w-24`: active is a filled `accent` pill with a soft
  * shadow; inactive is quiet ink. (The old 2px underline is gone with the
- * toolbar hairline it sat on.) The title fades only when it overflows.
+ * toolbar hairline it sat on.) The title fades only when it overflows, and it
+ * owns the pill's full width at rest: the controls sit out of flow and overlay
+ * its tail on hover (on the pill's ground, behind a short ramp) rather than
+ * reserving room while invisible.
  *
  * Inside a split pair the pill is one SEGMENT (`segment`): the focused one is
  * filled, the other is not, and a parked pair fills neither.
@@ -120,6 +123,7 @@ export function SessionTabPill({ tab, segment, hintIndex = null, canOpenInSplit,
   const [dropHover, setDropHover] = useState(false);
   const filled = segment == null ? tab.active : segment === 'focused';
   const inPair = segment != null;
+  const restingClose = filled || inPair;
 
   return (
     <SessionTabContextMenu
@@ -194,55 +198,73 @@ export function SessionTabPill({ tab, segment, hintIndex = null, canOpenInSplit,
             </Hint>
           )}
         </span>
+        {/* The title owns the whole pill at rest and fades at the pill's end. The
+            controls are out of flow: they overlay its tail on hover, on the pill's
+            own ground with a short ramp, so a hidden ✕ never reserves label room. */}
         <FadeLabel className={cn('flex-1', tab.preview && 'italic')}>{tab.title}</FadeLabel>
-        {canOpenInSplit && !inPair && (
-          <Hint label="Open beside the current session">
-            <Button
-              data-testid={`session-tab-open-beside-${tab.id}`}
-              variant="ghost"
-              size="icon-2xs"
-              className="opacity-0 group-hover:opacity-100"
-              onClick={(e) => {
-                e.stopPropagation();
-                actions.onOpenInSplit(tab.id);
-              }}
-            >
-              <Columns2 />
-            </Button>
-          </Hint>
-        )}
-        {tab.preview && (
-          <Hint label="Keep open">
-            <Button
-              data-testid={`session-tab-pin-${tab.id}`}
-              variant="ghost"
-              size="icon-2xs"
-              className={cn('opacity-0 group-hover:opacity-100', filled && 'opacity-60')}
-              onClick={(e) => {
-                e.stopPropagation();
-                actions.onPin(tab.id);
-              }}
-            >
-              <Pin />
-            </Button>
-          </Hint>
-        )}
-        <Hint label={`Close ${tab.title}`}>
-          <Button
-            data-testid={`session-tab-close-${tab.id}`}
-            variant="ghost"
-            size="icon-2xs"
+        <span
+          data-testid={`session-tab-controls-${tab.id}`}
+          className={cn(
+            'absolute inset-y-0 right-1 flex items-center gap-0.5 pl-0.5',
+            'before:pointer-events-none before:absolute before:inset-y-0 before:right-full before:w-4 before:bg-linear-to-r before:from-transparent',
+            filled
+              ? 'bg-accent before:to-accent'
+              : inPair
+                ? 'bg-popover before:to-popover'
+                : 'bg-sidebar before:to-sidebar',
             // Pair segments are both ON SCREEN, so both keep the resting ✕ the
-            // active tab gets — it closes the zone, not a hidden session.
-            className={cn('opacity-0 group-hover:opacity-100', (filled || inPair) && 'opacity-60')}
-            onClick={(e) => {
-              e.stopPropagation();
-              actions.onClose(tab.id);
-            }}
-          >
-            <X />
-          </Button>
-        </Hint>
+            // active tab gets — it closes the zone, not a hidden session. Every
+            // other pill shows its controls (and their ground) only on hover.
+            !restingClose && 'opacity-0 group-hover:opacity-100',
+          )}
+        >
+          {canOpenInSplit && !inPair && (
+            <Hint label="Open beside the current session">
+              <Button
+                data-testid={`session-tab-open-beside-${tab.id}`}
+                variant="ghost"
+                size="icon-2xs"
+                className="opacity-0 group-hover:opacity-100"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  actions.onOpenInSplit(tab.id);
+                }}
+              >
+                <Columns2 />
+              </Button>
+            </Hint>
+          )}
+          {tab.preview && (
+            <Hint label="Keep open">
+              <Button
+                data-testid={`session-tab-pin-${tab.id}`}
+                variant="ghost"
+                size="icon-2xs"
+                className={cn('opacity-0 group-hover:opacity-100', filled && 'opacity-60')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  actions.onPin(tab.id);
+                }}
+              >
+                <Pin />
+              </Button>
+            </Hint>
+          )}
+          <Hint label={`Close ${tab.title}`}>
+            <Button
+              data-testid={`session-tab-close-${tab.id}`}
+              variant="ghost"
+              size="icon-2xs"
+              className={cn('opacity-0 group-hover:opacity-100', restingClose && 'opacity-60')}
+              onClick={(e) => {
+                e.stopPropagation();
+                actions.onClose(tab.id);
+              }}
+            >
+              <X />
+            </Button>
+          </Hint>
+        </span>
       </div>
     </SessionTabContextMenu>
   );
