@@ -30,7 +30,7 @@ export const NAV_RAIL_WIDTH = 56;
 /** The sidebar section's width while the sidebar is open: it ends on the sidebar's right edge. */
 export const SIDEBAR_SECTION_WIDTH = `calc(${NAV_RAIL_WIDTH}px + var(--sidebar-width) - ${TRAFFIC_LIGHTS_WIDTH}px)`;
 
-export function TitleBar({ projectId }: { projectId?: string }) {
+export function TitleBar() {
   const { open, setOpen } = useSidebar();
 
   return (
@@ -73,7 +73,7 @@ export function TitleBar({ projectId }: { projectId?: string }) {
           </>
         )}
         <SessionTabs />
-        <TitleBarActions projectId={projectId} />
+        <TitleBarActions />
       </div>
     </div>
   );

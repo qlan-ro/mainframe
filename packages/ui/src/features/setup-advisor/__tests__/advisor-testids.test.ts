@@ -7,10 +7,11 @@
  * present, so the new Skills section can't silently drop one while editing
  * these files.
  *
- * Spec AC 2 says "all six existing advisor `data-testid` values"; the repo
- * actually has five string literals plus two template-literal prefixes —
- * seven tokens total (plan Decision D6). This test asserts the real seven
- * rather than silently reinterpreting the spec's count down to six.
+ * D8 update: the sheet (`SetupAdvisorHost`) is gone — its testids moved to
+ * `AdvisorSurface` (the rail-view body) — and the title bar's Setup Advisor
+ * button is gone too (it's a rail button now, `shell-rail-advisor`, covered
+ * by `NavRail.test.tsx`), so `automation-recommender-sheet` and
+ * `automation-recommender-open` are retired rather than tracked here.
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -19,26 +20,19 @@ import { dirname, join } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const advisorDir = join(here, '..');
-const layoutDir = join(here, '..', '..', '..', 'layout');
 
 function read(...segments: string[]): string {
   return readFileSync(join(...segments), 'utf-8');
 }
 
 describe('Setup Advisor — pre-existing data-testid tokens survive the section work', () => {
-  it('keeps all five literal testids', () => {
-    const host = read(advisorDir, 'SetupAdvisorHost.tsx');
+  it('keeps the literal testids', () => {
     const sheet = read(advisorDir, 'SetupAdvisorSheet.tsx');
     const evidence = read(advisorDir, 'EvidenceDisclosure.tsx');
-    // D2/phase 2: the advisor button moved out of the dead MainToolbar into
-    // the title bar's own actions cluster.
-    const titleBarActions = read(layoutDir, 'TitleBarActions.tsx');
 
-    expect(host).toContain('data-testid="automation-recommender-sheet"');
     expect(sheet).toContain('data-testid="automation-recommender-loading"');
     expect(sheet).toContain('data-testid="automation-recommender-retry"');
     expect(evidence).toContain('data-testid="automation-recommender-evidence-toggle"');
-    expect(titleBarActions).toContain('data-testid="automation-recommender-open"');
   });
 
   it('keeps both template-literal testid prefixes', () => {

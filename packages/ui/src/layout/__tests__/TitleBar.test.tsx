@@ -16,18 +16,16 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 
 vi.mock('@/features/session-tabs/SessionTabs', () => ({ SessionTabs: () => <div data-testid="session-tabs-stub" /> }));
 vi.mock('../TitleBarActions', () => ({
-  TitleBarActions: ({ projectId }: { projectId?: string }) => (
-    <div data-testid="title-bar-actions-stub" data-project-id={projectId ?? ''} />
-  ),
+  TitleBarActions: () => <div data-testid="title-bar-actions-stub" />,
 }));
 
 import { TitleBar } from '../TitleBar';
 
-function renderBar(open: boolean, props: Parameters<typeof TitleBar>[0] = {}) {
+function renderBar(open: boolean) {
   return render(
     <SidebarProvider open={open} onOpenChange={() => {}}>
       <TooltipProvider>
-        <TitleBar {...props} />
+        <TitleBar />
       </TooltipProvider>
     </SidebarProvider>,
   );
@@ -83,12 +81,10 @@ describe('TitleBar — the surface toggle pill renders exactly once', () => {
 });
 
 describe('TitleBar — composition', () => {
-  it('renders the session tabs and the right-cluster actions in the chat column, passed the projectId', () => {
-    renderBar(true, { projectId: 'proj-9' });
+  it('renders the session tabs and the right-cluster actions in the chat column', () => {
+    renderBar(true);
     const column = screen.getByTestId('title-bar-chat-column');
     expect(column.contains(screen.getByTestId('session-tabs-stub'))).toBe(true);
-    const actions = screen.getByTestId('title-bar-actions-stub');
-    expect(column.contains(actions)).toBe(true);
-    expect(actions).toHaveAttribute('data-project-id', 'proj-9');
+    expect(column.contains(screen.getByTestId('title-bar-actions-stub'))).toBe(true);
   });
 });

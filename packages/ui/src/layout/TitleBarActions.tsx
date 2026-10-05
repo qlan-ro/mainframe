@@ -1,15 +1,15 @@
 /**
- * TitleBarActions — the title bar's right cluster: search · Setup Advisor │
- * side-chat toggle (the focused chat's) · the session-details toggle. The
- * "Forked from" link lives in the chat column (ChatForkBanner / ZoneStrip).
+ * TitleBarActions — the title bar's right cluster: search │ side-chat toggle
+ * (the focused chat's) · the session-details toggle. The "Forked from" link
+ * lives in the chat column (ChatForkBanner / ZoneStrip). The Setup Advisor
+ * button moved to the nav rail (D8) — it's a rail view now, not a sheet.
  */
-import { ScanSearch, Search } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { chordHint } from '@/features/shortcuts/chord-hint';
-import { useSetupAdvisor } from '@/features/setup-advisor/use-setup-advisor';
 import { SideChatToggle } from '@/features/side-chat/SideChatToggle';
 import { SessionPanelToggle } from '@/features/session-panel/SessionPanelToggle';
 import { emitSurfaceIntent } from '@/store/surface-intents';
@@ -28,8 +28,7 @@ function isWorkspaceSidebarAtRightEdge(layout: { top: string[]; bottom: string |
   return layout.top[layout.top.length - 1] === 'workspace';
 }
 
-export function TitleBarActions({ projectId }: { projectId?: string }) {
-  const openSetupAdvisor = useSetupAdvisor((s) => s.openSheet);
+export function TitleBarActions() {
   const searchChord = chordHint('app.search-palette');
   const layout = useLayoutStore((s) => s.layout);
   const filesScopeKey = useActiveBasesStore((s) => s.scopeKey);
@@ -53,19 +52,6 @@ export function TitleBarActions({ projectId }: { projectId?: string }) {
           <Search className="size-4" />
         </Button>
       </Hint>
-      {projectId && (
-        <Hint label="Setup Advisor">
-          <Button
-            data-testid="automation-recommender-open"
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => openSetupAdvisor()}
-            className="text-muted-foreground"
-          >
-            <ScanSearch className="size-4" />
-          </Button>
-        </Hint>
-      )}
       <Separator orientation="vertical" className="mx-1 h-4 data-vertical:self-center" />
       {/* The focused chat's side chat (the root provider follows the focused zone). */}
       <SideChatToggle />
