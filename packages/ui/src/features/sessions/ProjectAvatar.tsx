@@ -4,8 +4,8 @@
  * is learned once, everywhere it appears). Shared by the scope strip, the
  * pickers, the draft row and the session hover card.
  *
- * The fill is the palette hue darkened toward black (`FILL_MIX`), so even the
- * light hues (amber, cyan) carry a white initial in both themes.
+ * The fill comes from a vivid palette index-aligned with the identity hues
+ * (`projectFill`): same colour family, saturated, dark enough for white.
  *
  * `ground` is the stacked mode (the scope strip): avatars overlap on that
  * surface, so each wears a 2px border in the ground colour (a clean cut-out),
@@ -18,6 +18,7 @@
  */
 import { CheckIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { projectFill } from './sidebar/project-color';
 
 /** The scope strip's avatar size; pickers and hover cards pass their own. */
 export const SCOPE_AVATAR_SIZE = 26;
@@ -37,11 +38,8 @@ interface ProjectAvatarProps {
   className?: string;
 }
 
-/** How much of the palette hue survives the darkening (the rest is black). */
-const FILL_MIX = 78;
-
 function fillOf(color: string): string {
-  return `color-mix(in oklch, ${color} ${FILL_MIX}%, black)`;
+  return projectFill(color);
 }
 
 function stackedStyle(color: string, ground: string, ring: boolean, dim: boolean): React.CSSProperties {
