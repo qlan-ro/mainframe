@@ -859,5 +859,6 @@ Departures from the text above:
 
 Not built yet: copying segment rows into whole-chat forks and the unsent-fork-switches case
 (Interactions → whole-chat fork); relocating non-active Claude native rows on worktree moves;
-the union of tool categories across adapters; a `chat_manager` integration test with a fake
-segment store; the E2E second mock adapter.
+the union of tool categories across adapters; the E2E second mock adapter. The switch and
+first-send delivery are covered by `chat_manager/tests/provider_switch.rs` over an in-memory
+segment store, not yet by a two-adapter E2E run.

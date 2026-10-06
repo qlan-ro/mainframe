@@ -23,6 +23,7 @@ mod history_eviction;
 mod history_snapshot;
 mod offload;
 mod plan_mode;
+mod provider_switch;
 mod resume_overlay;
 mod resume_snapshot;
 mod side_chat;
@@ -112,6 +113,11 @@ pub(crate) struct StoreDeps {
     /// `history_cache_dir()` override, for the same test (a real tempdir it
     /// alone owns, so it can't collide with any other test's chat ids).
     history_cache_dir: Mutex<Option<String>>,
+    /// `segment_store()` — set once by the provider-switch tests; every other
+    /// test leaves it unset (single-segment chats, as before segments existed).
+    segment_store: std::sync::OnceLock<Arc<dyn crate::segments::SegmentStore>>,
+    /// `adapter_info(adapter_id)` answers, keyed by adapter id.
+    adapter_infos: Mutex<HashMap<String, mainframe_types::adapter::AdapterInfo>>,
 }
 
 /// `pin_fork_point`'s configurable failure, for fork_chat's status-mapping tests.
@@ -190,6 +196,15 @@ impl StoreDeps {
     }
     pub(crate) fn set_history_sources(&self, sources: Vec<std::path::PathBuf>) {
         *self.history_sources.lock().unwrap() = sources;
+    }
+    pub(crate) fn set_segment_store(&self, store: Arc<dyn crate::segments::SegmentStore>) {
+        let _ = self.segment_store.set(store);
+    }
+    pub(crate) fn set_adapter_info(&self, info: mainframe_types::adapter::AdapterInfo) {
+        self.adapter_infos
+            .lock()
+            .unwrap()
+            .insert(info.id.clone(), info);
     }
     pub(crate) fn set_history_cache_dir(&self, dir: &str) {
         *self.history_cache_dir.lock().unwrap() = Some(dir.to_string());
@@ -769,6 +784,12 @@ impl ChatManagerDeps for StoreDeps {
                     .to_string_lossy()
                     .into_owned()
             })
+    }
+    fn segment_store(&self) -> Option<&dyn crate::segments::SegmentStore> {
+        self.segment_store.get().map(|store| store.as_ref())
+    }
+    fn adapter_info(&self, adapter_id: &str) -> Option<mainframe_types::adapter::AdapterInfo> {
+        self.adapter_infos.lock().unwrap().get(adapter_id).cloned()
     }
     fn chats_find_or_create_side_chat(&self, parent: &Chat) -> Result<(Chat, bool), String> {
         let all = self.raw_chats();
