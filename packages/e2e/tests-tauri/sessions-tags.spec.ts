@@ -20,7 +20,7 @@
  *   SessionContextMenu.tsx  — row context-menu item `sessions-ctx-tags`
  *   SessionRowMetaLine.tsx  — the applied-tag dot cluster on the row (replaced
  *                             `SessionRowMetaIcons.tsx`, hence the dot testid rename)
- *   TagFilterBar.tsx        — tag chips in the sidebar footer
+ *   SessionsFilterMenu.tsx  — the group header's tag-filter dropdown
  *
  * Testid reference (all verified against source above):
  *   sessions-row-action-tags        — row hover action that opens the popover
@@ -48,7 +48,8 @@
  *   sessions-tag-delete-confirm      — delete confirm dialog root
  *   sessions-tag-delete-confirm-cancel / -ok — dialog buttons
  *   sessions-row-meta-tag-dot-<name> — applied-tag dot on the row meta line
- *   sessions-tag-filter-<name>       — tag chip in the sidebar footer's filter bar
+ *   sessions-filter-button           — the group header's tag-filter trigger (opens the menu)
+ *   sessions-tag-filter-<name>       — a tag's checkbox item inside that filter menu
  *
  * NOTE on the validation-error scenario: TagPopoverPanel's client-side
  * validateTagName() (packages/ui/src/features/sessions/tags/validate-tag-name.ts)
@@ -133,6 +134,17 @@ async function closePopover(page: Page): Promise<void> {
   await expect(popover).toHaveCount(0, { timeout: 5_000 });
 }
 
+/** The tag-filter menu lists a tag once some chat carries it. The menu is the
+ *  group header's dropdown (the old footer chip bar is gone), so open it,
+ *  assert, and close it again so it cannot cover the next step. */
+async function expectTagInFilterMenu(page: Page, name: string, listed: boolean): Promise<void> {
+  await page.getByTestId('sessions-filter-button').click();
+  await expect(page.getByTestId('sessions-tag-filter-bar')).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByTestId(`sessions-tag-filter-${name}`)).toHaveCount(listed ? 1 : 0, { timeout: 10_000 });
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('sessions-tag-filter-bar')).toHaveCount(0, { timeout: 5_000 });
+}
+
 /** Right-click a registry row to open its item context menu. */
 async function openRegistryItemMenu(page: Page, name: string): Promise<void> {
   await page.getByTestId(`sessions-tag-toggle-${name}`).click({ button: 'right' });
@@ -212,7 +224,7 @@ test.describe('§sessions-tags Tag popover lifecycle', () => {
     await closePopover(page);
 
     await expect(row.getByTestId(`sessions-row-meta-tag-dot-${TAG_A}`)).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByTestId(`sessions-tag-filter-${TAG_A}`)).toBeVisible({ timeout: 10_000 });
+    await expectTagInFilterMenu(page, TAG_A, true);
   });
 
   test('an applied tag survives a page reload (daemon-persisted)', async () => {
@@ -309,7 +321,7 @@ test.describe('§sessions-tags Tag popover lifecycle', () => {
     // Rename cascades to every thread carrying the old name (spec §5.5).
     await expect(row.getByTestId(`sessions-row-meta-tag-dot-${TAG_A_RENAMED}`)).toBeVisible({ timeout: 10_000 });
     await expect(row.getByTestId(`sessions-row-meta-tag-dot-${TAG_A}`)).toHaveCount(0);
-    await expect(page.getByTestId(`sessions-tag-filter-${TAG_A_RENAMED}`)).toBeVisible({ timeout: 10_000 });
+    await expectTagInFilterMenu(page, TAG_A_RENAMED, true);
   });
 
   // Previously: a registry-only recolor never updated the row's tag dot color
@@ -374,8 +386,8 @@ test.describe('§sessions-tags Tag popover lifecycle', () => {
 
   // Deletes TAG_A_RENAMED (TAG_A's post-rename name — see the recolor test's
   // note). It is still applied to the seeded chat, so this exercises the full
-  // cascade: registry row → row dot → filter chip.
-  test('delete confirm dialog: OK removes the tag from the registry, the row, and the filter bar', async () => {
+  // cascade: registry row → row dot → filter menu item.
+  test('delete confirm dialog: OK removes the tag from the registry, the row, and the filter menu', async () => {
     const { page } = app;
     const row = sessionsSidebar(page).row(chatId);
 
@@ -395,7 +407,7 @@ test.describe('§sessions-tags Tag popover lifecycle', () => {
     await expect(row.getByTestId(`sessions-row-meta-tag-dot-${TAG_A_RENAMED}`)).toHaveCount(0, {
       timeout: 10_000,
     });
-    await expect(page.getByTestId(`sessions-tag-filter-${TAG_A_RENAMED}`)).toHaveCount(0, { timeout: 10_000 });
+    await expectTagInFilterMenu(page, TAG_A_RENAMED, false);
   });
 
   test('shows an inline validation message for a disallowed tag name and suppresses create', async () => {

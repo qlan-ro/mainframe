@@ -19,13 +19,11 @@
  *
  * Testid reference (all verified against source above):
  *   sessions-row                     — row root (data-chat-id, data-active)
- *   sessions-row-status-dot          — StatusDot; aria-label = badge.base
+ *   sessions-row-status-dot          — StatusDot; aria-label = data-status = badge.base
  *                                       ('idle'|'working'|'waiting'|'worktree-missing'|'transcript-missing').
- *                                       Its ink is now stock's two-step ramp — `text-primary` for
- *                                       anything wanting attention (working/waiting/unread) and
- *                                       `text-muted-foreground` for everything else. The v1
- *                                       four-step `text-mf-text-3` is a PHANTOM class in v2 and
- *                                       compiles to nothing.
+ *                                       The slot itself carries no ink (the glyph inside it does), so
+ *                                       state is asserted through `data-status`, plus `data-unread="true"`
+ *                                       on an idle chat with an unseen response (absent otherwise).
  *   sessions-row-relative-time       — time label; it STAYS PUT on hover (the actions insert in
  *                                       front of it and the truncating title gives way instead —
  *                                       SessionRow.tsx RowBody)
@@ -146,13 +144,10 @@ test.describe('§sessions-rows Row selection, hover, context menu, pin, meta lin
     const rowX = sessionsSidebar(page).row(chatIdX);
     const dot = rowX.getByTestId('sessions-row-status-dot');
 
-    // The dot is a ProviderLogo glyph tinted by state (StatusDot.tsx statusClass).
-    // v2 has two usable inks, so the ramp collapsed to `text-primary` for anything
-    // wanting attention and `text-muted-foreground` for everything else — v1's
-    // `text-mf-text-3` no longer exists in this tree.
+    // Idle and read: the muted ring, i.e. idle with no unread flag (StatusDot.tsx).
     await expect(dot).toHaveAttribute('aria-label', 'idle');
-    await expect(dot).toHaveClass(/text-muted-foreground/);
-    await expect(dot).not.toHaveClass(/text-primary/);
+    await expect(dot).toHaveAttribute('data-status', 'idle');
+    await expect(dot).not.toHaveAttribute('data-unread');
   });
 
   test('hovering a row reveals the pin/tag/archive actions in front of the relative time', async () => {
@@ -446,14 +441,14 @@ test.describe('§sessions-rows Unread status dot + copy session id', () => {
     await selectRow(rowB);
 
     // A's response lands in the background: chat.notification reaches the
-    // client and session-list-router's onMarkUnread(chatIdA) flips the logo
-    // glyph to the accent (StatusDot.tsx statusClass → wantsAttention).
-    await expect(dotA).toHaveClass(/text-primary/, { timeout: 45_000 });
+    // client and session-list-router's onMarkUnread(chatIdA) flips the dot to
+    // the solid primary "unread" glyph (StatusDot.tsx, idle + unread).
+    await expect(dotA).toHaveAttribute('data-unread', 'true', { timeout: 45_000 });
     await expect(dotA).toHaveAttribute('aria-label', 'idle');
 
     // Reselecting A clears the unread flag.
     await selectRow(rowA);
-    await expect(dotA).not.toHaveClass(/text-primary/, { timeout: 10_000 });
+    await expect(dotA).not.toHaveAttribute('data-unread', { timeout: 10_000 });
   });
 
   test('copy-session-id appears once the chat has a claudeSessionId, and copies it to the clipboard', async () => {
