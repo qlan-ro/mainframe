@@ -19,6 +19,10 @@
  *   ``Diff of `<file>` `` + `At line N:`   → ReviewCommentCard
  *                                            (`view-model/parse-review-comment.ts`)
  *   `Implement the following plan:`        → PlanBubble (`messages/plan-message.ts`)
+ *   `<mainframe-agent-message …>`,
+ *   `<mainframe-task-result …>`             → AgentMessageCard
+ *                                            (`markers/agent-message.ts`; the
+ *                                            daemon mirrors the first for titles)
  *
  * `\0__MF_PERMISSION__` (`view-model/map-assistant-blocks.ts`) is neither: the
  * projection invents it and it never travels on the wire.

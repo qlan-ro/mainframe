@@ -4,6 +4,7 @@ import type { UIZone } from './plugin.js';
 import type { LaunchProcessStatus } from './launch.js';
 import type { AutomationRunSummary, AutomationInteractionSummary } from './automation.js';
 import type { WorktreeSwitchOffer, WorktreeOfferOutcome } from './worktree-offer.js';
+import type { DelegatedTask } from './orchestration.js';
 
 export type ChatNotificationKind = 'task_complete' | 'session_error' | 'attention_request';
 
@@ -16,6 +17,9 @@ export type DaemonEvent =
   // cached history, and removed the chat from the live registry. The chat row
   // stays visible; reopening cold-reloads the transcript from the JSONL.
   | { type: 'chat.offloaded'; chatId: string }
+  // A delegated task's status, work state, or delivery changed. No top-level
+  // chatId, so every client sees it without subscribing to the child chat.
+  | { type: 'delegated_task.updated'; task: DelegatedTask }
   | { type: 'process.started'; chatId: string; process: AdapterProcess }
   | { type: 'process.ready'; processId: string; claudeSessionId: string }
   | { type: 'process.stopped'; processId: string }

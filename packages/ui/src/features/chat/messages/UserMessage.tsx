@@ -18,6 +18,8 @@
  *   - Implementing plan → PlanBubble, when the daemon sent a clear-context
  *     `Implement the following plan:` turn (see plan-message.ts)
  *   - Hover bar     → UserMessageActionBar ("Fork from here")
+ *   - Agent-sent turn → AgentMessageCard, when another chat's agent wrote it
+ *     through the orchestration MCP server (see markers/agent-message.ts)
  *
  * Inline directives (@mention, @session, /command) render through
  * user-directive-renderers.tsx; session reference lines are stripped here so the
@@ -51,6 +53,8 @@ import { ReviewCommentCard } from './ReviewCommentCard';
 import { PlanBubble } from './PlanBubble';
 import { parsePlanUserMessage } from './plan-message';
 import { UserMessageActionBar } from './UserMessageActionBar';
+import { AgentMessageCard } from './AgentMessageCard';
+import { parseAgentText } from '../markers/agent-message';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Remark plugin set (stable reference — never define inline)
@@ -159,19 +163,23 @@ function UserMessageImpl() {
   // `Implement the following plan:` — render the PlanBubble in place of the
   // plain bubble (never a command/review turn, never queued).
   const planBody = !slashProps && !meta.reviewComment ? parsePlanUserMessage(cleanText) : null;
+  // A message another agent sent (chat_send/launch, a task prompt, task
+  // results) renders as a card naming the sender, never as the user's bubble.
+  const agentText = !slashProps && !meta.reviewComment && !planBody ? parseAgentText(cleanText) : null;
 
-  const body = planBody ? null : slashProps ? (
-    <ReadMoreBubble>
-      <SlashPill kind={slashProps.kind} name={slashProps.name} />
-      {slashProps.userText}
-    </ReadMoreBubble>
-  ) : cleanText ? (
-    <ReadMoreBubble>
-      <Markdown remarkPlugins={REMARK_PLUGINS} urlTransform={urlTransform} components={userMarkdownComponents}>
-        {cleanText}
-      </Markdown>
-    </ReadMoreBubble>
-  ) : null;
+  const body =
+    planBody || agentText ? null : slashProps ? (
+      <ReadMoreBubble>
+        <SlashPill kind={slashProps.kind} name={slashProps.name} />
+        {slashProps.userText}
+      </ReadMoreBubble>
+    ) : cleanText ? (
+      <ReadMoreBubble>
+        <Markdown remarkPlugins={REMARK_PLUGINS} urlTransform={urlTransform} components={userMarkdownComponents}>
+          {cleanText}
+        </Markdown>
+      </ReadMoreBubble>
+    ) : null;
 
   // H5: surface send failures. `error` is set by projectPendingMessage when
   // status === 'failed'; Retry re-sends the pending's text via the controller
@@ -223,6 +231,8 @@ function UserMessageImpl() {
             <div className="w-full">
               <PlanBubble plan={planBody} clearedContext executionMode={chatExtras?.state.chatConfig?.permissionMode} />
             </div>
+          ) : agentText ? (
+            <AgentMessageCard parsed={agentText} messageId={messageId} />
           ) : (
             <>
               {body && <UserBubble>{body}</UserBubble>}
