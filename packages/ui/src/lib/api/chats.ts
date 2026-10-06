@@ -3,7 +3,14 @@
  * All routes are unauthenticated when called from localhost (daemon auth middleware
  * isLocalhost() bypass confirmed in packages/core/src/server/middleware/auth.ts).
  */
-import type { Chat, ClaudeWorkflowRun, SessionTuning, ExecutionMode, PermissionMode } from '@qlan-ro/mainframe-types';
+import type {
+  Chat,
+  ClaudeWorkflowRun,
+  SessionTuning,
+  ExecutionMode,
+  ForkChatRequest,
+  PermissionMode,
+} from '@qlan-ro/mainframe-types';
 import { apiBase, request, requestEmpty } from './http';
 
 /** Body for PATCH /api/chats/:id/config — adapter / model / permission / plan. */
@@ -159,13 +166,14 @@ export const discardChat = (port: number, chatId: string): Promise<void> =>
   requestEmpty('POST', `${apiBase(port)}/api/chats/${chatId}/discard`);
 
 /**
- * Branch a chat's conversation into a new chat (todo #343). No body — the
- * daemon's `deny_unknown_fields` empty struct accepts either no body or `{}`.
- * On failure the daemon's `fail` message (adapter name, or the reason from
- * the Behavior list) surfaces via `ApiRequestError.message`.
+ * Branch a chat's conversation into a new chat (todo #343). No body forks
+ * the whole chat; `{ fromMessageId }` forks immediately before that sent
+ * user message. The daemon rejects unknown body fields. On failure the
+ * daemon's `fail` message (adapter name, or the reason from the Behavior
+ * list) surfaces via `ApiRequestError.message`.
  */
-export const forkChat = (port: number, chatId: string): Promise<Chat> =>
-  request<Chat>('POST', `${apiBase(port)}/api/chats/${chatId}/fork`);
+export const forkChat = (port: number, chatId: string, body?: ForkChatRequest): Promise<Chat> =>
+  request<Chat>('POST', `${apiBase(port)}/api/chats/${chatId}/fork`, body);
 
 /**
  * Open (or reveal) a chat's side chat (todo #344). Idempotent — a parent with

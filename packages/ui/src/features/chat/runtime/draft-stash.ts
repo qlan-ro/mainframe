@@ -30,6 +30,15 @@ export function captureIfMarked(chatId: string, draft: DraftStash): void {
   stash.set(chatId, draft);
 }
 
+/**
+ * Seed a thread's composer before it first mounts — a from-message fork puts
+ * the chosen message's text here, unsent. Read by the same one-shot
+ * `takeStash`, so it lands exactly once and never survives a later remount.
+ */
+export function seedDraft(chatId: string, text: string): void {
+  stash.set(chatId, { text, attachments: [] });
+}
+
 /** Call from the runtime hook's mount effect. One-shot: consumes the stash. */
 export function takeStash(chatId: string): DraftStash | undefined {
   const draft = stash.get(chatId);

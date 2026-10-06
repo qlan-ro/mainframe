@@ -17,29 +17,8 @@
 import type { FC } from 'react';
 import { ActionBarPrimitive, ActionBarMorePrimitive, AuiIf } from '@assistant-ui/react';
 import { CheckIcon, CopyIcon, DownloadIcon, MoreHorizontalIcon } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-
-// ── Shared ghost icon button with tooltip ────────────────────────────────────
-
-interface IconButtonProps {
-  tooltip: string;
-  'data-testid'?: string;
-  className?: string;
-  children: React.ReactNode;
-}
-
-const ActionIconButton = ({ tooltip, children, className, ...rest }: IconButtonProps) => (
-  <Tooltip>
-    <TooltipTrigger asChild>
-      <Button variant="ghost" size="icon-xs" className={cn('text-muted-foreground', className)} {...rest}>
-        {children}
-      </Button>
-    </TooltipTrigger>
-    <TooltipContent side="bottom">{tooltip}</TooltipContent>
-  </Tooltip>
-);
+import { ActionIconButton } from './action-icon-button';
 
 // ── Copy button — shows check icon while in copied state ─────────────────────
 

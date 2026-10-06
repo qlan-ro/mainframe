@@ -6,11 +6,18 @@
  * a disabled menu item's `Hint` shows. Pure and side-effect-free: the caller
  * resolves the adapter and the chat's own fields (`SessionCustom`) and decides
  * how to render `reason` (a disabled `ContextMenuItem` wrapped in `Hint`).
+ *
+ * `forkBaseAvailability` holds the checks every fork shares; the whole-chat
+ * Fork adds the turn-in-flight refusal, and "Fork from here" adds its message
+ * rules (`fork-from-message-availability.ts`).
  */
 
 export type ForkAvailability = { enabled: true } | { enabled: false; reason: string };
 
-export interface ForkAvailabilityInput {
+export const FORK_ENABLED: ForkAvailability = { enabled: true };
+
+/** The chat-level facts every fork checks, whatever its fork point. */
+export interface ForkBaseInput {
   /** `AdapterInfo.capabilities.fork` — absent/false both mean "can't fork". */
   capabilityFork: boolean;
   /** `AdapterInfo.name` — the disabled reason names the adapter, never its id. */
@@ -30,6 +37,9 @@ export interface ForkAvailabilityInput {
   claudeSessionId?: string;
   transcriptMissing: boolean;
   directoryMissing: boolean;
+}
+
+export interface ForkAvailabilityInput extends ForkBaseInput {
   /**
    * The main turn only — NEVER `displayStatus === 'working'` alone, which
    * live background tasks also set. A chat with background tasks but no main
@@ -40,31 +50,27 @@ export interface ForkAvailabilityInput {
   hasPending: boolean;
 }
 
+const disabled = (reason: string): ForkAvailability => ({ enabled: false, reason });
+
+/** The shared checks, in the spec's order. */
+export function forkBaseAvailability(input: ForkBaseInput): ForkAvailability {
+  if (!input.capabilityFork) {
+    return disabled(input.capabilityReason ?? `Forking isn't available for ${input.adapterName} chats yet`);
+  }
+  if (input.temporary) return disabled("Temporary chats can't be forked");
+  if (input.noProject) return disabled("Chats with no project can't be forked");
+  if (input.claudeSessionId == null) return disabled('Nothing to fork yet');
+  if (input.transcriptMissing) return disabled("This chat's transcript is missing");
+  if (input.directoryMissing) return disabled("This chat's folder is missing");
+  return FORK_ENABLED;
+}
+
 /** The spec's exact Behavior-list copy, in the spec's exact order. */
 export function forkAvailability(input: ForkAvailabilityInput): ForkAvailability {
-  if (!input.capabilityFork) {
-    return {
-      enabled: false,
-      reason: input.capabilityReason ?? `Forking isn't available for ${input.adapterName} chats yet`,
-    };
-  }
-  if (input.temporary) {
-    return { enabled: false, reason: "Temporary chats can't be forked" };
-  }
-  if (input.noProject) {
-    return { enabled: false, reason: "Chats with no project can't be forked" };
-  }
-  if (input.claudeSessionId == null) {
-    return { enabled: false, reason: 'Nothing to fork yet' };
-  }
-  if (input.transcriptMissing) {
-    return { enabled: false, reason: "This chat's transcript is missing" };
-  }
-  if (input.directoryMissing) {
-    return { enabled: false, reason: "This chat's folder is missing" };
-  }
+  const base = forkBaseAvailability(input);
+  if (!base.enabled) return base;
   if (input.isRunning || input.hasPending) {
-    return { enabled: false, reason: 'Wait for the current turn to finish or interrupt it' };
+    return disabled('Wait for the current turn to finish or interrupt it');
   }
-  return { enabled: true };
+  return FORK_ENABLED;
 }

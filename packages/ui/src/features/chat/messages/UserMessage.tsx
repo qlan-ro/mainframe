@@ -17,6 +17,7 @@
  *     tiles with their selector context (native message.attachments)
  *   - Implementing plan → PlanBubble, when the daemon sent a clear-context
  *     `Implement the following plan:` turn (see plan-message.ts)
+ *   - Hover bar     → UserMessageActionBar ("Fork from here")
  *
  * Inline directives (@mention, @session, /command) render through
  * user-directive-renderers.tsx; session reference lines are stripped here so the
@@ -49,6 +50,7 @@ import { UserAttachments } from './UserAttachments';
 import { ReviewCommentCard } from './ReviewCommentCard';
 import { PlanBubble } from './PlanBubble';
 import { parsePlanUserMessage } from './plan-message';
+import { UserMessageActionBar } from './UserMessageActionBar';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Remark plugin set (stable reference — never define inline)
@@ -192,7 +194,12 @@ function UserMessageImpl() {
   const hasExtras = imageParts.length > 0 || attachmentCount > 0;
 
   return (
-    <MessagePrimitive.Root data-testid="chat-user-message" data-message-id={messageId} className="pt-1 pb-4">
+    // The fork bar's footer takes over most of the bottom padding when it renders.
+    <MessagePrimitive.Root
+      data-testid="chat-user-message"
+      data-message-id={messageId}
+      className="pt-1 pb-4 has-data-[slot=message-footer]:pb-1"
+    >
       <Message align="end">
         <MessageContent>
           {reviewCard}
@@ -250,6 +257,8 @@ function UserMessageImpl() {
               </p>
             </div>
           )}
+
+          <UserMessageActionBar prefill={visibleMessageText(rawText)} />
         </MessageContent>
       </Message>
     </MessagePrimitive.Root>

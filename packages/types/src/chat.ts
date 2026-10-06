@@ -127,6 +127,15 @@ export interface Chat {
   sideChatWaiting?: boolean;
 }
 
+/**
+ * Body of `POST /api/chats/{id}/fork`. Omitted or `null` `fromMessageId`
+ * forks the whole chat (todo #343). An id forks immediately before that sent
+ * user message: the fork holds everything the parent showed before it.
+ */
+export interface ForkChatRequest {
+  fromMessageId?: string | null;
+}
+
 export interface Project {
   id: string;
   name: string;
