@@ -72,6 +72,16 @@ impl SegmentStore for DaemonChatDeps {
         }
     }
 
+    fn set_session_file_path(&self, native_ref: &str, path: &str) {
+        let (id, path) = (native_ref.to_string(), path.to_string());
+        if let Err(err) = self
+            .db
+            .call_blocking(move |d| d.segments.set_session_file_path(&id, &path))
+        {
+            tracing::warn!(%err, native_ref, "native session path write failed");
+        }
+    }
+
     fn has_native_id(&self, chat_id: &str) -> bool {
         let id = chat_id.to_string();
         match self

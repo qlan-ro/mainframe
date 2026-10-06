@@ -1,5 +1,6 @@
 //! `ConfigManagerDeps` adapter and its sub-manager construction.
 use super::*;
+use crate::config_transcripts::OwnedNativeSession;
 
 pub(super) struct CmDeps {
     deps: Arc<dyn ChatManagerDeps>,
@@ -91,6 +92,28 @@ impl ConfigManagerDeps for CmDeps {
         self.deps
             .segment_store()
             .is_some_and(|store| store.has_native_id(chat_id))
+    }
+    fn owned_native_sessions(&self, chat_id: &str) -> Vec<OwnedNativeSession> {
+        let Some(layout) = self.deps.segment_store().and_then(|s| s.layout(chat_id)) else {
+            return Vec::new();
+        };
+        layout
+            .natives
+            .into_iter()
+            .filter(|n| n.borrowed_from_chat_id.is_none())
+            .filter_map(|n| {
+                Some(OwnedNativeSession {
+                    session_id: n.native_session_id?,
+                    native_ref: n.id,
+                    adapter_id: n.adapter_id,
+                })
+            })
+            .collect()
+    }
+    fn set_native_session_file_path(&self, native_ref: &str, path: &str) {
+        if let Some(store) = self.deps.segment_store() {
+            store.set_session_file_path(native_ref, path);
+        }
     }
 }
 

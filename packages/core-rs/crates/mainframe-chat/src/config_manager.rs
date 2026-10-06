@@ -3,9 +3,7 @@
 use std::sync::{Arc, Mutex};
 
 use mainframe_adapter_api::{AdapterError, AdapterSession, BoxFuture};
-use mainframe_services::workspace::{
-    create_worktree, get_claude_project_dir, move_session_files, remove_worktree,
-};
+use mainframe_services::workspace::{create_worktree, move_session_files, remove_worktree};
 use mainframe_types::adapter::model_endpoint;
 use mainframe_types::chat::Project;
 use mainframe_types::events::DaemonEvent;
@@ -13,7 +11,7 @@ use mainframe_types::settings::{ExecutionMode, GeneralConfig};
 use tracing::warn;
 
 use crate::config_respawn_guard::{model_changed, respawn_refusal};
-use crate::event_handler::compute_session_file_path;
+use crate::config_transcripts::{ActiveSession, OwnedNativeSession, relocate_claude_transcripts};
 use crate::types::ActiveChat;
 
 #[path = "config_locks.rs"]
@@ -89,6 +87,14 @@ pub trait ConfigManagerDeps: Send + Sync {
     fn adapter_name(&self, adapter_id: &str) -> String {
         adapter_id.to_string()
     }
+    /// The chat's owned native sessions that have a provider id, which a
+    /// worktree move relocates. Empty (the default) for a deps impl that
+    /// stores no segments: the mirrored active session moves as before.
+    fn owned_native_sessions(&self, _chat_id: &str) -> Vec<OwnedNativeSession> {
+        Vec::new()
+    }
+    /// Records a relocated transcript path on one native row.
+    fn set_native_session_file_path(&self, _native_ref: &str, _path: &str) {}
     /// Relocate a Claude session's transcript files between project dirs. A seam
     /// only so tests can exercise the failure path without touching a real `$HOME`.
     fn move_claude_session_files<'a>(
@@ -473,20 +479,19 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
             .await
             .map_err(|e| ConfigError::Message(e.to_string()))?;
 
-            let mut moved_transcript = None;
-            if adapter == "claude" {
-                let old_dir = get_claude_project_dir(&project.path);
-                let new_dir = get_claude_project_dir(&info.worktree_path);
-                move_session_files(
-                    &session_id,
-                    &old_dir.to_string_lossy(),
-                    &new_dir.to_string_lossy(),
-                )
-                .await
-                .map_err(|e| ConfigError::Message(e.to_string()))?;
-                moved_transcript =
-                    Some(compute_session_file_path(&info.worktree_path, &session_id));
-            }
+            let active = ActiveSession {
+                adapter_id: &adapter,
+                session_id: Some(&session_id),
+            };
+            let moved_transcript = relocate_claude_transcripts(
+                &self.deps,
+                chat_id,
+                active,
+                &project.path,
+                &info.worktree_path,
+            )
+            .await
+            .map_err(ConfigError::Message)?;
 
             self.apply_worktree_update(
                 &cell,
@@ -510,6 +515,21 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
         )
         .await
         .map_err(|e| ConfigError::Message(e.to_string()))?;
+        // A switched chat whose new segment hasn't sent yet still owns its
+        // earlier sessions; returning to one resumes it from the worktree.
+        let active = ActiveSession {
+            adapter_id: &adapter,
+            session_id: None,
+        };
+        relocate_claude_transcripts(
+            &self.deps,
+            chat_id,
+            active,
+            &project.path,
+            &info.worktree_path,
+        )
+        .await
+        .map_err(ConfigError::Message)?;
         self.apply_worktree_update(
             &cell,
             chat_id,
@@ -560,22 +580,22 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
                 fut.await;
             }
 
-            let mut moved_transcript = None;
-            if adapter == "claude" {
-                let old_dir = get_claude_project_dir(effective_dir(
-                    current_worktree.as_deref(),
-                    &project.path,
-                ));
-                let new_dir = get_claude_project_dir(worktree_path);
-                if let Err(err) = self
-                    .deps
-                    .move_claude_session_files(
-                        &session_id,
-                        &old_dir.to_string_lossy(),
-                        &new_dir.to_string_lossy(),
-                    )
-                    .await
-                {
+            let active = ActiveSession {
+                adapter_id: &adapter,
+                session_id: Some(&session_id),
+            };
+            let old_dir = effective_dir(current_worktree.as_deref(), &project.path);
+            let moved_transcript = match relocate_claude_transcripts(
+                &self.deps,
+                chat_id,
+                active,
+                old_dir,
+                worktree_path,
+            )
+            .await
+            {
+                Ok(path) => path,
+                Err(err) => {
                     // The chat is already stopped at this point — leaving it that way
                     // would strand the session with no running CLI and no new binding.
                     tracing::error!(
@@ -589,8 +609,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
                         "Moving the session's history into the worktree failed. The session stayed where it was.".to_string(),
                     ));
                 }
-                moved_transcript = Some(compute_session_file_path(worktree_path, &session_id));
-            }
+            };
 
             self.apply_worktree_update(
                 &cell,
@@ -631,7 +650,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
         let Some(worktree_path) = worktree_path else {
             return Ok(());
         };
-        if has_claude_session {
+        if has_claude_session || self.deps.has_native_session(chat_id) {
             return Err(ConfigError::Message(
                 "Cannot disable worktree after session has started".to_string(),
             ));

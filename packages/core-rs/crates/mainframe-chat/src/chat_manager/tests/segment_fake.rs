@@ -96,6 +96,12 @@ impl SegmentStore for FakeStore {
     fn add_result(&self, _chat_id: &str, delta: &SegmentResultDelta) {
         self.results.lock().unwrap().push(delta.clone());
     }
+    fn set_session_file_path(&self, native_ref: &str, path: &str) {
+        let mut l = self.layout.lock().unwrap();
+        if let Some(n) = l.natives.iter_mut().find(|n| n.id == native_ref) {
+            n.session_file_path = Some(path.to_string());
+        }
+    }
     fn has_native_id(&self, _chat_id: &str) -> bool {
         let l = self.layout.lock().unwrap();
         l.natives.iter().any(|n| n.native_session_id.is_some())

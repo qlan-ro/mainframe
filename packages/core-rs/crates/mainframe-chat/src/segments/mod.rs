@@ -42,4 +42,6 @@ pub trait SegmentStore: Send + Sync {
     fn add_result(&self, chat_id: &str, delta: &SegmentResultDelta);
     /// Whether any owned native row has a provider id.
     fn has_native_id(&self, chat_id: &str) -> bool;
+    /// Records a relocated transcript path on one native row.
+    fn set_session_file_path(&self, native_ref: &str, path: &str);
 }
