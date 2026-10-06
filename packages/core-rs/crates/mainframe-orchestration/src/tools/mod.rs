@@ -16,7 +16,9 @@ mod chat_read;
 mod chat_read_items;
 mod chat_send;
 mod chat_wait;
+mod delegate_task;
 mod launch_common;
+mod task_status;
 
 /// One `tools/list` entry.
 pub struct ToolDef {
@@ -57,6 +59,9 @@ pub fn definitions() -> Vec<ToolDef> {
         chat_launch::definition(),
         chat_send::definition(),
         chat_interrupt::definition(),
+        delegate_task::definition(),
+        task_status::status_definition(),
+        task_status::cancel_definition(),
     ]
 }
 
@@ -84,6 +89,9 @@ pub(crate) async fn call(
         "chat_launch" => chat_launch::run(svc, ctx, args).await,
         "chat_send" => chat_send::run(svc, ctx, args).await,
         "chat_interrupt" => chat_interrupt::run(svc, ctx, args).await,
+        "delegate_task" => delegate_task::run(svc, ctx, args).await,
+        "task_status" => task_status::run_status(svc, ctx, args).await,
+        "task_cancel" => task_status::run_cancel(svc, ctx, args).await,
         _ => Err(ToolError::invalid(format!("Unknown tool: {name}"))),
     }
 }
@@ -145,7 +153,7 @@ mod tests {
         for def in definitions() {
             let read = matches!(
                 def.name,
-                "capabilities" | "chat_list" | "chat_read" | "chat_wait"
+                "capabilities" | "chat_list" | "chat_read" | "chat_wait" | "task_status"
             );
             assert_eq!(def.read_only, read, "{}", def.name);
         }

@@ -216,6 +216,9 @@ impl ChatManager {
         if let Some(v) = partial.pinned {
             guard.chat.pinned = Some(v);
         }
+        if let Some(v) = partial.parent_chat_id {
+            guard.chat.parent_chat_id = Some(Some(v));
+        }
     }
 
     /// Broadcast `chat.updated` for a chat whose fields were persisted out-of-band

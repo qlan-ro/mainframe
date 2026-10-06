@@ -123,3 +123,45 @@ async fn a_spawn_through_the_chat_manager_issues_a_credential() {
     chats.end_chat(&caller).await;
     assert!(!service.credentials().has_credential(&caller));
 }
+
+#[tokio::test]
+async fn a_delegated_child_reports_its_task_and_boot_interrupts_open_tasks() {
+    use mainframe_orchestration::ports::TaskStore;
+    use mainframe_types::orchestration::{DelegatedTask, TaskDelivery, TaskRole, TaskStatus};
+
+    let (ctx, port, project_id, caller) = setup().await;
+    let mut launch = request(&project_id, &caller, LaunchWorkspace::ProjectRoot);
+    launch.parent_chat_id = Some(caller.clone());
+    let child = port.launch_chat(launch).await.unwrap();
+    let store = super::DbTaskStore::new(ctx.db.clone());
+    let task = DelegatedTask {
+        id: "task_1".into(),
+        parent_chat_id: caller.clone(),
+        child_chat_id: child.id.clone(),
+        client_request_id: None,
+        title: None,
+        role: TaskRole::General,
+        status: TaskStatus::Running,
+        depth: 1,
+        summary: None,
+        error: None,
+        cancel_reason: None,
+        delivery: TaskDelivery::Pending,
+        created_at: "t".into(),
+        updated_at: "t".into(),
+        completed_at: None,
+    };
+    store.insert(task).await.unwrap();
+
+    let view = port.chat(&child.id).await.unwrap();
+    assert_eq!(view.task_id.as_deref(), Some("task_1"));
+    assert_eq!(view.parent_chat_id.as_deref(), Some(caller.as_str()));
+    let listed = port.list_chats(&project_id, false).await;
+    let row = listed.iter().find(|c| c.id == child.id).unwrap();
+    assert_eq!(row.task_id.as_deref(), Some("task_1"));
+
+    ctx.orchestration.clone().unwrap().reconcile_boot().await;
+    let after = store.get("task_1").await.unwrap();
+    assert_eq!(after.status, TaskStatus::Interrupted);
+    assert_eq!(after.delivery, TaskDelivery::Dropped);
+}

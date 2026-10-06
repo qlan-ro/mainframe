@@ -14,6 +14,7 @@ use crate::ports::{
     AdapterView, BoxFuture, ChatView, LaunchRequest, LaunchWorkspace, ModelView, OrchestrationPort,
 };
 use crate::service::{CallCtx, OrchestrationService};
+use crate::test_tasks::FakeTasks;
 
 pub fn chat_view(id: &str) -> ChatView {
     ChatView {
@@ -232,12 +233,32 @@ impl OrchestrationPort for FakePort {
 
 /// A service over `port` and a live call context for `caller_chat_id`.
 pub fn service_with(port: FakePort, caller_chat_id: &str) -> (Arc<OrchestrationService>, CallCtx) {
-    let svc = Arc::new(OrchestrationService::new(Arc::new(port), "test", 1));
-    let token = svc.issue_launch(caller_chat_id, "session-1").token;
+    service_with_tasks(port, FakeTasks::default(), caller_chat_id)
+}
+
+pub fn service_with_tasks(
+    port: FakePort,
+    tasks: FakeTasks,
+    caller_chat_id: &str,
+) -> (Arc<OrchestrationService>, CallCtx) {
+    let svc = Arc::new(OrchestrationService::new(
+        Arc::new(port),
+        Arc::new(tasks),
+        "test",
+        1,
+    ));
+    let ctx = call_ctx(&svc, caller_chat_id);
+    (svc, ctx)
+}
+
+/// A live call context for another chat on the same service.
+pub fn call_ctx(svc: &OrchestrationService, chat_id: &str) -> CallCtx {
+    let token = svc
+        .issue_launch(chat_id, &format!("session-{chat_id}"))
+        .token;
     let caller = svc
         .credentials()
         .resolve(token.expose())
         .unwrap_or_else(|| panic!("caller"));
-    let ctx = svc.begin_call(&caller, "n:1");
-    (svc, ctx)
+    svc.begin_call(&caller, "n:1")
 }

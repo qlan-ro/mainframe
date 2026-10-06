@@ -1,33 +1,23 @@
-//! The service's reactions to chat lifecycle: Stop cascades, outbox flushes
-//! when a target goes idle, and credential revocation on process exit.
+//! The service's reactions to chat lifecycle: task progress, outbox
+//! flushes when a target goes idle, and credential revocation on exit.
 
 use std::sync::Arc;
 
-use mainframe_types::events::DaemonEvent;
+use mainframe_types::events::{ChatUpdatedReason, DaemonEvent};
+use mainframe_types::orchestration::TaskDelivery;
 use tokio::sync::broadcast::error::RecvError;
 
-use crate::outbox::batch_body;
+use crate::outbox::{OutboxEntry, OutboxKind, batch_body};
 use crate::service::OrchestrationService;
 use crate::state::ChatState;
+use crate::tasks::now;
 use crate::waiter::event_chat_id;
 
 impl OrchestrationService {
-    /// Steps 1–3 of a Stop (the caller performs step 4, the turn interrupt):
-    /// end the chat's in-flight calls and refuse late ones, then drop every
-    /// message held for it. Returns the task ids it cancelled.
-    pub async fn cascade_stop(&self, chat_id: &str, reason: Option<&str>) -> Vec<String> {
-        self.mark_stopping(chat_id);
-        let _ = reason;
-        let dropped = self.outbox.drop_for_target(chat_id);
-        if dropped > 0 {
-            tracing::info!(chat_id, dropped, "dropped held agent messages on stop");
-        }
-        Vec::new()
-    }
-
     /// Sends everything held for `chat_id` as one message once it is idle.
+    /// Deliveries a restart left owed wait until the chat spawns again.
     pub async fn try_flush(&self, chat_id: &str) {
-        if !self.outbox.has_for(chat_id) {
+        if !self.outbox.has_for(chat_id) || self.is_boot_held(chat_id) {
             return;
         }
         let _guard = self.flush_lock.lock().await;
@@ -47,10 +37,27 @@ impl OrchestrationService {
         if entries.is_empty() {
             return;
         }
-        let body = batch_body(&entries);
-        if let Err(err) = self.port.send(chat_id, &body).await {
+        if let Err(err) = self.port.send(chat_id, &batch_body(&entries)).await {
             tracing::warn!(chat_id, ?err, "outbox delivery failed; keeping entries");
             self.outbox.restore(entries);
+            return;
+        }
+        self.mark_delivered(&entries).await;
+    }
+
+    async fn mark_delivered(&self, entries: &[OutboxEntry]) {
+        for entry in entries {
+            let OutboxKind::TaskResult { task_id } = &entry.kind else {
+                continue;
+            };
+            let Some(mut task) = self.tasks.get(task_id).await else {
+                continue;
+            };
+            task.delivery = TaskDelivery::Delivered;
+            task.updated_at = now();
+            if let Err(err) = self.save(&task).await {
+                tracing::warn!(task_id, %err, "failed to record a task delivery");
+            }
         }
     }
 
@@ -64,17 +71,44 @@ impl OrchestrationService {
             DaemonEvent::ChatEnded { chat_id } | DaemonEvent::ChatOffloaded { chat_id } => {
                 self.revoke(chat_id);
             }
+            // Our own announcements; reacting would only re-read the same task.
+            DaemonEvent::DelegatedTaskUpdated { .. } => return,
             _ => {}
         }
-        if let Some(chat_id) = event_chat_id(event) {
-            if self.port.chat(chat_id).await.is_some_and(|c| !c.working) {
-                self.clear_stopping(chat_id);
-            }
-            self.try_flush(chat_id).await;
+        let Some(chat_id) = event_chat_id(event) else {
+            return;
+        };
+        if self.port.chat(chat_id).await.is_some_and(|c| !c.working) {
+            self.clear_stopping(chat_id);
         }
+        if let Some(task_id) = self.tracked_task(chat_id) {
+            let interrupted = matches!(
+                event,
+                DaemonEvent::ChatUpdated {
+                    reason: Some(ChatUpdatedReason::Interrupted),
+                    ..
+                }
+            );
+            if let Err(err) = self.advance(&task_id, interrupted).await {
+                tracing::warn!(task_id, %err, "failed to advance a delegated task");
+            }
+        }
+        self.try_flush(chat_id).await;
     }
 
     async fn on_lagged(&self) {
+        let tracked: Vec<String> = self
+            .active_children
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .values()
+            .cloned()
+            .collect();
+        for task_id in tracked {
+            if let Err(err) = self.advance(&task_id, false).await {
+                tracing::warn!(task_id, %err, "failed to advance a delegated task");
+            }
+        }
         for target in self.outbox.targets() {
             self.try_flush(&target).await;
         }
@@ -138,7 +172,7 @@ mod tests {
         port.add_chat("caller");
         let (svc, ctx) = service_with(port, "caller");
         svc.on_event(&DaemonEvent::ProcessStopped {
-            process_id: "session-1".into(),
+            process_id: "session-caller".into(),
         })
         .await;
         assert!(!svc.credentials().has_credential("caller"));

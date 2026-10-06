@@ -6,7 +6,8 @@
 //! title paths (deterministic fallback and LLM) run [`visible_message_text`].
 //!
 //! Whole-message forms (the review-comment card, the plan preamble) never reach a
-//! title path, so they have no mirror here. Adding a fenced marker on the TS side
+//! title path, so they have no mirror here — except the agent-message marker,
+//! which is a chat's first message when an agent launches it. Adding a fenced marker on the TS side
 //! means adding it here too — otherwise it surfaces verbatim in the sidebar.
 //!
 //! The `regex` crate is not a dependency of this crate; both matchers are
@@ -131,12 +132,44 @@ pub fn strip_reference_lines(text: &str) -> String {
 /// first — they sit at offset 0, so removing them is what puts a capture sentinel
 /// back at the start of the string where its own strip can find it.
 pub fn visible_message_text(text: &str) -> String {
-    strip_sandbox_capture_block(&strip_reference_lines(text))
+    strip_sandbox_capture_block(&strip_reference_lines(&unwrap_agent_message(text)))
+}
+
+// ── Agent messages ──────────────────────────────────────────────────────────
+
+const AGENT_MESSAGE_OPEN: &str = "<mainframe-agent-message ";
+const AGENT_MESSAGE_CLOSE: &str = "</mainframe-agent-message>";
+
+/// The body of a whole-message agent marker (`chat_launch` and `chat_send`
+/// prompts from the orchestration MCP server), so a chat an agent launched is
+/// titled after the prompt, not the marker. Mirrors the TS
+/// `parseAgentMessage`; anything else passes through unchanged.
+pub fn unwrap_agent_message(text: &str) -> String {
+    let trimmed = text.trim();
+    let Some(rest) = trimmed.strip_prefix(AGENT_MESSAGE_OPEN) else {
+        return text.to_string();
+    };
+    let (Some(header_end), true) = (rest.find('>'), rest.ends_with(AGENT_MESSAGE_CLOSE)) else {
+        return text.to_string();
+    };
+    let body = &rest[header_end + 1..rest.len() - AGENT_MESSAGE_CLOSE.len()];
+    body.trim().to_string()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_agent_message_marker_titles_as_its_body() {
+        let text = "<mainframe-agent-message from=\"abc\" kind=\"launch\">\nReview the diff\n</mainframe-agent-message>";
+        assert_eq!(visible_message_text(text), "Review the diff");
+        assert_eq!(unwrap_agent_message("plain"), "plain");
+        assert_eq!(
+            unwrap_agent_message("<mainframe-agent-message unterminated"),
+            "<mainframe-agent-message unterminated"
+        );
+    }
 
     #[test]
     fn strips_a_leading_run_of_reference_lines_plus_the_following_blank_line() {

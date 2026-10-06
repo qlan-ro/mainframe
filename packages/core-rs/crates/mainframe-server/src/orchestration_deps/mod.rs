@@ -17,12 +17,14 @@ use crate::db::Db;
 
 mod chat_port;
 mod launch;
+mod task_store;
 mod workspace;
 
 #[cfg(test)]
 mod tests;
 
 pub use chat_port::DaemonOrchestrationPort;
+pub use task_store::DbTaskStore;
 pub(crate) use workspace::branch_name_ok;
 
 /// Builds the service and attaches its hooks to the chat manager, so every
@@ -36,13 +38,14 @@ pub fn build_orchestration(
     version: &str,
     daemon_port: u16,
 ) -> Arc<OrchestrationService> {
+    let tasks = Arc::new(DbTaskStore::new(db.clone()));
     let port = Arc::new(DaemonOrchestrationPort::new(
         Arc::clone(&chats),
         db,
         adapters,
         broadcast,
     ));
-    let service = Arc::new(OrchestrationService::new(port, version, daemon_port));
+    let service = Arc::new(OrchestrationService::new(port, tasks, version, daemon_port));
     chats.set_orchestration_hooks(Arc::new(ChatOrchestrationHooks {
         service: Arc::downgrade(&service),
     }));

@@ -73,7 +73,7 @@ pub(super) async fn run(
         "limits": {
             "maxDepth": MAX_DEPTH,
             "maxActiveTasksPerTree": MAX_ACTIVE_TASKS_PER_TREE,
-            "activeTasksInTree": 0,
+            "activeTasksInTree": svc.open_tasks_in_tree(&caller.id).await,
             "launchesRemaining": svc.limiter.remaining(&caller.id),
             "defaultWaitMs": DEFAULT_WAIT_MS,
             "maxWaitMs": MAX_WAIT_MS,

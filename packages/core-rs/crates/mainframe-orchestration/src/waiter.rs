@@ -34,6 +34,9 @@ fn is_relevant(event: &DaemonEvent, watched: &[String]) -> bool {
     match event {
         // A process exit carries only the provider session id.
         DaemonEvent::ProcessStopped { .. } => true,
+        DaemonEvent::DelegatedTaskUpdated { task } => watched
+            .iter()
+            .any(|w| *w == task.child_chat_id || *w == task.parent_chat_id),
         _ => event_chat_id(event).is_some_and(|id| watched.iter().any(|w| w == id)),
     }
 }

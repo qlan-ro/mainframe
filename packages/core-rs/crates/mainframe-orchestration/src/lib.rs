@@ -21,11 +21,15 @@ pub mod ports;
 pub mod protocol;
 mod service;
 pub mod state;
+mod tasks;
+mod tasks_ops;
 pub mod tools;
 mod waiter;
 
 #[cfg(test)]
 mod test_support;
+#[cfg(test)]
+mod test_tasks;
 
 pub use credentials::{Caller, CredentialRegistry};
 pub use protocol::{RpcReply, is_supported_version};

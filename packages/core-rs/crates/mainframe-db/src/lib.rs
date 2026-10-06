@@ -20,6 +20,7 @@ mod chat_segments_repo;
 mod chat_segments_switch;
 pub mod chat_tags;
 pub mod chats;
+pub mod delegated_tasks;
 pub mod devices;
 pub mod migrations;
 mod orchestration;
@@ -35,6 +36,7 @@ pub use chat_handoffs::HandoffsRepository;
 pub use chat_segments::{RecordOutcome, SegmentResultDelta, SegmentsRepository};
 pub use chat_tags::ChatTagsRepository;
 pub use chats::{ChatListFilters, ChatUpdate, ChatsRepository, ForkInsert, PendingFork};
+pub use delegated_tasks::DelegatedTasksRepository;
 pub use devices::DevicesRepository;
 pub use projects::ProjectsRepository;
 pub use settings::SettingsRepository;
@@ -100,6 +102,7 @@ pub struct DatabaseManager {
     pub chat_tags: ChatTagsRepository,
     pub segments: SegmentsRepository,
     pub handoffs: HandoffsRepository,
+    pub delegated_tasks: DelegatedTasksRepository,
 }
 
 impl DatabaseManager {
@@ -128,6 +131,7 @@ impl DatabaseManager {
         let devices = DevicesRepository::new(Rc::clone(&db));
         let segments = SegmentsRepository::new(Rc::clone(&db));
         let handoffs = HandoffsRepository::new(Rc::clone(&db));
+        let delegated_tasks = DelegatedTasksRepository::new(Rc::clone(&db));
 
         Ok(Self {
             db,
@@ -139,6 +143,7 @@ impl DatabaseManager {
             chat_tags,
             segments,
             handoffs,
+            delegated_tasks,
         })
     }
 

@@ -7,6 +7,7 @@ use std::pin::Pin;
 
 use mainframe_types::chat::{ChatMessage, ChatStatus};
 use mainframe_types::events::DaemonEvent;
+use mainframe_types::orchestration::DelegatedTask;
 use mainframe_types::settings::ExecutionMode;
 use tokio::sync::broadcast;
 
@@ -113,6 +114,31 @@ pub struct LaunchRequest {
     pub created_by_chat_id: String,
     /// `Some` for a delegated child: the parent it nests under.
     pub parent_chat_id: Option<String>,
+}
+
+/// Persistence for `delegated_tasks`. Every failure is internal: the tools
+/// never expose storage errors to the model.
+pub trait TaskStore: Send + Sync {
+    fn insert(&self, task: DelegatedTask) -> BoxFuture<'_, Result<(), PortError>>;
+    fn update(&self, task: DelegatedTask) -> BoxFuture<'_, Result<(), PortError>>;
+    fn get<'a>(&'a self, task_id: &'a str) -> BoxFuture<'a, Option<DelegatedTask>>;
+    fn by_child<'a>(&'a self, child_chat_id: &'a str) -> BoxFuture<'a, Option<DelegatedTask>>;
+    fn by_request<'a>(
+        &'a self,
+        parent_chat_id: &'a str,
+        client_request_id: &'a str,
+    ) -> BoxFuture<'a, Option<DelegatedTask>>;
+    /// The parent's tasks, newest first.
+    fn by_parent<'a>(
+        &'a self,
+        parent_chat_id: &'a str,
+        limit: u32,
+    ) -> BoxFuture<'a, Vec<DelegatedTask>>;
+    fn nonterminal(&self) -> BoxFuture<'_, Vec<DelegatedTask>>;
+    fn owed(&self) -> BoxFuture<'_, Vec<DelegatedTask>>;
+    /// Boot: marks every unfinished task interrupted (its CLI died with the
+    /// previous daemon). Returns how many.
+    fn interrupt_unfinished(&self) -> BoxFuture<'_, usize>;
 }
 
 pub trait OrchestrationPort: Send + Sync {

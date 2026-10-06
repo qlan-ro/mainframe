@@ -43,6 +43,8 @@ pub struct ChatFieldsPartial {
     pub ultracode: Option<Option<bool>>,
     pub adaptive_thinking: Option<Option<bool>>,
     pub pinned: Option<bool>,
+    /// The parent a delegated child nests under, recorded after creation.
+    pub parent_chat_id: Option<String>,
 }
 
 /// Error surfaced by `forkToWorktree` (the create step is fallible, the enable step

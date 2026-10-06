@@ -356,6 +356,7 @@ fn tuning_partial(update: &mainframe_db::chats::ChatUpdate) -> ChatFieldsPartial
         ultracode: update.ultracode,
         adaptive_thinking: update.adaptive_thinking,
         pinned: None,
+        parent_chat_id: None,
     }
 }
 

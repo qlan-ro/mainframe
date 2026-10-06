@@ -470,6 +470,9 @@ async fn run_daemon() {
         interval_ms: None,
     });
     spawn_reconcile(db.clone(), Arc::clone(&background_tasks));
+    // Tasks whose CLIs died with the previous daemon become interrupted; owed
+    // deliveries wait for each parent's next spawn.
+    orchestration.reconcile_boot().await;
     spawn_worktree_backfill(db.clone());
 
     // allowRefresh() gates a pre-configure probe; refreshAll enriches

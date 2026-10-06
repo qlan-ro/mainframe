@@ -10,8 +10,8 @@ use tokio_util::sync::CancellationToken;
 use crate::credentials::{Caller, CredentialRegistry};
 use crate::errors::{ErrorCode, ToolError};
 use crate::outbox::Outbox;
-use crate::policy::{Clock, CreationLimiter, MAX_DEPTH, SystemClock};
-use crate::ports::{ChatView, OrchestrationPort};
+use crate::policy::{CreationLimiter, MAX_DEPTH, SystemClock};
+use crate::ports::{ChatView, OrchestrationPort, TaskStore};
 use crate::state::{ChatState, derive_state};
 
 /// One in-flight `tools/call`: who made it and how to abandon it.
@@ -22,6 +22,7 @@ pub struct CallCtx {
 
 pub struct OrchestrationService {
     pub(crate) port: Arc<dyn OrchestrationPort>,
+    pub(crate) tasks: Arc<dyn TaskStore>,
     credentials: CredentialRegistry,
     pub(crate) limiter: CreationLimiter,
     pub(crate) outbox: Outbox,
@@ -30,31 +31,39 @@ pub struct OrchestrationService {
     inflight: Mutex<HashMap<(String, String), CancellationToken>>,
     /// Serializes outbox flushes so two triggers cannot send one batch twice.
     pub(crate) flush_lock: tokio::sync::Mutex<()>,
+    /// Serializes task state transitions, so the event loop and a waiting
+    /// tool call cannot both finalize (and deliver) one task.
+    pub(crate) task_lock: tokio::sync::Mutex<()>,
+    /// `child chat id → task id` for every started, nonterminal task: the
+    /// event loop's in-memory index of which chat events advance a task.
+    pub(crate) active_children: Mutex<HashMap<String, String>>,
+    /// Parents whose owed deliveries survived a restart; held until the
+    /// parent's CLI spawns again, so a restart never wakes every parent.
+    pub(crate) boot_held: Mutex<HashSet<String>>,
     version: String,
     endpoint_url: String,
 }
 
 impl OrchestrationService {
     #[must_use]
-    pub fn new(port: Arc<dyn OrchestrationPort>, version: &str, daemon_port: u16) -> Self {
-        Self::with_clock(port, version, daemon_port, Box::new(SystemClock))
-    }
-
-    #[must_use]
-    pub fn with_clock(
+    pub fn new(
         port: Arc<dyn OrchestrationPort>,
+        tasks: Arc<dyn TaskStore>,
         version: &str,
         daemon_port: u16,
-        clock: Box<dyn Clock>,
     ) -> Self {
         Self {
             port,
+            tasks,
             credentials: CredentialRegistry::new(),
-            limiter: CreationLimiter::new(clock),
+            limiter: CreationLimiter::new(Box::new(SystemClock)),
             outbox: Outbox::new(),
             stopping: Mutex::new(HashSet::new()),
             inflight: Mutex::new(HashMap::new()),
             flush_lock: tokio::sync::Mutex::new(()),
+            task_lock: tokio::sync::Mutex::new(()),
+            active_children: Mutex::new(HashMap::new()),
+            boot_held: Mutex::new(HashSet::new()),
             version: version.to_string(),
             // The daemon binds 127.0.0.1 only, so loopback is always right.
             endpoint_url: format!("http://127.0.0.1:{daemon_port}/mcp"),
@@ -74,6 +83,10 @@ impl OrchestrationService {
     /// The credential for one spawn of `chat_id` (revoking any earlier one).
     #[must_use]
     pub fn issue_launch(&self, chat_id: &str, session_id: &str) -> OrchestrationMcpLaunch {
+        self.boot_held
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(chat_id);
         OrchestrationMcpLaunch {
             url: self.endpoint_url.clone(),
             token: self.credentials.issue(chat_id, session_id),
