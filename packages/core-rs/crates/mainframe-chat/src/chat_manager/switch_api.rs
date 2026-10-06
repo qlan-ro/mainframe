@@ -1,11 +1,15 @@
 //! `switch_provider`: continue a chat on another provider. The switch kills
 //! the current CLI and spawns nothing; the next send spawns the target
 //! (fresh, or resuming its earlier native session) and carries the handoff.
+//! An unsent fork's pin becomes a borrowed view of its parent first.
 use super::*;
 
-use mainframe_types::segment::{SegmentLayout, SwitchCommit, SwitchProviderRequest};
+use mainframe_types::segment::{
+    BorrowConversion, SegmentLayout, SwitchCommit, SwitchProviderRequest,
+};
 
 use crate::segments::divider::{divider_for, divider_id};
+use crate::segments::fork_borrow::{BorrowInput, apply_to_layout, borrow_conversion};
 use crate::segments::switch_plan::{SwitchPlanInput, plan_switch};
 use crate::segments::switch_rules::{SwitchCheck, SwitchError, check_switch_allowed};
 
@@ -21,6 +25,12 @@ impl ChatManager {
         chat_id: &str,
         req: &SwitchProviderRequest,
     ) -> Result<Chat, SwitchError> {
+        // An unsent fork's pre-send history bounds its borrowed pin. Read it
+        // before the claim: a history read waits out the claim.
+        let fork_history = match self.deps.get_pending_fork(chat_id) {
+            Some(_) => self.get_messages(chat_id).await,
+            None => Vec::new(),
+        };
         let outcome = {
             let _config = self.config.lock_changes(chat_id).await;
             self.check_switch(chat_id, req)?;
@@ -29,7 +39,7 @@ impl ChatManager {
             if !self.lifecycle.try_claim_offload(chat_id) {
                 return Err(SwitchError::TurnInFlight);
             }
-            let outcome = self.switch_claimed(chat_id, req).await;
+            let outcome = self.switch_claimed(chat_id, req, &fork_history).await;
             self.lifecycle.release_offload(chat_id);
             outcome?
         };
@@ -78,6 +88,7 @@ impl ChatManager {
         &self,
         chat_id: &str,
         req: &SwitchProviderRequest,
+        fork_history: &[ChatMessage],
     ) -> Result<SwitchOutcome, SwitchError> {
         self.lifecycle.await_starting(chat_id).await;
         let chat = self.check_switch(chat_id, req)?;
@@ -88,13 +99,21 @@ impl ChatManager {
             .deps
             .segment_store()
             .ok_or_else(|| SwitchError::Failed("Provider switching is unavailable".into()))?;
-        if !store.has_native_id(chat_id) {
+        let unsent_fork = self.deps.get_pending_fork(chat_id).is_some();
+        if !unsent_fork && !store.has_native_id(chat_id) {
             return Ok(SwitchOutcome::BeforeFirstMessage);
         }
-        let layout = store
+        let mut layout = store
             .layout(chat_id)
             .ok_or_else(|| SwitchError::NotFound(chat_id.to_string()))?;
-        let commit = self.plan_commit(&chat, &layout, req)?;
+        let borrow = self.unsent_fork_borrow(&chat, &mut layout, fork_history);
+        if unsent_fork && borrow.is_none() {
+            return Err(SwitchError::Failed(
+                "Couldn't switch this fork before its first message".into(),
+            ));
+        }
+        let mut commit = self.plan_commit(&chat, &layout, req)?;
+        commit.borrow_pinned = borrow;
         self.detach_session(chat_id).await;
         let layout = store.commit_switch(&commit).map_err(SwitchError::Failed)?;
         let chat = self.apply_switch(chat_id, &commit, &layout)?;
@@ -131,6 +150,32 @@ impl ChatManager {
             new_native_id: &new_native_id,
         })
         .ok_or_else(|| SwitchError::Failed(format!("Chat {} has no active segment", chat.id)))
+    }
+
+    /// An unsent fork's pinned row as a borrowed view of its parent's source
+    /// session, applied to `layout` so planning never resumes it (see
+    /// `segments::fork_borrow`). `None` for a chat with no pending fork.
+    fn unsent_fork_borrow(
+        &self,
+        chat: &Chat,
+        layout: &mut SegmentLayout,
+        messages: &[ChatMessage],
+    ) -> Option<BorrowConversion> {
+        let pending = self.deps.get_pending_fork(&chat.id)?;
+        let parent_layout = chat
+            .parent_chat_id
+            .clone()
+            .flatten()
+            .and_then(|parent| self.deps.segment_store()?.layout(&parent));
+        let conversion = borrow_conversion(&BorrowInput {
+            chat,
+            layout,
+            pending: &pending,
+            parent_layout: parent_layout.as_ref(),
+            messages,
+        })?;
+        apply_to_layout(layout, &conversion);
+        Some(conversion)
     }
 
     /// Kills the CLI if one is spawned; the next send spawns the target.

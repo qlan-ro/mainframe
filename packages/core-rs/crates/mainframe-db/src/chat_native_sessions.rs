@@ -98,6 +98,36 @@ pub(crate) fn insert_fresh(
     Ok(())
 }
 
+/// A read-only row in `chat_id` for another chat's native session (`source`),
+/// owned by `owner_chat_id`: never resumed, relocated or written.
+pub(crate) fn insert_borrowed(
+    db: &Connection,
+    id: &str,
+    chat_id: &str,
+    owner_chat_id: &str,
+    source: &NativeSessionRecord,
+) -> Result<(), DbError> {
+    let now = now_iso8601();
+    db.execute(
+        "INSERT INTO chat_native_sessions (id, chat_id, adapter_id, native_session_id, \
+         session_file_path, borrowed_from_chat_id, model, transcript_missing, created_at, \
+         updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        rusqlite::params![
+            id,
+            chat_id,
+            source.adapter_id,
+            source.native_session_id,
+            source.session_file_path,
+            owner_chat_id,
+            source.model,
+            i64::from(source.transcript_missing),
+            now,
+            now,
+        ],
+    )?;
+    Ok(())
+}
+
 /// Whether any closed segment still runs on `native_ref` — its native id is
 /// then pinned: overwriting it would point that history at the wrong transcript.
 pub(crate) fn backs_closed_segment(db: &Connection, native_ref: &str) -> Result<bool, DbError> {

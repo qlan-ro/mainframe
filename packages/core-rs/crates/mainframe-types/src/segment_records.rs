@@ -175,6 +175,10 @@ pub struct SwitchCommit {
     pub reactivate_segment_id: Option<String>,
     pub open_segment: Option<OpenSegment>,
     pub settings: SwitchSettings,
+    /// An unsent fork switching provider: its pinned native row becomes a
+    /// borrowed view of the parent and its pending fork is retired, in the
+    /// same transaction, before the rest of the commit applies.
+    pub borrow_pinned: Option<BorrowConversion>,
 }
 
 /// Per-turn deltas `persist_result` adds to the active segment.
@@ -185,4 +189,58 @@ pub struct SegmentResultDelta {
     pub tokens_output: i64,
     pub first_message_id: Option<String>,
     pub last_message_id: Option<String>,
+}
+
+// ── fork row plan (planned in mainframe-chat, applied by mainframe-db) ─────
+
+/// How a fork carries one parent segment.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ForkSegmentRole {
+    /// Runs on the fork's own native row, pinned at the fork point.
+    Pinned,
+    /// Read-only view of the parent's native session, bounded.
+    Borrowed {
+        end_message_id: Option<String>,
+        end_at: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ForkSegmentPlan {
+    pub source_segment_id: String,
+    pub ordinal: u32,
+    pub kind: SegmentKind,
+    pub role: ForkSegmentRole,
+}
+
+/// Which parent segments a fork copies, and how. The fork's last copied
+/// segment is its active one, unless `pending_active` opens a new one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ForkPlan {
+    pub segments: Vec<ForkSegmentPlan>,
+    /// The fork's active segment is a new pending segment on a fresh native
+    /// row (its first send builds a `full` handoff) instead of the pinned one.
+    pub pending_active: bool,
+}
+
+// ── unsent fork to borrowed (a fork that switches before its first send) ──
+
+/// Where a borrowed segment ends in its owner's transcript.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct SegmentBound {
+    pub segment_id: String,
+    pub end_message_id: Option<String>,
+    pub end_at: Option<String>,
+}
+
+/// Turns an unsent fork's pinned native row into a read-only view of the
+/// parent's source session, bounded where the fork's pin ended.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BorrowConversion {
+    pub chat_id: String,
+    pub native_ref: String,
+    pub owner_chat_id: String,
+    pub native_session_id: String,
+    pub session_file_path: Option<String>,
+    pub bounds: Vec<SegmentBound>,
 }

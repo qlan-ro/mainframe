@@ -15,6 +15,7 @@ use rusqlite::Connection;
 pub mod chat_handoffs;
 mod chat_native_sessions;
 pub mod chat_segments;
+mod chat_segments_fork;
 mod chat_segments_repo;
 mod chat_segments_switch;
 pub mod chat_tags;

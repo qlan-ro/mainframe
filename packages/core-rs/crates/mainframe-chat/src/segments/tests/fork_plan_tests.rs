@@ -33,6 +33,22 @@ fn a_cut_in_the_latest_segment_pins_its_native_and_borrows_the_rest() {
 }
 
 #[test]
+fn a_segment_the_parent_borrows_keeps_its_own_bound() {
+    let mut layout = c_x_c();
+    layout.segments[1].last_message_id = Some("x-a9".into());
+    layout.segments[1].end_bound_message_id = Some("x-a1".into());
+    layout.segments[1].end_bound_at = Some("2026-10-06T01:30:00Z".into());
+    let plan = fork_plan(&layout, &point("s2", None), true).unwrap();
+    assert_eq!(
+        plan.segments[1].role,
+        ForkSegmentRole::Borrowed {
+            end_message_id: Some("x-a1".into()),
+            end_at: Some("2026-10-06T01:30:00Z".into()),
+        }
+    );
+}
+
+#[test]
 fn a_cut_in_an_earlier_segment_drops_the_later_ones() {
     let plan = fork_plan(&c_x_c(), &point("s1", Some("x-a1")), true).unwrap();
     assert_eq!(plan.segments.len(), 2);

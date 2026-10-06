@@ -125,3 +125,99 @@ fn an_unknown_id_is_not_found() {
         Err(ForkChatError::MessageNotFound)
     );
 }
+
+// ── resolve_segment_fork_cut: only the latest provider segment ──────────────
+
+fn divider(segment_id: &str, kind: SegmentKind, to: &str) -> ChatMessage {
+    use mainframe_types::segment::{ProviderSwitchMarker, SegmentTotals};
+    let marker = ProviderSwitchMarker {
+        segment_id: segment_id.to_string(),
+        kind,
+        from_adapter_id: "claude".into(),
+        to_adapter_id: "codex".into(),
+        from_adapter_name: "Claude".into(),
+        to_adapter_name: to.into(),
+        to_model: None,
+        resumed: false,
+        previous: SegmentTotals::default(),
+        handoff: None,
+    };
+    crate::segments::divider::divider_message("c1", marker, "t")
+}
+
+/// u1, u2 on Claude; a switch to Codex; x1, x2, x3 on Codex.
+fn switched(kind: SegmentKind) -> Vec<ChatMessage> {
+    let mut messages = conversation(&["u1", "u2"]);
+    messages.push(divider("s1", kind, "Codex"));
+    messages.extend(conversation(&["x1", "x2", "x3"]));
+    messages
+}
+
+#[test]
+fn a_single_segment_chat_resolves_as_before() {
+    let live = conversation(&["u1", "u2"]);
+    assert_eq!(
+        resolve_segment_fork_cut(&live, &live, "u2"),
+        Ok("u2".to_string())
+    );
+}
+
+#[test]
+fn a_message_in_the_latest_segment_resolves() {
+    let live = switched(SegmentKind::ProviderSwitch);
+    assert_eq!(
+        resolve_segment_fork_cut(&live, &live, "x2"),
+        Ok("x2".to_string())
+    );
+}
+
+#[test]
+fn a_message_before_the_switch_names_the_provider() {
+    let live = switched(SegmentKind::ProviderSwitch);
+    assert_eq!(
+        resolve_segment_fork_cut(&live, &live, "u2"),
+        Err(ForkChatError::BeforeProviderSwitch("Codex".into()))
+    );
+}
+
+#[test]
+fn the_message_that_opens_the_latest_segment_is_refused_too() {
+    let live = switched(SegmentKind::ProviderSwitch);
+    assert_eq!(
+        resolve_segment_fork_cut(&live, &live, "x1"),
+        Err(ForkChatError::BeforeProviderSwitch("Codex".into()))
+    );
+}
+
+#[test]
+fn a_context_reset_segment_has_its_own_refusal() {
+    let live = switched(SegmentKind::ContextReset);
+    assert_eq!(
+        resolve_segment_fork_cut(&live, &live, "x1"),
+        Err(ForkChatError::BeforeContextReset)
+    );
+}
+
+#[test]
+fn the_chat_first_message_keeps_its_own_refusal() {
+    let live = switched(SegmentKind::ProviderSwitch);
+    assert_eq!(
+        resolve_segment_fork_cut(&live, &live, "u1"),
+        Err(ForkChatError::NothingBeforeMessage)
+    );
+}
+
+#[test]
+fn the_ordinal_fallback_counts_only_the_latest_segment() {
+    // Live Codex ids are daemon nanoids; the transcript has item ids. The
+    // earlier segment holds a different number of user messages, so only a
+    // per-segment count lines the two lists up.
+    let live = switched(SegmentKind::ProviderSwitch);
+    let mut disk = conversation(&["u1"]);
+    disk.push(divider("s1", SegmentKind::ProviderSwitch, "Codex"));
+    disk.extend(conversation(&["item-1", "item-2", "item-3"]));
+    assert_eq!(
+        resolve_segment_fork_cut(&live, &disk, "x3"),
+        Ok("item-3".to_string())
+    );
+}

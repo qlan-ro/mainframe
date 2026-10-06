@@ -6,6 +6,7 @@ use mainframe_runtime::time::now_iso8601;
 use mainframe_types::adapter::{DetectedPr, DetectedPrSource, EffortLevel, ForkSource};
 use mainframe_types::chat::{Chat, ChatStatus, NO_PROJECT_ID, NewChat, ProcessState, TodoItem};
 use mainframe_types::context::{SessionMention, SkillFileEntry};
+use mainframe_types::segment::ForkPlan;
 use mainframe_types::settings::ExecutionMode;
 use rusqlite::types::Value as SqlValue;
 use rusqlite::{Connection, OptionalExtension};
@@ -70,6 +71,9 @@ pub struct ForkInsert<'a> {
     pub branch_name: Option<&'a str>,
     pub title: Option<&'a str>,
     pub pending_fork: &'a PendingFork,
+    /// A multi-segment parent's segments, copied as planned. `None` seeds the
+    /// usual single initial segment.
+    pub segments: Option<&'a ForkPlan>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -397,7 +401,8 @@ impl ChatsRepository {
         let effort_bind = insert.effort.as_ref().map(enum_to_db_string).transpose()?;
         let pending_fork_json = serde_json::to_string(insert.pending_fork)?;
 
-        self.db.execute(
+        let tx = self.db.unchecked_transaction()?;
+        tx.execute(
             "INSERT INTO chats (
                 id, adapter_id, project_id, model, permission_mode, plan_mode,
                 effort, fast, ultracode, adaptive_thinking,
@@ -425,7 +430,17 @@ impl ChatsRepository {
                 now,
             ],
         )?;
-        chat_segments::ensure_seeded(&self.db, &id)?;
+        match insert.segments {
+            Some(plan) => crate::chat_segments_fork::copy_from_parent(
+                &tx,
+                &id,
+                insert.parent_chat_id,
+                insert.model,
+                plan,
+            )?,
+            None => chat_segments::ensure_seeded(&tx, &id)?,
+        }
+        tx.commit()?;
 
         Ok(Chat {
             id,

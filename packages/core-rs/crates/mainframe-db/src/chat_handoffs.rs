@@ -45,6 +45,34 @@ pub(crate) fn live_for_chat(db: &Connection, chat_id: &str) -> Result<Vec<Handof
     Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
+/// Inserts `record` as it is, status and delivery time included (a fork's
+/// copy of a delivered handoff).
+pub(crate) fn insert(db: &Connection, record: &HandoffRecord) -> Result<(), DbError> {
+    db.execute(
+        "INSERT INTO chat_handoffs (id, chat_id, target_segment_id, strategy, \
+         covered_from_ordinal, covered_to_ordinal, item_count, omitted_count, budget_bytes, \
+         used_bytes, fell_back_to_fresh, status, created_at, delivered_at) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        rusqlite::params![
+            record.id,
+            record.chat_id,
+            record.target_segment_id,
+            record.strategy.as_db_str(),
+            record.covered_from_ordinal,
+            record.covered_to_ordinal,
+            record.item_count,
+            record.omitted_count,
+            record.budget_bytes as i64,
+            record.used_bytes as i64,
+            i64::from(record.fell_back_to_fresh),
+            record.status.as_db_str(),
+            record.created_at,
+            record.delivered_at,
+        ],
+    )?;
+    Ok(())
+}
+
 pub struct HandoffsRepository {
     db: Rc<Connection>,
 }

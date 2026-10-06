@@ -65,6 +65,7 @@ fn switch_to_codex(db: &DatabaseManager, chat_id: &str) -> SwitchCommit {
             model: Some("x-model".into()),
             ..Default::default()
         },
+        borrow_pinned: None,
     }
 }
 

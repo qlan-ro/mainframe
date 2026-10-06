@@ -1,6 +1,7 @@
 //! Shared fixtures for the segment tests; each concern has its own file.
 
 mod compose_tests;
+mod fork_borrow_tests;
 mod fork_plan_tests;
 mod switch_plan_tests;
 mod switch_rules_tests;

@@ -6,9 +6,12 @@
 //! "Group 3 — daemon-fork" and `docs/specs/2026-10-06-fork-from-message.md`.
 use mainframe_adapter_api::ForkCut;
 
+use mainframe_types::segment::ForkPlan;
+
 use super::*;
 use crate::fork::ForkPoint;
-use crate::fork_cut::resolve_fork_cut;
+use crate::fork_cut::resolve_segment_fork_cut;
+use crate::segments::fork_plan::{ForkPoint as SegmentForkPoint, fork_plan};
 
 /// A turn is in flight when the main turn is running, or a permission/question
 /// answer is pending. Deliberately NOT `display_status == Working` — live
@@ -45,8 +48,26 @@ impl ChatManager {
             ForkPoint::Current => None,
             ForkPoint::BeforeMessage(message_id) => Some(self.fork_cut(chat_id, message_id).await?),
         };
+        let segments = self.fork_segment_plan(chat_id, cut.as_ref());
         let (fork_source, dest_dir) = self.pin_fork(&parent, cut).await?;
-        self.insert_fork(&parent.chat, fork_source, dest_dir).await
+        self.insert_fork(&parent.chat, fork_source, dest_dir, segments)
+            .await
+    }
+
+    /// A multi-segment parent's segments as the fork copies them: those on
+    /// the active segment's native session ride the pin, every other one is
+    /// borrowed read-only and bounded where it ended. `None` for a
+    /// single-segment parent, whose fork gets one initial segment as before.
+    fn fork_segment_plan(&self, chat_id: &str, cut: Option<&ForkCut>) -> Option<ForkPlan> {
+        let layout = self.deps.segment_store()?.layout(chat_id)?;
+        if !layout.is_multi_segment() {
+            return None;
+        }
+        let point = SegmentForkPoint {
+            segment_id: layout.active()?.id.clone(),
+            message_id: cut.map(|c| c.vendor_message_id.clone()),
+        };
+        fork_plan(&layout, &point, true)
     }
 
     /// Every check that holds for both fork points, in the spec's order.
@@ -88,11 +109,12 @@ impl ChatManager {
 
     /// Resolve the chat message id to the vendor id the adapter's transcript
     /// knows it by, comparing what the chat shows with what the adapter
-    /// reloads from disk.
+    /// reloads from disk. A multi-segment chat composes both lists, and the
+    /// cut must lie in its latest segment.
     async fn fork_cut(&self, chat_id: &str, message_id: &str) -> Result<ForkCut, ForkChatError> {
         let live = self.get_messages(chat_id).await;
         let disk = self.get_messages_from_disk(chat_id).await;
-        let vendor_message_id = resolve_fork_cut(&live, &disk, message_id)?;
+        let vendor_message_id = resolve_segment_fork_cut(&live, &disk, message_id)?;
         Ok(ForkCut { vendor_message_id })
     }
 
@@ -141,6 +163,7 @@ impl ChatManager {
         parent: &Chat,
         fork_source: ForkSource,
         dest_dir: String,
+        segments: Option<ForkPlan>,
     ) -> Result<Chat, ForkChatError> {
         let provisional_title = fork_title(parent.title.as_deref());
         let insert = ForkCreateInput {
@@ -162,6 +185,7 @@ impl ChatManager {
                 snapshot_dir: dest_dir.clone(),
                 provisional_title,
             },
+            segments,
         };
 
         let new_chat = match self.deps.create_fork(&insert) {

@@ -4,7 +4,8 @@
 //! row insertion.
 
 use mainframe_types::chat::{ChatMessage, MessageContent, MessageContentNode};
-use mainframe_types::segment::{ProviderSwitchMarker, SegmentKind, SegmentLayout};
+pub use mainframe_types::segment::{ForkPlan, ForkSegmentPlan, ForkSegmentRole};
+use mainframe_types::segment::{ProviderSwitchMarker, SegmentLayout};
 
 use super::divider::is_divider;
 use super::switch_plan::is_pending_empty;
@@ -15,33 +16,6 @@ use super::switch_plan::is_pending_empty;
 pub struct ForkPoint {
     pub segment_id: String,
     pub message_id: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ForkSegmentRole {
-    /// Runs on the fork's own native row, pinned at the fork point.
-    Pinned,
-    /// Read-only view of the parent's native session, bounded.
-    Borrowed {
-        end_message_id: Option<String>,
-        end_at: Option<String>,
-    },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ForkSegmentPlan {
-    pub source_segment_id: String,
-    pub ordinal: u32,
-    pub kind: SegmentKind,
-    pub role: ForkSegmentRole,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ForkPlan {
-    pub segments: Vec<ForkSegmentPlan>,
-    /// The fork's active segment is a new pending segment on a fresh native
-    /// row (its first send builds a `full` handoff) instead of the pinned one.
-    pub pending_active: bool,
 }
 
 /// `can_pin`: the adapter can pin a native fork at the cut point.
@@ -69,9 +43,14 @@ pub fn fork_plan(parent: &SegmentLayout, point: &ForkPoint, can_pin: bool) -> Op
                     end_at: None,
                 }
             } else {
+                // A segment the parent itself borrows keeps its own, tighter
+                // bound (a fork of a fork).
                 ForkSegmentRole::Borrowed {
-                    end_message_id: s.last_message_id.clone(),
-                    end_at: s.closed_at.clone(),
+                    end_message_id: s
+                        .end_bound_message_id
+                        .clone()
+                        .or_else(|| s.last_message_id.clone()),
+                    end_at: s.end_bound_at.clone().or_else(|| s.closed_at.clone()),
                 }
             };
             ForkSegmentPlan {
@@ -88,7 +67,8 @@ pub fn fork_plan(parent: &SegmentLayout, point: &ForkPoint, can_pin: bool) -> Op
     })
 }
 
-fn marker_of(message: &ChatMessage) -> Option<&ProviderSwitchMarker> {
+/// The divider marker a message carries, if it is a divider.
+pub fn marker_of(message: &ChatMessage) -> Option<&ProviderSwitchMarker> {
     message.content.iter().find_map(|block| match block {
         MessageContent::Node(MessageContentNode::ProviderSwitch { marker }) => Some(marker),
         _ => None,

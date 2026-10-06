@@ -1,10 +1,12 @@
 //! Provider segments: one chat, many provider-native sessions. History
 //! composition (`compose`, `partition`), the divider message (`divider`),
-//! switch planning and refusals (`switch_plan`, `switch_rules`), and the fork
-//! row plan the fork features use (`fork_plan`).
+//! switch planning and refusals (`switch_plan`, `switch_rules`), the fork
+//! row plan the fork features use (`fork_plan`), and an unsent fork's switch
+//! (`fork_borrow`).
 
 pub mod compose;
 pub mod divider;
+pub mod fork_borrow;
 pub mod fork_plan;
 pub mod partition;
 pub mod switch_plan;

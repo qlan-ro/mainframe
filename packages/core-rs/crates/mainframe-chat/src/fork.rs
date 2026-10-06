@@ -61,6 +61,9 @@ pub struct ForkCreateInput {
     pub branch_name: Option<String>,
     pub title: Option<String>,
     pub pending_fork: PendingForkState,
+    /// A multi-segment parent's segments, as the fork copies them. `None`
+    /// gives the fork one initial segment.
+    pub segments: Option<mainframe_types::segment::ForkPlan>,
 }
 
 /// The fork's provisional title: `<parent title> (fork)`, without stacking a
@@ -112,6 +115,15 @@ pub enum ForkChatError {
     MessageNotSent,
     #[error("Nothing before this message to fork")]
     NothingBeforeMessage,
+    /// The message lies before the chat's latest provider switch, or opens
+    /// the segment that switch started (it carries the handoff). Names the
+    /// provider switched to.
+    #[error("Can't fork from before the switch to {0}")]
+    BeforeProviderSwitch(String),
+    /// The same rule for a segment a context reset (`/clear`, plan "clear
+    /// context") started: the earlier session is no longer the chat's.
+    #[error("Can't fork from before this chat's context was cleared")]
+    BeforeContextReset,
     /// The message can't be placed in the provider transcript. The reason
     /// names why ("Couldn't find this message…", "…joined a turn…").
     #[error("{0}")]
@@ -137,6 +149,8 @@ impl ForkChatError {
             | ForkChatError::TurnInFlight
             | ForkChatError::MessageNotSent
             | ForkChatError::NothingBeforeMessage
+            | ForkChatError::BeforeProviderSwitch(_)
+            | ForkChatError::BeforeContextReset
             | ForkChatError::ForkPointUnresolved(_) => 409,
             ForkChatError::PinFailed(_) | ForkChatError::InsertFailed(_) => 500,
         }
@@ -190,6 +204,11 @@ mod tests {
         assert_eq!(ForkChatError::MessageNotSent.status_code(), 409);
         assert_eq!(ForkChatError::NothingBeforeMessage.status_code(), 409);
         assert_eq!(
+            ForkChatError::BeforeProviderSwitch("Codex".into()).status_code(),
+            409
+        );
+        assert_eq!(ForkChatError::BeforeContextReset.status_code(), 409);
+        assert_eq!(
             ForkChatError::ForkPointUnresolved("gone".into()).status_code(),
             409
         );
@@ -209,6 +228,10 @@ mod tests {
         assert_eq!(
             ForkChatError::NothingToForkYet.to_string(),
             "Nothing to fork yet"
+        );
+        assert_eq!(
+            ForkChatError::BeforeProviderSwitch("Codex".into()).to_string(),
+            "Can't fork from before the switch to Codex"
         );
         assert_eq!(
             ForkChatError::UnavailableWithReason(

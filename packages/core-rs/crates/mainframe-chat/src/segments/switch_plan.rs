@@ -68,6 +68,7 @@ pub fn plan_switch(i: &SwitchPlanInput<'_>) -> Option<SwitchCommit> {
         reactivate_segment_id: None,
         open_segment: None,
         settings: SwitchSettings::default(),
+        borrow_pinned: None,
     };
     let candidate = if is_pending_empty(i.layout, active) {
         let shared = i

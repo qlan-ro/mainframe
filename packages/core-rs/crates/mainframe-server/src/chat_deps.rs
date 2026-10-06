@@ -184,6 +184,7 @@ fn to_db_fork_insert<'a>(
         branch_name: input.branch_name.as_deref(),
         title: input.title.as_deref(),
         pending_fork,
+        segments: input.segments.as_ref(),
     }
 }
 

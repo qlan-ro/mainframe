@@ -17,6 +17,7 @@ mod chat_surface_wiring;
 mod fork_chat;
 mod fork_from_message;
 mod fork_history;
+mod fork_segments;
 mod fork_sweep;
 mod fork_title;
 mod history_eviction;
@@ -26,6 +27,7 @@ mod plan_mode;
 mod provider_switch;
 mod resume_overlay;
 mod resume_snapshot;
+mod segment_fake;
 mod side_chat;
 
 // ── fake ChatManagerDeps ─────────────────────────────────────────────────────
@@ -99,6 +101,8 @@ pub(crate) struct StoreDeps {
     pin_requests: Mutex<Vec<ForkPinRequest>>,
     /// When `Some`, `create_fork` fails with this message instead of inserting.
     create_fork_failure: Mutex<Option<String>>,
+    /// Every `create_fork` input, so tests can assert the copied segments.
+    fork_inserts: Mutex<Vec<ForkCreateInput>>,
     /// `db.chats.pendingFork` per chat id, for the lifecycle/history/title tests
     /// that resume an unsent fork.
     pending_forks: Mutex<HashMap<String, PendingForkState>>,
@@ -172,6 +176,9 @@ impl StoreDeps {
     }
     pub(crate) fn fail_pin_point_not_found(&self, reason: &str) {
         *self.pin_failure.lock().unwrap() = Some(PinFailure::PointNotFound(reason.to_string()));
+    }
+    pub(crate) fn fork_inserts(&self) -> Vec<ForkCreateInput> {
+        self.fork_inserts.lock().unwrap().clone()
     }
     pub(crate) fn pin_requests(&self) -> Vec<ForkPinRequest> {
         self.pin_requests.lock().unwrap().clone()
@@ -697,6 +704,7 @@ impl ChatManagerDeps for StoreDeps {
         if let Some(message) = self.create_fork_failure.lock().unwrap().clone() {
             return Err(message);
         }
+        self.fork_inserts.lock().unwrap().push(insert.clone());
         let id = format!("fork-{}", self.store.lock().unwrap().len());
         let chat = Chat {
             id: id.clone(),

@@ -10,6 +10,9 @@ use crate::chat_segments::insert_segment;
 use crate::{DbError, enum_to_db_string};
 
 pub(crate) fn apply(db: &Connection, commit: &SwitchCommit) -> Result<(), DbError> {
+    if let Some(conversion) = &commit.borrow_pinned {
+        crate::chat_segments_fork::borrow_pinned(db, conversion)?;
+    }
     if let Some(pending) = &commit.delete_pending {
         db.execute(
             "DELETE FROM chat_segments WHERE id = ? AND chat_id = ? AND closed_at IS NULL",
