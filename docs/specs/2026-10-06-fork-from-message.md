@@ -46,8 +46,10 @@ message's text waits in the new chat's composer, unsent. The parent is untouched
   5. The message is still sending or failed to send: "This message hasn't been sent
      yet".
   6. It is the chat's first user message: "Nothing before this message to fork".
-  7. Once sibling (a) ships, the message is before the latest provider switch: "Can't
-     fork from before the switch to <adapter display name>".
+  7. The message is before the latest provider switch, or opens the segment that
+     switch started: "Can't fork from before the switch to <adapter display name>".
+     When the latest segment started with a context reset instead: "Can't fork from
+     before this chat's context was cleared".
 - A turn in flight does not disable the action. Everything before a sent message is
   already settled, so the cut is unambiguous even while the parent works or waits on
   a gate. #343's whole-chat Fork keeps its in-flight refusal.
@@ -95,7 +97,8 @@ id that the thread shows. The checks run in this order:
 | Message is not a user message | 400 | `fromMessageId must name a user message` |
 | Message queued, still sending, or failed | 409 | `This message hasn't been sent yet` |
 | First user message | 409 | `Nothing before this message to fork` |
-| Before the latest provider switch (sibling (a)) | 409 | `Can't fork from before the switch to <name>` |
+| Before the latest provider switch, or its segment's first message (sibling (a)) | 409 | `Can't fork from before the switch to <name>` |
+| Before the latest context reset, or its segment's first message | 409 | `Can't fork from before this chat's context was cleared` |
 | The message can't be placed in the provider transcript | 409 | The adapter's reason (see Protocol) |
 | Pin or insert failure | 500 | Failure message |
 
@@ -160,7 +163,10 @@ chosen message:
    differ, refuse with the unresolved 409, "Couldn't find this message in the chat's
    transcript". Failing closed never forks at the wrong point.
 
-Once sibling (a) ships, both lists are first restricted to the latest segment.
+For a multi-segment chat, `resolve_segment_fork_cut` runs the rules of step 1 on
+the whole list, refuses a message before the latest divider or the first user
+message after it, and then restricts both lists to the latest segment, so the
+ordinal fallback counts only that segment's user messages.
 
 ### Claude: pin a prefix snapshot
 
@@ -314,6 +320,19 @@ fork. Sibling (a) must provide two things:
 The fork's pre-send history is that segment's rendering up to the cut. Forking into
 an earlier segment is deferred. It would resume that segment's session at the cut
 and carry segments 1..N-1's handoff.
+
+**Built (2026-10-06).** `fork_cut::resolve_segment_fork_cut` enforces the rule over
+the composed live and transcript lists (dividers mark the boundaries), and
+`fork-from-message-availability.ts::latestSegmentBlock` mirrors it in the UI from
+the dividers' `providerSwitch` meta. A fork of a multi-segment chat copies the
+parent's segments through sibling (a)'s `segments::fork_plan`: segments on the
+active segment's native session ride the pin (start markers kept, so the fork's own
+transcript partitions the same way), every other segment is a borrowed, bounded
+view of the parent's session, and delivered handoff rows are copied with their
+segment. The fork's pre-send history therefore shows every earlier segment
+read-only, with its dividers, above the latest segment up to the cut. A segment
+opened by a context reset gets its own refusal copy (row above), since "the switch
+to <name>" would name the same provider.
 
 **(b) MCP orchestration.** A fork tool calls `fork_chat` with
 `ForkPoint::BeforeMessage(id)`. The ids are the same ones its read-chat tool

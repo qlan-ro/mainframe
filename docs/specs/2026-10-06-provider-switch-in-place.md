@@ -857,8 +857,35 @@ Departures from the text above:
 - **`ProviderSwitchMarker`** also carries `fromAdapterName` / `toAdapterName`, so the text
   fallback and clients without an adapter registry can name both providers.
 
-Not built yet: copying segment rows into whole-chat forks and the unsent-fork-switches case
-(Interactions → whole-chat fork); relocating non-active Claude native rows on worktree moves;
-the union of tool categories across adapters; the E2E second mock adapter. The switch and
-first-send delivery are covered by `chat_manager/tests/provider_switch.rs` over an in-memory
-segment store, not yet by a two-adapter E2E run.
+Also built since: forks of multi-segment chats copy segment rows
+(`mainframe-db/src/chat_segments_fork.rs`, planned by `segments::fork_plan`, for both the
+whole-chat fork and "Fork from here"); an unsent fork that switches provider borrows its pin
+(`segments/fork_borrow.rs`, applied inside the switch commit together with retiring the pending
+fork); worktree enable/attach relocates every owned Claude native session
+(`config_transcripts.rs`); `get_tool_categories` returns the union over the chat's adapters
+(`segments/categories.rs`); and the E2E spec `tests-tauri/provider-switch.spec.ts` with a
+second mock adapter (`mock-cli-b`, registered with `E2E_MOCK_SWITCH=1`). The E2E spec is
+written but has not been run; the switch, first-send delivery and the fork paths are covered
+by `chat_manager/tests/{provider_switch,fork_segments}.rs` over an in-memory segment store and
+by `mainframe-db/tests/chat_segments_fork.rs`.
+
+More departures, from those pieces:
+
+- **Unsent fork bounds** come from the fork's own pre-send history (the last message each
+  pinned segment shows, its timestamp as the fallback, the fork's creation time when a segment
+  shows nothing), not from `ForkSource.last_turn_id` or the snapshot's last uuid. That history
+  is the pin's rendering, so the bound is the same point on either adapter.
+- **Borrowed bounds compose:** a segment the parent itself borrows keeps its own, tighter
+  bound when a fork of that fork copies it.
+- **Worktree moves** also relocate earlier Claude sessions when the active segment has no
+  session yet (switched, nothing sent), and disabling a worktree is refused once any owned
+  native session exists, not only the active one.
+- **"Fork from here" refusal copy** gains a context-reset variant, "Can't fork from before this
+  chat's context was cleared", because a reset segment's divider names the same provider.
+
+Still not built: the whole-chat fork of a parent whose active segment is pending and empty
+(switched, nothing sent). "Eligibility is unchanged and still reads the mirror columns", and
+the mirror has no session id in that state, so `fork_chat` refuses with "Nothing to fork yet"
+before a plan is made. The DB copy supports the plan's `pending_active` case; reaching it needs
+a fork without a native pin (`pending_fork` optional on the insert), which is left for a
+follow-up.
