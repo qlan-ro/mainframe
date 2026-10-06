@@ -190,6 +190,21 @@ describe('the workspace follows the split', () => {
     expect(move).toHaveBeenCalledTimes(1); // the mount itself entered the split
   });
 
+  it('keeps the workspace parked while the split is parked only for width', () => {
+    mainThreadIdValue = 'chat-a';
+    useZonesStore.setState({ zones: ['chat-a', 'chat-b'], focusedIndex: 0, splitFits: true });
+    renderHook(() => useZonesReconciler());
+    move.mockClear();
+
+    // A narrow window parks the split; restoring the workspace beside the chat
+    // would eat the width the split needs, so widening could never unpark it.
+    act(() => useZonesStore.getState().setSplitFits(false));
+    act(() => useZonesStore.getState().setSplitFits(true));
+
+    expect(restore).not.toHaveBeenCalled();
+    expect(move).not.toHaveBeenCalled();
+  });
+
   it('leaves the workspace alone while the split only swaps a zone', () => {
     mainThreadIdValue = 'chat-a';
     useZonesStore.setState({ zones: ['chat-a', 'chat-b'], focusedIndex: 0 });
