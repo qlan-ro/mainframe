@@ -289,6 +289,7 @@ mod sink_notifications;
 mod sink_permissions;
 mod sink_queue;
 mod sink_result;
+mod sink_segments;
 mod sink_tools;
 
 mod presentation;

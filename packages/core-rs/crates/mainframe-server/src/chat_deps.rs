@@ -995,7 +995,21 @@ impl ChatManagerDeps for DaemonChatDeps {
             .call_blocking(move |d| d.chats.find_or_create_side_chat(&parent))
             .map_err(|err| err.to_string())
     }
+
+    fn segment_store(&self) -> Option<&dyn mainframe_chat::segments::SegmentStore> {
+        Some(self)
+    }
+
+    fn adapter_info(&self, adapter_id: &str) -> Option<mainframe_types::adapter::AdapterInfo> {
+        self.adapters
+            .get_snapshots()
+            .into_iter()
+            .find(|info| info.id == adapter_id)
+    }
 }
+
+#[path = "chat_deps_segments.rs"]
+mod segments;
 
 /// The daemon-side `ExternalSessionDeps` (`getExternalSessionService()`'s
 /// backing instance). `listExternalSessions` is not on the ported `Adapter`

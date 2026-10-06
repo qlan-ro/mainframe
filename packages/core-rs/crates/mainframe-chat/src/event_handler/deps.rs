@@ -107,4 +107,14 @@ pub trait EventHandlerDeps: Send + Sync {
     fn clear_pending_fork(&self, chat_id: &str) {
         let _ = chat_id;
     }
+    /// The segment repository (`ChatManagerDeps::segment_store`'s bridge).
+    /// `None` (the default): no per-segment counters or handoff delivery,
+    /// the right answer for a deps impl that stores no segments.
+    fn segment_store(&self) -> Option<&dyn crate::segments::SegmentStore> {
+        None
+    }
+    /// An adapter's display name, for the divider label.
+    fn adapter_name(&self, adapter_id: &str) -> String {
+        adapter_id.to_string()
+    }
 }

@@ -14,15 +14,7 @@ use crate::chat_segments::{
 };
 use crate::{DbError, chat_handoffs};
 
-/// Per-turn deltas `persist_result` adds to the active segment.
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct SegmentResultDelta {
-    pub cost: f64,
-    pub tokens_input: i64,
-    pub tokens_output: i64,
-    pub first_message_id: Option<String>,
-    pub last_message_id: Option<String>,
-}
+pub use mainframe_types::segment::SegmentResultDelta;
 
 pub struct SegmentsRepository {
     db: Rc<Connection>,
@@ -144,6 +136,32 @@ impl SegmentsRepository {
         crate::chat_segments_switch::apply(&tx, commit)?;
         tx.commit()?;
         self.layout(&commit.chat_id)
+    }
+
+    /// Moves the active segment onto a fresh, id-less native row of the same
+    /// adapter: the returning session was too full to catch up, so the next
+    /// spawn starts a new one. The old row keeps backing its closed segments.
+    pub fn replace_active_native(&self, chat_id: &str) -> Result<SegmentLayout, DbError> {
+        let tx = self.db.unchecked_transaction()?;
+        let segment = crate::chat_segments::active(&tx, chat_id)?
+            .ok_or_else(|| DbError::Message(format!("chat {chat_id} has no active segment")))?;
+        let native = natives::active(&tx, chat_id)?
+            .ok_or_else(|| DbError::Message(format!("chat {chat_id} has no active session")))?;
+        let fresh = format!("ns_{}", nanoid::nanoid!());
+        natives::insert_fresh(
+            &tx,
+            &fresh,
+            chat_id,
+            &native.adapter_id,
+            native.model.as_deref(),
+        )?;
+        tx.execute(
+            "UPDATE chat_segments SET native_session_ref = ? WHERE id = ?",
+            rusqlite::params![fresh, segment.id],
+        )?;
+        natives::write_mirror(&tx, chat_id)?;
+        tx.commit()?;
+        self.layout(chat_id)
     }
 
     /// Whether any owned native row of the chat has a provider id — the point

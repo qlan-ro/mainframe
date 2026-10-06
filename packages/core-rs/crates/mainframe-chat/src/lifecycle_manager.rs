@@ -9,7 +9,7 @@ use mainframe_adapter_api::{AdapterError, AdapterSession, BoxFuture, SessionSink
 use mainframe_runtime::time::now_iso8601;
 use mainframe_services::settings::normalize_saved_default_model;
 use mainframe_types::adapter::{SessionOptions, SessionSpawnOptions};
-use mainframe_types::chat::{Chat, ChatStatus, NewChat, ProcessState, ResolvedTuning};
+use mainframe_types::chat::{Chat, ChatMessage, ChatStatus, NewChat, ProcessState, ResolvedTuning};
 use mainframe_types::events::DaemonEvent;
 use tokio::sync::Notify;
 use tracing::{debug, info, warn};
@@ -166,6 +166,16 @@ pub trait LifecycleManagerDeps: Send + Sync {
     fn get_pending_fork(&self, chat_id: &str) -> Option<PendingForkState> {
         let _ = chat_id;
         None
+    }
+    /// A multi-segment chat's composed history and the index its active
+    /// segment starts at. `None` (the default) means a single-segment chat,
+    /// loaded from its one session as before segments existed.
+    fn compose_history<'a>(
+        &'a self,
+        chat_id: &'a str,
+    ) -> BoxFuture<'a, Option<(Vec<ChatMessage>, usize)>> {
+        let _ = chat_id;
+        Box::pin(async { None })
     }
 }
 
@@ -973,13 +983,20 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         // way, `fork_source` rides along so the adapter's own resolver
         // (`resolve_resume`) can fall back to the pinned snapshot. Only a chat
         // with neither an own id nor a pending fork has nothing to resume.
+        // A multi-segment chat composes every segment's history, even while
+        // its active segment has no session yet (switched, nothing sent):
+        // returning early below would hide the earlier segments.
+        let composed = self.deps.compose_history(chat_id).await;
         let own_id = chat.claude_session_id.clone();
         let fork_source = self
             .deps
             .get_pending_fork(chat_id)
             .map(|pending| pending.fork_source);
         if own_id.is_none() && fork_source.is_none() {
-            return false;
+            return match composed {
+                Some(history) => self.finish_load(chat_id, Some(history)).await,
+                None => false,
+            };
         }
 
         let Some(session) = self.deps.create_session(
@@ -998,31 +1015,45 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             cell.lock().unwrap_or_else(|e| e.into_inner()).session = Some(session.clone());
         }
 
+        let history = match composed {
+            Some(history) => Some(history),
+            None => session.load_history().await.ok().map(|history| {
+                let remapped: Vec<_> = history
+                    .into_iter()
+                    .map(|mut m| {
+                        m.chat_id = chat_id.to_string();
+                        m
+                    })
+                    .collect();
+                (remapped, 0)
+            }),
+        };
+        self.finish_load(chat_id, history).await
+    }
+
+    /// Settles a loaded history into the cache, restores a pending permission
+    /// from the active segment's slice only (`active_from`), runs the
+    /// post-load scan, and raises a resync when the cache changed.
+    async fn finish_load(&self, chat_id: &str, history: Option<(Vec<ChatMessage>, usize)>) -> bool {
         let mut cache_reloaded = false;
-        if let Ok(history) = session.load_history().await {
-            let remapped: Vec<_> = history
-                .into_iter()
-                .map(|mut m| {
-                    m.chat_id = chat_id.to_string();
-                    m
-                })
-                .collect();
-            if !remapped.is_empty() {
-                let mut messages = self.messages.lock().unwrap_or_else(|e| e.into_inner());
-                let previous = messages.get(chat_id).cloned();
-                messages.set(chat_id, remapped);
-                let remapped = messages.get(chat_id).cloned().unwrap_or_default();
-                drop(messages);
-                self.permissions
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .restore_pending_permission(chat_id, &remapped);
-                // Raise the resync only when the reload actually changed the
-                // cached list — "no previous entry" counts as changed, but a
-                // cold chat's identical re-read (the first send after
-                // `session/resume`) must not force a full replay (finding 6).
-                cache_reloaded = previous.as_ref() != Some(&remapped);
-            }
+        if let Some((remapped, active_from)) = history
+            && !remapped.is_empty()
+        {
+            let mut messages = self.messages.lock().unwrap_or_else(|e| e.into_inner());
+            let previous = messages.get(chat_id).cloned();
+            messages.set(chat_id, remapped);
+            let remapped = messages.get(chat_id).cloned().unwrap_or_default();
+            drop(messages);
+            let active_slice = &remapped[active_from.min(remapped.len())..];
+            self.permissions
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .restore_pending_permission(chat_id, active_slice);
+            // Raise the resync only when the reload actually changed the
+            // cached list — "no previous entry" counts as changed, but a
+            // cold chat's identical re-read (the first send after
+            // `session/resume`) must not force a full replay (finding 6).
+            cache_reloaded = previous.as_ref() != Some(&remapped);
         }
 
         // Mention extraction + PR-URL scan + plan/skill-file extraction are all
@@ -1032,7 +1063,6 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         // later phase) implements over the just-set message cache.
         // TODO(port): thread the loaded `session` handle into the scan seam once
         // the adapter-claude history scanner is wired.
-        let _ = &session;
         self.deps.scan_loaded_history(chat_id).await;
         if cache_reloaded {
             // Notify here, not just from the public `load_chat` wrapper: a

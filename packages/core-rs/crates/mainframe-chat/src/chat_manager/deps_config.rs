@@ -81,6 +81,11 @@ impl ConfigManagerDeps for CmDeps {
         self.worktree_offers
             .on_binding_changed(chat_id, worktree_path);
     }
+    fn has_native_session(&self, chat_id: &str) -> bool {
+        self.deps
+            .segment_store()
+            .is_some_and(|store| store.has_native_id(chat_id))
+    }
 }
 
 pub(super) fn build(

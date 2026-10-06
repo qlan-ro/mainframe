@@ -165,6 +165,7 @@ impl ChatManager {
         session: &Arc<dyn AdapterSession>,
         chat_id: &str,
         content: &str,
+        handoff: Option<&str>,
     ) -> Result<(), SendError> {
         // A command dispatched while another turn is already running (T17,
         // R3.12) is not a turn start — a turn is already in progress. Only a
@@ -193,7 +194,9 @@ impl ChatManager {
                 .clone()
                 .or_else(|| find_mainframe_command(&cmd.name).and_then(|c| c.prompt_template));
             let wrapped = wrap_mainframe_command(&cmd.name, content, resolved_args.as_deref());
-            session.send_message(wrapped, Vec::new(), None).await?;
+            session
+                .send_message(with_handoff(handoff, wrapped), Vec::new(), None)
+                .await?;
         } else {
             session
                 .send_command(cmd.name.clone(), cmd.args.clone())
@@ -227,6 +230,7 @@ impl ChatManager {
         chat_id: &str,
         content: &str,
         attachment_ids: Option<&[String]>,
+        handoff: Option<&str>,
     ) -> Result<(), SendError> {
         let outgoing = self
             .prepare_outgoing(chat_id, content, attachment_ids)
@@ -257,8 +261,11 @@ impl ChatManager {
         let chat = post.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
         self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
 
+        // The provider gets the handoff block; the stored message keeps only
+        // the user's own text, so live and cold history match.
+        let text = with_handoff(handoff, outgoing.text);
         session
-            .send_message(outgoing.text, outgoing.images, Some(message_uuid.clone()))
+            .send_message(text, outgoing.images, Some(message_uuid.clone()))
             .await?;
 
         if is_queued {
@@ -273,5 +280,12 @@ impl ChatManager {
             );
         }
         Ok(())
+    }
+}
+
+fn with_handoff(handoff: Option<&str>, text: String) -> String {
+    match handoff {
+        Some(block) => crate::handoff::render::prepend_block(block, &text),
+        None => text,
     }
 }

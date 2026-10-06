@@ -101,6 +101,12 @@ impl EventHandlerDeps for EhDeps {
     fn clear_pending_fork(&self, chat_id: &str) {
         self.deps.clear_pending_fork(chat_id);
     }
+    fn segment_store(&self) -> Option<&dyn crate::segments::SegmentStore> {
+        self.deps.segment_store()
+    }
+    fn adapter_name(&self, adapter_id: &str) -> String {
+        self.deps.adapter_fork_info(adapter_id).name
+    }
 }
 
 pub(super) fn build(

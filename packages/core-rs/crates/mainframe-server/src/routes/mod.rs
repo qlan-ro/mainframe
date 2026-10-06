@@ -22,6 +22,7 @@ pub mod chat_discard;
 pub mod chat_fork;
 pub mod chat_recovery;
 pub mod chat_side_chat;
+pub mod chat_switch;
 pub mod chat_workflow_runs;
 pub mod chats;
 pub mod commands;

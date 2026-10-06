@@ -83,6 +83,8 @@ mod errors;
 mod external_facade;
 mod fork_api;
 mod fork_sweep;
+mod handoff_resolve;
+mod handoff_send;
 mod history;
 mod lifecycle_api;
 mod reads;
@@ -91,12 +93,14 @@ mod send_entry;
 mod send_queue;
 mod shared;
 mod side_chat;
+mod switch_api;
 mod update;
 
 pub use deps::ChatManagerDeps;
 pub use errors::{ChatFieldsPartial, CommandMeta, ForkError, SendError, TrustWorkspaceError};
 pub use external_facade::ExternalSessionFacade;
 pub use history::ResumeSnapshot;
+pub(crate) use shared::remap_history as remap_history_for;
 pub use side_chat::OpenSideChatError;
 pub use update::{ChatUpdate, ProcessedAttachments};
 

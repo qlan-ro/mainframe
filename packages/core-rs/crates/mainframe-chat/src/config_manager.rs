@@ -72,6 +72,13 @@ pub trait ConfigManagerDeps: Send + Sync {
     /// Fired after a binding change persists — the offer registry's single
     /// source of `resolved{accepted}`.
     fn on_binding_changed(&self, _chat_id: &str, _worktree_path: Option<&str>) {}
+    /// Whether any owned native session of the chat has a provider id — after
+    /// that, an adapter change is a provider switch, not a config edit.
+    /// `false` (the default) for a deps impl that stores no segments; the
+    /// mirrored `claude_session_id` check still applies.
+    fn has_native_session(&self, _chat_id: &str) -> bool {
+        false
+    }
     /// Relocate a Claude session's transcript files between project dirs. A seam
     /// only so tests can exercise the failure path without touching a real `$HOME`.
     fn move_claude_session_files<'a>(
@@ -117,6 +124,11 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
             deps,
             changes: config_locks::ConfigLocks::default(),
         }
+    }
+
+    /// Serializes a provider switch with config changes on the same chat.
+    pub(crate) async fn lock_changes(&self, chat_id: &str) -> tokio::sync::OwnedMutexGuard<()> {
+        self.changes.acquire(chat_id).await
     }
 
     fn require_active_chat(&self, chat_id: &str) -> Result<Arc<Mutex<ActiveChat>>, ConfigError> {
@@ -334,10 +346,10 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
 
         if let Some(ref new_adapter) = adapter_id
             && *new_adapter != cur_adapter
-            && has_claude_session
+            && (has_claude_session || self.deps.has_native_session(chat_id))
         {
             return Err(ConfigError::Message(
-                "Cannot change adapter after a session has started".to_string(),
+                "Use switch-provider to change this chat's provider".to_string(),
             ));
         }
 

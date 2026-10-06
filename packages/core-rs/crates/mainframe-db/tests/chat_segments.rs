@@ -38,6 +38,9 @@ fn set_session(db: &DatabaseManager, chat_id: &str, session: &str) {
         .unwrap();
 }
 
+/// (chat_id, adapter_id, native_session_id, last_context_total_tokens, transcript_missing)
+type NativeRow = (String, String, Option<String>, Option<i64>, i64);
+
 #[test]
 fn migration_31_backfills_one_active_initial_segment_per_chat() {
     let conn = Connection::open_in_memory().unwrap();
@@ -53,7 +56,7 @@ fn migration_31_backfills_one_active_initial_segment_per_chat() {
     .unwrap();
     run_migrations(&conn, 31).unwrap();
 
-    let natives: Vec<(String, String, Option<String>, Option<i64>, i64)> = {
+    let natives: Vec<NativeRow> = {
         let mut stmt = conn
             .prepare("SELECT chat_id, adapter_id, native_session_id, last_context_total_tokens, transcript_missing FROM chat_native_sessions ORDER BY chat_id")
             .unwrap();

@@ -276,4 +276,26 @@ pub trait ChatManagerDeps: Send + Sync {
     /// `StoreDeps`) both back a real store, so a silent no-op default would mint
     /// side chats that vanish on the next read (same class as #273/#289/#290).
     fn chats_find_or_create_side_chat(&self, parent: &Chat) -> Result<(Chat, bool), String>;
+
+    // ── provider segments ─────────────────────────────────────────────────────
+    /// The segment repository. `None` (the default) runs every chat as one
+    /// segment on one provider session — the behavior before segments existed,
+    /// and the correct answer for every test double that stores no segments.
+    fn segment_store(&self) -> Option<&dyn crate::segments::SegmentStore> {
+        None
+    }
+    /// The adapter's cached catalog snapshot (name, installed, models,
+    /// capabilities). `None` (the default) means "not installed", which makes
+    /// a provider switch refuse rather than guess.
+    fn adapter_info(&self, adapter_id: &str) -> Option<mainframe_types::adapter::AdapterInfo> {
+        let _ = adapter_id;
+        None
+    }
+    /// Whether the orchestration MCP server's `read_chat` tool reaches this
+    /// chat's sessions; the handoff header then points at it for omitted
+    /// items. `false` until that server exists.
+    fn orchestration_mcp_attached(&self, chat_id: &str) -> bool {
+        let _ = chat_id;
+        false
+    }
 }

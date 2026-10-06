@@ -185,7 +185,7 @@ pub(super) fn build_history_session(
 
 /// `loadHistory` embeds the Claude sessionId as `chatId`; remap it back to the
 /// Mainframe chatId before caching/returning.
-pub(super) fn remap_history(history: Vec<ChatMessage>, chat_id: &str) -> Vec<ChatMessage> {
+pub(crate) fn remap_history(history: Vec<ChatMessage>, chat_id: &str) -> Vec<ChatMessage> {
     history
         .into_iter()
         .map(|mut m| {

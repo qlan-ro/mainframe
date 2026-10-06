@@ -126,6 +126,29 @@ impl LifecycleManagerDeps for LcDeps {
     fn get_pending_fork(&self, chat_id: &str) -> Option<PendingForkState> {
         self.deps.get_pending_fork(chat_id)
     }
+    fn compose_history<'a>(
+        &'a self,
+        chat_id: &'a str,
+    ) -> BoxFuture<'a, Option<(Vec<ChatMessage>, usize)>> {
+        Box::pin(async move {
+            let composed = compose_if_multi(self.deps.as_ref(), chat_id).await?;
+            Some((composed.messages, composed.active_from))
+        })
+    }
+}
+
+/// Composes a multi-segment chat's history; `None` for a single-segment chat
+/// (or a deps impl without segments), whose one session loads as before.
+pub(super) async fn compose_if_multi(
+    deps: &dyn ChatManagerDeps,
+    chat_id: &str,
+) -> Option<crate::segments::compose::Composed> {
+    let store = deps.segment_store()?;
+    let layout = store
+        .layout(chat_id)
+        .filter(mainframe_types::segment::SegmentLayout::is_multi_segment)?;
+    let chat = deps.chats_get(chat_id)?;
+    Some(crate::segments::compose::compose(deps, &chat, &layout).await)
 }
 
 pub(super) fn build(

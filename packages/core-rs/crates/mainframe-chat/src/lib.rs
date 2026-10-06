@@ -40,6 +40,7 @@ pub mod plan_mode_actions;
 pub mod plan_mode_handler;
 pub mod resolve_tuning;
 pub mod resolve_tuning_for_chat;
+pub mod segments;
 pub mod title_generator;
 pub mod transcript_presence;
 pub mod types;

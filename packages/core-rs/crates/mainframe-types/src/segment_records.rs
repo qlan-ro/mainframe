@@ -176,3 +176,13 @@ pub struct SwitchCommit {
     pub open_segment: Option<OpenSegment>,
     pub settings: SwitchSettings,
 }
+
+/// Per-turn deltas `persist_result` adds to the active segment.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct SegmentResultDelta {
+    pub cost: f64,
+    pub tokens_input: i64,
+    pub tokens_output: i64,
+    pub first_message_id: Option<String>,
+    pub last_message_id: Option<String>,
+}

@@ -61,6 +61,7 @@ pub fn build_app(ctx: Arc<AppCtx>) -> Router {
         .merge(routes::chat_create::router())
         .merge(routes::chat_discard::router())
         .merge(routes::chat_side_chat::router())
+        .merge(routes::chat_switch::router())
         .merge(routes::context::router())
         .merge(routes::worktree::router())
         .merge(routes::worktree_offer::router())

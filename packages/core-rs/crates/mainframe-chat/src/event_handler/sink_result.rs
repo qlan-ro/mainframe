@@ -14,6 +14,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         let now = now_iso8601();
         let refs_after = self.reconcile_result_queue();
         self.persist_result(&cell, &data, totals, refs_after.len(), now);
+        self.record_segment_result(&data);
         let (reason, was_interrupted, is_error) = self.result_reason(&data);
         self.emit_result_state(&cell, reason, was_interrupted, is_error);
         self.emit_turn_duration(&cell);
