@@ -165,6 +165,7 @@ export async function startDaemon(opts?: {
   recordingKey?: string;
   mockMaxDelayMs?: number;
   mockFork?: boolean;
+  mockSwitch?: boolean;
 }): Promise<DaemonHandle> {
   await assertPortFree();
   const testDataDir = mkdtempSync(path.join(tmpdir(), 'mf-e2e-data-'));
@@ -179,6 +180,8 @@ export async function startDaemon(opts?: {
     if (opts?.mockMaxDelayMs != null) e2eEnv['E2E_MOCK_MAX_DELAY_MS'] = String(opts.mockMaxDelayMs);
     // The mock adapter reports no fork capability unless a fork spec opts in.
     if (opts?.mockFork) e2eEnv['E2E_MOCK_FORK'] = '1';
+    // A second mock adapter (`mock-cli-b`) for the provider-switch spec.
+    if (opts?.mockSwitch) e2eEnv['E2E_MOCK_SWITCH'] = '1';
   }
   const daemonPath = resolveRustDaemon();
   const daemonLogFd = openSync(path.join(testDataDir, 'daemon.log'), 'w');

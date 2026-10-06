@@ -8,6 +8,20 @@ fn adapter_trait_resolves_a_plan_mode_handler() {
 }
 
 #[test]
+fn a_second_identity_renames_the_adapter_and_its_recordings_key() {
+    let default = MockCliAdapter::default();
+    assert_eq!((default.id(), default.name()), ("mock-cli", "Mock CLI"));
+    assert_eq!(default.recording_key_var(), None);
+
+    let second = MockCliAdapter::default().with_identity("mock-cli-b", "Mock CLI B");
+    assert_eq!((second.id(), second.name()), ("mock-cli-b", "Mock CLI B"));
+    assert_eq!(
+        second.recording_key_var().as_deref(),
+        Some("E2E_RECORDING_KEY_MOCK_CLI_B")
+    );
+}
+
+#[test]
 fn no_persistence_defaults_to_false() {
     assert!(!Adapter::capabilities(&MockCliAdapter::default()).no_persistence);
 }

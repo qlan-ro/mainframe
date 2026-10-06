@@ -36,7 +36,13 @@ pub struct MockCliAdapter {
     /// The last `pin_fork_point` request, so tests can assert the cut the
     /// chat layer resolved.
     last_pin_request: Mutex<Option<ForkPinRequest>>,
+    /// A second registration's id and name (the provider-switch e2e needs two
+    /// adapters); `None` is the default `mock-cli` / "Mock CLI".
+    identity: Option<(String, String)>,
 }
+
+const DEFAULT_ID: &str = "mock-cli";
+const DEFAULT_NAME: &str = "Mock CLI";
 
 impl MockCliAdapter {
     /// Build an adapter that reports replayed subagent / background-bash work to
@@ -64,6 +70,31 @@ impl MockCliAdapter {
     pub fn with_fork_capable(mut self, fork_capable: bool) -> Self {
         self.fork_capable = fork_capable;
         self
+    }
+
+    /// Register under another id and display name, so two mock adapters can
+    /// run side by side. Its recordings key comes from
+    /// `E2E_RECORDING_KEY_<ID>` (upper-cased, `-` as `_`) when set, else the
+    /// shared `E2E_RECORDING_KEY`.
+    pub fn with_identity(mut self, id: &str, name: &str) -> Self {
+        self.identity = Some((id.to_string(), name.to_string()));
+        self
+    }
+
+    /// The environment variable naming this adapter's recordings key.
+    pub fn recording_key_var(&self) -> Option<String> {
+        let (id, _) = self.identity.as_ref()?;
+        Some(format!(
+            "E2E_RECORDING_KEY_{}",
+            id.to_ascii_uppercase().replace('-', "_")
+        ))
+    }
+
+    fn recording_key(&self) -> String {
+        self.recording_key_var()
+            .and_then(|var| std::env::var(var).ok())
+            .or_else(|| std::env::var("E2E_RECORDING_KEY").ok())
+            .unwrap_or_else(|| "session".to_string())
     }
 
     /// The last request `pin_fork_point` received, if any.
@@ -154,10 +185,12 @@ fn model(
 
 impl Adapter for MockCliAdapter {
     fn id(&self) -> &str {
-        "mock-cli"
+        self.identity.as_ref().map_or(DEFAULT_ID, |(id, _)| id)
     }
     fn name(&self) -> &str {
-        "Mock CLI"
+        self.identity
+            .as_ref()
+            .map_or(DEFAULT_NAME, |(_, name)| name)
     }
     fn capabilities(&self) -> AdapterCapabilities {
         AdapterCapabilities {
@@ -202,7 +235,7 @@ impl Adapter for MockCliAdapter {
                 ));
             }
         };
-        let key = std::env::var("E2E_RECORDING_KEY").unwrap_or_else(|_| "session".to_string());
+        let key = self.recording_key();
         let index = {
             let mut indexes = self.indexes.lock().unwrap_or_else(|e| e.into_inner());
             let index = *indexes.get(&key).unwrap_or(&0);

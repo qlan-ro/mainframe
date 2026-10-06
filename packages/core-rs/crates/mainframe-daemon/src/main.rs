@@ -14,6 +14,7 @@
 
 mod builtin_plugins;
 mod cli;
+mod e2e_mock;
 mod github_issues_port;
 mod plugin_host_db;
 mod quota_store;
@@ -44,7 +45,6 @@ use mainframe_adapter_claude::trust_store::{
 use mainframe_adapter_codex::CodexAdapter;
 use mainframe_adapter_codex::quota_pull::pull_codex_quota_via_temp_app_server;
 use mainframe_adapter_codex::{CODEX_IDENTITY_TRANSIENT, read_codex_account_identity_from_disk};
-use mainframe_adapter_mock::MockCliAdapter;
 use mainframe_background_tasks::liveness::{LivenessDeps, start_liveness_scheduler};
 use mainframe_background_tasks::reconcile::{
     ReconcileDb, ReconcileDeps, reconcile_background_tasks,
@@ -211,16 +211,12 @@ async fn run_daemon() {
         resolved_path.clone(),
     )));
     if std::env::var("E2E_MODE").as_deref() == Ok("mock") {
-        tracing::warn!("E2E mock mode enabled; registering the native replay adapter");
-        // Fork e2e specs opt in; every other spec keeps the mock fork-incapable.
-        let fork_capable = std::env::var("E2E_MOCK_FORK").as_deref() == Ok("1");
-        adapters.register(Arc::new(
-            MockCliAdapter::with_tracker(
-                Arc::clone(&background_tasks),
-                Arc::clone(&claude_workflows),
-            )
-            .with_fork_capable(fork_capable),
-        ));
+        tracing::warn!("E2E mock mode enabled; registering the native replay adapters");
+        for mock in e2e_mock::mock_adapters(&background_tasks, &claude_workflows, |name| {
+            std::env::var(name).ok()
+        }) {
+            adapters.register(Arc::new(mock));
+        }
     }
     adapters.seed_static_snapshots();
 
