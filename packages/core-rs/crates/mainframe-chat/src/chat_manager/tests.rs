@@ -15,6 +15,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 mod chat_surface_wiring;
 mod fork_chat;
+mod fork_from_message;
 mod fork_history;
 mod fork_sweep;
 mod fork_title;
@@ -92,6 +93,9 @@ pub(crate) struct StoreDeps {
     /// When `Some`, `pin_fork_point` fails with this instead of echoing the
     /// source session id back as the snapshot path.
     pin_failure: Mutex<Option<PinFailure>>,
+    /// Every `pin_fork_point` request, in order — the from-message tests
+    /// assert the cut the chat layer resolved.
+    pin_requests: Mutex<Vec<ForkPinRequest>>,
     /// When `Some`, `create_fork` fails with this message instead of inserting.
     create_fork_failure: Mutex<Option<String>>,
     /// `db.chats.pendingFork` per chat id, for the lifecycle/history/title tests
@@ -116,6 +120,7 @@ pub(crate) enum PinFailure {
     Unsupported,
     TranscriptMissing,
     Failed(String),
+    PointNotFound(String),
 }
 
 impl StoreDeps {
@@ -158,6 +163,15 @@ impl StoreDeps {
     }
     pub(crate) fn fail_pin_unsupported(&self) {
         *self.pin_failure.lock().unwrap() = Some(PinFailure::Unsupported);
+    }
+    pub(crate) fn fail_pin_point_not_found(&self, reason: &str) {
+        *self.pin_failure.lock().unwrap() = Some(PinFailure::PointNotFound(reason.to_string()));
+    }
+    pub(crate) fn pin_requests(&self) -> Vec<ForkPinRequest> {
+        self.pin_requests.lock().unwrap().clone()
+    }
+    pub(crate) fn set_history(&self, history: Vec<ChatMessage>) {
+        *self.history.lock().unwrap() = Some(history);
     }
     pub(crate) fn fail_create_fork(&self, message: &str) {
         *self.create_fork_failure.lock().unwrap() = Some(message.to_string());
@@ -647,15 +661,19 @@ impl ChatManagerDeps for StoreDeps {
         request: ForkPinRequest,
     ) -> BoxFuture<'a, Result<ForkSource, ForkPinError>> {
         let failure = self.pin_failure.lock().unwrap().clone();
+        self.pin_requests.lock().unwrap().push(request.clone());
         Box::pin(async move {
             match failure {
                 Some(PinFailure::Unsupported) => Err(ForkPinError::Unsupported),
                 Some(PinFailure::TranscriptMissing) => Err(ForkPinError::TranscriptMissing),
                 Some(PinFailure::Failed(message)) => Err(ForkPinError::Failed(message)),
+                Some(PinFailure::PointNotFound(reason)) => Err(ForkPinError::PointNotFound(reason)),
+                // A cut is echoed as the pinned turn so tests can see it
+                // survive into the stored pending fork.
                 None => Ok(ForkSource {
                     source_session_id: request.source_session_id,
                     resume_path: Some(format!("{}/snapshot.jsonl", request.dest_dir)),
-                    last_turn_id: None,
+                    last_turn_id: request.cut.map(|cut| cut.vendor_message_id),
                 }),
             }
         })

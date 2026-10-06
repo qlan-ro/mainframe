@@ -74,11 +74,23 @@ pub struct ReplaySession {
     pub(crate) sink: Arc<Mutex<Option<Arc<dyn SessionSink>>>>,
     pub(crate) state: Arc<Mutex<SessionState>>,
     source: tokio::sync::Mutex<ReplaySource>,
+    /// An unsent from-message fork's cut: the history replays the parent's
+    /// recording up to, not including, the message with this id.
+    pub(crate) fork_cut: Option<String>,
 }
 
 impl ReplaySession {
     pub fn new(options: SessionOptions, events: Vec<RecordedEvent>) -> Self {
+        // Once the fork has sent, it has its own session and no cut applies.
+        let fork_cut = match options.chat_id {
+            Some(_) => None,
+            None => options
+                .fork_source
+                .as_ref()
+                .and_then(|source| source.last_turn_id.clone()),
+        };
         Self {
+            fork_cut,
             id: options.mainframe_chat_id,
             task_bridge: None,
             project_path: options.project_path,

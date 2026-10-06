@@ -33,6 +33,9 @@ pub struct MockCliAdapter {
     /// the source instead of returning `Unsupported` (todo #343). Tests opt in
     /// via `with_fork_capable(true)`; default `false` mirrors Codex today.
     fork_capable: bool,
+    /// The last `pin_fork_point` request, so tests can assert the cut the
+    /// chat layer resolved.
+    last_pin_request: Mutex<Option<ForkPinRequest>>,
 }
 
 impl MockCliAdapter {
@@ -61,6 +64,14 @@ impl MockCliAdapter {
     pub fn with_fork_capable(mut self, fork_capable: bool) -> Self {
         self.fork_capable = fork_capable;
         self
+    }
+
+    /// The last request `pin_fork_point` received, if any.
+    pub fn last_pin_request(&self) -> Option<ForkPinRequest> {
+        self.last_pin_request
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 
     fn bridge(&self) -> Option<Arc<TaskBridge>> {
@@ -170,7 +181,14 @@ impl Adapter for MockCliAdapter {
     }
 
     fn create_session(&self, options: SessionOptions) -> Arc<dyn AdapterSession> {
-        if let Some(session_id) = options.chat_id.as_deref()
+        // An unsent fork has no session of its own yet; it replays its parent's.
+        let replay_id = options.chat_id.clone().or_else(|| {
+            options
+                .fork_source
+                .as_ref()
+                .map(|source| source.source_session_id.clone())
+        });
+        if let Some(session_id) = replay_id.as_deref()
             && let Some(events) = self.cache.lookup(session_id)
         {
             return Arc::new(ReplaySession::new(options, events).with_bridge(self.bridge()));
@@ -218,13 +236,19 @@ impl Adapter for MockCliAdapter {
         &self,
         request: ForkPinRequest,
     ) -> BoxFuture<'_, Result<ForkSource, ForkPinError>> {
+        *self
+            .last_pin_request
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(request.clone());
         if !self.fork_capable {
             return Box::pin(async { Err(ForkPinError::Unsupported) });
         }
+        // The mock has no turns, so `last_turn_id` carries the cut message id
+        // itself; `ReplaySession::load_history` truncates the replay there.
         let source = ForkSource {
             source_session_id: request.source_session_id,
             resume_path: request.session_file_path,
-            last_turn_id: None,
+            last_turn_id: request.cut.map(|cut| cut.vendor_message_id),
         };
         Box::pin(async move { Ok(source) })
     }
@@ -257,5 +281,34 @@ mod tests {
 
         let capable = MockCliAdapter::default().with_fork_capable(true);
         assert!(Adapter::capabilities(&capable).fork);
+    }
+
+    fn pin_request(cut: Option<&str>) -> ForkPinRequest {
+        ForkPinRequest {
+            source_session_id: "sess-1".to_string(),
+            cwd: "/tmp".to_string(),
+            session_file_path: None,
+            dest_dir: "/tmp/snap".to_string(),
+            cut: cut.map(|id| mainframe_adapter_api::ForkCut {
+                vendor_message_id: id.to_string(),
+            }),
+        }
+    }
+
+    #[tokio::test]
+    async fn pin_records_the_request_and_carries_the_cut() {
+        let adapter = MockCliAdapter::default().with_fork_capable(true);
+        let source = adapter
+            .pin_fork_point(pin_request(Some("mock-history-4")))
+            .await
+            .unwrap();
+        assert_eq!(source.last_turn_id.as_deref(), Some("mock-history-4"));
+        assert_eq!(
+            adapter.last_pin_request(),
+            Some(pin_request(Some("mock-history-4")))
+        );
+
+        let whole = adapter.pin_fork_point(pin_request(None)).await.unwrap();
+        assert_eq!(whole.last_turn_id, None);
     }
 }

@@ -146,15 +146,50 @@ async fn load_history_remaps_recorded_project_paths() {
     let session = ReplaySession::new(options(project_path.clone()), events);
 
     let history = session.load_history().await.unwrap();
-    let MessageContent::Node(MessageContentNode::ToolUse { input, .. }) = &history[1].content[0]
-    else {
-        panic!("expected tool-use history block");
-    };
+    let input = history
+        .iter()
+        .flat_map(|m| m.content.iter())
+        .find_map(|c| match c {
+            MessageContent::Node(MessageContentNode::ToolUse { input, .. }) => Some(input),
+            _ => None,
+        })
+        .expect("expected a tool-use history block");
 
     assert_eq!(
         input.get("file_path").and_then(serde_json::Value::as_str),
         Some("/tmp/mf-e2e-current/src/main.ts")
     );
+}
+
+#[tokio::test]
+async fn load_history_lists_recorded_prompts_as_user_messages() {
+    use mainframe_types::chat::ChatMessageType;
+    let events = parse_fixture(include_str!("fixtures/replay.ndjson")).unwrap();
+    let session = ReplaySession::new(options("/tmp/p".to_string()), events);
+
+    let history = session.load_history().await.unwrap();
+    assert_eq!(history[0].r#type, ChatMessageType::User);
+    assert_eq!(history[0].id, "mock-history-0");
+}
+
+/// An unsent from-message fork replays its parent's recording only up to the
+/// cut message (the mock pins the cut id in `last_turn_id`).
+#[tokio::test]
+async fn an_unsent_forks_history_stops_before_the_cut_message() {
+    let events = parse_fixture(include_str!("fixtures/replay.ndjson")).unwrap();
+    let fork_options = SessionOptions {
+        fork_source: Some(mainframe_types::adapter::ForkSource {
+            source_session_id: "recorded-session".to_string(),
+            resume_path: None,
+            last_turn_id: Some("mock-history-3".to_string()),
+        }),
+        ..options("/tmp/p".to_string())
+    };
+    let session = ReplaySession::new(fork_options, events);
+
+    let history = session.load_history().await.unwrap();
+    let ids: Vec<&str> = history.iter().map(|m| m.id.as_str()).collect();
+    assert_eq!(ids, ["mock-history-0", "mock-history-2"]);
 }
 
 #[test]

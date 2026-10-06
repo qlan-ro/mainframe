@@ -267,7 +267,7 @@ async fn fork_refuses_a_side_chat() {
         .chat_manager
         .as_ref()
         .unwrap()
-        .fork_chat(&side_id)
+        .fork_chat(&side_id, mainframe_chat::chat_manager::ForkPoint::Current)
         .await
         .unwrap_err();
     // StubAdapter isn't fork-capable, so this may surface as Unsupported

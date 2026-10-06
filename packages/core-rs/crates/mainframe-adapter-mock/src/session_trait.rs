@@ -152,6 +152,11 @@ impl AdapterSession for ReplaySession {
             self.ensure_loaded().await?;
             let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
             let mut history = messages_from_events(&state.replay.events, &self.id);
+            if let Some(cut) = self.fork_cut.as_deref()
+                && let Some(end) = history.iter().position(|m| m.id == cut)
+            {
+                history.truncate(end);
+            }
             remap_history_paths(&mut history, &self.project_path);
             Ok(history)
         })

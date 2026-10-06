@@ -85,7 +85,24 @@ pub struct ForkPinRequest {
     pub cwd: String,
     pub session_file_path: Option<String>,
     pub dest_dir: String,
+    /// `None` pins the parent's current end (todo #343). `Some` pins the point
+    /// immediately before one of the parent's user messages (fork from a
+    /// message), so the fork holds everything before it and nothing after.
+    pub cut: Option<ForkCut>,
 }
+
+/// Where a from-message fork ends: just before the user message the adapter's
+/// own transcript knows as `vendor_message_id`. `mainframe-chat` resolves the
+/// chat message id to this vendor id, so an adapter only has to locate it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ForkCut {
+    pub vendor_message_id: String,
+}
+
+/// The `ForkPinError::PointNotFound` reason for a cut message the provider
+/// transcript doesn't hold. One copy for the chat layer and every adapter, so
+/// the user sees one message for one situation.
+pub const FORK_CUT_NOT_FOUND_REASON: &str = "Couldn't find this message in the chat's transcript";
 
 /// Failure modes for `Adapter::pin_fork_point`.
 #[derive(Debug, Clone, PartialEq)]
@@ -97,6 +114,9 @@ pub enum ForkPinError {
     TranscriptMissing,
     /// Pinning was attempted but failed (I/O error, malformed transcript, etc).
     Failed(String),
+    /// The requested cut can't be placed in the provider transcript. The
+    /// string is user-facing and becomes the 409 body verbatim.
+    PointNotFound(String),
 }
 
 /// An adapter (a CLI integration). Trait object stored as `Arc<dyn Adapter>`.

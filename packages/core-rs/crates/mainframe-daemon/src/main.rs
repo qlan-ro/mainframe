@@ -212,10 +212,15 @@ async fn run_daemon() {
     )));
     if std::env::var("E2E_MODE").as_deref() == Ok("mock") {
         tracing::warn!("E2E mock mode enabled; registering the native replay adapter");
-        adapters.register(Arc::new(MockCliAdapter::with_tracker(
-            Arc::clone(&background_tasks),
-            Arc::clone(&claude_workflows),
-        )));
+        // Fork e2e specs opt in; every other spec keeps the mock fork-incapable.
+        let fork_capable = std::env::var("E2E_MOCK_FORK").as_deref() == Ok("1");
+        adapters.register(Arc::new(
+            MockCliAdapter::with_tracker(
+                Arc::clone(&background_tasks),
+                Arc::clone(&claude_workflows),
+            )
+            .with_fork_capable(fork_capable),
+        ));
     }
     adapters.seed_static_snapshots();
 

@@ -26,6 +26,7 @@ pub mod degraded_recovery;
 pub mod event_handler;
 pub mod external_session_service;
 pub mod fork;
+pub mod fork_cut;
 pub mod idle_offload;
 pub mod idle_scanner;
 pub mod lifecycle_manager;

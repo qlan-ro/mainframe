@@ -82,6 +82,7 @@ mod discard;
 mod errors;
 mod external_facade;
 mod fork_api;
+mod fork_sweep;
 mod history;
 mod lifecycle_api;
 mod reads;
@@ -101,7 +102,7 @@ pub use update::{ChatUpdate, ProcessedAttachments};
 
 // `ForkChatError` (todo #343's fork-a-chat action, `fork_api.rs`) is distinct
 // from `ForkError` above (the pre-existing `forkToWorktree` action).
-pub use crate::fork::{AdapterForkInfo, ForkChatError, ForkCreateInput};
+pub use crate::fork::{AdapterForkInfo, ForkChatError, ForkCreateInput, ForkPoint};
 
 use deps_config::CmDeps;
 use deps_event::EhDeps;

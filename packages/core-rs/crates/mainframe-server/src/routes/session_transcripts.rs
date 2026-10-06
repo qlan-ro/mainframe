@@ -19,6 +19,7 @@ use mainframe_types::transcript::{
 
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok};
+use crate::routes::identifier::is_identifier;
 use crate::routes::projects::parse_body;
 
 const MAX_CHAT_IDS: usize = 500;
@@ -27,14 +28,6 @@ const MAX_CHAT_IDS: usize = 500;
 struct ResolveBody {
     #[serde(rename = "chatIds")]
     chat_ids: Option<Vec<String>>,
-}
-
-/// Mirrors the daemon's identifier convention (`^[a-zA-Z0-9_-]+$`) — hand-rolled
-/// so this route stays dependency-free like its `worktree_offer` sibling.
-fn valid_id(s: &str) -> bool {
-    !s.is_empty()
-        && s.chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
 }
 
 fn parse_chat_ids(body: &Bytes) -> Result<Vec<String>, &'static str> {
@@ -46,7 +39,7 @@ fn parse_chat_ids(body: &Bytes) -> Result<Vec<String>, &'static str> {
     if chat_ids.len() > MAX_CHAT_IDS {
         return Err("chatIds exceeds the 500-entry limit");
     }
-    if !chat_ids.iter().all(|id| valid_id(id)) {
+    if !chat_ids.iter().all(|id| is_identifier(id)) {
         return Err("chatIds contains an invalid id");
     }
     Ok(chat_ids)

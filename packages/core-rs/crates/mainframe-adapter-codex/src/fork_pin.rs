@@ -4,10 +4,11 @@
 //! fork::pin_fork_point`), Codex's `thread/fork` needs no on-disk write at pin
 //! time: pinning only reads the parent thread and records its last turn id.
 
-use mainframe_adapter_api::{ForkPinError, ForkPinRequest};
+use mainframe_adapter_api::{FORK_CUT_NOT_FOUND_REASON, ForkCut, ForkPinError, ForkPinRequest};
 use mainframe_types::adapter::ForkSource;
 use serde_json::json;
 
+use crate::item_types::ThreadItem;
 use crate::session::spawn_temp_app_server;
 use crate::types::{ThreadReadResult, ThreadReadTurn};
 
@@ -28,6 +29,53 @@ fn last_completed_turn_id(turns: &[ThreadReadTurn]) -> Option<String> {
         .map(|t| t.id.clone())
 }
 
+/// The turn a from-message fork pins: the one right before the turn that
+/// holds the chosen `userMessage`. `thread/fork`'s `lastTurnId` is inclusive,
+/// so pinning the previous turn leaves the message's own turn (and everything
+/// after it) out of the fork. Nothing falls back to `thread/rollback`: forked
+/// threads paginate history, which rejects it.
+fn turn_before_message(
+    turns: &[ThreadReadTurn],
+    vendor_message_id: &str,
+) -> Result<String, ForkPinError> {
+    let not_found = || ForkPinError::PointNotFound(FORK_CUT_NOT_FOUND_REASON.to_string());
+    let index = turns
+        .iter()
+        .position(|turn| turn_has_user_message(turn, vendor_message_id))
+        .ok_or_else(not_found)?;
+    let previous = index
+        .checked_sub(1)
+        .and_then(|i| turns.get(i))
+        .ok_or_else(|| {
+            ForkPinError::PointNotFound("Nothing before this message to fork".to_string())
+        })?;
+    // `lastTurnId` may not name an in-progress turn (CODEX-RPC-07).
+    if previous.status == "inProgress" {
+        return Err(not_found());
+    }
+    Ok(previous.id.clone())
+}
+
+fn turn_has_user_message(turn: &ThreadReadTurn, vendor_message_id: &str) -> bool {
+    turn.items
+        .iter()
+        .any(|item| matches!(item, ThreadItem::UserMessage(m) if m.id == vendor_message_id))
+}
+
+/// The turn to pin: the last settled one for a whole-chat fork, or the turn
+/// before the cut message for a from-message fork.
+fn pinned_turn_id(
+    turns: Option<&[ThreadReadTurn]>,
+    cut: Option<&ForkCut>,
+) -> Result<Option<String>, ForkPinError> {
+    match cut {
+        None => Ok(turns.and_then(last_completed_turn_id)),
+        Some(cut) => {
+            turn_before_message(turns.unwrap_or_default(), &cut.vendor_message_id).map(Some)
+        }
+    }
+}
+
 /// Maps a raw `thread/read` JSON-RPC error message to a `ForkPinError`. Live
 /// verification (Gate 0, codex-cli 0.155.1 — CONSUMED-SURFACE CODEX-RPC-07)
 /// found `thread/read` answers an id it cannot find on disk at all with
@@ -44,7 +92,8 @@ fn map_pin_error(message: &str) -> ForkPinError {
 }
 
 /// Pin a fork's starting point (todo #368): spawn a temp app-server in the
-/// parent's cwd, read the parent thread, and pin its last turn id — the point
+/// parent's cwd, read the parent thread, and pin its last turn id (or, with a
+/// cut, the turn before the cut message's turn) — the point
 /// `thread/fork`'s `lastTurnId` will fork through, inclusive. Writes nothing to
 /// `request.dest_dir`; Codex's fork mechanism needs no on-disk snapshot (the
 /// retirement/startup-sweep paths already tolerate a missing directory).
@@ -73,11 +122,7 @@ pub(crate) async fn pin_fork_point(
     let value = result.map_err(|e| map_pin_error(&e.0))?;
     let read: ThreadReadResult =
         serde_json::from_value(value).map_err(|e| ForkPinError::Failed(e.to_string()))?;
-    let last_turn_id = read
-        .thread
-        .turns
-        .as_deref()
-        .and_then(last_completed_turn_id);
+    let last_turn_id = pinned_turn_id(read.thread.turns.as_deref(), request.cut.as_ref())?;
 
     Ok(ForkSource {
         source_session_id: request.source_session_id,
@@ -145,6 +190,79 @@ mod tests {
         assert_eq!(
             map_pin_error("boom"),
             ForkPinError::Failed("boom".to_string())
+        );
+    }
+
+    // ---- turn_before_message ----
+
+    fn prompt_turn(id: &str, status: &str, message_id: &str) -> ThreadReadTurn {
+        let mut t = turn(id, status);
+        t.items = vec![ThreadItem::UserMessage(
+            crate::item_types::UserMessageItem {
+                id: message_id.to_string(),
+                content: None,
+                text: Some("hi".to_string()),
+            },
+        )];
+        t
+    }
+
+    fn is_point_not_found(result: Result<String, ForkPinError>) -> bool {
+        matches!(result, Err(ForkPinError::PointNotFound(_)))
+    }
+
+    #[test]
+    fn the_turn_before_the_messages_turn_is_pinned() {
+        let turns = vec![
+            prompt_turn("t1", "completed", "m1"),
+            prompt_turn("t2", "completed", "m2"),
+            prompt_turn("t3", "completed", "m3"),
+        ];
+        assert_eq!(turn_before_message(&turns, "m3"), Ok("t2".to_string()));
+        assert_eq!(turn_before_message(&turns, "m2"), Ok("t1".to_string()));
+    }
+
+    #[test]
+    fn the_first_turn_is_point_not_found() {
+        let turns = vec![
+            prompt_turn("t1", "completed", "m1"),
+            prompt_turn("t2", "completed", "m2"),
+        ];
+        assert!(is_point_not_found(turn_before_message(&turns, "m1")));
+    }
+
+    #[test]
+    fn an_absent_message_is_point_not_found() {
+        let turns = vec![prompt_turn("t1", "completed", "m1")];
+        assert!(is_point_not_found(turn_before_message(&turns, "nope")));
+        assert!(is_point_not_found(turn_before_message(&[], "nope")));
+    }
+
+    #[test]
+    fn an_in_progress_previous_turn_is_point_not_found() {
+        let turns = vec![
+            prompt_turn("t1", "inProgress", "m1"),
+            prompt_turn("t2", "completed", "m2"),
+        ];
+        assert!(is_point_not_found(turn_before_message(&turns, "m2")));
+    }
+
+    #[test]
+    fn a_later_in_progress_turn_does_not_block_an_earlier_cut() {
+        let turns = vec![
+            prompt_turn("t1", "completed", "m1"),
+            prompt_turn("t2", "completed", "m2"),
+            prompt_turn("t3", "inProgress", "m3"),
+        ];
+        assert_eq!(turn_before_message(&turns, "m2"), Ok("t1".to_string()));
+    }
+
+    #[test]
+    fn no_cut_keeps_the_last_completed_turn() {
+        let turns = vec![turn("t1", "completed"), turn("t2", "inProgress")];
+        assert_eq!(
+            pinned_turn_id(Some(&turns), None),
+            Ok(Some("t1".to_string()))
         );
     }
 }
