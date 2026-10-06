@@ -1,9 +1,11 @@
-//! Provider segments: one chat, many provider-native sessions. History
+//! Provider segments: one chat, many provider-native sessions. Tool
+//! categories across adapters (`categories`). History
 //! composition (`compose`, `partition`), the divider message (`divider`),
 //! switch planning and refusals (`switch_plan`, `switch_rules`), the fork
 //! row plan the fork features use (`fork_plan`), and an unsent fork's switch
 //! (`fork_borrow`).
 
+pub mod categories;
 pub mod compose;
 pub mod divider;
 pub mod fork_borrow;

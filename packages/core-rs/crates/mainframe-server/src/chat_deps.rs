@@ -17,6 +17,7 @@
 //!      small local bridge types (`RtDeps`, `CtxDbHandle`) satisfy those bounds by
 //!      routing each call back through `Db::call_blocking`.
 
+use mainframe_chat::segments::categories::{segment_adapters, union_categories};
 use std::sync::{Arc, OnceLock, Weak};
 
 use mainframe_adapter_api::pr_detection::scan_history_for_prs;
@@ -318,6 +319,8 @@ impl ChatManagerDeps for DaemonChatDeps {
         let _ = self.broadcast.send(event);
     }
 
+    /// The union over every adapter the chat's segments ran on, so a
+    /// switched chat folds each segment's tools by their own adapter's rules.
     fn get_tool_categories(&self, chat_id: &str) -> Option<ToolCategories> {
         let id = chat_id.to_string();
         let chat = self
@@ -325,9 +328,13 @@ impl ChatManagerDeps for DaemonChatDeps {
             .call_blocking(move |d| d.chats.get(&id))
             .ok()
             .flatten()?;
-        self.adapters
-            .get(&chat.adapter_id)
-            .and_then(|a| a.get_tool_categories())
+        let layout = mainframe_chat::segments::SegmentStore::layout(self, chat_id);
+        let adapters = segment_adapters(&chat.adapter_id, layout.as_ref());
+        union_categories(adapters.iter().filter_map(|adapter_id| {
+            self.adapters
+                .get(adapter_id)
+                .and_then(|a| a.get_tool_categories())
+        }))
     }
 
     fn prepare_messages_for_client(
