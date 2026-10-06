@@ -72,6 +72,9 @@ pub struct ItemMeta {
     /// True when the system container carries a compaction marker.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub is_compacted: Option<bool>,
+    /// The divider a provider switch (or context reset) opens a segment with.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider_switch: Option<crate::segment::ProviderSwitchMarker>,
     /// The containing `DisplayMessage.metadata` map, passed through verbatim
     /// (attachments, command, cost_usd, turnDurationMs, …) — the same data
     /// the legacy dialect already serializes on every display frame.

@@ -6,6 +6,8 @@ use rusqlite::Connection;
 
 use crate::DbError;
 
+pub(crate) mod v31_segments;
+
 type MigrationFn = fn(&Connection) -> Result<(), DbError>;
 
 pub struct Migration {
@@ -530,11 +532,16 @@ pub fn migrations() -> Vec<Migration> {
                 )?)
             },
         },
+        // Provider segments: one chat, many provider-native sessions.
+        Migration {
+            version: 31,
+            up: v31_segments::up,
+        },
     ]
 }
 
 /// Highest migration version — the target a fresh DB stamps to.
-pub const LATEST_VERSION: i64 = 30;
+pub const LATEST_VERSION: i64 = 31;
 
 fn user_version(db: &Connection) -> Result<i64, DbError> {
     Ok(db.pragma_query_value(None, "user_version", |row| row.get(0))?)

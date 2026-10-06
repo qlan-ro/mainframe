@@ -144,6 +144,9 @@ pub enum DisplayNode {
         #[serde(skip_serializing_if = "Option::is_none")]
         parent_tool_use_id: Option<String>,
     },
+    ProviderSwitch {
+        marker: crate::segment::ProviderSwitchMarker,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -3,6 +3,7 @@ import type { CommandExecutionMetadata } from './command-execution.js';
 import type { SessionMention } from './context.js';
 import type { BackgroundActivity } from './background-task.js';
 import type { DetectedPr, ControlRequest, EffortLevel } from './adapter.js';
+import type { ProviderSwitchMarker } from './segment.js';
 import type { ExecutionMode } from './settings.js';
 import type { LeafContent } from './content.js';
 
@@ -210,7 +211,8 @@ export type MessageContent =
     }
   | { type: 'permission_request'; request: ControlRequest; parentToolUseId?: string }
   | { type: 'error'; message: string; parentToolUseId?: string }
-  | { type: 'compaction'; parentToolUseId?: string };
+  | { type: 'compaction'; parentToolUseId?: string }
+  | { type: 'provider_switch'; marker: ProviderSwitchMarker };
 
 export type ToolResultMessageContent = Extract<MessageContent, { type: 'tool_result' }>;
 

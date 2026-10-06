@@ -6,6 +6,7 @@ export * from './device.js';
 export * from './chat.js';
 export * from './command-execution.js';
 export * from './display.js';
+export * from './segment.js';
 export * from './events.js';
 export * from './skill.js';
 export * from './context.js';

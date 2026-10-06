@@ -27,6 +27,8 @@ pub mod launch;
 pub mod lsp;
 pub mod plugin;
 pub mod search;
+pub mod segment;
+mod segment_records;
 pub mod settings;
 pub mod setup_advisor;
 pub mod skill;

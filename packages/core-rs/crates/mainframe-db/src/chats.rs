@@ -12,6 +12,8 @@ use rusqlite::{Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::chat_native_sessions::NativePatch;
+use crate::chat_segments;
 use crate::chat_tags::ChatTagsRepository;
 use crate::{DbError, enum_to_db_string};
 
@@ -115,6 +117,19 @@ pub struct ChatUpdate {
     pub transcript_missing: Option<bool>,
     pub vendor_session_ephemeral: Option<bool>,
     pub context_lost_at: Option<String>,
+}
+
+/// The part of a `chats` patch that belongs to the active native session.
+fn native_patch(updates: &ChatUpdate) -> NativePatch {
+    NativePatch {
+        adapter_id: updates.adapter_id.clone(),
+        model: updates.model.clone(),
+        session_file_path: updates.session_file_path.clone(),
+        last_context_tokens_input: updates.last_context_tokens_input,
+        last_context_total_tokens: updates.last_context_total_tokens,
+        last_context_max_tokens: updates.last_context_max_tokens,
+        transcript_missing: updates.transcript_missing,
+    }
 }
 
 fn parse_effort(value: Option<String>) -> Option<EffortLevel> {
@@ -311,6 +326,7 @@ impl ChatsRepository {
                 scratch_path,
             ],
         )?;
+        chat_segments::ensure_seeded(&self.db, &id)?;
 
         Ok(Chat {
             id,
@@ -409,6 +425,7 @@ impl ChatsRepository {
                 now,
             ],
         )?;
+        chat_segments::ensure_seeded(&self.db, &id)?;
 
         Ok(Chat {
             id,
@@ -474,15 +491,37 @@ impl ChatsRepository {
     /// resumed, so the resume target and the ephemeral flag are cleared together
     /// with stamping the loss time.
     pub fn mark_context_lost(&self, id: &str, context_lost_at: &str) -> Result<(), DbError> {
-        self.db.execute(
-            "UPDATE chats SET context_lost_at = ?, claude_session_id = NULL, \
-             session_file_path = NULL, vendor_session_ephemeral = 0 WHERE id = ?",
+        let tx = self.db.unchecked_transaction()?;
+        chat_segments::clear_active_native_id(&tx, id)?;
+        tx.execute(
+            "UPDATE chats SET context_lost_at = ?, vendor_session_ephemeral = 0 WHERE id = ?",
             rusqlite::params![context_lost_at, id],
         )?;
+        tx.commit()?;
         Ok(())
     }
 
+    /// Session columns (`claude_session_id`, `session_file_path`, context
+    /// usage, `transcript_missing`, adapter and model) are routed through the
+    /// segment repository first, in the same transaction, so the `chats`
+    /// mirror and the active native-session row never disagree.
     pub fn update(&self, id: &str, updates: &ChatUpdate) -> Result<(), DbError> {
+        let tx = self.db.unchecked_transaction()?;
+        if let Some(native_id) = &updates.claude_session_id {
+            chat_segments::record_native_id(
+                &tx,
+                id,
+                native_id,
+                updates.session_file_path.as_deref(),
+            )?;
+        }
+        chat_segments::absorb_chat_patch(&tx, id, &native_patch(updates))?;
+        self.update_columns(id, updates)?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    fn update_columns(&self, id: &str, updates: &ChatUpdate) -> Result<(), DbError> {
         let mut sets: Vec<&str> = Vec::new();
         let mut values: Vec<SqlValue> = Vec::new();
 
@@ -809,11 +848,12 @@ impl ChatsRepository {
     /// Forget the CLI session bound to this chat: the next send spawns a fresh
     /// session instead of `--resume`ing a dead id. Used by degraded-chat recovery
     /// ("Continue here") after the CLI's transcript file was deleted.
+    /// Opens a `context_reset` segment, so the earlier session's history stays
+    /// readable while the mirror (and therefore the next spawn) starts fresh.
     pub fn clear_session(&self, id: &str) -> Result<(), DbError> {
-        self.db.execute(
-            "UPDATE chats SET claude_session_id = NULL, session_file_path = NULL, transcript_missing = 0 WHERE id = ?",
-            rusqlite::params![id],
-        )?;
+        let tx = self.db.unchecked_transaction()?;
+        chat_segments::start_context_reset(&tx, id)?;
+        tx.commit()?;
         Ok(())
     }
 
@@ -839,7 +879,9 @@ impl ChatsRepository {
     pub fn get_imported_session_ids(&self, project_id: &str) -> Result<Vec<String>, DbError> {
         let mut stmt = self
             .db
-            .prepare("SELECT claude_session_id FROM chats WHERE project_id = ? AND claude_session_id IS NOT NULL")?;
+            .prepare("SELECT n.native_session_id FROM chat_native_sessions n JOIN chats c ON c.id = n.chat_id \
+                      WHERE c.project_id = ? AND n.native_session_id IS NOT NULL \
+                      AND n.borrowed_from_chat_id IS NULL")?;
         let rows = stmt.query_map([project_id], |row| row.get::<_, String>(0))?;
         Ok(rows.collect::<Result<Vec<_>, _>>()?)
     }
@@ -850,7 +892,9 @@ impl ChatsRepository {
         project_id: &str,
     ) -> Result<Option<Chat>, DbError> {
         let sql = format!(
-            "SELECT {CHAT_SELECT_FIELDS} FROM chats WHERE claude_session_id = ? AND project_id = ?"
+            "SELECT {CHAT_SELECT_FIELDS} FROM chats WHERE id IN (SELECT chat_id FROM \
+             chat_native_sessions WHERE native_session_id = ? AND borrowed_from_chat_id IS NULL) \
+             AND project_id = ?"
         );
         let mut chats = self.query_chats(&sql, rusqlite::params![session_id, project_id])?;
         match chats.pop() {

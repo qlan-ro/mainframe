@@ -411,6 +411,11 @@ pub enum MessageContentNode {
         #[serde(skip_serializing_if = "Option::is_none")]
         parent_tool_use_id: Option<String>,
     },
+    /// The divider that opens every segment after a chat's first (provider
+    /// switch, or a context reset on the same provider).
+    ProviderSwitch {
+        marker: crate::segment::ProviderSwitchMarker,
+    },
 }
 
 /// Tracks a message that was sent to stdin while the CLI was busy.

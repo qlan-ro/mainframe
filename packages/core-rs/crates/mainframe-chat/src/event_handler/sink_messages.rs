@@ -209,6 +209,7 @@ fn has_child_owner(content: &MessageContent) -> bool {
             }
             | MessageContentNode::Compaction { parent_tool_use_id },
         ) => parent_tool_use_id,
+        MessageContent::Node(MessageContentNode::ProviderSwitch { .. }) => return false,
     };
     parent.as_deref().is_some_and(|id| !id.is_empty())
 }

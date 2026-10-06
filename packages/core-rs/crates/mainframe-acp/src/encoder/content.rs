@@ -183,6 +183,13 @@ fn handle_node(
         DisplayNode::Compaction { .. } => {
             message.claim_marker(out, container).is_compacted = true;
         }
+        DisplayNode::ProviderSwitch { marker } => {
+            // The meta drives the divider; the label text is what clients
+            // without provider-switch rendering (mobile) show instead.
+            let accum = message.claim(out, container);
+            accum.provider_switch = Some(marker.clone());
+            push_text(&mut accum.blocks, &marker.label());
+        }
     }
 }
 
