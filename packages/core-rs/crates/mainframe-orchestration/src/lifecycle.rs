@@ -103,7 +103,8 @@ impl OrchestrationService {
         let Some(chat_id) = event_chat_id(event) else {
             return;
         };
-        if self.port.chat(chat_id).await.is_some_and(|c| !c.working) {
+        // Only a stopped chat needs the re-read; most events skip the port.
+        if self.is_stopping(chat_id) && self.port.chat(chat_id).await.is_some_and(|c| !c.working) {
             self.clear_stopping(chat_id);
         }
         if let Some(task_id) = self.tracked_task(chat_id) {

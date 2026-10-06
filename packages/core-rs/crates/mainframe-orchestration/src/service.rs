@@ -108,7 +108,7 @@ impl OrchestrationService {
         self.lock_stopping().remove(chat_id);
     }
 
-    fn is_stopping(&self, chat_id: &str) -> bool {
+    pub(crate) fn is_stopping(&self, chat_id: &str) -> bool {
         self.lock_stopping().contains(chat_id)
     }
 
