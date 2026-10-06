@@ -20,18 +20,18 @@ on:
   # push:
   #   branches: [main]
   workflow_dispatch: # ad-hoc run on any ref (reports as "e2e-mock", not the gate name)
-  # Invoked by release.yml (auto-publish gate), ci.yml (every PR) and
-  # e2e-gate.yml (manual run on the version PR). `mode` exists for ci.yml: a
+  # Invoked by release.yml (auto-publish gate) and ci.yml (every PR; the
+  # suite runs when a PR gets the `run-e2e` label). `mode` exists for ci.yml: a
   # caller job skipped by its own `if:` reports a check named after the caller
   # ("e2e-mock"), while a job that runs reports the callee's name
   # ("e2e-mock / e2e-mock"). Deciding INSIDE this workflow keeps one name in
   # every case, which is what main's required check matches on:
-  #   run            — the suite runs (default; release.yml and e2e-gate.yml)
+  #   run            — the suite runs (default; release.yml, and ci.yml on `run-e2e`)
   #   skip           — the job is skipped, which satisfies the required check
   #                    (feature PRs)
-  #   require-manual — the job fails at once with a pointer to e2e-gate.yml,
-  #                    so the PR cannot merge until someone runs the suite on
-  #                    its current head (the changesets version PR)
+  #   require-manual — the job fails at once with a pointer to the `run-e2e`
+  #                    label, so the PR cannot merge until someone runs the
+  #                    suite on its current head (the changesets version PR)
   workflow_call:
     inputs:
       mode:
@@ -50,71 +50,80 @@ jobs:
     if: ${{ inputs.mode != 'skip' }}
     runs-on: ubuntu-latest
     steps:
-      # The changesets version PR is force-pushed after every merge to main;
-      # running the hour-long suite on each update is waste, so ci.yml passes
-      # `require-manual` there. Failing here keeps the PR unmergeable until
-      # e2e-gate.yml has run on its current head — that run carries the same
-      # check name and, being newer, is the one the ruleset evaluates.
-      # Passes when e2e-gate.yml already succeeded on this exact head. The PR
-      # merge box only counts check runs from the PR's own CI run, so the gate
-      # cannot satisfy the required check directly; instead e2e-gate.yml
-      # re-runs this job after its suite is green, and this lookup is what
-      # makes the re-run pass without running the suite a second time.
+      # The changesets version PR is force-pushed after every merge to main,
+      # so ci.yml passes `require-manual` there instead of running the suite
+      # on every update. This step passes when the suite already succeeded on
+      # this exact head (a `run-e2e` run, then CI re-ran for another label or
+      # a re-run) and otherwise fails with a pointer to the label. A satisfied
+      # check sets `satisfied`, and every later step checks it: a step's
+      # `exit 0` does not end the job, so without the guard the job would go
+      # on to rebuild everything and run the whole suite again.
       - name: Require a manual run on the version PR
+        id: manual
         if: ${{ inputs.mode == 'require-manual' }}
         env:
           GH_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          HEAD_REF: ${{ github.head_ref || github.ref_name }}
         run: |
           prior=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?check_name=e2e-mock%20%2F%20e2e-mock&status=completed&per_page=50" \
             --jq '[.check_runs[] | select(.conclusion == "success")] | length')
           if [ "${prior:-0}" -gt 0 ]; then
-            echo "e2e gate already green on ${HEAD_SHA} (${prior} successful run(s)); nothing to do."
+            echo "e2e suite already green on ${HEAD_SHA} (${prior} successful run(s)); nothing to do."
+            echo "satisfied=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          echo "::error::The e2e gate has not run on this head. Run it with: gh workflow run e2e-gate.yml --ref ${HEAD_REF} (Actions → \"e2e gate (manual)\" → branch ${HEAD_REF}). A later push to the branch needs a new run."
+          echo "::error::The e2e suite has not run on this head. Add the run-e2e label to this PR to run it (gh pr edit <number> --add-label run-e2e). A later push to the branch needs the label again."
           exit 1
 
-      - uses: actions/checkout@v7
+      - if: ${{ steps.manual.outputs.satisfied != 'true' }}
+        uses: actions/checkout@v7
 
       # This job builds the daemon (build:app:tauri), which links libdbus via
       # keyring's secret-service backend — without the dev package cargo dies
       # in libdbus-sys' build.rs.
       - name: System dependencies
+        if: ${{ steps.manual.outputs.satisfied != 'true' }}
         run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
 
-      - uses: pnpm/action-setup@v6
+      - if: ${{ steps.manual.outputs.satisfied != 'true' }}
+        uses: pnpm/action-setup@v6
         with:
           version: 10
 
-      - uses: actions/setup-node@v7
+      - if: ${{ steps.manual.outputs.satisfied != 'true' }}
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: 'pnpm'
 
-      - uses: dtolnay/rust-toolchain@stable
+      - if: ${{ steps.manual.outputs.satisfied != 'true' }}
+        uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
 
-      - uses: Swatinem/rust-cache@v2
+      - if: ${{ steps.manual.outputs.satisfied != 'true' }}
+        uses: Swatinem/rust-cache@v2
         with:
           workspaces: packages/core-rs
 
-      - run: pnpm install --frozen-lockfile
+      - if: ${{ steps.manual.outputs.satisfied != 'true' }}
+        run: pnpm install --frozen-lockfile
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # build:app:tauri builds types + the Rust daemon and bakes the UI
       # bundle for the e2e daemon port (31416, NOT prod 31415 — assertBundleTargetsTestPort
       # aborts otherwise).
-      - run: pnpm --filter @qlan-ro/mainframe-e2e build:app:tauri
+      - if: ${{ steps.manual.outputs.satisfied != 'true' }}
+        run: pnpm --filter @qlan-ro/mainframe-e2e build:app:tauri
         env:
           NODE_OPTIONS: '--max-old-space-size=4096'
-      - run: pnpm --filter @qlan-ro/mainframe-e2e exec playwright install --with-deps chromium
+      - if: ${{ steps.manual.outputs.satisfied != 'true' }}
+        run: pnpm --filter @qlan-ro/mainframe-e2e exec playwright install --with-deps chromium
 
       # The harness and daemon run git operations (worktrees, status); the runner has no identity.
       - name: Configure git identity for the runner
+        if: ${{ steps.manual.outputs.satisfied != 'true' }}
         run: |
           git config --global user.email "e2e@mainframe.test"
           git config --global user.name "Mainframe E2E"
@@ -123,7 +132,8 @@ jobs:
       # MF_E2E_SKIP_BUILD: the bundle was built (and port-verified) above — each describe block
       # would otherwise rebuild it in beforeAll. MF_E2E_GLOBAL_TIMEOUT: the whole suite shares
       # one process budget (default 40 min starves the tail when every spec runs back-to-back).
-      - run: E2E_MODE=mock MF_E2E_SKIP_BUILD=1 MF_E2E_GLOBAL_TIMEOUT=5400000 pnpm --filter @qlan-ro/mainframe-e2e exec playwright test --project=tauri
+      - if: ${{ steps.manual.outputs.satisfied != 'true' }}
+        run: E2E_MODE=mock MF_E2E_SKIP_BUILD=1 MF_E2E_GLOBAL_TIMEOUT=5400000 pnpm --filter @qlan-ro/mainframe-e2e exec playwright test --project=tauri
 
       - name: Upload Playwright report on failure
         if: failure()
