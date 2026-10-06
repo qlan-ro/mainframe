@@ -31,6 +31,8 @@ const state = vi.hoisted(() => ({
   firstUserId: 'msg-1',
   remoteId: 'chat-1' as string | null,
   custom: null as Record<string, unknown> | null,
+  /** Overrides the default three-message thread (a switched chat's dividers). */
+  threadMessages: null as unknown[] | null,
   nested: false,
   fork: vi.fn(),
 }));
@@ -40,7 +42,7 @@ vi.mock('@assistant-ui/react', () => ({
     selector({
       message: { id: state.messageId, metadata: { custom: { mainframe: state.meta } } },
       thread: {
-        messages: [
+        messages: state.threadMessages ?? [
           { id: state.firstUserId, role: 'user' },
           { id: 'reply-1', role: 'assistant' },
           { id: state.messageId, role: 'user' },
@@ -97,6 +99,7 @@ beforeEach(() => {
   state.messageId = 'msg-2';
   state.remoteId = 'chat-1';
   state.nested = false;
+  state.threadMessages = null;
   state.fork.mockReset();
   useAdaptersStore.setState({ byId: { claude: adapter(true) } });
 });
@@ -139,6 +142,24 @@ describe('UserMessageActionBar', () => {
     setup();
     expect(button()).toBeDisabled();
     expect(hint()).toBe('Nothing before this message to fork');
+  });
+
+  it('is disabled before the latest provider switch, naming the provider', () => {
+    const divider = {
+      id: 'segdiv-seg_1',
+      role: 'system',
+      metadata: { custom: { mainframe: { providerSwitch: { kind: 'provider_switch', toAdapterName: 'Codex' } } } },
+    };
+    state.threadMessages = [
+      { id: 'msg-1', role: 'user' },
+      { id: 'msg-2', role: 'user' },
+      divider,
+      { id: 'msg-3', role: 'user' },
+      { id: 'msg-4', role: 'user' },
+    ];
+    setup();
+    expect(button()).toBeDisabled();
+    expect(hint()).toBe("Can't fork from before the switch to Codex");
   });
 
   it.each([

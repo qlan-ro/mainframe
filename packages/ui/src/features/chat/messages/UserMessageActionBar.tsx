@@ -12,7 +12,8 @@
  * draft, a temporary (or side) chat, a no-project chat, and a nested subagent
  * transcript — because a disabled button on every message would be noise.
  * Everywhere else the button is enabled, or disabled with the first failing
- * reason as its tooltip. A turn in flight does not disable it.
+ * reason as its tooltip. A turn in flight does not disable it. A chat that
+ * switched providers forks only inside its latest segment.
  */
 import type { FC } from 'react';
 import { ActionBarPrimitive, useAuiState } from '@assistant-ui/react';
@@ -20,7 +21,10 @@ import { GitFork } from 'lucide-react';
 import { MessageFooter } from '@/components/ui/message';
 import { useAdaptersStore } from '@/store/adapters';
 import { activeSessionCustom } from '@/features/sessions/view-model/chat-to-thread-custom';
-import { forkFromMessageAvailability } from '@/features/sessions/view-model/fork-from-message-availability';
+import {
+  forkFromMessageAvailability,
+  latestSegmentBlock,
+} from '@/features/sessions/view-model/fork-from-message-availability';
 import { useForkChat } from '@/features/sessions/use-fork-chat';
 import { useMainframeMeta } from '../view-model/message-meta';
 import { useIsNestedTranscript } from './nested-transcript-context';
@@ -45,6 +49,8 @@ const ForkFromHereBar: FC<UserMessageActionBarProps> = ({ prefill }) => {
   const messageId = useAuiState((s) => s.message.id);
   // A primitive selection, so no fresh array ever reaches getSnapshot.
   const firstUserMessageId = useAuiState((s) => s.thread.messages.find((m) => m.role === 'user')?.id);
+  // The store's own marker object, so the selection stays stable.
+  const beforeLatestSegment = useAuiState((s) => latestSegmentBlock(s.thread.messages, s.message.id));
   const chatId = useAuiState((s) => s.threadListItem.remoteId);
   const custom = useAuiState((s) => activeSessionCustom(s.threadListItem, s.threads.threadItems));
   const adapter = useAdaptersStore((s) => (custom == null ? undefined : s.byId[custom.adapterId]));
@@ -63,6 +69,7 @@ const ForkFromHereBar: FC<UserMessageActionBarProps> = ({ prefill }) => {
     directoryMissing: custom.directoryMissing ?? false,
     messageUnsent: meta.pending === true || meta.error != null,
     isFirstUserMessage: firstUserMessageId === messageId,
+    beforeLatestSegment,
   });
 
   return (
