@@ -22,7 +22,7 @@ use mainframe_types::settings::ExecutionMode;
 
 mod app_ctx;
 
-pub(crate) use app_ctx::{test_ctx, test_ctx_with_chat_manager};
+pub(crate) use app_ctx::{test_ctx, test_ctx_with_chat_manager, test_ctx_with_orchestration};
 
 static NEXT_SESSION_ID: AtomicUsize = AtomicUsize::new(1);
 

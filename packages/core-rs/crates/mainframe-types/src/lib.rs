@@ -25,6 +25,7 @@ pub mod git;
 pub mod host;
 pub mod launch;
 pub mod lsp;
+pub mod orchestration;
 pub mod plugin;
 pub mod search;
 pub mod segment;

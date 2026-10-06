@@ -6,8 +6,8 @@ use std::sync::Arc;
 
 use mainframe_automations::engine::BoxFuture;
 use mainframe_chat::chat_manager::ChatManager;
-use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent, NewChat};
-use mainframe_types::content::LeafContent;
+use mainframe_orchestration::last_assistant_text;
+use mainframe_types::chat::NewChat;
 
 pub trait AgentChatPort: Send + Sync {
     /// `createChatWithDefaults` → the new chat id. `branch_name` rides the
@@ -119,26 +119,6 @@ impl AgentChatPort for ChatManagerPort {
     fn interrupt<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()> {
         Box::pin(async move { self.chats.interrupt_chat(chat_id).await })
     }
-}
-
-/// The last non-empty assistant text block (event_handler.rs
-/// `get_last_assistant_text` semantics, minus the push-body length cap —
-/// the engine needs the full text for A2 parsing).
-pub(crate) fn last_assistant_text(messages: &[ChatMessage]) -> String {
-    for message in messages.iter().rev() {
-        if message.r#type != ChatMessageType::Assistant {
-            continue;
-        }
-        for block in message.content.iter().rev() {
-            if let MessageContent::Leaf(LeafContent::Text { text, .. }) = block {
-                let text = text.trim();
-                if !text.is_empty() {
-                    return text.to_string();
-                }
-            }
-        }
-    }
-    String::new()
 }
 
 // PORT STATUS: packages/core/src/automations/agent-port.ts (ChatPortDeps)

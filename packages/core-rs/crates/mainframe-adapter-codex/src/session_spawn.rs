@@ -52,6 +52,7 @@ impl CodexSession {
             small_fast_model: None,
             default_model: None,
             no_persistence: None,
+            orchestration_mcp: None,
         });
         let sink = sink.unwrap_or_else(null_sink);
         *self.sink.lock().unwrap_or_else(|e| e.into_inner()) = sink.clone();
@@ -109,6 +110,10 @@ impl CodexSession {
             &executable,
             Some(Path::new(&self.project_path)),
             self.resolved_path.as_str(),
+        );
+        crate::orchestration_args::apply_orchestration(
+            &mut cmd,
+            options.orchestration_mcp.as_ref(),
         );
         let child = cmd
             .spawn()

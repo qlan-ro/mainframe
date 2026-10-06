@@ -135,6 +135,7 @@ async fn harness(fork_capable: bool, update: ChatUpdate) -> Harness {
         lsp_manager: None,
         plugin_manager: None,
         automations: None,
+        orchestration: None,
         quota: None,
         data_dir: data_dir.path().to_path_buf(),
         version: "0.0.0-test".to_string(),

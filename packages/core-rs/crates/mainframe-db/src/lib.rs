@@ -22,6 +22,7 @@ pub mod chat_tags;
 pub mod chats;
 pub mod devices;
 pub mod migrations;
+mod orchestration;
 pub mod projects;
 pub mod schema;
 pub mod settings;

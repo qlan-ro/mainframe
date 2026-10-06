@@ -137,6 +137,7 @@ mod tests {
             lsp_manager: None,
             plugin_manager: None,
             automations: None,
+            orchestration: None,
             quota,
             data_dir: std::env::temp_dir(),
             version: "0.0.0-test".into(),

@@ -34,6 +34,7 @@ pub mod history_subagents;
 pub mod history_tool_result;
 pub mod messages;
 pub mod models;
+mod orchestration_args;
 pub mod partial_stream;
 pub mod permission_updates;
 pub mod plan_mode_handler;

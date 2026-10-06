@@ -36,6 +36,7 @@ pub mod lifecycle_manager;
 pub mod message_cache;
 pub mod message_markers;
 pub mod no_persistence;
+pub mod orchestration_hooks;
 pub mod permission_handler;
 pub mod permission_manager;
 pub mod plan_mode_actions;

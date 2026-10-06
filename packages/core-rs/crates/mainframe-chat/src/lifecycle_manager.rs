@@ -19,6 +19,7 @@ use crate::chat_surface::{self, ChatSurface, ChatSurfaceEvent};
 use crate::fork::PendingForkState;
 use crate::message_cache::MessageCache;
 use crate::no_persistence;
+use crate::orchestration_hooks::OrchestrationSlot;
 use crate::permission_manager::PermissionManager;
 use crate::title_generator::resolve_title_binary;
 use crate::types::ActiveChat;
@@ -243,6 +244,8 @@ pub struct ChatLifecycleManager<D: LifecycleManagerDeps + 'static> {
     /// no surface attached (most unit tests) is a no-op, not a compile-time
     /// obligation on every `LifecycleManagerDeps` fake.
     chat_surface: Arc<OnceLock<Arc<dyn ChatSurface>>>,
+    /// The orchestration MCP hooks; inert until the daemon attaches them.
+    orchestration: OrchestrationSlot,
 }
 
 impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
@@ -259,6 +262,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             permissions,
             guards: Arc::new(Mutex::new(Guards::default())),
             chat_surface: Arc::new(OnceLock::new()),
+            orchestration: OrchestrationSlot::default(),
         }
     }
 
@@ -266,6 +270,11 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
     /// second call (e.g. a stray double-attach) is a harmless no-op.
     pub fn set_chat_surface(&self, surface: Arc<dyn ChatSurface>) {
         let _ = self.chat_surface.set(surface);
+    }
+
+    /// The orchestration hooks every spawn and teardown path consults.
+    pub fn orchestration(&self) -> &OrchestrationSlot {
+        &self.orchestration
     }
 
     fn get_active(&self, chat_id: &str) -> Option<Arc<Mutex<ActiveChat>>> {
@@ -664,6 +673,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         {
             warn!(?err, chat_id, "session.kill failed on archive");
         }
+        self.orchestration.revoke(chat_id);
 
         let project_path = chat
             .as_ref()
@@ -747,6 +757,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         {
             warn!(?err, chat_id, "session.kill failed on stopChat");
         }
+        self.orchestration.revoke(chat_id);
         cell.lock().unwrap_or_else(|e| e.into_inner()).session = None;
     }
 
@@ -769,6 +780,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         {
             warn!(?err, chat_id, "session.kill failed on endChat");
         }
+        self.orchestration.revoke(chat_id);
 
         self.deps.chats_update(
             chat_id,
@@ -1189,6 +1201,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
                     small_fast_model,
                     default_model,
                     no_persistence: Some(plan.no_persistence),
+                    orchestration_mcp: self.orchestration.issue(chat_id, session.id()),
                 }),
                 Some(sink),
             )
@@ -1209,6 +1222,9 @@ mod flight_claims;
 
 #[cfg(test)]
 mod title_logging_tests;
+
+#[cfg(test)]
+mod orchestration_tests;
 
 #[cfg(test)]
 mod tests {

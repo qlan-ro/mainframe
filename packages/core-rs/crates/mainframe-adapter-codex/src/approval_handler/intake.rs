@@ -122,6 +122,12 @@ impl ApprovalHandler {
                     &flat_labels,
                 ));
             }
+        } else if method == "mcpServer/elicitation/request" {
+            respond(
+                json_rpc_id,
+                crate::orchestration_args::elicitation_response(params),
+            );
+            return;
         } else {
             tracing::warn!(
                 module = "codex:approvals",

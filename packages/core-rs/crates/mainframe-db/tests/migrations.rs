@@ -34,7 +34,7 @@ fn schema_sql(db: &Connection) -> String {
     sqls.join("\n")
 }
 
-const ALL_CHATS_COLUMNS: [&str; 38] = [
+const ALL_CHATS_COLUMNS: [&str; 39] = [
     "id",
     "adapter_id",
     "project_id",
@@ -73,6 +73,7 @@ const ALL_CHATS_COLUMNS: [&str; 38] = [
     "vendor_session_ephemeral",
     "context_lost_at",
     "scratch_path",
+    "created_by_chat_id",
 ];
 
 // Builds an intermediate historical DB by replaying the real migration chain up to
@@ -114,10 +115,17 @@ fn build_legacy_intermediate() -> Connection {
     db
 }
 
+/// Versions reserved for a migration landing from a parallel branch. Each
+/// entry must be removed once that migration merges.
+const RESERVED_VERSIONS: [i64; 1] = [31];
+
 #[test]
 fn latest_version_is_highest_migration_contiguous_from_1() {
     let versions: Vec<i64> = migrations().iter().map(|m| m.version).collect();
-    let expected: Vec<i64> = (1..=versions.len() as i64).collect();
+    let last = *versions.last().unwrap();
+    let expected: Vec<i64> = (1..=last)
+        .filter(|v| !RESERVED_VERSIONS.contains(v))
+        .collect();
     assert_eq!(versions, expected);
     assert_eq!(LATEST_VERSION, *versions.last().unwrap());
 }

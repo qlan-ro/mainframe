@@ -33,6 +33,7 @@ impl AdapterSession for ClaudeSession {
             small_fast_model: None,
             default_model: None,
             no_persistence: None,
+            orchestration_mcp: None,
         });
         Box::pin(ClaudeSession::spawn(self, options, sink))
     }

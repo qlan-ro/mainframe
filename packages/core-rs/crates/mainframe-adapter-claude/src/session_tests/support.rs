@@ -42,6 +42,7 @@ pub(super) fn spawn_opts(permission_mode: Option<ExecutionMode>) -> SessionSpawn
         small_fast_model: None,
         default_model: None,
         no_persistence: None,
+        orchestration_mcp: None,
     }
 }
 

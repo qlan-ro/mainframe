@@ -33,6 +33,7 @@ impl ChatManager {
                 "session.kill failed during teardown"
             );
         }
+        self.lifecycle.orchestration().revoke(&chat.id);
         self.active_chats.remove(&chat.id);
         self.messages
             .lock()
@@ -70,6 +71,7 @@ impl ChatManager {
             Box::pin(self.discard_chat(&side_chat_id)).await?;
         }
 
+        self.lifecycle.orchestration().stopping(chat_id).await;
         self.teardown_live_chat(&chat).await;
         self.deps.attachment_delete_chat(chat_id).await;
         if !side_chat && let Some(scratch_path) = &chat.scratch_path {

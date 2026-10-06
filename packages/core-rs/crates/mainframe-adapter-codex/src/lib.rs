@@ -40,6 +40,7 @@ pub(crate) mod image_generation_history;
 pub(crate) mod image_generation_render;
 pub mod item_types;
 pub mod jsonrpc;
+pub(crate) mod orchestration_args;
 pub(crate) mod parent_id_sink;
 pub mod plan_mode_handler;
 pub mod quota_identity;

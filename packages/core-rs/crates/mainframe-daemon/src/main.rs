@@ -64,7 +64,7 @@ use mainframe_server::ctx::{AppCtx, DefaultRunner, GitFactory, Services};
 use mainframe_server::db::Db;
 use mainframe_server::{
     RegistryLaunchStopper, RegistryScopeTunnelStopper, build_app, build_automations_engine,
-    build_chat_manager, spawn_broadcast_pump,
+    build_chat_manager, build_orchestration, spawn_broadcast_pump,
 };
 use mainframe_services::attachment::AttachmentStore;
 use mainframe_services::files::FileWatcherService;
@@ -315,6 +315,19 @@ async fn run_daemon() {
     // removal deleted directly, both bypass on_result's normal retirement.
     chats.sweep_unreferenced_fork_snapshots().await;
 
+    // Orchestration MCP server: attached to the ChatManager before any chat
+    // can spawn, so every spawn carries a credential. Its event loop revokes
+    // credentials on process exit and flushes held agent messages on idle.
+    let orchestration = build_orchestration(
+        Arc::clone(&chats),
+        db.clone(),
+        Arc::clone(&adapters),
+        broadcast.clone(),
+        DAEMON_VERSION,
+        port,
+    );
+    let orchestration_events = orchestration.spawn_event_loop();
+
     // Automations v2 engine (T9.2): built over its own automations.db after the
     // ChatManager exists (the agent port drives chats). A build failure logs and
     // leaves `None` — routes answer 503, everything else serves.
@@ -414,6 +427,7 @@ async fn run_daemon() {
         lsp_manager: Some(Arc::clone(&lsp_manager)),
         plugin_manager: Some(Arc::clone(&plugin_manager)),
         automations: automations.clone(),
+        orchestration: Some(Arc::clone(&orchestration)),
         quota: Some(quota_manager.clone() as Arc<dyn QuotaService>),
     });
 
@@ -536,6 +550,10 @@ async fn run_daemon() {
     if let Some(automations) = &automations {
         automations.stop();
     }
+    // Credentials are in memory only and the CLIs die with the daemon; revoke
+    // first so no call made during the drain outlives it.
+    orchestration.credentials().revoke_all();
+    orchestration_events.abort();
     chats.dispose();
     plugin_manager.unload_all();
     adapters.kill_all();

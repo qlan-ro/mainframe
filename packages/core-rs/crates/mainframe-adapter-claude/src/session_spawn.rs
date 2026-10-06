@@ -25,14 +25,18 @@ impl ClaudeSession {
             })?;
         self.state().real_project_path = real.to_string_lossy().to_string();
 
-        let mut child = build_spawn_command(
+        let mut cmd = build_spawn_command(
             &executable,
             &args,
             &self.project_path,
             self.resolved_path.as_str(),
             proxy_env.as_ref(),
-        )
-        .spawn()?;
+        );
+        crate::orchestration_args::apply_orchestration_env(
+            &mut cmd,
+            options.orchestration_mcp.as_ref(),
+        );
+        let mut child = cmd.spawn()?;
 
         let handle = self.bind_child(&child);
         self.start_stdin(child.stdin.take());
@@ -199,6 +203,9 @@ pub(super) fn build_args(
     args.push("--permission-mode".to_string());
     args.push(cli_mode);
     args.push("--allow-dangerously-skip-permissions".to_string());
+    args.extend(crate::orchestration_args::orchestration_args(
+        options.orchestration_mcp.as_ref(),
+    ));
     (args, base_mode)
 }
 

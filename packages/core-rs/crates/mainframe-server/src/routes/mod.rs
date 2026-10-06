@@ -38,6 +38,7 @@ pub mod health;
 mod identifier;
 pub mod launch;
 pub mod lsp_routes;
+pub mod mcp;
 pub mod notifications;
 pub mod projects;
 pub mod quota;

@@ -103,6 +103,7 @@ fn spawn_options(
         small_fast_model: None,
         default_model: None,
         no_persistence: None,
+        orchestration_mcp: None,
     }
 }
 

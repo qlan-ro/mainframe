@@ -316,3 +316,21 @@ fn resolve_resume_falls_back_to_fork_source_when_own_transcript_is_missing() {
     assert_eq!(args[i + 1], "/snap/n1/parent-id.jsonl");
     assert!(args.iter().any(|a| a == "--fork-session"));
 }
+
+#[test]
+fn a_spawn_with_an_orchestration_launch_gets_the_mcp_server_after_the_mode_flags() {
+    let mut options = spawn_opts(None);
+    options.orchestration_mcp = Some(mainframe_types::orchestration::OrchestrationMcpLaunch {
+        url: "http://127.0.0.1:31415/mcp".into(),
+        token: mainframe_types::orchestration::SecretToken::new("tok".into()),
+    });
+    let (args, _) = build_args(&options, &crate::fork::ResumeTarget::Fresh, false);
+    let at = args.iter().position(|a| a == "--mcp-config").unwrap();
+    assert!(at > args.iter().position(|a| a == "--permission-mode").unwrap());
+    assert_eq!(args[at + 2], "--allowedTools");
+    assert_eq!(args[at + 3], "mcp__mainframe");
+    assert!(!args.iter().any(|a| a.contains("tok\"")));
+
+    let (plain, _) = build_args(&spawn_opts(None), &crate::fork::ResumeTarget::Fresh, false);
+    assert!(!plain.iter().any(|a| a == "--mcp-config"));
+}

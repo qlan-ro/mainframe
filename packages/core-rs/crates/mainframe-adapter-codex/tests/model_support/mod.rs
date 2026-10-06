@@ -103,6 +103,7 @@ for line in sys.stdin:
                     small_fast_model: None,
                     default_model: hint.map(str::to_owned),
                     no_persistence: None,
+                    orchestration_mcp: None,
                 }),
                 None,
             )

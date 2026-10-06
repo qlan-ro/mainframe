@@ -124,6 +124,10 @@ pub fn build_app(ctx: Arc<AppCtx>) -> Router {
         // ACP v2 chat-facade WS upgrade (todo #350) — self-authenticates like
         // the routes above; `{profile}` must name a registered adapter.
         .route("/acp/{profile}", any(acp_ws_handler))
+        // Orchestration MCP endpoint — authenticates itself with per-spawn
+        // bearer tokens; outside the auth layer (its loopback bypass would
+        // admit any local process) and outside the compressor.
+        .merge(routes::mcp::router())
         // axum's built-in 2 MB extractor limit shadows the layer below unless
         // disabled — without this, any body over ~2 MB (a ~1.5 MB attachment,
         // base64-inflated) gets an empty-bodied 413 before the handler runs.
