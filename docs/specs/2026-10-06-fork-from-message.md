@@ -248,6 +248,29 @@ CONSUMED-SURFACE files.
 If check 4 fails for an adapter, the from-message fork keeps #343's in-flight
 refusal for all adapters. The rule stays single.
 
+### Pending live verification
+
+The primary design is implemented without Gate 0: no authenticated Claude or
+Codex CLI was available where it was built. Fixture tests cover the prefix
+cut, the Codex turn choice, the chat-layer cut resolution and the REST
+contract. These checks remain to be run with the protocol-debugger skills
+before the CONSUMED-SURFACE rows (CLAUDE-FILE-09, CODEX-RPC-07c) can be
+marked verified:
+
+1. Claude: a 3-turn session cut before prompt 3 resumes with prompt 2 as the
+   previous prompt, under a new session id, with the parent JSONL unchanged.
+2. Claude: the same with `/compact` run after turn 3.
+3. Claude: a cut before a queued-then-dequeued prompt; a trailing
+   `queue-operation` line in the prefix does not auto-run anything on resume.
+4. Claude and Codex: pin and fork while the parent's later turn runs in its
+   own process; the parent is unaffected. If this fails, restore #343's
+   in-flight refusal for `BeforeMessage` too.
+5. Codex: `lastTurnId` naming a non-last completed turn excludes every later
+   turn.
+6. Codex: on a forked (paginated) thread, `lastTurnId` naming an inherited
+   turn is accepted. If not, map the refusal to "Can't fork from before this
+   chat was forked. Fork its parent instead".
+
 ## Data model & API changes
 
 - **No storage migration.** `chats.pending_fork` and `ForkSource` keep their shape.
