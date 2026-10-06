@@ -150,7 +150,7 @@ it('refreshes permission statuses and carries root identity and pending IDs thro
   const state = createChatThreadState('scope-chat');
   const messages = [active('awaiting input')];
   const view = render(<ScopeFixture messages={messages} state={state} />);
-  await screen.findByText('Read files');
+  await screen.findByText('Reading /src/a.ts');
   view.rerender(<ScopeFixture messages={messages} state={withPermission(state)} />);
   await screen.findByRole('button', { name: /Waiting for approval/ });
   expect(readScope()).toMatchObject({
@@ -160,7 +160,7 @@ it('refreshes permission statuses and carries root identity and pending IDs thro
     pendingToolIds: ['active-read'],
   });
   view.rerender(<ScopeFixture messages={messages} state={{ ...state, chatId: 'other-chat' }} sideId="other-root" />);
-  await screen.findByText('Read files');
+  await screen.findByText('Reading /src/a.ts');
   await waitFor(() =>
     expect(readScope()).toMatchObject({ rootThreadId: 'other-root', chatId: 'other-chat', pendingToolIds: [] }),
   );

@@ -25,6 +25,14 @@ function label(member: ActivityMember): ActivityLabel {
     text: part.type === 'tool-call' ? toolLabel([part], toolKind(part.toolName), 'running') : 'Thinking',
   };
 }
+function isRunning(member: ActivityMember, pending: ReadonlySet<string>): boolean {
+  const part = member.part;
+  if (part.type === 'tool-call') return resolveToolStatus(part, pending) === 'running';
+  return part.type === 'reasoning' && part.status.type === 'running';
+}
+export function hasRunningMember(group: ActivityGroup, pending: ReadonlySet<string>): boolean {
+  return group.members.some((member) => isRunning(member, pending));
+}
 export function activityLabel(group: ActivityGroup, pending: ReadonlySet<string>): ActivityLabel {
   const tools = group.members.filter((member) => member.part.type === 'tool-call');
   const running = tools.filter(

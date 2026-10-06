@@ -3,7 +3,7 @@ import { MessagePrimitive, ThreadPrimitive, useAuiState } from '@assistant-ui/re
 import { CheckIcon, Loader2Icon } from 'lucide-react';
 import type { ActivityGroup } from '../../view-model/compact/types';
 import { activityMemberIdentity } from '../../view-model/compact/build-activity-groups';
-import { activityLabel } from '../../view-model/compact/activity-label';
+import { activityLabel, hasRunningMember } from '../../view-model/compact/activity-label';
 import { hasActivityDetail } from '../../view-model/compact/activity-details';
 import { activitySummary } from '../../view-model/compact/activity-summary';
 import { CompactDisclosure } from './CompactDisclosure';
@@ -88,11 +88,13 @@ function ActivityDetails({ group }: { group: ActivityGroup }) {
 }
 export function CompactActivityGroup({ group, details }: { group: ActivityGroup; details?: ReactNode }) {
   const scope = useTranscriptScope();
-  const candidate = group.active
+  // A running member keeps the header live even when the group is not the turn's open tail.
+  const active = group.active || hasRunningMember(group, scope.pendingToolIds);
+  const candidate = active
     ? activityLabel(group, scope.pendingToolIds)
     : { identity: 'completed', text: activitySummary(group.members) };
-  const label = useStableActivityLabel(candidate, group.active);
-  const Icon = group.active ? Loader2Icon : CheckIcon;
+  const label = useStableActivityLabel(candidate, active);
+  const Icon = active ? Loader2Icon : CheckIcon;
   return (
     <CompactDisclosure
       memberKeys={group.members.map(activityMemberIdentity)}
@@ -101,12 +103,14 @@ export function CompactActivityGroup({ group, details }: { group: ActivityGroup;
       label={label}
       icon={
         <Icon
-          aria-label={group.active ? 'running' : 'completed'}
-          className={`size-3.5 shrink-0 ${group.active ? 'animate-spin motion-reduce:animate-none' : ''}`}
+          aria-label={active ? 'running' : 'completed'}
+          className={`size-3.5 shrink-0 ${active ? 'animate-spin motion-reduce:animate-none' : ''}`}
         />
       }
     >
-      {details ?? <ActivityDetails group={group} />}
+      <div data-testid="chat-compact-activity-members" className="ml-1.5 min-w-0 space-y-2 border-l border-border pl-3">
+        {details ?? <ActivityDetails group={group} />}
+      </div>
     </CompactDisclosure>
   );
 }
