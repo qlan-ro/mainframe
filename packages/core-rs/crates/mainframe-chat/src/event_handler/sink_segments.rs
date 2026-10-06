@@ -2,10 +2,10 @@
 //! and delivery of its pending handoff (the provider recorded the message
 //! that carried the block, interrupted or not).
 
-use mainframe_types::segment::{HandoffStatus, SegmentResultDelta};
+use mainframe_types::segment::{HandoffStatus, SegmentLayout, SegmentResultDelta};
 
 use super::*;
-use crate::segments::divider::{is_divider, refresh_divider};
+use crate::segments::divider::{divider_for, divider_id, is_divider, refresh_divider};
 
 impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
     pub(super) fn record_segment_result(&self, data: &SessionResult) {
@@ -39,6 +39,43 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         store.set_handoff_status(&pending.id, HandoffStatus::Delivered);
         let name_of = |id: &str| self.deps.adapter_name(id);
         if refresh_divider(&self.messages, store, &self.chat_id, &active.id, &name_of) {
+            self.emit_display();
+        }
+    }
+
+    /// After `on_init`: a provider that replaced its session in-process
+    /// (Claude `/clear`) or a spawn after a context reset leaves the chat on a
+    /// new segment whose divider a warm cache does not have yet.
+    pub(super) fn sync_active_divider(&self) {
+        let Some(store) = self.deps.segment_store() else {
+            return;
+        };
+        let Some(layout) = store
+            .layout(&self.chat_id)
+            .filter(SegmentLayout::is_multi_segment)
+        else {
+            return;
+        };
+        let Some(active) = layout.active() else {
+            return;
+        };
+        let name_of = |id: &str| self.deps.adapter_name(id);
+        let Some(divider) = divider_for(&self.chat_id, &layout, &active.id, &name_of) else {
+            return;
+        };
+        let appended = {
+            let mut messages = self.messages.lock().unwrap_or_else(|e| e.into_inner());
+            let id = divider_id(&active.id);
+            let warm = messages.get(&self.chat_id).is_some_and(|m| !m.is_empty());
+            let present = messages
+                .get(&self.chat_id)
+                .is_some_and(|m| m.iter().any(|x| x.id == id));
+            if warm && !present {
+                messages.append(&self.chat_id, divider);
+            }
+            warm && !present
+        };
+        if appended {
             self.emit_display();
         }
     }

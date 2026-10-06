@@ -12,6 +12,7 @@ use mainframe_types::events::DaemonEvent;
 use mainframe_types::settings::{ExecutionMode, GeneralConfig};
 use tracing::warn;
 
+use crate::config_respawn_guard::{model_changed, respawn_refusal};
 use crate::event_handler::compute_session_file_path;
 use crate::types::ActiveChat;
 
@@ -78,6 +79,15 @@ pub trait ConfigManagerDeps: Send + Sync {
     /// mirrored `claude_session_id` check still applies.
     fn has_native_session(&self, _chat_id: &str) -> bool {
         false
+    }
+    /// Live background tasks (shells, agents) the CLI owns: a respawn would
+    /// end them. `0` (the default) for a deps impl with no task tracker.
+    fn live_background_tasks(&self, _chat_id: &str) -> usize {
+        0
+    }
+    /// An adapter's display name, for refusal copy.
+    fn adapter_name(&self, adapter_id: &str) -> String {
+        adapter_id.to_string()
     }
     /// Relocate a Claude session's transcript files between project dirs. A seam
     /// only so tests can exercise the failure path without touching a real `$HOME`.
@@ -354,10 +364,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
         }
 
         let adapter_changed = adapter_id.as_ref().is_some_and(|a| *a != cur_adapter);
-        let model_changed = match &model {
-            Some(m) => cur_model.as_deref() != Some(m.as_str()),
-            None => false,
-        };
+        let model_changed = model_changed(cur_model.as_deref(), model.as_deref());
         let mode_changed = match permission_mode {
             Some(pm) => cur_mode != Some(pm),
             None => false,
@@ -402,6 +409,11 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
             return Ok(());
         }
 
+        let name = self.deps.adapter_name(&cur_adapter);
+        let live = self.deps.live_background_tasks(chat_id);
+        if let Some(refusal) = respawn_refusal(session_spawned, live, &name) {
+            return Err(ConfigError::Message(refusal));
+        }
         self.respawn_with_config(
             chat_id,
             &cell,

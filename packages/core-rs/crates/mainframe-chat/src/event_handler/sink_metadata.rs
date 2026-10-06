@@ -121,6 +121,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
                 ..Default::default()
             },
         );
+        self.sync_active_divider();
         let project_path = self.deps.projects_get_path(&project_id);
         let cwd = crate::chat_cwd::chat_cwd(
             worktree_path.as_deref(),

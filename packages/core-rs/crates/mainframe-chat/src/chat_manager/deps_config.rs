@@ -81,6 +81,12 @@ impl ConfigManagerDeps for CmDeps {
         self.worktree_offers
             .on_binding_changed(chat_id, worktree_path);
     }
+    fn live_background_tasks(&self, chat_id: &str) -> usize {
+        self.deps.tracker_list_live(chat_id).len()
+    }
+    fn adapter_name(&self, adapter_id: &str) -> String {
+        self.deps.adapter_fork_info(adapter_id).name
+    }
     fn has_native_session(&self, chat_id: &str) -> bool {
         self.deps
             .segment_store()

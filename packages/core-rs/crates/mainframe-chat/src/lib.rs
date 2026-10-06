@@ -21,6 +21,7 @@ pub mod chat_cwd;
 pub mod chat_manager;
 pub mod chat_surface;
 pub mod config_manager;
+pub mod config_respawn_guard;
 pub mod context_tracker;
 pub mod degraded_recovery;
 pub mod event_handler;

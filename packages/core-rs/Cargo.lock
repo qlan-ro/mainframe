@@ -1513,6 +1513,7 @@ dependencies = [
  "dirs",
  "mainframe-adapter-api",
  "mainframe-adapter-claude",
+ "mainframe-adapter-codex",
  "mainframe-background-tasks",
  "mainframe-display",
  "mainframe-runtime",
