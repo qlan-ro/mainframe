@@ -18,7 +18,7 @@ afterEach(() => {
 });
 
 it.each([
-  ['Bash', { command: 'echo hello' }, 'shell detail', 'chat-bash-output', 'Ran echo hello'],
+  ['Bash', { command: 'echo hello' }, 'shell detail', 'chat-bash-output', 'echo hello'],
   ['CustomAnalytics', { input: 'query' }, 'custom detail', 'chat-tool-fallback-result', null],
   ['mcp__server__query', { query: 'a' }, 'mcp failure detail', 'marker-body', 'Failed to run mcp__server__query'],
 ])('opens %s details immediately through the existing registry', (toolName, args, result, testId, detailLabel) => {
@@ -85,7 +85,7 @@ it('routes nested full-output requests through the inherited root chat ID', asyn
   fireEvent.click(screen.getAllByRole('button')[0]!);
   const shell = await screen.findByRole('button', { name: 'Ran a command' });
   fireEvent.click(shell);
-  fireEvent.click(screen.getByRole('button', { name: 'Ran echo hello' }));
+  fireEvent.click(screen.getByRole('button', { name: 'echo hello' }));
   await waitFor(() => expect(screen.getByTestId('tool-result-expand-toggle')).toBeEnabled());
   fireEvent.click(screen.getByTestId('tool-result-expand-toggle'));
   await screen.findByText('full daemon output');

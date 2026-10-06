@@ -11,7 +11,8 @@ const verbs = {
   'web-search': ['Search the web', 'Searching the web', 'Searched the web'],
   fetch: ['Fetch', 'Fetching', 'Fetched'],
   subagent: ['Run agent', 'Running agent', 'Ran agent'],
-  command: ['Run', 'Running', 'Ran'],
+  // The row's status icon already says running or done, so a generic command carries no verb there.
+  command: ['Run', '', ''],
   lint: ['Run lint', 'Running lint', 'Lint passed'],
   typecheck: ['Run typecheck', 'Running typecheck', 'Typecheck passed'],
   test: ['Run tests', 'Running tests', 'Tests passed'],
@@ -35,8 +36,8 @@ export type Action = { kind: ActionKind; target?: string };
 export function actionLabel({ kind, target }: Action, status: ToolStatus): string {
   const [base, running, success] = verbs[kind];
   const suffix = target ? ` ${displayText(target)}` : '';
-  if (status === 'running') return running + suffix;
-  if (status === 'success') return success + suffix;
+  if (status === 'running') return (running + suffix).trim();
+  if (status === 'success') return (success + suffix).trim();
   if (status === 'unknown') return base + suffix + ' (status unknown)';
   const action = base.charAt(0).toLowerCase() + base.slice(1) + suffix;
   if (status === 'failed') return `Failed to ${action}`;

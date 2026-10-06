@@ -80,14 +80,14 @@ it('ticks a supplied clock without rebuilding compact rows or changing disclosur
       ]}
     />,
   );
-  const toggle = screen.getByRole('button', { name: 'Running echo' });
+  const toggle = screen.getByRole('button', { name: 'echo' });
   fireEvent.click(toggle);
-  const detailToggle = screen.getAllByRole('button', { name: 'Running echo' })[1]!;
+  const detailToggle = screen.getAllByRole('button', { name: 'echo' })[1]!;
   fireEvent.click(detailToggle);
   const before = build.mock.calls.length;
   act(() => vi.advanceTimersByTime(2000));
   expect(screen.getByText('0:07')).toBeInTheDocument();
   expect(build).toHaveBeenCalledTimes(before);
   expect(toggle).toHaveAttribute('aria-expanded', 'true');
-  expect(toggle).toHaveAccessibleName('Running echo');
+  expect(toggle).toHaveAccessibleName('echo');
 });

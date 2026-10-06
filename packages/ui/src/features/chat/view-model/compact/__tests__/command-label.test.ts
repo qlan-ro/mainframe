@@ -59,7 +59,7 @@ it.each([
   'cat "unterminated',
 ])('falls back for ambiguous syntax/options: %s', (command) => {
   expect(commandLabel(tool({ args: { command, description: 'Provider description' } }), 'success')).toBe(
-    'Ran Provider description',
+    'Provider description',
   );
 });
 
@@ -101,10 +101,10 @@ it.each([
 });
 
 it.each([
-  ['custom --option', 'Running custom'],
-  ['/usr/local/bin/custom arg', 'Running custom'],
-  ['cat a && echo b', 'Running command'],
-  ['', 'Running command'],
+  ['custom --option', 'custom'],
+  ['/usr/local/bin/custom arg', 'custom'],
+  ['cat a && echo b', 'command'],
+  ['', 'command'],
 ])('labels an unknown running command %s', (command, expected) => {
   expect(commandLabel(tool({ args: { command } }), 'running')).toBe(expected);
 });
@@ -112,26 +112,26 @@ it.each([
 it('keeps the complete sanitized raw label for disclosure tooltips', () => {
   const raw = 'unknown \u001b[31m<b>\u001b[0m\n' + 'x'.repeat(50000) + '\u202e';
   const label = commandLabel(tool({ args: { command: raw } }), 'success');
-  expect(label).toBe('Ran unknown <b> ' + 'x'.repeat(50000));
+  expect(label).toBe('unknown <b> ' + 'x'.repeat(50000));
 });
 
 it.each(['npm run constructor', 'git toString', 'pnpm build --fix', 'tsc --write', 'vitest --noEmit'])(
   'rejects an unknown command or option: %s',
   (command) => {
-    expect(commandLabel(tool({ args: { command, description: 'Fallback' } }), 'success')).toBe('Ran Fallback');
+    expect(commandLabel(tool({ args: { command, description: 'Fallback' } }), 'success')).toBe('Fallback');
   },
 );
 
 it.each(['if true', 'for item in files', '! npm test'])(
   'does not treat shell control words as programs: %s',
   (command) => {
-    expect(commandLabel(tool({ args: { command } }), 'running')).toBe('Running command');
+    expect(commandLabel(tool({ args: { command } }), 'running')).toBe('command');
   },
 );
 it.each(['head --lines invalid src/a.ts', "sed -n '1p' --unknown a"])(
   'rejects malformed read options: %s',
   (command) => {
-    expect(commandLabel(tool({ args: { command, description: 'Fallback' } }), 'success')).toBe('Ran Fallback');
+    expect(commandLabel(tool({ args: { command, description: 'Fallback' } }), 'success')).toBe('Fallback');
   },
 );
 
@@ -140,9 +140,9 @@ it.each(['vitest', 'pnpm exec vitest', 'npx vitest'])(
   (prefix) => {
     for (const mode of ['list', 'list --run', 'init browser', 'bench', 'watch', 'unsupported-mode']) {
       const command = `${prefix} ${mode}`;
-      expect(commandLabel(tool({ args: { command } }), 'success')).toBe(`Ran ${command}`);
+      expect(commandLabel(tool({ args: { command } }), 'success')).toBe(command);
       expect(commandLabel(tool({ args: { command, description: 'Inspect test configuration' } }), 'success')).toBe(
-        'Ran Inspect test configuration',
+        'Inspect test configuration',
       );
     }
   },

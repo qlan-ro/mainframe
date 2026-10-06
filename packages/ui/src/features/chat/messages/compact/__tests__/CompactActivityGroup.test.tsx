@@ -37,7 +37,7 @@ it('shows ordered tool summaries before mounting individual details and omits gr
   expect(screen.queryByTestId('read-card-code-preview')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Read /src/a.ts' }));
   fireEvent.click(screen.getByRole('button', { name: 'Edited /src/b.ts' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Ran echo done' }));
+  fireEvent.click(screen.getByRole('button', { name: 'echo done' }));
   expect(screen.getByTestId('read-card-code-preview')).toHaveTextContent('const a = 1;');
   expect(screen.queryByText('Compare the implementation')).toBeNull();
   expect(screen.getByTestId('chat-edit-open-diff')).toBeInTheDocument();
@@ -57,7 +57,7 @@ it('keeps expanded members open through growth, reclassification and splitting',
     'true',
   );
   expect(screen.getByRole('button', { name: 'Read files, ran a command' }).dataset.testid).toBe(identity);
-  fireEvent.click(screen.getByRole('button', { name: 'Ran echo done' }));
+  fireEvent.click(screen.getByRole('button', { name: 'echo done' }));
   expect(screen.getByTestId('chat-bash-output')).toHaveTextContent('done');
   const failed = { ...read, isError: true };
   view.rerender(<CompactFixture rootId="activity-growth" messages={[fixtureMessage([failed, shell])]} />);
@@ -90,7 +90,7 @@ it('keeps pending and unknown tools standalone while ordinary failures stay grou
   expect(screen.getAllByRole('button', { name: 'Read files' })).toHaveLength(2);
   expect(screen.queryByRole('button', { name: /Failed to read/ })).toBeNull();
   expect(screen.getByRole('button', { name: /Waiting for approval/ })).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Ran CustomAnalytics' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'CustomAnalytics' })).toBeInTheDocument();
   expect(screen.queryByTestId('read-card-root')).toBeNull();
 });
 it.each([false, true])('renders cross-message references through their original native scopes (split=%s)', (split) => {
