@@ -1,6 +1,6 @@
 /**
  * Gates the facade plane's SUBSCRIPTION on whether this chat is the active
- * thread (D2 dormancy, todo #350 T33) — split out of `acp-chat-controller.ts`
+ * thread or held on screen by a split zone (D2 dormancy, todo #350 T33) — split out of `acp-chat-controller.ts`
  * to keep it under the 300-line cap. `load()`'s config-seed + client bind
  * happen unconditionally; only the subscribe half (session/resume plus
  * listeners) is gated here.
@@ -22,20 +22,44 @@ export interface ChatActivationHost {
 }
 
 export class ChatActivation {
-  private active = false;
+  /** The runtime hook's flag: this chat is the main thread. */
+  private flag = false;
+  /** Holds from on-screen views that are not the main thread (split zones). */
+  private holds = 0;
 
   constructor(private readonly host: ChatActivationHost) {}
 
+  /** Active while it is the main thread OR any visible zone holds it. */
   get isActive(): boolean {
-    return this.active;
+    return this.flag || this.holds > 0;
   }
 
   /** Idempotent on a repeat call with the same value. */
   setActive(active: boolean): void {
-    if (this.active === active) return;
-    this.active = active;
-    if (active) this.ensureFacadeActive();
-    else this.host.detachPlane();
+    if (this.flag === active) return;
+    const before = this.isActive;
+    this.flag = active;
+    this.apply(before);
+  }
+
+  /**
+   * Hold the plane attached while a view shows this chat without it being the
+   * main thread — a split zone. Without it an unfocused zone never attaches
+   * (blank until clicked) and a zone that loses focus stops streaming.
+   * Returns an idempotent release.
+   */
+  hold(): () => void {
+    const before = this.isActive;
+    this.holds += 1;
+    this.apply(before);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      const wasActive = this.isActive;
+      this.holds -= 1;
+      this.apply(wasActive);
+    };
   }
 
   /**
@@ -47,8 +71,15 @@ export class ChatActivation {
     this.ensureFacadeActive();
   }
 
+  private apply(before: boolean): void {
+    const now = this.isActive;
+    if (now === before) return;
+    if (now) this.ensureFacadeActive();
+    else this.host.detachPlane();
+  }
+
   private ensureFacadeActive(): void {
-    if (!this.active || this.host.isLocalOnly()) return;
+    if (!this.isActive || this.host.isLocalOnly()) return;
     if (this.host.isReady()) {
       const client = this.host.getClient();
       if (client) {

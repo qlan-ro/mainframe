@@ -1,17 +1,49 @@
 /**
- * AutomationDetails — read-only Overview/Runs details view for a library row
- * (todo #233). Self-sufficient like `AutomationEditor`/`RunView`: driven
- * through `use-automations-nav`/`use-automations-store` rather than props.
- * TDD: test written first, implemented after.
+ * AutomationDetails — the Automations rail's single per-automation view
+ * (todo #233; 2026-10 redesign: no more Runs/Overview tabs — a `RunsColumn`
+ * plus the body it drives). Self-sufficient: driven through
+ * `use-automations-nav`/`use-automations-store` rather than props.
  */
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { useState } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { AutomationRunSummary, AutomationSummary } from '../../contract';
 import { createFakeGateway as fakeGateway } from '../../data/__tests__/fake-gateway';
 import { useAutomationsNav } from '../../data/use-automations-nav';
 import { useAutomationsStore } from '../../data/use-automations-store';
+import { EMPTY_LIBRARY } from '../../data/library-cache';
 import { AutomationDetails } from '../AutomationDetails';
+import { AutomationsHeaderSlot } from '../../header-slot';
+
+vi.mock('@/features/sessions/use-projects', () => ({
+  useProjects: () => ({ projects: [{ id: 'proj-1', name: 'Mainframe' }] }),
+}));
+
+vi.mock('@/lib/confirm-bridge', () => ({ requestConfirm: vi.fn() }));
+vi.mock('@/lib/toast', () => ({ mfToast: { error: vi.fn(), success: vi.fn(), info: vi.fn() } }));
+
+import { requestConfirm } from '@/lib/confirm-bridge';
+
+/** The view's single header row: details portals its name and actions here. */
+function WithHeader() {
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  return (
+    <>
+      <div data-testid="automations-header-slot" ref={setSlot} />
+      <AutomationsHeaderSlot.Provider value={slot}>
+        <AutomationDetails />
+      </AutomationsHeaderSlot.Provider>
+    </>
+  );
+}
+
+/** Patches the 'all' scope entry on top of whatever is already there. */
+function patchLibrary(patch: { definitions?: AutomationSummary[]; runs?: AutomationRunSummary[] }) {
+  useAutomationsStore.setState((s) => ({
+    libraries: { ...s.libraries, all: { ...(s.libraries.all ?? EMPTY_LIBRARY), ...patch } },
+  }));
+}
 
 const AUTOMATION: AutomationSummary = {
   id: 'auto-1',
@@ -28,21 +60,27 @@ const AUTOMATION: AutomationSummary = {
   updatedAt: 1,
 };
 
-function run(id: string, startedAt: number): AutomationRunSummary {
+function run(
+  id: string,
+  startedAt: number,
+  status: AutomationRunSummary['status'] = 'succeeded',
+): AutomationRunSummary {
   return {
     id,
     automationId: 'auto-1',
-    status: 'succeeded',
+    status,
     trigger: { kind: 'schedule' },
     startedAt,
-    finishedAt: startedAt + 5000,
+    finishedAt: status === 'running' || status === 'waiting' ? null : startedAt + 5000,
     error: null,
   };
 }
 
 function resetStores() {
-  useAutomationsNav.setState({ open: true, editorTarget: null, runId: null, detailsAutomationId: null });
-  useAutomationsStore.setState({ definitions: [AUTOMATION], runs: [], catalog: [], gateway: fakeGateway() });
+  useAutomationsNav.setState({ editorTarget: null, detailsAutomationId: null, selectedRunId: null });
+  useAutomationsStore.setState({ libraries: {}, catalog: [], gateway: fakeGateway() });
+  patchLibrary({ definitions: [AUTOMATION], runs: [] });
+  vi.mocked(requestConfirm).mockReset();
 }
 
 afterEach(() => {
@@ -65,29 +103,42 @@ describe('AutomationDetails — not found / not open', () => {
 });
 
 describe('AutomationDetails — header', () => {
-  it('renders the automation name and closes on Back', async () => {
+  it('puts the automation name in the view header (no second title row)', () => {
     resetStores();
     useAutomationsNav.setState({ detailsAutomationId: 'auto-1' });
-    const user = userEvent.setup();
-    render(<AutomationDetails />);
+    render(<WithHeader />);
 
-    expect(screen.getByTestId('automations-details')).toHaveTextContent('Daily standup');
-
-    await user.click(screen.getByTestId('automations-details-back'));
-    expect(useAutomationsNav.getState().detailsAutomationId).toBeNull();
+    expect(screen.getByTestId('automations-header-slot')).toHaveTextContent('Daily standup');
+    expect(screen.getByTestId('automations-details')).not.toHaveTextContent('Daily standup');
   });
 
-  it('Edit navigates to the editor for this automation', async () => {
+  it("shows the project chip, scoped to the automation's own project", () => {
+    resetStores();
+    useAutomationsNav.setState({ detailsAutomationId: 'auto-1' });
+    render(<WithHeader />);
+    expect(screen.getByTestId('automations-details-project')).toHaveTextContent('Mainframe');
+  });
+
+  it('shows "All projects" on the chip for an unscoped automation', () => {
+    resetStores();
+    patchLibrary({ definitions: [{ ...AUTOMATION, projectId: null }] });
+    useAutomationsNav.setState({ detailsAutomationId: 'auto-1' });
+    render(<WithHeader />);
+    expect(screen.getByTestId('automations-details-project')).toHaveTextContent('All projects');
+  });
+
+  it('Edit navigates to the editor for this automation, keeping detailsAutomationId set', async () => {
     resetStores();
     useAutomationsNav.setState({ detailsAutomationId: 'auto-1' });
     const user = userEvent.setup();
-    render(<AutomationDetails />);
+    render(<WithHeader />);
 
     await user.click(screen.getByTestId('automations-details-edit'));
     expect(useAutomationsNav.getState().editorTarget).toEqual({ mode: 'edit', automationId: 'auto-1' });
+    expect(useAutomationsNav.getState().detailsAutomationId).toBe('auto-1');
   });
 
-  it('"Run now" starts a run via the gateway and opens it', async () => {
+  it('"Run now" starts a run via the gateway and selects it in the column', async () => {
     resetStores();
     useAutomationsNav.setState({ detailsAutomationId: 'auto-1' });
     const newRun = run('run-new', Date.now());
@@ -100,67 +151,123 @@ describe('AutomationDetails — header', () => {
       }),
     );
     const user = userEvent.setup();
-    render(<AutomationDetails />);
+    render(<WithHeader />);
 
     await user.click(screen.getByTestId('automations-details-run'));
 
     await waitFor(() => {
-      expect(useAutomationsNav.getState().runId).toBe('run-new');
+      expect(useAutomationsNav.getState().selectedRunId).toBe('run-new');
+    });
+  });
+
+  it('toggles enabled/disabled via the Switch', async () => {
+    resetStores();
+    useAutomationsNav.setState({ detailsAutomationId: 'auto-1' });
+    useAutomationsStore
+      .getState()
+      .setGateway(fakeGateway({ setEnabled: async (id, enabled) => ({ ...AUTOMATION, id, enabled }) }));
+    const user = userEvent.setup();
+    render(<WithHeader />);
+
+    await user.click(screen.getByTestId('automations-details-toggle'));
+    await waitFor(() => {
+      expect(useAutomationsStore.getState().libraries.all?.definitions[0]?.enabled).toBe(false);
+    });
+  });
+
+  describe('delete', () => {
+    it('confirming the dialog deletes the automation and closes details', async () => {
+      resetStores();
+      useAutomationsNav.setState({ detailsAutomationId: 'auto-1' });
+      vi.mocked(requestConfirm).mockResolvedValue(true);
+      const deleteAutomation = vi.fn().mockResolvedValue(undefined);
+      useAutomationsStore.getState().setGateway(fakeGateway({ deleteAutomation }));
+      const user = userEvent.setup();
+      render(<WithHeader />);
+
+      await user.click(screen.getByTestId('automations-details-delete'));
+      await waitFor(() => expect(deleteAutomation).toHaveBeenCalledWith('auto-1'));
+      await waitFor(() => expect(useAutomationsNav.getState().detailsAutomationId).toBeNull());
+    });
+
+    it('cancelling the dialog leaves the automation and details open', async () => {
+      resetStores();
+      useAutomationsNav.setState({ detailsAutomationId: 'auto-1' });
+      vi.mocked(requestConfirm).mockResolvedValue(false);
+      const deleteAutomation = vi.fn();
+      useAutomationsStore.getState().setGateway(fakeGateway({ deleteAutomation }));
+      const user = userEvent.setup();
+      render(<WithHeader />);
+
+      await user.click(screen.getByTestId('automations-details-delete'));
+      await waitFor(() => expect(requestConfirm).toHaveBeenCalled());
+      expect(deleteAutomation).not.toHaveBeenCalled();
+      expect(useAutomationsNav.getState().detailsAutomationId).toBe('auto-1');
     });
   });
 });
 
-describe('AutomationDetails — tabs', () => {
-  it('defaults to Overview when the automation has never run', () => {
+describe('AutomationDetails — runs column + default selection', () => {
+  it('lands on Overview when the automation has never run', () => {
     resetStores();
     useAutomationsNav.setState({ detailsAutomationId: 'auto-1' });
-    render(<AutomationDetails />);
+    render(<WithHeader />);
     expect(screen.getByTestId('automations-details-overview')).toBeInTheDocument();
+    expect(screen.getByTestId('automations-runs-empty')).toBeInTheDocument();
   });
 
-  it('defaults to Runs when there is run history', () => {
+  it("defaults to the most recent run's trace, expanded, when there is run history", async () => {
     resetStores();
-    useAutomationsStore.setState({ runs: [run('r1', 1000), run('r2', 500)] });
+    patchLibrary({
+      runs: [run('r-old', 500, 'succeeded'), run('r-new', 1500, 'succeeded')],
+    });
+    useAutomationsStore.setState({
+      gateway: fakeGateway({
+        getRunTimeline: async () => [
+          { stepRef: 's1', stepId: 's1', kind: 'notify', status: 'succeeded', outputPreview: 'hi' },
+        ],
+      }),
+    });
     useAutomationsNav.setState({ detailsAutomationId: 'auto-1' });
-    render(<AutomationDetails />);
-    expect(screen.getByTestId('automations-details-runs')).toBeInTheDocument();
+    render(<WithHeader />);
+
+    await waitFor(() => expect(useAutomationsNav.getState().selectedRunId).toBe('r-new'));
+    expect(await screen.findByTestId('automations-run-step-s1-output')).toBeInTheDocument();
+    expect(screen.getByTestId('automations-runs-row-r-new')).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('switches tabs on click', async () => {
+  it('clicking an older run shows its trace, collapsed by default (not the forced-open latest)', async () => {
     resetStores();
-    useAutomationsStore.setState({ runs: [run('r1', 1000), run('r2', 500)] });
+    patchLibrary({ runs: [run('r-old', 500, 'succeeded'), run('r-new', 1500, 'succeeded')] });
+    useAutomationsStore.setState({
+      gateway: fakeGateway({
+        getRunTimeline: async () => [
+          { stepRef: 's1', stepId: 's1', kind: 'notify', status: 'succeeded', outputPreview: 'hi' },
+        ],
+      }),
+    });
     useAutomationsNav.setState({ detailsAutomationId: 'auto-1' });
     const user = userEvent.setup();
-    render(<AutomationDetails />);
+    render(<WithHeader />);
 
-    expect(screen.getByTestId('automations-details-runs')).toBeInTheDocument();
-    await user.click(screen.getByTestId('automations-details-tab-overview'));
-    expect(screen.getByTestId('automations-details-overview')).toBeInTheDocument();
+    await waitFor(() => expect(useAutomationsNav.getState().selectedRunId).toBe('r-new'));
+    await user.click(screen.getByTestId('automations-runs-row-r-old'));
+
+    await screen.findByTestId('automations-run-step-s1');
+    expect(screen.queryByTestId('automations-run-step-s1-output')).not.toBeInTheDocument();
   });
 
-  it('Overview shows the trigger and step recipe summary', () => {
+  it('clicking Overview returns to the overview body and stays there across later run patches', async () => {
     resetStores();
-    useAutomationsNav.setState({ detailsAutomationId: 'auto-1' });
-    render(<AutomationDetails />);
-    const overview = screen.getByTestId('automations-details-overview');
-    expect(overview).toHaveTextContent('Every day at 08:00');
-    expect(overview).toHaveTextContent('Notify me');
-  });
-
-  it('Runs lists every run for this automation, newest first, and opens one on click', async () => {
-    resetStores();
-    useAutomationsStore.setState({ runs: [run('r-old', 500), run('r-new', 1500)] });
+    patchLibrary({ runs: [run('r-new', 1500, 'succeeded')] });
+    useAutomationsStore.setState({ gateway: fakeGateway({ getRunTimeline: async () => [] }) });
     useAutomationsNav.setState({ detailsAutomationId: 'auto-1' });
     const user = userEvent.setup();
-    render(<AutomationDetails />);
+    render(<WithHeader />);
 
-    const rows = screen.getAllByTestId(/automations-details-run-r-/);
-    expect(rows.map((r) => r.getAttribute('data-testid'))).toEqual([
-      'automations-details-run-r-new',
-      'automations-details-run-r-old',
-    ]);
+    await waitFor(() => expect(useAutomationsNav.getState().selectedRunId).toBe('r-new'));
+    await user.click(screen.getByTestId('automations-runs-overview'));
 
-    await user.click(screen.getByTestId('automations-details-run-r-old'));
-    expect(useAutomationsNav.getState().runId).toBe('r-old');
+    expect(screen.getByTestId('automations-details-overview')).toBeInTheDocument();
   });
 });

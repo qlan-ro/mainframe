@@ -18,7 +18,7 @@ vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: (...a: unknown[])
 let isMac = true;
 vi.mock('@/features/shortcuts/platform', () => ({ isMacPlatform: () => isMac }));
 
-const { useSettingsStore } = await import('@/store/settings');
+const { useUiPrefs } = await import('@/store/ui-prefs');
 const { useCheatSheetStore } = await import('@/features/shortcuts/cheat-sheet-store');
 const { useShortcutDispatcher } = await import('@/features/shortcuts/use-shortcut-dispatcher');
 const { useAppShortcutActions } = await import('../use-app-shortcut-actions');
@@ -36,7 +36,7 @@ beforeEach(() => {
   isMac = true;
   mockEmit.mockReset();
   onNewSession.mockReset();
-  useSettingsStore.setState({ isOpen: false });
+  useUiPrefs.setState({ sidebarView: 'chats' });
   useCheatSheetStore.setState({ open: false });
 });
 
@@ -73,10 +73,10 @@ describe('app-root shortcuts', () => {
     unmount();
   });
 
-  it('Cmd+, opens settings', () => {
+  it('Cmd+, shows the Settings rail view', () => {
     const { unmount } = mountAppShortcuts();
     window.dispatchEvent(new KeyboardEvent('keydown', { metaKey: true, key: ',', code: 'Comma', cancelable: true }));
-    expect(useSettingsStore.getState().isOpen).toBe(true);
+    expect(useUiPrefs.getState().sidebarView).toBe('settings');
     unmount();
   });
 

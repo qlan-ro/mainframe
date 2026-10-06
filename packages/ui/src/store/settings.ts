@@ -5,14 +5,11 @@ import { GENERAL_DEFAULTS } from '@qlan-ro/mainframe-types';
 export type SettingsTab = 'general' | 'providers' | 'keybindings' | 'notifications' | 'remote-access' | 'about';
 
 interface SettingsState {
-  isOpen: boolean;
   activeTab: SettingsTab;
   selectedProvider: string | null;
   providers: Record<string, ProviderConfig>;
   general: GeneralConfig;
   loading: boolean;
-  open: (defaultProvider?: string, tab?: SettingsTab) => void;
-  close: () => void;
   setActiveTab: (tab: SettingsTab) => void;
   setSelectedProvider: (id: string | null) => void;
   setProviderConfig: (adapterId: string, config: ProviderConfig) => void;
@@ -23,7 +20,6 @@ interface SettingsState {
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({
-  isOpen: false,
   activeTab: 'general',
   selectedProvider: null,
   providers: {},
@@ -32,13 +28,6 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   // so toggling a notification would mutate the shared default across every store.
   general: structuredClone(GENERAL_DEFAULTS),
   loading: false,
-  open: (defaultProvider, tab) =>
-    set({
-      isOpen: true,
-      activeTab: tab ?? (defaultProvider ? 'providers' : 'general'),
-      selectedProvider: defaultProvider ?? null,
-    }),
-  close: () => set({ isOpen: false }),
   setActiveTab: (tab) => set({ activeTab: tab }),
   setSelectedProvider: (id) => set({ selectedProvider: id }),
   setProviderConfig: (adapterId, config) => set((s) => ({ providers: { ...s.providers, [adapterId]: config } })),

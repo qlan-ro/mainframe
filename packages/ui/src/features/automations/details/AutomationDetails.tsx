@@ -1,63 +1,49 @@
 /**
- * AutomationDetails — read-only Overview/Runs details view for a library
- * row (todo #233). `LibraryRow`'s click handler already routes straight to
- * `RunView` when there's exactly one run, so by the time this mounts, this
- * automation's runs are 0 or 2+ — the initial tab reflects that ("Runs"
- * when there's history to browse, "Overview" otherwise).
+ * AutomationDetails — the Automations rail's single per-automation view
+ * (todo #233; 2026-10 redesign retired its Runs/Overview tab switch): a
+ * header (name + run-status suffix + actions) portaled into the shared slot,
+ * a second-level `RunsColumn`, and the body that column's selection drives —
+ * `DetailsOverview` or a run's trace (`run/RunTrace`). There is only ever ONE
+ * automation open at a time; the sidebar list is the only "browse" surface.
  *
- * Self-sufficient like `AutomationEditor`/`RunView`: reads
+ * Self-sufficient like `AutomationEditor`/`RunTrace`: reads
  * `use-automations-nav`/`use-automations-store` directly rather than taking
  * props — `AutomationsView` only decides WHETHER to mount this.
  */
-import { useMemo, useState } from 'react';
-import { ChevronLeft, Pencil, Play, Zap } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { Hint } from '@/components/ui/hint';
-import { mfToast } from '@/lib/toast';
+import { useEffect, useMemo } from 'react';
+import { formatRelativeTime } from '@/features/sessions/view-model/relative-time';
 import { useAutomationsNav } from '../data/use-automations-nav';
-import { useAutomationsStore } from '../data/use-automations-store';
+import { selectAutomationById, useAutomationsStore } from '../data/use-automations-store';
+import { runsForAutomation } from '../data/library-cache';
+import { RUN_STATUS_LABEL } from '../library/LastRunPill';
 import { DetailsOverview } from './DetailsOverview';
-import { DetailsRuns } from './DetailsRuns';
-
-type DetailsTab = 'overview' | 'runs';
-
-function errorMessage(err: unknown): string | undefined {
-  return err instanceof Error ? err.message : undefined;
-}
+import { DetailsHeaderActions } from './DetailsHeaderActions';
+import { RunsColumn } from './RunsColumn';
+import { RunTrace } from '../run/RunTrace';
+import { AutomationsHeaderPortal } from '../header-slot';
 
 export function AutomationDetails() {
   const automationId = useAutomationsNav((s) => s.detailsAutomationId);
-  const closeDetails = useAutomationsNav((s) => s.closeDetails);
-  const openEditor = useAutomationsNav((s) => s.openEditor);
-  const openRun = useAutomationsNav((s) => s.openRun);
-  const definitions = useAutomationsStore((s) => s.definitions);
-  const allRuns = useAutomationsStore((s) => s.runs);
+  const selectedRunId = useAutomationsNav((s) => s.selectedRunId);
+  const selectRun = useAutomationsNav((s) => s.selectRun);
+  const automation = useAutomationsStore(selectAutomationById(automationId));
+  const libraries = useAutomationsStore((s) => s.libraries);
   const catalog = useAutomationsStore((s) => s.catalog);
-  const gateway = useAutomationsStore((s) => s.gateway);
-  const patchRun = useAutomationsStore((s) => s.patchRun);
-  const [starting, setStarting] = useState(false);
 
-  const automation = definitions.find((d) => d.id === automationId);
   const runs = useMemo(
-    () => allRuns.filter((r) => r.automationId === automationId).sort((a, b) => b.startedAt - a.startedAt),
-    [allRuns, automationId],
+    () => (automationId == null ? [] : runsForAutomation(libraries, automationId)),
+    [libraries, automationId],
   );
 
-  const [tab, setTab] = useState<DetailsTab>(() => (runs.length > 0 ? 'runs' : 'overview'));
-
-  async function handleRunNow(): Promise<void> {
-    if (!automation || starting) return;
-    setStarting(true);
-    try {
-      const run = await gateway.startRun(automation.id);
-      patchRun(run);
-      openRun(run.id);
-    } catch (err) {
-      mfToast.error('Could not start the run', { description: errorMessage(err) });
-    } finally {
-      setStarting(false);
-    }
-  }
+  // Opening an automation that already ran lands on its most recent run —
+  // "click an automation, see its latest run's trace already open" (2026-10
+  // redesign). Keyed on automationId alone, not `runs`, so it fires once per
+  // open rather than snapping back to the latest run on every later WS
+  // update once the user has picked something else (Overview, an older run).
+  useEffect(() => {
+    if (automationId == null || selectedRunId != null || runs.length === 0) return;
+    selectRun(runs[0]!.id);
+  }, [automationId]);
 
   if (!automationId) return null;
 
@@ -72,71 +58,31 @@ export function AutomationDetails() {
     );
   }
 
+  const selectedRun = selectedRunId == null ? undefined : runs.find((r) => r.id === selectedRunId);
+  const isLatestRun = selectedRun != null && runs[0]?.id === selectedRun.id;
+
   return (
-    <div data-testid="automations-details" className="flex h-full min-h-0 flex-col">
-      <div className="flex h-[52px] shrink-0 items-center gap-[11px] border-b border-border px-[16px]">
-        <Hint label="Back">
-          <button
-            type="button"
-            data-testid="automations-details-back"
-            onClick={closeDetails}
-            className="flex size-[28px] items-center justify-center rounded-[6px] text-muted-foreground hover:bg-accent"
-          >
-            <ChevronLeft size={16} aria-hidden />
-          </button>
-        </Hint>
-        <Zap size={15} className="text-primary" aria-hidden />
+    <div data-testid="automations-details" className="flex h-full min-h-0">
+      <AutomationsHeaderPortal>
         <span className="min-w-0 flex-1 truncate text-base font-semibold tracking-tight text-foreground">
           {automation.name}
+          {selectedRun && (
+            <span className="ml-1.5 text-sm font-normal text-muted-foreground">
+              · {RUN_STATUS_LABEL[selectedRun.status].toLowerCase()}{' '}
+              {formatRelativeTime(selectedRun.startedAt, Date.now())}
+            </span>
+          )}
         </span>
-        <button
-          type="button"
-          data-testid="automations-details-run"
-          disabled={starting}
-          onClick={() => void handleRunNow()}
-          className="inline-flex h-[28px] items-center gap-[5px] rounded-md border-[0.5px] border-border px-[12px] text-xs font-semibold text-muted-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-45"
-        >
-          <Play size={14} className="text-primary" fill="currentColor" aria-hidden />
-          Run now
-        </button>
-        <Hint label="Edit">
-          <button
-            type="button"
-            data-testid="automations-details-edit"
-            onClick={() => openEditor({ mode: 'edit', automationId: automation.id })}
-            className="flex size-[28px] items-center justify-center rounded-[6px] text-muted-foreground hover:bg-accent"
-          >
-            <Pencil size={14} aria-hidden />
-          </button>
-        </Hint>
-      </div>
+        <DetailsHeaderActions automation={automation} />
+      </AutomationsHeaderPortal>
 
-      <div className="flex shrink-0 items-center border-b border-border p-[10px]">
-        <div className="flex items-center gap-[2px] rounded-[6px] bg-muted p-[2px]">
-          {(['overview', 'runs'] as const).map((t) => (
-            <button
-              key={t}
-              type="button"
-              data-testid={`automations-details-tab-${t}`}
-              onClick={() => setTab(t)}
-              className={cn(
-                'rounded-[5px] px-[12px] py-[4px] text-xs transition-colors',
-                tab === t
-                  ? 'bg-popover font-medium text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground',
-              )}
-            >
-              {t === 'overview' ? 'Overview' : `Runs${runs.length > 0 ? ` (${runs.length})` : ''}`}
-            </button>
-          ))}
-        </div>
-      </div>
+      <RunsColumn runs={runs} selectedRunId={selectedRunId} onSelect={selectRun} />
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {tab === 'overview' ? (
-          <DetailsOverview description={automation.description} definition={automation.definition} catalog={catalog} />
+        {selectedRun ? (
+          <RunTrace runId={selectedRun.id} forceOpenDefault={isLatestRun} />
         ) : (
-          <DetailsRuns runs={runs} onOpenRun={openRun} />
+          <DetailsOverview description={automation.description} definition={automation.definition} catalog={catalog} />
         )}
       </div>
     </div>

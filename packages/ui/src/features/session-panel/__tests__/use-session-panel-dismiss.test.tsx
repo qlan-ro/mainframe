@@ -2,8 +2,9 @@
  * useSessionPanelState — light dismiss of the floated stack: Escape, or a
  * pointer outside both the panel root and any portalled surface.
  *
- * The overlay is opened the way the rail opens it: a togglePanel click on the
- * already-open session card while the gutter is short.
+ * The overlay is opened the way the title bar's details toggle opens it: a
+ * `togglePanel` click on the already-open panel while the column is too
+ * short to dock it.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { act } from '@testing-library/react';
@@ -22,7 +23,7 @@ afterEach(() => {
 function openOverlay() {
   const rendered = renderPanelState();
   setWidth(1000);
-  act(() => rendered.result.current.togglePanel('session'));
+  act(() => rendered.result.current.togglePanel());
   return rendered;
 }
 
@@ -44,7 +45,7 @@ describe('useSessionPanelState — light dismiss', () => {
     const outside = document.createElement('div');
     document.body.append(outside);
     pointerDownOn(outside);
-    expect(result.current.mode).toBe('rail');
+    expect(result.current.mode).toBe('hidden');
   });
 
   it('leaves the panel open when it closes — dismissal is not a collapse', () => {
@@ -52,7 +53,7 @@ describe('useSessionPanelState — light dismiss', () => {
     const outside = document.createElement('div');
     document.body.append(outside);
     pointerDownOn(outside);
-    expect(result.current.isPanelOpen('session')).toBe(true);
+    expect(result.current.isPanelOpen()).toBe(true);
   });
 
   it('stays open for a pointerdown inside the panel', () => {
@@ -95,7 +96,7 @@ describe('useSessionPanelState — light dismiss', () => {
   it('closes on Escape', () => {
     const { result } = openOverlay();
     escapeOn(document);
-    expect(result.current.mode).toBe('rail');
+    expect(result.current.mode).toBe('hidden');
   });
 
   it('ignores an Escape another handler already consumed', () => {

@@ -20,7 +20,7 @@ export function useZoneShortcutActions(aui: AssistantClient): void {
   useShortcutAction('sessions.close-split', () => {
     const store = useZonesStore.getState();
     const { mainThreadId } = aui.threads.getState();
-    if (!splitVisible(store.zones, mainThreadId) || store.zones == null) return;
+    if (!splitVisible(store.zones, mainThreadId, store.splitFits) || store.zones == null) return;
     const survivor = store.zones[store.focusedIndex === 0 ? 1 : 0];
     store.closeSplit();
     aui.threads.switchToThread(survivor);

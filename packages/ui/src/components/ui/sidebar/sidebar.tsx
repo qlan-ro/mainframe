@@ -51,7 +51,8 @@ export function Sidebar({
         'bg-sidebar text-sidebar-foreground',
         // A width transition mid-drag lags a frame behind the pointer.
         resizing ? 'transition-none' : 'transition-[width] duration-200 ease-linear',
-        'border-sidebar-border data-[side=left]:border-r data-[side=right]:border-l',
+        // No edge hairline at width 0: it would double the content card's own border.
+        'border-sidebar-border data-[side=left]:border-r data-[side=right]:border-l data-[state=collapsed]:border-0',
         className,
       )}
       style={{ width: collapsed ? collapsedWidth(collapsible) : 'var(--sidebar-width)', ...style }}

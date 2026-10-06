@@ -4,10 +4,11 @@
  *
  * - tracks which slot holds focus while the split is visible, so gestures that
  *   target "the focused/unfocused slot" (⌘-click retarget, ⌘\\) aim right, and
- * - drives the workspace auto-park on VISIBILITY transitions: entering the
- *   visible split parks a top-row workspace in the bottom strip, leaving it
- *   (parking the split or dissolving it) restores the workspace unless the
- *   user repositioned things in between, and
+ * - drives the workspace auto-park on MEMBERSHIP transitions: focusing a
+ *   member of the pair parks a top-row workspace in the bottom strip, leaving
+ *   it (focusing another chat or dissolving the pair) restores the workspace
+ *   unless the user repositioned things in between — a split parked only for
+ *   width keeps the workspace parked, so widening brings the split back, and
  * - opens a queued `pendingPair` once its second chat is in the thread list.
  *
  * Mounted once, by ChatSurface.
@@ -27,6 +28,10 @@ registerChatSplitVisibleProbe(() => splitVisibleNow);
 export function useZonesReconciler(): void {
   const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
   const zones = useZonesStore((s) => s.zones);
+  // Membership only, NOT `splitFits`: the parked workspace is what frees the
+  // width the split needs. Gating on fit made a narrow window park the split,
+  // restore the workspace beside the chat, and keep the surface too narrow for
+  // the split ever to come back after the window widened again.
   const visible = splitVisible(zones, mainThreadId);
   splitVisibleNow = visible;
 

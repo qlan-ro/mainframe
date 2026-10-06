@@ -1,14 +1,12 @@
 /**
- * Per-chat controller — the ONE desktop chat controller (desktop-cutover
- * pass; the legacy `chat-thread-controller.ts` is deleted). Two planes over
- * one reducer:
+ * Per-chat controller — the ONE desktop chat controller (the legacy
+ * `chat-thread-controller.ts` is deleted). Two planes over one reducer:
  *  - `AcpSessionPlane` (transcript, run frames, gates) on the shared
  *    per-adapter `/acp/{profile}` facade client — SUBSCRIBED only while
- *    active (D2 dormancy, todo #350 T33; gating logic in `chat-activation.ts`,
- *    load/bind in `chat-plane-loader.ts`). `load()` seeds config and binds
- *    the client unconditionally (prompt/cancel/reply work dormant too); a
- *    switch-back reactivates from the last settled item, never a full
- *    replay.
+ *    active or held by a split zone (D2 dormancy, todo #350 T33; gating in
+ *    `chat-activation.ts`, load/bind in `chat-plane-loader.ts`). `load()`
+ *    seeds config and binds the client unconditionally (prompt/cancel/reply
+ *    work dormant too); a switch-back resumes from the last settled item.
  *  - `ChatWsSubscription` (side-band: config, background tasks, worktree
  *    offers, workflow runs) gated to the active thread exactly as before.
  *
@@ -167,12 +165,15 @@ export class AcpChatController {
   }
 
   /**
-   * Gates the facade plane's subscription (D2 dormancy, T33) — called from
-   * the runtime hook's `opts.active` effect, the same one that gates
-   * `subscribeLive`. Idempotent on a repeat call with the same value.
+   * Gates the facade plane's subscription (D2 dormancy, T33) from the runtime
+   * hook's `opts.active` effect (the one gating `subscribeLive`); idempotent.
+   * `holdActive` keeps it attached while a split zone shows the chat.
    */
   public setActive(active: boolean): void {
     this.activation.setActive(active);
+  }
+  public holdActive(): () => void {
+    return this.activation.hold();
   }
 
   /**

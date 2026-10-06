@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
-const SIDEBAR_DEFAULT_WIDTH = 256; // mirrors ui-prefs (v2 sidebar 16rem default)
-import { useUiPrefs, isSessionPanelOpen, isSessionPanelSectionOpen, dialogSizeFor } from '../ui-prefs';
+import { useUiPrefs, isSessionPanelSectionOpen, dialogSizeFor, SIDEBAR_DEFAULT_WIDTH } from '../ui-prefs';
 
 const STORAGE_KEY = 'mf:ui-prefs';
 
-// The persisted-payload migrations live in ui-prefs-migration.test.ts.
+// The persisted-payload migrations live in ui-prefs-migration.test.ts and
+// ui-prefs-migration-v8.test.ts.
 
 beforeEach(() => {
   localStorage.clear();
@@ -13,8 +13,9 @@ beforeEach(() => {
   useUiPrefs.setState({
     sidebarVisible: true,
     sidebarWidth: SIDEBAR_DEFAULT_WIDTH,
+    sidebarView: 'chats',
     dontWarnOnTuningChange: false,
-    sessionPanelOpen: {},
+    sessionPanelOpen: true,
     sessionPanelSections: {},
     dialogSizes: {},
   });
@@ -25,8 +26,10 @@ describe('useUiPrefs defaults', () => {
     const s = useUiPrefs.getState();
     expect(s.sidebarVisible).toBe(true);
     expect(s.sidebarWidth).toBe(SIDEBAR_DEFAULT_WIDTH);
+    expect(s.sidebarWidth).toBe(260);
+    expect(s.sidebarView).toBe('chats');
     expect(s.dontWarnOnTuningChange).toBe(false);
-    expect(s.sessionPanelOpen).toEqual({});
+    expect(s.sessionPanelOpen).toBe(true);
     expect(s.sessionPanelSections).toEqual({});
     expect(s.dialogSizes).toEqual({});
   });
@@ -45,20 +48,6 @@ describe('dialogSizeFor', () => {
   });
 });
 
-describe('isSessionPanelOpen', () => {
-  it('opens the session card alone on first run', () => {
-    expect(isSessionPanelOpen({}, 'session')).toBe(true);
-    expect(isSessionPanelOpen({}, 'activity')).toBe(false);
-    expect(isSessionPanelOpen({}, 'launch')).toBe(false);
-    expect(isSessionPanelOpen({}, 'tasks')).toBe(false);
-  });
-
-  it('returns the recorded value when present', () => {
-    expect(isSessionPanelOpen({ session: false }, 'session')).toBe(false);
-    expect(isSessionPanelOpen({ tasks: true }, 'tasks')).toBe(true);
-  });
-});
-
 describe('isSessionPanelSectionOpen', () => {
   it('applies the per-section defaults when nothing is recorded', () => {
     expect(isSessionPanelSectionOpen({}, 'plan')).toBe(false);
@@ -71,44 +60,49 @@ describe('isSessionPanelSectionOpen', () => {
   });
 });
 
-describe('stacked panel actions', () => {
-  it('toggleSessionPanel closes the session card first — it defaults to open', () => {
-    useUiPrefs.getState().toggleSessionPanel('session');
-    expect(useUiPrefs.getState().sessionPanelOpen.session).toBe(false);
-    useUiPrefs.getState().toggleSessionPanel('session');
-    expect(useUiPrefs.getState().sessionPanelOpen.session).toBe(true);
+describe('D8: the session panel open bit is ONE boolean for the whole panel', () => {
+  it('defaults open', () => {
+    expect(useUiPrefs.getState().sessionPanelOpen).toBe(true);
   });
 
-  it('toggleSessionPanel opens a closed panel and closes it again', () => {
-    useUiPrefs.getState().toggleSessionPanel('tasks');
-    expect(useUiPrefs.getState().sessionPanelOpen.tasks).toBe(true);
-    useUiPrefs.getState().toggleSessionPanel('tasks');
-    expect(useUiPrefs.getState().sessionPanelOpen.tasks).toBe(false);
+  it('toggleSessionPanel flips the single bit', () => {
+    useUiPrefs.getState().toggleSessionPanel();
+    expect(useUiPrefs.getState().sessionPanelOpen).toBe(false);
+    useUiPrefs.getState().toggleSessionPanel();
+    expect(useUiPrefs.getState().sessionPanelOpen).toBe(true);
   });
 
-  it('toggleSessionPanel leaves its siblings alone — the panels are independent', () => {
-    useUiPrefs.getState().toggleSessionPanel('activity');
-    expect(useUiPrefs.getState().sessionPanelOpen).toEqual({ activity: true });
+  it('setSessionPanelOpen sets the bit directly, idempotently', () => {
+    useUiPrefs.getState().setSessionPanelOpen(false);
+    expect(useUiPrefs.getState().sessionPanelOpen).toBe(false);
+    useUiPrefs.getState().setSessionPanelOpen(false);
+    expect(useUiPrefs.getState().sessionPanelOpen).toBe(false);
+    useUiPrefs.getState().setSessionPanelOpen(true);
+    expect(useUiPrefs.getState().sessionPanelOpen).toBe(true);
   });
 
-  it('openSessionPanel is idempotent — twice on an open panel leaves it open', () => {
-    useUiPrefs.getState().openSessionPanel('launch');
-    expect(useUiPrefs.getState().sessionPanelOpen.launch).toBe(true);
-    useUiPrefs.getState().openSessionPanel('launch');
-    expect(useUiPrefs.getState().sessionPanelOpen.launch).toBe(true);
-  });
-
-  it('openSessionPanel re-opens a panel the user closed', () => {
-    useUiPrefs.getState().toggleSessionPanel('session');
-    expect(useUiPrefs.getState().sessionPanelOpen.session).toBe(false);
-    useUiPrefs.getState().openSessionPanel('session');
-    expect(useUiPrefs.getState().sessionPanelOpen.session).toBe(true);
-  });
-
-  it('persists the open map to localStorage', () => {
-    useUiPrefs.getState().openSessionPanel('tasks');
+  it('persists the bit to localStorage', () => {
+    useUiPrefs.getState().setSessionPanelOpen(false);
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
-    expect(parsed.state.sessionPanelOpen).toEqual({ tasks: true });
+    expect(parsed.state.sessionPanelOpen).toBe(false);
+  });
+});
+
+describe('D4: sidebarView — which list the nav rail selects', () => {
+  it('defaults to "chats"', () => {
+    expect(useUiPrefs.getState().sidebarView).toBe('chats');
+  });
+
+  it('setSidebarView switches the sidebar and persists it', () => {
+    useUiPrefs.getState().setSidebarView('tasks');
+    expect(useUiPrefs.getState().sidebarView).toBe('tasks');
+    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+    expect(parsed.state.sidebarView).toBe('tasks');
+  });
+
+  it('setSidebarView can select automations too', () => {
+    useUiPrefs.getState().setSidebarView('automations');
+    expect(useUiPrefs.getState().sidebarView).toBe('automations');
   });
 });
 
@@ -192,6 +186,7 @@ describe('useUiPrefs persistence', () => {
         'sideChatFrac',
         'sidebarVisible',
         'sidebarWidth',
+        'sidebarView',
         'transcriptMode',
       ].sort(),
     );

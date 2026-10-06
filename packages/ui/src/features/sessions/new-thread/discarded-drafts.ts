@@ -14,7 +14,7 @@
  * useNewThreadAutoConfig is already a no-op without an active project filter.
  *
  * Cleared by resetNewThreadDraft — the canonical "start a fresh New action"
- * reset point (SessionsNewButton's pill-active click, its project-picker
+ * reset point (the New session row's pill-active click, its project-picker
  * pick(), and the ⌘N hotkey all call it) — so a genuinely new New for the
  * recycled localId arms normally again.
  */

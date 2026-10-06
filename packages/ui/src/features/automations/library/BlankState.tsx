@@ -77,7 +77,7 @@ export function BlankState({ onDescribe, onBuild, describeEnabled }: BlankStateP
         <div className="mx-auto mb-[12px] inline-flex size-[52px] items-center justify-center rounded-xl bg-primary/10">
           <Zap size={26} className="text-primary" aria-hidden />
         </div>
-        <div className="text-lg font-semibold tracking-tight text-foreground">Create a workflow</div>
+        <div className="text-lg font-semibold tracking-tight text-foreground">Create an automation</div>
         <div className="mt-[4px] text-sm text-muted-foreground">Automate the repetitive parts of your day.</div>
       </div>
       <div className="flex w-full max-w-[620px] gap-[16px]">

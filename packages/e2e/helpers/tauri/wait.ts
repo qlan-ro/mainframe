@@ -14,7 +14,7 @@ export async function sendMessage(page: Page, text: string): Promise<void> {
  * `ConnDot` renders `aria-label="Connected"` once `useConnectionStatus().state === 'connected'`.
  */
 export async function waitConnected(page: Page, timeout = 20_000): Promise<void> {
-  await page.locator('[data-testid="daemon-footer-trigger"]').locator('[aria-label="Connected"]').waitFor({ timeout });
+  await page.locator('[data-testid="shell-rail-daemon"]').locator('[aria-label="Connected"]').waitFor({ timeout });
 }
 
 /**

@@ -1,7 +1,8 @@
 /**
- * The expanded per-provider view: every window with its exact (absolute) reset
- * timestamp, a staleness hint, and a manual refresh. Pure presentation over the
- * `quota-format` view-model; all reasoning lives there.
+ * The hover-card body for one provider: every window on its own 18px line with
+ * its exact (absolute) reset timestamp, a staleness hint, and a manual
+ * refresh. Pure presentation over the `quota-format` view-model; all reasoning
+ * lives there.
  */
 import { useCallback, useState } from 'react';
 import { RefreshCwIcon } from 'lucide-react';
@@ -20,7 +21,7 @@ import {
   minutesAgo,
   type QuotaSeverity,
 } from '@/features/quota/quota-format';
-import { ProviderLogo } from '../shared/ProviderLogo';
+import { ProviderDot } from '../shared/ProviderDot';
 
 /** Only the red band gets its own ink — the preset carries no amber. */
 const PERCENT_TEXT: Record<QuotaSeverity, string> = {
@@ -88,15 +89,15 @@ function QuotaWindowRow({
       data-testid={`provider-quota-window-${providerId}-${window.kind}`}
       aria-label={`${label} ${window.label}: ${formatUsedPercent(window.usedPercent)}% used, ${resetSpeech}`}
     >
-      <div className="mb-1 flex items-baseline justify-between">
+      <div className="flex h-4.5 items-center justify-between">
         <span className="font-medium text-foreground">{window.label}</span>
         <span className={cn('font-semibold tabular-nums', PERCENT_TEXT[window.severity])}>
           {formatUsedPercent(window.usedPercent)}%
         </span>
       </div>
-      <Progress value={window.usedPercent} className={cn('h-1.5 bg-muted', BAR_FILL[window.severity])} />
+      <Progress value={window.usedPercent} className={cn('h-0.75 bg-muted', BAR_FILL[window.severity])} />
       {window.resetsAt != null && (
-        <div className="mt-1 flex justify-between text-xs text-muted-foreground">
+        <div className="flex h-4.5 items-center justify-between text-xs text-muted-foreground">
           <span>resets in {rel}</span>
           <span>{formatAbsoluteReset(window.resetsAt)}</span>
         </div>
@@ -121,15 +122,16 @@ export function QuotaPopover({
   const windows = quota && known ? deriveWindowList(quota) : [];
 
   return (
-    <div data-testid={`provider-quota-popover-${providerId}`} className="w-64 p-3 text-xs">
-      <div className="mb-2 flex items-center justify-between">
+    <div data-testid={`provider-quota-popover-${providerId}`} className="p-3 text-xs">
+      <div className="mb-2 flex h-4.5 items-center justify-between">
         <span className="flex items-center gap-2 font-semibold text-foreground">
-          <ProviderLogo
-            adapterId={providerId}
-            testId={`provider-quota-popover-glyph-${providerId}`}
-            className="size-4 rounded"
-          />
+          <ProviderDot adapterId={providerId} testId={`provider-quota-popover-glyph-${providerId}`} />
           {label}
+          {known && (
+            <span className="font-normal text-muted-foreground">
+              · {windows.length} limit{windows.length === 1 ? '' : 's'}
+            </span>
+          )}
         </span>
         <span data-testid={`provider-quota-freshness-${providerId}`} className="text-xs text-muted-foreground">
           {quota == null ? '—' : `${stale ? 'stale · ' : ''}${minutesAgo(quota.observedAt, now)}m ago`}
@@ -141,7 +143,7 @@ export function QuotaPopover({
           Quota unknown — this provider reports no trustworthy plan quota (API-key auth, or the data has expired).
         </p>
       ) : (
-        <ul className="flex flex-col gap-2.5">
+        <ul className="flex flex-col gap-1.5">
           {windows.map((w) => (
             <QuotaWindowRow key={`${w.kind}-${w.label}`} providerId={providerId} label={label} window={w} now={now} />
           ))}

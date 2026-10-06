@@ -28,6 +28,20 @@ export function soleProjectId(ids: ReadonlySet<string>): string | null {
   return only ?? null;
 }
 
+/**
+ * What a scope-aware pick list offers when the scope names no single
+ * project: the scoped set, or every project when the scope is empty. Shared
+ * by Tasks, the Setup Advisor, and any other per-project surface — picking
+ * from the result narrows the shared scope (`soloFilterProject`), it never
+ * stores a local override.
+ */
+export function projectsInScopeOrAll<T extends { id: string }>(
+  projects: readonly T[],
+  scope: ReadonlySet<string>,
+): T[] {
+  return scope.size === 0 ? [...projects] : projects.filter((p) => scope.has(p.id));
+}
+
 interface SessionFiltersState {
   filterProjectIds: ReadonlySet<string>;
   selectedTags: Set<string>;
@@ -35,6 +49,8 @@ interface SessionFiltersState {
   /** Active sessions-list sort: drives arrangeSessions grouping/ordering. */
   sortMode: SortMode;
   toggleFilterProject: (id: string) => void;
+  /** ⌥-click on the scope strip: this project alone, replacing the set. */
+  soloFilterProject: (id: string) => void;
   clearProjectFilter: () => void;
   /** Drop a deleted project from the scope; the rest of the scope survives. */
   removeFilterProject: (id: string) => void;
@@ -88,6 +104,12 @@ export const useSessionFilters = create<SessionFiltersState>((set) => ({
       persistProjectIds(next);
       return { filterProjectIds: next };
     }),
+
+  soloFilterProject: (id) => {
+    const next = new Set([id]);
+    persistProjectIds(next);
+    set({ filterProjectIds: next });
+  },
 
   clearProjectFilter: () => {
     persistProjectIds(new Set());

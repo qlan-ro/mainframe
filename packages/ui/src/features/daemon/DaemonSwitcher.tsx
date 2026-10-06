@@ -1,16 +1,17 @@
 /**
- * The sidebar-footer daemon switcher: shows the active daemon and opens the
- * picker. Owns the rename/remove dialog state.
+ * The nav rail's daemon switcher (bottom group): a device glyph with the
+ * connection dot in its corner — name and address in the hint — that opens the
+ * picker to the right. Owns the rename/remove dialog state.
  *
  * Status model, unchanged from the shipped switcher: only the active daemon
  * reflects live connection state; inactive ones read `connected`, since nothing
  * polls their health.
  */
 import { useCallback, useState, useSyncExternalStore, type ComponentProps } from 'react';
-import { ChevronsUpDownIcon } from 'lucide-react';
 import type { DaemonMeta, DaemonTarget } from '@qlan-ro/mainframe-types';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
+import { Hint } from '@/components/ui/hint';
+import { cn } from '@/lib/utils';
 // Legacy island: ConnectionOverlay is the app-level window-state overlay; it
 // ports with the window-states pass.
 import { ConnectionOverlay } from '@/app/ConnectionOverlay';
@@ -39,34 +40,36 @@ function targetToMeta(target: DaemonTarget): DaemonMeta {
 function SwitcherTrigger({
   meta,
   status,
+  className,
   ...props
-}: { meta: DaemonMeta; status: DaemonStatus } & ComponentProps<typeof SidebarMenuButton>) {
+}: { meta: DaemonMeta; status: DaemonStatus } & ComponentProps<'button'>) {
   return (
-    <SidebarMenuButton size="lg" data-testid="daemon-footer-trigger" data-tut="daemon" {...props}>
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-sidebar-accent">
-        <DaemonGlyph kind={meta.kind} />
+    // Same 38px / 10px-radius button as NavRailButton. The ConnDot stays INSIDE
+    // the trigger: every e2e readiness wait looks for its aria-label there.
+    <button
+      type="button"
+      data-testid="shell-rail-daemon"
+      data-tut="daemon"
+      className={cn(
+        'relative flex size-9.5 shrink-0 items-center justify-center rounded-[10px] text-muted-foreground transition-colors',
+        'hover:bg-sidebar-accent hover:text-foreground data-[state=open]:bg-sidebar-accent',
+        className,
+      )}
+      {...props}
+    >
+      <DaemonGlyph kind={meta.kind} className="size-5 text-current" />
+      <span className="absolute right-1.5 bottom-1.5 flex rounded-full ring-2 ring-sidebar">
+        <ConnDot status={status} />
       </span>
-      <span className="grid min-w-0 flex-1 text-left leading-tight">
-        <span className="flex items-center gap-1.5">
-          <span
-            data-testid="daemon-footer-trigger-label"
-            className="min-w-0 truncate font-medium text-muted-foreground"
-          >
-            {meta.label}
-          </span>
-          {/* Dot only: the word is spelled out per-daemon in the picker, and on
-              the trigger it just repeated what the colour already said. */}
-          <ConnDot status={status} />
-        </span>
-        {meta.host && (
-          <span data-testid="daemon-footer-trigger-host" className="truncate font-mono text-xs text-muted-foreground">
-            {meta.host}
-          </span>
-        )}
+      <span data-testid="shell-rail-daemon-label" className="sr-only">
+        {meta.label}
       </span>
-      <ChevronsUpDownIcon className="ml-auto shrink-0" />
-    </SidebarMenuButton>
+    </button>
   );
+}
+
+function hintFor(meta: DaemonMeta): string {
+  return meta.host ? `${meta.label} · ${meta.host}` : meta.label;
 }
 
 export function DaemonSwitcher() {
@@ -115,50 +118,46 @@ export function DaemonSwitcher() {
   );
 
   return (
-    <SidebarMenu>
-      <SidebarMenuItem>
-        <DropdownMenu>
+    <>
+      <DropdownMenu>
+        {/* Hint outside the trigger (a Tooltip root forwards nothing to the DOM). */}
+        <Hint label={hintFor(activeMeta)} side="right">
           <DropdownMenuTrigger asChild>
             <SwitcherTrigger meta={activeMeta} status={statusOf(registry.activeId)} />
           </DropdownMenuTrigger>
-          <DropdownMenuContent side="top" align="start" className="w-80">
-            <DaemonMenuItems
-              daemons={registry.daemons}
-              statusOf={statusOf}
-              activeId={registry.activeId}
-              onSwitch={handleSwitch}
-              onRename={(d) => setDialog({ kind: 'rename', target: d })}
-              onRepair={(d) => setPairing({ mode: 'repair', target: d })}
-              onRemove={(d) => setDialog({ kind: 'remove', target: d })}
-              onAddRemote={() => setPairing({ mode: 'add' })}
-            />
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        {dialog != null && (
-          <DaemonSmallDialog
-            kind={dialog.kind}
-            target={dialog.target}
-            onClose={closeDialog}
-            onConfirm={handleConfirm}
+        </Hint>
+        <DropdownMenuContent side="right" align="end" className="w-80">
+          <DaemonMenuItems
+            daemons={registry.daemons}
+            statusOf={statusOf}
+            activeId={registry.activeId}
+            onSwitch={handleSwitch}
+            onRename={(d) => setDialog({ kind: 'rename', target: d })}
+            onRepair={(d) => setPairing({ mode: 'repair', target: d })}
+            onRemove={(d) => setDialog({ kind: 'remove', target: d })}
+            onAddRemote={() => setPairing({ mode: 'add' })}
           />
-        )}
+        </DropdownMenuContent>
+      </DropdownMenu>
 
-        {/* onDone stays a no-op: the dialog fires it the instant pairing
+      {dialog != null && (
+        <DaemonSmallDialog kind={dialog.kind} target={dialog.target} onClose={closeDialog} onConfirm={handleConfirm} />
+      )}
+
+      {/* onDone stays a no-op: the dialog fires it the instant pairing
             succeeds, then defers its own onClose ~800ms so the "Paired" notice
             stays visible. Closing here would collapse that grace window. */}
-        <AddRemoteDialog
-          open={pairing != null}
-          mode={pairing?.mode ?? 'add'}
-          target={pairing?.target}
-          onClose={() => setPairing(null)}
-          onDone={() => undefined}
-        />
+      <AddRemoteDialog
+        open={pairing != null}
+        mode={pairing?.mode ?? 'add'}
+        target={pairing?.target}
+        onClose={() => setPairing(null)}
+        onDone={() => undefined}
+      />
 
-        <ConnectionOverlay open={showUnreachableOverlay}>
-          <DaemonUnreachableBody target={activeMeta} onSwitchLocal={handleSwitchLocal} />
-        </ConnectionOverlay>
-      </SidebarMenuItem>
-    </SidebarMenu>
+      <ConnectionOverlay open={showUnreachableOverlay}>
+        <DaemonUnreachableBody target={activeMeta} onSwitchLocal={handleSwitchLocal} />
+      </ConnectionOverlay>
+    </>
   );
 }

@@ -62,6 +62,7 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName, depth }: S
   const zoneDimmed = useZonesStore(
     (s) =>
       s.zones != null &&
+      s.splitFits &&
       mainThreadId != null &&
       s.zones.includes(mainThreadId) &&
       s.zones.includes(item.id) &&
@@ -159,9 +160,10 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName, depth }: S
                   }}
                   // pr-2!: the variants reserve a gutter for an overlaid
                   // SidebarMenuAction, but the actions render inline now.
+                  // h-11 clamps the row to its two lines; the draft row stays single-line.
                   className={cn(
                     ROW_INDENT,
-                    'h-auto py-1 pr-2! group-data-active/menu-item:bg-sidebar-selection',
+                    'h-11 rounded-md py-1 pr-2! hover:bg-sidebar-accent group-data-active/menu-item:bg-sidebar-selection',
                     zoneDimmed && 'bg-sidebar-selection/40',
                   )}
                 >

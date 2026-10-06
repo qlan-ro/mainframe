@@ -1,12 +1,15 @@
 /**
- * PairGlyph — the trailing glyph slot of a task row or card.
+ * PairGlyph — the trailing glyph slot of a task card.
  *
  * An unpaired task shows a hover-revealed publish action; a paired one shows its
  * issue number, amber whenever a person should look (overwritten in the last run,
  * errored, or remotely unlinked). Ordinary sync activity is never amber.
  *
  * The pair is read from the sync store by `todo.id` — the pairing key is never
- * the reusable board number — so neither the row nor the card grows a prop.
+ * the reusable board number — so the card grows no prop for it.
+ *
+ * Board-only since the 2026-10 redesign (the list view's row variant is gone);
+ * the `tasks-card-*` prefix is no longer a choice between two surfaces.
  */
 import React from 'react';
 import { CircleDotDashed, TriangleAlert, Unlink } from 'lucide-react';
@@ -18,13 +21,9 @@ import { useGitHubSyncStore } from './use-github-sync-store';
 
 interface Props {
   todo: Todo;
-  surface: 'list' | 'card';
 }
 
-const PREFIX: Record<Props['surface'], string> = {
-  list: 'tasks-list-row',
-  card: 'tasks-card',
-};
+const PREFIX = 'tasks-card';
 
 const AMBER_STATES: ReadonlySet<Pair['pairState']> = new Set(['overwritten', 'errored', 'remotely-unlinked']);
 
@@ -47,18 +46,16 @@ function pairedAffordance(pair: Pair): { icon: React.ReactNode; hint: string } {
 
 function PublishAction({
   todo,
-  prefix,
   openDialog,
 }: {
   todo: Todo;
-  prefix: string;
   openDialog: (dialog: { kind: 'publish'; todo: Todo }) => void;
 }): React.ReactElement {
   return (
     <Hint label="Publish to GitHub">
       <button
         type="button"
-        data-testid={`${prefix}-publish-${todo.number}`}
+        data-testid={`${PREFIX}-publish-${todo.number}`}
         onClick={(e) => {
           e.stopPropagation();
           openDialog({ kind: 'publish', todo });
@@ -75,12 +72,11 @@ function PublishAction({
   );
 }
 
-export function PairGlyph({ todo, surface }: Props): React.ReactElement | null {
+export function PairGlyph({ todo }: Props): React.ReactElement | null {
   const { pairs, openDialog } = useGitHubSyncStore();
-  const prefix = PREFIX[surface];
   const pair = pairs[todo.id];
 
-  if (pair === undefined) return <PublishAction todo={todo} prefix={prefix} openDialog={openDialog} />;
+  if (pair === undefined) return <PublishAction todo={todo} openDialog={openDialog} />;
 
   const amber = AMBER_STATES.has(pair.pairState);
   const { icon, hint } = pairedAffordance(pair);
@@ -103,7 +99,7 @@ export function PairGlyph({ todo, surface }: Props): React.ReactElement | null {
       {opensReport ? (
         <button
           type="button"
-          data-testid={`${prefix}-pair-${todo.number}`}
+          data-testid={`${PREFIX}-pair-${todo.number}`}
           data-amber="true"
           onClick={(e) => {
             e.stopPropagation();
@@ -116,7 +112,7 @@ export function PairGlyph({ todo, surface }: Props): React.ReactElement | null {
         </button>
       ) : (
         <span
-          data-testid={`${prefix}-pair-${todo.number}`}
+          data-testid={`${PREFIX}-pair-${todo.number}`}
           data-amber={amber ? 'true' : undefined}
           className={className}
         >

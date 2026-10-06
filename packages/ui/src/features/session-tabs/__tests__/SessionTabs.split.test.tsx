@@ -280,27 +280,26 @@ describe('the tab context menu', () => {
   });
 });
 
-describe("the pair's shared underline", () => {
-  // The underline is the SELECTION signal, and a split can be open while parked
-  // behind a third session. Lighting it on membership rather than on visibility
-  // is what used to make three tabs read as selected at once.
-  const groupMark = () => screen.getByTestId('session-tabs-zone-group').className;
+describe("the pair's shared data-visible", () => {
+  // `data-visible` is the SELECTION signal, and a split can be open while
+  // parked behind a third session. Lighting it on membership rather than on
+  // visibility is what used to make three tabs read as selected at once.
+  const group = () => screen.getByTestId('session-tabs-zone-group');
 
-  it('is lit while a member of the pair is the focused session', () => {
+  it('is visible while a member of the pair is the focused session', () => {
     seed('chat-a');
     useZonesStore.setState({ zones: ['chat-a', 'chat-b'], focusedIndex: 0 });
     render();
 
-    expect(groupMark()).toContain('after:opacity-100');
+    expect(group()).toHaveAttribute('data-visible', 'true');
   });
 
-  it('goes dark while the pair is PARKED behind another session', () => {
+  it('has no data-visible while the pair is PARKED behind another session', () => {
     seed('chat-p');
     useZonesStore.setState({ zones: ['chat-a', 'chat-b'], focusedIndex: 0 });
     render();
 
-    expect(groupMark()).toContain('after:opacity-0');
-    expect(groupMark()).not.toContain('after:opacity-100');
+    expect(group()).not.toHaveAttribute('data-visible');
   });
 
   it('leaves the parked pair with exactly one lit tab in the strip — the focused one', () => {

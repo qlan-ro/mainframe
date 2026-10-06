@@ -23,11 +23,8 @@ export function WsTourLabel({ step, idx, total, onBack, onNext, style }: WsTourL
   return (
     <div className="absolute w-[268px] z-[3] pointer-events-auto" style={style} data-testid="tour-label-card">
       <div
-        className="bg-card border-[0.5px] border-border rounded-[13px]"
-        style={{
-          padding: '14px 15px 13px',
-          boxShadow: 'var(--mf-shadow-pop)',
-        }}
+        className="bg-card border-[0.5px] border-border rounded-[13px] shadow-mf-pop"
+        style={{ padding: '14px 15px 13px' }}
       >
         {/* Header row */}
         <div className="flex items-center gap-[7px] mb-[8px]">

@@ -9,7 +9,8 @@
  *
  * Testid reference (verified against packages/ui/src/v2/features/sessions/):
  *   sessions-row                  — each session row (data-chat-id attr)
- *   sessions-new-button           — + new session button
+ *   sidebar-action-new-thread     — the sidebar header's "New session" row (the shell
+ *                                   redesign retired the standalone sessions-new-button pill)
  *   sessions-more-button          — ⋯ overflow menu trigger
  *   sessions-more-archived        — dropdown item: Archived sessions
  *   sessions-more-import          — dropdown item: Import external sessions
@@ -30,7 +31,7 @@
  *   import-session-btn            — Import button on each external-session row
  *   sessions-welcome / welcome-project — the projectless draft's welcome screen and
  *                                   its project picker (see the note below)
- *   daemon-footer-trigger         — sidebar footer daemon status (used for readiness waits)
+ *   shell-rail-daemon             — nav rail daemon status (used for readiness waits)
  *   sessions-archive-keep-worktree   — ArchiveWorktreeDialog "Keep worktree" button
  *   sessions-archive-delete-worktree — ArchiveWorktreeDialog "Delete worktree" button
  *   sessions-import-load-more     — ImportSessionList paging sentinel (IntersectionObserver),

@@ -36,20 +36,26 @@ export const QUOTA_PROVIDERS: readonly { id: string; label: string }[] = [
 ];
 
 /**
- * Collapsed-row view: the session window when it's trusted (that's the one that
- * actually blocks the user next), falling back to the tightest trusted window when
- * there's no live session (e.g. Codex, which only reports weekly) — or a designed
- * unknown — plus staleness.
+ * Collapsed-row view: the SMALLEST window — the session window when it is
+ * trusted (that is the one that blocks the user next), else the tightest
+ * trusted window (Codex only reports weekly) — plus which window it is, so the
+ * row can tag it `5h` / `wk`. Or a designed unknown.
  */
 export type QuotaRowVm =
   | { state: 'unknown' }
   | {
       state: 'ok';
+      kind: QuotaWindow['kind'];
       usedPercent: number;
       severity: QuotaSeverity;
       resetsAt: number | null;
       stale: boolean;
     };
+
+/** The two-letter window tag the usage row shows beside the provider name. */
+export function windowTag(kind: QuotaWindow['kind']): string {
+  return kind === 'session' ? '5h' : 'wk';
+}
 
 export function deriveQuotaRow(quota: ProviderQuota | undefined, now: number): QuotaRowVm {
   if (!quota || deriveProviderStatus(quota, now) === 'unknown') return { state: 'unknown' };
@@ -60,6 +66,7 @@ export function deriveQuotaRow(quota: ProviderQuota | undefined, now: number): Q
   if (!headline) return { state: 'unknown' };
   return {
     state: 'ok',
+    kind: headline.kind,
     usedPercent: headline.usedPercent,
     severity: severityOf(headline.usedPercent),
     resetsAt: headline.resetsAt,

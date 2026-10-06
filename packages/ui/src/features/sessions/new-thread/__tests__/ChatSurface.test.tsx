@@ -71,10 +71,10 @@ vi.mock('../pending-draft-project', () => ({
   usePendingDraftProject: (sel: (s: { projectId: string | null }) => unknown) => sel({ projectId: __pendingProjectId }),
 }));
 vi.mock('../use-new-thread-auto-config', () => ({ useNewThreadAutoConfig: () => undefined }));
+vi.mock('../../../chat/thread/ChatColumnHeader', () => ({ ChatColumnHeader: () => null }));
 vi.mock('../../../chat/thread/ChatThread', () => ({
   ChatThread: ({ emptyState }: { emptyState?: React.ReactNode }) => <div data-testid="chat-thread">{emptyState}</div>,
 }));
-vi.mock('../../../chat/thread/ChatCardHeader', () => ({ ChatCardHeader: () => <div data-testid="chat-header" /> }));
 vi.mock('../ChatEmptyState', () => ({
   ChatEmptyState: ({ variant, projectId }: { variant: string; projectId?: string }) => (
     <div data-testid={`empty-${variant}`} data-project={projectId ?? ''} />
@@ -86,16 +86,8 @@ vi.mock('@/features/session-panel/SessionPanel', () => ({
   ),
 }));
 vi.mock('@/features/side-chat/SideChatHost', () => ({
-  SideChatHost: ({
-    parentChatId,
-    threadRef,
-    children,
-  }: {
-    parentChatId: string | null;
-    threadRef: (el: HTMLElement | null) => void;
-    children: React.ReactNode;
-  }) => (
-    <div ref={threadRef} data-testid="side-chat-host-stub" data-parent-chat-id={parentChatId ?? ''}>
+  SideChatHost: ({ parentChatId, children }: { parentChatId: string | null; children: React.ReactNode }) => (
+    <div data-testid="side-chat-host-stub" data-parent-chat-id={parentChatId ?? ''}>
       {children}
     </div>
   ),
@@ -188,14 +180,18 @@ describe('ChatSurface', () => {
     __mainThreadId = 'chat-123';
     __itemStatus = 'regular';
     __messageCount = 4;
-    render(<ChatSurface />);
+    const { container } = render(<ChatSurface />);
 
     const host = screen.getByTestId('side-chat-host-stub');
     expect(host).toHaveAttribute('data-parent-chat-id', 'chat-123');
-    // Wraps the parent's thread AND its session panel, so the rail floats over
-    // the parent's column and a side chat beside it can carry its own.
     expect(host.contains(screen.getByTestId('chat-thread'))).toBe(true);
-    expect(host.contains(screen.getByTestId('session-panel-root'))).toBe(true);
+    // D20: the panel docks as a flex SIBLING of the side-chat host, outside
+    // it — not wrapped inside it — so the beside/below decision inside the
+    // host is made on the width that remains once the panel takes its own.
+    expect(host.contains(screen.getByTestId('session-panel-root'))).toBe(false);
+    const column = container.querySelector('[data-chat-column]') as HTMLElement;
+    expect(column.contains(host)).toBe(true);
+    expect(column.contains(screen.getByTestId('session-panel-root'))).toBe(true);
   });
 
   it('hides ChatThread and its composer while initialization is pending', () => {
@@ -261,14 +257,16 @@ describe('ChatSurface', () => {
   });
 
   it("observes the parent's thread column, so a split or a side chat beside it shrinks what the panel measures", () => {
-    render(<ChatSurface />);
+    const { container } = render(<ChatSurface />);
 
-    // Two observers: the surface root (split-fits width gate) and the panel's
-    // host — the parent's thread column, which SideChatHost owns (its
-    // `relative` containing block and flex sizing are tested there).
+    // Two observers: the surface root (split-fits width gate) and the panel
+    // state hook's own host — `[data-chat-column]`, measured BEFORE the
+    // docked panel takes its width, holding the side-chat host and the panel
+    // as flex siblings (D20).
     expect(observed).toHaveLength(2);
-    const column = observed.find((el) => !el.contains(screen.getByTestId('chat-header'))) as HTMLElement;
-    expect(column).toBe(screen.getByTestId('side-chat-host-stub'));
+    const column = container.querySelector('[data-chat-column]') as HTMLElement;
+    expect(observed).toContain(column);
+    expect(column.contains(screen.getByTestId('side-chat-host-stub'))).toBe(true);
     expect(column.contains(screen.getByTestId('chat-thread'))).toBe(true);
     expect(column.contains(screen.getByTestId('session-panel-root'))).toBe(true);
   });

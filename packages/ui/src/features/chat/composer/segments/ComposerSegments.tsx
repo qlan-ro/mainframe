@@ -87,7 +87,7 @@ export function ComposerSegments({ threadId }: { threadId: string }) {
           <ComposerSegmentTextarea
             segmentId={segment.id}
             value={segment.text}
-            placeholder={segment.quote != null ? 'Add a message…' : 'Reply to Mainframe…'}
+            placeholder={segment.quote != null ? 'Add a message…' : 'Reply to the agent…'}
             onChange={(text) => updateText(threadId, segment.id, text)}
           />
         </div>

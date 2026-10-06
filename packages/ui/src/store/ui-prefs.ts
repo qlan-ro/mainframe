@@ -1,9 +1,10 @@
 /**
  * ui-prefs — the single persisted store for global UI chrome.
  *
- * Owns sidebar visibility, the committed sidebar width, the session
- * panel's per-section open state, and committed sizes for opt-in resizable
- * dialogs. Persisted to localStorage under
+ * Owns sidebar visibility, the committed sidebar width, which list the
+ * sidebar shows (`sidebarView`, chosen on the nav rail), the session panel's
+ * open bit and per-section open state, and committed sizes for opt-in
+ * resizable dialogs. Persisted to localStorage under
  * `mf:ui-prefs` via zustand's persist middleware (mirrors store/tutorial.ts).
  * Per-session surface layout is NOT here — it stays in-memory in
  * store/layout.ts (live PTY/preview refs make it unsafe to persist). The
@@ -14,28 +15,21 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { clampSidebarWidth } from '@/components/ui/sidebar';
 
-/** Matches the v2 sidebar's `SIDEBAR_WIDTH` (16rem) — the un-dragged default. */
-const SIDEBAR_DEFAULT_WIDTH = 256;
+/** Matches the sidebar primitive's `SIDEBAR_WIDTH` (260px) — the un-dragged default. */
+export const SIDEBAR_DEFAULT_WIDTH = 260;
+/** The default before v8; a persisted copy of it migrates to the new default. */
+const SIDEBAR_LEGACY_DEFAULT_WIDTH = 256;
 
-/** The rail's independent stacked panels, in rail/stack order. Declared here
- *  rather than in `features/session-panel/` because this store persists their
- *  open-state and `store/` must not import from `features/`. */
-export type SessionPanelId = 'session' | 'activity' | 'launch' | 'tasks';
+/**
+ * Which list the sidebar hosts; the nav rail selects, the sidebar renders.
+ * 'settings' is reachable (⌘, the rail's Settings button, every
+ * `useSettingsStore`-adjacent open path) but never restored on boot — see
+ * `sanitizeBootSidebarView`.
+ */
+export type SidebarView = 'chats' | 'tasks' | 'automations' | 'advisor' | 'settings';
 
-/** Open on first run: the session card alone — the other panels are opt-in. */
-const SESSION_PANEL_DEFAULTS: Record<SessionPanelId, boolean> = {
-  session: true,
-  activity: false,
-  launch: false,
-  tasks: false,
-};
-
-export type SessionPanelOpen = Partial<Record<SessionPanelId, boolean>>;
-
-/** Selector helper: a panel with no recorded state falls back to its default. */
-export function isSessionPanelOpen(open: SessionPanelOpen, id: SessionPanelId): boolean {
-  return open[id] ?? SESSION_PANEL_DEFAULTS[id];
-}
+/** The pre-v8 stacked panels — kept only so the v8 migration can name them. */
+type LegacySessionPanelId = 'session' | 'activity' | 'launch' | 'tasks';
 
 /** The session card's collapsible sections (Summary is never collapsible). */
 export type SessionPanelSectionId = 'summary' | 'plan' | 'context';
@@ -78,11 +72,13 @@ interface UiPrefsState {
   setTranscriptMode: (mode: TranscriptMode) => void;
   sidebarVisible: boolean;
   sidebarWidth: number;
+  sidebarView: SidebarView;
   /** Once true, the mid-session model/effort/feature change warning is suppressed for good. */
   dontWarnOnTuningChange: boolean;
-  /** Which stacked panels are open. This store is the sole owner — absent keys
-   *  read as the panel's default; see isSessionPanelOpen. */
-  sessionPanelOpen: SessionPanelOpen;
+  /** Whether the session panel is open. ONE bit for the whole panel — it is a
+   *  single docked column of sections, not a stack of cards. This store is the
+   *  sole owner so the choice survives a remount and a session switch. */
+  sessionPanelOpen: boolean;
   /** Per-section open state inside the session card. Absent keys read as the
    *  section's default; see isSessionPanelSectionOpen. */
   sessionPanelSections: SessionPanelSections;
@@ -94,10 +90,10 @@ interface UiPrefsState {
   toggleSidebar: () => void;
   setSidebarVisible: (visible: boolean) => void;
   setSidebarWidth: (width: number) => void;
+  setSidebarView: (view: SidebarView) => void;
   dismissTuningChangeWarning: () => void;
-  toggleSessionPanel: (id: SessionPanelId) => void;
-  /** Idempotent open — for controls that navigate to a panel's content. */
-  openSessionPanel: (id: SessionPanelId) => void;
+  toggleSessionPanel: () => void;
+  setSessionPanelOpen: (open: boolean) => void;
   toggleSessionPanelSection: (id: SessionPanelOpenSectionId) => void;
   /** Overwrites the committed size for one dialog key. Callers clamp before
    *  committing — the store doesn't know a dialog's measured minimum. */
@@ -111,6 +107,7 @@ function partializeUiPrefs(s: UiPrefsState) {
     transcriptMode: s.transcriptMode,
     sidebarVisible: s.sidebarVisible,
     sidebarWidth: s.sidebarWidth,
+    sidebarView: s.sidebarView,
     dontWarnOnTuningChange: s.dontWarnOnTuningChange,
     sessionPanelOpen: s.sessionPanelOpen,
     sessionPanelSections: s.sessionPanelSections,
@@ -121,9 +118,55 @@ function partializeUiPrefs(s: UiPrefsState) {
 
 type PersistedUiPrefs = ReturnType<typeof partializeUiPrefs>;
 
+const SIDEBAR_VIEWS: readonly SidebarView[] = ['chats', 'tasks', 'automations', 'advisor', 'settings'];
+
+function sanitizeSidebarView(value: unknown): SidebarView {
+  return SIDEBAR_VIEWS.includes(value as SidebarView) ? (value as SidebarView) : 'chats';
+}
+
+/**
+ * 'settings' is a view you navigate TO, never one you boot into — applied on
+ * every rehydration (not just a version migration), same as the transcript
+ * sanitizer below, so no version bump is needed for it to take effect.
+ */
+function sanitizeBootSidebarView(value: unknown): SidebarView {
+  const view = sanitizeSidebarView(value);
+  return view === 'settings' ? 'chats' : view;
+}
+
 function sanitizeTranscriptPreference(persisted: unknown): Partial<PersistedUiPrefs> {
   const state = persisted !== null && typeof persisted === 'object' ? (persisted as Record<string, unknown>) : {};
-  return { ...state, transcriptMode: state.transcriptMode === 'compact' ? 'compact' : 'verbose' };
+  return {
+    ...state,
+    transcriptMode: state.transcriptMode === 'compact' ? 'compact' : 'verbose',
+    sidebarView: sanitizeBootSidebarView(state.sidebarView),
+  };
+}
+
+/** The pre-v8 per-card defaults — the session card alone opened by default. */
+const LEGACY_PANEL_DEFAULTS: Record<LegacySessionPanelId, boolean> = {
+  session: true,
+  activity: false,
+  launch: false,
+  tasks: false,
+};
+
+/**
+ * v8: the four stacked cards became one docked panel, so their four open bits
+ * collapse to one — open if ANY card was open (an absent key reads as that
+ * card's old default). The legacy 256px default width maps to the new 260;
+ * a width the user dragged to is left alone.
+ */
+function migrateToV8(next: Record<string, unknown>): void {
+  const raw = next.sessionPanelOpen;
+  if (typeof raw !== 'boolean') {
+    const legacy = (raw ?? {}) as Partial<Record<LegacySessionPanelId, boolean>>;
+    next.sessionPanelOpen = (Object.keys(LEGACY_PANEL_DEFAULTS) as LegacySessionPanelId[]).some(
+      (id) => legacy[id] ?? LEGACY_PANEL_DEFAULTS[id],
+    );
+  }
+  if (next.sidebarWidth === SIDEBAR_LEGACY_DEFAULT_WIDTH) next.sidebarWidth = SIDEBAR_DEFAULT_WIDTH;
+  next.sidebarView = sanitizeSidebarView(next.sidebarView);
 }
 
 export const useUiPrefs = create<UiPrefsState>()(
@@ -133,20 +176,19 @@ export const useUiPrefs = create<UiPrefsState>()(
       setTranscriptMode: (transcriptMode) => set({ transcriptMode }),
       sidebarVisible: true,
       sidebarWidth: SIDEBAR_DEFAULT_WIDTH,
+      sidebarView: 'chats',
       dontWarnOnTuningChange: false,
-      sessionPanelOpen: {},
+      sessionPanelOpen: true,
       sessionPanelSections: {},
       dialogSizes: {},
       sideChatFrac: SIDE_CHAT_DEFAULT_FRAC,
       toggleSidebar: () => set((s) => ({ sidebarVisible: !s.sidebarVisible })),
       setSidebarVisible: (visible) => set({ sidebarVisible: visible }),
       setSidebarWidth: (width) => set({ sidebarWidth: clampSidebarWidth(width) }),
+      setSidebarView: (sidebarView) => set({ sidebarView }),
       dismissTuningChangeWarning: () => set({ dontWarnOnTuningChange: true }),
-      toggleSessionPanel: (id) =>
-        set((s) => ({
-          sessionPanelOpen: { ...s.sessionPanelOpen, [id]: !isSessionPanelOpen(s.sessionPanelOpen, id) },
-        })),
-      openSessionPanel: (id) => set((s) => ({ sessionPanelOpen: { ...s.sessionPanelOpen, [id]: true } })),
+      toggleSessionPanel: () => set((s) => ({ sessionPanelOpen: !s.sessionPanelOpen })),
+      setSessionPanelOpen: (sessionPanelOpen) => set({ sessionPanelOpen }),
       toggleSessionPanelSection: (id) =>
         set((s) => ({
           sessionPanelSections: {
@@ -159,14 +201,18 @@ export const useUiPrefs = create<UiPrefsState>()(
     }),
     {
       name: 'mf:ui-prefs',
-      version: 7,
+      version: 8,
       partialize: partializeUiPrefs,
       merge: (persisted, current) => ({ ...current, ...sanitizeTranscriptPreference(persisted) }),
       migrate: (persisted, version): PersistedUiPrefs => {
-        if (version >= 6 || persisted === null || typeof persisted !== 'object') {
+        if (version >= 8 || persisted === null || typeof persisted !== 'object') {
           return sanitizeTranscriptPreference(persisted) as PersistedUiPrefs;
         }
         const next = { ...(persisted as Record<string, unknown>) };
+        if (version >= 6) {
+          migrateToV8(next);
+          return sanitizeTranscriptPreference(next) as PersistedUiPrefs;
+        }
         if (version < 2) {
           // v2 retired the bottom Context/Skills/Agents panel; its two keys are
           // dropped so a stale tab/height can never rehydrate into the new panel.
@@ -201,6 +247,7 @@ export const useUiPrefs = create<UiPrefsState>()(
         // collapsible sidebar sections and no right-click affordance remain.
         delete next.collapsedSidebarSections;
         delete next.rightClickHintDismissed;
+        migrateToV8(next);
         return sanitizeTranscriptPreference(next) as PersistedUiPrefs;
       },
     },

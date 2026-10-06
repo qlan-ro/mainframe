@@ -1,11 +1,10 @@
-import { useAuiState } from '@assistant-ui/react';
+import { ComposerPrimitive, useAuiState } from '@assistant-ui/react';
 import { useSideAwareThreadId } from '@/features/side-chat/side-chat-scope';
-import { AlertTriangleIcon, Loader2Icon } from 'lucide-react';
+import { AlertTriangleIcon, Loader2Icon, SquareIcon } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { useChatExtras } from '../runtime/chat-extras';
 import { CompactingPill } from '../messages/SystemMessage';
-import { useRotatingPhrase } from './use-rotating-phrase';
 import { formatElapsedSeconds } from '../format-duration';
 import { useRunElapsed } from './use-run-elapsed';
 export function LoadErrorBanner() {
@@ -44,22 +43,23 @@ export function ChatThreadLoadingSpinner() {
     </div>
   );
 }
-const RUNNING_PHRASES = ['Thinking…', 'Working…', 'Reasoning…', 'Crunching…', 'Composing…'] as const;
-const PHRASE_INTERVAL_MS = 2600;
-
+/**
+ * The status line above the composer while a turn runs: a pulsing `primary`
+ * dot, a fixed "Working", the one live clock, and a ghost Stop — the
+ * `ComposerPrimitive.Cancel`, so the composer's send slot shows send only.
+ */
 export function GeneratingIndicator() {
   const isRunning = useAuiState((s: { thread: { isRunning: boolean } }) => s.thread.isRunning);
-  const phrase = useRotatingPhrase(isRunning, RUNNING_PHRASES, PHRASE_INTERVAL_MS);
   const elapsed = useRunElapsed(isRunning);
   if (!isRunning) return null;
   return (
-    <div data-testid="chat-thread-running" className="flex items-center gap-2 px-1 pb-1.5">
+    <div data-testid="chat-thread-running" className="flex h-7 items-center gap-2 px-1">
       <span
         aria-hidden
         className="size-1.5 shrink-0 animate-pulse rounded-full bg-primary motion-reduce:animate-none"
       />
-      <span data-testid="chat-thread-running-text" className="text-xs font-medium text-muted-foreground shimmer">
-        {phrase}
+      <span data-testid="chat-thread-running-text" className="text-xs font-medium text-muted-foreground">
+        Working
       </span>
       {elapsed !== undefined && (
         <span
@@ -69,6 +69,19 @@ export function GeneratingIndicator() {
           {formatElapsedSeconds(elapsed)}
         </span>
       )}
+      <span className="flex-1" />
+      <ComposerPrimitive.Cancel asChild>
+        <Button
+          data-testid="chat-composer-cancel"
+          aria-label="Stop"
+          variant="ghost"
+          size="xs"
+          className="text-muted-foreground"
+        >
+          <SquareIcon fill="currentColor" />
+          Stop
+        </Button>
+      </ComposerPrimitive.Cancel>
     </div>
   );
 }

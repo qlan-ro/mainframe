@@ -29,9 +29,9 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks());
 
 describe('NotificationsPane', () => {
-  it('renders a top-level "Notifications" pane heading (was entirely missing)', () => {
+  it('draws no pane title of its own — the settings surface owns the one title', () => {
     render(<NotificationsPane port={31415} />);
-    expect(screen.getByRole('heading', { name: 'Notifications', level: 2 })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Notifications' })).toBeNull();
   });
   it('toggling a chat notification fires a leaf-only PUT and updates the store', () => {
     render(<NotificationsPane port={31415} />);

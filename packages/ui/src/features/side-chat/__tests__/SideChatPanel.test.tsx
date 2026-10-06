@@ -63,13 +63,6 @@ vi.mock('@/features/chat/thread/ChatThread', async () => {
   };
 });
 
-vi.mock('@/features/session-panel/SessionPanel', () => ({
-  SessionPanel: () => <div data-testid="side-chat-session-panel-stub" />,
-}));
-vi.mock('@/features/session-panel/use-session-panel-state', () => ({
-  useSessionPanelState: () => ({ hostRef: () => undefined }),
-}));
-
 vi.mock('../SideChatPanelHeader', () => ({
   SideChatPanelHeader: ({ parentChatId, sideChatId }: { parentChatId: string; sideChatId: string }) => (
     <div data-testid="header-stub" data-parent={parentChatId} data-side={sideChatId} />
@@ -152,20 +145,5 @@ describe('SideChatPanel — binding spike (UI rule 5)', () => {
     expect(panel).toHaveAttribute('data-placement', 'beside');
     expect(panel.style.flexGrow).toBe('0.3');
     expect(panel.style.minWidth).toBe('360px');
-  });
-
-  it('carries its own session rail, inside its own column', () => {
-    render(
-      <SideChatPanel
-        parentChatId="parent-1"
-        sideChatId="side-9"
-        controller={fakeController as never}
-        placement="beside"
-        frac={0.4}
-      />,
-    );
-
-    const panel = screen.getByTestId('side-chat-panel-parent-1');
-    expect(panel.contains(screen.getByTestId('side-chat-session-panel-stub'))).toBe(true);
   });
 });

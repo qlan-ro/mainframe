@@ -23,12 +23,16 @@
  * source: `packages/ui/src/features/sessions/new-thread/` + `DraftSessionRow.tsx`
  * + `SessionsNewButton.tsx`.
  *
- * Testid reference (verified against source):
- *   sessions-new-button              — the list header's "+" (SessionsNewButton.tsx); one
- *                                      click, whether or not a project filter is active
+ * Testid reference (verified against source; updated for the shell redesign,
+ * docs/plans/2026-10-04-mainframe-redesign-adoption.md D13/D14):
+ *   sidebar-action-new-thread        — the sidebar header's full-width "New session" row
+ *                                      (replaced the standalone `SessionsNewButton` pill);
+ *                                      one click, whether or not a project is in scope
  *   sessions-welcome                 — WelcomeState root (ChatEmptyState variant='welcome')
  *   welcome-project                  — the welcome screen's project trigger: "Choose a
- *                                      project" until one is picked, the ProjectChip after
+ *                                      project" until one is picked, the ProjectChip after.
+ *                                      Now the ONLY place a draft's project is named — the
+ *                                      chat header this used to share it with is gone (D7)
  *   welcome-project-picker           — the dropdown content it opens
  *   welcome-project-<id>             — one project row inside that dropdown
  *   sessions-draft-row               — the synthetic draft row's BUTTON (DraftSessionRow.tsx).
@@ -37,23 +41,19 @@
  *   sessions-draft-row-discard       — the ✕. It is a `SidebarMenuAction`, i.e. a SIBLING of
  *                                      `sessions-draft-row` inside the list item — not a
  *                                      descendant, so it can only be reached from the page.
- *   sidebar-project-scope-trigger     — the header's project scope dropdown trigger
- *                                      (replaced the inline project-row list, 2026-08-27)
- *   sidebar-project-scope-menu       — the dropdown's content root; opens on a trigger
- *                                      click, stays open across picks (multi-select), and
- *                                      closes only on Escape
- *   sidebar-project-<id>             — a project's checkbox item inside that menu
- *                                      (was a standalone row); toggles it in/out of scope
- *                                      and never switches the active session
- *   sidebar-project-all              — "All projects" checkbox item inside the menu;
- *                                      clears the whole scope, also without switching
- *                                      the active session
+ *   sessions-scope-avatar-<id>       — a project's avatar in the scope strip (ScopeStrip.tsx,
+ *                                      replaced `ProjectScopeSelector`'s dropdown) — always
+ *                                      mounted, no menu to open first. Click toggles it
+ *                                      in/out of scope; never switches the active session.
+ *                                      `aria-pressed` is "true"/"false" (`data-state` is the
+ *                                      Hint tooltip's, not the toggle's)
+ *   sessions-scope-label             — the strip's own summary: "All projects" (empty scope)
+ *                                      or "N of M"
  *   project-avatar                   — the coloured initial the draft row shows in "All" view.
  *                                      The draft row no longer prints the project NAME (v2
  *                                      DraftSessionRow renders a `ProjectAvatar`), so the
- *                                      project a draft belongs to is asserted on the chat
- *                                      header's chip instead.
- *   chat-header-project              — ChatCardHeaderDraft's project chip (names the project)
+ *                                      project a draft belongs to is asserted on the welcome
+ *                                      screen's `welcome-project` chip instead.
  *   sessions-welcome-suggestion-<i>  — one repo-derived suggestion row (SuggestionRow.tsx)
  *   sessions-firstrun                — FirstRunState root (zero projects)
  *   sessions-firstrun-add-project    — FirstRunState's "Add project…" CTA
@@ -61,34 +61,26 @@
  *   chat-composer-input / -send      — composer (usable pre-send on the draft)
  *   composer-model-select / composer-permission-mode-select — config selectors
  *
- * The project switcher is a count-collapsed vertical list now (ProjectSection.tsx,
- * VISIBLE_LIMIT = 3), not a width-measured pill row, so the old `expandProjectPills`
- * helper is gone — with ≤3 projects every row is rendered.
+ * The project switcher is the scope strip now (`ScopeStrip.tsx`, D14) — a row of
+ * avatars, always mounted, with no menu to open before toggling one.
  *
  * Not covered here (per the plan's "does NOT cover" list / out of scope for this
  * flow): DraftSessionRow's own unit-level styling states, provider-tuning
- * inheritance defaults (chat-header.spec.ts / composer.spec.ts territory).
+ * inheritance defaults (title-bar.spec.ts / composer.spec.ts territory).
  */
 
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sessionsSidebar, composer } from '../helpers/tauri/page-objects.js';
-import { closeMenus } from '../helpers/tauri/menus.js';
 import { DAEMON_PORT } from '../fixtures/daemon.js';
 import { TOAST } from '../helpers/tauri/testids.js';
 
 const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
 
-/** A project's checkbox item inside the (open) project scope menu. */
-function projectRow(page: Page, projectId: string): Locator {
-  return page.getByTestId(`sidebar-project-${projectId}`);
-}
-
-/** Open the header's project scope dropdown. */
-async function openProjectScope(page: Page): Promise<void> {
-  await page.getByTestId('sidebar-project-scope-trigger').click();
-  await expect(page.getByTestId('sidebar-project-scope-menu')).toBeVisible({ timeout: 5_000 });
+/** A project's avatar in the (always-mounted) scope strip. */
+function scopeAvatar(page: Page, projectId: string): Locator {
+  return page.getByTestId(`sessions-scope-avatar-${projectId}`);
 }
 
 /**
@@ -298,9 +290,9 @@ test.describe('§sessions-draft — All view welcome picker + draft row', () => 
     // The draft is a distinct synthetic row — no new sessions-row was created.
     await expect(page.getByTestId('sessions-row')).toHaveCount(rowsBefore);
     // In "All" view the row marks its project with a coloured initial, not the
-    // name (v2 DraftSessionRow → ProjectAvatar); the name is on the chat header.
+    // name (v2 DraftSessionRow → ProjectAvatar); the name is on the welcome
+    // screen's project chip (the chat header that used to share it is gone).
     await expect(draftRow.getByTestId('project-avatar')).toBeVisible();
-    await expect(page.getByTestId('chat-header-project')).toContainText(baseName(project.projectPath));
     // The welcome screen names the inherited project up front, and the
     // composer — which only the choose-project state would withhold — is
     // live for the first send.
@@ -413,12 +405,10 @@ test.describe('§sessions-draft — All view welcome picker + draft row', () => 
     // freshly-handed-off chat — whether ITS custom.projectId has propagated to
     // `useActiveIdentity()` yet is exactly the kind of client-side timing this
     // test isn't about.
-    await openProjectScope(page);
-    await projectRow(page, project.projectId).click();
-    await expect(projectRow(page, project.projectId)).toHaveAttribute('data-state', 'checked', {
+    await scopeAvatar(page, project.projectId).click();
+    await expect(scopeAvatar(page, project.projectId)).toHaveAttribute('aria-pressed', 'true', {
       timeout: 5_000,
     });
-    await closeMenus(page);
     await sessionsSidebar(page).newButton().click({ timeout: 10_000 });
     await expect(page.getByTestId('sessions-welcome')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('welcome-project')).toContainText(baseName(project.projectPath), {
@@ -476,12 +466,10 @@ test.describe('§sessions-draft — selected-project skip + no leak across New c
     const { page } = app;
     const sidebar = sessionsSidebar(page);
 
-    await openProjectScope(page);
-    await projectRow(page, projectA.projectId).click();
-    await expect(projectRow(page, projectA.projectId)).toHaveAttribute('data-state', 'checked', {
+    await scopeAvatar(page, projectA.projectId).click();
+    await expect(scopeAvatar(page, projectA.projectId)).toHaveAttribute('aria-pressed', 'true', {
       timeout: 5_000,
     });
-    await closeMenus(page);
 
     await sidebar.newButton().click();
 
@@ -493,27 +481,24 @@ test.describe('§sessions-draft — selected-project skip + no leak across New c
     await expect(page.getByTestId('welcome-project-picker')).toHaveCount(0);
     await expect(composer(page).input()).toBeVisible({ timeout: 10_000 });
     // The draft row's project marker only renders in "All" view (`showProject`,
-    // DraftSessionRow.tsx) — with a project selected the row omits it. The chat
-    // header's chip always names the draft's project (ChatCardHeaderDraft's
-    // `chat-header-project`), so assert there.
+    // DraftSessionRow.tsx) — with a project selected the row omits it. The
+    // welcome screen's `welcome-project` chip (asserted above) is the only
+    // place left that names the draft's project — the chat header it used to
+    // share that with is gone (D7).
     await expect(draftRow.getByTestId('project-avatar')).toHaveCount(0);
-    await expect(page.getByTestId('chat-header-project')).toContainText(baseName(projectA.projectPath));
 
-    // Clean up: discard, then clear the scope for the next test via the menu's
-    // "All projects" item (unchecking A's own item would work too — either
-    // clears it, since scope is multi-select now).
+    // Clean up: discard, then clear the scope for the next test — toggling A's
+    // own avatar off clears it, since scope is multi-select and empty = "All".
     await draftRow.hover();
     await page.getByTestId('sessions-draft-row-discard').click();
     await expect(page.getByTestId('sessions-draft-row')).toHaveCount(0, { timeout: 10_000 });
-    await openProjectScope(page);
-    await page.getByTestId('sidebar-project-all').click();
-    await closeMenus(page);
+    await scopeAvatar(page, projectA.projectId).click();
   });
 
   test('abandoning a draft in project A does not leak into a second New picking project B', async () => {
     const { page } = app;
     // Guarantee "All" view.
-    await expect(page.getByTestId('sessions-new-button')).toBeVisible();
+    await expect(page.getByTestId('sidebar-action-new-thread')).toBeVisible();
 
     const rowsBefore = await page.getByTestId('sessions-row').count();
     const chatsBeforeA = await fetchProjectChatIds(projectA.projectId);
@@ -521,8 +506,9 @@ test.describe('§sessions-draft — selected-project skip + no leak across New c
 
     // First New: pick project A. The draft row itself only carries a coloured
     // initial (both e2e projects are `mf-e2e-<hex>`, so the initial cannot tell
-    // them apart) — the chat header's chip is what names the draft's project.
-    const headerProject = page.getByTestId('chat-header-project');
+    // them apart) — the welcome screen's project chip is what names the draft's
+    // project (the chat header it used to share that with is gone, D7).
+    const headerProject = page.getByTestId('welcome-project');
     await openProjectlessDraft(page);
     await pickProjectFromWelcome(page, projectA.projectId);
     const draftRow = page.getByTestId('sessions-draft-row');
@@ -587,9 +573,9 @@ test.describe('§sessions-draft — ⌘N takes the same one-click path as "+"', 
   test("⌘N inherits the active session's project — no choose-project state, no new session yet", async () => {
     const { page } = app;
     const rowsBefore = await page.getByTestId('sessions-row').count();
-    // Guarantee "All" view (no project selected) — the trigger reads "All
-    // projects" when the scope is empty.
-    await expect(page.getByTestId('sidebar-project-scope-trigger')).toContainText('All projects');
+    // Guarantee "All" view (no project selected) — the scope strip's own
+    // summary reads "All projects" when the scope is empty.
+    await expect(sessionsSidebar(page).scopeLabel()).toHaveText('All projects');
 
     await page.keyboard.press('ControlOrMeta+n');
 
@@ -604,7 +590,6 @@ test.describe('§sessions-draft — ⌘N takes the same one-click path as "+"', 
     await expect(page.getByTestId('sessions-draft-row')).toBeVisible({ timeout: 10_000 });
     // Still no new chat created — the draft is unsent.
     await expect(page.getByTestId('sessions-row')).toHaveCount(rowsBefore);
-    await expect(page.getByTestId('chat-header-project')).toContainText(baseName(project.projectPath));
   });
 
   test('sending from the ⌘N-picked draft creates exactly one chat tied to the picked project', async () => {
@@ -627,12 +612,10 @@ test.describe('§sessions-draft — ⌘N takes the same one-click path as "+"', 
   test('with a project selected, ⌘N skips the project pick and seeds that project directly', async () => {
     const { page } = app;
 
-    await openProjectScope(page);
-    await projectRow(page, project.projectId).click();
-    await expect(projectRow(page, project.projectId)).toHaveAttribute('data-state', 'checked', {
+    await scopeAvatar(page, project.projectId).click();
+    await expect(scopeAvatar(page, project.projectId)).toHaveAttribute('aria-pressed', 'true', {
       timeout: 5_000,
     });
-    await closeMenus(page);
 
     await page.keyboard.press('ControlOrMeta+n');
 
@@ -640,15 +623,13 @@ test.describe('§sessions-draft — ⌘N takes the same one-click path as "+"', 
     await expect(draftRow).toBeVisible({ timeout: 10_000 });
     // No dropdown step — the draft resolves straight from the selected project.
     await expect(page.getByTestId('welcome-project-picker')).toHaveCount(0);
-    await expect(page.getByTestId('chat-header-project')).toContainText(baseName(project.projectPath));
+    await expect(page.getByTestId('welcome-project')).toContainText(baseName(project.projectPath));
 
-    // Clean up: discard, then clear the scope via "All projects".
+    // Clean up: discard, then clear the scope by toggling the avatar back off.
     await draftRow.hover();
     await page.getByTestId('sessions-draft-row-discard').click();
     await expect(page.getByTestId('sessions-draft-row')).toHaveCount(0, { timeout: 10_000 });
-    await openProjectScope(page);
-    await page.getByTestId('sidebar-project-all').click();
-    await closeMenus(page);
+    await scopeAvatar(page, project.projectId).click();
   });
 });
 

@@ -46,16 +46,14 @@ export function GeneralPane({ port }: { port: number }) {
   }
 
   return (
-    <div data-testid="settings-pane-general" className="flex flex-col gap-6 p-4">
-      <h2 className="text-lg font-semibold text-foreground">General</h2>
-
-      <section className="flex flex-col gap-3">
-        <h3 className="text-xs font-medium text-muted-foreground">Appearance</h3>
+    <div data-testid="settings-pane-general" className="flex flex-col">
+      <section className="flex flex-col gap-3 border-t border-border py-5 first:border-t-0 first:pt-0">
+        <h3 className="text-sm font-semibold text-foreground">Appearance</h3>
         <AppearanceControls />
       </section>
 
-      <section className="flex flex-col gap-3">
-        <h3 className="text-xs font-medium text-muted-foreground">Worktree directory</h3>
+      <section className="flex flex-col gap-3 border-t border-border py-5 first:border-t-0 first:pt-0">
+        <h3 className="text-sm font-semibold text-foreground">Worktree directory</h3>
         <p className="text-xs text-muted-foreground">Relative path where worktrees are created inside project roots.</p>
         <div className="flex items-center gap-2">
           <Input
@@ -74,8 +72,8 @@ export function GeneralPane({ port }: { port: number }) {
         {saveError !== null && <p className="text-xs text-destructive">{saveError}</p>}
       </section>
 
-      <section className="flex flex-col gap-3">
-        <h3 className="text-xs font-medium text-muted-foreground">Updates</h3>
+      <section className="flex flex-col gap-3 border-t border-border py-5 first:border-t-0 first:pt-0">
+        <h3 className="text-sm font-semibold text-foreground">Updates</h3>
         <PickerRow
           label="Channel"
           options={UPDATE_CHANNEL_OPTIONS}

@@ -6,9 +6,9 @@
  * Calls useAdapters + useComposerTuning ONCE and fans out resolved props to
  * all config controls so no child runs its own hooks.
  *
- * Left→right order: Agent+Model · Permission · Plan · Temporary · Worktree. Effort and
- * features are no longer their own chips — they live in each model row's
- * flyout inside the model menu (the Cursor pattern).
+ * Left→right order: Agent+Model · Permission · Plan · Temporary · Worktree ·
+ * context percent. Effort and features are no longer their own chips — they
+ * live in each model row's flyout inside the model menu (the Cursor pattern).
  * Renders nothing when every control is hidden (e.g. before chat/model loads).
  *
  * `variant="side"` (todo #344): the side-chat panel's composer offers no
@@ -26,6 +26,7 @@ import { PlanModeToggle } from './PlanModeToggle';
 import { TemporaryToggle } from './TemporaryToggle';
 import { WorktreePopover } from './WorktreePopover';
 import { TuningWarningDialog } from './TuningWarningDialog';
+import { ContextPercent } from './ContextPercent';
 
 export function ComposerToolbar({ variant = 'main' }: { variant?: 'main' | 'side' } = {}) {
   const adapters = useAdapters();
@@ -83,6 +84,7 @@ export function ComposerToolbar({ variant = 'main' }: { variant?: 'main' | 'side
       {adapter != null && <PlanModeToggle chat={chat} adapter={adapter} setPlanMode={setPlanMode} />}
       {variant !== 'side' && <TemporaryToggle chat={chat} draftMode={draftMode} setTemporary={setTemporary} />}
       {variant !== 'side' && <WorktreePopover chat={chat} hasMessages={hasMessages} busy={disabled} />}
+      <ContextPercent />
       <TuningWarningDialog
         pending={tuningWarning.pending}
         contextTokens={contextTokens}

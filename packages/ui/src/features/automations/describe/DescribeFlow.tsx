@@ -42,7 +42,7 @@ export function DescribeFlow() {
           </button>
         </Hint>
         <Wand2 size={16} className="text-primary" aria-hidden />
-        <span className="text-base font-semibold tracking-tight text-foreground">Describe your workflow</span>
+        <span className="text-base font-semibold tracking-tight text-foreground">Describe your automation</span>
       </div>
 
       <div className="flex shrink-0 gap-2.5 border-b border-border p-3.5">

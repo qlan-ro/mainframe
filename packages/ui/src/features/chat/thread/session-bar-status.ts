@@ -1,7 +1,6 @@
 /**
- * Context-usage derivation for the session panel's rail ring and Summary row.
- * It fed the ChatCardHeader's inline 8-cell meter until the right-sidebar
- * revamp removed that third indicator of one number.
+ * Context-usage derivation for the session panel's Summary row and the
+ * composer's context percent — one number, derived once.
  */
 import type { ChatThreadState } from '../controller/chat-thread-state';
 

@@ -15,8 +15,13 @@ export function estimateTokens(content: string): number {
 /** `3.2k` / `200k` / `999`. */
 export function formatTokenCount(tokens: number): string {
   if (tokens < 1000) return String(tokens);
+  // "1M" / "200K" — the same spelling `modelDisplayLabel` uses for the window.
+  if (tokens >= 1_000_000) {
+    const millions = (tokens / 1_000_000).toFixed(1);
+    return `${millions.endsWith('.0') ? millions.slice(0, -2) : millions}M`;
+  }
   const thousands = (tokens / 1000).toFixed(1);
-  return `${thousands.endsWith('.0') ? thousands.slice(0, -2) : thousands}k`;
+  return `${thousands.endsWith('.0') ? thousands.slice(0, -2) : thousands}K`;
 }
 
 /** `~3.2k` — the tilde marks an estimate rather than a measurement. */

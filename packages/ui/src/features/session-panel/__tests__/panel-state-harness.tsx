@@ -8,6 +8,7 @@
 import { renderHook, act } from '@testing-library/react';
 import { useUiPrefs } from '@/store/ui-prefs';
 import { useSessionPanelState } from '../use-session-panel-state';
+import { usePanelControl } from '../panel-control-store';
 
 type ResizeCallback = (entries: { contentRect: { width: number } }[]) => void;
 
@@ -41,9 +42,14 @@ export function installPanelHarness(): PanelHarness {
   const root = document.createElement('div');
   document.body.append(host, root);
   harness = { host, root, observed: [] };
-  // The store is a module-level singleton: an open panel or an expansion written
-  // by one case would otherwise leak into the next.
-  useUiPrefs.setState({ sessionPanelOpen: {}, sessionPanelSections: {} });
+  // The stores are module-level singletons: an open panel, a float, or a
+  // measured "fits" verdict written by one case would otherwise leak into the
+  // next. D8: one boolean for the whole panel — reset to the store's own
+  // declared default (open) so each case starts from the same place the real
+  // app boots into. panel-control-store's transient per-column state (D8/D20)
+  // resets to empty so no column starts out floating or pre-measured.
+  useUiPrefs.setState({ sessionPanelOpen: true, sessionPanelSections: {} });
+  usePanelControl.setState({ overlayOpen: {}, fits: {} });
   return harness;
 }
 

@@ -1,6 +1,7 @@
 /**
- * §session-tabs — chrome-style session tabs in the MainToolbar
- * (docs/plans/2026-08-08-session-tabs-and-workspace-files.md).
+ * §session-tabs — chrome-style session tabs in the title bar's chat column
+ * (docs/plans/2026-08-08-session-tabs-and-workspace-files.md, restyled by the
+ * shell redesign, docs/plans/2026-10-04-mainframe-redesign-adoption.md D9).
  *
  * UI-only, no recordings: tabs are pure chrome over the thread list. One
  * project + two chats; every activation path goes through the one membership
@@ -11,12 +12,21 @@
  * ONE tab, not two — the contract pinned below, taken from the store's own
  * unit tests (`session-tabs/__tests__/use-session-tabs-sync.preview.test.tsx`).
  *
+ * Every testid below is unchanged by the redesign (`SessionTabPill.tsx` kept
+ * them through the restyle — content-sized `rounded-md` pill, no more
+ * underline, the 14px lead slot now a `ProviderDot` instead of a
+ * `ProjectAvatar`). The pill's new split-pair form (`SessionTabPair.tsx`,
+ * `session-tabs-zone-group`) and the menu's "Open in Split"
+ * (`session-tab-ctx-open-split`) have no single-tab scenario here — they
+ * belong to the split/zone specs that actually open a second surface.
+ *
  * Testid reference (verified against packages/ui/src/features/session-tabs/):
- *   session-tabs             — the strip root (inside main-toolbar)
+ *   session-tabs             — the strip root (inside the title bar's chat column)
  *   session-tab-<threadId>   — a tab pill (role=tab, aria-selected, data-preview);
  *                              threadId is the chat id for daemon-created chats
  *   session-tab-close-<id>   — a tab's hover close button
- *   session-tab-pin-<id>     — a preview tab's hover pin ("Keep open")
+ *   session-tab-ctx-keep-open — the tab menu's "Keep open" (pins a preview; the hover
+ *                              pin is gone — a pill shows only its ✕)
  *   session-tabs-new         — the "+" button (the one-click new-session flow)
  *   sessions-row + data-chat-id — a sidebar session row (helpers/tauri/testids)
  *   sessions-welcome / welcome-project — the draft's welcome screen and its
@@ -60,7 +70,8 @@ test.describe('§session-tabs', () => {
 
   test('pinning the preview keeps it; the next activation opens its own preview', async () => {
     const { page } = app;
-    await page.getByTestId(`session-tab-pin-${chatB}`).click({ force: true });
+    await page.getByTestId(`session-tab-${chatB}`).click({ button: 'right' });
+    await page.getByTestId('session-tab-ctx-keep-open').click();
     await expect(page.getByTestId(`session-tab-${chatB}`)).toHaveAttribute('data-preview', 'false', {
       timeout: 10_000,
     });
@@ -96,7 +107,8 @@ test.describe('§session-tabs', () => {
     const { page } = app;
     // Pin what's on screen first — otherwise reopening chatB would just replace
     // the chatA preview and the strip would stay at one tab.
-    await page.getByTestId(`session-tab-pin-${chatA}`).click({ force: true });
+    await page.getByTestId(`session-tab-${chatA}`).click({ button: 'right' });
+    await page.getByTestId('session-tab-ctx-keep-open').click();
     await expect(page.getByTestId(`session-tab-${chatA}`)).toHaveAttribute('data-preview', 'false', {
       timeout: 10_000,
     });

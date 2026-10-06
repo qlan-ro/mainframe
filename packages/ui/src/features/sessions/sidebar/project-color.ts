@@ -27,6 +27,32 @@ const PROJECT_PALETTE: readonly string[] = [
 ];
 
 /**
+ * Vivid fills for FILLED avatars (white initial), index-aligned with
+ * PROJECT_PALETTE: same hue family per project, but saturated and pitched just
+ * dark enough to carry white. Darkening the identity hue toward black instead
+ * drained its chroma and read muddy.
+ */
+const PROJECT_FILL_PALETTE: readonly string[] = [
+  'oklch(0.58 0.24 262)', // blue
+  'oklch(0.60 0.25 27)', // red
+  'oklch(0.56 0.28 305)', // purple
+  'oklch(0.53 0.26 285)', // violet
+  'oklch(0.68 0.19 55)', // amber
+  'oklch(0.60 0.15 180)', // teal
+  'oklch(0.62 0.17 230)', // cyan
+  'oklch(0.62 0.22 145)', // green
+  'oklch(0.62 0.26 355)', // pink
+  'oklch(0.65 0.22 40)', // orange
+];
+
+const FILL_BY_COLOR = new Map(PROJECT_PALETTE.map((color, i) => [color, PROJECT_FILL_PALETTE[i] as string]));
+
+/** The vivid avatar fill for an identity colour from `projectColor` (passes anything else through). */
+export function projectFill(color: string): string {
+  return FILL_BY_COLOR.get(color) ?? color;
+}
+
+/**
  * djb2 string hash → unsigned 32-bit. Stable across runs/platforms (no Math.random,
  * no Date) so a project keeps the same color for its whole life.
  */

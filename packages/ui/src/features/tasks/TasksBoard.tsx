@@ -1,32 +1,39 @@
 /**
- * TasksBoard — the Tasks full-view modal shell.
+ * TasksBoard — the Tasks board shell, filling the body while `sidebarView` is
+ * 'tasks' (D1). The projects are the shared session scope's project SET
+ * (resolved by the caller — `TasksSurface`; empty scope = every project) —
+ * multi-project, same scope semantics as Chats/Automations. There is no
+ * picker of its own, so the board always agrees with the sidebar list and
+ * Chats' scope strip.
  *
- * Header: checklist glyph + "Tasks" + the project picker + active/done chip +
- * List/Board switch + New. The picker re-scopes this open of the modal only —
- * the host owns the scope, and the sidebar filter is never written.
- * Body: TasksFilterBar + TaskListView or TaskBoardView.
+ * Header: checklist glyph + "Tasks" + active/done chip + GitHub control (sole
+ * project only). Body: TasksFilterBar + TaskBoardView, over the MERGED todos
+ * of every project in `projectIds`. Board-only now (2026-10 redesign) — the
+ * List view and its switch are gone; the sidebar list IS the list, and "New
+ * task" lives there too (`TasksSidebarList`'s action row), not here.
  *
- * Loads the todos store itself: the always-mounted sidebar section that used to
- * own the load effect is gone (Tasks moved to the session-panel rail), and the
- * rail's TasksCard mounts only while its panel is open. The store's sequence
- * guard makes the two loaders safe, not racy.
+ * Loads every project's bucket itself (concurrently — the sidebar Tasks list
+ * loads its own scope too; the store's per-project sequence guard makes the
+ * loaders safe, not racy). The task edit modal is NOT mounted here — it is the
+ * one modal `TasksModalHost` owns, opened through `useTasksModal.openEdit`.
  *
- * data-testid="tasks-board-modal".
+ * `onClose` is optional: body mode (`TasksSurface`) passes none and the
+ * close button doesn't render — there is nothing to close, Tasks is a rail
+ * view now, not a dialog.
+ *
+ * data-testid="tasks-board".
  */
-import React, { useState } from 'react';
-import type { Project } from '@qlan-ro/mainframe-types';
-import { LayoutList, LayoutGrid, Plus, ListChecks, X } from 'lucide-react';
-import { ModalProjectPicker } from '@/features/project-scope/ModalProjectPicker';
+import React from 'react';
+import { ListChecks, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useTodosStore, selectProjectTodos } from './use-todos-store';
+import { useProjects } from '@/features/sessions/use-projects';
+import { useMergedTodos, useTodosStore } from './use-todos-store';
 import { matchesFilters, sortTodos, extractAllLabels } from './todos-filters';
 import type { TodoFilters } from './todos-filters';
 import { TasksFilterBar } from './TasksFilterBar';
-import { TaskListView } from './TaskListView';
 import { TaskBoardView } from './TaskBoardView';
-import { TaskEditModal } from './TaskEditModal';
+import { useTasksModal } from './use-tasks-modal';
 import { GitHubSyncControl } from './github/GitHubSyncControl';
 import { SyncRunBanner } from './github/SyncRunBanner';
 import { LinkRepoDialog } from './github/LinkRepoDialog';
@@ -39,38 +46,40 @@ import type { Todo } from '@/lib/api/todos';
 
 interface Props {
   port: number;
-  projectId: string;
-  projects: Project[];
-  /** Re-scopes this open of the modal; the sidebar filter is never written. */
-  onProjectChange: (projectId: string) => void;
+  projectIds: string[];
   onStartSession: (todo: Todo) => void;
-  onClose: () => void;
+  /** Renders the close button only when provided — body mode passes none. */
+  onClose?: () => void;
 }
 
-export function TasksBoard({
-  port,
-  projectId,
-  projects,
-  onProjectChange,
-  onStartSession,
-  onClose,
-}: Props): React.ReactElement {
-  const { todos, loading } = useTodosStore(selectProjectTodos(projectId));
-  const { load, filters, sort, view, move, remove, setFilters, setSort, setView } = useTodosStore();
-  const { init: initSync, load: loadSync, dialog: syncDialog } = useGitHubSyncStore();
-  const [editTodo, setEditTodo] = useState<Todo | null | undefined>(undefined);
+export function TasksBoard({ port, projectIds, onStartSession, onClose }: Props): React.ReactElement {
+  const { projects } = useProjects();
+  const multi = projectIds.length > 1;
+  // GitHub sync is a single-project feature — it never had a "several repos"
+  // shape, so the control and its init only run when the set resolves to one.
+  const singleProjectId = projectIds.length === 1 ? projectIds[0]! : null;
+
+  const { todos, loading } = useMergedTodos(projectIds);
+  const { load, filters, sort, move, remove, setFilters, setSort } = useTodosStore();
+  const { init: initSync, load: loadSync } = useGitHubSyncStore();
+  const openEdit = useTasksModal((s) => s.openEdit);
 
   React.useEffect(() => {
-    void load(port, projectId);
-    initSync(port, projectId);
-    void loadSync();
-  }, [port, projectId, load, initSync, loadSync]);
+    // Fired without awaiting each other — every project's load starts
+    // concurrently; the store's per-project sequence guard keeps a slow
+    // response from landing in the wrong bucket.
+    for (const id of projectIds) void load(port, id);
+  }, [port, projectIds, load]);
 
-  // An edit modal must not survive a re-scope holding the previous project's
-  // todo (the same reason TasksCard resets on the active project).
-  React.useEffect(() => setEditTodo(undefined), [projectId]);
+  React.useEffect(() => {
+    if (singleProjectId == null) return;
+    initSync(port, singleProjectId);
+    void loadSync();
+  }, [port, singleProjectId, initSync, loadSync]);
 
   const allLabels = extractAllLabels(todos);
+  // `todos` is already concatenated in scope-strip (projectIds) order, so the
+  // stable sort below keeps that as the tie-break for equal sort keys.
   const filtered = sortTodos(
     todos.filter((t) => matchesFilters(t, filters)),
     sort,
@@ -85,19 +94,17 @@ export function TasksBoard({
   const doneCount = todos.filter((t) => t.status === 'done').length;
 
   function handleEdit(todo: Todo) {
-    setEditTodo(todo);
-  }
-
-  function handleNew() {
-    setEditTodo(null);
+    openEdit({ projectId: todo.project_id, todoId: todo.id });
   }
 
   function handleDelete(id: string) {
-    void remove(port, id, projectId);
+    const todo = todos.find((t) => t.id === id);
+    if (!todo) return;
+    void remove(port, id, todo.project_id);
   }
 
-  function handleMove(port: number, id: string, status: Todo['status'], projectId: string) {
-    return move(port, id, status, projectId);
+  function handleMove(port: number, id: string, status: Todo['status'], moveProjectId: string) {
+    return move(port, id, status, moveProjectId);
   }
 
   function handleStart(todo: Todo) {
@@ -108,56 +115,30 @@ export function TasksBoard({
     // flex-1, not h-full: DialogContent only sets min/max-height (no explicit
     // height), so percentage sizing here doesn't resolve reliably — flex-grow
     // makes this fill available space regardless, threading through to
-    // TaskBoardView/TaskListView (already flex-1) and the board's columns.
-    <div data-testid="tasks-board-modal" className="flex flex-1 flex-col min-h-0 overflow-hidden">
+    // TaskBoardView (already flex-1) and the board's columns.
+    <div data-testid="tasks-board" className="flex flex-1 flex-col min-h-0 overflow-hidden">
       {/* Header band. Close sits at the far RIGHT — every dialog closes on the
           right (stock shadcn position); the old left-side X predates the port. */}
       <div className="flex h-[52px] shrink-0 items-center gap-4 border-b px-4">
         <ListChecks size={15} className="shrink-0 text-primary" aria-hidden />
         <span className="text-base font-semibold text-foreground">Tasks</span>
-        <ModalProjectPicker
-          surface="tasks-board"
-          projectId={projectId}
-          projects={projects}
-          onSelect={(id) => {
-            if (id !== null) onProjectChange(id);
-          }}
-        />
         <Badge variant="secondary" className="font-mono text-xs font-normal text-muted-foreground">
           {activeCount} active · {doneCount} done
         </Badge>
 
-        {/* List / Board view switch */}
-        <Tabs value={view} onValueChange={(v) => setView(v as 'list' | 'board')} className="ml-auto">
-          <TabsList className="h-8">
-            <TabsTrigger value="list" data-testid="tasks-view-list">
-              <LayoutList />
-              List
-            </TabsTrigger>
-            <TabsTrigger value="board" data-testid="tasks-view-board">
-              <LayoutGrid />
-              Board
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
+        {/* Pushes the GitHub control / close button to the right — the
+            List/Board switch and "New task" button used to do this; both
+            moved out (board-only now; "New task" is the sidebar's action row). */}
+        <span className="ml-auto" />
 
-        <GitHubSyncControl />
+        {/* GitHub sync — a single-repo feature; hidden for an empty/multi scope. */}
+        {singleProjectId != null && <GitHubSyncControl />}
 
-        {/* New task */}
-        <Button size="sm" data-testid="tasks-board-new" onClick={handleNew}>
-          <Plus />
-          New task
-        </Button>
-
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          data-testid="tasks-board-close"
-          onClick={onClose}
-          aria-label="Close (Esc)"
-        >
-          <X />
-        </Button>
+        {onClose != null && (
+          <Button variant="ghost" size="icon-sm" data-testid="tasks-board-close" onClick={onClose} aria-label="Close">
+            <X />
+          </Button>
+        )}
       </div>
 
       <SyncRunBanner />
@@ -172,8 +153,9 @@ export function TasksBoard({
         todos={todos}
       />
 
-      {/* Body — only blank to the loading state on the first load; a refetch
-          (e.g. reopening the modal) keeps the previous list rendered. */}
+      {/* Body — only blank to the loading state on the first load (no todos
+          yet for ANY project in scope); a refetch (e.g. reopening the modal)
+          keeps the previous list rendered. */}
       {loading && todos.length === 0 ? (
         <div
           data-testid="tasks-board-loading"
@@ -181,21 +163,13 @@ export function TasksBoard({
         >
           Loading tasks…
         </div>
-      ) : view === 'list' ? (
-        <TaskListView
-          port={port}
-          projectId={projectId}
-          todos={filtered}
-          filters={filters as TodoFilters}
-          onEdit={handleEdit}
-          onStartSession={handleStart}
-        />
       ) : (
         <TaskBoardView
           port={port}
-          projectId={projectId}
           todos={filtered}
           filtersActive={filtersActive}
+          projects={projects}
+          multi={multi}
           onEdit={handleEdit}
           onDelete={handleDelete}
           onStartSession={handleStart}
@@ -203,31 +177,24 @@ export function TasksBoard({
         />
       )}
 
-      {/* Edit / Create modal */}
-      {editTodo !== undefined && (
-        <TaskEditModal
-          port={port}
-          projectId={projectId}
-          todo={editTodo}
-          allTodos={todos}
-          allLabels={allLabels}
-          onClose={() => setEditTodo(undefined)}
-          onStartSession={(id) => {
-            const todo = todos.find((t) => t.id === id);
-            if (todo) onStartSession(todo);
-            setEditTodo(undefined);
-          }}
-        />
-      )}
-
       {/* GitHub sync dialogs — one mount each, driven by the sync store's
           `dialog`. LinkRepoDialog is the exception: it refetches the project's
           remotes on mount, so it is gated here rather than self-gated. */}
-      {syncDialog?.kind === 'link' && <LinkRepoDialog />}
+      <TasksBoardGitHubDialogs />
+    </div>
+  );
+}
+
+/** Split out purely to keep the component body's line count down. */
+function TasksBoardGitHubDialogs(): React.ReactElement {
+  const dialog = useGitHubSyncStore((s) => s.dialog);
+  return (
+    <>
+      {dialog?.kind === 'link' && <LinkRepoDialog />}
       <ImportIssuesDialog />
       <PublishTaskDialog />
       <SyncReportDialog />
       <UpdateTokenDialog />
-    </div>
+    </>
   );
 }

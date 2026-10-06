@@ -1,26 +1,14 @@
-import { useEffect, useState } from 'react';
 import type { TurnDisclosure } from '../../view-model/compact/turn-types';
 import { turnDuration } from '../../view-model/compact/turn-timing';
 import { formatDurationMs } from '../../format-duration';
 
+/**
+ * "Worked for X" once the turn settles. While the turn RUNS this renders
+ * nothing: the footer's status line is the one live timer (D18), and a
+ * second clock ticking inside the transcript would contradict it.
+ */
 export function CompactTurnElapsed({ turn }: { turn: TurnDisclosure }) {
-  const [now, setNow] = useState(Date.now);
-  const ticking =
-    turn.running &&
-    turn.timing?.startedAtMs !== undefined &&
-    turn.timing.completedAtMs === undefined &&
-    turn.timing.durationMs === undefined;
-  useEffect(() => {
-    if (!ticking) return;
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, [ticking]);
-  const duration = turnDuration(turn.timing, turn.running, now);
-  return (
-    <>
-      {duration === undefined
-        ? 'Work details'
-        : `${turn.running ? 'Working' : 'Worked'} for ${formatDurationMs(duration)}`}
-    </>
-  );
+  if (turn.running) return null;
+  const duration = turnDuration(turn.timing, false, 0);
+  return <>{duration === undefined ? 'Work details' : `Worked for ${formatDurationMs(duration)}`}</>;
 }

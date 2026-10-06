@@ -1,77 +1,128 @@
 /**
- * §tasks — Tasks feature specs: quick-create, board (list/board views), the
- * session panel's Tasks card, full edit modal, filters/sort, and start-session.
+ * §tasks — Tasks feature specs: quick-create, the board, the sidebar's "New
+ * task" row, the create form's avatar project chips, the session panel's
+ * Tasks card, full edit modal, filters/sort, and start-session.
  *
  * Scope: docs/plans/2026-07-03-tauri-e2e-test-plan.md spec #29 (Cluster D).
  * UI-only — no agent-turn recording needed (Tasks live entirely in daemon REST
  * + a zustand store; no CLI/adapter involvement).
  *
+ * BOARD-ONLY since the 2026-10 redesign (verified against source): the List
+ * view, the List/Board switch (`tasks-view-list`/`tasks-view-board`), and the
+ * board header's own "New task" button (`tasks-board-new`) are ALL GONE —
+ * `TaskListView`/`TaskListRow`/`TaskRowActions` were deleted outright. The
+ * body always renders `TaskBoardView`'s three columns; `tasks-list-row-*`,
+ * `tasks-list-empty`, `tasks-list-group-<status>` are retired, do not
+ * re-assert. The one remaining per-task row elsewhere is the sidebar's own
+ * compact list (`tasks-sidebar-row-<n>`, unchanged) — the board's cards are
+ * `tasks-card-<n>` (also the GitHub pairing glyph's only prefix now;
+ * `PairGlyph`/`UnlinkPairButton` dropped their `surface` prop since the list
+ * variant they used to also serve is gone).
+ *
  * Entry points (verified against source):
  *   ControlOrMeta+Shift+T (window keydown, TasksModalHost.tsx)      → tasks-quick-dialog
- *   sidebar-action-kanban → dispatches `mf:open-tasks` (features/sessions/SidebarActions.tsx;
- *     succeeded the icon-only `sidebar-tasks`, which died with the header icon cluster)
- *     → tasks-board-modal. This sidebar-footer button survived the move below.
- *   session-panel-rail-tasks → the session panel's Tasks CARD
- *     (features/session-panel/TasksCard.tsx) — where the left sidebar's Tasks
- *     section went. It is opt-in: `store/ui-prefs.ts` opens the Session card
- *     only, so the rail button is the way in and a second click closes it again.
+ *   shell-rail-tasks → switches BOTH the sidebar (`TasksSidebarList`) and the
+ *     body (`TasksSurface`, the `SidebarInset` content while `sidebarView` is
+ *     'tasks', D1) to Tasks. The board is body content now, not a dialog
+ *     opened by a second click — `tasks-board` renders directly, merging every
+ *     project in the shared session scope (the ONE shared `ScopeStrip`;
+ *     multi-project, same semantics as Chats/Automations — empty scope = every
+ *     project). There is no project pick-list fallback any more: with more
+ *     than one project in scope, each card/row gets a project avatar
+ *     (`tasks-card-project-<n>` / `tasks-sidebar-row-project-<n>`) and the
+ *     GitHub sync control (`tasks-github-link`/`-pill`) hides (it is a
+ *     single-repo feature).
+ *   tasks-sidebar-new → the sidebar's "New task" action row (same shape as
+ *     Chats' "New session" row — ONE CLICK, always) — the single entry point
+ *     for creating a task now; it opens the full create form
+ *     (`TaskEditModal`, `tasks-edit-*`) seeded with the scope's default
+ *     project (`resolveDefaultTaskProject`), not an inline input. The old
+ *     inline quick-add input that used to live at this same testid, and its
+ *     project chooser chip (`tasks-sidebar-new-project`/`-project-<id>`), are
+ *     BOTH GONE — retired with the board's own "New task" button in the same
+ *     pass. (⌘⇧T's QuickTaskDialog, a third, separate creation path, is
+ *     unaffected and still `tasks-quick-dialog`.)
+ *   title-bar-details → the session panel's ONE switch now (the floating rail
+ *     died with the redesign, D20) — opening the panel renders every section
+ *     together, including the Tasks section (features/session-panel/TasksSection.tsx,
+ *     `session-panel-card-tasks`) — where the left sidebar's OLD Tasks section
+ *     went before this redesign added the sidebar list back as a second, separate
+ *     surface (see below). The session panel's Tasks card keeps its OWN inline
+ *     quick-add (`session-panel-tasks-new`, `use-quick-add-todo.ts`) — that one
+ *     did not move, only the separate sidebar list's did.
  *
- * ── The sidebar section became a panel card ──────────────────────────────────
- * `tasks-sidebar-section` / `-new` / `-empty` / `-row-<n>` / `-overflow` /
- * `-section-jump` are GONE from the product (no `tasks-sidebar` testid is emitted
- * anywhere any more). Their successors live on the card: `session-panel-tasks-new`,
- * `session-panel-tasks-empty`, `session-panel-tasks-no-project` and
- * `session-panel-task-row-<number>`. The card lists EVERY active task — the old
- * VISIBLE_TASKS = 5 cap and its "N more" residual row have no successor, so the
- * overflow scenario below pins the uncapped list instead of being deleted.
+ * ── Three surfaces, and `tasks-sidebar-*` is reused for a NEW one ──
+ * The pre-redesign history: a left-sidebar Tasks SECTION (`tasks-sidebar-section`
+ * / `-new` / `-empty` / `-row-<n>` / `-overflow` / `-section-jump`) was deleted and
+ * replaced by the session panel's Tasks CARD. Those ids are still gone — do not
+ * revive them. The shell redesign then added a THIRD surface, a compact sidebar
+ * Tasks LIST (`features/tasks/sidebar-list/TasksSidebarList.tsx`, reached via
+ * `shell-rail-tasks`), which happens to reuse the retired `tasks-sidebar-*`
+ * PREFIX for an entirely different, new component tree:
+ * `tasks-sidebar-new` (now the "New task" action row — see above),
+ * `tasks-sidebar-row-<n>`, `tasks-sidebar-cycle-<n>`, `tasks-sidebar-start-<n>`,
+ * `tasks-sidebar-edit-<n>`, `tasks-sidebar-group-toggle-<label>`,
+ * `tasks-sidebar-empty`. None of these is the old section reborn — this
+ * spec does not drive the new list's rows directly (it is covered by its own
+ * unit tests); the session panel's Tasks SECTION (`session-panel-tasks-new`,
+ * `session-panel-tasks-empty`, `session-panel-tasks-no-project`,
+ * `session-panel-task-row-<number>`) is still this file's main board-adjacent
+ * coverage, unchanged by the redesign. The card lists EVERY active task — the
+ * old VISIBLE_TASKS = 5 cap and its "N more" residual row have no successor, so
+ * the overflow scenario below pins the uncapped list instead of being deleted.
  *
- * The card sits on the chat surface's right edge and only stacks inline when the
- * chat host clears `INLINE_MIN_WIDTH` (1468, panel-mode.ts); narrower, a rail
- * click FLOATS it and any outside pointerdown light-dismisses it — which every
- * board/dialog interaction here would do. Hence the explicit wide viewport in
- * `beforeAll`: the card has to be inline to survive the tests that drive other
- * surfaces around it.
+ * The panel sits on the chat surface's right edge and only docks inline when the
+ * chat host clears `INLINE_MIN_WIDTH` (1044, panel-mode.ts); narrower,
+ * `title-bar-details` FLOATS it and any outside pointerdown light-dismisses it —
+ * which every board/dialog interaction here would do. Hence the explicit wide
+ * viewport in `beforeAll`: the panel has to be inline to survive the tests that
+ * drive other surfaces around it.
  *
  * TWO TaskEditModal implementations are still in play, and both are exercised
- * here: the board opens `features/tasks/TaskEditModal.tsx` (the quick dialog is a
- * third body of its own, QuickTaskDialog.tsx), while the Tasks card opens
- * `features/tasks/sidebar/TaskEditModal.tsx` — the one the left-sidebar section
- * used to open, which moved into the card with it. They carry
- * the same `tasks-edit-*` testids, so the assertions below are shared; only their
- * select option labels differ slightly (both run options through
- * `replace('_', ' ')`, identical for the underscore-free priorities).
+ * here: the board (via the sidebar's "New task" row) opens
+ * `features/tasks/sidebar/TaskEditModal.tsx`, the SAME file the Tasks card
+ * opens — there is only one `TaskEditModal` left (the board-local one was
+ * never a separate file; `use-tasks-modal.ts`'s single `openEdit` target is
+ * what both callers share). The quick dialog is a third body of its own,
+ * `QuickTaskDialog.tsx`. Project retargeting in the create form is now avatar
+ * chips (`TaskProjectChips`, `tasks-edit-project` group + `tasks-edit-project-<id>`
+ * per avatar, `aria-checked`) rather than a `Select` dropdown — `TaskProjectPicker`
+ * is deleted.
  *
  * Testid reference (verified against source):
  *   tasks-quick-dialog / tasks-quick-feature / tasks-quick-bug / tasks-quick-title /
  *     tasks-quick-body / tasks-quick-priority-<low|medium|high> / tasks-quick-create
- *   tasks-board-modal / tasks-board-close / tasks-view-list / tasks-view-board /
- *     tasks-board-new / tasks-board-loading
+ *   tasks-board (body content, D1/D7 — no `-modal` suffix, no `-close` button:
+ *     TasksSurface passes TasksBoard no `onClose`) / tasks-board-loading
+ *   tasks-sidebar-new — the sidebar's "New task" action row (opens the create form)
  *   tasks-filter-search / tasks-filter-clear / tasks-filter-<type|priority|label> /
  *     tasks-filter-opt-<value> / tasks-sort-menu / tasks-sort-option-<priority|number|updated|type>
- *   tasks-list-empty / tasks-list-group-<open|in_progress|done> / tasks-list-row-<n> /
- *     tasks-list-row-expand-<n> / tasks-list-row-cycle-<n> / tasks-list-row-type-<n> /
- *     tasks-list-row-start-<n> / tasks-list-row-edit-<n> / tasks-list-row-delete-<n> /
- *     tasks-list-row-start-cta-<n> / tasks-list-row-edit-cta-<n>
- *   tasks-column-<status> / tasks-card-<n>
+ *   tasks-column-<status> / tasks-card-<n> / tasks-card-project-<n> /
+ *     tasks-card-start-<n> / tasks-card-edit-<n> / tasks-card-delete-<n>
  *   tasks-edit-title / tasks-edit-body / tasks-edit-type / tasks-edit-priority /
  *     tasks-edit-status / tasks-edit-assignees / tasks-edit-milestone / tasks-edit-delete /
- *     tasks-edit-start / tasks-edit-cancel / tasks-edit-save
+ *     tasks-edit-start / tasks-edit-cancel / tasks-edit-save /
+ *     tasks-edit-project (group, create-mode + multi-project scope only) /
+ *     tasks-edit-project-<id> (each avatar, aria-checked)
  *   tasks-label-pill-<label> / tasks-label-remove-<label> / tasks-label-input
  *   tasks-dep-pill-<n> / tasks-dep-remove-<n> / tasks-dep-input / tasks-dep-opt-<n>
  *   tasks-attach-add / tasks-attach-<id> (root) / tasks-attach-delete-<id>
- *   session-panel-rail-tasks / session-panel-card-tasks / session-panel-card-close-tasks
- *     — the rail toggle, the card, and its header X (features/session-panel/)
+ *   title-bar-details / session-panel-card-tasks
+ *     — the panel's one switch, and the Tasks section it always renders once
+ *     open (there is no per-card toggle or close any more, D20)
  *   session-panel-tasks-new / session-panel-tasks-empty /
- *     session-panel-tasks-no-project / session-panel-task-row-<n> — the card's body
+ *     session-panel-tasks-no-project / session-panel-task-row-<n> — the section's body
  *
- * Deliberately deleted (do not re-assert): every `tasks-sidebar-*` id. The v2
- * rebuild had already dropped `tasks-sidebar-expand`, `-section-toggle` and
- * `-view-all`; the section itself is gone now, so the remaining five ids went
- * with it. The board is still reached via `sidebar-action-kanban`.
+ * Deliberately deleted (do not re-assert): `tasks-sidebar-expand`,
+ * `-section-toggle`, `-view-all`, `-section`, `-overflow`, `-section-jump` — the
+ * OLD left-sidebar Tasks section's ids, from before either the panel card or the
+ * new sidebar list existed; `tasks-sidebar-open-board` / `tasks-board-modal`
+ * / `tasks-board-close`, retired when the board moved into the body (D1/D7;
+ * see the header note above); and, from THIS redesign, `tasks-view-list` /
+ * `tasks-view-board` / `tasks-board-new` / `tasks-list-row-*` / `tasks-list-empty`
+ * / `tasks-list-group-<status>` / `tasks-sidebar-new-project` / `-project-<id>`.
  *
  * v2 interaction contracts that changed how these controls are driven:
- *   - The List/Board switch is a Radix `Tabs` (TasksBoard.tsx), so the selected
- *     marker is `data-state="active"` — `aria-pressed` is gone.
  *   - FilterMenu/SortMenu are native `DropdownMenu`s whose items `preventDefault()`
  *     on select, so the menu STAYS OPEN across picks. Never re-click the trigger to
  *     "reopen" it (that toggles it shut); pick again in place, and close with Escape
@@ -88,6 +139,12 @@
  *   - The hidden `<input type="file">` in TaskAttachments has no data-testid; driven
  *     via `page.waitForEvent('filechooser')` + the `tasks-attach-add` button, matching
  *     composer.spec.ts's existing pattern for the same problem.
+ *   - `tasks-card-<n>`/`tasks-sidebar-row-<n>` key by the todo's `number` alone,
+ *     which is unique PER PROJECT, not globally — two projects can each have a
+ *     "#1", and a merged (multi-project) board then renders two DOM nodes
+ *     sharing the same data-testid. The multi-project scenario below works
+ *     around it by asserting on title text and avatar PRESENCE (a `^=` prefix
+ *     locator) rather than a specific numbered testid.
  *
  * Task-numbering note: todo `number` is `MAX(number)+1` PER PROJECT (todos plugin,
  * scoped to remaining rows) — deletions are deferred to the END of this file so
@@ -110,24 +167,15 @@ async function openQuickDialog(page: Page): Promise<void> {
 }
 
 /**
- * Show the session panel's Tasks card. Opt-in (ui-prefs opens the Session card
- * alone), and the rail button TOGGLES — clicking it while the card is up would
- * close it — so this only clicks when the card is absent.
+ * Show the session panel, which always renders the Tasks section once open —
+ * there is no per-card toggle any more (D20). `title-bar-details` TOGGLES the
+ * WHOLE panel — clicking it while the panel is up would close it — so this
+ * only clicks when the panel is absent.
  */
 async function openTasksCard(page: Page): Promise<void> {
   const card = page.getByTestId('session-panel-card-tasks');
-  if ((await card.count()) === 0) await page.getByTestId('session-panel-rail-tasks').click();
+  if ((await card.count()) === 0) await page.getByTestId('session-panel-toggle').click();
   await expect(card).toBeVisible({ timeout: 10_000 });
-}
-
-async function openBoard(page: Page): Promise<void> {
-  await page.getByTestId('sidebar-action-kanban').click();
-  await page.getByTestId('tasks-board-modal').waitFor({ timeout: 10_000 });
-}
-
-async function closeBoard(page: Page): Promise<void> {
-  await page.getByTestId('tasks-board-close').click();
-  await expect(page.getByTestId('tasks-board-modal')).toHaveCount(0, { timeout: 5_000 });
 }
 
 /** Select an option from a shadcn/Radix <Select> by its visible display text. */
@@ -152,8 +200,8 @@ test.describe('§tasks', () => {
 
   test.beforeAll(async () => {
     app = await launchTauriApp();
-    // Wide enough for the session panel's Tasks card to stack INLINE (host must
-    // clear INLINE_MIN_WIDTH = 1468); at the harness default of 1280 the card
+    // Wide enough for the session panel to dock INLINE (host must clear
+    // INLINE_MIN_WIDTH = 1044); at the harness default of 1280 the panel
     // only floats, and the first board click would light-dismiss it.
     await app.page.setViewportSize({ width: 2100, height: 900 });
     project = await createTauriProject(app.page);
@@ -167,13 +215,33 @@ test.describe('§tasks', () => {
     await closeTauriApp(app);
   });
 
+  /**
+   * The board is the body now (D1, TasksSurface) — the rail switches
+   * `sidebarView` and the body renders directly, merging every project in
+   * the shared scope (empty throughout this file until the multi-project
+   * scenario at the end, so it is just `project`'s own tasks until then).
+   */
+  async function openBoard(page: Page): Promise<void> {
+    await page.getByTestId('shell-rail-tasks').click();
+    await page.getByTestId('tasks-board').waitFor({ timeout: 10_000 });
+  }
+
+  /** Tasks is a rail view, not a dialog — there is no close button any more;
+   *  "closing" the board means picking another view. */
+  async function closeBoard(page: Page): Promise<void> {
+    await page.getByTestId('shell-rail-chats').click();
+    await expect(page.getByTestId('tasks-board')).toHaveCount(0, { timeout: 5_000 });
+  }
+
   test('board and the Tasks card show empty state before any tasks exist', async () => {
     const { page } = app;
 
     await openBoard(page);
-    const empty = page.getByTestId('tasks-list-empty');
-    await expect(empty).toBeVisible({ timeout: 10_000 });
-    await expect(empty).toContainText('No tasks yet');
+    // Board-only: the empty state is per-column now (TaskColumn's own
+    // `-empty` placeholder), not one list-wide `tasks-list-empty` banner.
+    const emptyColumn = page.getByTestId('tasks-column-open-empty');
+    await expect(emptyColumn).toBeVisible({ timeout: 10_000 });
+    await expect(emptyColumn).toContainText('Nothing here');
     await closeBoard(page);
 
     // The Tasks card replaced the left-sidebar section; a project is active, so
@@ -199,19 +267,19 @@ test.describe('§tasks', () => {
     await expect(page.getByTestId('tasks-quick-dialog')).toHaveCount(0, { timeout: 5_000 });
 
     await openBoard(page);
-    const row = page.getByTestId('tasks-list-row-1');
-    await expect(row).toBeVisible({ timeout: 10_000 });
-    await expect(row).toContainText('Fix the login redirect');
+    const card = page.getByTestId('tasks-card-1');
+    await expect(card).toBeVisible({ timeout: 10_000 });
+    await expect(card).toContainText('Fix the login redirect');
     await closeBoard(page);
   });
 
-  // ─── Board "New task" → full-field create ──────────────────────────────
+  // ─── Sidebar "New task" → full-field create ────────────────────────────
 
-  test('board New-task button creates task #2 via the full edit modal', async () => {
+  test('sidebar "New task" row creates task #2 via the full edit modal', async () => {
     const { page } = app;
     await openBoard(page);
 
-    await page.getByTestId('tasks-board-new').click();
+    await page.getByTestId('tasks-sidebar-new').click();
     const title = page.getByTestId('tasks-edit-title');
     await title.waitFor({ timeout: 5_000 });
     // Create mode: no delete button, Save button reads "Create task".
@@ -225,93 +293,52 @@ test.describe('§tasks', () => {
     await page.getByTestId('tasks-edit-save').click();
 
     await expect(page.getByTestId('tasks-edit-title')).toHaveCount(0, { timeout: 5_000 });
-    const row = page.getByTestId('tasks-list-row-2');
-    await expect(row).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByTestId('tasks-list-row-type-2')).toHaveText('bug');
-    await expect(page.getByTestId('tasks-list-group-in_progress')).toBeVisible();
-    await closeBoard(page);
-  });
-
-  test('sidebar tasks button opens the board populated with both seeded tasks', async () => {
-    const { page } = app;
-    await page.getByTestId('sidebar-action-kanban').click();
-    const modal = page.getByTestId('tasks-board-modal');
-    await expect(modal).toBeVisible({ timeout: 10_000 });
-    await expect(modal).toContainText('2 active');
-    await expect(modal).toContainText('0 done');
-    await expect(page.getByTestId('tasks-list-row-1')).toBeVisible();
-    await expect(page.getByTestId('tasks-list-row-2')).toBeVisible();
-    await closeBoard(page);
-  });
-
-  // ─── List / board view toggle ───────────────────────────────────────────
-
-  // The switch is a Radix `Tabs` (List+Trigger only) since the v2 conversion, so
-  // the selected segment is marked by `data-state`, not the hand-rolled
-  // `aria-pressed` the old toggle pair carried.
-  test('board: list/board view toggle switches TaskListView and TaskBoardView', async () => {
-    const { page } = app;
-    await openBoard(page);
-
-    await page.getByTestId('tasks-view-board').click();
-    await expect(page.getByTestId('tasks-view-board')).toHaveAttribute('data-state', 'active');
-    await expect(page.getByTestId('tasks-view-list')).toHaveAttribute('data-state', 'inactive');
-    await expect(page.getByTestId('tasks-column-open').getByTestId('tasks-card-1')).toBeVisible({
-      timeout: 5_000,
-    });
+    const card = page.getByTestId('tasks-card-2');
+    await expect(card).toBeVisible({ timeout: 10_000 });
+    // TaskCard has no per-field type testid — assert its text instead.
+    await expect(card).toContainText('bug');
     await expect(page.getByTestId('tasks-column-in_progress').getByTestId('tasks-card-2')).toBeVisible();
-
-    await page.getByTestId('tasks-view-list').click();
-    await expect(page.getByTestId('tasks-view-list')).toHaveAttribute('data-state', 'active');
-    await expect(page.getByTestId('tasks-list-row-1')).toBeVisible();
-    await expect(page.getByTestId('tasks-list-row-2')).toBeVisible();
     await closeBoard(page);
   });
 
-  // ─── Status cycle ────────────────────────────────────────────────────────
-
-  test('list row: status cycle button cycles open → in_progress → done → open', async () => {
+  test("the rail's Tasks view shows the board populated with both seeded tasks", async () => {
     const { page } = app;
     await openBoard(page);
-
-    await expect(page.getByTestId('tasks-list-group-open')).toBeVisible();
-    await page.getByTestId('tasks-list-row-1').hover();
-    await page.getByTestId('tasks-list-row-cycle-1').click(); // open -> in_progress
-    await expect(page.getByTestId('tasks-list-row-1')).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByTestId('tasks-list-group-open')).toHaveCount(0);
-
-    await page.getByTestId('tasks-list-row-1').hover();
-    await page.getByTestId('tasks-list-row-cycle-1').click(); // in_progress -> done
-    // 'done' is collapsed by default — the row unmounts.
-    await expect(page.getByTestId('tasks-list-row-1')).toHaveCount(0, { timeout: 5_000 });
-    await page.getByTestId('tasks-list-group-done').click(); // expand
-    await expect(page.getByTestId('tasks-list-row-1')).toBeVisible({ timeout: 5_000 });
-
-    await page.getByTestId('tasks-list-row-1').hover();
-    await page.getByTestId('tasks-list-row-cycle-1').click(); // done -> open
-    await expect(page.getByTestId('tasks-list-group-open')).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByTestId('tasks-list-row-1')).toBeVisible();
-
+    const board = page.getByTestId('tasks-board');
+    await expect(board).toContainText('2 active');
+    await expect(board).toContainText('0 done');
+    await expect(page.getByTestId('tasks-card-1')).toBeVisible();
+    await expect(page.getByTestId('tasks-card-2')).toBeVisible();
     await closeBoard(page);
   });
 
-  // ─── Row expand ──────────────────────────────────────────────────────────
+  // ─── Status cycle (sidebar row, reflected on the board) ─────────────────
 
-  test('list row: expand reveals body + Start/Edit CTAs, collapse hides them', async () => {
+  // The List/Board switch is gone — the board is the only view — so the
+  // per-task cycle control lives in the sidebar's compact list now
+  // (TaskSidebarRow, unchanged by this redesign); cycling it is asserted
+  // against the board's column membership rather than a list group.
+  test('sidebar row: status cycle button cycles open → in_progress → done → open, reflected on the board', async () => {
     const { page } = app;
     await openBoard(page);
 
-    await page.getByTestId('tasks-list-row-expand-1').click();
-    await expect(page.getByText('Redirect loops back to /login after SSO callback.')).toBeVisible({
+    await expect(page.getByTestId('tasks-column-open').getByTestId('tasks-card-1')).toBeVisible();
+    await page.getByTestId('tasks-sidebar-cycle-1').click(); // open -> in_progress
+    await expect(page.getByTestId('tasks-column-in_progress').getByTestId('tasks-card-1')).toBeVisible({
       timeout: 5_000,
     });
-    const startCta = page.getByTestId('tasks-list-row-start-cta-1');
-    await expect(startCta).toBeVisible();
-    await expect(startCta).toContainText('Start session'); // status still 'open' at this point
-    await expect(page.getByTestId('tasks-list-row-edit-cta-1')).toBeVisible();
+    await expect(page.getByTestId('tasks-column-open').getByTestId('tasks-card-1')).toHaveCount(0);
 
-    await page.getByTestId('tasks-list-row-expand-1').click();
-    await expect(page.getByText('Redirect loops back to /login after SSO callback.')).toHaveCount(0, {
+    await page.getByTestId('tasks-sidebar-cycle-1').click(); // in_progress -> done
+    await expect(page.getByTestId('tasks-column-done').getByTestId('tasks-card-1')).toBeVisible({
+      timeout: 5_000,
+    });
+    // 'done' is collapsed by default in the sidebar — expand to reach the
+    // cycle button again.
+    await page.getByTestId('tasks-sidebar-group-toggle-Done').click();
+    await page.getByTestId('tasks-sidebar-cycle-1').click(); // done -> open
+
+    await expect(page.getByTestId('tasks-column-open').getByTestId('tasks-card-1')).toBeVisible({
       timeout: 5_000,
     });
 
@@ -324,8 +351,8 @@ test.describe('§tasks', () => {
     const { page } = app;
     await openBoard(page);
 
-    await page.getByTestId('tasks-list-row-1').hover();
-    await page.getByTestId('tasks-list-row-edit-1').click();
+    await page.getByTestId('tasks-card-1').hover();
+    await page.getByTestId('tasks-card-edit-1').click();
     await expect(page.getByTestId('tasks-edit-title')).toHaveValue('Fix the login redirect');
 
     await selectOption(page, 'tasks-edit-type', 'enhancement');
@@ -350,8 +377,8 @@ test.describe('§tasks', () => {
     await expect(page.getByTestId('tasks-edit-title')).toHaveCount(0, { timeout: 5_000 });
 
     // Reopen to confirm persistence.
-    await page.getByTestId('tasks-list-row-1').hover();
-    await page.getByTestId('tasks-list-row-edit-1').click();
+    await page.getByTestId('tasks-card-1').hover();
+    await page.getByTestId('tasks-card-edit-1').click();
     await expect(page.getByTestId('tasks-edit-title')).toHaveValue('Fix the login redirect');
     await expect(page.getByTestId('tasks-edit-assignees')).toHaveValue('alice, bob');
     await expect(page.getByTestId('tasks-edit-milestone')).toHaveValue('v1.0');
@@ -362,7 +389,8 @@ test.describe('§tasks', () => {
     await expect(page.getByTestId('tasks-edit-start')).toBeVisible();
     await page.getByTestId('tasks-edit-cancel').click();
 
-    await expect(page.getByTestId('tasks-list-row-type-1')).toHaveText('enhancement');
+    // TaskCard has no per-field type testid — assert its text instead.
+    await expect(page.getByTestId('tasks-card-1')).toContainText('enhancement');
     await closeBoard(page);
   });
 
@@ -372,8 +400,8 @@ test.describe('§tasks', () => {
     const { page } = app;
     await openBoard(page);
 
-    await page.getByTestId('tasks-list-row-1').hover();
-    await page.getByTestId('tasks-list-row-edit-1').click();
+    await page.getByTestId('tasks-card-1').hover();
+    await page.getByTestId('tasks-card-edit-1').click();
     await page.getByTestId('tasks-dep-input').click();
     await page.getByTestId('tasks-dep-opt-2').click();
     await expect(page.getByTestId('tasks-dep-pill-2')).toBeVisible();
@@ -381,8 +409,8 @@ test.describe('§tasks', () => {
     await expect(page.getByTestId('tasks-edit-title')).toHaveCount(0, { timeout: 5_000 });
 
     // Reopen — dependency persisted.
-    await page.getByTestId('tasks-list-row-1').hover();
-    await page.getByTestId('tasks-list-row-edit-1').click();
+    await page.getByTestId('tasks-card-1').hover();
+    await page.getByTestId('tasks-card-edit-1').click();
     await expect(page.getByTestId('tasks-dep-pill-2')).toBeVisible({ timeout: 5_000 });
     await page.getByTestId('tasks-dep-remove-2').click();
     await expect(page.getByTestId('tasks-dep-pill-2')).toHaveCount(0);
@@ -390,8 +418,8 @@ test.describe('§tasks', () => {
     await expect(page.getByTestId('tasks-edit-title')).toHaveCount(0, { timeout: 5_000 });
 
     // Reopen — removal persisted.
-    await page.getByTestId('tasks-list-row-1').hover();
-    await page.getByTestId('tasks-list-row-edit-1').click();
+    await page.getByTestId('tasks-card-1').hover();
+    await page.getByTestId('tasks-card-edit-1').click();
     await expect(page.getByTestId('tasks-dep-pill-2')).toHaveCount(0, { timeout: 5_000 });
     await page.getByTestId('tasks-edit-cancel').click();
 
@@ -404,8 +432,8 @@ test.describe('§tasks', () => {
     const { page } = app;
     await openBoard(page);
 
-    await page.getByTestId('tasks-list-row-1').hover();
-    await page.getByTestId('tasks-list-row-edit-1').click();
+    await page.getByTestId('tasks-card-1').hover();
+    await page.getByTestId('tasks-card-edit-1').click();
 
     await expect(attachmentTiles(page)).toHaveCount(0);
     const chooserPromise = page.waitForEvent('filechooser');
@@ -442,29 +470,29 @@ test.describe('§tasks', () => {
     await expect(page.getByTestId('tasks-quick-dialog')).toHaveCount(0, { timeout: 5_000 });
 
     await openBoard(page);
-    await page.getByTestId('tasks-board-new').click();
+    await page.getByTestId('tasks-sidebar-new').click();
     await page.getByTestId('tasks-edit-title').fill('Zulu security review');
     await selectOption(page, 'tasks-edit-type', 'enhancement');
     await selectOption(page, 'tasks-edit-priority', 'critical');
     await page.getByTestId('tasks-edit-save').click();
     await expect(page.getByTestId('tasks-edit-title')).toHaveCount(0, { timeout: 5_000 });
 
-    await expect(page.getByTestId('tasks-list-row-3')).toContainText('Alpha bug report');
-    await expect(page.getByTestId('tasks-list-row-4')).toContainText('Beta enhancement idea');
-    await expect(page.getByTestId('tasks-list-row-5')).toContainText('Zulu security review');
+    await expect(page.getByTestId('tasks-card-3')).toContainText('Alpha bug report');
+    await expect(page.getByTestId('tasks-card-4')).toContainText('Beta enhancement idea');
+    await expect(page.getByTestId('tasks-card-5')).toContainText('Zulu security review');
     await closeBoard(page);
   });
 
   // ─── Filters ─────────────────────────────────────────────────────────────
 
-  test('filters: search narrows the list; the priority filter narrows further; Clear resets', async () => {
+  test('filters: search narrows the board; the priority filter narrows further; Clear resets', async () => {
     const { page } = app;
     await openBoard(page);
 
     await page.getByTestId('tasks-filter-search').fill('Alpha');
-    await expect(page.getByTestId('tasks-list-row-3')).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByTestId('tasks-list-row-1')).toHaveCount(0);
-    await expect(page.getByTestId('tasks-list-row-4')).toHaveCount(0);
+    await expect(page.getByTestId('tasks-card-3')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('tasks-card-1')).toHaveCount(0);
+    await expect(page.getByTestId('tasks-card-4')).toHaveCount(0);
     await page.getByTestId('tasks-filter-search').fill('');
 
     // Only task #5 ("Zulu security review") has priority=critical. FilterMenu is a
@@ -475,15 +503,15 @@ test.describe('§tasks', () => {
     await page.getByTestId('tasks-filter-opt-critical').click();
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('tasks-filter-opt-critical')).toHaveCount(0, { timeout: 5_000 });
-    await expect(page.getByTestId('tasks-list-row-5')).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByTestId('tasks-list-row-1')).toHaveCount(0);
-    await expect(page.getByTestId('tasks-list-row-3')).toHaveCount(0);
+    await expect(page.getByTestId('tasks-card-5')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('tasks-card-1')).toHaveCount(0);
+    await expect(page.getByTestId('tasks-card-3')).toHaveCount(0);
     await expect(page.getByTestId('tasks-filter-priority-count')).toHaveText('1');
 
     await page.getByTestId('tasks-filter-clear').click();
-    await expect(page.getByTestId('tasks-list-row-1')).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByTestId('tasks-list-row-3')).toBeVisible();
-    await expect(page.getByTestId('tasks-list-row-5')).toBeVisible();
+    await expect(page.getByTestId('tasks-card-1')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('tasks-card-3')).toBeVisible();
+    await expect(page.getByTestId('tasks-card-5')).toBeVisible();
     await expect(page.getByTestId('tasks-filter-clear')).toHaveCount(0);
 
     await closeBoard(page);
@@ -499,7 +527,6 @@ test.describe('§tasks', () => {
   test('sort menu: priority (default) then Number reorder the open column deterministically', async () => {
     const { page } = app;
     await openBoard(page);
-    await page.getByTestId('tasks-view-board').click();
 
     const openColumn = page.getByTestId('tasks-column-open');
     // TaskCard's own hover-action buttons (`tasks-card-start-<n>` etc.) share the
@@ -530,7 +557,6 @@ test.describe('§tasks', () => {
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('tasks-sort-option-number')).toHaveCount(0, { timeout: 5_000 });
 
-    await page.getByTestId('tasks-view-list').click();
     await closeBoard(page);
   });
 
@@ -598,9 +624,9 @@ test.describe('§tasks', () => {
 
     // Delete the fixture so the later delete tests keep their active counts.
     await openBoard(page);
-    await page.getByTestId('tasks-list-row-6').hover();
-    await page.getByTestId('tasks-list-row-delete-6').click();
-    await expect(page.getByTestId('tasks-list-row-6')).toHaveCount(0, { timeout: 5_000 });
+    await page.getByTestId('tasks-card-6').hover();
+    await page.getByTestId('tasks-card-delete-6').click();
+    await expect(page.getByTestId('tasks-card-6')).toHaveCount(0, { timeout: 5_000 });
     await closeBoard(page);
 
     // The card follows the deletion through the shared store.
@@ -609,14 +635,14 @@ test.describe('§tasks', () => {
 
   // ─── Delete ──────────────────────────────────────────────────────────────
 
-  test('delete a task from the list row', async () => {
+  test('delete a task from the board', async () => {
     const { page } = app;
     await openBoard(page);
 
-    await page.getByTestId('tasks-list-row-2').hover();
-    await page.getByTestId('tasks-list-row-delete-2').click();
-    await expect(page.getByTestId('tasks-list-row-2')).toHaveCount(0, { timeout: 5_000 });
-    await expect(page.getByTestId('tasks-board-modal')).toContainText('4 active');
+    await page.getByTestId('tasks-card-2').hover();
+    await page.getByTestId('tasks-card-delete-2').click();
+    await expect(page.getByTestId('tasks-card-2')).toHaveCount(0, { timeout: 5_000 });
+    await expect(page.getByTestId('tasks-board')).toContainText('4 active');
 
     await closeBoard(page);
   });
@@ -625,14 +651,14 @@ test.describe('§tasks', () => {
     const { page } = app;
     await openBoard(page);
 
-    await page.getByTestId('tasks-list-row-4').hover();
-    await page.getByTestId('tasks-list-row-edit-4').click();
+    await page.getByTestId('tasks-card-4').hover();
+    await page.getByTestId('tasks-card-edit-4').click();
     await expect(page.getByTestId('tasks-edit-title')).toHaveValue('Beta enhancement idea');
     await page.getByTestId('tasks-edit-delete').click();
 
     await expect(page.getByTestId('tasks-edit-title')).toHaveCount(0, { timeout: 5_000 });
-    await expect(page.getByTestId('tasks-list-row-4')).toHaveCount(0, { timeout: 5_000 });
-    await expect(page.getByTestId('tasks-board-modal')).toContainText('3 active');
+    await expect(page.getByTestId('tasks-card-4')).toHaveCount(0, { timeout: 5_000 });
+    await expect(page.getByTestId('tasks-board')).toContainText('3 active');
 
     await closeBoard(page);
   });
@@ -664,16 +690,58 @@ test.describe('§tasks', () => {
     const rowsBefore = await page.getByTestId('sessions-row').count();
 
     await openBoard(page);
-    await page.getByTestId('tasks-list-row-3').hover();
-    await page.getByTestId('tasks-list-row-start-3').click();
+    await page.getByTestId('tasks-card-3').hover();
+    await page.getByTestId('tasks-card-start-3').click();
 
-    // TasksBoard.onStartSession closes the modal immediately, then starts the
-    // session asynchronously (useStartTodoSession: create -> reload threads ->
-    // switchToThread -> composer().setText(initialMessage)).
-    await expect(page.getByTestId('tasks-board-modal')).toHaveCount(0, { timeout: 5_000 });
+    // TasksBoard.onStartSession starts the session asynchronously
+    // (useStartTodoSession: create -> reload threads -> switchToThread ->
+    // composer().setText(initialMessage)); the D3 seam then brings Chats back
+    // on its own once the new session activates — no explicit rail click.
     await expect(page.getByTestId('sessions-row')).toHaveCount(rowsBefore + 1, { timeout: 20_000 });
 
     const composerInput = page.getByTestId('chat-composer-input');
     await expect(composerInput).toHaveValue(/#3 Alpha bug report/, { timeout: 15_000 });
+  });
+
+  // ─── Multi-project scope ─────────────────────────────────────────────────
+
+  // Placed LAST: `createTauriProject` reloads the page, and the shared scope
+  // is persisted + still empty at this point (narrowing it was never needed
+  // above — `project` was always the only project around), so every test
+  // from here on would otherwise see a merged, two-project board and the
+  // sequential task numbering the earlier tests rely on would no longer hold.
+  test('multi-project scope: an empty scope merges every project, with a project avatar per card', async () => {
+    const { page } = app;
+    const project2 = await createTauriProject(page);
+
+    await page.getByTestId('shell-rail-tasks').click();
+    await page.getByTestId('tasks-sidebar-new').click();
+    const title = page.getByTestId('tasks-edit-title');
+    await title.waitFor({ timeout: 5_000 });
+
+    // More than one project in scope now — the create form grows the avatar
+    // project-chip row (`TaskProjectChips`), defaulted to the first project;
+    // retarget to project2.
+    await expect(page.getByTestId('tasks-edit-project')).toBeVisible();
+    await page.getByTestId(`tasks-edit-project-${project2.projectId}`).click();
+    await title.fill('Second project task');
+    await page.getByTestId('tasks-edit-save').click();
+    await expect(title).toHaveCount(0, { timeout: 5_000 });
+
+    // The merged body board shows the new task alongside `project`'s
+    // survivors (#1/#3/#5) — asserted by title text, not a numbered testid:
+    // todo numbers are per-project, so project2's first task (#1) collides
+    // with `project`'s surviving #1 (see the file-header testid-gaps note).
+    const board = page.getByTestId('tasks-board');
+    await expect(board.getByText('Second project task')).toBeVisible({ timeout: 10_000 });
+    await expect(board.getByText('Zulu security review')).toBeVisible();
+
+    // Every card carries a project avatar now that more than one project is
+    // in scope, and the single-repo GitHub control hides.
+    await expect(page.locator('[data-testid^="tasks-card-project-"]').first()).toBeVisible();
+    await expect(page.getByTestId('tasks-github-link')).toHaveCount(0);
+    await expect(page.getByTestId('tasks-github-pill')).toHaveCount(0);
+
+    cleanupTauriProject(project2);
   });
 });

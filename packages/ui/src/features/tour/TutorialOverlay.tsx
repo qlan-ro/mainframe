@@ -199,11 +199,7 @@ function WsTourCore({ plan }: { plan: TourStep[] }) {
       <button
         data-testid="tour-skip-btn"
         onClick={skip}
-        className="absolute bottom-[16px] right-[18px] z-[3] pointer-events-auto rounded-[8px] border-[0.5px] border-border py-[6px] px-[12px] text-muted-foreground text-xs font-medium"
-        style={{
-          background: 'var(--popover)',
-          boxShadow: 'var(--mf-shadow-pop)',
-        }}
+        className="absolute bottom-[16px] right-[18px] z-[3] pointer-events-auto rounded-[8px] border-[0.5px] border-border bg-popover py-[6px] px-[12px] text-muted-foreground text-xs font-medium shadow-mf-pop"
       >
         Skip tour
       </button>

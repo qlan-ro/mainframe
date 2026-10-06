@@ -3,7 +3,7 @@ import { cn } from '../../../../lib/utils';
 import { useSettingsStore } from '../../../../store/settings';
 import { useAdapters } from '../../../../store/adapters';
 import { updateGeneralSettings } from '../../../../lib/api/settings';
-import { providerDot } from '../../../chat/composer/config-toolbar/ProviderModelSelect';
+import { providerDotColor } from '../../../shared/provider-avatar';
 import { ProviderConfigForm } from './ProviderConfigForm';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -53,10 +53,9 @@ function ProviderHeader({ adapter }: { adapter: AdapterInfo }) {
   return (
     <div data-testid={`settings-provider-header-${adapter.id}`} className="flex items-center gap-3">
       <span
-        className={cn(
-          'inline-flex size-[30px] shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white',
-          providerDot(adapter.id),
-        )}
+        // Brand hue inline: it is a literal in provider-avatar.ts, not a token.
+        style={{ backgroundColor: providerDotColor(adapter.id) ?? 'var(--muted-foreground)' }}
+        className="inline-flex size-[30px] shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white"
       >
         {adapter.name.charAt(0).toUpperCase()}
       </span>
@@ -82,7 +81,7 @@ export function ProvidersPane({ port }: ProvidersPaneProps) {
   const adapter = adapters.find((a) => a.id === selectedProvider);
 
   return (
-    <div data-testid="settings-pane-providers" className="flex flex-col gap-4 p-4">
+    <div data-testid="settings-pane-providers" className="flex flex-col gap-4">
       <DefaultProviderPicker port={port} />
       {!selectedProvider && (
         <p className="text-sm text-muted-foreground">Select a provider from the sidebar to configure it.</p>

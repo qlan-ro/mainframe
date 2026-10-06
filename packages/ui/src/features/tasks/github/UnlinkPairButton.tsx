@@ -1,9 +1,10 @@
 /**
  * UnlinkPairButton — drops the pairing between a task and its GitHub issue.
  *
- * Lives in the row's and the card's existing hover cluster, and renders nothing
- * for an unpaired task. Reads the pair from the store by `todo.id` so neither
- * host component grows a prop (D4).
+ * Lives in the card's existing hover cluster, and renders nothing for an
+ * unpaired task. Reads the pair from the store by `todo.id` so the card
+ * grows no prop for it (D4). Board-only since the 2026-10 redesign (the list
+ * view's row variant is gone).
  */
 import React from 'react';
 import { Unlink } from 'lucide-react';
@@ -14,15 +15,11 @@ import { useGitHubSyncStore } from './use-github-sync-store';
 
 interface Props {
   todo: Todo;
-  surface: 'list' | 'card';
 }
 
-const PREFIX: Record<Props['surface'], string> = {
-  list: 'tasks-list-row',
-  card: 'tasks-card',
-};
+const PREFIX = 'tasks-card';
 
-export function UnlinkPairButton({ todo, surface }: Props): React.ReactElement | null {
+export function UnlinkPairButton({ todo }: Props): React.ReactElement | null {
   const paired = useGitHubSyncStore((s) => s.pairs[todo.id] !== undefined);
   const unlinkPair = useGitHubSyncStore((s) => s.unlinkPair);
 
@@ -32,7 +29,7 @@ export function UnlinkPairButton({ todo, surface }: Props): React.ReactElement |
     <Tooltip>
       <TooltipTrigger asChild>
         <button
-          data-testid={`${PREFIX[surface]}-unlink-${todo.number}`}
+          data-testid={`${PREFIX}-unlink-${todo.number}`}
           onClick={(e) => {
             e.stopPropagation();
             void runOrToast('Unlink failed', () => unlinkPair(todo.id));

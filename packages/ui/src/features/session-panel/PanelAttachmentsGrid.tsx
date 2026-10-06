@@ -1,5 +1,5 @@
 /**
- * PanelAttachmentsGrid — the session's attachments as a 3-across grid of tiles.
+ * PanelAttachmentsGrid — the session's attachments as a 5-across grid of tiles.
  *
  * Same tile recipe the transcript uses for message attachments (the v2
  * `Attachment` compound, `extTint` for files, `variant="image"` for images), so
@@ -71,7 +71,7 @@ export function PanelAttachmentsGrid({ port, chatId, attachments, enabled }: Pan
 
   return (
     <>
-      <div data-testid="session-panel-attachment-grid" className="grid grid-cols-3 gap-1.5">
+      <div data-testid="session-panel-attachment-grid" className="grid grid-cols-5 gap-1">
         {attachments.map((att) => {
           const meta = fileExtMeta(att.name);
           const data = loaded.get(att.id);

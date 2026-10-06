@@ -1,132 +1,102 @@
 /**
- * TasksModalHost — single app-root host for the Tasks full-view modal and
- * the QuickTaskDialog. Driven by useTasksModal (zustand store).
+ * TasksModalHost — single app-root host for the ONE task edit modal and the
+ * QuickTaskDialog. The Kanban/List board moved to the body (`TasksSurface`,
+ * D1/D7) — it is no longer a dialog this host owns, and it reads the shared
+ * session scope directly rather than carrying a per-open scope of its own.
  *
- * Each dialog holds its own per-open project scope, seeded from the sidebar
- * filter on the rising edge of its own open. The two never share a pick, and
- * neither follows a background session switch. Opening always produces a
- * surface: with no project resolved the dialog shows the project list instead
- * of the board, so the sidebar entry and ⌘⇧T can no longer be dead clicks.
+ * `TaskEditHost` resolves the shared edit modal (behind the store's `edit`
+ * target) that the board, the panel card and the sidebar list all open.
+ * `QuickTaskDialog` keeps its own per-open scope (`useModalProjectScope`),
+ * seeded from the sidebar filter on the rising edge of ITS open — unrelated
+ * to D7's shared scope, since a quick-added task's project is a one-off
+ * choice, not a navigation.
  *
- * Registers ⌘⇧T → openQuick(). Listens for `mf:open-tasks` (dispatched by
- * SidebarHeader TasksBtn). Mounted once in AppShell's outlet block — so unlike
- * `useModalProjectScope`'s own internal instance (reloaded per hook, per
- * open), this component's top-level `useProjects()` never remounts and never
- * refetches on its own. Without an explicit reload here, a project added
- * after boot stays permanently absent from `projects` below: `known()` keeps
- * rejecting it and the pick list never lists it, however many times the modal
- * reopens. Reloading on the rising edge of either dialog keeps it current.
+ * Registers ⌘⇧T → openQuick(). Mounted once in AppShell's outlet block — so
+ * unlike `useModalProjectScope`'s own internal instance (reloaded per hook,
+ * per open), this component's top-level `useProjects()` never remounts and
+ * never refetches on its own. Without an explicit reload here, a project
+ * added after boot stays permanently absent from `projects` below: `known()`
+ * keeps rejecting it and the quick-add pick list never lists it, however
+ * many times it reopens. Reloading on the rising edge of its open keeps it
+ * current.
  */
 import React, { useEffect } from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { cn } from '@/lib/utils';
-import { useShortcutAction } from '@/features/shortcuts/action-store';
 import { soleProjectId, useSessionFilters } from '@/store/session-filters';
+import { useShortcutAction } from '@/features/shortcuts/action-store';
 import { useProjects } from '@/features/sessions/use-projects';
 import { useModalProjectScope } from '@/features/project-scope/use-modal-project-scope';
-import { ProjectPickList } from '@/features/project-scope/ProjectPickList';
 import { useTasksModal } from './use-tasks-modal';
-import { useStartTodoSession } from './use-start-todo-session';
-import { useTodosStore } from './use-todos-store';
-import { TasksBoard } from './TasksBoard';
+import { selectProjectTodos, useTodosStore } from './use-todos-store';
+import { useTasksProjects } from './use-tasks-projects';
 import { QuickTaskDialog } from './QuickTaskDialog';
+import { TaskEditModal } from './sidebar/TaskEditModal';
+import { extractAllLabels } from './todos-filters';
+import { useStartTodoSession } from './use-start-todo-session';
+import type { TaskEditTarget } from './use-tasks-modal';
+
+/**
+ * The shared edit/create modal, resolved against its project's todos bucket.
+ * `projects` is the scope's full candidate list — only used (and only
+ * rendered) when CREATING with more than one project in scope, for the
+ * create form's project select.
+ */
+function TaskEditHost({ port, edit, onClose }: { port: number; edit: TaskEditTarget; onClose: () => void }) {
+  const { todos } = useTodosStore(selectProjectTodos(edit.projectId));
+  const { projects: allProjects } = useProjects();
+  const scopeProjectIds = useTasksProjects();
+  const startSession = useStartTodoSession(port);
+  const todo = edit.todoId == null ? null : (todos.find((t) => t.id === edit.todoId) ?? null);
+  // A todo deleted out from under an open edit has nothing left to edit.
+  if (edit.todoId != null && todo == null) return null;
+  const scopedProjects = allProjects.filter((p) => scopeProjectIds.includes(p.id));
+  return (
+    <TaskEditModal
+      port={port}
+      projectId={edit.projectId}
+      todo={todo}
+      allTodos={todos}
+      allLabels={extractAllLabels(todos)}
+      projects={scopedProjects}
+      onClose={onClose}
+      onStartSession={(id) => {
+        const target = todos.find((t) => t.id === id);
+        if (target) void startSession(target.id, target.project_id, target.status);
+      }}
+    />
+  );
+}
 
 interface Props {
   port: number;
 }
 
 export function TasksModalHost({ port }: Props): React.ReactElement {
-  const { open, quickOpen, closeModal, openModal, openQuick, closeQuick } = useTasksModal();
+  const { quickOpen, openQuick, closeQuick, edit, closeEdit } = useTasksModal();
   const { projects, reloadProjects } = useProjects();
   const filterProjectId = useSessionFilters((s) => soleProjectId(s.filterProjectIds));
-  const board = useModalProjectScope(open);
   const quick = useModalProjectScope(quickOpen);
-  const view = useTodosStore((s) => s.view);
 
-  // Rising edge of EITHER dialog — this instance's own list, not the scope
-  // hook's internal one, is what `known()`/the pick list/the board below read.
+  // Rising edge of the quick dialog — this instance's own list, not the scope
+  // hook's internal one, is what `known()`/the pick list below read.
   const reloadProjectsRef = React.useRef(reloadProjects);
   reloadProjectsRef.current = reloadProjects;
-  const anyOpenRef = React.useRef(false);
+  const wasOpenRef = React.useRef(false);
   useEffect(() => {
-    const anyOpen = open || quickOpen;
-    if (anyOpen && !anyOpenRef.current) void reloadProjectsRef.current();
-    anyOpenRef.current = anyOpen;
-  }, [open, quickOpen]);
+    if (quickOpen && !wasOpenRef.current) void reloadProjectsRef.current();
+    wasOpenRef.current = quickOpen;
+  }, [quickOpen]);
 
-  // A project deleted while a modal is open leaves its scope pointing at
+  // A project deleted while the dialog is open leaves its scope pointing at
   // nothing; falling back to the pick list keeps the surface honest without an
   // effect racing the render.
-  const known = (id: string | null): string | null =>
-    id !== null && projects.some((project) => project.id === id) ? id : null;
-  const boardProjectId = known(board.projectId);
-  const quickProjectId = known(quick.projectId);
-
-  const startSession = useStartTodoSession(port, boardProjectId ?? undefined);
+  const quickProjectId =
+    quick.projectId !== null && projects.some((project) => project.id === quick.projectId) ? quick.projectId : null;
 
   useShortcutAction('app.quick-task', openQuick);
 
-  // mf:open-tasks custom event (dispatched by SidebarHeader TasksBtn)
-  useEffect(() => {
-    function handleOpenTasks() {
-      openModal();
-    }
-    window.addEventListener('mf:open-tasks', handleOpenTasks);
-    return () => window.removeEventListener('mf:open-tasks', handleOpenTasks);
-  }, [openModal]);
-
   return (
     <>
-      {/* Full-view Tasks modal */}
-      <Dialog
-        open={open}
-        onOpenChange={(o) => {
-          if (!o) closeModal();
-        }}
-      >
-        <DialogContent
-          showCloseButton={boardProjectId === null}
-          resizeKey={boardProjectId !== null ? 'tasks' : undefined}
-          className={cn(
-            boardProjectId === null
-              ? 'sm:max-w-sm'
-              : 'flex max-h-[85vh] min-h-[480px] w-full flex-col gap-0 p-0 transition-[width] duration-[180ms] ease-out',
-            boardProjectId !== null && (view === 'list' ? 'sm:max-w-[880px]' : 'w-[90vw] sm:max-w-[1200px]'),
-          )}
-        >
-          {boardProjectId === null ? (
-            <>
-              <DialogHeader>
-                <DialogTitle>Tasks</DialogTitle>
-                <DialogDescription>Pick the project whose board you want to open.</DialogDescription>
-              </DialogHeader>
-              <ProjectPickList
-                surface="tasks-board"
-                projects={projects}
-                filterProjectId={filterProjectId}
-                onSelect={board.setProjectId}
-              />
-            </>
-          ) : (
-            <>
-              <DialogHeader className="sr-only">
-                <DialogTitle>Tasks</DialogTitle>
-              </DialogHeader>
-              <TasksBoard
-                port={port}
-                projectId={boardProjectId}
-                projects={projects}
-                onProjectChange={board.setProjectId}
-                onClose={closeModal}
-                onStartSession={(todo) => {
-                  closeModal();
-                  void startSession(todo.id, todo.status);
-                }}
-              />
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+      {edit != null && <TaskEditHost port={port} edit={edit} onClose={closeEdit} />}
 
       {/* Quick-add dialog */}
       <QuickTaskDialog

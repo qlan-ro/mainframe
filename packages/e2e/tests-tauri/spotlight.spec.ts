@@ -34,7 +34,8 @@
  *                                             the old `files`/`run` ids merged into `workspace`)
  *   search-palette-change-row-<path>        — `#` changed-file result
  *   WORKSPACE.strip / diff-tab              — workspace-surface targets a row selection opens
- *   sessions-row / show-sidebar-button      — shell chrome used to observe command effects
+ *   sessions-row / show-sidebar-button / sidebar-action-new-thread — shell chrome used to
+ *                                             observe command effects
  */
 
 import { test, expect, type Page } from '@playwright/test';
@@ -176,11 +177,11 @@ test.describe('§spotlight', () => {
     await expect(activeRow).toHaveAttribute('data-active', 'true', { timeout: 10_000 });
   });
 
-  // Observed via `show-sidebar-button` (MainToolbar, rendered only while the panel
-  // is hidden) rather than the sidebar's own contents: the v2 `Sidebar` collapses by
+  // Observed via `show-sidebar-button` (TitleBar, rendered only while the panel
+  // is hidden) rather than the sidebar's own contents: the `Sidebar` collapses by
   // animating its width to 0 with `overflow-hidden` and keeps the full-width content
-  // mounted inside the clip, so `sessions-new-button` still has a bounding box and
-  // Playwright would never call it hidden.
+  // mounted inside the clip, so `sidebar-action-new-thread` still has a bounding box
+  // and Playwright would never call it hidden.
   test('`>` command mode runs a command (Toggle Sidebar)', async () => {
     const { page } = app;
     await openPalette(page);
@@ -200,7 +201,7 @@ test.describe('§spotlight', () => {
     await page.getByTestId('search-palette-input').fill('>sidebar');
     await page.getByTestId('search-palette-command-row-sidebar').click();
     await expect(page.getByTestId('show-sidebar-button')).toHaveCount(0, { timeout: 5_000 });
-    await expect(page.getByTestId('sessions-new-button')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('sidebar-action-new-thread')).toBeVisible({ timeout: 5_000 });
   });
 
   test('`@` symbol mode switches the field to symbol search', async () => {

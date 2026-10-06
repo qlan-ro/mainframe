@@ -1,6 +1,7 @@
 /**
- * The session row's second line — the project on the left, indicator glyphs on
- * the right.
+ * The session row's second line — the project on the left (or "your turn"
+ * while the session waits on you), indicator glyphs on the right, ending with
+ * the provider's muted mark.
  *
  * Only the project is spelled out. Worktree, branch and PR names are identifiers
  * the row can never show in full anyway, and three truncated strings on one line
@@ -15,8 +16,10 @@
  */
 import { FolderGit2, GitBranch, GitFork, GitPullRequest, Timer } from 'lucide-react';
 import type { DetectedPr, TagColor } from '@qlan-ro/mainframe-types';
+import { FadeLabel } from '@/components/ui/fade-label';
 import { Hint } from '@/components/ui/hint';
 import { NoProjectLabel } from '@/features/sessions/NoProjectLabel';
+import { ProviderLogo } from '@/features/shared/ProviderLogo';
 import { TAG_DOT_STYLE } from '@/features/sessions/tags/tag-colors';
 import { cn } from '@/lib/utils';
 
@@ -39,6 +42,10 @@ const GLYPH_SIZE = 'size-3.5!';
 
 interface SessionRowMetaLineProps {
   projectName?: string;
+  /** The session waits on the user: "your turn" takes the project's slot. */
+  waiting?: boolean;
+  /** The adapter's muted mark closes the glyph cluster; absent for a draft. */
+  adapterId?: string;
   /** True for a chat with no real project — renders NoProjectLabel instead of projectName/ProjectAvatar (todo #346). */
   noProject?: boolean;
   worktreePath?: string;
@@ -96,6 +103,8 @@ function WorktreeOrBranchGlyph({
 
 export function SessionRowMetaLine({
   projectName,
+  waiting = false,
+  adapterId,
   noProject = false,
   worktreePath,
   branchName,
@@ -110,6 +119,8 @@ export function SessionRowMetaLine({
 
   const hasContent =
     projectName != null ||
+    waiting ||
+    adapterId != null ||
     noProject ||
     worktreePath != null ||
     branchName != null ||
@@ -121,13 +132,17 @@ export function SessionRowMetaLine({
 
   return (
     <span data-testid="sessions-row-meta" className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-      {noProject ? (
+      {waiting ? (
+        <span data-testid="sessions-row-your-turn" className="min-w-0 flex-1 truncate font-medium text-warning">
+          your turn
+        </span>
+      ) : noProject ? (
         <NoProjectLabel data-testid="sessions-row-no-project" className="flex-1" />
       ) : (
         projectName != null && (
-          <span data-testid="sessions-row-project" className="min-w-0 flex-1 truncate-fade">
+          <FadeLabel data-testid="sessions-row-project" className="flex-1">
             {projectName}
-          </span>
+          </FadeLabel>
         )
       )}
       {/* ml-auto, not a spacer: the glyphs sit at the row's end whether or not
@@ -158,6 +173,9 @@ export function SessionRowMetaLine({
           </Hint>
         )}
         {forkFallback != null && <ForkFallbackGlyph forkFallback={forkFallback} />}
+        {adapterId != null && (
+          <ProviderLogo adapterId={adapterId} muted testId="sessions-row-provider" className="size-3.5 shrink-0" />
+        )}
       </span>
     </span>
   );

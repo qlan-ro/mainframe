@@ -16,7 +16,12 @@
  *
  * Testid reference (all verified against source):
  *   surface-rail-<chat|workspace>   — rail toggles (disabled at the dynamic floor)
- *   chat-header / chat-header-hide / chat-header-split-right / chat-header-split-down
+ *   session-tab-<id> / session-tab-ctx-hide-chat — the shell
+ *                                     redesign moved Hide/Split off `ChatCardHeader` (now
+ *                                     gone) onto every session tab's right-click menu (D7).
+ *                                     Split items are CONDITIONALLY rendered (`surface.canSplit`),
+ *                                     not merely disabled; Hide is always rendered, `disabled`
+ *                                     (Radix `data-disabled`) at the dynamic floor
  *   chat-thread                     — chat surface body (T.thread)
  *   workspace-surface               — the merged surface root
  *   workspace-empty-state           — its inline picker card, shown while it has no tabs
@@ -98,11 +103,12 @@ async function openPermanentFileTab(page: Page, query: string): Promise<void> {
 test.describe('§20 layout — surface rail, floor, shortcuts', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
+  let chatId: string;
 
   test.beforeAll(async () => {
     app = await launchTauriApp();
     project = await createTauriProject(app.page);
-    await createTauriChat(app.page, project.projectId, 'default');
+    chatId = await createTauriChat(app.page, project.projectId, 'default');
   });
 
   test.afterAll(async () => {
@@ -144,9 +150,10 @@ test.describe('§20 layout — surface rail, floor, shortcuts', () => {
 
   test('the last lit surface cannot be toggled off (the workspace becomes the floor once Chat is hidden)', async () => {
     const { page } = app;
-    // litCount=2 here, so hiding Chat (via its header control) is allowed.
-    await page.getByTestId('chat-header-hide').click();
-    await expect(page.getByTestId('chat-header')).toHaveCount(0);
+    // litCount=2 here, so hiding Chat (via its tab's context menu) is allowed.
+    await page.getByTestId(`session-tab-${chatId}`).click({ button: 'right' });
+    await page.getByTestId('session-tab-ctx-hide-chat').click();
+    await expect(page.locator('[data-surface="chat"]')).toHaveCount(0);
 
     // The workspace is now the ONLY lit surface — its rail button and its own
     // close button are both disabled (the dynamic floor). The close button exists
@@ -161,7 +168,7 @@ test.describe('§20 layout — surface rail, floor, shortcuts', () => {
 
     // Restore Chat via the rail so later tests in this file start from a normal state.
     await page.getByTestId('surface-rail-chat').click();
-    await expect(page.getByTestId('chat-header')).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator('[data-surface="chat"]')).toBeVisible({ timeout: 5_000 });
   });
 });
 
@@ -170,11 +177,12 @@ test.describe('§20 layout — surface rail, floor, shortcuts', () => {
 test.describe('§20 layout — splits + divider resize', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
+  let chatId: string;
 
   test.beforeAll(async () => {
     app = await launchTauriApp();
     project = await createTauriProject(app.page);
-    await createTauriChat(app.page, project.projectId, 'default');
+    chatId = await createTauriChat(app.page, project.projectId, 'default');
   });
 
   test.afterAll(async () => {
@@ -182,9 +190,9 @@ test.describe('§20 layout — splits + divider resize', () => {
     await closeTauriApp(app);
   });
 
-  test('chat-header split-right adds the workspace beside Chat in the top row', async () => {
+  test('the title-bar toggle places the workspace beside Chat in the top row', async () => {
     const { page } = app;
-    await page.getByTestId('chat-header-split-right').click();
+    await page.getByTestId('surface-rail-workspace').click();
     await expect(page.getByTestId('workspace-surface')).toBeVisible({ timeout: 5_000 });
 
     const chatBox = await page.locator('[data-surface="chat"]').boundingBox();
@@ -196,14 +204,18 @@ test.describe('§20 layout — splits + divider resize', () => {
     expect(chatBox!.x).toBeLessThan(wsBox!.x);
   });
 
-  test('with the workspace already placed, no split controls render anywhere', async () => {
+  test('no split-right / split-down controls render anywhere', async () => {
     const { page } = app;
-    // The strip's split buttons were deleted outright (they could only render
-    // while the workspace was placed — exactly when layoutCanSplit() is false).
-    // The chat header's split stays conditional and must be hidden here too.
+    // Both the workspace strip's split buttons and the tab menu's Split Right /
+    // Split Down items are gone: the title-bar toggle is the one way to light
+    // the workspace.
     await expect(page.getByTestId('workspace-tab-strip-split-right')).toHaveCount(0);
     await expect(page.getByTestId('workspace-tab-strip-split-down')).toHaveCount(0);
-    await expect(page.getByTestId('chat-header-split-right')).toHaveCount(0);
+    await page.getByTestId(`session-tab-${chatId}`).click({ button: 'right' });
+    await expect(page.getByTestId('session-tab-ctx-hide-chat')).toBeVisible();
+    await expect(page.getByTestId('session-tab-ctx-split-right')).toHaveCount(0);
+    await expect(page.getByTestId('session-tab-ctx-split-down')).toHaveCount(0);
+    await page.keyboard.press('Escape');
   });
 
   test('dragging the horizontal divider resizes the top-row split, and the fraction sticks across a re-render', async () => {
@@ -234,38 +246,9 @@ test.describe('§20 layout — splits + divider resize', () => {
     expect(Math.abs(wsAfterRerender.width - wsAfter.width)).toBeLessThan(3);
   });
 
-  test('chat-header split-down moves the workspace to the bottom strip, and its divider resizes the rows', async () => {
-    const { page } = app;
-    // Hide the workspace first so `layoutCanSplit` is true again and chat's own
-    // split-down is offered; split-down then places it in the bottom slot.
-    await page.getByTestId('surface-rail-workspace').click();
-    await expect(page.getByTestId('workspace-surface')).toHaveCount(0);
-    await page.getByTestId('chat-header-split-down').click();
-    await expect(page.getByTestId('workspace-surface')).toBeVisible({ timeout: 5_000 });
-
-    const chatBox = await page.locator('[data-surface="chat"]').boundingBox();
-    const wsBox = await page.locator('[data-surface="workspace"]').boundingBox();
-    expect(chatBox).not.toBeNull();
-    expect(wsBox).not.toBeNull();
-    // The workspace sits below the top row (allow the divider's own gutter height).
-    expect(wsBox!.y).toBeGreaterThan(chatBox!.y + chatBox!.height - 5);
-
-    const box = await page.getByTestId('surf-divider-y').boundingBox();
-    if (!box) throw new Error('surf-divider-y has no bounding box');
-    await beginDrag(page, { x: box.x + box.width / 2, y: box.y + box.height / 2 });
-    await moveDragTo(page, { x: box.x + box.width / 2, y: box.y + box.height / 2 - 90 });
-    await page.mouse.up();
-
-    const wsAfter = await page.locator('[data-surface="workspace"]').boundingBox();
-    if (!wsAfter) throw new Error('workspace pane has no bounding box after drag');
-    expect(Math.abs(wsAfter.height - wsBox!.height)).toBeGreaterThan(25);
-  });
-
   test('closing the non-floor workspace leaves Chat alone, and re-showing it brings its tabs back', async () => {
     const { page } = app;
-    // The previous test left the workspace docked in the bottom strip, where the
-    // empty-state card's rows overflow the short strip and can't be clicked. Re-light
-    // it so `placeInLayout` puts it back in the top row at full height.
+    // Re-light the workspace so it starts from a fresh top-row placement.
     await page.getByTestId('surface-rail-workspace').click();
     await expect(page.getByTestId('workspace-surface')).toHaveCount(0);
     await page.getByTestId('surface-rail-workspace').click();

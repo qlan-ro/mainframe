@@ -1,14 +1,15 @@
 /**
- * ContextSection — what the agent is working from: the memory files it loaded,
- * the files this session touched, the skills it invoked, and the session's
- * attachments.
+ * ContextSection — what the agent is working from, as FOUR first-class panel
+ * sections (no "Context" wrapper, no sub-groups): Memory files it loaded,
+ * Mentioned files this session touched, Skills it invoked, and the session's
+ * Attachments. Empty ones hide, except Skills.
  *
- * Every sub-group reads the SAME source, the session context. Skills lists the
+ * Every section reads the SAME source, the session context. Skills lists the
  * skills THIS session invoked (`skillFiles`), not the adapter's available-skills
  * catalog — that catalog belongs to the Setup Advisor, which Manage reaches. It
- * is the only route to that sheet, so the sub-group renders even when empty.
+ * is the only route to that sheet, so the Skills section renders even when empty.
  */
-import { Layers } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
@@ -20,10 +21,7 @@ import { deriveContextFiles, type ContextFileRow } from './context-groups';
 import { deriveSessionItems } from './derive-session-items';
 import { formatTokens } from './context-tokens';
 import { PanelAttachmentsGrid } from './PanelAttachmentsGrid';
-import { PanelSection } from './PanelSection';
-import { PanelSubGroup, SUB_GROUP_ROW } from './PanelSubGroup';
-
-const SUB_NOTE = 'px-1 py-0.5 text-xs text-muted-foreground';
+import { PANEL_EMPTY, PANEL_ROW_BUTTON, PanelEyebrow, SECTION_BODY } from './PanelEyebrow';
 
 function MemoryFileRow({ row }: { row: ContextFileRow }) {
   return (
@@ -32,7 +30,7 @@ function MemoryFileRow({ row }: { row: ContextFileRow }) {
         type="button"
         data-testid={`session-panel-context-file-${row.path}`}
         onClick={() => emitSurfaceIntent({ type: 'open-file', path: row.path })}
-        className={SUB_GROUP_ROW}
+        className={PANEL_ROW_BUTTON}
       >
         <span className="min-w-0 flex-1 truncate text-sm">{row.label}</span>
         <Badge variant="outline">{row.scope}</Badge>
@@ -47,11 +45,29 @@ function MemoryFileRow({ row }: { row: ContextFileRow }) {
 
 interface ContextSectionProps {
   port: number;
-  open: boolean;
-  onToggle: () => void;
 }
 
-export function ContextSection({ port, open, onToggle }: ContextSectionProps) {
+/** One first-class panel section: the shared eyebrow over a body of rows. */
+function Section({
+  id,
+  label,
+  action,
+  children,
+}: {
+  id: string;
+  label: string;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section data-testid={`session-panel-section-${id}`} className="shrink-0">
+      <PanelEyebrow label={label} action={action} />
+      <div className={SECTION_BODY}>{children}</div>
+    </section>
+  );
+}
+
+export function ContextSection({ port }: ContextSectionProps) {
   const { context, chatId } = useSessionContext();
   const openSheet = useSetupAdvisor((s) => s.openSheet);
 
@@ -59,27 +75,19 @@ export function ContextSection({ port, open, onToggle }: ContextSectionProps) {
   const sessionItems = context ? deriveSessionItems(context) : [];
   const skillFiles = context?.skillFiles ?? [];
   const attachments = context?.attachments ?? [];
-  const count = memoryFiles.length + sessionItems.length + skillFiles.length + attachments.length;
 
   return (
-    <PanelSection
-      id="context"
-      label="Context"
-      icon={Layers}
-      count={count > 0 ? count : undefined}
-      open={open}
-      onToggle={onToggle}
-    >
+    <>
       {memoryFiles.length > 0 && (
-        <PanelSubGroup label="Context" count={memoryFiles.length}>
+        <Section id="memory" label="Memory files">
           {memoryFiles.map((row) => (
             <MemoryFileRow key={row.path} row={row} />
           ))}
-        </PanelSubGroup>
+        </Section>
       )}
 
       {sessionItems.length > 0 && (
-        <PanelSubGroup label="Session" count={sessionItems.length}>
+        <Section id="mentions" label="Mentioned files">
           {sessionItems.map((item) => (
             <ContextFileItem
               key={item.path}
@@ -88,12 +96,12 @@ export function ContextSection({ port, open, onToggle }: ContextSectionProps) {
               badge={item.badge}
             />
           ))}
-        </PanelSubGroup>
+        </Section>
       )}
 
-      <PanelSubGroup
+      <Section
+        id="skills"
         label="Skills"
-        count={skillFiles.length}
         action={
           <Button
             data-testid="session-panel-skills-manage"
@@ -106,7 +114,7 @@ export function ContextSection({ port, open, onToggle }: ContextSectionProps) {
         }
       >
         {skillFiles.length === 0 ? (
-          <div data-testid="session-panel-skills-empty" className={SUB_NOTE}>
+          <div data-testid="session-panel-skills-empty" className={PANEL_EMPTY}>
             No skills used
           </div>
         ) : (
@@ -119,13 +127,13 @@ export function ContextSection({ port, open, onToggle }: ContextSectionProps) {
             />
           ))
         )}
-      </PanelSubGroup>
+      </Section>
 
       {attachments.length > 0 && chatId != null && (
-        <PanelSubGroup label="Attachments" count={attachments.length}>
-          <PanelAttachmentsGrid port={port} chatId={chatId} attachments={attachments} enabled={open} />
-        </PanelSubGroup>
+        <Section id="attachments" label="Attachments">
+          <PanelAttachmentsGrid port={port} chatId={chatId} attachments={attachments} enabled />
+        </Section>
       )}
-    </PanelSection>
+    </>
   );
 }

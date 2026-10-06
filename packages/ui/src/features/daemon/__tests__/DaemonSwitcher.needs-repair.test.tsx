@@ -93,7 +93,7 @@ afterEach(() => {
 });
 
 function trigger() {
-  return screen.getByTestId('daemon-footer-trigger');
+  return screen.getByTestId('shell-rail-daemon');
 }
 
 describe('DaemonSwitcher — needs-repair marker', () => {

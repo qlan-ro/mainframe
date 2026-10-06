@@ -13,8 +13,10 @@ import { Play, Edit, Trash2, Paperclip, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { Hint } from '@/components/ui/hint';
+import type { Project } from '@qlan-ro/mainframe-types';
 import type { Todo } from '@/lib/api/todos';
 import { typeTint, priorityTint, priorityDotClass } from './task-palettes';
+import { TaskProjectBadge } from './TaskProjectBadge';
 import { PairGlyph } from './github/PairGlyph';
 import { UnlinkPairButton } from './github/UnlinkPairButton';
 import { useGitHubSyncStore } from './github/use-github-sync-store';
@@ -37,6 +39,9 @@ function relativeTime(iso: string): string {
 interface Props {
   todo: Todo;
   attachmentCount?: number;
+  /** Set only when Tasks has more than one project in scope — renders the
+   *  card's project avatar; omitted (incl. single-project) renders none. */
+  project?: Project;
   onEdit: (todo: Todo) => void;
   onDelete: (id: string) => void;
   onStartSession: (todo: Todo) => void;
@@ -45,6 +50,7 @@ interface Props {
 export const TaskCard = React.memo(function TaskCard({
   todo,
   attachmentCount,
+  project,
   onEdit,
   onDelete,
   onStartSession,
@@ -108,14 +114,15 @@ export const TaskCard = React.memo(function TaskCard({
       onDragEnd={handleDragEnd}
       onClick={() => onEdit(todo)}
       className={cn(
-        'group flex cursor-pointer flex-col gap-1.5 rounded-md border-[0.5px] border-border bg-background px-[11px] py-[10px]',
+        'group flex cursor-pointer flex-col gap-1.5 rounded-md border-[0.5px] border-border bg-card shadow-xs px-[11px] py-[10px]',
         'transition-colors hover:border-border/80',
         isDragging && 'opacity-50',
       )}
     >
-      {/* Row 1: #number + title + type badge */}
+      {/* Row 1: #number + project avatar (multi-project only) + title + type badge */}
       <div className="flex items-start gap-1.5 min-w-0">
         <span className="shrink-0 font-mono text-xs font-medium text-primary leading-5">#{todo.number}</span>
+        {project != null && <TaskProjectBadge project={project} testId={`tasks-card-project-${todo.number}`} />}
         <span className="flex-1 min-w-0">
           <span
             className={cn(
@@ -181,10 +188,10 @@ export const TaskCard = React.memo(function TaskCard({
 
         <div className="flex items-center gap-1 shrink-0">
           {/* GitHub pairing — absent entirely until the project is linked */}
-          {linked && <PairGlyph todo={todo} surface="card" />}
+          {linked && <PairGlyph todo={todo} />}
 
           <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-            <UnlinkPairButton todo={todo} surface="card" />
+            <UnlinkPairButton todo={todo} />
             {(todo.status === 'open' || todo.status === 'in_progress') && (
               <Tooltip>
                 <TooltipTrigger asChild>

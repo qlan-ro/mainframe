@@ -61,6 +61,7 @@ export function toTabEntry(
     title: entry?.title ?? (isDraft ? 'New Session' : 'Untitled'),
     projectId,
     projectName: projectId != null ? projectNames.get(projectId) : undefined,
+    adapterId: custom?.adapterId,
     active: id === activeId,
     preview,
     forkAvailability: tabForkAvailability(custom, adaptersById),

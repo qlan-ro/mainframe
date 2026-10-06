@@ -3,7 +3,7 @@
 /**
  * The two instruction-chip actions. Neither ever sends.
  *
- * "Run in a new session" mirrors `SessionsNewButton`'s picker branch, but
+ * "Run in a new session" mirrors the sidebar's New session row's picker branch, but
  * seeds the draft from the *source* chat instead of a project filter: the New
  * button inherits nothing, and an uninitialized draft renders
  * "Initializing session…" with no composer to fill.

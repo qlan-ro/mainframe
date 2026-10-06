@@ -63,10 +63,12 @@ function ThreadFooter({ variant }: { variant: ChatThreadVariant }) {
           <ArrowDownIcon />
         </Button>
       </ThreadPrimitive.ScrollToBottom>
-      <div
-        data-testid="chat-thread-footer"
-        className="mx-auto flex w-full min-h-0 max-w-[min(48rem,100%-116px)] flex-col px-5 pb-4"
-      >
+      {/* 680px, not `min(48rem, 100% − 116px)`: the 116 only ever cleared the
+          floating rail, which is gone; the panel takes real width now. */}
+      <div data-testid="chat-thread-footer" className="mx-auto flex w-full min-h-0 max-w-[680px] flex-col px-5 pb-4">
+        {/* The ONE live timer (D18, reverses #214): the status line sits above
+            the gate slot and the composer, not inside the transcript. */}
+        <GeneratingIndicator />
         <ChatGateMount />
         <div className="flex min-h-0 flex-col">
           {variant !== 'side' && <WorktreeSwitchBanner />}
@@ -91,7 +93,7 @@ export function ChatThreadViewport({ emptyState, variant }: { emptyState?: React
         className="relative flex flex-1 flex-col overflow-y-auto [container-type:size]"
       >
         <ChatThreadLoadingSpinner />
-        <div ref={contentRef} className="mx-auto w-full max-w-[min(48rem,100%-116px)] flex-1 px-5 py-4">
+        <div ref={contentRef} className="mx-auto w-full max-w-[680px] flex-1 px-5 py-4">
           <LoadErrorBanner />
           {variant !== 'side' && <ContextNotPreservedNotice />}
           {messageCount === 0 && emptyState != null ? emptyState : null}
@@ -99,7 +101,6 @@ export function ChatThreadViewport({ emptyState, variant }: { emptyState?: React
               restart from the new thread's tail on a switch instead of
               inheriting the previous thread's state. */}
           <TranscriptMessages key={threadId ?? ''} />
-          <GeneratingIndicator />
           <CompactingIndicator />
         </div>
         <ThreadFooter variant={variant} />

@@ -14,9 +14,9 @@
  * dialogs are stock v2 Dialogs (six slots of `InputOTP` for the code).
  *
  * Testid reference (verified against source):
- *   daemon-footer-trigger        — DaemonSwitcher trigger; ConnDot inside carries
+ *   shell-rail-daemon            — DaemonSwitcher trigger (nav rail); ConnDot inside carries
  *                                   aria-label Connected/Connecting…/Unreachable
- *   daemon-footer-trigger-label  — the active daemon's LABEL alone; the trigger also
+ *   shell-rail-daemon-label      — the active daemon's LABEL (sr-only); the trigger also
  *                                   prints the host, and the local host is 127.0.0.1:<port>,
  *                                   so only the label separates local from a remote
  *   daemon-picker                — the menu body (DaemonMenuItems root)
@@ -133,7 +133,7 @@ function daemonRowByHost(page: Page, hostSubstr: string) {
 /** The trigger prints label AND host, and the local host is `127.0.0.1:<port>` —
  *  so only the label discriminates local ("This Mac") from a remote ("127"). */
 function footerLabel(page: Page) {
-  return page.getByTestId('daemon-footer-trigger-label');
+  return page.getByTestId('shell-rail-daemon-label');
 }
 
 async function openPicker(page: Page): Promise<void> {
@@ -159,7 +159,7 @@ async function openPicker(page: Page): Promise<void> {
     // the zero-session boot picker (see the describe's beforeAll) — owns the
     // page's pointer events and makes this trigger unhittable while it lives.
     await page.keyboard.press('Escape');
-    await page.getByTestId('daemon-footer-trigger').click({ timeout: 5_000 });
+    await page.getByTestId('shell-rail-daemon').click({ timeout: 5_000 });
     await expect(page.getByTestId('daemon-picker')).toBeVisible({ timeout: 5_000 });
   }).toPass({ timeout: 30_000, intervals: [500, 1_000, 2_000, 3_000] });
 }
@@ -513,7 +513,7 @@ test.describe('§daemon-picker', () => {
   test('ends the suite back on the local daemon', async () => {
     const { page } = app;
     await expect(footerLabel(page)).toHaveText('This Mac');
-    await expect(page.getByTestId('daemon-footer-trigger').locator('[aria-label="Connected"]')).toBeVisible({
+    await expect(page.getByTestId('shell-rail-daemon').locator('[aria-label="Connected"]')).toBeVisible({
       timeout: 15_000,
     });
   });

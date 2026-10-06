@@ -3,8 +3,8 @@
 /**
  * SideChatPanelHeader — "Side chat" title, live status dot, collapse, close,
  * and the compact context notices sitting directly under this row (todo #344).
- * `ChatCardHeader` is deliberately not reused here, so no forked-from link
- * ever renders inside the panel (AC 22).
+ * The parent's fork-parent link is deliberately not rendered here, so no
+ * forked-from link ever appears inside the panel (AC 22).
  *
  * Close hard-deletes through #346's existing discard route and asks for no
  * confirmation (spec decision) — a failed discard leaves the row (and this

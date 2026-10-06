@@ -87,7 +87,6 @@ function insertArmedAnchors(): Record<string, HTMLElement> {
   const targets = [
     'add-project',
     'new-session',
-    'new-session-row',
     'new-session-tab',
     'sessions-list',
     'session-tabs',
@@ -154,7 +153,7 @@ describe('TutorialOverlay', () => {
     insertArmedAnchors();
     render(<TutorialOverlay />);
     await settle();
-    expect(screen.getByText('The session rail')).toBeTruthy();
+    expect(screen.getByText('Session details')).toBeTruthy();
     expect(screen.getByText('Step 4 of 9')).toBeTruthy();
   });
 
@@ -204,27 +203,27 @@ describe('TutorialOverlay', () => {
     expect(screen.getByText('Which machine you’re on')).toBeTruthy();
   });
 
-  // "Three ways to start a session" needs three rings but exactly one scrim —
-  // the scrim IS the primary ring's outward box-shadow, so a second would paint
-  // over the first cut-out.
-  it('rings every secondary location, and cuts the scrim only once', async () => {
-    mockStep = 1; // "Start a session" — also: new-session-row, new-session-tab
+  // D24: "Start a session" needs ONE secondary ring (the title bar's "+" tab)
+  // but exactly one scrim — the scrim IS the primary ring's outward
+  // box-shadow, so a second would paint over the first cut-out.
+  it('rings the secondary location, and cuts the scrim only once', async () => {
+    mockStep = 1; // "Start a session" — also: new-session-tab
     insertArmedAnchors();
     render(<TutorialOverlay />);
     await settle();
     expect(screen.getByTestId('tour-spotlight')).toBeTruthy();
     expect(screen.getByTestId('tour-spotlight-also-0')).toBeTruthy();
-    expect(screen.getByTestId('tour-spotlight-also-1')).toBeTruthy();
+    expect(screen.queryByTestId('tour-spotlight-also-1')).toBeNull();
     expect(screen.getByTestId('tour-spotlight').style.boxShadow).toContain('9999px');
     expect(screen.getByTestId('tour-spotlight-also-0').style.boxShadow).toBe('');
   });
 
   it('renders no secondary rings for a single-location step', async () => {
-    mockStep = 6; // Kanban
+    mockStep = 6; // Tasks (kanban)
     insertArmedAnchors();
     render(<TutorialOverlay />);
     await settle();
-    expect(screen.getByText('The Kanban board')).toBeTruthy();
+    expect(screen.getByText('Tasks')).toBeTruthy();
     expect(screen.queryByTestId('tour-spotlight-also-0')).toBeNull();
   });
 

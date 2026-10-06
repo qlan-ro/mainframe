@@ -144,7 +144,7 @@ describe('ComposerSegments', () => {
     expect(document.activeElement).toBe(screen.getByTestId('chat-composer-input'));
   });
 
-  it('placeholder rule: a committed box under a quote reads "Add a message…", a quoteless committed box reads "Reply to Mainframe…"', () => {
+  it('placeholder rule: a committed box under a quote reads "Add a message…", a quoteless committed box reads "Reply to the agent…"', () => {
     useComposerSegments.setState({
       byThread: {
         [THREAD_ID]: {
@@ -159,6 +159,6 @@ describe('ComposerSegments', () => {
     render(<Harness />);
 
     expect(segmentInput('s1').placeholder).toBe('Add a message…');
-    expect(segmentInput('s2').placeholder).toBe('Reply to Mainframe…');
+    expect(segmentInput('s2').placeholder).toBe('Reply to the agent…');
   });
 });

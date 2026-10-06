@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useAutomationsNav } from '../use-automations-nav';
+import { useUiPrefs } from '@/store/ui-prefs';
 
 type AutomationsNavState = ReturnType<typeof useAutomationsNav.getState>;
 
@@ -12,140 +13,118 @@ type SetterCase = {
 
 const SETTER_CASES: SetterCase[] = [
   {
-    name: 'openHost opens the host',
-    setup: {},
-    act: (s) => s.openHost(),
-    expected: { open: true },
-  },
-  {
-    name: 'close resets open, editorTarget, and runId together',
-    setup: { open: true, editorTarget: { mode: 'new' }, runId: 'r1' },
-    act: (s) => s.close(),
-    expected: { open: false, editorTarget: null, runId: null },
-  },
-  {
-    name: 'openEditor sets the target and clears any open run',
-    setup: { runId: 'r1' },
-    act: (s) => s.openEditor({ mode: 'edit', automationId: 'a1' }),
-    expected: { editorTarget: { mode: 'edit', automationId: 'a1' }, runId: null },
-  },
-  {
     name: 'closeEditor clears only the editor target',
-    setup: { editorTarget: { mode: 'new' }, runId: 'r1' },
+    setup: { editorTarget: { mode: 'new' }, detailsAutomationId: 'a1' },
     act: (s) => s.closeEditor(),
-    expected: { editorTarget: null, runId: 'r1' },
+    expected: { editorTarget: null, detailsAutomationId: 'a1' },
   },
   {
-    name: 'openRun sets the run id and clears any open editor',
-    setup: { editorTarget: { mode: 'new' } },
-    act: (s) => s.openRun('r2'),
-    expected: { runId: 'r2', editorTarget: null },
-  },
-  {
-    name: 'closeRun clears only the run id',
-    setup: { runId: 'r2', editorTarget: { mode: 'new' } },
-    act: (s) => s.closeRun(),
-    expected: { runId: null, editorTarget: { mode: 'new' } },
+    name: 'closeDescribe clears only describeOpen',
+    setup: { describeOpen: true, detailsAutomationId: 'a1' },
+    act: (s) => s.closeDescribe(),
+    expected: { describeOpen: false, detailsAutomationId: 'a1' },
   },
 ];
 
-describe('useAutomationsNav', () => {
-  beforeEach(() => {
-    useAutomationsNav.setState({ open: false, editorTarget: null, runId: null });
+beforeEach(() => {
+  useAutomationsNav.setState({
+    editorTarget: null,
+    describeOpen: false,
+    detailsAutomationId: null,
+    selectedRunId: null,
   });
+  useUiPrefs.setState({ sidebarView: 'chats' });
+});
 
+describe('useAutomationsNav', () => {
   it.each(SETTER_CASES)('$name', ({ setup, act, expected }) => {
     useAutomationsNav.setState(setup);
     act(useAutomationsNav.getState());
     expect(useAutomationsNav.getState()).toMatchObject(expected);
   });
 
-  it('openEditor accepts an optional draft on the new-mode target (Describe-it → Open in editor)', () => {
-    const draft = { name: 'Daily health log', scope: 'global' as const, definition: { triggers: [], steps: [] } };
-    useAutomationsNav.getState().openEditor({ mode: 'new', draft });
-    expect(useAutomationsNav.getState().editorTarget).toEqual({ mode: 'new', draft });
+  it('openHost shows the Automations rail view without touching any open sub-view', () => {
+    useAutomationsNav.setState({ detailsAutomationId: 'a1' });
+    useAutomationsNav.getState().openHost();
+    expect(useUiPrefs.getState().sidebarView).toBe('automations');
+    expect(useAutomationsNav.getState().detailsAutomationId).toBe('a1');
   });
 
-  describe('describe flow', () => {
-    beforeEach(() => {
-      useAutomationsNav.setState({ open: false, editorTarget: null, runId: null, describeOpen: false });
+  describe('openEditor / closeEditor — remembers where it came from (2026-10 redesign)', () => {
+    it('opening the editor on top of an open details view leaves detailsAutomationId set, so closing falls back to it', () => {
+      useAutomationsNav.setState({ detailsAutomationId: 'a1', selectedRunId: 'r1' });
+      useAutomationsNav.getState().openEditor({ mode: 'edit', automationId: 'a1' });
+      expect(useAutomationsNav.getState().detailsAutomationId).toBe('a1');
+
+      useAutomationsNav.getState().closeEditor();
+      const s = useAutomationsNav.getState();
+      expect(s.editorTarget).toBeNull();
+      expect(s.detailsAutomationId).toBe('a1');
     });
 
-    it('openDescribe opens describe and clears any open editor/run', () => {
-      useAutomationsNav.setState({ editorTarget: { mode: 'new' }, runId: 'r1' });
+    it('a brand-new editor target clears any open describe flow', () => {
+      useAutomationsNav.setState({ describeOpen: true });
+      useAutomationsNav.getState().openEditor({ mode: 'new' });
+      expect(useAutomationsNav.getState().describeOpen).toBe(false);
+    });
+
+    it('accepts an optional draft on the new-mode target (Describe-it → Open in editor)', () => {
+      const draft = { name: 'Daily health log', scope: 'global' as const, definition: { triggers: [], steps: [] } };
+      useAutomationsNav.getState().openEditor({ mode: 'new', draft });
+      expect(useAutomationsNav.getState().editorTarget).toEqual({ mode: 'new', draft });
+    });
+  });
+
+  describe('openDescribe / closeDescribe', () => {
+    it('opening describe clears any open editor, leaving detailsAutomationId as-is', () => {
+      useAutomationsNav.setState({ editorTarget: { mode: 'new' }, detailsAutomationId: 'a1' });
       useAutomationsNav.getState().openDescribe();
       const s = useAutomationsNav.getState();
       expect(s.describeOpen).toBe(true);
       expect(s.editorTarget).toBeNull();
-      expect(s.runId).toBeNull();
-    });
-
-    it('closeDescribe clears only describeOpen', () => {
-      useAutomationsNav.setState({ describeOpen: true, runId: 'r1' });
-      useAutomationsNav.getState().closeDescribe();
-      const s = useAutomationsNav.getState();
-      expect(s.describeOpen).toBe(false);
-      expect(s.runId).toBe('r1');
-    });
-
-    it('openEditor and openRun both clear describeOpen', () => {
-      useAutomationsNav.setState({ describeOpen: true });
-      useAutomationsNav.getState().openEditor({ mode: 'new' });
-      expect(useAutomationsNav.getState().describeOpen).toBe(false);
-
-      useAutomationsNav.setState({ describeOpen: true });
-      useAutomationsNav.getState().openRun('r1');
-      expect(useAutomationsNav.getState().describeOpen).toBe(false);
-    });
-
-    it('close resets describeOpen too', () => {
-      useAutomationsNav.setState({ open: true, describeOpen: true });
-      useAutomationsNav.getState().close();
-      expect(useAutomationsNav.getState().describeOpen).toBe(false);
+      expect(s.detailsAutomationId).toBe('a1');
     });
   });
 
-  describe('details flow (todo #233)', () => {
-    beforeEach(() => {
-      useAutomationsNav.setState({ open: false, editorTarget: null, runId: null, detailsAutomationId: null });
-    });
-
-    it('openDetails sets the automation id and clears any open editor/run/describe', () => {
-      useAutomationsNav.setState({ editorTarget: { mode: 'new' }, runId: 'r1', describeOpen: true });
+  describe('openDetails / closeDetails / selectRun', () => {
+    it('openDetails sets the automation id, defaults to Overview, and clears any open editor/describe', () => {
+      useAutomationsNav.setState({ editorTarget: { mode: 'new' }, describeOpen: true, selectedRunId: 'stale' });
       useAutomationsNav.getState().openDetails('auto-1');
       const s = useAutomationsNav.getState();
       expect(s.detailsAutomationId).toBe('auto-1');
       expect(s.editorTarget).toBeNull();
-      expect(s.runId).toBeNull();
       expect(s.describeOpen).toBe(false);
+      expect(s.selectedRunId).toBeNull();
     });
 
-    it('closeDetails clears only the details target', () => {
-      useAutomationsNav.setState({ detailsAutomationId: 'auto-1', runId: 'r1' });
+    it('openDetails accepts a runId that pins the column selection (a toast\'s "View run")', () => {
+      useAutomationsNav.getState().openDetails('auto-1', 'run-9');
+      const s = useAutomationsNav.getState();
+      expect(s.detailsAutomationId).toBe('auto-1');
+      expect(s.selectedRunId).toBe('run-9');
+    });
+
+    it('selectRun changes the column selection without touching detailsAutomationId', () => {
+      useAutomationsNav.setState({ detailsAutomationId: 'auto-1', selectedRunId: null });
+      useAutomationsNav.getState().selectRun('run-1');
+      expect(useAutomationsNav.getState()).toMatchObject({ detailsAutomationId: 'auto-1', selectedRunId: 'run-1' });
+
+      useAutomationsNav.getState().selectRun(null);
+      expect(useAutomationsNav.getState()).toMatchObject({ detailsAutomationId: 'auto-1', selectedRunId: null });
+    });
+
+    it('closeDetails clears the automation id and the run selection together', () => {
+      useAutomationsNav.setState({ detailsAutomationId: 'auto-1', selectedRunId: 'run-1' });
       useAutomationsNav.getState().closeDetails();
       const s = useAutomationsNav.getState();
       expect(s.detailsAutomationId).toBeNull();
-      expect(s.runId).toBe('r1');
+      expect(s.selectedRunId).toBeNull();
     });
 
-    it('openEditor, openRun, and openDescribe all clear an open details target', () => {
-      useAutomationsNav.setState({ detailsAutomationId: 'auto-1' });
-      useAutomationsNav.getState().openEditor({ mode: 'new' });
-      expect(useAutomationsNav.getState().detailsAutomationId).toBeNull();
-
-      useAutomationsNav.setState({ detailsAutomationId: 'auto-1' });
-      useAutomationsNav.getState().openRun('r1');
-      expect(useAutomationsNav.getState().detailsAutomationId).toBeNull();
-
-      useAutomationsNav.setState({ detailsAutomationId: 'auto-1' });
-      useAutomationsNav.getState().openDescribe();
-      expect(useAutomationsNav.getState().detailsAutomationId).toBeNull();
-    });
-
-    it('close resets detailsAutomationId too', () => {
-      useAutomationsNav.setState({ open: true, detailsAutomationId: 'auto-1' });
-      useAutomationsNav.getState().close();
-      expect(useAutomationsNav.getState().detailsAutomationId).toBeNull();
+    it('openEditor leaves both detailsAutomationId and the run selection alone, so Cancel lands back on the same run', () => {
+      useAutomationsNav.setState({ detailsAutomationId: 'auto-1', selectedRunId: 'run-1' });
+      useAutomationsNav.getState().openEditor({ mode: 'edit', automationId: 'auto-1' });
+      expect(useAutomationsNav.getState()).toMatchObject({ detailsAutomationId: 'auto-1', selectedRunId: 'run-1' });
     });
   });
 });

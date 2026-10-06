@@ -6,14 +6,15 @@
  * through this mount while split, so a focus click changes only context
  * (`switchToThread`), never a mount — no transcript remount, no scroll jump.
  *
- * The zone is a complete chat column: the regular ChatCardHeader (zone mode —
- * close ✕ instead of the whole-surface controls) and its own session panel +
- * rail, both resolving per zone because `useActiveIdentity` and the panel
- * cards read the rebound `threadListItem`/extras contexts.
+ * The zone is a complete chat column: a `ChatColumnHeader` (name, fork-parent
+ * link, its own session-details toggle, close ✕) and its OWN session panel, resolving
+ * per zone because `useActiveIdentity` and the panel sections read the rebound
+ * `threadListItem`/extras contexts. Each half opens/closes its panel
+ * independently (per-column open state); a half too narrow to dock floats it.
  *
- * The zone holds its own live-subscription ref; `subscribeLive` is ref-counted
- * on the controller, so the focused zone (also main, whose per-item runtime
- * hook holds a ref of its own) is safe.
+ * The zone holds its own live-subscription ref and an activation hold (both
+ * counted on the controller), so the focused zone — also main, whose per-item
+ * runtime hook holds its own — is safe, and the unfocused one stays attached.
  */
 import { useCallback, useEffect, useMemo } from 'react';
 import { AuiConfig, AuiProvider, ExternalThread, useAui, type AppendMessage } from '@assistant-ui/react';
@@ -21,13 +22,14 @@ import { Derived } from '@assistant-ui/store';
 import { cn } from '@/lib/utils';
 import { SessionPanel } from '@/features/session-panel/SessionPanel';
 import { useSessionPanelState } from '@/features/session-panel/use-session-panel-state';
+import { zoneColumnId } from '@/features/session-panel/panel-control-store';
 import { chatControllerRegistry } from '../../sessions/runtime/chat-controller-registry';
 import { useDaemonPort } from '../../sessions/runtime/daemon-port-context';
 import { CHAT_ATTACHMENT_ADAPTER, useControllerState } from '../runtime/use-chat-thread-runtime';
 import { buildChatExtras, isRunningFromState, useChatExtrasState } from '../runtime/chat-extras';
 import { useNativeThreadMessages } from '../runtime/use-native-thread-messages';
-import { ChatCardHeader } from '../thread/ChatCardHeader';
 import { ChatThread } from '../thread/ChatThread';
+import { ChatColumnHeader } from '../thread/ChatColumnHeader';
 import { SideChatHost } from '@/features/side-chat/SideChatHost';
 
 export function ChatZone({
@@ -48,13 +50,20 @@ export function ChatZone({
   const port = useDaemonPort();
   const controller = chatControllerRegistry.getOrCreate(chatId, port);
   const state = useControllerState(controller);
-  const panelState = useSessionPanelState();
+  const panelState = useSessionPanelState(zoneColumnId(chatId));
 
-  // Seed once + hold this zone's live ref for as long as it is visible.
+  // Seed once + hold this zone's live ref AND its facade-plane activation for
+  // as long as it is visible: activation otherwise follows the main thread
+  // only, so an unfocused zone never attached its transcript (blank until
+  // clicked) and a zone that lost focus stopped streaming.
   useEffect(() => {
     void controller.load();
     const stop = controller.subscribeLive();
-    return stop;
+    const release = controller.holdActive();
+    return () => {
+      release();
+      stop();
+    };
   }, [controller]);
 
   const messages = useNativeThreadMessages(state);
@@ -114,14 +123,21 @@ export function ChatZone({
           if (!focused) onFocus();
         }}
       >
-        <ChatCardHeader zone={{ chatId, onClose }} />
-        <div className="flex min-h-0 flex-1 overflow-hidden">
-          {/* The thread column this zone's panel floats over — measured per
-              zone, so each side derives its own rail/overlay mode from its own width. */}
-          <SideChatHost parentChatId={chatId} threadRef={panelState.hostRef}>
-            <ChatThread />
-            <SessionPanel state={panelState} />
+        {/* Measured per zone, before the panel takes its width, so each side
+            derives its own inline/overlay mode from its own width. The header
+            sits INSIDE the transcript column so the panel runs full height. */}
+        <div ref={panelState.hostRef} data-chat-column className="relative flex min-h-0 flex-1 overflow-hidden">
+          <SideChatHost parentChatId={chatId}>
+            <ChatColumnHeader
+              columnId={zoneColumnId(chatId)}
+              toggleTestId={`session-panel-toggle-${chatId}`}
+              zone={{ chatId, onClose }}
+            />
+            <div className="min-h-0 flex-1">
+              <ChatThread />
+            </div>
           </SideChatHost>
+          <SessionPanel state={panelState} />
         </div>
       </div>
     </AuiProvider>

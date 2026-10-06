@@ -32,6 +32,7 @@ import { useAutomationsNav } from '../use-automations-nav';
 import { useAutomationsStore } from '../use-automations-store';
 import { useAutomationToasts } from '../use-automation-toasts';
 import { mfToast } from '@/lib/toast';
+import { useUiPrefs } from '@/store/ui-prefs';
 
 let handler: (event: DaemonEvent) => void = () => {};
 
@@ -47,7 +48,8 @@ function mountWithHandler() {
 beforeEach(() => {
   handler = () => {};
   vi.clearAllMocks();
-  useAutomationsNav.setState({ open: false, runId: null, editorTarget: null });
+  useAutomationsNav.setState({ detailsAutomationId: null, selectedRunId: null, editorTarget: null });
+  useUiPrefs.setState({ sidebarView: 'chats' });
 });
 
 describe('useAutomationToasts — automation.notification', () => {
@@ -84,8 +86,9 @@ describe('useAutomationToasts — automation.notification', () => {
     const [call] = vi.mocked(mfToast).mock.calls[0]!;
     call.action!.onClick();
 
-    expect(useAutomationsNav.getState().open).toBe(true);
-    expect(useAutomationsNav.getState().runId).toBe('run-2');
+    expect(useUiPrefs.getState().sidebarView).toBe('automations');
+    expect(useAutomationsNav.getState().detailsAutomationId).toBe('auto-1');
+    expect(useAutomationsNav.getState().selectedRunId).toBe('run-2');
   });
 
   it('passes the first chatId (native "Open session" CTA) instead of an action when chat ids are present', () => {
@@ -123,7 +126,8 @@ describe('useAutomationToasts — automation.completed', () => {
     expect(opts?.action?.label).toBe('View run');
 
     opts!.action!.onClick();
-    expect(useAutomationsNav.getState().runId).toBe('run-4');
+    expect(useAutomationsNav.getState().detailsAutomationId).toBe('auto-1');
+    expect(useAutomationsNav.getState().selectedRunId).toBe('run-4');
   });
 
   it('fires an error toast with the result as description on status:failed', () => {

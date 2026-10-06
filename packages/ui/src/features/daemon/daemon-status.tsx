@@ -7,7 +7,7 @@
  * reads `muted-foreground` and anything wrong reads `destructive`, the same
  * collapse `StatusDot` made.
  */
-import { LaptopIcon, LockIcon, ServerIcon } from 'lucide-react';
+import { LockIcon, MonitorIcon, ServerIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type DaemonStatus = 'connected' | 'connecting' | 'unreachable' | 'needs-repair';
@@ -69,7 +69,8 @@ export function ConnDot({ status }: { status: DaemonStatus }) {
   return <span aria-label={meta.label} className={cn('inline-block size-2 shrink-0 rounded-full', meta.dotClass)} />;
 }
 
+/** Local reads as "this machine" (`Monitor`), remote as a server. */
 export function DaemonGlyph({ kind, className }: { kind: 'local' | 'remote'; className?: string }) {
-  const Icon = kind === 'local' ? LaptopIcon : ServerIcon;
+  const Icon = kind === 'local' ? MonitorIcon : ServerIcon;
   return <Icon aria-hidden className={cn('size-4 shrink-0 text-muted-foreground', className)} />;
 }

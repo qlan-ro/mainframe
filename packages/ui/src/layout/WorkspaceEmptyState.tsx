@@ -155,7 +155,7 @@ export function WorkspaceEmptyState() {
       {/* max-h-full + min-h-0: in a short bottom strip the card must shrink and
           scroll its rows rather than clip top and bottom against the centering. */}
       <Card data-testid="workspace-empty-state" className="max-h-full w-72 gap-0 overflow-hidden py-0">
-        <div className="flex max-h-72 min-h-0 flex-col gap-0.5 overflow-y-auto p-1">
+        <div className="flex max-h-72 min-h-0 flex-col gap-0.5 overflow-y-auto p-1 [scrollbar-width:none]">
           <FileRows />
           <Separator className="my-1" />
           <RunRows />

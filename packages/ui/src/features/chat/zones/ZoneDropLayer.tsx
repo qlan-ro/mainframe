@@ -66,6 +66,7 @@ export function ZoneDropLayer({ canSplit = true }: { canSplit?: boolean }) {
   const aui = useAui();
   const draggingId = useTabDragStore((s) => s.draggingId);
   const zones = useZonesStore((s) => s.zones);
+  const fits = useZonesStore((s) => s.splitFits);
   const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
 
   if (draggingId == null || draggingId.startsWith('__LOCALID_') || !canSplit) return null;
@@ -90,7 +91,7 @@ export function ZoneDropLayer({ canSplit = true }: { canSplit?: boolean }) {
 
   // Only a VISIBLE split offers per-zone targets — a parked pair is off
   // screen, and the drop below rebuilds the pair around the current chat.
-  if (splitVisible(zones, mainThreadId)) {
+  if (splitVisible(zones, mainThreadId, fits)) {
     return (
       <div className={LAYER}>
         <DropTarget testId="zone-drop-left" label="Show here" className="flex-1" onDrop={() => dropOnZone(0)} />

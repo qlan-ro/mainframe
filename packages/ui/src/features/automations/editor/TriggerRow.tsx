@@ -24,7 +24,7 @@ import type { LucideIcon } from 'lucide-react';
 import { Hint } from '@/components/ui/hint';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { AutomationEventName, AutomationTrigger, EventTrigger } from '../contract';
-import { useAutomationsStore } from '../data/use-automations-store';
+import { selectModalLibrary, useAutomationsStore } from '../data/use-automations-store';
 import { SchedulePicker } from './SchedulePicker';
 import { WebhookTriggerCard } from './WebhookTriggerCard';
 
@@ -50,7 +50,7 @@ function EventTriggerFields({
   onChange: (next: EventTrigger) => void;
   testId: string;
 }) {
-  const definitions = useAutomationsStore((s) => s.definitions);
+  const { definitions } = useAutomationsStore(selectModalLibrary);
 
   function handleEvent(event: AutomationEventName) {
     const next: EventTrigger = { id: trigger.id, kind: 'event', event };

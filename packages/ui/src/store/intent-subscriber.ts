@@ -36,7 +36,6 @@ import { useEditorStore } from './editor';
 import { useFilesStore } from './files';
 import { useOverlaysStore } from './overlays';
 import { useActiveBasesStore } from './active-bases-store';
-import { useSettingsStore } from './settings';
 import type { FileTabKind } from './run-pane-file-tabs';
 
 /** Ensure the workspace surface is visible in the layout. Pure store call. */
@@ -148,7 +147,7 @@ export function subscribeToFileIntents(): () => void {
     }
 
     if (intent.type === 'open-settings') {
-      useSettingsStore.getState().open();
+      useUiPrefs.getState().setSidebarView('settings');
       return;
     }
 

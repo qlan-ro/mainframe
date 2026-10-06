@@ -31,7 +31,7 @@ import { Hint } from '@/components/ui/hint';
 import { mfToast } from '@/lib/toast';
 import { formatRelativeTime } from '@/features/sessions/view-model/relative-time';
 import type { WebhookRegistration, WebhookTrigger } from '../contract';
-import { useAutomationsStore } from '../data/use-automations-store';
+import { selectAutomationById, useAutomationsStore } from '../data/use-automations-store';
 
 const SAVE_FIRST = 'Save the automation first';
 
@@ -210,9 +210,7 @@ export interface WebhookTriggerCardProps {
 
 export function WebhookTriggerCard({ trigger, onChange, automationId, testId }: WebhookTriggerCardProps) {
   const gateway = useAutomationsStore((s) => s.gateway);
-  const saved = useAutomationsStore((s) =>
-    automationId ? s.definitions.find((d) => d.id === automationId) : undefined,
-  );
+  const saved = useAutomationsStore(selectAutomationById(automationId ?? null));
   const [registering, setRegistering] = useState(false);
   const [secret, setSecret] = useState<string | null>(null);
   const registration = trigger.registration;

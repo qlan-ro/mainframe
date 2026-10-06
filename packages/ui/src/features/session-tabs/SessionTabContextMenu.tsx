@@ -3,9 +3,13 @@
  * actions that otherwise need a hover target (keep-open, close).
  *
  * Every gesture here already exists — ⌘-click opens a split, drag-to-split
- * retargets one, ⌘\ dissolves one, the ✕ closes a tab. None of them announces
- * itself, so this menu is where they become discoverable; it deliberately adds
- * no capability of its own.
+ * retargets one, ⌘\ dissolves one, the ✕ closes a tab, ⌘1 hides the chat
+ * surface. None of them announces itself, so this menu is where they become
+ * discoverable; it deliberately adds no capability of its own. The
+ * whole-surface "Hide Chat" moved here from the retired chat header — it is
+ * about the surface, not the tab, so every tab's menu offers it. (Placing the
+ * workspace beside / below the chat is not offered: the title bar's surface
+ * toggle lights it.)
  *
  * Wraps its child — the pill is the trigger — so the whole tab responds,
  * including the parts its ✕ and pin overlay (the SessionContextMenu pattern).
@@ -13,7 +17,7 @@
  * data-testid: session-tab-ctx-<action>.
  */
 import type { ReactNode } from 'react';
-import { Columns2, GitFork, MessageSquarePlus, PinIcon, SquareSplitHorizontal, XIcon } from 'lucide-react';
+import { Columns2, EyeOff, GitFork, MessageSquarePlus, PinIcon, SquareSplitHorizontal, XIcon } from 'lucide-react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -23,6 +27,13 @@ import {
 } from '@/components/ui/context-menu';
 import { Hint } from '@/components/ui/hint';
 import type { ForkAvailability } from '@/features/sessions/view-model/fork-availability';
+
+/** The chat SURFACE's actions — the same for every tab. */
+export interface SurfaceMenuActions {
+  /** False while chat is the last lit surface — the dynamic floor. */
+  canHide: boolean;
+  onHide: () => void;
+}
 
 interface SessionTabContextMenuProps {
   /** A member of the open pair — the split actions invert for it. */
@@ -40,6 +51,7 @@ interface SessionTabContextMenuProps {
   /** True for a real, non-side-chat tab (todo #344) — a draft has no chat id yet. */
   canOpenSideChat: boolean;
   onOpenSideChat: () => void;
+  surface: SurfaceMenuActions;
   children: ReactNode;
 }
 
@@ -55,6 +67,7 @@ export function SessionTabContextMenu({
   onFork,
   canOpenSideChat,
   onOpenSideChat,
+  surface,
   children,
 }: SessionTabContextMenuProps) {
   return (
@@ -101,6 +114,11 @@ export function SessionTabContextMenu({
             Open Side Chat
           </ContextMenuItem>
         )}
+        <ContextMenuSeparator />
+        <ContextMenuItem data-testid="session-tab-ctx-hide-chat" disabled={!surface.canHide} onSelect={surface.onHide}>
+          <EyeOff />
+          Hide Chat
+        </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem data-testid="session-tab-ctx-close" onSelect={onClose}>
           <XIcon />

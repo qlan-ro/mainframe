@@ -1,13 +1,14 @@
 /**
  * Pure filter/sort helpers for the Tasks surface — the full Tasks board and the
- * session rail's Tasks panel, which orders its rows with orderByStatusThenRecency.
+ * session panel's Tasks section and the sidebar Tasks list, which order rows
+ * with newestFirst.
  *
  * Ported from packages/app-electron/src/renderer/components/todos/TodoFilterBar.tsx
  * (lines 29–81). No side-effects; safe to test in isolation.
  *
  * Search scope is todo.title ONLY — matches desktop behavior exactly.
  */
-import type { Todo, TodoType, TodoPriority, TodoStatus } from '@/lib/api/todos';
+import type { Todo, TodoType, TodoPriority } from '@/lib/api/todos';
 
 export interface TodoFilters {
   types: TodoType[];
@@ -50,14 +51,13 @@ export function sortTodos(todos: Todo[], sort: TodoSort): Todo[] {
   return copy;
 }
 
-const ACTIVE_STATUS_RANK: Record<TodoStatus, number> = { in_progress: 0, open: 1, done: 2 };
-
-export function orderByStatusThenRecency(todos: Todo[]): Todo[] {
-  const byRecency = sortTodos(todos, { key: 'updated', dir: 'desc' });
-  // sortTodos returns a copy, so sorting in place spares the caller's array; the
-  // sort is stable, so grouping by status keeps each block newest-first.
-  byRecency.sort((a, b) => (ACTIVE_STATUS_RANK[a.status] ?? 3) - (ACTIVE_STATUS_RANK[b.status] ?? 3));
-  return byRecency;
+/**
+ * Most recent first: the highest task number leads (numbers grow with each new
+ * task). Ties — two projects' tasks sharing a number in a merged list — break
+ * on creation time, newest first. Returns a copy.
+ */
+export function newestFirst(todos: readonly Todo[]): Todo[] {
+  return [...todos].sort((a, b) => b.number - a.number || b.created_at.localeCompare(a.created_at));
 }
 
 export function extractAllLabels(todos: Todo[]): string[] {

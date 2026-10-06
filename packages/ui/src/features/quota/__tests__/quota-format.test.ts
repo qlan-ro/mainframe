@@ -11,6 +11,7 @@ import {
   minutesAgo,
   severityOf,
   windowLabel,
+  windowTag,
 } from '../quota-format';
 
 const NOW = 1_752_750_000_000; // fixed injected clock
@@ -43,6 +44,7 @@ describe('deriveQuotaRow — session-first headline, tightest-window fallback, &
     };
     expect(deriveQuotaRow(quota, NOW)).toEqual({
       state: 'ok',
+      kind: 'session',
       usedPercent: 1,
       severity: 'normal',
       resetsAt: NOW + 2 * HOUR,
@@ -59,6 +61,7 @@ describe('deriveQuotaRow — session-first headline, tightest-window fallback, &
     };
     expect(deriveQuotaRow(quota, NOW)).toEqual({
       state: 'ok',
+      kind: 'weekly',
       usedPercent: 53,
       severity: 'normal',
       resetsAt: NOW + 6 * DAY,
@@ -76,6 +79,7 @@ describe('deriveQuotaRow — session-first headline, tightest-window fallback, &
     };
     expect(deriveQuotaRow(quota, NOW)).toEqual({
       state: 'ok',
+      kind: 'weekly',
       usedPercent: 53,
       severity: 'normal',
       resetsAt: NOW + 6 * DAY,
@@ -111,6 +115,14 @@ describe('deriveQuotaRow — session-first headline, tightest-window fallback, &
       session: { kind: 'session', usedPercent: 50, resetsAt: NOW - HOUR },
     };
     expect(deriveQuotaRow(quota, NOW)).toEqual({ state: 'unknown' });
+  });
+});
+
+describe('windowTag', () => {
+  it('tags the session window 5h, and every other window kind wk', () => {
+    expect(windowTag('session')).toBe('5h');
+    expect(windowTag('weekly')).toBe('wk');
+    expect(windowTag('weekly-model')).toBe('wk');
   });
 });
 

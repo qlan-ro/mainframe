@@ -21,13 +21,13 @@
  * - Everything else (a sent local thread or a pre-existing chat) shows the
  *   plain ChatThread.
  *
- * The session panel floats over the thread column in the last two cases; the
- * transcript keeps the column's full width, centred. Its state machine lives
- * here because the column is the width the panel follows — the panel sits in
- * the gutter the centred transcript leaves, so it needs the column's TOTAL
- * width, which shrinks when the surface is split or a side chat sits beside
- * it, and which the panel measuring its own box would never see.
+ * The session panel DOCKS beside the thread column in the last two cases (or
+ * overlays it when the column is too narrow to share). Its state machine
+ * lives here because the column is the width the panel follows — it needs the
+ * column's TOTAL width, before the panel takes its own, which the panel
+ * measuring its own box would never see.
  */
+import { useEffect } from 'react';
 import { useAui, useAuiState } from '@assistant-ui/react';
 import { soleProjectId, useSessionFilters } from '@/store/session-filters';
 import { SessionPanel } from '@/features/session-panel/SessionPanel';
@@ -41,8 +41,8 @@ import { useZoneShortcutActions } from '@/features/chat/zones/use-zone-shortcut-
 import { useShortcutAction } from '@/features/shortcuts/action-store';
 import { focusVisibleComposer } from '@/features/chat/composer/focus-composer';
 import { ZoneDropLayer } from '@/features/chat/zones/ZoneDropLayer';
-import { ChatCardHeader } from '../../chat/thread/ChatCardHeader';
 import { ChatThread } from '../../chat/thread/ChatThread';
+import { ChatColumnHeader } from '../../chat/thread/ChatColumnHeader';
 import { SideChatHost } from '@/features/side-chat/SideChatHost';
 import { ChatEmptyState } from './ChatEmptyState';
 import { useNewThreadAutoConfig } from './use-new-thread-auto-config';
@@ -70,13 +70,12 @@ export function ChatSurface() {
   // hostRef only attaches in single mode, so it cannot feed this decision.
   const [surfaceWidth, measureSurface] = useMeasuredWidth();
   const splitFits = surfaceWidth == null || surfaceWidth >= MIN_ZONE_WIDTH * 2 + 1;
+  // Publish the gate: the tab strip, the reconciler and the drop layer must
+  // agree with what this surface actually renders.
+  const setSplitFits = useZonesStore((s) => s.setSplitFits);
+  useEffect(() => setSplitFits(splitFits), [splitFits, setSplitFits]);
 
-  const panelState = useSessionPanelState();
-  // `hostRef` is the hook's state-backed callback ref — passed straight through,
-  // so the hook re-measures whenever the thread column (re)mounts. On a cold boot the
-  // initializing branch renders first and the row arrives on a later commit;
-  // a RefObject here left the panel unmeasured (hidden) in the packaged app.
-  const setHostRef = panelState.hostRef;
+  const panelState = useSessionPanelState('main');
 
   const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
   // s.threadListItem is the native active ThreadListItemState; its `status`
@@ -110,7 +109,6 @@ export function ChatSurface() {
   if (isNewLocal && !loading && projects.length === 0 && draftCfg?.projectId !== null) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
-        <ChatCardHeader />
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto p-6">
           <ChatEmptyState variant="firstrun" />
         </div>
@@ -125,7 +123,6 @@ export function ChatSurface() {
   if (isNewLocal && (isInitializing || initialization.status === 'error')) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
-        <ChatCardHeader />
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-y-auto p-6">
           <p>{isInitializing ? 'Initializing session…' : 'Couldn’t initialize session'}</p>
           {initialization.status === 'error' && (
@@ -185,14 +182,23 @@ export function ChatSurface() {
 
   return (
     <div ref={measureSurface} className="flex min-h-0 flex-1 flex-col">
-      <ChatCardHeader />
-      <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        {/* The parent's thread column is what the panel measures and floats
-            over, so a side chat beside it keeps its own rail (as split zones do). */}
-        <SideChatHost parentChatId={mainThreadId} threadRef={setHostRef}>
-          <ChatThread emptyState={welcome} />
-          <SessionPanel state={panelState} />
+      {/* The chat's title row (ChatColumnHeader) sits INSIDE the transcript
+          column, so the docked panel runs the full height beside it. Its old controls
+          live in the title bar (D7). `hostRef` is the hook's state-backed
+          callback ref: on a cold boot the initializing branch renders first and
+          this row arrives on a later commit, so a RefObject would measure null
+          once and leave the panel hidden for good. The row is measured BEFORE
+          the docked panel takes its width; `data-chat-column` is where the
+          footer publishes its height for the overlay. */}
+      <div ref={panelState.hostRef} data-chat-column className="relative flex min-h-0 flex-1 overflow-hidden">
+        <SideChatHost parentChatId={mainThreadId}>
+          <ChatColumnHeader columnId="main" toggleTestId="session-panel-toggle" tourAnchor />
+          {/* The thread is h-full: it needs a box that is "the rest", not the column. */}
+          <div className="min-h-0 flex-1">
+            <ChatThread emptyState={welcome} />
+          </div>
         </SideChatHost>
+        <SessionPanel state={panelState} />
         <ZoneDropLayer canSplit={splitFits} />
       </div>
     </div>

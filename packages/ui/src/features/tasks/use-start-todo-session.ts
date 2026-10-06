@@ -17,6 +17,10 @@
  *
  * Status transition: if the todo is `open`, it is moved to `in_progress`
  * before the session starts (mirrors desktop behavior).
+ *
+ * `projectId` is a per-call argument, not a hook-level one: Tasks shows
+ * several projects at once now (multi-project), so each todo carries its
+ * OWN project — there is no single "the" project to bind the hook to.
  */
 import { useCallback } from 'react';
 import { useAui } from '@assistant-ui/react';
@@ -25,13 +29,11 @@ import { useTodosStore } from './use-todos-store';
 
 export function useStartTodoSession(
   port: number,
-  projectId: string | undefined,
-): (todoId: string, currentStatus?: TodoStatus) => Promise<void> {
+): (todoId: string, projectId: string, currentStatus?: TodoStatus) => Promise<void> {
   const aui = useAui();
 
   return useCallback(
-    async (todoId: string, currentStatus?: TodoStatus): Promise<void> => {
-      if (!projectId) return;
+    async (todoId: string, projectId: string, currentStatus?: TodoStatus): Promise<void> => {
       if (currentStatus === 'open') {
         await moveTodo(port, todoId, 'in_progress');
         await useTodosStore.getState().load(port, projectId);
@@ -48,6 +50,6 @@ export function useStartTodoSession(
       // Prefill the new chat's composer — NOT auto-sent (parity with desktop).
       aui.composer.setText(initialMessage);
     },
-    [port, projectId, aui],
+    [port, aui],
   );
 }

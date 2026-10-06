@@ -3,7 +3,8 @@ import { isSurfaceFloor, useLayoutStore } from '@/store/layout';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Hint } from '@/components/ui/hint';
 import { cn } from '@/lib/utils';
-import { ChatGlyph, EditorGlyph } from './surface-icons';
+import { Code } from 'lucide-react';
+import { ChatGlyph } from './surface-icons';
 
 interface SurfaceDef {
   id: SurfaceId;
@@ -14,9 +15,14 @@ interface SurfaceDef {
 
 const SURFACES: SurfaceDef[] = [
   { id: 'chat', label: 'Chat', Icon: ChatGlyph, activeColor: 'text-primary' },
-  { id: 'workspace', label: 'Workspace', Icon: EditorGlyph, activeColor: 'text-primary' },
+  { id: 'workspace', label: 'Workspace', Icon: Code, activeColor: 'text-primary' },
 ];
 
+/**
+ * The surface toggle pill in the title bar: a 32px `popover` pill holding two
+ * 28px items (Chat · Workspace). Both may be lit; the last lit one is the
+ * floor and cannot be toggled off.
+ */
 export function SurfaceRail() {
   const layout = useLayoutStore((s) => s.layout);
   const toggleSurface = useLayoutStore((s) => s.toggleSurface);
@@ -34,7 +40,7 @@ export function SurfaceRail() {
         const changed = SURFACES.find(({ id }) => lit.includes(id) !== next.includes(id));
         if (changed) toggleSurface(changed.id);
       }}
-      className="shrink-0 gap-0.5 rounded-lg bg-muted p-0.5"
+      className="h-8 shrink-0 gap-0.5 rounded-lg border bg-popover p-0.5"
     >
       {SURFACES.map(({ id, label, Icon, activeColor }) => {
         const on = lit.includes(id);
@@ -49,11 +55,11 @@ export function SurfaceRail() {
               data-tut={id === 'workspace' ? 'workspace' : undefined}
               disabled={isFloor}
               className={cn(
-                'h-7 w-8 min-w-0 flex-none rounded-md p-0 first:rounded-md last:rounded-md',
+                'size-7 min-w-0 flex-none rounded-md p-0 first:rounded-md last:rounded-md',
                 // Pressed chrome keys off store state, NOT data-[state=on]: the Hint's
                 // TooltipTrigger asChild overwrites the item's data-state with the
                 // tooltip's open-state ("closed"), so the Radix selector never matches.
-                on && 'bg-background shadow-sm hover:bg-background',
+                on && 'bg-accent shadow-sm hover:bg-accent',
                 isFloor && 'disabled:opacity-60',
               )}
             >

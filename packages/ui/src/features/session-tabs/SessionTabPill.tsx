@@ -1,36 +1,39 @@
 /**
- * SessionTabPill — one session tab in the title-bar strip: a project-colored
- * dot, the session title, and a hover close (×).
+ * SessionTabPill — one session tab in the title bar: a 14px lead slot (the
+ * provider dot, or the ⌘N badge while the hint modifier is held), the session
+ * title, and a hover ✕ — everything else (open in split, keep open, fork,
+ * side chat) lives in the right-click menu.
  *
- * A PREVIEW tab (editor-style temporary slot) renders its title italic and
- * grows a hover pin; double-click also pins. Pinned tabs are the plain form —
- * and so is an unsent draft, which is kept open until its first send demotes
- * it into the preview slot.
+ * A content-sized `rounded-md` pill, `h-8`, capped at `max-w-45` and never
+ * narrower than `min-w-24`: active is a filled `accent` pill with a soft
+ * shadow; inactive is quiet ink. (The old 2px underline is gone with the
+ * toolbar hairline it sat on.) The title fades only when it overflows, and it
+ * owns the pill's full width at rest: the controls sit out of flow and overlay
+ * its tail on hover (on the pill's ground, behind a short ramp) rather than
+ * reserving room while invisible.
  *
- * Styled as the v2 Tabs primitive's `line` variant (verdict after trying the
- * boxed and Chrome-filled treatments): transparent pills, the active tab
- * marked by a 2px `bg-foreground` underline sitting ON the toolbar's bottom
- * hairline. The vocabulary is borrowed rather than the primitive used — a
- * closeable tab is never Radix Tabs, because `TabsTrigger` renders a <button>
- * and the close control would nest buttons (the workspace strip's rule).
+ * Inside a split pair the pill is one SEGMENT (`segment`): the focused one is
+ * filled, the other is not, and a parked pair fills neither.
  *
- * The pill lives inside the toolbar's window-drag region; the strip container
- * opts out via `data-no-drag` (see host `init()`), so pointer-downs here reach
- * the pill instead of starting an OS window drag.
+ * A PREVIEW tab (editor-style temporary slot) renders its title italic;
+ * double-click or the menu's "Keep open" pins it. While another tab is being dragged, the ACTIVE pill
+ * is a drop target (highlight via state, not `:hover` — WKWebView freezes hover
+ * matching under a held button) and acts on pointerup, before the drag's
+ * rAF-deferred `end()`.
  *
- * data-testid: session-tab-<id> / session-tab-close-<id> / session-tab-pin-<id>.
+ * data-testid: session-tab-<id> / -close- / -waiting-.
  */
-import { useRef } from 'react';
-import { Pin, X } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { FadeLabel } from '@/components/ui/fade-label';
 import { Hint } from '@/components/ui/hint';
 import { cn } from '@/lib/utils';
 import { useTabDragStore } from '@/features/chat/zones/tab-drag-store';
-import { ProjectAvatar } from '@/features/sessions/ProjectAvatar';
-import { projectColor } from '@/features/sessions/sidebar/project-color';
 import type { ForkAvailability } from '@/features/sessions/view-model/fork-availability';
+import { ProviderDot } from '@/features/shared/ProviderDot';
 import { ShortcutIndexBadge } from '@/features/shortcuts/ShortcutIndexBadge';
-import { SessionTabContextMenu } from './SessionTabContextMenu';
+import { SessionTabContextMenu, type SurfaceMenuActions } from './SessionTabContextMenu';
 
 /** Pixels of pointer travel before a press becomes a drag-to-split. */
 const DRAG_THRESHOLD = 6;
@@ -40,62 +43,48 @@ export interface SessionTabEntry {
   title: string;
   projectId: string | undefined;
   projectName: string | undefined;
+  adapterId: string | undefined;
   active: boolean;
   /** The temporary slot — the next opened session replaces this tab. */
   preview: boolean;
   forkAvailability: ForkAvailability;
-  /**
-   * The chat's own pending gate OR its side chat's (todo #344) — distinct from
-   * `forkAvailability`'s internal `hasPending` check, which stays the chat's
-   * own value so fork gating is unaffected by a side chat waiting.
-   */
+  /** The chat's own pending gate OR its side chat's (todo #344). */
   hasPending: boolean;
   /** True for a real, non-side-chat tab (todo #344) — a draft has no chat id yet. */
   canOpenSideChat: boolean;
 }
 
-interface SessionTabPillProps {
-  tab: SessionTabEntry;
-  /** Inside the split pair's group container — the group owns the underline. */
-  grouped?: boolean;
+export type PillSegment = 'focused' | 'unfocused' | 'parked';
+
+export interface SessionTabPillActions {
   /** `split` is true on a ⌘-click — the open-in-split gesture. */
   onActivate: (id: string, split: boolean) => void;
   onClose: (id: string) => void;
   onPin: (id: string) => void;
-  /** 1-based ⌘N number, while the hint modifier is held; null the rest of the time. */
-  hintIndex?: number | null;
-  /** The open-in-split gesture has somewhere to go from this tab. */
-  canOpenInSplit: boolean;
   onOpenInSplit: (id: string) => void;
   onCloseSplit: (id: string) => void;
   onFork: (id: string) => void;
   onOpenSideChat: (id: string) => void;
+  /** A dragged tab was dropped on this (active) pill. */
+  onDropTab: (draggedId: string) => void;
+  surface: SurfaceMenuActions;
 }
 
-export function SessionTabPill({
-  tab,
-  grouped = false,
-  hintIndex = null,
-  onActivate,
-  onClose,
-  onPin,
-  canOpenInSplit,
-  onOpenInSplit,
-  onCloseSplit,
-  onFork,
-  onOpenSideChat,
-}: SessionTabPillProps) {
-  // Drag-to-split: a press that travels DRAG_THRESHOLD becomes a tab drag
-  // (tab-drag-store; ZoneDropLayer renders the targets and handles the drop).
-  // The flag swallows the click that follows a drag's pointerup. While the
-  // drag is live the page must not select text under the moving pointer —
-  // suppress selection globally and show a grabbing cursor until release.
+interface SessionTabPillProps extends SessionTabPillActions {
+  tab: SessionTabEntry;
+  /** Set inside a split pair; absent for a lone tab. */
+  segment?: PillSegment;
+  /** 1-based ⌘N number, while the hint modifier is held; null the rest of the time. */
+  hintIndex?: number | null;
+  canOpenInSplit: boolean;
+}
+
+/** Drag-to-split: a press that travels DRAG_THRESHOLD becomes a tab drag. */
+function useTabDrag(id: string) {
   const draggedRef = useRef(false);
-  const dragging = useTabDragStore((s) => s.draggingId === tab.id);
   const onPointerDown = (event: React.PointerEvent) => {
     if (event.button !== 0) return;
     const { clientX, clientY } = event;
-    const id = tab.id;
     const onMove = (e: PointerEvent) => {
       if (Math.abs(e.clientX - clientX) + Math.abs(e.clientY - clientY) < DRAG_THRESHOLD) return;
       if (useTabDragStore.getState().draggingId !== id) {
@@ -117,20 +106,39 @@ export function SessionTabPill({
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
   };
+  /** True once, for the click that follows a drag's pointerup. */
+  const consumeDragClick = () => {
+    const dragged = draggedRef.current;
+    draggedRef.current = false;
+    return dragged;
+  };
+  return { onPointerDown, consumeDragClick };
+}
+
+export function SessionTabPill({ tab, segment, hintIndex = null, canOpenInSplit, ...actions }: SessionTabPillProps) {
+  const { onPointerDown, consumeDragClick } = useTabDrag(tab.id);
+  const dragging = useTabDragStore((s) => s.draggingId === tab.id);
+  // Only the active pill receives a drop — a background tab has nothing to split against.
+  const dropTarget = useTabDragStore((s) => tab.active && s.draggingId != null && s.draggingId !== tab.id);
+  const [dropHover, setDropHover] = useState(false);
+  const filled = segment == null ? tab.active : segment === 'focused';
+  const inPair = segment != null;
+  const restingClose = filled || inPair;
 
   return (
     <SessionTabContextMenu
-      inSplit={grouped}
+      inSplit={inPair}
       canOpenInSplit={canOpenInSplit}
       preview={tab.preview}
-      onOpenInSplit={() => onOpenInSplit(tab.id)}
-      onCloseSplit={() => onCloseSplit(tab.id)}
-      onKeepOpen={() => onPin(tab.id)}
-      onClose={() => onClose(tab.id)}
+      onOpenInSplit={() => actions.onOpenInSplit(tab.id)}
+      onCloseSplit={() => actions.onCloseSplit(tab.id)}
+      onKeepOpen={() => actions.onPin(tab.id)}
+      onClose={() => actions.onClose(tab.id)}
       forkAvailability={tab.forkAvailability}
-      onFork={() => onFork(tab.id)}
+      onFork={() => actions.onFork(tab.id)}
       canOpenSideChat={tab.canOpenSideChat}
-      onOpenSideChat={() => onOpenSideChat(tab.id)}
+      onOpenSideChat={() => actions.onOpenSideChat(tab.id)}
+      surface={actions.surface}
     >
       <div
         data-testid={`session-tab-${tab.id}`}
@@ -138,48 +146,64 @@ export function SessionTabPill({
         aria-selected={tab.active}
         data-preview={tab.preview ? 'true' : 'false'}
         data-dragging={dragging || undefined}
+        data-drop-hover={dropHover || undefined}
         // preventDefault at MOUSEDOWN, not at the drag threshold: WebKit anchors
         // a native text selection on mousedown, and once that gesture starts no
         // later user-select/removeAllRanges stops it from painting the
         // transcript as the pointer crosses it.
         onMouseDown={(event) => event.preventDefault()}
         onPointerDown={onPointerDown}
+        onPointerEnter={() => dropTarget && setDropHover(true)}
+        onPointerLeave={() => setDropHover(false)}
+        onPointerUp={() => {
+          if (!dropTarget) return;
+          const draggedId = useTabDragStore.getState().draggingId;
+          setDropHover(false);
+          if (draggedId != null) actions.onDropTab(draggedId);
+        }}
         onClick={(event) => {
-          if (draggedRef.current) {
-            draggedRef.current = false;
-            return;
-          }
-          onActivate(tab.id, event.metaKey);
+          if (consumeDragClick()) return;
+          actions.onActivate(tab.id, event.metaKey);
         }}
         onDoubleClick={() => {
-          if (tab.preview) onPin(tab.id);
+          if (tab.preview) actions.onPin(tab.id);
         }}
         className={cn(
-          // h-full puts the underline on the toolbar's bottom hairline and the
-          // label on the toolbar midline — one alignment for every tab state.
-          'group relative flex h-full w-45 min-w-24 shrink cursor-pointer items-center gap-1.5 px-2 text-xs select-none',
+          'group relative flex max-w-45 min-w-24 shrink cursor-pointer items-center gap-1.5 rounded-md px-2 text-xs select-none',
+          // A pair segment fills the pair pill's content box (32px minus its 1px
+          // border): at h-8 it overflowed by 1px top and bottom, and the hover
+          // controls' ground painted over the pair's border.
+          inPair ? 'h-full' : 'h-8',
           // The dragged pill ghosts so the cursor + drop targets read as the live thing.
           dragging && 'opacity-40',
-          !grouped &&
-            'after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-foreground after:opacity-0 after:transition-opacity',
-          tab.active
-            ? cn('font-semibold text-foreground', !grouped && 'after:opacity-100')
+          filled
+            ? 'bg-accent font-semibold text-foreground shadow-sm'
             : 'font-medium text-muted-foreground hover:text-foreground',
+          // A background tab (or an unfocused pair segment) tints on hover —
+          // quieter than the active fill + shadow, so "pointed at" never reads
+          // as "selected".
+          !filled && 'hover:bg-(--tab-hover)',
+          dropHover && 'ring-2 ring-primary',
         )}
+        // One opaque hover ground, shared with the controls cluster below so the
+        // ✕ sits on exactly the pill's colour (no patch).
+        style={
+          {
+            // Mixed over whatever the pill sits on: the title bar for a lone tab, the pair pill for a segment.
+            '--tab-hover': `color-mix(in oklch, var(--sidebar-accent) 60%, var(${inPair ? '--popover' : '--sidebar'}))`,
+          } as React.CSSProperties
+        }
       >
-        {/* The badge takes the avatar's 14px slot rather than adding one, so
+        {/* The badge takes the dot's 14px slot rather than adding one, so
             holding the modifier never reflows the strip under the pointer. */}
-        <span className="relative inline-flex shrink-0">
+        <span className="relative inline-flex size-3.5 shrink-0 items-center justify-center">
           {hintIndex != null ? (
             <ShortcutIndexBadge index={hintIndex} data-testid={`session-tab-hint-${tab.id}`} />
-          ) : tab.projectId != null ? (
-            <ProjectAvatar name={tab.projectName ?? '?'} color={projectColor(tab.projectId)} size={14} />
           ) : (
-            <span className="size-1.5 shrink-0 rounded-full bg-muted-foreground/40" aria-hidden />
+            <ProviderDot adapterId={tab.adapterId ?? ''} testId={`session-tab-provider-${tab.id}`} />
           )}
-          {/* The chat's own pending gate or its side chat's (todo #344) — same
-              primary/pulse treatment as the sidebar's StatusDot 'waiting' state,
-              so a side chat waiting off screen still surfaces on its parent's tab. */}
+          {/* The chat's own pending gate or its side chat's (todo #344) — the
+              same primary/pulse treatment as the sidebar's waiting state. */}
           {tab.hasPending && (
             <Hint label="Your turn">
               <span
@@ -190,39 +214,44 @@ export function SessionTabPill({
             </Hint>
           )}
         </span>
-        <span className={cn('min-w-0 flex-1 truncate', tab.preview && 'italic')}>{tab.title}</span>
-        {tab.preview && (
-          <Hint label="Keep open">
+        {/* The title owns the whole pill at rest and fades at the pill's end. The
+            controls are out of flow: they overlay its tail on hover, on the pill's
+            own ground with a short ramp, so a hidden ✕ never reserves label room. */}
+        <FadeLabel className={cn('flex-1', tab.preview && 'italic')} tooltipDelay={600}>
+          {tab.title}
+        </FadeLabel>
+        <span
+          data-testid={`session-tab-controls-${tab.id}`}
+          className={cn(
+            'absolute inset-y-0 right-1 flex items-center gap-0.5 pl-0.5',
+            'before:pointer-events-none before:absolute before:inset-y-0 before:right-full before:w-4 before:bg-linear-to-r before:from-transparent',
+            filled
+              ? 'bg-accent before:to-accent'
+              : inPair
+                ? // A segment's ✕ rests visible, so its ground follows the hover tint.
+                  'bg-popover before:to-popover group-hover:bg-(--tab-hover) group-hover:before:to-(--tab-hover)'
+                : 'bg-(--tab-hover) before:to-(--tab-hover)',
+            // Pair segments are both ON SCREEN, so both keep the resting ✕ the
+            // active tab gets — it closes the zone, not a hidden session. Every
+            // other pill shows its controls (and their ground) only on hover.
+            !restingClose && 'opacity-0 group-hover:opacity-100',
+          )}
+        >
+          <Hint label={`Close ${tab.title}`}>
             <Button
-              data-testid={`session-tab-pin-${tab.id}`}
+              data-testid={`session-tab-close-${tab.id}`}
               variant="ghost"
               size="icon-2xs"
-              className={cn('opacity-0 group-hover:opacity-100', tab.active && 'opacity-60')}
+              className={cn('opacity-0 group-hover:opacity-100', restingClose && 'opacity-60')}
               onClick={(e) => {
                 e.stopPropagation();
-                onPin(tab.id);
+                actions.onClose(tab.id);
               }}
             >
-              <Pin />
+              <X />
             </Button>
           </Hint>
-        )}
-        <Hint label={`Close ${tab.title}`}>
-          <Button
-            data-testid={`session-tab-close-${tab.id}`}
-            variant="ghost"
-            size="icon-2xs"
-            // Grouped (split) tabs are both ON SCREEN, so both keep the resting
-            // ✕ the active tab gets — it closes the zone, not a hidden session.
-            className={cn('opacity-0 group-hover:opacity-100', (tab.active || grouped) && 'opacity-60')}
-            onClick={(e) => {
-              e.stopPropagation();
-              onClose(tab.id);
-            }}
-          >
-            <X />
-          </Button>
-        </Hint>
+        </span>
       </div>
     </SessionTabContextMenu>
   );

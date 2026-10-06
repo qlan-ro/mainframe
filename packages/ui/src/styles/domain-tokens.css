@@ -15,7 +15,9 @@
      reads consistently; do NOT pick them off.
    - DESIGN-CONSTANT TINT TABLES: mf-task-type-*, mf-priority-* (tasks),
      mf-auto-* + mf-accent-violet/-amber (automations step kinds),
-     mf-directive-skill/-session, mf-provider-*-avatar.
+     mf-directive-skill/-session. (Provider brand hues live in TS —
+     features/shared/provider-avatar.ts — because the dot and the logo read
+     them as inline paint, never as utilities.)
    - APP CHROME with no v2 token: mf-scrim, mf-focus-ring (+ the @layer base
      ring rule — bare non-`data-slot` interactive elements rely on it as their
      ONLY focus indicator), mf-shadow-pop/-modal/-card/-card-hover/-edit-ring,
@@ -98,8 +100,6 @@
   /* Inline-code ink — the old warm browns are within a hair of v2's warning
      hue in BOTH modes, so it derives instead of pinning a second amber. */
   --mf-code-inline-fg: var(--warning);
-  --mf-provider-claude-avatar: #d97757;
-  --mf-provider-openai-avatar: #19c37d;
 
   /* Tasks/Todos semantic tints — design-constant (12-todos.jsx TD_TYPE/TD_PRI) */
   --mf-task-type-bug: #c4302b;
@@ -244,6 +244,8 @@
   --color-mf-viewer-check-a: var(--mf-viewer-check-a);
   --color-mf-viewer-check-b: var(--mf-viewer-check-b);
   --color-mf-scrim: var(--mf-scrim);
+  /* Shadow utility for floating chrome (hover cards, tour cards): `shadow-mf-pop`. */
+  --shadow-mf-pop: var(--mf-shadow-pop);
   --color-mf-accent-amber: var(--mf-accent-amber);
   --color-mf-accent-violet: var(--mf-accent-violet);
 
@@ -296,8 +298,8 @@
    `shadcn/tailwind.css` ships the `shimmer` text sweep (both imported by the v2
    sheet). Worse than redundant — an unlayered class here outranks every layered
    utility, so the copies were silently shadowing the libraries.
-   `mf-text-shimmer` went with them: ChatThread's running indicator, its only
-   consumer, is on stock `motion-safe:shimmer`.
+   `mf-text-shimmer` went with them: the reasoning and tool-fallback triggers
+   are on stock `shimmer`; the running status line has no sweep at all.
 
    mf-claude-logo-working lives in the v2 sheet (both trees animate it). */
 

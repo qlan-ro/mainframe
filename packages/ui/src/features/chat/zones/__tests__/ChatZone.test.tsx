@@ -32,6 +32,7 @@ vi.mock('../../../sessions/runtime/chat-controller-registry', () => ({
           getState: () => state,
           subscribeState: () => () => undefined,
           subscribeLive: () => () => undefined,
+          holdActive: () => () => undefined,
           load: async () => undefined,
           sendMessage: vi.fn(),
           cancel: vi.fn(),
@@ -55,25 +56,20 @@ vi.mock('@/features/session-panel/SessionPanel', () => ({ SessionPanel: () => <d
 vi.mock('@/features/session-panel/use-session-panel-state', () => ({
   useSessionPanelState: () => ({ hostRef: () => undefined, mode: 'hidden' }),
 }));
-vi.mock('../../thread/ChatCardHeader', () => ({
-  ChatCardHeader: ({ zone }: { zone?: { chatId: string } }) => <div data-testid={`chat-header-${zone?.chatId}`} />,
-}));
 vi.mock('../../thread/ChatThread', () => ({
   ChatThread: () => <div data-testid="chat-thread-stub" />,
 }));
 vi.mock('@/features/side-chat/SideChatHost', () => ({
-  SideChatHost: ({
-    parentChatId,
-    threadRef,
-    children,
-  }: {
-    parentChatId: string | null;
-    threadRef: (el: HTMLElement | null) => void;
-    children: React.ReactNode;
-  }) => (
-    <div ref={threadRef} data-testid={`side-chat-host-stub-${parentChatId}`}>
-      {children}
-    </div>
+  SideChatHost: ({ parentChatId, children }: { parentChatId: string | null; children: React.ReactNode }) => (
+    <div data-testid={`side-chat-host-stub-${parentChatId}`}>{children}</div>
+  ),
+}));
+// ChatColumnHeader reads the zone's rebound `threadListItem` through
+// ChatHeaderParentLink/SideChatToggle — out of scope for this suite, which is
+// about where SideChatHost mounts, not the strip's own content.
+vi.mock('../../thread/ChatColumnHeader', () => ({
+  ChatColumnHeader: ({ zone }: { zone?: { chatId: string } }) => (
+    <div data-testid={`chat-zone-strip-${zone?.chatId}`} />
   ),
 }));
 

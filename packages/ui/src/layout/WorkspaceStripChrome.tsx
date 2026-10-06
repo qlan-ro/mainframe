@@ -14,23 +14,16 @@ import { cn } from '@/lib/utils';
 import { isSurfaceFloor, useLayoutStore } from '@/store/layout';
 import { useActiveBasesStore } from '@/store/active-bases-store';
 import { isWorkspaceFilesPanelOpen, useWorkspaceFilesPanel } from '@/store/workspace-files-panel';
-import { EditorGlyph } from './surface-icons';
 
 /** Strip height, shared with the empty-state header so the two never drift.
  *  No bottom hairline — surface headers sit flush on their content. */
 export const STRIP_ROW = 'flex h-9 shrink-0 items-center';
 
-/** Leading surface glyph. (The surface-drag grip was retired with the whole
- *  surface-drag system, 2026-08-12 — placement is decided by the split-aware
- *  layout rules now, not by dragging.) */
+/** Leading inset only — the surface glyph is gone (the title bar's toggle
+ *  already names the surface). (The surface-drag grip was retired with the
+ *  whole surface-drag system, 2026-08-12.) */
 export function WorkspaceStripLead({ primary }: { primary: boolean }) {
-  return (
-    <>
-      <div className={primary ? 'shrink-0 px-1 pl-2' : 'shrink-0 pr-1 pl-2.5'}>
-        <EditorGlyph size={12} className="text-primary" />
-      </div>
-    </>
-  );
+  return <div aria-hidden className={primary ? 'w-2 shrink-0' : 'w-2.5 shrink-0'} />;
 }
 
 /**

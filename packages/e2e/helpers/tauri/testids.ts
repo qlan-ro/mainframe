@@ -3,7 +3,7 @@
 export const T = {
   // `app-status-bar` was retired (~2026-06-23, App.integration.test.tsx asserts it's absent);
   // connection status now lives in the sidebar footer — see `waitConnected()` in wait.ts.
-  daemonFooterTrigger: 'daemon-footer-trigger',
+  daemonFooterTrigger: 'shell-rail-daemon',
   sessionRow: 'sessions-row',
   composerInput: 'chat-composer-input',
   composerSend: 'chat-composer-send',
@@ -17,7 +17,10 @@ export const T = {
   modelSelect: 'composer-model-select',
   permissionModeSelect: 'composer-permission-mode-select',
   adapterSelect: 'composer-adapter-select',
-  sessionsNewButton: 'sessions-new-button',
+  // The redesign retired the standalone `SessionsNewButton` pill — "New
+  // session" is now a full-width row in the sidebar header
+  // (`sidebar-action-new-thread`, SessionSidebar.tsx's `NewSessionRow`).
+  sessionsNewButton: 'sidebar-action-new-thread',
   sessionsMoreButton: 'sessions-more-button',
 } as const;
 

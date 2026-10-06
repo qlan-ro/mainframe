@@ -1,12 +1,13 @@
 /**
- * SetupAdvisorSheet — presentational Setup Advisor body, rendered as the flex
- * children of the host's DialogContent column (header and dialog chrome live
- * in SetupAdvisorHost). Props-driven so the host owns nav/data (open state,
- * fetch, cross-project copy ledger) and this owns layout/local UI: the active
- * category tab and per-row copy-failure flashes. Copy state is not mirrored
- * here — `onCopy` fires only on a successful clipboard write, and the host
- * feeds the result back down as `copiedIds` (per-row) and `copiedCount` (the
- * footer's report-scoped total).
+ * SetupAdvisorSheet — presentational Setup Advisor body (the Recommendations
+ * section), rendered as the flex children of its host's column — the body's
+ * `AdvisorSurface` now (D8; the dialog chrome it used to sit in,
+ * `SetupAdvisorHost`, is retired). Props-driven so the host owns nav/data
+ * (fetch, cross-project copy ledger) and this owns layout/local UI: the
+ * active category tab and per-row copy-failure flashes. Copy state is not
+ * mirrored here — `onCopy` fires only on a successful clipboard write, and
+ * the host feeds the result back down as `copiedIds` (per-row) and
+ * `copiedCount` (the footer's report-scoped total).
  */
 import { Button } from '@/components/ui/button';
 import { useEffect, useState } from 'react';

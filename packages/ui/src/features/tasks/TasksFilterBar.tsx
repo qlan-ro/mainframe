@@ -94,7 +94,7 @@ export function TasksFilterBar({ filters, onChange, allLabels, sort, onSortChang
   const clearAll = () => onChange({ types: [], priorities: [], labels: [], search: '' });
 
   return (
-    <div className="px-3 py-2 border-b border-border bg-card shrink-0">
+    <div className="px-3 py-2 border-b border-border bg-background shrink-0">
       <div className="flex flex-wrap items-center gap-2 min-w-0">
         {/* Search input */}
         <div className="relative flex items-center">

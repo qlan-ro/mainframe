@@ -4,9 +4,11 @@
  * DaemonPortProvider → AssistantRuntimeProvider feed the sidebar + surface host.
  * useSessionListRouter() runs INSIDE the provider (needs the live thread list).
  *
- * The chrome is the v2 shell (SidebarProvider + the ported SessionSidebar); the
- * surfaces, toolbar and overlay hosts are legacy islands that port in place,
- * one at a time.
+ * The chrome is a COLUMN over a ROW: the title bar spans the window; under it
+ * the nav rail and the one content card (sidebar + chat). The app root is the
+ * `sidebar` ground; the card is the only `background` surface. The
+ * SidebarProvider wraps the whole column so the title bar reads
+ * `--sidebar-width` live during a resize.
  */
 import { useEffect } from 'react';
 import { AssistantRuntimeProvider, useAui } from '@assistant-ui/react';
@@ -15,14 +17,16 @@ import { DirectoryPickerModal } from '@/features/files/DirectoryPickerModal';
 import { FindInPathModal } from '@/features/files/FindInPathModal';
 import { SpotlightPalette } from '@/features/palette/SpotlightPalette';
 import { ArchiveWorktreeDialog } from '@/features/sessions/ArchiveWorktreeDialog';
-import { SessionSidebar } from '@/features/sessions/SessionSidebar';
 import { TagPopoverHost } from '@/features/sessions/TagPopoverHost';
 import { FilePickerDialog } from '../features/files/FilePickerDialog';
 import { TasksModalHost } from '../features/tasks/TasksModalHost';
+import { TasksSurface } from '../features/tasks/TasksSurface';
 import { AutomationsHost } from '../features/automations/AutomationsHost';
-import { SetupAdvisorHost } from '../features/setup-advisor/SetupAdvisorHost';
+import { AutomationsRuntime } from '../features/automations/AutomationsRuntime';
+import { AutomationsSurface } from '../features/automations/AutomationsSurface';
+import { AdvisorSurface } from '../features/setup-advisor/AdvisorSurface';
+import { SettingsSurface } from '../features/settings/SettingsSurface';
 import { ConfirmDialogHost } from '../components/overlays/ConfirmDialogHost';
-import { SettingsDialog } from '../features/settings/SettingsDialog';
 import { ReviewPanel } from '../features/review/ReviewPanel';
 import { TutorialOverlay } from '../features/tour/TutorialOverlay';
 import { useFirstRunTour } from '../features/tour/use-first-run-tour';
@@ -34,8 +38,12 @@ import { useActiveIdentity } from '../features/sessions/use-active-identity';
 import { useActiveBasesStore } from '../store/active-bases-store';
 import { activeLaunchScope } from '../lib/launch-scope';
 import { useUiPrefs } from '../store/ui-prefs';
-import { MainToolbar } from '../layout/MainToolbar';
+import { AppSidebar } from '../layout/AppSidebar';
+import { ContentCard } from '../layout/ContentCard';
+import { NavRail } from '../layout/NavRail';
 import { SurfaceHost } from '../layout/SurfaceHost';
+import { TitleBar } from '../layout/TitleBar';
+import { useReturnToChatsOnActivate } from '../layout/use-return-to-chats-on-activate';
 import { setSessionNavigator } from '../lib/session-nav';
 import { getChat } from '../lib/api/chats';
 import { navigateToSession } from '../features/side-chat/navigate-to-session';
@@ -45,9 +53,34 @@ import { ShortcutsCheatSheet } from '../features/shortcuts/ShortcutsCheatSheet';
 import { useAppShortcutActions } from './use-app-shortcut-actions';
 import { useSandboxWsRouter } from '../features/run/use-sandbox-ws-router';
 
-/** While the sidebar is collapsed, the surface area's top-left sits under the
- *  native traffic lights, so the MainToolbar's left group insets to clear them. */
-const TRAFFIC_LIGHTS_SPACER_WIDTH = 80;
+/**
+ * MainSurface — the body switch (D1): the rail picks the view, this renders
+ * exactly that view's content into the ONE `SidebarInset` chat/tasks/
+ * automations/advisor/settings all share. Only one of the five is ever
+ * mounted, so `<SurfaceHost />` (chat — panes, terminals, a native preview
+ * webview) UNMOUNTS whenever a non-chat view is picked. That's safe because
+ * chat's own state (controllers, layout) lives in stores, not this tree —
+ * "hiding is not closing" — and the preview webview's own unmount effect
+ * (`useWebviewMount`) tears the native child webview down on unmount, so it
+ * never floats above the Kanban board or any other view. Switching back to
+ * Chats remounts `SurfaceHost`, which re-reads the same stores and re-mounts
+ * the webview fresh.
+ */
+function MainSurface({ port }: { port: number }) {
+  const view = useUiPrefs((s) => s.sidebarView);
+  switch (view) {
+    case 'tasks':
+      return <TasksSurface />;
+    case 'automations':
+      return <AutomationsSurface />;
+    case 'advisor':
+      return <AdvisorSurface />;
+    case 'settings':
+      return <SettingsSurface port={port} />;
+    case 'chats':
+      return <SurfaceHost />;
+  }
+}
 
 function RuntimeBody({ port }: { port: number }) {
   useSessionListRouter();
@@ -60,6 +93,10 @@ function RuntimeBody({ port }: { port: number }) {
   useShortcutDispatcher();
   // Hold ⌘ (Ctrl off-mac) to reveal which number each session tab answers to.
   useIndexHintReveal();
+  // D3: a session activation (tab click, ⌘N, a task/automation's "open
+  // session", a toast deep-link) brings Chats back, whatever view the rail
+  // was on.
+  useReturnToChatsOnActivate();
 
   // Register the session navigator so global toasts (mfToast) can deep-link to a
   // session via their "Open session →" CTA without reaching through to the runtime.
@@ -103,19 +140,18 @@ function RuntimeBody({ port }: { port: number }) {
       onOpenChange={setSidebarVisible}
       defaultWidth={sidebarWidth}
       onWidthChange={setSidebarWidth}
-      className="min-h-0 flex-1 overflow-hidden"
+      className="min-h-0 flex-1 flex-col overflow-hidden bg-sidebar"
     >
-      <SessionSidebar />
-
-      <SidebarInset data-testid="main-surface-shell" className="overflow-hidden">
-        <MainToolbar
-          leadingInset={sidebarVisible ? 0 : TRAFFIC_LIGHTS_SPACER_WIDTH}
-          sidebarRendered={sidebarVisible}
-          onExpandSidebar={() => setSidebarVisible(true)}
-          projectId={projectId}
-        />
-        <SurfaceHost />
-      </SidebarInset>
+      <TitleBar />
+      <div className="flex min-h-0 flex-1">
+        <NavRail />
+        <ContentCard>
+          <AppSidebar />
+          <SidebarInset data-testid="main-surface-shell" className="overflow-hidden">
+            <MainSurface port={port} />
+          </SidebarInset>
+        </ContentCard>
+      </div>
 
       {/* Single app-wide outlets driven by their bridges/stores */}
       <ArchiveWorktreeDialog />
@@ -126,13 +162,12 @@ function RuntimeBody({ port }: { port: number }) {
       <ReviewPanel />
       <TagPopoverHost port={port} />
       <TasksModalHost port={port} />
-      {/* Automations v2 — production entry point is SidebarHeader's Workflows
-          button (Phase 6); v1's WorkflowsModalHost is unmounted here but its
-          tree stays on disk until Phase 7 deletes it. */}
+      {/* Automations: the always-on runtime (toasts, WS patches, the rail's
+          pending dot) and the ⌘⇧A shortcut wiring. The library itself lives
+          in the body/sidebar now (AutomationsSurface / AutomationsSidebarList). */}
+      <AutomationsRuntime />
       <AutomationsHost />
-      <SetupAdvisorHost />
       <ConfirmDialogHost />
-      <SettingsDialog port={port} />
       <ShortcutsCheatSheet />
       {showTour && <TutorialOverlay />}
     </SidebarProvider>

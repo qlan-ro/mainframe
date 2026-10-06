@@ -20,15 +20,19 @@ function recordedChat(recordingKey: string, permissionMode: 'default' | 'acceptE
 }
 async function openAppearance(page: Page) {
   await waitForDialogScrimsGone(page);
-  await page.getByTestId('sidebar-settings').click();
-  await expect(page.getByTestId('settings-dialog')).toBeVisible();
+  await page.getByTestId('shell-rail-settings').click();
+  await expect(page.getByTestId('settings-surface')).toBeVisible();
   await page.getByTestId('settings-nav-general').click();
+}
+/** Settings is a rail view now — "closing" it means picking Chats instead. */
+async function closeSettings(page: Page) {
+  await page.getByTestId('shell-rail-chats').click();
+  await waitForDialogScrimsGone(page);
 }
 async function selectTranscript(page: Page, mode: 'compact' | 'verbose') {
   await openAppearance(page);
   await page.getByTestId(`settings-appearance-transcript-${mode}`).click();
-  await page.getByTestId('settings-dialog-close').click();
-  await waitForDialogScrimsGone(page);
+  await closeSettings(page);
 }
 
 test.describe('compact transcript preference and disclosure', () => {
@@ -37,8 +41,7 @@ test.describe('compact transcript preference and disclosure', () => {
     const page = pageFor();
     await openAppearance(page);
     await expect(page.getByTestId('settings-appearance-transcript-verbose')).toHaveAttribute('aria-checked', 'true');
-    await page.getByTestId('settings-dialog-close').click();
-    await waitForDialogScrimsGone(page);
+    await closeSettings(page);
     await sendMessage(page, 'What is 2 + 2? Reply with just the number.');
     await waitForIdle(page, 60_000);
     await sendMessage(page, 'List the files in this project using bash ls.');

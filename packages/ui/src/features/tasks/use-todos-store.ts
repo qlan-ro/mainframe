@@ -4,8 +4,9 @@
  * Server state is bucketed by project: the Kanban modal follows its own
  * per-open scope while the session panel's card follows the active session, so
  * the two routinely hold different projects and a single flat list would let
- * whichever loaded last blank the other. View/filter/sort state stays global —
- * it belongs to the user, not to a project.
+ * whichever loaded last blank the other. Filter/sort state stays global — it
+ * belongs to the user, not to a project. (The board is Kanban-only since the
+ * 2026-10 redesign — there is no `view` field any more.)
  *
  * Mutations call lib/api/todos then refresh (refetch-on-mutation;
  * single-window, no WS event for todos).
@@ -17,6 +18,7 @@
  * discarded when a newer load for that same project has been issued since,
  * which keeps a slow response for one project from landing in another's bucket.
  */
+import { useMemo } from 'react';
 import { create } from 'zustand';
 import {
   listTodos,
@@ -54,7 +56,6 @@ interface TodosState {
   entries: Record<string, TodosEntry>;
   filters: TodoFilters;
   sort: TodoSort;
-  view: 'list' | 'board';
   load: (port: number, projectId: string) => Promise<void>;
   create: (port: number, input: CreateTodoInput, projectId: string) => Promise<Todo>;
   update: (port: number, id: string, input: UpdateTodoInput, projectId: string) => Promise<void>;
@@ -62,7 +63,6 @@ interface TodosState {
   remove: (port: number, id: string, projectId: string) => Promise<void>;
   setFilters: (f: TodoFilters) => void;
   setSort: (s: TodoSort) => void;
-  setView: (v: 'list' | 'board') => void;
   resetFilters: () => void;
 }
 
@@ -71,11 +71,39 @@ export function selectProjectTodos(projectId: string | null): (state: TodosState
   return (state) => (projectId === null ? EMPTY_ENTRY : (state.entries[projectId] ?? EMPTY_ENTRY));
 }
 
+/**
+ * Merges one or more projects' buckets — the multi-project Tasks read seam.
+ * Concatenates in the CALLER's order (scope-strip order, per
+ * `useTasksProjects`), which is what gives the merged list its project-order
+ * tie-break once a status/priority/etc. sort is layered on top (stable sort
+ * preserves this relative order for equal keys).
+ *
+ * Memoised against the store's `entries` (so it only recomputes when some
+ * project's bucket actually changed, not on every unrelated store update —
+ * filters/sort/view live in the same store) and the caller's `projectIds`
+ * array — pass a stable (e.g. `useMemo`'d) array, or this recomputes every
+ * render.
+ */
+export function useMergedTodos(projectIds: readonly string[]): TodosEntry {
+  const entries = useTodosStore((s) => s.entries);
+  return useMemo(() => {
+    let loading = false;
+    let error: string | null = null;
+    const todos: Todo[] = [];
+    for (const id of projectIds) {
+      const entry = entries[id] ?? EMPTY_ENTRY;
+      todos.push(...entry.todos);
+      if (entry.loading) loading = true;
+      if (entry.error != null && error === null) error = entry.error;
+    }
+    return { todos, loading, error };
+  }, [entries, projectIds]);
+}
+
 export const useTodosStore = create<TodosState>((set, get) => ({
   entries: {},
   filters: DEFAULT_FILTERS,
   sort: DEFAULT_SORT,
-  view: 'list',
 
   load: async (port, projectId) => {
     const seq = (_loadSeq.get(projectId) ?? 0) + 1;
@@ -122,6 +150,5 @@ export const useTodosStore = create<TodosState>((set, get) => ({
 
   setFilters: (filters) => set({ filters }),
   setSort: (sort) => set({ sort }),
-  setView: (view) => set({ view }),
   resetFilters: () => set({ filters: DEFAULT_FILTERS, sort: DEFAULT_SORT }),
 }));

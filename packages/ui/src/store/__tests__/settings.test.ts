@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { useSettingsStore } from '../settings';
 
 const FRESH = {
-  isOpen: false,
   activeTab: 'general' as const,
   selectedProvider: null,
   providers: {},
@@ -13,28 +12,9 @@ const FRESH = {
 beforeEach(() => useSettingsStore.setState({ ...FRESH }));
 
 describe('settings store', () => {
-  it('open() with no args opens to general', () => {
-    useSettingsStore.getState().open();
-    const s = useSettingsStore.getState();
-    expect(s.isOpen).toBe(true);
-    expect(s.activeTab).toBe('general');
-    expect(s.selectedProvider).toBeNull();
-  });
-  it('open(provider) opens to providers tab with that provider selected', () => {
-    useSettingsStore.getState().open('claude');
-    const s = useSettingsStore.getState();
-    expect(s.activeTab).toBe('providers');
-    expect(s.selectedProvider).toBe('claude');
-  });
-  it('open(undefined, tab) honors an explicit tab', () => {
-    useSettingsStore.getState().open(undefined, 'about');
-    expect(useSettingsStore.getState().activeTab).toBe('about');
-  });
-  it('close() clears isOpen', () => {
-    useSettingsStore.getState().open();
-    useSettingsStore.getState().close();
-    expect(useSettingsStore.getState().isOpen).toBe(false);
-  });
+  // `isOpen`/`open`/`close` are gone (D2): the store is just the tab/
+  // selection owner now — `ui-prefs.sidebarView` decides whether Settings is
+  // showing.
   it('loadProviders + setProviderConfig optimistic patch', () => {
     useSettingsStore.getState().loadProviders({ claude: { defaultModel: 'opus' } });
     useSettingsStore.getState().setProviderConfig('claude', { defaultModel: 'sonnet' });

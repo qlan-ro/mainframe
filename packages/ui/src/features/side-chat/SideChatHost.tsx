@@ -6,10 +6,9 @@
  * parent has a side chat and the panel isn't collapsed, `SideChatPanel` sits
  * beside the thread behind a draggable divider, or docks below it when the
  * column is too narrow for both (see `sideChatPlacement`). The thread keeps
- * its tree position in both layouts, so switching never remounts it. Like a
- * split zone, each side carries its own session rail: the parent's panel is
- * passed in as a child and floats over the thread column (`threadRef`), and
- * the side chat's panel mounts its own.
+ * its tree position in both layouts, so switching never remounts it. The
+ * parent's session panel is NOT inside this host — it docks as a flex sibling
+ * outside it, so the beside/below decision is made on the width that remains.
  *
  * Owns the "keep alive regardless of collapse" half of UI rule 8: the
  * controller is loaded and live-subscribed here, independent of the panel's
@@ -72,16 +71,7 @@ function useExpandOnGate(parentChatId: string | null, controller: SideChatContro
   }, [parentChatId, gatePending, expand]);
 }
 
-export function SideChatHost({
-  parentChatId,
-  threadRef,
-  children,
-}: {
-  parentChatId: string | null;
-  /** The parent's session panel host: its thread column, so its rail stops at the divider. */
-  threadRef: (el: HTMLElement | null) => void;
-  children: ReactNode;
-}) {
+export function SideChatHost({ parentChatId, children }: { parentChatId: string | null; children: ReactNode }) {
   const sideChatId = useChatExtras()?.state.chatConfig?.sideChatId ?? null;
   const collapsed = useSideChatCollapseStore((s) => (parentChatId != null ? s.isCollapsed(parentChatId) : true));
   const controller = useSideChatController(sideChatId);
@@ -104,7 +94,6 @@ export function SideChatHost({
       {/* min-h-0 + flex-col so ChatThread's h-full resolves against a definite
           height — otherwise the sticky composer footer collapses/clips. */}
       <div
-        ref={threadRef}
         className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
         style={beside ? { flexGrow: 1 - frac, minWidth: MIN_PARENT_BESIDE_WIDTH } : undefined}
       >

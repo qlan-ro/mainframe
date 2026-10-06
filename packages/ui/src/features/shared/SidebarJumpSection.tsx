@@ -43,7 +43,7 @@ export function SidebarJumpSection({ label, testId, sticky, actions, children }:
     <>
       {/* Full-bleed so a parked header occludes the rows sliding under it, but
           padded to the same 16px as a SidebarGroup's label so the two align. */}
-      <SidebarGroupLabel className={cn('sticky z-10 shrink-0 bg-sidebar pr-2 pl-4', sticky)}>
+      <SidebarGroupLabel className={cn('sticky z-10 shrink-0 bg-sidebar pr-2 pl-4 font-semibold', sticky)}>
         <button
           type="button"
           data-testid={`${testId}-jump`}
