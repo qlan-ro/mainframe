@@ -151,3 +151,51 @@ it('keeps main and real split native disclosures independent with identical mess
   fireEvent.click(within(screen.getByTestId('side')).getByRole('button', { name: 'Read /src/a.ts' }));
   expect(within(screen.getByTestId('side')).getByTestId('read-card-code-preview')).toHaveTextContent('const a = 1;');
 });
+it('shows a running member on the header, nested under it, even when the group is not the open tail', () => {
+  const edit = fixtureTool({
+    toolCallId: 'edit',
+    toolName: 'Edit',
+    args: { file_path: '/src/b.ts', old_string: 'old', new_string: 'new' },
+    result: { originalFile: 'old', modifiedFile: 'new' },
+  });
+  const shell = fixtureTool({
+    toolCallId: 'shell',
+    toolName: 'Bash',
+    args: { command: 'npm test', description: 'Run the suite' },
+    result: undefined,
+    providerMetadata: { mainframe: { acpStatus: 'in_progress' } },
+  });
+  const message = fixtureMessage([edit, shell]);
+  const members = message.content.map((part, index) => ({
+    messageId: message.id,
+    index,
+    rootThreadId: 'running-member',
+    ancestors: [],
+    part: part as MessagePartState,
+  }));
+  const group = { type: 'activity' as const, members, active: false };
+  const view = render(<ActivityFixture rootId="running-member" messages={[message]} group={group} />);
+  const toggle = screen.getByRole('button', { name: 'Running tests' });
+  expect(within(toggle).getByLabelText('running')).toBeInTheDocument();
+  fireEvent.click(toggle);
+  const nested = screen.getByTestId('chat-compact-activity-members');
+  expect(within(nested).getByRole('button', { name: 'Edited /src/b.ts' })).toBeInTheDocument();
+  expect(within(nested).getByRole('button', { name: 'Running tests' })).not.toBe(toggle);
+  expect(nested).not.toContainElement(toggle);
+
+  const done = { ...shell, result: 'ok', providerMetadata: { mainframe: { acpStatus: 'completed' } } };
+  const settled = fixtureMessage([edit, done]);
+  const settledMembers = members.map((member, index) => ({
+    ...member,
+    part: settled.content[index] as MessagePartState,
+  }));
+  view.rerender(
+    <ActivityFixture
+      rootId="running-member"
+      messages={[settled]}
+      group={{ type: 'activity', members: settledMembers, active: false }}
+    />,
+  );
+  const summary = screen.getByRole('button', { name: 'Edited a file, ran a command' });
+  expect(within(summary).getByLabelText('completed')).toBeInTheDocument();
+});
