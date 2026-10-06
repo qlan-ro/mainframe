@@ -82,7 +82,7 @@ graph TB
 
 ## The Rust daemon (`packages/core-rs`)
 
-The daemon is a Cargo workspace of 19 crates. `mainframe-daemon` is the only
+The daemon is a Cargo workspace of 21 crates. `mainframe-daemon` is the only
 binary; everything else is a library crate. The workspace is largely a
 line-for-line Rust port of an earlier Node.js daemon that lived at
 `packages/core` (see [History](#history-why-this-doc-changed) for that
@@ -108,6 +108,9 @@ Tier 1  mainframe-runtime          config, logging, auth, login-shell PATH captu
         mainframe-launch            launch.json processes + cloudflared tunnels
         mainframe-lsp               WS<->stdio LSP proxy
         mainframe-automations       when-trigger / do-step automation engine
+        mainframe-orchestration     agent-to-agent MCP server (tools, credentials,
+                                    tasks) over ports; depends on types only
+        mainframe-acp               ACP v2 chat-facade protocol (pure logic)
         mainframe-adapter-api       the AgentAdapter contract + registry
 
 Tier 2  mainframe-services   workspace/attachment/push/todos/commands/notifications/
@@ -125,7 +128,8 @@ Tier 3  mainframe-chat       ChatManager: per-chat session orchestration
 
 Tier 4  mainframe-server     axum HTTP app + WebSocket layer — aggregates nearly
                              every crate above (chat, all three adapters, plugins,
-                             automations, launch, lsp, db, git, services)
+                             automations, orchestration, acp, launch, lsp, db, git,
+                             services)
 
 Tier 5  mainframe-daemon     bin: boots everything mainframe-server aggregates
 ```
@@ -146,6 +150,8 @@ Tier 5  mainframe-daemon     bin: boots everything mainframe-server aggregates
 | `mainframe-launch` | Runs `.mainframe/launches.json` dev-server/sandbox processes per project and manages `cloudflared` tunnels for exposing them (used by the mobile companion). |
 | `mainframe-lsp` | Proxies a WebSocket connection to a spawned LSP server's stdio, for in-app language-server features. |
 | `mainframe-automations` | The automations engine: when-triggers and linear do-steps executed over trait "ports," including GitHub issue/webhook integration. |
+| `mainframe-orchestration` | The `mainframe` MCP server agents call from inside a chat: a hand-rolled stateless Streamable HTTP JSON-RPC layer, per-spawn bearer credentials, the tools (`capabilities`, `chat_list`, `chat_read`, `chat_wait`, `chat_launch`, `chat_send`, `chat_interrupt`, `delegate_task`, `task_status`, `task_cancel`), the privilege ceiling and limits, the agent outbox, and delegated-task state. Reaches chats, the DB, and events through `OrchestrationPort`/`TaskStore`, implemented in `mainframe-server/src/orchestration_deps/`; the `POST /mcp` route is in `mainframe-server`. Spec: `docs/specs/2026-10-06-mcp-orchestration-server.md`. |
+| `mainframe-acp` | The ACP v2 chat-facade protocol: JSON-RPC framing, the `initialize` handshake, and the `_mainframe.dev` extension namespace. `mainframe-server` owns the `/acp/{profile}` socket shell. |
 | `mainframe-adapter-api` | The `Adapter` trait (behavioral half of the `AgentAdapter` concept — see [Adapter system](#adapter-system-agentadapter)), the `AdapterRegistry`, and executable resolution. |
 | `mainframe-services` | Cross-cutting daemon services that don't fit one domain crate: workspace/worktree helpers, attachment storage, push notifications, todo normalization, custom commands, file watching, provider settings. |
 | `mainframe-plugins` | The builtin plugin registry and the capability-gated `PluginContext` (db/attachments/ui/events/config access). Only the builtin `todos` plugin loads here — Claude and Codex are native adapter crates, not plugins, and dynamic third-party JS plugin loading from the old Node daemon was **deliberately dropped** (the manifest/capability model is kept so a future WASM loader could restore it). |

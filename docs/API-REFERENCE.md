@@ -49,6 +49,7 @@ Path parameters use axum's `{param}` syntax (the old Express docs wrote
   - [Tunnel](#tunnel)
   - [Automations v2](#automations-v2)
   - [Plugins](#plugins)
+  - [Agent Orchestration (MCP)](#agent-orchestration-mcp)
 - [WebSocket Protocol](#websocket-protocol)
   - [ACP Chat Facade (`/acp/{profile}`)](#acp-chat-facade-acpprofile)
 - [What's Not Verified or Not Mounted](#whats-not-verified-or-not-mounted)
@@ -604,6 +605,42 @@ per-plugin and only exist for plugins actually loaded (the built-in `todos`
 plugin is the one every Mainframe install ships with; see
 `docs/guides/issue-tracker.md`).
 
+### Agent Orchestration (MCP)
+
+Source: `packages/core-rs/crates/mainframe-server/src/routes/mcp.rs`,
+`routes/agent_outbox.rs`, and the `mainframe-orchestration` crate. Spec:
+`docs/specs/2026-10-06-mcp-orchestration-server.md`.
+
+`POST /mcp` is a stateless MCP Streamable HTTP server for the CLIs the
+daemon spawns. It is mounted outside the device-token auth layer and the
+response compressor, and authenticates each request with the per-spawn
+bearer token the daemon puts in the child's `MAINFRAME_MCP_TOKEN` env var.
+
+| Condition | Response |
+|---|---|
+| Method other than `POST` | `405`, `Allow: POST` |
+| `Origin`, `Forwarded`, `X-Forwarded-For`, or `Cf-Connecting-Ip` header | `403` |
+| Missing or unknown bearer token | `401`, `WWW-Authenticate: Bearer realm="mainframe"` |
+| Body over 1 MiB | `413` |
+| `Content-Type` not `application/json` | `415` |
+| Unsupported `MCP-Protocol-Version` | `400` |
+| Unparseable JSON / JSON array | `400`, JSON-RPC `-32700` / `-32600` |
+| Notification or response | `202`, empty body |
+| Request (`initialize`, `ping`, `tools/list`, `tools/call`) | `200`, one JSON-RPC response |
+
+Tools: `capabilities`, `chat_list`, `chat_read`, `chat_wait`,
+`chat_launch`, `chat_send`, `chat_interrupt`, `delegate_task`,
+`task_status`, `task_cancel`. Every id is a Mainframe chat id. A tool
+failure is a tool result with `isError: true` and `structuredContent.error
+= { code, message }`; an unknown tool name is JSON-RPC `-32602`.
+
+Messages the server holds for a busy chat (behind the normal auth layer):
+
+| Method & Path | Purpose | Response |
+|---|---|---|
+| `GET /api/chats/{id}/agent-outbox` | List held messages | `[{ entryId, fromChatId, preview }]` |
+| `DELETE /api/chats/{id}/agent-outbox/{entryId}` | Cancel one before delivery | `okEmpty`; `404` when it is gone; `400` on an invalid id |
+
 ## WebSocket Protocol
 
 Source: `packages/core-rs/crates/mainframe-server/src/websocket.rs`,
@@ -662,6 +699,7 @@ adapter/provider/automation-level events) also reaches everyone.
 | `chat.created` | `chat: Chat`, `source?` |
 | `chat.updated` | `chat: Chat`, `reason?` |
 | `chat.ended` | — |
+| `delegated_task.updated` (no `chatId`) | `task: DelegatedTask` |
 | `process.started` | `process: AdapterProcess` |
 | `process.ready` | `processId`, `claudeSessionId` |
 | `process.stopped` | `processId` |

@@ -116,30 +116,68 @@ The marker is mirrored in `mainframe-chat/src/message_markers.rs` so titles neve
 
 ### UI
 
-- **Sidebar.** Delegated children nest under their parent with the fork nested-row recipe (variant D,
-  todo #343) but their own glyph (`sessions-row-delegated-nest-glyph`) and the label `Task · <role>`.
-  Fork counts exclude delegated children. Side chats stay excluded from every listing.
-- **Hover card.** On a child, `Delegated by "<parent>" · <role> · <status>`
-  (`sessions-meta-card-delegated-by`). On a launched chat, `Started by "<chat>"`
-  (`sessions-meta-card-started-by`).
+A delegated child is a **task chat**. It lives inside its parent's transcript, in the
+`delegate_task` card, and has no row in any session list (user decision, 2026-10-07).
+
+- **Sidebar and lists.** A task chat whose parent is loaded has no sidebar row: no nested row, no
+  top-level row, no place in any sort or project grouping. The same projection
+  (`features/sessions/view-model/task-chats.ts`) drops it from the archived dialog, search, the
+  `@`-session picker, project ordering, the first-run count, and the boot auto-open. The parent
+  lookup spans archived chats, so a task of an archived parent stays in that parent's card. One
+  exception keeps nothing orphaned: a task chat whose parent is gone (deleted or discarded) keeps an
+  ordinary row; its fallback glyph and hover line read `Delegated by a deleted chat`. Fork counts
+  exclude task chats. Side chats stay excluded from every listing.
+- **Search.** The palette lists what the sidebar lists, so task chats are not search results. They
+  are found through their parent, whose card opens them.
+- **Hover card.** On a launched chat, `Started by "<chat>"` (`sessions-meta-card-started-by`). On an
+  orphaned task chat, `Delegated by "<parent>" · <role> · <status>`
+  (`sessions-meta-card-delegated-by`).
 - **Parent header.** A chip, `N tasks running · M waiting` (`chat-header-tasks-chip`), opens a
   popover. It lists the parent's tasks with status and an open link (`chat-header-task-row-<taskId>`).
-- **Transcript.** The `delegate_task` tool card shows the child title, a live status, and an open link
-  (`chat-tool-delegate-task-open-<taskId>`). Task-result and agent-message markers render as compact
-  cards (`chat-agent-message-card-<messageId>`, `chat-task-result-card-<taskId>`).
+  A task counts as waiting while it, or a task below it, waits on a gate.
+- **Child header.** "Delegated by" (`chat-header-parent-link`) links back to the parent.
+- **Transcript.** The `delegate_task` tool card shows the child title, a live status, and an open
+  link (`chat-tool-delegate-task-open-<taskId>`); on an archived child the link reads "Restore and
+  open" (opening a thread unarchives it). Expanded, the card shows the child's live transcript,
+  read-only, through the path a native subagent uses (`SubagentTranscript` ›
+  `ReadonlyThreadProvider`; `chat-tool-delegate-task-transcript-<taskId>`). It holds the latest 20
+  messages; when there are more, a leading row counts them and opens the full chat
+  (`chat-tool-delegate-task-open-full-<taskId>`). Until the call returns, the body is the task
+  prompt; a wait-mode call returns on the child's first gate, so the transcript is there by the time
+  one needs answering. The card stays a full card in compact mode. Task-result and agent-message
+  markers render as compact cards (`chat-agent-message-card-<messageId>`,
+  `chat-task-result-card-<taskId>`).
+- **Transcript data.** The card reads the child through the child's own per-chat controller
+  (`chatControllerRegistry`), the one its thread uses, so opening the child afterwards finds it warm.
+  While the card is expanded it holds the controller's facade activation (`holdActive`, the
+  split-zone hold): a `session/resume` for the child on the shared per-adapter `/acp/{profile}`
+  connection. Collapsing or unmounting releases the hold, which detaches the stream
+  (`_mainframe.dev/session_detach`). A collapsed card subscribes to nothing, and the body is
+  lazy-loaded. The daemon needed no change: `session/resume` only reads history and redelivers an
+  open gate.
+- **Gates in the card.** The child's queue-front gate renders under its transcript
+  (`chat-tool-delegate-task-gate-<taskId>`) through `GateCard`, the dispatch `ChatGateMount` uses
+  for the thread's own gate, and answers into the child's session. The card opens itself whenever
+  the child, or a task below it, starts waiting on the user (`hasPending || delegatedWaiting`); the
+  user can collapse it again, and its status keeps reading `waiting`. A grandchild's card sits in the
+  child's transcript inside the parent's card, and each level opens itself the same way.
 - **Pending agent messages.** A target chat with Mainframe-held messages shows a composer chip,
   `1 message from "<sender>" after this turn` (`chat-composer-agent-outbox-chip`). The chip has a
   cancel action (`chat-composer-agent-outbox-cancel-<entryId>`).
 
 ### Permission prompts in children
 
-Only the user answers a child's permission and question gates, in the child chat, through the
-existing permission UI. No tool answers gates. A child's gates surface in three ways:
+Only the user answers a child's permission and question gates: in the parent's `delegate_task`
+card, or in the child chat once opened, through the existing gate cards. No tool answers gates. A
+child's gates surface in three ways:
 
-- **Sidebar.** The parent's row and tab show the waiting state while any delegated child is waiting
-  (derived `delegatedWaiting`, the same pattern as `side_chat_waiting`). The tasks chip counts it.
-- **Notifications.** The existing attention/push notification fires for the child. Its body names the
-  parent: `"<child>" (task of "<parent>") needs permission`.
+- **Sidebar.** The top-level chat's row and tab show the waiting state while any unfinished task
+  below it is waiting (derived `delegatedWaiting`, the same pattern as `side_chat_waiting`, over the
+  whole open task subtree). The tasks chip counts it, and the card opens itself on it.
+- **Notifications.** The existing push fires for the child. Its body names the parent:
+  `"<child>" (task of "<parent>") needs permission`. Its `data.chatId` is the nearest ancestor that
+  is not itself a task chat, so tapping it opens the chat whose card holds the gate;
+  `data.taskChatId` names the child.
 - **Agent side.** `chat_wait`, `task_status`, and `delegate_task` in wait mode return
   `waiting_for_permission` with the pending tool name, so the parent agent can tell the user.
 
@@ -361,9 +399,10 @@ as in t3code. The description tells agents to `chat_list` before retrying a lost
 
 ## Data model
 
-Migration **31** (renumber at merge if a sibling spec lands one first; `migrations.rs` is already 568
-lines, so the body goes in a new `mainframe-db/src/migrations/orchestration.rs` and the list grows by
-one entry):
+Migration **32** (31 is reserved for the in-place provider-switch migration; the runner applies any
+version above the stamped one, so the gap is safe only if 31 merges before a build stamped 32 ships.
+`migrations.rs` is already 568 lines, so the body goes in a new `mainframe-db/src/migrations/orchestration.rs`
+and the list grows by one entry):
 
 ```sql
 ALTER TABLE chats ADD COLUMN created_by_chat_id TEXT;          -- agent provenance (launch + delegate)
@@ -502,11 +541,26 @@ entry does not exist, and it is behind the normal auth layer.
    `waiting` become `interrupted` with delivery `dropped`. Completed tasks keep delivery `owed` but
    flush only after the parent's first spawn since boot. In-memory `queue` sends are lost; their
    callers' turns died too.
-9. **Children are non-temporary and visible.** They are real work the user may need to open, answer
-   permissions in, or continue. Launched chats are ordinary top-level chats with `created_by_chat_id`
+9. **Children are non-temporary and live in their parent's card.** They are real work the user may
+   need to open, answer permissions in, or continue, so they are kept and openable. They have no
+   sidebar row (user decision, 2026-10-07); the `delegate_task` card and the child's "Delegated by"
+   link are the ways in. Launched chats are ordinary top-level chats with `created_by_chat_id`
    provenance and no lineage.
 10. **Wait mode returns on a child's permission gate.** t3code waits for the result only. Mainframe
     returns early so the parent agent can tell the user, instead of blocking silently for up to an hour.
+11. **The card reads the child's own stream.** It reuses the child's controller and the split-zone
+    activation hold instead of a new subscription kind, so a gate answered in the card is the gate
+    the child's thread shows, and opening the child afterwards replays nothing. The hold lives only
+    while the card is expanded.
+12. **Twenty messages inline.** The card is a window onto the child, not a second chat: the latest
+    20 messages hold the last few turns, enough to follow the task and answer its gate. "Open full
+    chat" has the rest. The bound is a count, not a height, so nothing scrolls inside the card.
+13. **A pending gate opens the card.** The alternative, a collapsed card with a gate badge, makes the
+    user click before they can answer; the gate is the reason they came. Each rise of the waiting
+    state opens it again; a user collapse holds until then.
+14. **Search excludes task chats.** Search lists what the sidebar lists. A task chat is found through
+    its parent, whose card shows and opens it. An orphaned task chat (parent gone) is listed and
+    searchable like any chat.
 
 ## Not included
 
@@ -542,7 +596,7 @@ Rust unit tests live next to each module. Run single tests: `cargo test -p <crat
   `waiting_for_children` holds the task nonterminal until the grandchild result is processed. Stop
   cascades depth-first, drops owed deliveries, and rejects a late call with `caller_not_active`.
   Wait mode returns on `waiting_for_permission`.
-- **`mainframe-db`.** Migration 31 on a fresh DB and on a v30 DB. Repository CRUD, the partial unique
+- **`mainframe-db`.** Migration 32 on a fresh DB and on a v30 DB. Repository CRUD, the partial unique
   request index, and lineage-kind derivation (fork, side, and delegated coexisting under one parent).
 - **`mainframe-server` route.** axum `oneshot` covers `405`, `403` for an Origin header, `403` for a
   forwarded header, `401` for a missing or unknown token, `413`, `415`, `400` for a batch, and
@@ -557,11 +611,15 @@ Rust unit tests live next to each module. Run single tests: `cargo test -p <crat
   `steer` maps to `turn/steer` and to a Claude payload with `priority:"next"`.
 - **Lifecycle.** The credential is issued before `spawn` and revoked on `on_exit`, `stop_chat`,
   `end_chat`, archive, discard, and offload. Interrupt triggers the cascade hook.
-- **UI (vitest, single files).** `fork-lineage.ts` nests delegated children and excludes them from fork
-  counts. Tasks chip counts. Marker cards render. Outbox chip cancel. Parent waiting state from
-  `delegatedWaiting`.
+- **UI (vitest, single files).** `task-chats.ts` drops a task chat with a loaded parent from the
+  lists and keeps an orphan; fork counts exclude task chats; the boot pick skips task chats. Tasks
+  chip counts, including a nested gate. The `delegate_task` card mounts the child's transcript only
+  when expanded and opens itself on `hasPending` or `delegatedWaiting`; the transcript body's
+  states, bound, and gate answer; `useTaskChat` holds and releases the child's stream. Marker cards
+  render. Outbox chip cancel. Parent waiting state from `delegatedWaiting`.
 - **E2E (Playwright, mock adapter).** A mock fixture step `mcp_call` performs a real HTTP call with
-  the spawn credential. It covers delegate → child row nested under parent → result card in parent.
+  the spawn credential. It covers delegate → no sidebar row for the child → result card in parent →
+  the card expands into the child's transcript → open the child → its "Delegated by" link back.
 - **Live smoke (manual).** Use the `claude-protocol-debugger` and `codex-protocol-debugger` skills. A
   wait longer than 61 s completes. Delegation across Claude→Codex and Codex→Claude. A steer mid-tool
   batch ends with no `aborted_tools`.
@@ -588,7 +646,7 @@ Rust unit tests live next to each module. Run single tests: `cargo test -p <crat
    and `DaemonEvent` additions. Mirror them in `packages/types/src/{chat,events}.ts`, then run
    `pnpm --filter @qlan-ro/mainframe-types build` and `exec tsc --noEmit`. Update the Codex
    `configure_spawn` literal.
-2. **DB.** `mainframe-db/src/migrations/orchestration.rs` (migration 31, `LATEST_VERSION` bump),
+2. **DB.** `mainframe-db/src/migrations/orchestration.rs` (migration 32, `LATEST_VERSION` bump),
    `delegated_tasks.rs` repository, `chats.rs` `created_by_chat_id` plus derived lineage fields in
    `CHAT_SELECT_FIELDS`, and fork-count exclusion. Tests in `mainframe-db/tests/`.
 3. **Crate skeleton.** `crates/mainframe-orchestration/` (workspace member, `#![forbid(unsafe_code)]`):
@@ -620,12 +678,99 @@ Rust unit tests live next to each module. Run single tests: `cargo test -p <crat
 12. **Markers.** `mainframe-chat/src/message_markers.rs` plus the TS mirror in
     `packages/ui/src/features/chat/markers/message-markers.ts`. Add the agent-message and task-result
     card renderers.
-13. **UI.** Load `mainframe-design-system` first. Changes go in `features/sessions/view-model/fork-lineage.ts`,
-    `SessionRowBody.tsx`, `SessionMetaCard.tsx`, the chat header tasks chip, the `delegate_task` tool
-    card, and the composer outbox chip. Add the outbox `DELETE` route with validation and tests.
+13. **UI.** Load `mainframe-design-system` first. Changes go in `features/sessions/view-model/task-chats.ts`
+    (task chats out of every list), `SessionMetaCard.tsx`, the chat header tasks chip, the
+    `delegate_task` tool card with the child's transcript and gate, and the composer outbox chip. Add
+    the outbox `DELETE` route with validation and tests.
 14. **Docs and release.** Update `docs/API-REFERENCE.md` (the `/mcp` endpoint, tools, the outbox
     route, the event), `docs/ARCHITECTURE.md`, and the consumed-surface rows. Add a changeset (minor:
     ui, types).
+
+## Implementation status
+
+Built on branch `worktree-agent-a520919eb3cf212c7` (2026-10-06); the UI, the derived `Chat` fields,
+and the E2E fixture on branch `worktree-agent-a30868585bf2155ed` (2026-10-07); task chats moved
+from the sidebar into the `delegate_task` card on branch `worktree-agent-a15a5d1eec15e84cd`
+(2026-10-07).
+
+**Done.** The `mainframe-orchestration` crate (protocol, dispatch, credentials, policy, ports, outbox,
+waiter, tasks, all ten tools); `POST /mcp` with every row of the endpoint table; credential issue
+before every spawn and revocation on exit, stop, end, archive, discard, offload, and shutdown;
+Claude and Codex injection; Codex elicitation answers; steer (`priority:"next"` on Claude,
+`turn/steer` on Codex); the outbox with idle flush, sibling batching, acknowledgement, and boot
+hold; the depth-first Stop cascade; boot reconcile; migration 32 and the `delegated_tasks`
+repository; `delegated_task.updated`; `DELETE /api/chats/:id/agent-outbox/:entryId`; title
+unwrapping of the agent-message marker; TS type mirrors; agent-message and task-result cards in
+the transcript. The derived `Chat` fields (`created_by_chat_id`, `delegation`,
+`delegated_waiting`, `agent_outbox`); `chat.updated` on a chat whenever its held messages change
+and on both chats whenever a task changes; fork-count exclusion; the delegated-by and started-by
+hover-card lines; "Delegated by" in the child's header; the tasks chip; the `delegate_task` tool
+card; the composer outbox chip with cancel; the parent's waiting state on its row and tab; the
+push body naming the parent; the E2E `mcp_call` fixture step and the delegate scenario.
+
+Task chats in the card: task chats out of the sidebar, the archived dialog, search, the
+`@`-session picker, project ordering, the first-run count, and the boot auto-open, with the
+orphan exception; the nested-row variant for delegated children removed (its glyph and the
+`Task · <role>` label); the card's live read-only transcript (20 messages, "Open full chat") over
+the child's controller and activation hold, lazy-loaded; the child's gate in the card through the
+shared `GateCard`; the card opening itself on `hasPending || delegatedWaiting`; the card as a full
+card in compact mode; restore-and-open for an archived child; `delegated_waiting` over the whole
+open task subtree (a recursive walk in `CHAT_SELECT_FIELDS`); the tasks chip counting a nested
+gate; the push opening the top-level chat (`data.chatId`) and naming the child
+(`data.taskChatId`).
+
+**Deviations.**
+
+- Hooks: the chat layer reaches the service through `mainframe-chat::orchestration_hooks`
+  (`OrchestrationHooks` attached with `ChatManager::set_orchestration_hooks`), not new
+  `ChatManagerDeps` methods. `build_chat_manager` has eight call sites; a post-build attach
+  (the chat-surface pattern) avoids touching all of them. The same slot answers
+  `agent_outbox`, so one attach reaches spawns and reads.
+- Exit revocation listens for `process.stopped` (keyed by the adapter session id) instead of a
+  call in `sink_exit.rs`; `stop_chat`, `end_chat`, archive, discard, and offload revoke directly.
+- The derived fields live in one flattened `Chat.orchestration: ChatOrchestration` (the wire
+  shape stays flat). `CHAT_SELECT_FIELDS` reads `created_by_chat_id`, the child's task, and the
+  ids of its unfinished children; `delegated_waiting` follows live gates over those ids (the
+  `side_chat_waiting` pattern), so it covers direct children; a grandchild's gate shows on its
+  own parent. One `Enricher` derives every computed field for reads and for every sub-manager's
+  emit. `ChatManager::refresh_agent_lineage` re-reads the row into a loaded cell before the
+  re-announce (port `chat_changed`), since the cell otherwise keeps what it loaded.
+- `delegated_active_count` is not built: the tasks chip counts the child rows' `delegation`, and a
+  second count on the parent would be a second source of truth.
+- The narrow provenance queries and `GET /api/chats/:id/agent-outbox` are removed; the port and
+  the chip read the `Chat`.
+- The push body is rewritten in `mainframe-server`'s `send_push` (`orchestration_deps/push.rs`),
+  one place for both permission push sites.
+- The tasks chip sits in each chat column's header (`ChatColumnHeader`): the window-level chat
+  header was retired on 2026-10-04.
+- UI: the `delegate_task` card is a `TOOL_REGISTRY` by-name entry on assistant-ui's tool engine,
+  in the shared card shell. The outbox chip follows `QueuedUserTurn` (daemon-held, so the native
+  `Queue` model does not apply). The tasks chip is a `DropdownMenu`.
+- The E2E step is `{"dir":"out","method":"mcp_call","args":[{toolUseId, tool, arguments}]}`; the
+  mock emits the tool use, makes the call, and emits the answer as the tool result.
+- Task ids are `task_<childChatId>`.
+- `branch_name_ok` moved to `mainframe-server/src/orchestration_deps/workspace.rs`;
+  `existing_worktree` reuses `mainframe_services::workspace::get_worktrees`.
+
+**Not run.** The Playwright scenario (`packages/e2e/tests-tauri/mcp-delegate.spec.ts`), updated for
+task chats in the card, has not been run; Rust tests cover the `mcp_call` step against a local server, against the real `/mcp` route,
+and the recording's shape.
+
+### Pending live verification (Gate 0)
+
+None of these could run here: no authenticated standalone Claude CLI and no Codex binary.
+
+- Claude 2.1.292: `${MAINFRAME_MCP_TOKEN}` expansion in inline `--mcp-config` headers; a tool call
+  longer than 60 s with `timeout`; no permission prompt with `--allowedTools mcp__mainframe` in
+  `default` and plan mode; `priority:"next"` folds at a tool boundary without `aborted_tools`; a
+  long MCP call is not auto-backgrounded in stream-json mode (else set
+  `CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS=0`); precedence when a user server is also named `mainframe`.
+- Codex: the three `-c` keys and `bearer_token_env_var`; whether streamable HTTP needs a feature
+  flag on the pinned version; the `mcpServer/elicitation/request` shape; `turn/steer` params;
+  `shell_environment_policy` excluding `*TOKEN*` from tool shells.
+
+Record each result in `docs/research/adapters/{claude,codex}/CONSUMED-SURFACE.md` (rows
+CLAUDE-FLAG-04, CLAUDE-IO-03, CODEX-FLAG-05, CODEX-RPC-09, CODEX-RPC-10).
 
 ## Open questions (guesses made)
 
@@ -635,5 +780,6 @@ Rust unit tests live next to each module. Run single tests: `cargo test -p <crat
   worktree.
 - Whether the user's Stop on a parent should cancel children by default, or ask. The spec follows
   t3code (always cancel).
-- Whether delegated children should be hidden from the top-level sidebar sort, appearing only nested.
-  The spec nests them, as forks are nested.
+- A grandchild's gate re-emits `chat.updated` only on its own chat and its direct parent. The desktop
+  reloads the list on any `chat.updated`, so the top-level chat's `delegatedWaiting` is current
+  there; a client that patches single chats would need the re-announce to walk up the tree.
