@@ -881,6 +881,8 @@ struct RecSession {
     responded_calls: Mutex<Vec<ControlResponse>>,
     /// Every `set_permission_mode` call, in order.
     permission_mode_calls: Mutex<Vec<ExecutionMode>>,
+    /// Every `steer` call's message, in order. Steering is always supported.
+    steer_calls: Mutex<Vec<String>>,
 }
 
 impl RecSession {
@@ -897,6 +899,7 @@ impl RecSession {
             images_calls: Mutex::new(Vec::new()),
             responded_calls: Mutex::new(Vec::new()),
             permission_mode_calls: Mutex::new(Vec::new()),
+            steer_calls: Mutex::new(Vec::new()),
         })
     }
     fn with_order(label: &str, order: Arc<Mutex<Vec<String>>>) -> Arc<Self> {
@@ -912,6 +915,7 @@ impl RecSession {
             images_calls: Mutex::new(Vec::new()),
             responded_calls: Mutex::new(Vec::new()),
             permission_mode_calls: Mutex::new(Vec::new()),
+            steer_calls: Mutex::new(Vec::new()),
         })
     }
 }
@@ -965,6 +969,17 @@ impl AdapterSession for RecSession {
             .lock()
             .unwrap()
             .push((message, uuid));
+        ok()
+    }
+    fn supports_steer(&self) -> bool {
+        true
+    }
+    fn steer(
+        &self,
+        message: String,
+        _uuid: Option<String>,
+    ) -> BoxFuture<'_, Result<(), AdapterError>> {
+        self.steer_calls.lock().unwrap().push(message);
         ok()
     }
     fn respond_to_permission(
@@ -1088,6 +1103,36 @@ async fn writes_to_cli_immediately_with_uuid_and_records_queued_ref() {
     assert!(calls[0].1.is_some(), "sendMessage carried a uuid");
     drop(calls);
     assert_eq!(mgr.get_queued_for_chat("c1").len(), 1);
+}
+
+#[tokio::test]
+async fn steer_folds_into_a_working_turn_and_refuses_an_idle_one() {
+    let deps = StoreDeps::arc();
+    let mgr = ChatManager::new(deps);
+    let session = RecSession::new("c1", true, true);
+    seed_active(
+        &mgr,
+        "c1",
+        working_chat("c1", Some("t"), true),
+        session.clone(),
+    );
+
+    mgr.steer_message("c1", "also run the tests").await.unwrap();
+    assert_eq!(
+        *session.steer_calls.lock().unwrap(),
+        vec!["also run the tests".to_string()]
+    );
+    assert!(session.send_message_calls.lock().unwrap().is_empty());
+
+    let idle = RecSession::new("c2", true, true);
+    seed_active(
+        &mgr,
+        "c2",
+        working_chat("c2", Some("t"), false),
+        idle.clone(),
+    );
+    assert!(mgr.steer_message("c2", "x").await.is_err());
+    assert!(idle.steer_calls.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

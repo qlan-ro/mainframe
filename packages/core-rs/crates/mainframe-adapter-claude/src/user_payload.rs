@@ -35,8 +35,27 @@ pub fn build_user_payload(
     payload
 }
 
+/// The text payload with `priority: "next"`, which the CLI drains at the
+/// next tool boundary of the running turn.
+pub fn build_steer_payload(chat_id: &str, message: &str, uuid: Option<&str>) -> Value {
+    let mut payload = build_user_payload(chat_id, message, &[], uuid);
+    payload["priority"] = Value::String("next".to_string());
+    payload
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_steer_payload_asks_for_the_next_boundary_never_now() {
+        let payload = super::build_steer_payload("chat-1", "also run the tests", Some("u1"));
+        assert_eq!(payload["priority"], "next");
+        assert_eq!(payload["uuid"], "u1");
+        assert_eq!(
+            payload["message"]["content"][0]["text"],
+            "also run the tests"
+        );
+    }
+
     use mainframe_adapter_api::ImageInput;
 
     fn image_with_path(media_type: &str, data: &str, path: &str) -> ImageInput {

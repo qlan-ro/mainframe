@@ -42,10 +42,11 @@ impl OrchestrationService {
             self.outbox.restore(entries);
             return;
         }
-        self.mark_delivered(&entries).await;
+        self.set_delivery(&entries, TaskDelivery::Delivered).await;
     }
 
-    async fn mark_delivered(&self, entries: &[OutboxEntry]) {
+    /// Records where each task result among `entries` ended up.
+    async fn set_delivery(&self, entries: &[OutboxEntry], delivery: TaskDelivery) {
         for entry in entries {
             let OutboxKind::TaskResult { task_id } = &entry.kind else {
                 continue;
@@ -53,12 +54,36 @@ impl OrchestrationService {
             let Some(mut task) = self.tasks.get(task_id).await else {
                 continue;
             };
-            task.delivery = TaskDelivery::Delivered;
+            task.delivery = delivery;
             task.updated_at = now();
             if let Err(err) = self.save(&task).await {
                 tracing::warn!(task_id, %err, "failed to record a task delivery");
             }
         }
+    }
+
+    /// What Mainframe is holding for `chat_id`, oldest first.
+    #[must_use]
+    pub fn outbox_entries(&self, chat_id: &str) -> Vec<OutboxEntry> {
+        self.outbox.list_for(chat_id)
+    }
+
+    /// The user's cancel on one held message; a cancelled task result is
+    /// recorded as dropped. False when the entry is gone (already sent).
+    pub async fn cancel_outbox_entry(&self, chat_id: &str, entry_id: &str) -> bool {
+        let entry = self
+            .outbox
+            .list_for(chat_id)
+            .into_iter()
+            .find(|e| e.entry_id == entry_id);
+        let Some(entry) = entry else {
+            return false;
+        };
+        if !self.outbox.cancel(chat_id, entry_id) {
+            return false;
+        }
+        self.set_delivery(&[entry], TaskDelivery::Dropped).await;
+        true
     }
 
     /// Reacts to one daemon event. Public so the server can drive it from
@@ -164,6 +189,21 @@ mod tests {
             vec![("target".to_string(), "one\n\ntwo".to_string())]
         );
         assert!(!svc.outbox.has_for("target"));
+    }
+
+    #[tokio::test]
+    async fn a_cancelled_entry_is_never_sent() {
+        let port = FakePort::new();
+        port.add_chat("caller");
+        let (svc, _ctx) = service_with(port.clone(), "caller");
+        let id = svc
+            .outbox
+            .push("caller", "x", OutboxKind::Send, "hi".into(), "hi");
+        assert_eq!(svc.outbox_entries("caller").len(), 1);
+        assert!(svc.cancel_outbox_entry("caller", &id).await);
+        assert!(!svc.cancel_outbox_entry("caller", &id).await);
+        svc.try_flush("caller").await;
+        assert!(port.lock().sent.is_empty());
     }
 
     #[tokio::test]

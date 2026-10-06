@@ -129,6 +129,12 @@ pub trait Adapter: Send + Sync {
     fn id(&self) -> &str;
     fn name(&self) -> &str;
     fn capabilities(&self) -> AdapterCapabilities;
+    /// Whether this adapter's sessions implement `AdapterSession::steer`, for
+    /// listings that have no live session to ask. Defaulted to `false`, the
+    /// same answer as the session method's default.
+    fn supports_steer(&self) -> bool {
+        false
+    }
 
     fn is_installed(&self) -> BoxFuture<'_, Result<bool, AdapterError>>;
     fn get_version(&self) -> BoxFuture<'_, Result<Option<String>, AdapterError>>;

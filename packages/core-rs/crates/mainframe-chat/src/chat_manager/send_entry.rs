@@ -1,7 +1,7 @@
 //! The message send path + CLI-owned queue delegations off the `ChatManager` facade.
 use super::*;
 
-type LiveSession = (Arc<Mutex<ActiveChat>>, Arc<dyn AdapterSession>);
+pub(super) type LiveSession = (Arc<Mutex<ActiveChat>>, Arc<dyn AdapterSession>);
 
 impl ChatManager {
     pub async fn send_message(
@@ -61,7 +61,9 @@ impl ChatManager {
             chat_id,
             content,
             attachment_ids,
-            handoff.as_deref(),
+            Delivery::Turn {
+                handoff: handoff.as_deref(),
+            },
         )
         .await
     }
@@ -136,7 +138,7 @@ impl ChatManager {
         Ok(())
     }
 
-    fn require_live_session(&self, chat_id: &str) -> Result<LiveSession, SendError> {
+    pub(super) fn require_live_session(&self, chat_id: &str) -> Result<LiveSession, SendError> {
         let post = self
             .get_active(chat_id)
             .ok_or_else(|| SendError(format!("Chat {chat_id} not running")))?;

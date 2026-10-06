@@ -71,6 +71,7 @@ use mainframe_types::worktree_offer::WorktreeSwitchOffer;
 
 mod config_api;
 mod construct;
+mod delivery;
 mod deps;
 mod deps_config;
 mod deps_event;
@@ -93,6 +94,7 @@ mod send_entry;
 mod send_queue;
 mod shared;
 mod side_chat;
+mod steer;
 mod switch_api;
 mod update;
 

@@ -123,6 +123,9 @@ impl Adapter for ClaudeAdapter {
     fn name(&self) -> &str {
         CLAUDE_ADAPTER_NAME
     }
+    fn supports_steer(&self) -> bool {
+        true
+    }
     fn capabilities(&self) -> AdapterCapabilities {
         AdapterCapabilities {
             plan_mode: true,

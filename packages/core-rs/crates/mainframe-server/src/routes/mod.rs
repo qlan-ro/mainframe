@@ -6,6 +6,7 @@
 
 mod adapter_model;
 pub mod adapters;
+pub mod agent_outbox;
 pub mod agents;
 pub mod attachments;
 pub mod auth;

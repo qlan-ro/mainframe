@@ -65,6 +65,18 @@ impl AdapterSession for CodexSession {
         Box::pin(self.send_message_inner(message, images, _uuid))
     }
 
+    fn supports_steer(&self) -> bool {
+        true
+    }
+
+    fn steer(
+        &self,
+        message: String,
+        _uuid: Option<String>,
+    ) -> BoxFuture<'_, Result<(), AdapterError>> {
+        Box::pin(self.steer_inner(message))
+    }
+
     fn cancel_queued_message(&self, _uuid: String) -> BoxFuture<'_, Result<bool, AdapterError>> {
         Box::pin(async { Ok(false) })
     }

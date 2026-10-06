@@ -38,6 +38,8 @@ use crate::types::{ThreadStartResult, TurnStartResult};
 
 #[path = "session_model.rs"]
 mod model;
+#[path = "turn_steer.rs"]
+mod steer;
 
 const HANDSHAKE_TIMEOUT_MS: u64 = 10_000;
 type OnExitCallback = Box<dyn FnOnce() + Send>;

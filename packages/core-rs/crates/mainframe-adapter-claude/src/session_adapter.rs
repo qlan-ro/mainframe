@@ -51,6 +51,16 @@ impl AdapterSession for ClaudeSession {
     ) -> BoxFuture<'_, Result<(), AdapterError>> {
         Box::pin(ClaudeSession::send_message(self, message, images, uuid))
     }
+    fn supports_steer(&self) -> bool {
+        true
+    }
+    fn steer(
+        &self,
+        message: String,
+        uuid: Option<String>,
+    ) -> BoxFuture<'_, Result<(), AdapterError>> {
+        Box::pin(ClaudeSession::steer(self, message, uuid))
+    }
     fn respond_to_permission(
         &self,
         response: ControlResponse,

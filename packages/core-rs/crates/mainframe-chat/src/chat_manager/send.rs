@@ -230,7 +230,7 @@ impl ChatManager {
         chat_id: &str,
         content: &str,
         attachment_ids: Option<&[String]>,
-        handoff: Option<&str>,
+        delivery: Delivery<'_>,
     ) -> Result<(), SendError> {
         let outgoing = self
             .prepare_outgoing(chat_id, content, attachment_ids)
@@ -261,12 +261,16 @@ impl ChatManager {
         let chat = post.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
         self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
 
-        // The provider gets the handoff block; the stored message keeps only
-        // the user's own text, so live and cold history match.
-        let text = with_handoff(handoff, outgoing.text);
-        session
-            .send_message(text, outgoing.images, Some(message_uuid.clone()))
-            .await?;
+        let uuid = Some(message_uuid.clone());
+        match delivery {
+            // The provider gets the handoff block; the stored message keeps
+            // only the user's own text, so live and cold history match.
+            Delivery::Turn { handoff } => {
+                let text = with_handoff(handoff, outgoing.text);
+                session.send_message(text, outgoing.images, uuid).await?;
+            }
+            Delivery::Steer => session.steer(outgoing.text, uuid).await?,
+        }
 
         if is_queued {
             self.record_queued_ref(chat_id, &message, message_uuid, content, attachment_ids);

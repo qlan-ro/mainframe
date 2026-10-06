@@ -218,11 +218,14 @@ impl OrchestrationPort for DaemonOrchestrationPort {
 
     fn adapters(&self) -> BoxFuture<'_, Vec<AdapterView>> {
         Box::pin(async move {
-            self.adapters
-                .list()
-                .await
+            let infos = self.adapters.list().await;
+            infos
                 .into_iter()
                 .map(|info| AdapterView {
+                    steer: self
+                        .adapters
+                        .get(&info.id)
+                        .is_some_and(|a| a.supports_steer()),
                     available: info.installed,
                     unavailable_reason: (!info.installed).then(|| "not installed".to_string()),
                     id: info.id,
@@ -236,9 +239,6 @@ impl OrchestrationPort for DaemonOrchestrationPort {
                             label: m.label,
                         })
                         .collect(),
-                    // No adapter folds a message into a running turn yet;
-                    // `chat_send` answers `not_steerable` and agents queue.
-                    steer: false,
                 })
                 .collect()
         })
@@ -260,12 +260,13 @@ impl OrchestrationPort for DaemonOrchestrationPort {
     fn steer<'a>(
         &'a self,
         chat_id: &'a str,
-        _text: &'a str,
+        text: &'a str,
     ) -> BoxFuture<'a, Result<(), PortError>> {
         Box::pin(async move {
-            Err(PortError::Internal(format!(
-                "steer requested for {chat_id}, but no adapter reports steer support"
-            )))
+            self.chats
+                .steer_message(chat_id, text)
+                .await
+                .map_err(|err| PortError::Internal(err.to_string()))
         })
     }
 
