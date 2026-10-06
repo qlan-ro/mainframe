@@ -105,11 +105,12 @@ async function closeSettings(page: Page): Promise<void> {
   }
 }
 
-/** Shows Settings and navigates to a tab. Opening always resets to the General tab, so every
- *  reopen after a change must re-navigate before re-reading a persisted value. */
+/** Shows Settings and navigates to a tab. The rail view keeps whichever tab was last
+ *  picked (the settings store's `activeTab` outlives the view), so General is clicked
+ *  too — a previous test that ended on About would otherwise leave the pane missing. */
 async function openTab(page: Page, tab: SettingsTab): Promise<void> {
   await openSettings(page);
-  if (tab !== 'general') await page.getByTestId(`settings-nav-${tab}`).click();
+  await page.getByTestId(`settings-nav-${tab}`).click();
   await page.getByTestId(`settings-pane-${tab}`).waitFor({ timeout: 10_000 });
 }
 
