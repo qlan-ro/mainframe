@@ -263,7 +263,7 @@ module, not generated from each other.
 SQLite via `rusqlite` (not `better-sqlite3` — that was the Node daemon's
 driver and is gone), at `$MAINFRAME_DATA_DIR/mainframe.db`
 (`MAINFRAME_DATA_DIR` defaults to `~/.mainframe`). WAL mode and foreign keys
-are enabled on open (`mainframe-db`). The core schema is six tables:
+are enabled on open (`mainframe-db`). The core schema starts with six tables:
 `projects`, `chats`, `settings`, `devices`, `tags`, `chat_tags` — all owned by
 `mainframe-db`'s repositories. Other subsystems (automations, plugins) reuse
 the same connection through the shared `Db` actor handle rather than opening
@@ -276,6 +276,20 @@ owns its own transcript on disk (Claude's `~/.claude/` JSONL, Codex's own
 session store) and the daemon replays it via the adapter's resume mechanism
 (`--resume <sessionId>` for Claude) rather than reading its own cache back.
 Attachments live under `~/.mainframe/attachments/{chatId}/`.
+
+One chat can run on several provider sessions in turn (switching between
+Claude and Codex in place, or a fresh session after `/clear`). Three more
+tables track that: `chat_native_sessions` (one row per provider-native
+session), `chat_segments` (an ordered list of spans, exactly one active), and
+`chat_handoffs` (bookkeeping for the context block a switch delivers; the
+block's text lives only in the target transcript). The `chats` session columns
+(`adapter_id`, `claude_session_id`, `session_file_path`, the context-usage
+columns, `transcript_missing`) are a mirror of the active segment's native
+session, written only through the segment repository. History for a
+multi-segment chat is composed from every native transcript, split back into
+segments at the `<mainframe-context-handoff>` markers
+(`mainframe-chat/src/segments/`). Spec:
+`docs/specs/2026-10-06-provider-switch-in-place.md`.
 
 ## Adapter system (`AgentAdapter`)
 

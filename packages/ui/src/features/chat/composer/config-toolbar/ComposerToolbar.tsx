@@ -27,6 +27,10 @@ import { TemporaryToggle } from './TemporaryToggle';
 import { WorktreePopover } from './WorktreePopover';
 import { TuningWarningDialog } from './TuningWarningDialog';
 import { ContextPercent } from './ContextPercent';
+import { ProviderSwitchConfirm } from './ProviderSwitchConfirm';
+import { providerSwitchBlockedReason } from './provider-switch';
+import { useProviderSwitch } from './use-provider-switch';
+import { useChatExtras } from '../../runtime/chat-extras';
 
 export function ComposerToolbar({ variant = 'main' }: { variant?: 'main' | 'side' } = {}) {
   const adapters = useAdapters();
@@ -52,9 +56,13 @@ export function ComposerToolbar({ variant = 'main' }: { variant?: 'main' | 'side
     contextTokens,
     tuningWarning,
   } = useComposerTuning(adapters);
+  const extras = useChatExtras();
+  const queuedCount = Object.values(extras?.queued ?? {}).filter((q) => q != null).length;
+  const providerSwitch = useProviderSwitch(chat, extras?.port ?? null, adapters);
 
   // All controls need a resolved chat; nothing to render while loading.
   if (!chat) return null;
+  const fromName = adapters.find((a) => a.id === chat.adapterId)?.name ?? chat.adapterId;
 
   return (
     <>
@@ -74,6 +82,8 @@ export function ComposerToolbar({ variant = 'main' }: { variant?: 'main' | 'side
         setEffort={setEffort}
         setFeature={setFeature}
         hideProviderSwitch={variant === 'side'}
+        switchBlockedReason={providerSwitchBlockedReason(chat, queuedCount, fromName)}
+        onSwitchProvider={providerSwitch.request}
       />
       <PermissionSelect
         chat={chat}
@@ -93,6 +103,7 @@ export function ComposerToolbar({ variant = 'main' }: { variant?: 'main' | 'side
         onConfirm={tuningWarning.confirm}
         onCancel={tuningWarning.cancel}
       />
+      <ProviderSwitchConfirm hook={providerSwitch} />
     </>
   );
 }

@@ -5,12 +5,15 @@
  */
 import type {
   Chat,
+  ChatSegment,
   ClaudeWorkflowRun,
   SessionTuning,
   ExecutionMode,
   ForkChatRequest,
   PermissionMode,
+  SwitchProviderBody,
 } from '@qlan-ro/mainframe-types';
+import { SwitchProviderBodySchema } from '@qlan-ro/mainframe-types';
 import { apiBase, request, requestEmpty } from './http';
 
 /** Body for PATCH /api/chats/:id/config — adapter / model / permission / plan. */
@@ -185,3 +188,16 @@ export const forkChat = (port: number, chatId: string, body?: ForkChatRequest): 
  */
 export const openSideChat = (port: number, parentChatId: string): Promise<Chat> =>
   request<Chat>('POST', `${apiBase(port)}/api/chats/${parentChatId}/side-chat`);
+
+/**
+ * Continue a chat on another provider. The daemon kills the current CLI and
+ * spawns nothing; the next send carries the context handoff. The body is
+ * validated before it leaves, and a refusal (turn running, queued messages,
+ * background work, …) surfaces via `ApiRequestError.message`.
+ */
+export const switchChatProvider = (port: number, chatId: string, body: SwitchProviderBody): Promise<Chat> =>
+  request<Chat>('POST', `${apiBase(port)}/api/chats/${chatId}/switch-provider`, SwitchProviderBodySchema.parse(body));
+
+/** The chat's provider segments, in order. */
+export const getChatSegments = (port: number, chatId: string): Promise<ChatSegment[]> =>
+  request<ChatSegment[]>('GET', `${apiBase(port)}/api/chats/${chatId}/segments`);

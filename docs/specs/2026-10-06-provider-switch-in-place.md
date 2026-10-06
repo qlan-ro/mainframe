@@ -806,3 +806,58 @@ reconstruction after an app-server restart.
 - Divider and dialog copy, the 2,000-byte command tail, and the restore-on-return of model and
   tuning are product guesses.
 - Union of tool categories across adapters. Low risk, since Codex normalizes to Claude tool names.
+
+## Pending live verification
+
+The marker round trip is covered by fixture tests only
+(`mainframe-chat/tests/handoff_marker_roundtrip.rs`: Claude JSONL string and text-block
+content, Codex rollout and `thread/read`). No authenticated Claude CLI or Codex binary was
+available while building, so these checks still need a live run:
+
+1. **Claude, fresh target.** Switch Codex → Claude, send. The first stream-json `user` message
+   carries the block; the JSONL `user` entry stores it verbatim (string content), and a reload
+   shows the divider and the typed text only.
+2. **Claude, return with `--resume`.** Claude → Codex → Claude. The resumed CLI keeps the same
+   session id on `system/init` (no `context_reset` segment appears), and the delta block lands in
+   the same JSONL.
+3. **Claude with images.** A first message with an image attachment: the text block that opens the
+   array content keeps the marker verbatim (`extract_user_content_blocks`).
+4. **Claude `/clear`.** `/clear` mid-chat regenerates the session id in-process; `on_init` opens a
+   `context_reset` segment and the "New Claude session" divider appears live and after reload.
+5. **Codex, fresh target.** Claude → Codex, send. `turn/start` input's first text item carries the
+   block; `thread/read` returns it verbatim in the `userMessage` item.
+6. **Codex after an app-server restart.** The same thread reloaded through rollout reconstruction
+   still opens with the marker (`codex-protocol-debugger`).
+7. **Codex return with `thread/resume`.** Codex → Claude → Codex resumes the same thread id and the
+   delta block lands as the next `userMessage`.
+8. **Interrupt during the handoff turn.** The interrupted result marks the handoff delivered, and
+   the transcript holds the marker.
+
+## Implementation status (2026-10-06)
+
+Built: migration 31 with backfill, the three repositories and the mirror invariant; the pure
+handoff builder; `POST /switch-provider` (refusal table, process lifecycle) and
+`GET /segments`; first-send delivery with transcript resolution and the fresh-session fallback;
+result-time delivery and per-segment counters; multi-segment history composition with dividers;
+`context_reset` segments for `/clear`, plan "clear context" and degraded recovery; the respawn
+guard; `segments::fork_plan` / `switch_before` for the fork features; the UI (browsing tabs,
+blocked hints, confirmation, divider).
+
+Departures from the text above:
+
+- **Mirror writers.** `ChatsRepository::update`, `clear_session` and `mark_context_lost` route
+  their session columns through the segment repository in one transaction, instead of renaming
+  every call site. The effect is the same single writer; the call sites are unchanged.
+- **`ActiveChat`** has no `active_segment_id` / `active_native_ref`; the layout is read from the
+  repository when needed.
+- **History cache.** Multi-segment chats bypass the snapshot cache instead of extending its
+  fingerprint; `FORMAT_VERSION` is unchanged.
+- **Budget inputs** are estimated before attachment processing (each attachment priced at the
+  image allowance), so the plan, including the fresh fallback, is settled before the spawn.
+- **`ProviderSwitchMarker`** also carries `fromAdapterName` / `toAdapterName`, so the text
+  fallback and clients without an adapter registry can name both providers.
+
+Not built yet: copying segment rows into whole-chat forks and the unsent-fork-switches case
+(Interactions → whole-chat fork); relocating non-active Claude native rows on worktree moves;
+the union of tool categories across adapters; a `chat_manager` integration test with a fake
+segment store; the E2E second mock adapter.

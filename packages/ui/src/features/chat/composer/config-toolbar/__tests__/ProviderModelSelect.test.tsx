@@ -17,8 +17,8 @@
  *  2. Opening the popover renders one provider pill per adapter and one model
  *     row per model (by their exact data-testid values)
  *  3. An uninstalled adapter's pill is disabled
- *  4. locked=true renders the footer ("Provider stays fixed for this session.")
- *     and disables non-active provider pills; locked=false omits the footer
+ *  4. the footer copy before and after the first message (switching itself is
+ *     covered in ProviderModelSelect.switch.test.tsx)
  *  5. Clicking a model row calls setModel with that model's literal id
  *  6. Clicking an installed, non-active provider pill calls setAdapter with
  *     that adapter's id
@@ -258,104 +258,35 @@ describe('ProviderModelSelect — uninstalled adapter pill is disabled', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 4. locked=true shows the footer and disables non-active provider pills;
-//    locked=false omits the footer
+// 4. The footer explains what a provider tab does before and after the first
+//    message (switch behavior itself: ProviderModelSelect.switch.test.tsx)
 // ---------------------------------------------------------------------------
 
-describe('ProviderModelSelect — locked prop controls footer and pill state', () => {
+describe('ProviderModelSelect — footer copy before and after the first message', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('locked=true renders the provider footer with its fixed text', async () => {
-    renderSelect({
-      adapters: [ADAPTER_CLAUDE, ADAPTER_GEMINI],
-      adapter: ADAPTER_CLAUDE,
-      model: SONNET,
-      locked: true,
-      chat: makeChat({ adapterId: 'claude', model: 'sonnet' }),
-    });
-
+  it('locked=true says switching keeps the chat', async () => {
+    renderSelect({ adapters: [ADAPTER_CLAUDE, ADAPTER_GEMINI], locked: true });
     await userEvent.click(screen.getByTestId('composer-model-select'));
-
-    const footer = screen.getByTestId('composer-provider-footer');
-    expect(footer).toBeInTheDocument();
-    expect(footer.textContent).toBe('Provider stays fixed for this session.');
+    expect(screen.getByTestId('composer-provider-footer').textContent).toBe(
+      'Switching keeps this chat. The new provider gets its history with your next message.',
+    );
   });
 
-  it('locked=true disables a non-active installed provider pill', async () => {
-    renderSelect({
-      adapters: [ADAPTER_CLAUDE, ADAPTER_GEMINI],
-      adapter: ADAPTER_CLAUDE,
-      model: SONNET,
-      locked: true,
-      chat: makeChat({ adapterId: 'claude', model: 'sonnet' }),
-    });
-
+  it('locked=true leaves every installed provider tab enabled when switching is open', async () => {
+    renderSelect({ adapters: [ADAPTER_CLAUDE, ADAPTER_GEMINI], locked: true });
     await userEvent.click(screen.getByTestId('composer-model-select'));
-
-    // gemini is installed but not active — should be disabled when locked
-    expect(screen.getByTestId('composer-adapter-select-option-gemini')).toBeDisabled();
-  });
-
-  it('locked=true explains itself: the locked segment carries a tooltip, the active one does not', async () => {
-    renderSelect({
-      adapters: [ADAPTER_CLAUDE, ADAPTER_GEMINI],
-      adapter: ADAPTER_CLAUDE,
-      model: SONNET,
-      locked: true,
-      chat: makeChat({ adapterId: 'claude', model: 'sonnet' }),
-    });
-
-    await userEvent.click(screen.getByTestId('composer-model-select'));
-
-    // A disabled button swallows pointer events, so the tooltip rides on a
-    // wrapper span around the locked segment only.
-    expect(screen.getByTestId('composer-adapter-locked-gemini')).toBeInTheDocument();
-    expect(screen.queryByTestId('composer-adapter-locked-claude')).toBeNull();
-  });
-
-  it('locked=false renders no tooltip wrapper on any segment', async () => {
-    renderSelect({
-      adapters: [ADAPTER_CLAUDE, ADAPTER_GEMINI],
-      adapter: ADAPTER_CLAUDE,
-      model: SONNET,
-      locked: false,
-      chat: makeChat({ adapterId: 'claude', model: 'sonnet' }),
-    });
-
-    await userEvent.click(screen.getByTestId('composer-model-select'));
-
+    expect(screen.getByTestId('composer-adapter-select-option-claude')).not.toBeDisabled();
+    expect(screen.getByTestId('composer-adapter-select-option-gemini')).not.toBeDisabled();
     expect(screen.queryByTestId('composer-adapter-locked-gemini')).toBeNull();
   });
 
-  it('locked=true does NOT disable the active provider pill', async () => {
-    renderSelect({
-      adapters: [ADAPTER_CLAUDE, ADAPTER_GEMINI],
-      adapter: ADAPTER_CLAUDE,
-      model: SONNET,
-      locked: true,
-      chat: makeChat({ adapterId: 'claude', model: 'sonnet' }),
-    });
-
-    await userEvent.click(screen.getByTestId('composer-model-select'));
-
-    // claude is the active adapter — its pill should remain enabled
-    expect(screen.getByTestId('composer-adapter-select-option-claude')).not.toBeDisabled();
-  });
-
   it('locked=false renders the footer with the unlocked hint text', async () => {
-    renderSelect({
-      adapters: [ADAPTER_CLAUDE, ADAPTER_GEMINI],
-      adapter: ADAPTER_CLAUDE,
-      model: SONNET,
-      locked: false,
-      chat: makeChat({ adapterId: 'claude', model: 'sonnet' }),
-    });
-
+    renderSelect({ adapters: [ADAPTER_CLAUDE, ADAPTER_GEMINI], locked: false });
     await userEvent.click(screen.getByTestId('composer-model-select'));
-
-    const footer = screen.getByTestId('composer-provider-footer');
-    expect(footer).toBeInTheDocument();
-    expect(footer.textContent).toBe('Pick a provider before your first message.');
+    expect(screen.getByTestId('composer-provider-footer').textContent).toBe(
+      'Pick a provider before your first message.',
+    );
   });
 });
 

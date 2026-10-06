@@ -79,10 +79,10 @@ fn refusals_come_in_table_order_with_their_status_and_copy() {
     );
     let err = check(&chat, Some(&codex(false)), None, 3).unwrap_err();
     assert_eq!(err.to_string(), "Codex isn't installed");
-    let err = check(&chat, Some(&codex(true)), Some("gpt-x"), 3).unwrap_err();
+    let err = check(&chat, Some(&codex(true)), Some("unlisted-model"), 3).unwrap_err();
     assert_eq!(
         (err.status(), err.to_string()),
-        (422, "gpt-x isn't a Codex model".to_string())
+        (422, "unlisted-model isn't a Codex model".to_string())
     );
     let err = check(&chat, Some(&codex(true)), None, 3).unwrap_err();
     assert_eq!(
