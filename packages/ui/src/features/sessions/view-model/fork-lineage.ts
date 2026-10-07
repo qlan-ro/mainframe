@@ -8,11 +8,15 @@
  * deleted) is left in the group's own sort position at depth 0 — the row
  * layer renders the fallback glyph for those, via `classifyParent`.
  *
+ * A delegated child (orchestration MCP server) carries the same
+ * `parentChatId`, so it nests through the same pass; only its wording and its
+ * glyph differ (`lineageRelation`), and it never counts as a fork.
+ *
  * Pure and side-effect-free: no daemon calls, no React. `use-parent-chat.ts`
  * resolves the archived/deleted cases this module can't see (they aren't in
  * the sidebar's loaded item set at all).
  */
-import type { SessionItem } from './chat-to-thread-custom';
+import type { SessionCustom, SessionItem } from './chat-to-thread-custom';
 
 const MAX_DEPTH = 2;
 
@@ -77,11 +81,23 @@ export function nestForks(items: readonly SessionItem[]): LineageRow[] {
   return rows;
 }
 
-/** Listed, non-archived, direct forks of `id` — excludes `id` itself (defends the self-reference case). */
+/** How a child relates to its parent: a delegated child is the parent's task, not a fork of it. */
+export type LineageRelation = 'fork' | 'delegated';
+
+export function lineageRelation(custom: Pick<SessionCustom, 'delegation'>): LineageRelation {
+  return custom.delegation != null ? 'delegated' : 'fork';
+}
+
+/**
+ * Listed, non-archived, direct forks of `id` — excludes `id` itself (defends
+ * the self-reference case) and delegated children, which nest the same way but
+ * are tasks, not forks.
+ */
 export function forkCount(allItems: readonly SessionItem[], id: string): number {
   let count = 0;
   for (const it of allItems) {
-    if (it.id !== id && it.custom.parentChatId === id && it.status !== 'archived') count++;
+    if (it.id === id || it.custom.parentChatId !== id || it.status === 'archived') continue;
+    if (lineageRelation(it.custom) === 'fork') count++;
   }
   return count;
 }
@@ -146,10 +162,12 @@ export function parentLineageValue(state: ParentLineageState): string {
   }
 }
 
+const RELATION_LEAD: Record<LineageRelation, string> = { fork: 'Forked from', delegated: 'Delegated by' };
+
 /** The exact Hint / header copy from the spec's Sidebar and Chat header sections. */
-export function parentLineageText(state: ParentLineageState): string {
+export function parentLineageText(state: ParentLineageState, relation: LineageRelation = 'fork'): string {
   const suffix = state.kind === 'different-group' ? " — in a different group, so it can't nest here" : '';
-  return `Forked from ${parentLineageValue(state)}${suffix}`;
+  return `${RELATION_LEAD[relation]} ${parentLineageValue(state)}${suffix}`;
 }
 
 /** Archived and deleted parents are never interactive (archived chats only reopen from the Archived dialog). */

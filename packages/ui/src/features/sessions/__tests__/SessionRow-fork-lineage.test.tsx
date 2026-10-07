@@ -159,6 +159,22 @@ describe('SessionRow — nested fork (depth > 0)', () => {
     expect(inner.querySelector('[data-chat-id="grandfork-1"]')).toBeTruthy();
   });
 
+  it('draws a nested delegated child with the task glyph and its `Task · <role>` label', async () => {
+    const child = makeItem('fork-1', 'Fork Chat', 'parent-1');
+    child.custom.delegation = { taskId: 'task_fork-1', role: 'review', status: 'running' };
+    renderRow(child, 1, {
+      allItems: [parentItem, child],
+      listedIds: new Set(['parent-1', 'fork-1']),
+      unfilteredIds: new Set(['parent-1', 'fork-1']),
+    });
+
+    await waitFor(() => expect(screen.getByText('Fork Chat')).toBeTruthy());
+    expect(screen.getByTestId('sessions-row-fork-nest')).toBeTruthy();
+    expect(screen.getByTestId('sessions-row-delegated-nest-glyph')).toBeTruthy();
+    expect(screen.queryByTestId('sessions-row-fork-nest-glyph')).toBeNull();
+    expect(screen.getByTestId('sessions-row-task-label')).toHaveTextContent('Task · review');
+  });
+
   it('renders no nest wrapper for a root chat (depth 0, no parent)', async () => {
     renderRow(parentItem, 0, {
       allItems: [parentItem],

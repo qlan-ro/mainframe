@@ -34,6 +34,9 @@ vi.mock('../../messages/bounded-messages', () => ({ boundedMessageComponents: {}
 vi.mock('../../composer/WorktreeSwitchBanner', () => ({
   WorktreeSwitchBanner: () => <div data-testid="worktree-banner" />,
 }));
+vi.mock('../../orchestration/AgentOutboxChip', () => ({
+  AgentOutboxChip: () => <div data-testid="agent-outbox-chip" />,
+}));
 vi.mock('../ChatSelectionToolbar', () => ({ ChatSelectionToolbar: () => null }));
 vi.mock('../../composer/edit/composer-edit-context', () => ({
   ComposerEditProvider: ({ children }: { children?: ReactNode }) => <>{children}</>,
@@ -96,6 +99,13 @@ describe('ChatThread — variant="side" (todo #344)', () => {
     render(<ChatThread variant="side" />);
 
     expect(screen.queryByTestId('worktree-banner')).toBeNull();
+  });
+
+  it('hides the agent-outbox chip in the side variant (nothing is ever held for a side chat)', () => {
+    __chatConfig = undefined;
+    render(<ChatThread variant="side" />);
+
+    expect(screen.queryByTestId('agent-outbox-chip')).toBeNull();
   });
 
   it('binding spike: reads the thread id from SideChatScope, not a bound threadListItem', () => {

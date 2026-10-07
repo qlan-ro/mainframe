@@ -9,8 +9,10 @@ import { useAui } from '@assistant-ui/react';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
 import {
   classifyParent,
+  lineageRelation,
   parentLineageInteractive,
   parentLineageText,
+  type LineageRelation,
   type ParentLineageState,
 } from '../view-model/fork-lineage';
 import { useSessionLineage } from '../SessionLineageContext';
@@ -27,6 +29,8 @@ export interface ForkRowLineage {
    * of its own parent.
    */
   depth: 0 | 1 | 2;
+  /** A delegated child nests like a fork but reads and draws as the parent's task. */
+  relation: LineageRelation;
   /** Set only for a non-nested fork — the row's own trailing fallback glyph. */
   fallback?: ForkFallback;
   /** Set whenever the item has a `parentChatId`, nested or not — the hover card's forked-from line. */
@@ -37,6 +41,7 @@ export function useForkLineageRow(item: SessionItem, depth: 0 | 1 | 2): ForkRowL
   const aui = useAui();
   const { allItems, listedIds, unfilteredIds } = useSessionLineage();
   const parentChatId = item.custom.parentChatId ?? null;
+  const relation = lineageRelation(item.custom);
 
   const classification =
     depth === 0 && parentChatId != null ? classifyParent(parentChatId, listedIds, unfilteredIds) : 'none';
@@ -47,13 +52,13 @@ export function useForkLineageRow(item: SessionItem, depth: 0 | 1 | 2): ForkRowL
     if (parentChatId != null) aui.threads.switchToThread(parentChatId);
   }, [aui, parentChatId]);
 
-  if (parentChatId == null) return { nested: depth > 0, depth };
+  if (parentChatId == null) return { nested: depth > 0, depth, relation };
 
   if (depth > 0) {
     // nestForks only nests onto a parent present in this same group, so the
     // title always resolves locally — no daemon round trip for a nested row.
     const title = allItems.find((it) => it.id === parentChatId)?.title ?? 'Untitled session';
-    return { nested: true, depth, parentState: { kind: 'linked', title } };
+    return { nested: true, depth, relation, parentState: { kind: 'linked', title } };
   }
 
   let state: ParentLineageState | undefined;
@@ -66,13 +71,15 @@ export function useForkLineageRow(item: SessionItem, depth: 0 | 1 | 2): ForkRowL
     state = { kind: 'deleted' };
   }
 
-  if (state == null) return { nested: false, depth: 0 }; // still resolving — no placeholder glyph while pending
+  if (state == null) return { nested: false, depth: 0, relation }; // still resolving — no placeholder glyph while pending
   return {
     nested: false,
     depth: 0,
+    relation,
     parentState: state,
     fallback: {
-      hint: parentLineageText(state),
+      hint: parentLineageText(state, relation),
+      relation,
       onActivate: parentLineageInteractive(state) ? activateParent : undefined,
     },
   };

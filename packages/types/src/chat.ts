@@ -6,6 +6,7 @@ import type { DetectedPr, ControlRequest, EffortLevel } from './adapter.js';
 import type { ProviderSwitchMarker } from './segment.js';
 import type { ExecutionMode } from './settings.js';
 import type { LeafContent } from './content.js';
+import type { AgentOutboxEntry, ChatDelegation } from './orchestration.js';
 
 export interface TodoItem {
   content: string;
@@ -126,6 +127,22 @@ export interface Chat {
    * the parent's badge (todo #344).
    */
   sideChatWaiting?: boolean;
+  /**
+   * The chat whose agent created this one through the orchestration MCP
+   * server (`chat_launch` or `delegate_task`). Stored; absent for a chat the
+   * user started.
+   */
+  createdByChatId?: string;
+  /** Set on a delegated child: the task it runs. Derived on every read. */
+  delegation?: ChatDelegation;
+  /**
+   * Set on a chat with unfinished delegated tasks: whether any of those
+   * children waits on a permission or question gate. Same pattern as
+   * `sideChatWaiting` — this chat's own `displayStatus` is unaffected.
+   */
+  delegatedWaiting?: boolean;
+  /** Messages Mainframe holds for this chat until it is idle, oldest first. Absent when none. */
+  agentOutbox?: AgentOutboxEntry[];
 }
 
 /**

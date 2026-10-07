@@ -169,6 +169,16 @@ export const discardChat = (port: number, chatId: string): Promise<void> =>
   requestEmpty('POST', `${apiBase(port)}/api/chats/${chatId}/discard`);
 
 /**
+ * Cancel a message the daemon holds for `chatId` until its turn ends (an
+ * agent's `chat_send`, or a task result). 404s once it was delivered.
+ */
+export const cancelAgentOutboxEntry = (port: number, chatId: string, entryId: string): Promise<void> =>
+  requestEmpty(
+    'DELETE',
+    `${apiBase(port)}/api/chats/${encodeURIComponent(chatId)}/agent-outbox/${encodeURIComponent(entryId)}`,
+  );
+
+/**
  * Branch a chat's conversation into a new chat (todo #343). No body forks
  * the whole chat; `{ fromMessageId }` forks immediately before that sent
  * user message. The daemon rejects unknown body fields. On failure the

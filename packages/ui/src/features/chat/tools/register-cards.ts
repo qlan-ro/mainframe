@@ -26,6 +26,7 @@ import { TaskCard } from './cards/TaskCard';
 import { WebFetchCard } from './cards/WebFetchCard';
 import { PushNotificationCard } from './cards/PushNotificationCard';
 import { WorkflowLauncherRow } from '../workflow/WorkflowLauncherRow';
+import { DelegateTaskCard } from '../orchestration/DelegateTaskCard';
 
 Object.assign(TOOL_REGISTRY, {
   // file-mutating
@@ -43,6 +44,8 @@ Object.assign(TOOL_REGISTRY, {
   WebFetch: WebFetchCard,
   WebSearch: WebFetchCard,
   PushNotification: PushNotificationCard,
+  // orchestration MCP server: exact name, so it wins over the `mcp__*` pill
+  mcp__mainframe__delegate_task: DelegateTaskCard,
   // marker pills
   _Mcp: MCPToolCard,
   ScheduleWakeup: ScheduleWakeupCard,

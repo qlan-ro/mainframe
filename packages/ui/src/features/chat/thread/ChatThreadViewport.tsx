@@ -7,6 +7,7 @@ import { useSideAwareThreadId } from '@/features/side-chat/side-chat-scope';
 import { useDraftConfigStore } from '@/features/sessions/runtime/draft-config';
 import { Composer } from '../composer/Composer';
 import { WorktreeSwitchBanner } from '../composer/WorktreeSwitchBanner';
+import { AgentOutboxChip } from '../orchestration/AgentOutboxChip';
 import { boundedMessageComponents } from '../messages/bounded-messages';
 import { ChatGateMount } from '../gates/ChatGateMount';
 import { useChatExtras } from '../runtime/chat-extras';
@@ -72,6 +73,8 @@ function ThreadFooter({ variant }: { variant: ChatThreadVariant }) {
         <ChatGateMount />
         <div className="flex min-h-0 flex-col">
           {variant !== 'side' && <WorktreeSwitchBanner />}
+          {/* A side chat is never agent-addressable, so nothing is ever held for it. */}
+          {variant !== 'side' && <AgentOutboxChip />}
           <ThreadFooterInput variant={variant} />
         </div>
       </div>

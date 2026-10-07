@@ -32,6 +32,7 @@ import { canOpenMetaCard, useHoverCardWedgeGuard } from './use-hover-card-wedge-
 import { useForkLineageRow } from './sidebar/use-fork-lineage-row';
 import { useRowActions } from './sidebar/use-row-actions';
 import { forkCount } from './view-model/fork-lineage';
+import { startedByTitle } from './view-model/agent-provenance';
 import { useSessionLineage } from './SessionLineageContext';
 
 /** The section owns the horizontal inset; the row only keeps the stock pad. */
@@ -173,7 +174,7 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName, depth }: S
                     colorOf={colorOf}
                     projectName={projectName}
                     showPinGlyph={custom.pinned && !inPinnedGroup}
-                    nestedFork={lineage.nested}
+                    nestedAs={lineage.nested ? lineage.relation : undefined}
                     forkFallback={lineage.fallback}
                     actionsSlot={
                       hovered ? (
@@ -217,6 +218,8 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName, depth }: S
                 tags={custom.tags}
                 colorOf={colorOf}
                 parentState={lineage.parentState}
+                delegation={custom.delegation}
+                startedBy={startedByTitle(allItems, custom)}
                 forkCount={childForkCount}
               />
             </HoverCardContent>

@@ -65,10 +65,12 @@ export function toTabEntry(
     active: id === activeId,
     preview,
     forkAvailability: tabForkAvailability(custom, adaptersById),
-    // The chat's own pending gate OR its side chat's (todo #344) — NOT the
-    // `hasPending` fed to tabForkAvailability above, which stays the chat's
-    // own value so a waiting side chat never blocks forking the parent.
-    hasPending: (custom?.hasPending ?? false) || (custom?.sideChatWaiting ?? false),
+    // The chat's own pending gate OR its side chat's (todo #344) or a
+    // delegated child's — NOT the `hasPending` fed to tabForkAvailability
+    // above, which stays the chat's own value so a waiting side chat never
+    // blocks forking the parent.
+    hasPending:
+      (custom?.hasPending ?? false) || (custom?.sideChatWaiting ?? false) || (custom?.delegatedWaiting ?? false),
     canOpenSideChat: tabCanOpenSideChat(custom),
   };
 }

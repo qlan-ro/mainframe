@@ -74,6 +74,14 @@ export interface SessionCustom {
    * `deriveSessionBadge`).
    */
   sideChatWaiting?: boolean;
+  /** The chat whose agent created this one (orchestration MCP server); absent for the user's own. */
+  createdByChatId?: string;
+  /** Set on a delegated child: its task. A delegated child nests like a fork but is never counted as one. */
+  delegation?: Chat['delegation'];
+  /** A delegated child of this chat waits on a gate — ORed into the badge like `sideChatWaiting`. */
+  delegatedWaiting?: boolean;
+  /** Messages the daemon holds for this chat until its turn ends. */
+  agentOutbox?: NonNullable<Chat['agentOutbox']>;
 }
 
 export interface SessionItem {
@@ -117,6 +125,10 @@ export function chatToThreadCustom(chat: Chat): ThreadCustomResult {
     isRunning: chat.isRunning ?? false,
     sideChatId: chat.sideChatId,
     sideChatWaiting: chat.sideChatWaiting ?? false,
+    createdByChatId: chat.createdByChatId,
+    delegation: chat.delegation,
+    delegatedWaiting: chat.delegatedWaiting ?? false,
+    agentOutbox: chat.agentOutbox ?? [],
   };
   return {
     status: chat.status === 'archived' ? 'archived' : 'regular',

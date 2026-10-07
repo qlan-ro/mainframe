@@ -31,7 +31,17 @@ export interface DelegatedTask {
   completedAt?: string;
 }
 
-/** A message the daemon holds for a busy chat (`GET /api/chats/:id/agent-outbox`). */
+/** A delegated child's task, as its `Chat.delegation` carries it. */
+export interface ChatDelegation {
+  taskId: string;
+  role: TaskRole;
+  status: TaskStatus;
+}
+
+/**
+ * A message the daemon holds for a busy chat (`Chat.agentOutbox`); cancel one
+ * with `DELETE /api/chats/:id/agent-outbox/:entryId`.
+ */
 export interface AgentOutboxEntry {
   entryId: string;
   fromChatId: string;
