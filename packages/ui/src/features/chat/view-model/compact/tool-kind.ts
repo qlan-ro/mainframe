@@ -12,7 +12,14 @@ const kinds = new Map<string, ToolKind>([
   ['Bash', 'shell'],
   ['Task', 'subagent'],
 ]);
-const fullCards = new Set(['ExitPlanMode', 'AskUserQuestion', 'Workflow', 'RunWorkflow']);
+// The delegate card holds a task chat's transcript and gate, which have no other home on screen.
+const fullCards = new Set([
+  'ExitPlanMode',
+  'AskUserQuestion',
+  'Workflow',
+  'RunWorkflow',
+  'mcp__mainframe__delegate_task',
+]);
 export const mergeableKinds: ReadonlySet<ToolKind> = new Set([
   'read',
   'edit',
