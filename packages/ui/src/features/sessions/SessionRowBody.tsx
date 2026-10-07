@@ -7,14 +7,12 @@
  * so the button's own `items-center` centres it across both lines.
  */
 import type { ReactNode } from 'react';
-import { PinIcon } from 'lucide-react';
+import { GitFork, PinIcon } from 'lucide-react';
 import type { TagColor } from '@qlan-ro/mainframe-types';
 import { FadeLabel } from '@/components/ui/fade-label';
 import { useTabHintIndex } from '@/features/session-tabs/use-tab-hint-index';
 import { ShortcutIndexBadge } from '@/features/shortcuts/ShortcutIndexBadge';
 import { formatCompactTime } from './compact-time';
-import { LINEAGE_GLYPH, taskLabel } from './lineage-glyph';
-import type { LineageRelation } from './view-model/fork-lineage';
 import type { SessionItem } from './view-model/chat-to-thread-custom';
 import type { SessionBadge } from './view-model/session-status';
 import { SessionRowMetaLine, type ForkFallback } from './SessionRowMetaLine';
@@ -29,8 +27,8 @@ interface RowBodyProps {
   renameSlot: ReactNode | null;
   /** The hover action cluster, revealed inline just before the time. */
   actionsSlot: ReactNode;
-  /** Set when this row nests under its parent (variant D) — leads the title with the relation's glyph. */
-  nestedAs?: LineageRelation;
+  /** True when this row nests under its parent (variant D) — leads the title with a GitFork glyph. */
+  nestedFork: boolean;
   /** Set only for a non-nested fork — the meta line's trailing fallback glyph. */
   forkFallback?: ForkFallback;
 }
@@ -43,12 +41,11 @@ export function RowBody({
   showPinGlyph,
   renameSlot,
   actionsSlot,
-  nestedAs,
+  nestedFork,
   forkFallback,
 }: RowBodyProps) {
   const { custom } = item;
   const hintIndex = useTabHintIndex(item.id);
-  const NestGlyph = nestedAs != null ? LINEAGE_GLYPH[nestedAs] : null;
   return (
     <>
       <StatusDot badge={badge} />
@@ -57,12 +54,10 @@ export function RowBody({
             rounds the bare text line to 17px, so without it the 18px action
             glyphs grow the hovered row and nudge every row below by 1px. */}
         <span className="flex h-4.5 items-center gap-1.5">
-          {NestGlyph != null && (
-            <NestGlyph
+          {nestedFork && (
+            <GitFork
               aria-hidden
-              data-testid={
-                nestedAs === 'delegated' ? 'sessions-row-delegated-nest-glyph' : 'sessions-row-fork-nest-glyph'
-              }
+              data-testid="sessions-row-fork-nest-glyph"
               className="size-3! shrink-0 text-muted-foreground"
             />
           )}
@@ -106,7 +101,6 @@ export function RowBody({
           tags={custom.tags}
           colorOf={colorOf}
           forkFallback={forkFallback}
-          taskLabel={custom.delegation != null ? taskLabel(custom.delegation.role) : undefined}
         />
       </span>
     </>

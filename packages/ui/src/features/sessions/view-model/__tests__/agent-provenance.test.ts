@@ -11,6 +11,7 @@ import {
   taskChipLabel,
 } from '../agent-provenance';
 import { deriveSessionBadge } from '../session-status';
+import { withoutTaskChats } from '../task-chats';
 
 function item(
   id: string,
@@ -45,18 +46,17 @@ function task(taskId: string, status: ChatDelegation['status'] = 'running'): Cha
   return { taskId, role: 'review', status };
 }
 
-describe('delegated children in the fork lineage', () => {
+describe('task chats in the fork lineage', () => {
   const items = [
     item('parent'),
     item('fork', { parentChatId: 'parent' }),
     item('kid', { parentChatId: 'parent', delegation: task('task_kid') }),
   ];
 
-  it('nests a delegated child under its parent like a fork', () => {
-    expect(nestForks(items).map((r) => [r.item.id, r.depth])).toEqual([
+  it('nests only the fork: the task chat has no row to nest', () => {
+    expect(nestForks(withoutTaskChats(items)).map((r) => [r.item.id, r.depth])).toEqual([
       ['parent', 0],
       ['fork', 1],
-      ['kid', 1],
     ]);
   });
 

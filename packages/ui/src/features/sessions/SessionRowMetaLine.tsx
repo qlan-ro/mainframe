@@ -63,8 +63,6 @@ interface SessionRowMetaLineProps {
   colorOf?: (name: string) => TagColor;
   /** Set only for a non-nested fork (its parent isn't adjacent in this group) — todo #343. */
   forkFallback?: ForkFallback;
-  /** A delegated child's `Task · <role>`, which takes the project's slot: it shares its parent's project. */
-  taskLabel?: string;
 }
 
 /** The fallback glyph for a child whose parent isn't nestable here — Hint-wrapped. */
@@ -121,7 +119,6 @@ export function SessionRowMetaLine({
   tags,
   colorOf,
   forkFallback,
-  taskLabel,
 }: SessionRowMetaLineProps) {
   const visibleTags = colorOf != null ? tags.slice(0, MAX_ROW_TAG_DOTS) : [];
 
@@ -135,8 +132,7 @@ export function SessionRowMetaLine({
     detectedPrs.length > 0 ||
     visibleTags.length > 0 ||
     temporary ||
-    forkFallback != null ||
-    taskLabel != null;
+    forkFallback != null;
   if (!hasContent) return null;
 
   return (
@@ -145,10 +141,6 @@ export function SessionRowMetaLine({
         <span data-testid="sessions-row-your-turn" className="min-w-0 flex-1 truncate font-medium text-warning">
           your turn
         </span>
-      ) : taskLabel != null ? (
-        <FadeLabel data-testid="sessions-row-task-label" className="flex-1">
-          {taskLabel}
-        </FadeLabel>
       ) : noProject ? (
         <NoProjectLabel data-testid="sessions-row-no-project" className="flex-1" />
       ) : (

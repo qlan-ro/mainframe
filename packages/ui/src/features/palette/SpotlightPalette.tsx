@@ -14,6 +14,7 @@ import { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, Comma
 import { InputGroupAddon } from '@/components/ui/input-group';
 import { useOverlaysStore } from '@/store/overlays';
 import { threadItemsToSessionItems } from '@/features/sessions/view-model/chat-to-thread-custom';
+import { withoutTaskChats } from '@/features/sessions/view-model/task-chats';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useProjects } from '@/features/sessions/use-projects';
@@ -53,7 +54,8 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
 
   const aui = useAui();
   const threadItems = useAuiState((s) => s.threads.threadItems);
-  const sessions = threadItemsToSessionItems(threadItems);
+  // Task chats are found through their parent: search lists what the sidebar lists.
+  const sessions = withoutTaskChats(threadItemsToSessionItems(threadItems));
   const port = useDaemonPort();
   const { projectId, projectPath, chatId } = useActiveIdentity();
   const { projects } = useProjects();

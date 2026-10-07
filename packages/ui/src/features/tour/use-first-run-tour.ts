@@ -20,7 +20,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { useAui } from '@assistant-ui/react';
-import { regularThreadItemsToSessionItems } from '../sessions/view-model/chat-to-thread-custom';
+import { listedThreadItemsToSessionItems } from '../sessions/view-model/task-chats';
 import { useProjects } from '../sessions/use-projects';
 import { useTutorialStore } from '@/store/tutorial';
 
@@ -43,7 +43,7 @@ export function useFirstRunTour(): boolean {
     if (completed || armedRef.current || !hasProject) return;
     // Regular-only: counting archived sessions would suppress the tour for someone
     // whose every session is archived — an empty workspace as far as the tour cares.
-    const sessionCount = () => regularThreadItemsToSessionItems(aui.threads.getState().threadItems).length;
+    const sessionCount = () => listedThreadItemsToSessionItems(aui.threads.getState().threadItems).length;
     // Returning user with sessions already loaded — never auto-open.
     if (sessionCount() > 0) return;
 

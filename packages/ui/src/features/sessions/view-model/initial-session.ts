@@ -15,10 +15,14 @@
  * `switchToThread`), or null when there is nothing to open (no sessions, or all
  * archived) — the caller then leaves the new-thread picker up.
  *
+ * A task chat is never the most-recent pick (it has no sidebar row and lives
+ * in its parent's card); restoring one the user had open is fine.
+ *
  * Pure. Pinned state intentionally does NOT influence the default selection
  * (matching desktop) — pinning affects list ordering/grouping, not auto-open.
  */
 import type { SessionItem } from './chat-to-thread-custom';
+import { isNestedTaskChat, loadedChatIds } from './task-chats';
 
 export function pickInitialSession(items: readonly SessionItem[], preferredRemoteId?: string | null): string | null {
   if (preferredRemoteId != null) {
@@ -26,9 +30,10 @@ export function pickInitialSession(items: readonly SessionItem[], preferredRemot
     if (restored != null) return restored.id;
   }
 
+  const loadedIds = loadedChatIds(items);
   let best: SessionItem | null = null;
   for (const item of items) {
-    if (item.status === 'archived') continue;
+    if (item.status === 'archived' || isNestedTaskChat(item.custom, loadedIds)) continue;
     if (best === null || item.custom.updatedAt > best.custom.updatedAt) {
       best = item;
     }

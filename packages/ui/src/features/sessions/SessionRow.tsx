@@ -174,7 +174,7 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName, depth }: S
                     colorOf={colorOf}
                     projectName={projectName}
                     showPinGlyph={custom.pinned && !inPinnedGroup}
-                    nestedAs={lineage.nested ? lineage.relation : undefined}
+                    nestedFork={lineage.nested}
                     forkFallback={lineage.fallback}
                     actionsSlot={
                       hovered ? (

@@ -76,9 +76,9 @@ export interface SessionCustom {
   sideChatWaiting?: boolean;
   /** The chat whose agent created this one (orchestration MCP server); absent for the user's own. */
   createdByChatId?: string;
-  /** Set on a delegated child: its task. A delegated child nests like a fork but is never counted as one. */
+  /** Set on a delegated child (a task chat): its task. Task chats have no sidebar row and never count as forks. */
   delegation?: Chat['delegation'];
-  /** A delegated child of this chat waits on a gate — ORed into the badge like `sideChatWaiting`. */
+  /** A task chat anywhere below this chat waits on a gate — ORed into the badge like `sideChatWaiting`. */
   delegatedWaiting?: boolean;
   /** Messages the daemon holds for this chat until its turn ends. */
   agentOutbox?: NonNullable<Chat['agentOutbox']>;

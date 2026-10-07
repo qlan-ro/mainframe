@@ -8,9 +8,11 @@
  * deleted) is left in the group's own sort position at depth 0 — the row
  * layer renders the fallback glyph for those, via `classifyParent`.
  *
- * A delegated child (orchestration MCP server) carries the same
- * `parentChatId`, so it nests through the same pass; only its wording and its
- * glyph differ (`lineageRelation`), and it never counts as a fork.
+ * A task chat (a delegated child, orchestration MCP server) never reaches
+ * this pass while its parent is loaded — it has no row (`task-chats.ts`).
+ * One whose parent is gone keeps a row; its fallback glyph and hover line
+ * read as the parent's task (`lineageRelation`), and it never counts as a
+ * fork.
  *
  * Pure and side-effect-free: no daemon calls, no React. `use-parent-chat.ts`
  * resolves the archived/deleted cases this module can't see (they aren't in
@@ -81,7 +83,7 @@ export function nestForks(items: readonly SessionItem[]): LineageRow[] {
   return rows;
 }
 
-/** How a child relates to its parent: a delegated child is the parent's task, not a fork of it. */
+/** How a child relates to its parent: a task chat is the parent's task, not a fork of it. */
 export type LineageRelation = 'fork' | 'delegated';
 
 export function lineageRelation(custom: Pick<SessionCustom, 'delegation'>): LineageRelation {
@@ -90,8 +92,8 @@ export function lineageRelation(custom: Pick<SessionCustom, 'delegation'>): Line
 
 /**
  * Listed, non-archived, direct forks of `id` — excludes `id` itself (defends
- * the self-reference case) and delegated children, which nest the same way but
- * are tasks, not forks.
+ * the self-reference case) and task chats, which share `parentChatId` but are
+ * tasks, not forks.
  */
 export function forkCount(allItems: readonly SessionItem[], id: string): number {
   let count = 0;

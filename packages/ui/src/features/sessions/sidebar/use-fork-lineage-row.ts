@@ -29,7 +29,7 @@ export interface ForkRowLineage {
    * of its own parent.
    */
   depth: 0 | 1 | 2;
-  /** A delegated child nests like a fork but reads and draws as the parent's task. */
+  /** `delegated` only on an orphaned task chat (its parent is gone): its fallback reads as a task. */
   relation: LineageRelation;
   /** Set only for a non-nested fork — the row's own trailing fallback glyph. */
   fallback?: ForkFallback;
