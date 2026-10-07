@@ -137,8 +137,9 @@ export interface Chat {
   delegation?: ChatDelegation;
   /**
    * Set on a chat with unfinished delegated tasks: whether any of those
-   * children waits on a permission or question gate. Same pattern as
-   * `sideChatWaiting` — this chat's own `displayStatus` is unaffected.
+   * children, or any unfinished task below them, waits on a permission or
+   * question gate. Same pattern as `sideChatWaiting` — this chat's own
+   * `displayStatus` is unaffected.
    */
   delegatedWaiting?: boolean;
   /** Messages Mainframe holds for this chat until it is idle, oldest first. Absent when none. */

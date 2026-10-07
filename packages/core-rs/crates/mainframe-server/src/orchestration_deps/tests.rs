@@ -3,8 +3,11 @@
 use std::sync::Arc;
 
 use mainframe_orchestration::errors::{ErrorCode, PortError};
-use mainframe_orchestration::ports::{LaunchRequest, LaunchWorkspace, OrchestrationPort};
+use mainframe_orchestration::ports::{
+    LaunchRequest, LaunchWorkspace, OrchestrationPort, TaskStore,
+};
 use mainframe_types::chat::{NO_PROJECT_ID, NewChat};
+use mainframe_types::orchestration::{DelegatedTask, TaskDelivery, TaskRole, TaskStatus};
 use mainframe_types::settings::ExecutionMode;
 
 use super::DaemonOrchestrationPort;
@@ -51,6 +54,26 @@ fn request(project_id: &str, caller: &str, workspace: LaunchWorkspace) -> Launch
         workspace,
         created_by_chat_id: caller.into(),
         parent_chat_id: None,
+    }
+}
+
+fn running_task(id: &str, parent: &str, child: &str) -> DelegatedTask {
+    DelegatedTask {
+        id: id.into(),
+        parent_chat_id: parent.into(),
+        child_chat_id: child.into(),
+        client_request_id: None,
+        title: None,
+        role: TaskRole::General,
+        status: TaskStatus::Running,
+        depth: 1,
+        summary: None,
+        error: None,
+        cancel_reason: None,
+        delivery: TaskDelivery::Pending,
+        created_at: "t".into(),
+        updated_at: "t".into(),
+        completed_at: None,
     }
 }
 
@@ -126,32 +149,15 @@ async fn a_spawn_through_the_chat_manager_issues_a_credential() {
 
 #[tokio::test]
 async fn a_delegated_child_reports_its_task_and_boot_interrupts_open_tasks() {
-    use mainframe_orchestration::ports::TaskStore;
-    use mainframe_types::orchestration::{DelegatedTask, TaskDelivery, TaskRole, TaskStatus};
-
     let (ctx, port, project_id, caller) = setup().await;
     let mut launch = request(&project_id, &caller, LaunchWorkspace::ProjectRoot);
     launch.parent_chat_id = Some(caller.clone());
     let child = port.launch_chat(launch).await.unwrap();
     let store = super::DbTaskStore::new(ctx.db.clone());
-    let task = DelegatedTask {
-        id: "task_1".into(),
-        parent_chat_id: caller.clone(),
-        child_chat_id: child.id.clone(),
-        client_request_id: None,
-        title: None,
-        role: TaskRole::General,
-        status: TaskStatus::Running,
-        depth: 1,
-        summary: None,
-        error: None,
-        cancel_reason: None,
-        delivery: TaskDelivery::Pending,
-        created_at: "t".into(),
-        updated_at: "t".into(),
-        completed_at: None,
-    };
-    store.insert(task).await.unwrap();
+    store
+        .insert(running_task("task_1", &caller, &child.id))
+        .await
+        .unwrap();
     // What the service's `save` does after every task write.
     port.chat_changed(&caller);
     port.chat_changed(&child.id);
@@ -167,14 +173,6 @@ async fn a_delegated_child_reports_its_task_and_boot_interrupts_open_tasks() {
     );
     let parent_chat = chats.get_chat(&caller).unwrap();
     assert_eq!(parent_chat.orchestration.delegated_waiting, Some(false));
-    assert_eq!(
-        super::push::delegated_permission_body(&ctx.db, &child.id).as_deref(),
-        Some("\"Review\" (task of \"Untitled session\") needs permission")
-    );
-    assert_eq!(
-        super::push::delegated_permission_body(&ctx.db, &caller),
-        None
-    );
 
     let view = port.chat(&child.id).await.unwrap();
     assert_eq!(view.task_id.as_deref(), Some("task_1"));
@@ -187,4 +185,43 @@ async fn a_delegated_child_reports_its_task_and_boot_interrupts_open_tasks() {
     let after = store.get("task_1").await.unwrap();
     assert_eq!(after.status, TaskStatus::Interrupted);
     assert_eq!(after.delivery, TaskDelivery::Dropped);
+}
+
+#[tokio::test]
+async fn a_task_chats_permission_push_names_its_parent_and_opens_the_top_level_chat() {
+    use super::push::{DelegatedPush, delegated_permission_push};
+
+    let (ctx, port, project_id, caller) = setup().await;
+    let store = super::DbTaskStore::new(ctx.db.clone());
+    let mut launch = request(&project_id, &caller, LaunchWorkspace::ProjectRoot);
+    launch.parent_chat_id = Some(caller.clone());
+    let child = port.launch_chat(launch).await.unwrap();
+    let mut launch = request(&project_id, &child.id, LaunchWorkspace::ProjectRoot);
+    launch.parent_chat_id = Some(child.id.clone());
+    launch.title = Some("Race check".into());
+    let grandchild = port.launch_chat(launch).await.unwrap();
+    for (id, parent, kid) in [
+        ("task_1", caller.as_str(), child.id.as_str()),
+        ("task_2", child.id.as_str(), grandchild.id.as_str()),
+    ] {
+        store.insert(running_task(id, parent, kid)).await.unwrap();
+    }
+
+    assert_eq!(
+        delegated_permission_push(&ctx.db, &child.id),
+        Some(DelegatedPush {
+            body: "\"Review\" (task of \"Untitled session\") needs permission".into(),
+            open_chat_id: caller.clone(),
+        })
+    );
+    // A grandchild's card sits inside its parent's card, so the push still
+    // opens the chat the sidebar lists.
+    assert_eq!(
+        delegated_permission_push(&ctx.db, &grandchild.id),
+        Some(DelegatedPush {
+            body: "\"Race check\" (task of \"Review\") needs permission".into(),
+            open_chat_id: caller.clone(),
+        })
+    );
+    assert_eq!(delegated_permission_push(&ctx.db, &caller), None);
 }

@@ -878,19 +878,33 @@ impl ChatManagerDeps for DaemonChatDeps {
 
     fn send_push(&self, msg: PushOut) {
         let push = Arc::clone(&self.push);
-        // A delegated child's gate names its parent; every other push keeps
-        // the body its sink wrote.
-        let body = match msg.push_type.as_str() {
+        // A delegated child's gate names its parent and opens the top-level
+        // chat whose card holds it (`taskChatId` names the card's chat);
+        // every other push keeps the body its sink wrote and opens its chat.
+        let delegated = match msg.push_type.as_str() {
             "permission" => {
-                crate::orchestration_deps::push::delegated_permission_body(&self.db, &msg.chat_id)
-                    .unwrap_or(msg.body)
+                crate::orchestration_deps::push::delegated_permission_push(&self.db, &msg.chat_id)
             }
-            _ => msg.body,
+            _ => None,
+        };
+        let (body, data) = match delegated {
+            Some(push) => (
+                push.body,
+                serde_json::json!({
+                    "chatId": push.open_chat_id,
+                    "taskChatId": msg.chat_id,
+                    "type": msg.push_type,
+                }),
+            ),
+            None => (
+                msg.body,
+                serde_json::json!({ "chatId": msg.chat_id, "type": msg.push_type }),
+            ),
         };
         let message = PushMessage {
             title: msg.title,
             body,
-            data: serde_json::json!({ "chatId": msg.chat_id, "type": msg.push_type }),
+            data,
             priority: if msg.priority == "high" {
                 PushPriority::High
             } else {

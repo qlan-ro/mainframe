@@ -167,3 +167,55 @@ fn fork_side_and_delegated_children_coexist_under_one_parent() {
     assert!(side_row.orchestration.delegation.is_none());
     assert!(side.temporary);
 }
+
+#[test]
+fn a_parent_reads_every_open_descendant_but_not_past_a_finished_task() {
+    let repos = setup();
+    let project = repos.projects.create("/project/tree", None).unwrap();
+    let chat = || {
+        repos
+            .chats
+            .create(&NewChat {
+                project_id: project.id.clone(),
+                adapter_id: "claude".into(),
+                ..Default::default()
+            })
+            .unwrap()
+    };
+    let (root, child, grandchild, done, under_done) = (chat(), chat(), chat(), chat(), chat());
+    let edges = [
+        ("t1", &root, &child),
+        ("t2", &child, &grandchild),
+        ("t3", &root, &done),
+        ("t4", &done, &under_done),
+    ];
+    for (id, parent, kid) in edges {
+        repos
+            .tasks
+            .insert(&task(id, &parent.id, &kid.id, id))
+            .unwrap();
+    }
+    let mut finished = task("t3", &root.id, &done.id, "t3");
+    finished.status = TaskStatus::Completed;
+    repos.tasks.update(&finished).unwrap();
+
+    // A task chat has no sidebar row, so its gate must reach the top-level
+    // chat that lists it: the walk spans grandchildren, and a finished task
+    // ends its branch.
+    let mut ids = repos
+        .chats
+        .get(&root.id)
+        .unwrap()
+        .unwrap()
+        .orchestration
+        .active_child_ids;
+    ids.sort();
+    let mut expected = vec![child.id.clone(), grandchild.id.clone()];
+    expected.sort();
+    assert_eq!(ids, expected);
+    let child_row = repos.chats.get(&child.id).unwrap().unwrap();
+    assert_eq!(
+        child_row.orchestration.active_child_ids,
+        vec![grandchild.id]
+    );
+}

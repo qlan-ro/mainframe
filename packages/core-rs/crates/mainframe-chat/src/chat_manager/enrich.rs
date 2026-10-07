@@ -59,8 +59,9 @@ impl Enricher {
     }
 
     /// `delegated_waiting` follows live gates, as `side_chat_waiting` does,
-    /// so a child's permission prompt shows on its parent the moment it
-    /// opens. `None` when the chat has no unfinished delegated tasks.
+    /// so a permission prompt anywhere in the chat's open task subtree shows
+    /// on it the moment it opens. `None` when the chat has no unfinished
+    /// delegated tasks.
     fn enrich_orchestration(&self, chat: &mut Chat) {
         let lineage = &mut chat.orchestration;
         lineage.delegated_waiting = (!lineage.active_child_ids.is_empty()).then(|| {

@@ -243,16 +243,19 @@ pub struct ChatOrchestration {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub delegation: Option<ChatDelegation>,
     /// Set on a chat with unfinished delegated tasks: whether any of those
-    /// children waits on a permission or question gate. Same pattern as
-    /// `side_chat_waiting`.
+    /// children, or any unfinished task below them, waits on a permission or
+    /// question gate. Same pattern as `side_chat_waiting`. It spans the whole
+    /// subtree because a task chat has no sidebar row of its own: its gate
+    /// shows on the top-level chat that delegated it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub delegated_waiting: Option<bool>,
     /// Messages Mainframe holds for this chat, oldest first. Absent when
     /// none are held.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent_outbox: Option<Vec<AgentOutboxEntry>>,
-    /// Children of this chat's unfinished delegated tasks, read with the row
-    /// so `delegated_waiting` can follow live gates. Daemon-internal.
+    /// Chats of this chat's unfinished delegated tasks and of every
+    /// unfinished task below them, read with the row so `delegated_waiting`
+    /// can follow live gates. Daemon-internal.
     #[serde(skip)]
     pub active_child_ids: Vec<String>,
 }
