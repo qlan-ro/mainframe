@@ -634,11 +634,23 @@ Tools: `capabilities`, `chat_list`, `chat_read`, `chat_wait`,
 failure is a tool result with `isError: true` and `structuredContent.error
 = { code, message }`; an unknown tool name is JSON-RPC `-32602`.
 
-Messages the server holds for a busy chat (behind the normal auth layer):
+Every `Chat` (REST reads and `chat.updated` / `chat.created`) carries the
+orchestration state, each field absent when it does not apply:
+
+| Field | Meaning |
+|---|---|
+| `createdByChatId` | The chat whose agent created this one (`chat_launch` or `delegate_task`). Stored. |
+| `delegation` | On a delegated child: `{ taskId, role, status }`, read from its task. |
+| `delegatedWaiting` | On a chat with unfinished delegated tasks: whether a child waits on a gate. |
+| `agentOutbox` | Messages held until the chat is idle: `[{ entryId, fromChatId, preview }]`. |
+
+The daemon re-emits `chat.updated` on the parent and the child whenever a
+task changes, and on a chat whenever its held messages change.
+
+Cancelling a held message (behind the normal auth layer):
 
 | Method & Path | Purpose | Response |
 |---|---|---|
-| `GET /api/chats/{id}/agent-outbox` | List held messages | `[{ entryId, fromChatId, preview }]` |
 | `DELETE /api/chats/{id}/agent-outbox/{entryId}` | Cancel one before delivery | `okEmpty`; `404` when it is gone; `400` on an invalid id |
 
 ## WebSocket Protocol
