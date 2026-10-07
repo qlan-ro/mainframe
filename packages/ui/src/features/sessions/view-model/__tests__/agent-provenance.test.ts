@@ -112,6 +112,11 @@ describe('delegatedTasksOf + taskChipLabel', () => {
     expect(countTasks(rows)).toEqual({ running: 1, waiting: 1, done: 1 });
   });
 
+  it('counts a task as waiting while a task below it waits on a gate', () => {
+    const nested = [item('d', { parentChatId: 'p', delegation: task('task_d'), delegatedWaiting: true })];
+    expect(delegatedTasksOf(nested, 'p').map((r) => r.waiting)).toEqual([true]);
+  });
+
   it('labels the chip by what is still open', () => {
     expect(taskChipLabel({ running: 2, waiting: 1, done: 4 })).toBe('2 tasks running · 1 waiting');
     expect(taskChipLabel({ running: 1, waiting: 0, done: 0 })).toBe('1 task running');

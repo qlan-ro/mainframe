@@ -44,7 +44,7 @@ export interface DelegatedTaskRow {
   itemId: string;
   title: string;
   status: TaskStatus;
-  /** The child waits on a permission or question gate. */
+  /** The child, or a task below it, waits on a permission or question gate. */
   waiting: boolean;
   updatedAt: number;
 }
@@ -60,7 +60,7 @@ export function delegatedTasksOf(items: readonly SessionItem[], parentChatId: st
       itemId: it.id,
       title: it.title ?? UNTITLED,
       status: delegation.status,
-      waiting: delegation.status === 'waiting' || it.custom.hasPending,
+      waiting: delegation.status === 'waiting' || it.custom.hasPending || it.custom.delegatedWaiting === true,
       updatedAt: it.custom.updatedAt,
     });
   }
