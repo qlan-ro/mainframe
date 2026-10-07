@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Launch the packaged-QA Tauri target for test-worktree: isolated ports and data
+# Launch the packaged-QA Tauri target for live-qa: isolated ports and data
 # dir, background launch of the built bundle, readiness wait on both the daemon
 # and the bridge's fixed port. Blocks until ready; prints READY + facts, or
 # exits 1 with the log tail. Mirrors launch-test-tauri.sh's contract.
@@ -44,7 +44,8 @@ QA_DAEMON_PORT="${MF_QA_DAEMON_PORT:-$((DAEMON_PORT + 1000))}"
 
 # Step 3: QA data dir. Left as a variable (not hard-assigned) so the refusal
 # gate below is reachable and its verify demonstrable via MF_QA_DATA_DIR.
-QA_DATA_DIR="${MF_QA_DATA_DIR:-$HOME/.mainframe_qa}"
+QA_DATA_DIR="${MF_QA_RUN_DIR:+$MF_QA_RUN_DIR/data}"
+QA_DATA_DIR="${QA_DATA_DIR:-${MF_QA_DATA_DIR:-$HOME/.mainframe_qa}}"
 
 APP_PATH="$PROJECT_ROOT/packages/app-tauri/src-tauri/target/debug/bundle/macos/Mainframe.app"
 
@@ -196,7 +197,7 @@ echo "$APP_PID" > "$PID_FILE"
 
 wait_for() {
   what="$1"; url="$2"; deadline=$((SECONDS + $3))
-  until curl -sf "$url" >/dev/null 2>&1; do
+  until curl --connect-timeout 2 --max-time 3 -sf "$url" >/dev/null 2>&1; do
     if ! kill -0 "$APP_PID" 2>/dev/null; then
       echo "LAUNCH_FAILED: app exited before $what was ready — log tail:" >&2
       tail -40 "$LOG" >&2
