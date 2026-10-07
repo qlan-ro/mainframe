@@ -9,7 +9,7 @@
  *  - runTimeline(run).all: one view per seeded phase, in CLI order. A phase's status
  *    comes from its agents — none → 'pending'; any start/progress → 'running'; else any
  *    error → 'failed'; else any done → 'done'; else 'unknown'. Its durationMs is the
- *    LONGEST agent duration, not the sum: a phase's agents run concurrently.
+ *    combined agent duration, including sequential and concurrent work.
  *  - The timeline split: `shown` is every phase up to the deepest agent-bearing one
  *    (an agent-less phase between two active ones stays in `shown`, as pending);
  *    `upNext` is the trailing phases nothing has reached; `orphans` are agents whose
@@ -136,7 +136,7 @@ describe('runTimeline — phase status', () => {
 });
 
 describe('runTimeline — phase duration', () => {
-  it('takes the longest agent duration, not the sum — the agents ran in parallel', () => {
+  it('counts both agents rather than assuming every phase runs concurrently', () => {
     const timeline = runTimeline(
       run({
         status: 'completed',
@@ -147,7 +147,7 @@ describe('runTimeline — phase duration', () => {
         ],
       }),
     );
-    expect(timeline.all[0]!.durationMs).toBe(9_000);
+    expect(timeline.all[0]!.durationMs).toBe(12_000);
   });
 
   it('reads 0 for a phase that has spawned nothing', () => {

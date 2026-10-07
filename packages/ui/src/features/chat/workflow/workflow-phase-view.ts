@@ -15,7 +15,7 @@ export interface PhaseView {
   phase: ClaudeWorkflowPhase;
   agents: ViewAgent[];
   status: PhaseStatus;
-  /** Longest agent duration — a phase's agents run concurrently, so max, not sum. */
+  /** Combined agent time; concurrent work is counted separately. */
   durationMs: number;
 }
 
@@ -62,7 +62,7 @@ export function runTimeline(run: ViewRun): RunTimeline {
       phase,
       agents,
       status: agentsStatus(agents),
-      durationMs: agents.reduce((max, agent) => Math.max(max, agent.durationMs), 0),
+      durationMs: agents.reduce((total, agent) => total + Math.max(0, agent.durationMs), 0),
     };
   });
 

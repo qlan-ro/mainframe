@@ -78,6 +78,7 @@ export function agentDetailLine(agent: ViewAgent, _run: ClaudeWorkflowRun): stri
 /** Secondary facts kept off the row itself (D19) and surfaced through its `title`. */
 export function agentTitle(agent: ViewAgent): string {
   const parts = [agent.label];
+  if (agent.tokens > 0) parts.push(`${formatAgentTokens(agent.tokens)} CLI-reported tokens; not a cost estimate`);
   if (agent.model) parts.push(agent.model);
   if (agent.attempt !== undefined) parts.push(`attempt ${agent.attempt}`);
   parts.push(`${agent.toolCalls} ${agent.toolCalls === 1 ? 'tool call' : 'tool calls'}`);
