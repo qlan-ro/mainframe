@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use mainframe_types::events::{ChatUpdatedReason, DaemonEvent};
-use mainframe_types::orchestration::TaskDelivery;
+use mainframe_types::orchestration::{AgentOutboxEntry, TaskDelivery};
 use tokio::sync::broadcast::error::RecvError;
 
 use crate::outbox::{OutboxEntry, OutboxKind, batch_body};
@@ -62,10 +62,19 @@ impl OrchestrationService {
         }
     }
 
-    /// What Mainframe is holding for `chat_id`, oldest first.
+    /// What Mainframe is holding for `chat_id`, oldest first, as the
+    /// target's `Chat.agent_outbox` shows it.
     #[must_use]
-    pub fn outbox_entries(&self, chat_id: &str) -> Vec<OutboxEntry> {
-        self.outbox.list_for(chat_id)
+    pub fn agent_outbox(&self, chat_id: &str) -> Vec<AgentOutboxEntry> {
+        self.outbox
+            .list_for(chat_id)
+            .into_iter()
+            .map(|e| AgentOutboxEntry {
+                entry_id: e.entry_id,
+                from_chat_id: e.from_chat_id,
+                preview: e.preview,
+            })
+            .collect()
     }
 
     /// The user's cancel on one held message; a cancelled task result is
@@ -193,6 +202,20 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn holding_and_flushing_reannounce_the_target() {
+        let port = FakePort::new();
+        port.add_chat("target");
+        port.add_chat("caller");
+        let (svc, _ctx) = service_with(port.clone(), "caller");
+        svc.outbox
+            .push("target", "a", OutboxKind::Send, "one".into(), "one");
+        assert_eq!(port.lock().changed, vec!["target"]);
+        svc.try_flush("target").await;
+        assert_eq!(port.lock().changed, vec!["target", "target"]);
+        assert_eq!(port.lock().sent.len(), 1);
+    }
+
+    #[tokio::test]
     async fn a_cancelled_entry_is_never_sent() {
         let port = FakePort::new();
         port.add_chat("caller");
@@ -200,7 +223,12 @@ mod tests {
         let id = svc
             .outbox
             .push("caller", "x", OutboxKind::Send, "hi".into(), "hi");
-        assert_eq!(svc.outbox_entries("caller").len(), 1);
+        let held = svc.agent_outbox("caller");
+        assert_eq!(held.len(), 1);
+        assert_eq!(
+            (held[0].from_chat_id.as_str(), held[0].preview.as_str()),
+            ("x", "hi")
+        );
         assert!(svc.cancel_outbox_entry("caller", &id).await);
         assert!(!svc.cancel_outbox_entry("caller", &id).await);
         svc.try_flush("caller").await;

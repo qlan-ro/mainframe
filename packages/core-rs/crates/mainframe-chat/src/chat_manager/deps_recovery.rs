@@ -8,7 +8,7 @@ use super::*;
 pub(super) struct RecoveryWrapper {
     deps: Arc<dyn ChatManagerDeps>,
     active_chats: Registry,
-    permissions: Arc<Mutex<PermissionManager>>,
+    enricher: Enricher,
     messages: Arc<Mutex<MessageCache>>,
     event_handler: Arc<EventHandler<EhDeps>>,
 }
@@ -41,7 +41,7 @@ impl RecoveryWrapper {
 pub(super) struct PresenceDeps {
     pub(super) deps: Arc<dyn ChatManagerDeps>,
     pub(super) active_chats: Registry,
-    pub(super) permissions: Arc<Mutex<PermissionManager>>,
+    pub(super) enricher: Enricher,
 }
 
 impl PresenceDeps {
@@ -95,7 +95,7 @@ impl TranscriptPresenceDeps for PresenceDeps {
         });
     }
     fn emit_event(&self, event: DaemonEvent) {
-        enrich_and_emit(self.deps.as_ref(), &self.permissions, event);
+        self.enricher.emit(event);
     }
 }
 
@@ -144,11 +144,8 @@ impl DegradedRecoveryDeps for RecoveryWrapper {
     }
     fn emit_chat_updated(&self, chat_id: &str) {
         if let Some(chat) = self.current_chat(chat_id) {
-            enrich_and_emit(
-                self.deps.as_ref(),
-                &self.permissions,
-                DaemonEvent::ChatUpdated { chat, reason: None },
-            );
+            self.enricher
+                .emit(DaemonEvent::ChatUpdated { chat, reason: None });
         }
     }
     fn clear_messages(&self, chat_id: &str) {
@@ -165,7 +162,7 @@ impl ChatManager {
         PresenceDeps {
             deps: self.deps.clone(),
             active_chats: self.active_chats.clone(),
-            permissions: self.permissions.clone(),
+            enricher: self.enricher.clone(),
         }
     }
 
@@ -173,7 +170,7 @@ impl ChatManager {
         RecoveryWrapper {
             deps: self.deps.clone(),
             active_chats: self.active_chats.clone(),
-            permissions: self.permissions.clone(),
+            enricher: self.enricher.clone(),
             messages: self.messages.clone(),
             event_handler: self.event_handler.clone(),
         }

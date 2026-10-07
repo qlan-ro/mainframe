@@ -8,6 +8,7 @@ use crate::adapter::{ControlRequest, DetectedPr, EffortLevel};
 use crate::background_task::BackgroundActivity;
 use crate::content::{LeafContent, ToolResultImage};
 use crate::context::SessionMention;
+use crate::orchestration::ChatOrchestration;
 use crate::settings::ExecutionMode;
 
 /// Deserialize a `field?: X | null` into the absent/null/value tri-state.
@@ -287,6 +288,9 @@ pub struct Chat {
     /// `Some`. Never a stored column.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub side_chat_waiting: Option<bool>,
+    /// Agent provenance and delegated-task state (orchestration MCP server).
+    #[serde(flatten)]
+    pub orchestration: ChatOrchestration,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -10,13 +10,14 @@ use mainframe_chat::chat_manager::ChatManager;
 use mainframe_chat::orchestration_hooks::OrchestrationHooks;
 use mainframe_orchestration::OrchestrationService;
 use mainframe_types::events::DaemonEvent;
-use mainframe_types::orchestration::OrchestrationMcpLaunch;
+use mainframe_types::orchestration::{AgentOutboxEntry, OrchestrationMcpLaunch};
 use tokio::sync::broadcast;
 
 use crate::db::Db;
 
 mod chat_port;
 mod launch;
+pub(crate) mod push;
 mod task_store;
 mod workspace;
 
@@ -76,5 +77,12 @@ impl OrchestrationHooks for ChatOrchestrationHooks {
                 service.cascade_stop(chat_id, None).await;
             }
         })
+    }
+
+    fn agent_outbox(&self, chat_id: &str) -> Vec<AgentOutboxEntry> {
+        self.service
+            .upgrade()
+            .map(|service| service.agent_outbox(chat_id))
+            .unwrap_or_default()
     }
 }

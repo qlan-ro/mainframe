@@ -37,7 +37,13 @@ pub(crate) const CHAT_SELECT_FIELDS: &str = "id, adapter_id as adapterId, projec
   temporary, vendor_session_ephemeral as vendorSessionEphemeral, \
   context_lost_at as contextLostAt, scratch_path as scratchPath, \
   parent_chat_id as parentChatId, \
-  (SELECT s.id FROM chats s WHERE s.parent_chat_id = chats.id AND s.temporary = 1) AS sideChatId";
+  (SELECT s.id FROM chats s WHERE s.parent_chat_id = chats.id AND s.temporary = 1) AS sideChatId, \
+  created_by_chat_id as createdByChatId, \
+  (SELECT t.id || ' ' || t.role || ' ' || t.status FROM delegated_tasks t \
+     WHERE t.child_chat_id = chats.id) AS delegation, \
+  (SELECT group_concat(t.child_chat_id, ' ') FROM delegated_tasks t \
+     WHERE t.parent_chat_id = chats.id AND t.status IN ('queued', 'running', 'waiting')) \
+     AS activeDelegatedChildIds";
 
 /// The still-pending fork state stored in `chats.pending_fork` (JSON), read and
 /// written only through `get_pending_fork` / `clear_pending_fork` (todo #343) —
@@ -381,6 +387,7 @@ impl ChatsRepository {
             parent_chat_id: None,
             side_chat_id: None,
             side_chat_waiting: None,
+            orchestration: Default::default(),
         })
     }
 
@@ -491,6 +498,7 @@ impl ChatsRepository {
             parent_chat_id: Some(Some(insert.parent_chat_id.to_string())),
             side_chat_id: None,
             side_chat_waiting: None,
+            orchestration: Default::default(),
         })
     }
 
@@ -1042,6 +1050,7 @@ fn map_row(row: &rusqlite::Row<'_>) -> Result<Chat, DbError> {
         side_chat_id: row.get("sideChatId")?,
         // Waiting state is enrichment-only (chat_manager), never derived here.
         side_chat_waiting: None,
+        orchestration: crate::orchestration::map_orchestration(row)?,
     })
 }
 

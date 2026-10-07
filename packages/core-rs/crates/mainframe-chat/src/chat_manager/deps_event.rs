@@ -6,7 +6,7 @@ use super::*;
 pub(super) struct EhDeps {
     deps: Arc<dyn ChatManagerDeps>,
     active_chats: Registry,
-    permissions: Arc<Mutex<PermissionManager>>,
+    enricher: Enricher,
     queued_refs: QueuedRefs,
     worktree_offers: Arc<WorktreeOfferRegistry>,
 }
@@ -16,7 +16,7 @@ impl EventHandlerDeps for EhDeps {
         self.active_chats.get(chat_id).map(|e| e.value().clone())
     }
     fn emit_event(&self, event: DaemonEvent) {
-        enrich_and_emit(self.deps.as_ref(), &self.permissions, event);
+        self.enricher.emit(event);
     }
     fn get_tool_categories(&self, chat_id: &str) -> Option<ToolCategories> {
         self.deps.get_tool_categories(chat_id)
@@ -83,7 +83,7 @@ impl EventHandlerDeps for EhDeps {
         let presence = PresenceDeps {
             deps: self.deps.clone(),
             active_chats: self.active_chats.clone(),
-            permissions: self.permissions.clone(),
+            enricher: self.enricher.clone(),
         };
         tokio::spawn(async move {
             crate::transcript_presence::refresh_transcript_location(&presence, &mut chat).await;
@@ -113,20 +113,20 @@ pub(super) fn build(
     deps: &Arc<dyn ChatManagerDeps>,
     active_chats: &Registry,
     messages: &Arc<Mutex<MessageCache>>,
-    permissions: &Arc<Mutex<PermissionManager>>,
+    enricher: &Enricher,
     queued_refs: &QueuedRefs,
     worktree_offers: &Arc<WorktreeOfferRegistry>,
 ) -> Arc<EventHandler<EhDeps>> {
     let eh_deps = Arc::new(EhDeps {
         deps: deps.clone(),
         active_chats: active_chats.clone(),
-        permissions: permissions.clone(),
+        enricher: enricher.clone(),
         queued_refs: queued_refs.clone(),
         worktree_offers: worktree_offers.clone(),
     });
     Arc::new(EventHandler::new(
         messages.clone(),
-        permissions.clone(),
+        enricher.permissions().clone(),
         eh_deps,
     ))
 }

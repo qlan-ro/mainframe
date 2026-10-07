@@ -72,11 +72,15 @@ fn idle_outcome(messages: &[ChatMessage]) -> Outcome {
 }
 
 impl OrchestrationService {
-    /// Persists and announces a task change.
+    /// Persists and announces a task change, on its own event and on both
+    /// chats whose derived fields read it (the child's `delegation`, the
+    /// parent's `delegated_waiting`).
     pub(crate) async fn save(&self, task: &DelegatedTask) -> Result<(), ToolError> {
         self.tasks.update(task.clone()).await?;
         self.port
             .emit(DaemonEvent::DelegatedTaskUpdated { task: task.clone() });
+        self.port.chat_changed(&task.parent_chat_id);
+        self.port.chat_changed(&task.child_chat_id);
         Ok(())
     }
 

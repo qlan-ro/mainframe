@@ -272,6 +272,14 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         let _ = self.chat_surface.set(surface);
     }
 
+    /// Shares the chat manager's slot, so one attach reaches both spawns and
+    /// the reads that show the agent outbox.
+    #[must_use]
+    pub fn with_orchestration(mut self, slot: OrchestrationSlot) -> Self {
+        self.orchestration = slot;
+        self
+    }
+
     /// The orchestration hooks every spawn and teardown path consults.
     pub fn orchestration(&self) -> &OrchestrationSlot {
         &self.orchestration

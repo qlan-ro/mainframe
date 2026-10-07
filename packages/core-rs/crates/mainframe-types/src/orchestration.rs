@@ -210,6 +210,53 @@ pub struct DelegatedTask {
     pub completed_at: Option<String>,
 }
 
+/// A delegated child's task, derived on read from its `delegated_tasks` row.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatDelegation {
+    pub task_id: String,
+    pub role: TaskRole,
+    pub status: TaskStatus,
+}
+
+/// One message Mainframe holds for a busy chat until it is idle: a
+/// `chat_send` in queue mode, or a task result owed to a parent.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentOutboxEntry {
+    pub entry_id: String,
+    pub from_chat_id: String,
+    pub preview: String,
+}
+
+/// Agent provenance and delegation state on a `Chat`, flattened into its wire
+/// shape. Only `created_by_chat_id` is stored; the rest is derived per read.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatOrchestration {
+    /// The chat whose agent created this one (`chat_launch` or
+    /// `delegate_task`). A delegated child also nests under it through
+    /// `parent_chat_id`; a launched chat does not.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub created_by_chat_id: Option<String>,
+    /// Set on a delegated child: the task it runs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delegation: Option<ChatDelegation>,
+    /// Set on a chat with unfinished delegated tasks: whether any of those
+    /// children waits on a permission or question gate. Same pattern as
+    /// `side_chat_waiting`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delegated_waiting: Option<bool>,
+    /// Messages Mainframe holds for this chat, oldest first. Absent when
+    /// none are held.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_outbox: Option<Vec<AgentOutboxEntry>>,
+    /// Children of this chat's unfinished delegated tasks, read with the row
+    /// so `delegated_waiting` can follow live gates. Daemon-internal.
+    #[serde(skip)]
+    pub active_child_ids: Vec<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

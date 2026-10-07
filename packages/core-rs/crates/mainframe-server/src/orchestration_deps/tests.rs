@@ -152,6 +152,29 @@ async fn a_delegated_child_reports_its_task_and_boot_interrupts_open_tasks() {
         completed_at: None,
     };
     store.insert(task).await.unwrap();
+    // What the service's `save` does after every task write.
+    port.chat_changed(&caller);
+    port.chat_changed(&child.id);
+
+    let chats = ctx.chat_manager.clone().unwrap();
+    let child_chat = chats.get_chat(&child.id).unwrap();
+    let delegation = child_chat.orchestration.delegation.clone().unwrap();
+    assert_eq!(delegation.task_id, "task_1");
+    assert_eq!(delegation.status, TaskStatus::Running);
+    assert_eq!(
+        child_chat.orchestration.created_by_chat_id.as_deref(),
+        Some(caller.as_str())
+    );
+    let parent_chat = chats.get_chat(&caller).unwrap();
+    assert_eq!(parent_chat.orchestration.delegated_waiting, Some(false));
+    assert_eq!(
+        super::push::delegated_permission_body(&ctx.db, &child.id).as_deref(),
+        Some("\"Review\" (task of \"Untitled session\") needs permission")
+    );
+    assert_eq!(
+        super::push::delegated_permission_body(&ctx.db, &caller),
+        None
+    );
 
     let view = port.chat(&child.id).await.unwrap();
     assert_eq!(view.task_id.as_deref(), Some("task_1"));

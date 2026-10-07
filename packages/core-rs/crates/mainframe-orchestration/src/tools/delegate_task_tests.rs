@@ -104,6 +104,11 @@ async fn async_delegation_creates_a_nested_child_with_only_the_task_prompt() {
     assert!(body.starts_with("<mainframe-agent-message from=\"parent\" kind=\"task\">"));
     assert!(body.contains("Review the diff"));
     assert_eq!(f.tasks.all()[0].depth, 1);
+    // Both chats re-announce, so the child row and the parent's waiting
+    // state follow the task.
+    let changed = f.port.lock().changed.clone();
+    assert!(changed.contains(&"parent".to_string()));
+    assert!(changed.contains(&child));
 }
 
 #[tokio::test]

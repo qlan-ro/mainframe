@@ -7,75 +7,23 @@ impl ChatManager {
             .get_active(chat_id)
             .map(|c| c.lock().unwrap_or_else(|e| e.into_inner()).chat.clone())
             .or_else(|| self.deps.chats_get(chat_id))?;
-        let has_pending = self
-            .permissions
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .has_pending(chat_id);
-        let side_chat_waiting =
-            side_chat_waiting_for(&self.permissions, chat.side_chat_id.as_deref());
-        let live = self.deps.tracker_list_live(chat_id);
-        let project_path = self.deps.projects_get_path(&chat.project_id);
-        enrich_chat(
-            &mut chat,
-            has_pending,
-            &live,
-            project_path.as_deref(),
-            side_chat_waiting,
-        );
+        self.enricher.enrich(&mut chat);
         Some(chat)
     }
 
     pub fn list_chats(&self, project_id: &str) -> Vec<Chat> {
-        self.deps
-            .chats_list(project_id)
-            .into_iter()
-            .map(|mut c| {
-                let hp = self
-                    .permissions
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .has_pending(&c.id);
-                let side_chat_waiting =
-                    side_chat_waiting_for(&self.permissions, c.side_chat_id.as_deref());
-                let live = self.deps.tracker_list_live(&c.id);
-                let project_path = self.deps.projects_get_path(&c.project_id);
-                enrich_chat(
-                    &mut c,
-                    hp,
-                    &live,
-                    project_path.as_deref(),
-                    side_chat_waiting,
-                );
-                c
-            })
-            .collect()
+        self.enrich_all(self.deps.chats_list(project_id))
     }
 
     pub fn list_all_chats(&self) -> Vec<Chat> {
-        self.deps
-            .chats_list_all()
-            .into_iter()
-            .map(|mut c| {
-                let hp = self
-                    .permissions
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .has_pending(&c.id);
-                let side_chat_waiting =
-                    side_chat_waiting_for(&self.permissions, c.side_chat_id.as_deref());
-                let live = self.deps.tracker_list_live(&c.id);
-                let project_path = self.deps.projects_get_path(&c.project_id);
-                enrich_chat(
-                    &mut c,
-                    hp,
-                    &live,
-                    project_path.as_deref(),
-                    side_chat_waiting,
-                );
-                c
-            })
-            .collect()
+        self.enrich_all(self.deps.chats_list_all())
+    }
+
+    fn enrich_all(&self, mut chats: Vec<Chat>) -> Vec<Chat> {
+        for chat in &mut chats {
+            self.enricher.enrich(chat);
+        }
+        chats
     }
 
     pub fn is_chat_running(&self, chat_id: &str) -> bool {
@@ -131,35 +79,13 @@ impl ChatManager {
         include_archived: bool,
         include_temporary: bool,
     ) -> Vec<Chat> {
-        self.deps
-            .chats_list_filtered(
-                project_id,
-                tags_all,
-                has_worktree,
-                include_archived,
-                include_temporary,
-            )
-            .into_iter()
-            .map(|mut c| {
-                let hp = self
-                    .permissions
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .has_pending(&c.id);
-                let side_chat_waiting =
-                    side_chat_waiting_for(&self.permissions, c.side_chat_id.as_deref());
-                let live = self.deps.tracker_list_live(&c.id);
-                let project_path = self.deps.projects_get_path(&c.project_id);
-                enrich_chat(
-                    &mut c,
-                    hp,
-                    &live,
-                    project_path.as_deref(),
-                    side_chat_waiting,
-                );
-                c
-            })
-            .collect()
+        self.enrich_all(self.deps.chats_list_filtered(
+            project_id,
+            tags_all,
+            has_worktree,
+            include_archived,
+            include_temporary,
+        ))
     }
 
     /// Working directory for `chatId`: the worktree path when present and still on
@@ -216,9 +142,6 @@ impl ChatManager {
         if let Some(v) = partial.pinned {
             guard.chat.pinned = Some(v);
         }
-        if let Some(v) = partial.parent_chat_id {
-            guard.chat.parent_chat_id = Some(Some(v));
-        }
     }
 
     /// Broadcast `chat.updated` for a chat whose fields were persisted out-of-band
@@ -227,6 +150,21 @@ impl ChatManager {
         if let Some(chat) = self.get_chat(chat_id) {
             self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
         }
+    }
+
+    /// Re-reads a chat's agent lineage and delegation state into its cached
+    /// cell, then announces the chat. The orchestration server calls this when
+    /// a task, the lineage, or the chat's agent outbox changes; without it the
+    /// cell keeps what was read when the chat loaded.
+    pub fn refresh_agent_lineage(&self, chat_id: &str) {
+        if let Some(cell) = self.get_active(chat_id)
+            && let Some(row) = self.deps.chats_get(chat_id)
+        {
+            let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+            guard.chat.orchestration = row.orchestration;
+            guard.chat.parent_chat_id = row.parent_chat_id;
+        }
+        self.emit_chat_updated(chat_id);
     }
 
     /// Re-emit `chat.updated` for every non-archived chat bound to `worktree_path`

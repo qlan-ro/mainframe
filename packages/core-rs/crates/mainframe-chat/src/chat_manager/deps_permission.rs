@@ -10,14 +10,13 @@ use super::*;
 struct PlanHostImpl {
     event_handler: Arc<EventHandler<EhDeps>>,
     lifecycle: Arc<ChatLifecycleManager<LcDeps>>,
-    deps: Arc<dyn ChatManagerDeps>,
-    permissions: Arc<Mutex<PermissionManager>>,
+    enricher: Enricher,
     self_ref: Arc<std::sync::OnceLock<std::sync::Weak<ChatManager>>>,
 }
 
 impl PlanHost for PlanHostImpl {
     fn emit_event(&self, event: DaemonEvent) {
-        enrich_and_emit(self.deps.as_ref(), &self.permissions, event);
+        self.enricher.emit(event);
     }
     fn clear_display_state(&self, chat_id: &str) {
         self.event_handler.clear_display_state(chat_id);
@@ -58,7 +57,7 @@ impl PlanHost for PlanHostImpl {
 pub(super) struct PhDeps {
     deps: Arc<dyn ChatManagerDeps>,
     active_chats: Registry,
-    permissions: Arc<Mutex<PermissionManager>>,
+    enricher: Enricher,
     event_handler: Arc<EventHandler<EhDeps>>,
     lifecycle: Arc<ChatLifecycleManager<LcDeps>>,
     plan_mode: Arc<PlanModeHandler<ChatPlanModeCtx>>,
@@ -72,7 +71,7 @@ impl PermissionHandlerDeps for PhDeps {
         Box::pin(async move { self.lifecycle.start_chat(chat_id).await })
     }
     fn emit_event(&self, event: DaemonEvent) {
-        enrich_and_emit(self.deps.as_ref(), &self.permissions, event);
+        self.enricher.emit(event);
     }
     fn emit_display(&self, chat_id: &str) {
         self.event_handler.emit_display(chat_id);
@@ -146,16 +145,16 @@ pub(super) fn build(
     deps: &Arc<dyn ChatManagerDeps>,
     active_chats: &Registry,
     messages: &Arc<Mutex<MessageCache>>,
-    permissions: &Arc<Mutex<PermissionManager>>,
+    enricher: &Enricher,
     event_handler: &Arc<EventHandler<EhDeps>>,
     lifecycle: &Arc<ChatLifecycleManager<LcDeps>>,
     self_ref: &Arc<std::sync::OnceLock<std::sync::Weak<ChatManager>>>,
 ) -> ChatPermissionHandler<PhDeps> {
+    let permissions = enricher.permissions();
     let plan_host: Arc<dyn PlanHost> = Arc::new(PlanHostImpl {
         event_handler: event_handler.clone(),
         lifecycle: lifecycle.clone(),
-        deps: deps.clone(),
-        permissions: permissions.clone(),
+        enricher: enricher.clone(),
         self_ref: self_ref.clone(),
     });
     let plan_mode = Arc::new(PlanModeHandler::new(ChatPlanModeCtx {
@@ -169,7 +168,7 @@ pub(super) fn build(
     let ph_deps = PhDeps {
         deps: deps.clone(),
         active_chats: active_chats.clone(),
-        permissions: permissions.clone(),
+        enricher: enricher.clone(),
         event_handler: event_handler.clone(),
         lifecycle: lifecycle.clone(),
         plan_mode,

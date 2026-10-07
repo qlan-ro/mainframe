@@ -2,7 +2,8 @@
 //! message, once that chat is idle. Unlike the CLI's own queue this never
 //! folds into a running turn, works the same on every adapter, and can drop
 //! entries when a chat is stopped. In memory only: a `queue` send's caller
-//! turn dies with the daemon too.
+//! turn dies with the daemon too. Every change is reported per target, so the
+//! target's `Chat.agent_outbox` stays current.
 
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -30,16 +31,42 @@ pub struct OutboxEntry {
     pub preview: String,
 }
 
+type Listener = Box<dyn Fn(&str) + Send + Sync>;
+
 #[derive(Default)]
 pub struct Outbox {
     entries: Mutex<Vec<OutboxEntry>>,
     next_id: AtomicU64,
+    /// Told each target whose held entries changed, after the lock drops (the
+    /// listener reads the outbox back).
+    listener: Option<Listener>,
 }
 
 impl Outbox {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    #[must_use]
+    pub fn observed(listener: impl Fn(&str) + Send + Sync + 'static) -> Self {
+        Self {
+            listener: Some(Box::new(listener)),
+            ..Self::default()
+        }
+    }
+
+    fn changed<'a>(&self, targets: impl IntoIterator<Item = &'a str>) {
+        let Some(listener) = &self.listener else {
+            return;
+        };
+        let mut seen: Vec<&str> = Vec::new();
+        for target in targets {
+            if !seen.contains(&target) {
+                seen.push(target);
+                listener(target);
+            }
+        }
     }
 
     /// Holds `body` for `target`; returns the entry id. `preview` is the
@@ -61,6 +88,7 @@ impl Outbox {
             body,
             preview: cap_chars(preview, PREVIEW_CHARS),
         });
+        self.changed([target]);
         entry_id
     }
 
@@ -92,18 +120,28 @@ impl Outbox {
 
     /// Removes and returns every entry owed to `target`, oldest first.
     pub fn take_for(&self, target: &str) -> Vec<OutboxEntry> {
-        let mut entries = self.lock();
-        let (taken, kept): (Vec<_>, Vec<_>) =
-            entries.drain(..).partition(|e| e.target_chat_id == target);
-        *entries = kept;
+        let taken = {
+            let mut entries = self.lock();
+            let (taken, kept): (Vec<_>, Vec<_>) =
+                entries.drain(..).partition(|e| e.target_chat_id == target);
+            *entries = kept;
+            taken
+        };
+        if !taken.is_empty() {
+            self.changed([target]);
+        }
         taken
     }
 
     /// Puts entries back at the front, after a failed delivery.
     pub fn restore(&self, mut taken: Vec<OutboxEntry>) {
-        let mut entries = self.lock();
-        taken.append(&mut entries);
-        *entries = taken;
+        let targets: Vec<String> = taken.iter().map(|e| e.target_chat_id.clone()).collect();
+        {
+            let mut entries = self.lock();
+            taken.append(&mut entries);
+            *entries = taken;
+        }
+        self.changed(targets.iter().map(String::as_str));
     }
 
     /// Drops every entry owed to `target` (Stop cascade step 3).
@@ -113,16 +151,32 @@ impl Outbox {
 
     /// Drops one task's delivery wherever it is queued.
     pub fn drop_task(&self, task_id: &str) {
-        self.lock()
-            .retain(|e| !matches!(&e.kind, OutboxKind::TaskResult { task_id: t } if t == task_id));
+        let is_task = |e: &OutboxEntry| matches!(&e.kind, OutboxKind::TaskResult { task_id: t } if t == task_id);
+        let targets: Vec<String> = {
+            let mut entries = self.lock();
+            let targets = entries
+                .iter()
+                .filter(|e| is_task(e))
+                .map(|e| e.target_chat_id.clone())
+                .collect();
+            entries.retain(|e| !is_task(e));
+            targets
+        };
+        self.changed(targets.iter().map(String::as_str));
     }
 
     /// The user's cancel on a pending agent message.
     pub fn cancel(&self, target: &str, entry_id: &str) -> bool {
-        let mut entries = self.lock();
-        let before = entries.len();
-        entries.retain(|e| !(e.target_chat_id == target && e.entry_id == entry_id));
-        entries.len() != before
+        let removed = {
+            let mut entries = self.lock();
+            let before = entries.len();
+            entries.retain(|e| !(e.target_chat_id == target && e.entry_id == entry_id));
+            entries.len() != before
+        };
+        if removed {
+            self.changed([target]);
+        }
+        removed
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Vec<OutboxEntry>> {
@@ -173,6 +227,36 @@ mod tests {
         assert!(outbox.cancel("t", &id));
         outbox.drop_task("k");
         assert!(outbox.targets().is_empty());
+    }
+
+    #[test]
+    fn every_change_reports_its_target_once() {
+        let seen = std::sync::Arc::new(Mutex::new(Vec::<String>::new()));
+        let outbox = {
+            let seen = std::sync::Arc::clone(&seen);
+            Outbox::observed(move |t| seen.lock().unwrap().push(t.to_string()))
+        };
+        let id = outbox.push("t", "a", OutboxKind::Send, "one".into(), "one");
+        outbox.push(
+            "p",
+            "c",
+            OutboxKind::TaskResult {
+                task_id: "k".into(),
+            },
+            "r".into(),
+            "r",
+        );
+        assert!(outbox.cancel("t", &id));
+        assert!(!outbox.cancel("t", &id));
+        outbox.drop_task("k");
+        assert!(outbox.take_for("p").is_empty());
+        outbox.push("t", "a", OutboxKind::Send, "two".into(), "two");
+        let taken = outbox.take_for("t");
+        outbox.restore(taken);
+        assert_eq!(
+            *seen.lock().unwrap(),
+            vec!["t", "p", "t", "p", "t", "t", "t"]
+        );
     }
 
     #[test]

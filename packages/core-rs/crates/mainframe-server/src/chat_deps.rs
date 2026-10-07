@@ -878,9 +878,18 @@ impl ChatManagerDeps for DaemonChatDeps {
 
     fn send_push(&self, msg: PushOut) {
         let push = Arc::clone(&self.push);
+        // A delegated child's gate names its parent; every other push keeps
+        // the body its sink wrote.
+        let body = match msg.push_type.as_str() {
+            "permission" => {
+                crate::orchestration_deps::push::delegated_permission_body(&self.db, &msg.chat_id)
+                    .unwrap_or(msg.body)
+            }
+            _ => msg.body,
+        };
         let message = PushMessage {
             title: msg.title,
-            body: msg.body,
+            body,
             data: serde_json::json!({ "chatId": msg.chat_id, "type": msg.push_type }),
             priority: if msg.priority == "high" {
                 PushPriority::High
@@ -1430,6 +1439,7 @@ pub(crate) fn fallback_chat(new_chat: &NewChat) -> Chat {
         parent_chat_id: None,
         side_chat_id: None,
         side_chat_waiting: None,
+        orchestration: Default::default(),
     }
 }
 

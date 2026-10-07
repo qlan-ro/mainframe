@@ -87,7 +87,7 @@ fn the_request_index_is_unique_per_parent_only_when_a_key_is_set() {
 }
 
 #[test]
-fn agent_lineage_is_recorded_and_read_back_per_project() {
+fn agent_lineage_is_recorded_and_read_back_on_the_chat() {
     let (chats, projects, _conn) = setup();
     let p = projects.create("/project/orchestration", None).unwrap();
     let caller = chats.create(&new_chat(&p.id)).unwrap();
@@ -101,15 +101,39 @@ fn agent_lineage_is_recorded_and_read_back_per_project() {
         .set_agent_lineage(&child.id, &caller.id, Some(&caller.id))
         .unwrap();
 
+    let launched_row = chats.get(&launched.id).unwrap().unwrap();
     assert_eq!(
-        chats.created_by(&launched.id).unwrap(),
+        launched_row.orchestration.created_by_chat_id,
         Some(caller.id.clone())
     );
-    assert_eq!(chats.created_by(&caller.id).unwrap(), None);
-    let map = chats.created_by_in_project(&p.id).unwrap();
-    assert_eq!(map.len(), 2);
+    assert_eq!(launched_row.parent_chat_id.flatten(), None);
+    let caller_row = chats.get(&caller.id).unwrap().unwrap();
+    assert_eq!(caller_row.orchestration.created_by_chat_id, None);
     let child_row = chats.get(&child.id).unwrap().unwrap();
     assert_eq!(child_row.parent_chat_id, Some(Some(caller.id.clone())));
-    let launched_row = chats.get(&launched.id).unwrap().unwrap();
-    assert_eq!(launched_row.parent_chat_id.flatten(), None);
+    let listed = chats.list(&p.id).unwrap();
+    let creators = listed
+        .iter()
+        .filter(|c| c.orchestration.created_by_chat_id.is_some())
+        .count();
+    assert_eq!(creators, 2);
+}
+
+#[test]
+fn the_wire_chat_carries_provenance_flat_and_hides_child_ids() {
+    let (chats, projects, _conn) = setup();
+    let p = projects.create("/project/wire", None).unwrap();
+    let caller = chats.create(&new_chat(&p.id)).unwrap();
+    let launched = chats.create(&new_chat(&p.id)).unwrap();
+    chats
+        .set_agent_lineage(&launched.id, &caller.id, None)
+        .unwrap();
+    let mut row = chats.get(&launched.id).unwrap().unwrap();
+    row.orchestration.active_child_ids = vec!["hidden".into()];
+    let wire = serde_json::to_value(&row).unwrap();
+    assert_eq!(wire["createdByChatId"], caller.id);
+    assert!(wire.get("activeChildIds").is_none());
+    assert!(wire.get("delegation").is_none());
+    let back: mainframe_types::chat::Chat = serde_json::from_value(wire).unwrap();
+    assert_eq!(back.orchestration.created_by_chat_id, Some(caller.id));
 }

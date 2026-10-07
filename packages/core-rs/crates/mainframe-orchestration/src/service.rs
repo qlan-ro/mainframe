@@ -52,12 +52,16 @@ impl OrchestrationService {
         version: &str,
         daemon_port: u16,
     ) -> Self {
+        let outbox = {
+            let port = Arc::clone(&port);
+            Outbox::observed(move |target| port.chat_changed(target))
+        };
         Self {
             port,
             tasks,
             credentials: CredentialRegistry::new(),
             limiter: CreationLimiter::new(Box::new(SystemClock)),
-            outbox: Outbox::new(),
+            outbox,
             stopping: Mutex::new(HashSet::new()),
             inflight: Mutex::new(HashMap::new()),
             flush_lock: tokio::sync::Mutex::new(()),

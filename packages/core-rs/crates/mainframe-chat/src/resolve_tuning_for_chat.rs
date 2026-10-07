@@ -124,6 +124,7 @@ mod tests {
             parent_chat_id: None,
             side_chat_id: None,
             side_chat_waiting: None,
+            orchestration: Default::default(),
         }
     }
 

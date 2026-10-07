@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use mainframe_adapter_api::BoxFuture;
 use mainframe_types::chat::ChatStatus;
-use mainframe_types::orchestration::{OrchestrationMcpLaunch, SecretToken};
+use mainframe_types::orchestration::{AgentOutboxEntry, OrchestrationMcpLaunch, SecretToken};
 
 use super::tests::{FakeDeps, chat_over, manager};
 use crate::orchestration_hooks::OrchestrationHooks;
@@ -37,6 +37,9 @@ impl OrchestrationHooks for Recorder {
                 .unwrap()
                 .push(format!("stopping {chat_id}"));
         })
+    }
+    fn agent_outbox(&self, _chat_id: &str) -> Vec<AgentOutboxEntry> {
+        Vec::new()
     }
 }
 

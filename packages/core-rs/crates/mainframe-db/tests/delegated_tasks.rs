@@ -138,8 +138,32 @@ fn fork_side_and_delegated_children_coexist_under_one_parent() {
         .insert(&task("t2", &parent.id, &second.id, "2"))
         .unwrap();
 
-    let delegated = repos.tasks.task_ids_in_project(&project.id).unwrap();
-    assert_eq!(delegated.len(), 2);
-    assert!(!delegated.contains_key(&side.id));
+    let mut done = task("t2", &parent.id, &second.id, "2");
+    done.status = TaskStatus::Completed;
+    repos.tasks.update(&done).unwrap();
+
+    let first_row = repos.chats.get(&first.id).unwrap().unwrap();
+    let delegation = first_row.orchestration.delegation.unwrap();
+    assert_eq!(delegation.task_id, "t1");
+    assert_eq!(delegation.role, TaskRole::Review);
+    assert_eq!(delegation.status, TaskStatus::Running);
+    assert_eq!(
+        first_row.orchestration.created_by_chat_id.as_deref(),
+        Some(parent.id.as_str())
+    );
+    let second_row = repos.chats.get(&second.id).unwrap().unwrap();
+    assert_eq!(
+        second_row.orchestration.delegation.map(|d| d.status),
+        Some(TaskStatus::Completed)
+    );
+    // Only unfinished tasks count toward the parent's waiting derivation.
+    let parent_row = repos.chats.get(&parent.id).unwrap().unwrap();
+    assert_eq!(
+        parent_row.orchestration.active_child_ids,
+        vec![first.id.clone()]
+    );
+    assert!(parent_row.orchestration.delegation.is_none());
+    let side_row = repos.chats.get(&side.id).unwrap().unwrap();
+    assert!(side_row.orchestration.delegation.is_none());
     assert!(side.temporary);
 }

@@ -1,8 +1,7 @@
 //! Messages the orchestration MCP server holds for a busy chat (`chat_send`
-//! in queue mode, task results owed to a parent). The user can see them and
-//! cancel one before it is delivered.
+//! in queue mode, task results owed to a parent). The target's
+//! `Chat.agentOutbox` lists them; the user can cancel one before delivery.
 //!
-//! - `GET /api/chats/{id}/agent-outbox` lists `{entryId, fromChatId, preview}`.
 //! - `DELETE /api/chats/{id}/agent-outbox/{entryId}` cancels one (404 when it
 //!   is gone, e.g. already delivered).
 
@@ -12,28 +11,12 @@ use axum::Router;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::Response;
-use axum::routing::{delete, get};
-use serde_json::json;
+use axum::routing::delete;
 
 use mainframe_orchestration::input::check_id;
 
 use crate::ctx::AppCtx;
-use crate::respond::{fail, ok, ok_empty};
-
-async fn list(State(ctx): State<Arc<AppCtx>>, Path(chat_id): Path<String>) -> Response {
-    if check_id("chatId", &chat_id).is_err() {
-        return fail(StatusCode::BAD_REQUEST, "Invalid chat id");
-    }
-    let Some(service) = ctx.orchestration.as_ref() else {
-        return fail(StatusCode::SERVICE_UNAVAILABLE, "orchestration unavailable");
-    };
-    let entries: Vec<_> = service
-        .outbox_entries(&chat_id)
-        .into_iter()
-        .map(|e| json!({ "entryId": e.entry_id, "fromChatId": e.from_chat_id, "preview": e.preview }))
-        .collect();
-    ok(entries)
-}
+use crate::respond::{fail, ok_empty};
 
 async fn cancel(
     State(ctx): State<Arc<AppCtx>>,
@@ -53,15 +36,11 @@ async fn cancel(
 }
 
 pub fn router() -> Router<Arc<AppCtx>> {
-    Router::new()
-        .route("/api/chats/{id}/agent-outbox", get(list))
-        .route("/api/chats/{id}/agent-outbox/{entry_id}", delete(cancel))
+    Router::new().route("/api/chats/{id}/agent-outbox/{entry_id}", delete(cancel))
 }
 
 #[cfg(test)]
 mod tests {
-    use axum::body::to_bytes;
-
     use super::*;
 
     #[tokio::test]
@@ -79,15 +58,5 @@ mod tests {
         )
         .await;
         assert_eq!(missing.status(), StatusCode::NOT_FOUND);
-    }
-
-    #[tokio::test]
-    async fn list_returns_the_held_entries() {
-        let ctx = AppCtx::test_ctx_with_orchestration();
-        let resp = list(State(Arc::clone(&ctx)), Path("chat1".to_string())).await;
-        assert_eq!(resp.status(), StatusCode::OK);
-        let body = to_bytes(resp.into_body(), 1 << 16).await.unwrap();
-        let value: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert_eq!(value["data"], json!([]));
     }
 }

@@ -1,6 +1,5 @@
 //! `OrchestrationPort` over the live daemon.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use mainframe_adapter_api::AdapterRegistry;
@@ -42,62 +41,6 @@ impl DaemonOrchestrationPort {
         }
     }
 
-    async fn created_by(&self, chat_id: &str) -> Option<String> {
-        let id = chat_id.to_string();
-        match self.db.call(move |d| d.chats.created_by(&id)).await {
-            Ok(creator) => creator,
-            Err(err) => {
-                tracing::warn!(chat_id, %err, "failed to read chat provenance");
-                None
-            }
-        }
-    }
-
-    async fn created_by_in_project(&self, project_id: &str) -> HashMap<String, String> {
-        let id = project_id.to_string();
-        match self
-            .db
-            .call(move |d| d.chats.created_by_in_project(&id))
-            .await
-        {
-            Ok(map) => map,
-            Err(err) => {
-                tracing::warn!(project_id, %err, "failed to read chat provenance");
-                HashMap::new()
-            }
-        }
-    }
-
-    async fn task_id(&self, chat_id: &str) -> Option<String> {
-        let id = chat_id.to_string();
-        match self
-            .db
-            .call(move |d| d.delegated_tasks.get_by_child(&id))
-            .await
-        {
-            Ok(task) => task.map(|t| t.id),
-            Err(err) => {
-                tracing::warn!(chat_id, %err, "failed to read the chat's task");
-                None
-            }
-        }
-    }
-
-    async fn task_ids_in_project(&self, project_id: &str) -> HashMap<String, String> {
-        let id = project_id.to_string();
-        match self
-            .db
-            .call(move |d| d.delegated_tasks.task_ids_in_project(&id))
-            .await
-        {
-            Ok(map) => map,
-            Err(err) => {
-                tracing::warn!(project_id, %err, "failed to read delegated tasks");
-                HashMap::new()
-            }
-        }
-    }
-
     async fn pending_permission(&self, chat_id: &str) -> Option<PendingPermissionView> {
         if !self.chats.has_pending_permission(chat_id) {
             return None;
@@ -107,13 +50,9 @@ impl DaemonOrchestrationPort {
     }
 
     pub(super) async fn view(&self, chat: Chat) -> ChatView {
-        let lineage = Lineage {
-            created_by: self.created_by(&chat.id).await,
-            task_id: self.task_id(&chat.id).await,
-        };
         let pending = self.pending_permission(&chat.id).await;
         let queued = self.chats.queued_message_count(&chat.id);
-        chat_view(chat, lineage, pending, queued)
+        chat_view(chat, pending, queued)
     }
 }
 
@@ -125,20 +64,9 @@ fn permission_view(request: &ControlRequest) -> PendingPermissionView {
     }
 }
 
-/// Agent provenance read alongside a chat row.
-struct Lineage {
-    created_by: Option<String>,
-    task_id: Option<String>,
-}
-
 /// The adapter-neutral view. `working` covers a live turn and prompts the
-/// CLI still holds in its own queue.
-fn chat_view(
-    chat: Chat,
-    lineage: Lineage,
-    pending: Option<PendingPermissionView>,
-    queued: usize,
-) -> ChatView {
+/// CLI still holds in its own queue. Provenance comes off the `Chat` itself.
+fn chat_view(chat: Chat, pending: Option<PendingPermissionView>, queued: usize) -> ChatView {
     let working = chat.process_state == Some(Some(ProcessState::Working)) || queued > 0;
     ChatView {
         id: chat.id,
@@ -154,8 +82,8 @@ fn chat_view(
         temporary: chat.temporary,
         automation: chat.automation_run_id.is_some(),
         parent_chat_id: chat.parent_chat_id.flatten(),
-        created_by_chat_id: lineage.created_by,
-        task_id: lineage.task_id,
+        created_by_chat_id: chat.orchestration.created_by_chat_id,
+        task_id: chat.orchestration.delegation.map(|d| d.task_id),
         worktree_path: chat.worktree_path,
         branch_name: chat.branch_name,
         created_at: chat.created_at,
@@ -177,20 +105,12 @@ impl OrchestrationPort for DaemonOrchestrationPort {
         include_archived: bool,
     ) -> BoxFuture<'a, Vec<ChatView>> {
         Box::pin(async move {
-            let creators = self.created_by_in_project(project_id).await;
-            let task_ids = self.task_ids_in_project(project_id).await;
             let chats =
                 self.chats
                     .list_filtered(Some(project_id), None, false, include_archived, false);
             let mut views = Vec::with_capacity(chats.len());
             for chat in chats {
-                let pending = self.pending_permission(&chat.id).await;
-                let queued = self.chats.queued_message_count(&chat.id);
-                let lineage = Lineage {
-                    created_by: creators.get(&chat.id).cloned(),
-                    task_id: task_ids.get(&chat.id).cloned(),
-                };
-                views.push(chat_view(chat, lineage, pending, queued));
+                views.push(self.view(chat).await);
             }
             views
         })
@@ -281,5 +201,9 @@ impl OrchestrationPort for DaemonOrchestrationPort {
     fn emit(&self, event: DaemonEvent) {
         // No receivers only means no client is connected; nothing to do.
         let _ = self.broadcast.send(event);
+    }
+
+    fn chat_changed(&self, chat_id: &str) {
+        self.chats.refresh_agent_lineage(chat_id);
     }
 }

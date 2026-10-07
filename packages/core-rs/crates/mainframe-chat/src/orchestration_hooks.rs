@@ -7,7 +7,7 @@
 use std::sync::{Arc, OnceLock};
 
 use mainframe_adapter_api::BoxFuture;
-use mainframe_types::orchestration::OrchestrationMcpLaunch;
+use mainframe_types::orchestration::{AgentOutboxEntry, OrchestrationMcpLaunch};
 
 pub trait OrchestrationHooks: Send + Sync {
     /// A credential for one spawn of `chat_id`, revoking the chat's previous
@@ -19,6 +19,8 @@ pub trait OrchestrationHooks: Send + Sync {
     /// A Stop is starting on `chat_id` (the user's Stop, archive, discard):
     /// cancel its in-flight calls and the work it delegated.
     fn on_chat_stopping<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()>;
+    /// Messages Mainframe holds for `chat_id` until it is idle, oldest first.
+    fn agent_outbox(&self, chat_id: &str) -> Vec<AgentOutboxEntry>;
 }
 
 /// Shared between the `ChatManager` facade and its lifecycle manager.
@@ -46,6 +48,14 @@ impl OrchestrationSlot {
         if let Some(hooks) = self.0.get() {
             hooks.on_chat_stopping(chat_id).await;
         }
+    }
+
+    #[must_use]
+    pub fn agent_outbox(&self, chat_id: &str) -> Vec<AgentOutboxEntry> {
+        self.0
+            .get()
+            .map(|hooks| hooks.agent_outbox(chat_id))
+            .unwrap_or_default()
     }
 }
 
@@ -85,18 +95,27 @@ mod tests {
                 self.calls.lock().unwrap().push(format!("stop {chat_id}"));
             })
         }
+        fn agent_outbox(&self, chat_id: &str) -> Vec<AgentOutboxEntry> {
+            vec![AgentOutboxEntry {
+                entry_id: "ob1".into(),
+                from_chat_id: chat_id.into(),
+                preview: "hi".into(),
+            }]
+        }
     }
 
     #[tokio::test]
     async fn an_empty_slot_is_inert_and_an_attached_one_forwards() {
         let slot = OrchestrationSlot::default();
         assert!(slot.issue("c", "s").is_none());
+        assert!(slot.agent_outbox("c").is_empty());
         slot.revoke("c");
         slot.stopping("c").await;
 
         let recorder = Arc::new(Recorder::default());
         slot.attach(recorder.clone());
         assert!(slot.issue("c", "s").is_some());
+        assert_eq!(slot.agent_outbox("c")[0].entry_id, "ob1");
         slot.revoke("c");
         slot.stopping("c").await;
         let calls = recorder.calls.lock().unwrap().clone();

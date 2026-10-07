@@ -3,7 +3,7 @@ use super::*;
 
 pub(super) struct LcDeps {
     deps: Arc<dyn ChatManagerDeps>,
-    permissions: Arc<Mutex<PermissionManager>>,
+    enricher: Enricher,
     event_handler: Arc<EventHandler<EhDeps>>,
     worktree_offers: Arc<WorktreeOfferRegistry>,
 }
@@ -50,7 +50,7 @@ impl LifecycleManagerDeps for LcDeps {
             .build_sink(chat_id, Some(session_id.to_string()))
     }
     fn emit_event(&self, event: DaemonEvent) {
-        enrich_and_emit(self.deps.as_ref(), &self.permissions, event);
+        self.enricher.emit(event);
     }
     fn attachment_delete_chat<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()> {
         self.deps.attachment_delete_chat(chat_id)
@@ -155,20 +155,23 @@ pub(super) fn build(
     deps: &Arc<dyn ChatManagerDeps>,
     active_chats: &Registry,
     messages: &Arc<Mutex<MessageCache>>,
-    permissions: &Arc<Mutex<PermissionManager>>,
+    enricher: &Enricher,
     event_handler: &Arc<EventHandler<EhDeps>>,
     worktree_offers: &Arc<WorktreeOfferRegistry>,
 ) -> Arc<ChatLifecycleManager<LcDeps>> {
     let lc_deps = Arc::new(LcDeps {
         deps: deps.clone(),
-        permissions: permissions.clone(),
+        enricher: enricher.clone(),
         event_handler: event_handler.clone(),
         worktree_offers: worktree_offers.clone(),
     });
-    Arc::new(ChatLifecycleManager::new(
-        lc_deps,
-        active_chats.clone(),
-        messages.clone(),
-        permissions.clone(),
-    ))
+    Arc::new(
+        ChatLifecycleManager::new(
+            lc_deps,
+            active_chats.clone(),
+            messages.clone(),
+            enricher.permissions().clone(),
+        )
+        .with_orchestration(enricher.orchestration().clone()),
+    )
 }

@@ -2,7 +2,6 @@
 //! the workspace first, create the chat, provision its worktree, then apply
 //! plan mode, title, and agent provenance.
 
-use mainframe_chat::chat_manager::ChatFieldsPartial;
 use mainframe_orchestration::errors::{ErrorCode, PortError, ToolError};
 use mainframe_orchestration::ports::{ChatView, LaunchRequest, LaunchWorkspace};
 use mainframe_types::chat::{NO_PROJECT_ID, NewChat};
@@ -121,16 +120,9 @@ impl DaemonOrchestrationPort {
             .call(move |d| d.chats.set_agent_lineage(&id, &creator, parent.as_deref()))
             .await
             .map_err(|err| PortError::Internal(format!("record provenance: {err}")))?;
-        if let Some(parent) = &request.parent_chat_id {
-            // The live cell was built before the lineage write; mirror it so
-            // the sidebar nests the child without a reload.
-            let partial = ChatFieldsPartial {
-                parent_chat_id: Some(parent.clone()),
-                ..Default::default()
-            };
-            self.chats.sync_chat_fields(chat_id, partial);
-            self.chats.emit_chat_updated(chat_id);
-        }
+        // The live cell was built before the lineage write; pull it in so the
+        // sidebar nests a child (and names its creator) without a reload.
+        self.chats.refresh_agent_lineage(chat_id);
         let chat = self
             .chats
             .get_chat(chat_id)

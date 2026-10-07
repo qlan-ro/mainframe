@@ -80,6 +80,7 @@ mod deps_offer;
 mod deps_permission;
 mod deps_recovery;
 mod discard;
+mod enrich;
 mod errors;
 mod external_facade;
 mod fork_api;
@@ -115,13 +116,13 @@ use deps_event::EhDeps;
 use deps_lifecycle::LcDeps;
 use deps_permission::PhDeps;
 use deps_recovery::PresenceDeps;
+use enrich::Enricher;
 // `enrich_chat`/`is_working` have no direct caller left in this file — every
-// caller (reads.rs, construct.rs) reaches them through this re-import via its
+// caller (enrich.rs, construct.rs) reaches them through this re-import via its
 // own `use super::*`, so removing this line would break the glob for them.
 use shared::{
-    apply_tuning_impl, build_history_session, clear_all_queued_for_chat, enrich_and_emit,
-    enrich_chat, handle_queued_processed, is_working, now_ms, queued_for_chat, remap_history,
-    side_chat_waiting_for,
+    apply_tuning_impl, build_history_session, clear_all_queued_for_chat, enrich_chat,
+    handle_queued_processed, is_working, now_ms, queued_for_chat, remap_history,
 };
 use side_chat::is_side_chat;
 
@@ -152,6 +153,8 @@ pub struct ChatManager {
     /// in-memory per-chat cache above), which stays the source of truth for
     /// any chat that's actually hot.
     history_cache: Arc<HistorySnapshotCache>,
+    /// Every derived `Chat` field, for reads and emits alike.
+    enricher: Enricher,
 }
 
 #[cfg(test)]

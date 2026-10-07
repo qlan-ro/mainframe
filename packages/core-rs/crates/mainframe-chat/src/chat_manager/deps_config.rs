@@ -5,7 +5,7 @@ use crate::config_transcripts::OwnedNativeSession;
 pub(super) struct CmDeps {
     deps: Arc<dyn ChatManagerDeps>,
     active_chats: Registry,
-    permissions: Arc<Mutex<PermissionManager>>,
+    enricher: Enricher,
     lifecycle: Arc<ChatLifecycleManager<LcDeps>>,
     worktree_offers: Arc<WorktreeOfferRegistry>,
 }
@@ -52,7 +52,7 @@ impl ConfigManagerDeps for CmDeps {
         self.deps.settings_get(ns, key)
     }
     fn emit_event(&self, event: DaemonEvent) {
-        enrich_and_emit(self.deps.as_ref(), &self.permissions, event);
+        self.enricher.emit(event);
     }
     fn start_chat<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()> {
         Box::pin(async move { self.lifecycle.start_chat(chat_id).await })
@@ -120,14 +120,14 @@ impl ConfigManagerDeps for CmDeps {
 pub(super) fn build(
     deps: &Arc<dyn ChatManagerDeps>,
     active_chats: &Registry,
-    permissions: &Arc<Mutex<PermissionManager>>,
+    enricher: &Enricher,
     lifecycle: &Arc<ChatLifecycleManager<LcDeps>>,
     worktree_offers: &Arc<WorktreeOfferRegistry>,
 ) -> ChatConfigManager<CmDeps> {
     ChatConfigManager::new(CmDeps {
         deps: deps.clone(),
         active_chats: active_chats.clone(),
-        permissions: permissions.clone(),
+        enricher: enricher.clone(),
         lifecycle: lifecycle.clone(),
         worktree_offers: worktree_offers.clone(),
     })

@@ -3,7 +3,6 @@
 //! row here makes a child `delegated`; otherwise `temporary = 1` is a side
 //! chat and any other child a fork.
 
-use std::collections::HashMap;
 use std::rc::Rc;
 
 use mainframe_types::orchestration::{DelegatedTask, TaskDelivery, TaskRole, TaskStatus};
@@ -154,19 +153,6 @@ impl DelegatedTasksRepository {
 
     pub fn list_owed(&self) -> Result<Vec<DelegatedTask>, DbError> {
         self.query("WHERE delivery = 'owed' ORDER BY completed_at, id", &[])
-    }
-
-    /// `child chat id → task id` for every delegated child in a project.
-    pub fn task_ids_in_project(
-        &self,
-        project_id: &str,
-    ) -> Result<HashMap<String, String>, DbError> {
-        let mut stmt = self.db.prepare(
-            "SELECT t.child_chat_id, t.id FROM delegated_tasks t \
-             JOIN chats c ON c.id = t.child_chat_id WHERE c.project_id = ?",
-        )?;
-        let rows = stmt.query_map([project_id], |r| Ok((r.get(0)?, r.get(1)?)))?;
-        Ok(rows.collect::<Result<HashMap<_, _>, _>>()?)
     }
 
     /// Boot: the CLIs died with the previous daemon, so no live task can

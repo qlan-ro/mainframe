@@ -61,6 +61,8 @@ pub struct FakeState {
     pub interrupted: Vec<String>,
     pub launched: Vec<LaunchRequest>,
     pub send_marks_working: bool,
+    /// Every `chat_changed` call, in order.
+    pub changed: Vec<String>,
 }
 
 #[derive(Clone)]
@@ -228,6 +230,10 @@ impl OrchestrationPort for FakePort {
 
     fn emit(&self, event: DaemonEvent) {
         let _ = self.tx.send(event);
+    }
+
+    fn chat_changed(&self, chat_id: &str) {
+        self.lock().changed.push(chat_id.to_string());
     }
 }
 

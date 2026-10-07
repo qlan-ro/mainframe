@@ -166,4 +166,8 @@ pub trait OrchestrationPort: Send + Sync {
     /// transition between the read and the subscription is lost.
     fn subscribe(&self) -> broadcast::Receiver<DaemonEvent>;
     fn emit(&self, event: DaemonEvent);
+    /// `chat_id`'s derived orchestration state changed (its task, its
+    /// children's tasks, or the messages held for it): refresh the chat and
+    /// re-announce it with `chat.updated`.
+    fn chat_changed(&self, chat_id: &str);
 }

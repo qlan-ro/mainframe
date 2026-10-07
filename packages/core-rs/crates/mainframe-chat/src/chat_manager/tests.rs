@@ -23,6 +23,7 @@ mod fork_title;
 mod history_eviction;
 mod history_snapshot;
 mod offload;
+mod orchestration;
 mod plan_mode;
 mod provider_switch;
 mod resume_overlay;
@@ -755,6 +756,7 @@ impl ChatManagerDeps for StoreDeps {
             parent_chat_id: Some(Some(insert.parent_chat_id.clone())),
             side_chat_id: None,
             side_chat_waiting: None,
+            orchestration: Default::default(),
         };
         self.store.lock().unwrap().insert(id.clone(), chat.clone());
         self.pending_forks
@@ -857,6 +859,7 @@ impl ChatManagerDeps for StoreDeps {
             parent_chat_id: Some(Some(parent.id.clone())),
             side_chat_id: None,
             side_chat_waiting: None,
+            orchestration: Default::default(),
         };
         self.store.lock().unwrap().insert(id, side_chat.clone());
         Ok((side_chat, true))
