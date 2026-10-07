@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Live QA — how the skill works</title>
+<link rel="icon" href="data:,">
+<style>
+:root{color-scheme:light;--ink:#163449;--muted:#526b7b;--paper:#f0f5f8;--white:#fff;--line:#c9d9e3;--teal:#006d77;--teal-light:#e2f3f2;--amber:#955018;--amber-light:#fff1db;--red:#a43b43;--radius:18px}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font-family:"Avenir Next","Segoe UI",sans-serif;font-size:16px;line-height:1.55}button,select,input{font:inherit}button,select{color:inherit}button{cursor:pointer}a{color:var(--teal)}button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid #087da8;outline-offset:4px}button:hover{filter:brightness(.97)}
+.page{max-width:1240px;margin:auto;padding:30px 44px 40px}header{display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:14px}.brand{display:flex;align-items:center;gap:10px;font-size:20px;font-weight:750;letter-spacing:-.6px}.brand svg{width:32px;height:32px}.meta{color:var(--muted)}.intro{display:grid;grid-template-columns:1.3fr 1fr;gap:70px;align-items:end;margin:48px 0 30px}h1{font-size:clamp(36px,4.5vw,60px);line-height:1.08;letter-spacing:-2.4px;font-weight:650;margin:0}h2,h3,p{margin-top:0}.intro p{max-width:440px;color:var(--muted);margin:0;padding-bottom:4px;font-size:17px}.intro strong{color:var(--ink);font-weight:600}
+.controls{background:var(--white);border:1px solid var(--line);border-radius:var(--radius);padding:20px 24px}.control-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px}.field{display:grid;gap:7px;font-size:13px;font-weight:650}.field select{width:100%;min-width:0;border:1px solid var(--line);border-radius:8px;background:#f8fbfd;padding:10px 30px 10px 11px;font-size:14px;font-weight:500}.toggles{display:flex;gap:25px;flex-wrap:wrap;border-top:1px solid #e3ebf0;margin-top:18px;padding-top:14px;font-size:13px;color:var(--muted)}.toggles label{display:flex;gap:7px;align-items:center;cursor:pointer}.toggles input{accent-color:var(--teal);width:16px;height:16px;margin:0}.guide-note{margin-left:auto;font-size:12px}
+.flow{position:relative;display:grid;grid-template-columns:repeat(4,1fr);gap:30px;margin:30px 0 18px}.flow:before{content:"";position:absolute;left:30px;right:30px;top:24px;border-top:2px solid var(--line)}.step{position:relative;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;text-align:left;border:0;background:transparent;padding:0 0 13px;border-bottom:3px solid transparent}.step[aria-pressed=true]{border-color:var(--teal)}.step-index{display:grid;place-items:center;background:var(--paper);border:2px solid var(--line);width:49px;height:49px;border-radius:50%;font-size:16px;font-weight:700;margin-bottom:12px}.step[aria-pressed=true] .step-index{background:var(--teal);color:white;border-color:var(--teal);box-shadow:0 0 0 5px var(--paper)}.step-title{display:block;font-size:19px;font-weight:650}.step small{display:block;color:var(--muted);font-size:13px;margin-top:3px}
+.gate{display:flex;gap:12px;align-items:center;background:var(--amber-light);border-left:4px solid var(--amber);padding:12px 16px;border-radius:0 10px 10px 0;font-size:14px;margin-bottom:18px}.gate.ready{background:var(--teal-light);border-color:var(--teal)}.gate-symbol{font-size:20px;line-height:1;font-weight:700}.gate strong{display:block;font-size:14px}.gate p{margin:0;color:#5c4e3b;font-size:13px}.gate.ready p{color:#355c60}
+.detail{background:white;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;min-height:340px}.detail-head{display:flex;justify-content:space-between;align-items:center;gap:20px;padding:24px 28px 0}.detail-head h2{margin:0;font-size:26px;letter-spacing:-.7px}.step-count{font-size:13px;color:var(--muted);white-space:nowrap}.detail-body{display:grid;grid-template-columns:1.15fr 1fr;gap:40px;padding:19px 28px 26px}.explanation{color:var(--muted);font-size:15px;max-width:62ch}.actions{list-style:none;margin:18px 0 0;padding:0}.actions li{position:relative;padding:0 0 12px 23px;font-size:14px}.actions li:before{content:"";position:absolute;left:0;top:9px;width:7px;height:7px;border-radius:50%;background:var(--teal)}.artifact{background:#f3f7fa;border-radius:12px;padding:20px;font-size:13px;align-self:start}.artifact h3{font-size:14px;margin:0 0 13px;font-weight:700}.artifact dl{display:grid;grid-template-columns:80px 1fr;gap:9px 14px;margin:0}.artifact dt{color:var(--muted)}.artifact dd{margin:0;font-weight:550}.artifact code,.file{font-family:ui-monospace,"SFMono-Regular",Consolas,monospace;font-size:12px;overflow-wrap:anywhere}.artifact .footnote{font-size:12px;color:var(--muted);margin:14px 0 0;padding-top:12px;border-top:1px solid var(--line)}.loop{display:flex;flex-wrap:wrap;gap:6px;margin:15px 0}.loop span{border-radius:5px;background:var(--teal-light);color:var(--teal);padding:4px 8px;font-size:12px;font-weight:650}.loop i{font-style:normal;color:var(--muted)}.nav{display:flex;justify-content:space-between;align-items:center;padding:13px 28px;border-top:1px solid #e2ebf0;font-size:12px;color:var(--muted)}.nav button{border:1px solid var(--line);border-radius:7px;background:white;padding:7px 14px;font-size:13px;font-weight:600}.nav button.primary{background:var(--teal);border-color:var(--teal);color:white}.nav button:disabled{opacity:.4;cursor:default}.nav-buttons{display:flex;gap:8px}
+.principles{display:grid;grid-template-columns:1fr 1fr 1fr;gap:30px;padding:28px 0 24px}.principle{padding-left:15px;border-left:2px solid var(--line)}.principle h3{font-size:14px;margin:0 0 6px}.principle p{font-size:13px;color:var(--muted);margin:0}details{font-size:13px;margin:0 0 20px}summary{cursor:pointer;font-weight:650}details p{max-width:85ch;color:var(--muted);margin:10px 0 0}.status-key{display:flex;flex-wrap:wrap;gap:16px;font-size:12px;border-top:1px solid var(--line);padding:17px 0}.status-key span{display:flex;align-items:center;gap:6px}.dot{width:7px;height:7px;border-radius:50%;background:var(--teal)}.dot.fail{background:var(--red)}.dot.blocked{background:var(--amber)}.dot.skipped{background:#6c7f8b}footer{display:flex;justify-content:space-between;gap:20px;font-size:12px;color:var(--muted);padding-top:4px}footer p{margin:0}.report-row{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}.badge{font-size:11px;background:var(--teal-light);color:var(--teal);border-radius:4px;padding:2px 6px;font-weight:700}.badge.blocked{background:var(--amber-light);color:var(--amber)}
+@media(max-width:800px){.page{padding:24px}.intro{gap:24px;margin-top:35px}.control-grid{grid-template-columns:1fr 1fr}.flow{gap:16px}.step-title{font-size:16px}.detail-body{gap:22px}.principles{gap:18px}.guide-note{margin-left:0}h1{letter-spacing:-1.5px}}
+@media(max-width:560px){.page{padding:18px}.intro{grid-template-columns:1fr;gap:18px;margin:28px 0 24px}.intro p{font-size:15px}.meta{font-size:11px}.controls{padding:16px}.control-grid{gap:13px}.field select{font-size:12px}.toggles{gap:12px 17px}.guide-note{width:100%}.flow{gap:10px;margin-top:24px}.step-index{width:38px;height:38px}.flow:before{top:19px}.step-title{font-size:13px}.step small{font-size:11px}.detail-head{padding:20px 18px 0}.detail-head h2{font-size:23px}.detail-body{grid-template-columns:1fr;padding:16px 18px 20px;gap:8px}.nav{padding:12px 18px}.nav>span{max-width:120px}.principles{grid-template-columns:1fr;gap:16px;padding:23px 0}footer{flex-direction:column;gap:6px}.status-key{gap:10px 16px}}
+@media(prefers-reduced-motion:no-preference){.step-index{transition:background .15s,color .15s}.detail-body{animation:appear .18s ease-out}@keyframes appear{from{opacity:.6}to{opacity:1}}}
+@media print{.page{max-width:none;padding:0}.controls,.nav{display:none}.detail,.principles{break-inside:avoid}body{background:white}.intro{margin:20px 0}.flow{margin-top:20px}}
+</style>
+</head>
+<body>
+<main class="page">
+<header><div class="brand"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="10" fill="#006d77"/><path d="m9 16 5 5 9-10" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>live-qa</div><span class="meta">A field guide to testing your work</span></header>
+<section class="intro" aria-label="Introduction"><h1>One change.<br>A clear path to proof.</h1><p>Follow a request from <strong>“test my work”</strong> to observed results. The same skill runs inline or inside a QA agent, with coverage sized to the change.</p></section>
+<section class="controls" aria-label="Explore the workflow">
+<div class="control-grid">
+<label class="field" for="scope">What are we testing?<select id="scope"><option value="change">Small change</option><option value="pr">A pull request</option><option value="branch">A branch / worktree</option></select></label>
+<label class="field" for="approval">Scenario authorization<select id="approval"><option value="new">New scenarios</option><option value="approved">Approved plan</option><option value="auto">Autonomous</option></select></label>
+<label class="field" for="runtime">App surface<select id="runtime"><option value="web">Web / browser</option><option value="tauri">Native Tauri</option><option value="electron">Electron</option><option value="api">API / DB only</option></select></label>
+<label class="field" for="evidence">Visible behavior<select id="evidence"><option value="static">Static state</option><option value="motion">Motion / flow</option><option value="none">No visible change</option></select></label>
+</div>
+<div class="toggles"><label><input id="agent" type="checkbox">Use a QA agent</label><label><input id="borrowed" type="checkbox">Reuse a running app</label><label><input id="watch" type="checkbox">Watch the run</label><span class="guide-note">Interactive explanation. No tests or commands run.</span></div>
+</section>
+<nav class="flow" aria-label="Workflow steps">
+<button type="button" class="step" data-step="0" aria-pressed="true" aria-controls="detail"><span class="step-index">1</span><span class="step-title">Scope</span><small>Identify the change</small></button>
+<button type="button" class="step" data-step="1" aria-pressed="false" aria-controls="detail"><span class="step-index">2</span><span class="step-title">Scenarios</span><small>Define the proof</small></button>
+<button type="button" class="step" data-step="2" aria-pressed="false" aria-controls="detail"><span class="step-index">3</span><span class="step-title">Prepare &amp; test</span><small>Observe real behavior</small></button>
+<button type="button" class="step" data-step="3" aria-pressed="false" aria-controls="detail"><span class="step-index">4</span><span class="step-title">Report</span><small>Keep the evidence</small></button>
+</nav>
+<aside class="gate" id="gate" aria-live="polite"><span class="gate-symbol" aria-hidden="true">Ⅱ</span><div><strong id="gate-title">Approval sits between scenarios and launch</strong><p id="gate-copy">Present the new scenario set and wait. Read-only scoping can continue.</p></div></aside>
+<section class="detail" id="detail" aria-label="Selected workflow step">
+<div class="detail-head"><h2 id="detail-title">Scope the requested work</h2><span class="step-count" id="step-count">Step 1 of 4</span></div>
+<div class="detail-body" id="detail-body" aria-live="polite"></div>
+<div class="nav"><span>Explore any step, in any order.</span><div class="nav-buttons"><button type="button" id="previous" disabled>Previous</button><button type="button" class="primary" id="next">Next step</button></div></div>
+</section>
+<section class="principles" aria-label="Rules that stay the same">
+<div class="principle"><h3>One process, two ways to run</h3><p id="execution">A small check can run inline. No agent or fresh worktree is required.</p></div>
+<div class="principle"><h3>Evidence follows the behavior</h3><p id="evidence-note">Use a small set of screenshots for static states. Media supports assertions; it does not replace them.</p></div>
+<div class="principle"><h3>Restore first, then release</h3><p id="lifecycle">Restore fixtures even after failure. Leave an interactive app up for review unless teardown was requested.</p></div>
+</section>
+<details><summary>Testing several targets?</summary><p>Combine drafts and evidence plans for any required approval. Run sequentially by default; parallel runs need isolated ports, mutable data, driver sessions and artifacts within project limits. Automated runs release owned resources unless asked to keep them. Keep each checkout’s identity and evidence in the combined results.</p></details>
+<div class="status-key" aria-label="Scenario result meanings"><span><i class="dot"></i><strong>PASS</strong> assertions and restoration succeeded</span><span><i class="dot fail"></i><strong>FAIL</strong> observed mismatch</span><span><i class="dot blocked"></i><strong>BLOCKED</strong> cannot verify</span><span><i class="dot skipped"></i><strong>SKIPPED</strong> not run, with a reason</span></div>
+<footer><p>Based on the live-qa skill · 19 September 2026</p><p>Standalone HTML · no services, tracking or external dependencies</p></footer>
+<noscript><p>This guide needs JavaScript for the step details. The workflow is: scope the change, define and authorize scenarios, prepare/test/restore, then report results and evidence.</p></noscript>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const steps = [...document.querySelectorAll('[data-step]')];
+let current = 0;
+const scopeInfo = {
+  change: ['Your current change', 'Use the named behavior or current task’s edits, including relevant uncommitted and untracked files. Keep unrelated dirty work out of scope.', 'No PR or clean checkout required.'],
+  pr: ['The selected PR', 'Use the PR’s test plan and diff against its actual base. Narrow coverage to the user’s focus without replacing the original test plan.', 'Resolve the actual PR host and checkout.'],
+  branch: ['The selected branch / worktree', 'Compare the named checkout with its intended base. Preserve existing edits and do not assume the base is main.', 'Use the requested checkout, not a convenient substitute.']
+};
+const drivers = {
+  web: ['Playwright', 'CLI · named session · batched scenario functions', 'Inspect live targets, then run a function receiving page. Keep the browser session available to inspect a failure.'],
+  tauri: ['Tauri', 'Tauri MCP bridge · native app', 'Verify the app and window. Use native interaction tools, bounded waits and a browser DOM assertion expression.'],
+  electron: ['Electron', 'Playwright Node API · CDP attachment', 'Match the intended renderer exactly. Use a complete Node script; disconnect without closing the app’s existing pages.'],
+  api: ['No UI driver', 'Documented HTTP / database tools', 'Check response shape, content and authoritative side effects. A 2xx status alone does not prove persistence.']
+};
+function state(){return {scope:$('scope').value, approval:$('approval').value, runtime:$('runtime').value, evidence:$('runtime').value === 'api' ? 'none' : $('evidence').value, agent:$('agent').checked, borrowed:$('borrowed').checked, watch:$('watch').checked};}
+function list(items){return '<ul class="actions">'+items.map(item=>'<li>'+item+'</li>').join('')+'</ul>';}
+function record(title, rows, note){return '<div class="artifact"><h3>'+title+'</h3><dl>'+rows.map(([key,value])=>'<dt>'+key+'</dt><dd>'+value+'</dd>').join('')+'</dl><p class="footnote">'+note+'</p></div>';}
+function media(s){return s.evidence === 'static' ? 'Screenshots' : s.evidence === 'motion' ? 'A short video' : 'No visual evidence needed';}
+function scopeStep(s){return {
+  title:'Scope the requested work',
+  content:'<div><p class="explanation">'+scopeInfo[s.scope][1]+'</p>'+list([scopeInfo[s.scope][2], 'Read the project’s QA notes and launch contract. Choose the cheapest supported target that covers the behavior.', 'Preserve the checkout. A missing named checkout can use a separate worktree; never switch a dirty checkout or merge without a request.'])+'</div>',
+  artifact:record('The run starts with facts', [['Scope',scopeInfo[s.scope][0]],['Executor',s.agent?'QA agent':'Current session'],['Surface',drivers[s.runtime][0]],['Notes','<code>.agents/live-qa.md</code>']], 'The skill owns the workflow. An agent carries the scope and authorization; it does not invent another process.')
+};}
+function scenarioStep(s){return {
+  title:'Decide what would prove it works',
+  content:'<div><p class="explanation">One behavior per scenario, with concrete assertions and a way to restore changes. Cover the requested behavior and adjacent regressions; do not pad a small check.</p>'+list(['Record preconditions, actions, expected results and restoration. Multiple assertions can establish one behavior.', 'Choose the visual evidence now: '+media(s).toLowerCase()+'.', s.approval==='new' ? (s.agent?'Return the draft to the caller. After approval, resume the same worker with the same plan.':'Present the draft before launch, seeding or execution.') : 'Carry the existing approval or explicit waiver forward. Do not ask for the same approval again.'])+'</div>',
+  artifact:record('Example scenario · illustrative', [['ID','S1 · Save a setting'],['Class','Happy path'],['Before','Record the original value'],['Actions','Change → save → reload'],['Expected','New value remains after reload'],['Restore','Restore the original value']], 'Save the scenario set and evidence choice in scenarios.md. “Looks fine” is not an expected result.')
+};}
+function testStep(s){return {
+  title:'Prepare, act, assert, restore',
+  content:'<div><p class="explanation">'+(s.borrowed?'Verify the borrowed app’s checkout, build and data identity. Do not assume ownership of its processes.':'Use the project harness or documented launch procedure. Verify that the running build contains the requested changes.')+'</p><div class="loop" aria-label="Scenario order"><span>Prepare</span><i>›</i><span>Act</span><i>›</i><span>Assert</span><i>›</i><span>Capture</span><i>›</i><span>Restore</span></div>'+list(['Use DB, API and UI in dependency order. Observe targets and use bounded waits with explicit assertions.', 'Capture relevant media after setup and before restoration. Finalize recordings even on failure.', 'Restore in finally. A failed restore prevents PASS; uncertain state blocks dependent work.'])+'</div>',
+  artifact:record('Selected implementation', [['Driver',drivers[s.runtime][0]],['Execution',drivers[s.runtime][1]],['Evidence',media(s)],['Pace',s.watch?'Visible actions; pause after each scenario':'Normal pace; batch understood actions']], drivers[s.runtime][2])
+};}
+function reportStep(s){return {
+  title:'Report what actually happened',
+  content:'<div><p class="explanation">Keep one result for every planned scenario: status, observed result, evidence and restoration. A partial run is never a clean pass.</p>'+list(['Record checkout, HEAD/base and relevant dirty-file fingerprints. Disclose changes to the build during the run.', 'Save report.md and media in the run directory. A short user-facing summary still retains the full scenario results.', s.borrowed?'Restore fixtures, but leave the borrowed app running.':s.watch?'Leave the app available until the user releases the watch session.':'Leave the interactive app up for review unless teardown was requested. Stop only run-owned resources.'])+'</div>',
+  artifact:'<div class="artifact"><h3>Example report · not a real test run</h3><div class="report-row"><span>S1 · Save persists after reload</span><span class="badge">PASS</span></div><div class="report-row"><span>S2 · Shared data setup unavailable</span><span class="badge blocked">BLOCKED</span></div><p class="footnote">S1 includes an observed result and successful restoration. S2 states what could not be verified. The final report discloses that one scenario did not run.</p><p class="file">/tmp/live-qa/&lt;scope&gt;-&lt;run-id&gt;/<br>scenarios.md · report.md · evidence files</p></div>'
+};}
+function updateNotes(s){
+  const ready=s.approval!=='new'; $('gate').classList.toggle('ready',ready);
+  $('gate-title').textContent=ready?(s.approval==='approved'?'The existing plan is already authorized':'The scenario gate is explicitly waived'):'Approval sits between scenarios and launch';
+  $('gate-copy').textContent=ready?'Continue the plan. Shared-data mutations still need their own authorization.':'Present the new scenario set and wait. Read-only scoping can continue.';
+  $('gate').querySelector('.gate-symbol').textContent=ready?'✓':'Ⅱ';
+  $('execution').textContent=s.agent?'The QA agent loads this same skill. Return gated drafts to the caller and resume the same worker; no nested preparation agent.':'A small check can run inline. No agent or fresh worktree is required.';
+  $('evidence-note').textContent=s.evidence==='none'?'No visible change means no required screenshot or video. Keep concrete API/DB observations with the results.':s.evidence==='motion'?'Use a brief video for motion or sequences. If recording is unavailable, use screenshots and disclose the limitation.':'Use a small set of screenshots for static states. Media supports assertions; it does not replace them.';
+  $('lifecycle').textContent=s.borrowed?'Restore fixtures, finalize recordings and leave the borrowed app running. Never stop it as run-owned cleanup.':s.watch?'Announce and pace actions, then pause after each scenario. Wait for release before teardown; recording alone does not imply watch mode.':'Restore fixtures even after failure. Leave an interactive app up for review unless teardown was requested.';
+  $('evidence').disabled=s.runtime==='api';
+}
+function render(){
+  const s=state();const detail=[scopeStep,scenarioStep,testStep,reportStep][current](s);
+  $('detail-title').textContent=detail.title;$('step-count').textContent='Step '+(current+1)+' of 4';
+  $('detail-body').innerHTML=detail.content+detail.artifact;
+  steps.forEach((step,index)=>step.setAttribute('aria-pressed',String(index===current)));
+  $('previous').disabled=current===0;$('next').textContent=current===3?'Back to scope':'Next step';
+  updateNotes(s);
+}
+steps.forEach(step=>step.addEventListener('click',()=>{current=Number(step.dataset.step);render();}));
+document.querySelectorAll('select,input').forEach(control=>control.addEventListener('change',render));
+$('previous').addEventListener('click',()=>{current=Math.max(0,current-1);render();});
+$('next').addEventListener('click',()=>{current=(current+1)%4;render();});
+render();
+</script>
+</body>
+</html>
