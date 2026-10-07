@@ -9,10 +9,13 @@
  * daemon holds its result until the parent is idle, then delivers it as the
  * parent's second turn.
  *
+ * The child is a task chat: it has no sidebar row, and lives inside the
+ * parent's `delegate_task` card, which expands into its live transcript.
+ *
  * Testid reference:
- *   chat-tool-delegate-task-card / -status / -open-<taskId> — the tool card
- *   sessions-row-fork-nest / sessions-row-delegated-nest-glyph — the nested child row
- *   sessions-row-task-label     — the child row's `Task · <role>`
+ *   chat-tool-delegate-task-card / -trigger / -status / -open-<taskId> — the tool card
+ *   chat-tool-delegate-task-transcript-<taskId> — the child's transcript inside the card
+ *   sessions-row (data-chat-id) — a sidebar row; the child never gets one
  *   chat-task-result-card-<taskId> — the delivered result in the parent
  *   chat-header-tasks-chip / chat-header-task-row-<taskId> — the parent's tasks chip
  *   chat-header-parent-link     — the child's "Delegated by" link
@@ -38,18 +41,13 @@ test.describe('§mcp-delegate (mock CLI calls the real /mcp endpoint)', () => {
     await closeTauriApp(app);
   });
 
-  test('delegate → child row nests under the parent → result card lands in the parent', async () => {
+  test('delegate → the child stays out of the sidebar → result card lands in the parent', async () => {
     const { page } = app;
     await sendMessage(page, 'Delegate a race review of the diff to a child chat');
 
     const card = page.getByTestId('chat-tool-delegate-task-card');
     await expect(card).toBeVisible({ timeout: 60_000 });
     await expect(card).toContainText('Race review');
-
-    const nest = page.getByTestId('sessions-row-fork-nest');
-    await expect(nest).toBeVisible({ timeout: 30_000 });
-    await expect(nest.getByTestId('sessions-row-delegated-nest-glyph')).toBeVisible();
-    await expect(nest.getByTestId('sessions-row-task-label')).toHaveText('Task · review');
 
     const result = page.locator('[data-testid^="chat-task-result-card-"]');
     await expect(result).toBeVisible({ timeout: 60_000 });
@@ -58,13 +56,27 @@ test.describe('§mcp-delegate (mock CLI calls the real /mcp endpoint)', () => {
 
     await expect(card.getByTestId('chat-tool-delegate-task-status')).toHaveAttribute('data-status', 'completed');
     await expect(page.getByTestId('chat-header-tasks-chip')).toHaveText(/1 task done/);
+    // The child row has loaded (the card reads its status), yet the sidebar lists only the parent.
+    await expect(page.getByTestId('sessions-row')).toHaveCount(1);
+    await expect(page.getByTestId('sessions-row-fork-nest')).toHaveCount(0);
   });
 
-  test('the card opens the child, which names its delegator', async () => {
+  test("the card expands into the child's transcript", async () => {
+    const { page } = app;
+    const card = page.getByTestId('chat-tool-delegate-task-card');
+    await card.getByTestId('chat-tool-delegate-task-trigger').click();
+    const transcript = card.locator('[data-testid^="chat-tool-delegate-task-transcript-"]');
+    await expect(transcript).toContainText('No data races found', { timeout: 15_000 });
+  });
+
+  test('the card opens the child, which links back to its delegator', async () => {
     const { page } = app;
     await page.locator('[data-testid^="chat-tool-delegate-task-open-"]').click();
-    await expect(page.getByTestId('chat-header-parent-link').first()).toContainText('Delegated by', {
-      timeout: 15_000,
-    });
+    const parentLink = page.getByTestId('chat-header-parent-link').first();
+    await expect(parentLink).toContainText('Delegated by', { timeout: 15_000 });
+    await expect(page.getByTestId('sessions-row')).toHaveCount(1);
+
+    await parentLink.click();
+    await expect(page.getByTestId('chat-tool-delegate-task-card')).toBeVisible({ timeout: 15_000 });
   });
 });
