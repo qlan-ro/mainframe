@@ -641,11 +641,19 @@ orchestration state, each field absent when it does not apply:
 |---|---|
 | `createdByChatId` | The chat whose agent created this one (`chat_launch` or `delegate_task`). Stored. |
 | `delegation` | On a delegated child: `{ taskId, role, status }`, read from its task. |
-| `delegatedWaiting` | On a chat with unfinished delegated tasks: whether a child waits on a gate. |
+| `delegatedWaiting` | On a chat with unfinished delegated tasks: whether a child, or any unfinished task below it, waits on a gate. |
 | `agentOutbox` | Messages held until the chat is idle: `[{ entryId, fromChatId, preview }]`. |
 
 The daemon re-emits `chat.updated` on the parent and the child whenever a
-task changes, and on a chat whenever its held messages change.
+task changes, and on a chat whenever its held messages change. A
+grandchild's gate re-emits only its own chat and its direct parent; a client
+that keeps a chat list reloads the list on any `chat.updated`, which re-reads
+the top-level chat's `delegatedWaiting`.
+
+A delegated child's permission push carries `data.chatId` = the nearest
+ancestor that is not itself a task chat (the chat whose `delegate_task` card
+holds the gate) and `data.taskChatId` = the child that asked. Every other
+push carries only its own `chatId`.
 
 Cancelling a held message (behind the normal auth layer):
 
