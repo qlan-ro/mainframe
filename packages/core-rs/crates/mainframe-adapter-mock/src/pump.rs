@@ -8,8 +8,11 @@ use std::time::Duration;
 
 use mainframe_adapter_api::{AdapterError, SessionSink};
 
+use mainframe_types::orchestration::OrchestrationMcpLaunch;
+
 use crate::dispatch::emit_event;
 use crate::fixture::{EventDirection, RecordedEvent, ReplayState};
+use crate::mcp_call::MCP_CALL_METHOD;
 use crate::session::SessionState;
 use crate::task_bridge::TaskBridge;
 
@@ -37,6 +40,7 @@ pub(crate) struct Pump {
     pub state: Arc<Mutex<SessionState>>,
     pub sink: Arc<dyn SessionSink>,
     pub bridge: Option<Arc<TaskBridge>>,
+    pub orchestration: Option<OrchestrationMcpLaunch>,
 }
 
 impl Pump {
@@ -78,6 +82,12 @@ impl Pump {
                 Duration::from_millis(event.delay_ms.saturating_sub(base).clamp(0, ceiling) as u64);
             if let Some(remaining) = target.checked_sub(started_at.elapsed()) {
                 tokio::time::sleep(remaining).await;
+            }
+            // Awaited in line, so the events after it see what the call did.
+            if event.method == MCP_CALL_METHOD {
+                crate::mcp_call::replay(self.sink.as_ref(), self.orchestration.as_ref(), &event)
+                    .await;
+                continue;
             }
             // Start/end the task BEFORE the message lands, so the Activity
             // panel and the transcript card appear on the same frame.

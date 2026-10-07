@@ -1,0 +1,4 @@
+{"dir":"in","method":"sendMessage","args":["(the daemon sends the delegated task prompt here)"],"delayMs":0}
+{"dir":"out","method":"onInit","args":["e2e-mcp-delegate-child"],"delayMs":20}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"No data races found: every shared write is behind the session mutex."}],null],"delayMs":60}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.002,"usage":{"input_tokens":30,"output_tokens":14},"subtype":"success","is_error":false}],"delayMs":100}

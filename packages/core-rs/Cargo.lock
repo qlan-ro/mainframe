@@ -1455,6 +1455,7 @@ dependencies = [
  "mainframe-background-tasks",
  "mainframe-claude-workflows",
  "mainframe-types",
+ "reqwest",
  "serde",
  "serde_json",
  "tempfile",

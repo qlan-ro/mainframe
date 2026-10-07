@@ -241,3 +241,29 @@ async fn responses_are_never_compressed() {
     assert_eq!(res.status(), StatusCode::OK);
     assert!(res.headers().get("content-encoding").is_none());
 }
+
+/// The mock CLI's `mcp_call` fixture step (E2E) speaks to the real route.
+#[tokio::test]
+async fn the_mock_clis_mcp_call_reaches_the_route_with_its_credential() {
+    use mainframe_adapter_mock::mcp_call::call_tool;
+    use mainframe_types::orchestration::{OrchestrationMcpLaunch, SecretToken};
+
+    let server = Server::start().await;
+    let (chat_id, token) = server.caller().await;
+    let launch = OrchestrationMcpLaunch {
+        url: server.base.clone(),
+        token: SecretToken::new(token),
+    };
+    let outcome = call_tool(&launch, "capabilities", json!({})).await;
+    assert!(!outcome.is_error, "{}", outcome.text);
+    let result: Value = serde_json::from_str(&outcome.text).unwrap();
+    assert_eq!(result["caller"]["chatId"], chat_id);
+
+    let stale = OrchestrationMcpLaunch {
+        url: server.base.clone(),
+        token: SecretToken::new("revoked".into()),
+    };
+    let refused = call_tool(&stale, "capabilities", json!({})).await;
+    assert!(refused.is_error);
+    assert!(refused.text.contains("401"), "{}", refused.text);
+}

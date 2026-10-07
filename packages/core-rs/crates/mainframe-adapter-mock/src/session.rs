@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use mainframe_adapter_api::{AdapterError, SessionSink};
 use mainframe_types::adapter::{AdapterProcess, AdapterProcessStatus, SessionOptions};
+use mainframe_types::orchestration::OrchestrationMcpLaunch;
 
 use crate::fixture::{RecordedEvent, ReplayState};
 use crate::history::recorded_session_id;
@@ -72,6 +73,8 @@ pub struct ReplaySession {
     pub(crate) project_path: String,
     pub(crate) spawned: AtomicBool,
     pub(crate) sink: Arc<Mutex<Option<Arc<dyn SessionSink>>>>,
+    /// The orchestration credential of the current spawn, for `mcp_call`.
+    pub(crate) orchestration: Mutex<Option<OrchestrationMcpLaunch>>,
     pub(crate) state: Arc<Mutex<SessionState>>,
     source: tokio::sync::Mutex<ReplaySource>,
     /// An unsent from-message fork's cut: the history replays the parent's
@@ -96,6 +99,7 @@ impl ReplaySession {
             project_path: options.project_path,
             spawned: AtomicBool::new(false),
             sink: Arc::new(Mutex::new(None)),
+            orchestration: Mutex::new(None),
             state: Arc::new(Mutex::new(SessionState {
                 replay: ReplayState::new(events),
                 last_delay: 0,
@@ -199,6 +203,11 @@ impl ReplaySession {
             state: self.state.clone(),
             sink,
             bridge: self.task_bridge.clone(),
+            orchestration: self
+                .orchestration
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone(),
         }
         .spawn(outputs, base);
     }

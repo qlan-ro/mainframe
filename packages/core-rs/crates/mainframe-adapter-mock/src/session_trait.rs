@@ -39,13 +39,16 @@ impl AdapterSession for ReplaySession {
 
     fn spawn(
         &self,
-        _options: Option<SessionSpawnOptions>,
+        options: Option<SessionSpawnOptions>,
         sink: Option<Arc<dyn SessionSink>>,
     ) -> BoxFuture<'_, Result<AdapterProcess, AdapterError>> {
         Box::pin(async move {
             self.ensure_loaded().await?;
             self.spawned.store(true, Ordering::SeqCst);
             *self.sink.lock().unwrap_or_else(|e| e.into_inner()) = sink;
+            // `mcp_call` steps reach the daemon with this spawn's credential.
+            *self.orchestration.lock().unwrap_or_else(|e| e.into_inner()) =
+                options.and_then(|o| o.orchestration_mcp);
             let (batch, base) = {
                 let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
                 let base = state.last_delay;
