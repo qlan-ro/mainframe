@@ -1186,6 +1186,51 @@ async fn a_steer_that_loses_the_turn_end_race_does_not_relatch_working() {
     );
 }
 
+/// Review follow-up on 3c86aa74: a steer into a replay-ack adapter (Claude)
+/// is also a queued send (`queued_message_metadata`'s `is_queued`), and must
+/// go through the same `record_queued_ref`/wait-for-the-ack bookkeeping an
+/// ordinary queued `send_message` does — not fire `TurnStarted` itself, or
+/// the chat gets that transition twice: once here, once on the replay ack
+/// (`on_queued_processed`).
+#[tokio::test]
+async fn a_queued_steer_records_a_ref_instead_of_restarting_the_turn() {
+    let deps = StoreDeps::arc();
+    let mgr = ChatManager::new(deps.clone());
+    let session = RecSession::new("c1", true, true);
+    seed_active(
+        &mgr,
+        "c1",
+        working_chat("c1", Some("t"), true),
+        session.clone(),
+    );
+    deps.events.lock().unwrap().clear();
+
+    mgr.steer_message("c1", "also run the tests").await.unwrap();
+
+    assert_eq!(
+        *session.steer_calls.lock().unwrap(),
+        vec!["also run the tests".to_string()]
+    );
+    assert_eq!(
+        mgr.get_queued_for_chat("c1").len(),
+        1,
+        "a steer the adapter also replay-acks must record a queued ref"
+    );
+    assert!(
+        mgr.get_messages("c1").await.iter().any(|m| {
+            m.content.iter().any(|c| {
+                matches!(
+                    c,
+                    mainframe_types::chat::MessageContent::Leaf(
+                        mainframe_types::content::LeafContent::Text { text, .. },
+                    ) if text.contains("also run the tests")
+                )
+            })
+        }),
+        "the steered message is stored, not just queued"
+    );
+}
+
 #[tokio::test]
 async fn handle_queued_processed_deletes_the_ref() {
     let deps = StoreDeps::arc();

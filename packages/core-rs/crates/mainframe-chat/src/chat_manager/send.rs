@@ -249,16 +249,31 @@ impl ChatManager {
         // been delivered.
         let handoff = match delivery {
             Delivery::Steer => {
-                session
-                    .steer(outgoing.text, Some(message_uuid.clone()))
-                    .await?;
-                self.store_user_message(
+                // Stored BEFORE the adapter call, unlike the comment above
+                // used to suggest: a fast-arriving replay ack (Claude's
+                // queued-send path, `is_queued` below) must find the message
+                // already in the transcript, or it looks for a ref that does
+                // not exist yet. A steer that then fails never got the CLI's
+                // attention at all, so the stored message is rolled back
+                // rather than left to look delivered.
+                let message = self.store_user_message(
                     chat_id,
                     outgoing.message_content,
                     transient_metadata,
                     attachment_ids,
-                    Some(message_uuid),
+                    Some(message_uuid.clone()),
                 );
+                if let Err(err) = session
+                    .steer(outgoing.text, Some(message_uuid.clone()))
+                    .await
+                {
+                    self.messages
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .remove_by_id(chat_id, &message.id);
+                    self.event_handler.emit_display(chat_id);
+                    return Err(err.into());
+                }
                 if self.deps.extract_mentions_from_text(chat_id, content) {
                     self.emit(DaemonEvent::ContextUpdated {
                         chat_id: chat_id.to_string(),
@@ -266,11 +281,24 @@ impl ChatManager {
                     });
                 }
                 self.assign_initial_title(post, chat_id, content);
-                self.event_handler.notify_chat_surface(
-                    crate::chat_surface::ChatSurfaceEvent::TurnStarted {
-                        chat_id: chat_id.to_string(),
-                    },
-                );
+                // Claude's steer is also a queued send when replay-ack
+                // applies (`queued_message_metadata`): the running
+                // transition is reported once, on the ack, not here too.
+                if is_queued {
+                    self.record_queued_ref(
+                        chat_id,
+                        &message,
+                        message_uuid,
+                        content,
+                        attachment_ids,
+                    );
+                } else {
+                    self.event_handler.notify_chat_surface(
+                        crate::chat_surface::ChatSurfaceEvent::TurnStarted {
+                            chat_id: chat_id.to_string(),
+                        },
+                    );
+                }
                 return Ok(());
             }
             Delivery::Turn { handoff } => handoff,
