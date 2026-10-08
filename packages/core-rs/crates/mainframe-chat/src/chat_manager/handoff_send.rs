@@ -34,11 +34,18 @@ struct Planned {
 impl ChatManager {
     /// The block to prepend to this send, or `None` when the active segment
     /// needs no handoff (first segment, context reset, already delivered).
+    ///
+    /// Held for the whole check-then-insert below (`resolve_live_handoff`
+    /// through `insert_pending_handoff`): two sends for the same chat that
+    /// both reach this function around the same time (the outbox's idle
+    /// flush racing an independent new message, say) would otherwise both
+    /// see no live handoff yet and both build and record one.
     pub(super) async fn prepare_handoff(
         &self,
         chat_id: &str,
         size: OutgoingSize,
     ) -> Result<Option<String>, SendError> {
+        let _guard = self.handoff_locks.acquire(chat_id).await;
         let Some(store) = self.deps.segment_store() else {
             return Ok(None);
         };

@@ -120,6 +120,7 @@ impl ChatManager {
             self_ref,
             history_cache,
             enricher,
+            handoff_locks: super::handoff_locks::HandoffLocks::default(),
         }
     }
 
