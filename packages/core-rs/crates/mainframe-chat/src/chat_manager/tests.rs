@@ -1177,6 +1177,13 @@ async fn a_steer_that_loses_the_turn_end_race_does_not_relatch_working() {
             .all(|(_, patch)| patch.process_state.is_none()),
         "steer must not (re)assert the chat's working state"
     );
+    // A failed steer calls the adapter before storing anything: the CLI
+    // never received this message, so it must not appear in the
+    // transcript as if it had been.
+    assert!(
+        mgr.get_messages("c1").await.is_empty(),
+        "a failed steer must not store a message the CLI never received"
+    );
 }
 
 #[tokio::test]

@@ -239,6 +239,43 @@ impl ChatManager {
         let (transient_metadata, message_uuid, is_queued) =
             self.queued_message_metadata(post, session, &outgoing.attachment_previews);
 
+        // Steering calls the adapter FIRST, unlike an ordinary send below:
+        // it never queues and has none of a composer send's optimistic-
+        // display need, so there is nothing to lose by waiting for the
+        // result, and something to avoid — a steer that loses the turn-end
+        // race (Codex rejects `turn/steer` once its `expectedTurnId` has
+        // ended, `turn_steer.rs`) would otherwise still store a message the
+        // CLI never received, appearing in the transcript as if it had
+        // been delivered.
+        let handoff = match delivery {
+            Delivery::Steer => {
+                session
+                    .steer(outgoing.text, Some(message_uuid.clone()))
+                    .await?;
+                self.store_user_message(
+                    chat_id,
+                    outgoing.message_content,
+                    transient_metadata,
+                    attachment_ids,
+                    Some(message_uuid),
+                );
+                if self.deps.extract_mentions_from_text(chat_id, content) {
+                    self.emit(DaemonEvent::ContextUpdated {
+                        chat_id: chat_id.to_string(),
+                        file_paths: None,
+                    });
+                }
+                self.assign_initial_title(post, chat_id, content);
+                self.event_handler.notify_chat_surface(
+                    crate::chat_surface::ChatSurfaceEvent::TurnStarted {
+                        chat_id: chat_id.to_string(),
+                    },
+                );
+                return Ok(());
+            }
+            Delivery::Turn { handoff } => handoff,
+        };
+
         let message = self.store_user_message(
             chat_id,
             outgoing.message_content,
@@ -257,30 +294,15 @@ impl ChatManager {
         self.assign_initial_title(post, chat_id, content);
 
         let now = now_iso8601();
-        // Only a new turn needs this: steering folds into one that is already
-        // marked Working (the caller just checked). Re-asserting it here for
-        // Steer raced a turn that finished between that check and this call
-        // (Codex rejects `turn/steer` once its `expectedTurnId` has ended, via
-        // `turn_steer.rs`): the adapter call below then fails, but nothing
-        // ever flips the chat back to idle, since the real turn already did
-        // and will not do so again. Leaving the flag alone keeps the chat's
-        // state whatever the turn's own completion event set it to.
-        if matches!(delivery, Delivery::Turn { .. }) {
-            self.set_working(post, chat_id, &now);
-            let chat = post.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
-            self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
-        }
+        self.set_working(post, chat_id, &now);
+        let chat = post.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
+        self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
 
         let uuid = Some(message_uuid.clone());
-        match delivery {
-            // The provider gets the handoff block; the stored message keeps
-            // only the user's own text, so live and cold history match.
-            Delivery::Turn { handoff } => {
-                let text = with_handoff(handoff, outgoing.text);
-                session.send_message(text, outgoing.images, uuid).await?;
-            }
-            Delivery::Steer => session.steer(outgoing.text, uuid).await?,
-        }
+        // The provider gets the handoff block; the stored message keeps
+        // only the user's own text, so live and cold history match.
+        let text = with_handoff(handoff, outgoing.text);
+        session.send_message(text, outgoing.images, uuid).await?;
 
         if is_queued {
             self.record_queued_ref(chat_id, &message, message_uuid, content, attachment_ids);
