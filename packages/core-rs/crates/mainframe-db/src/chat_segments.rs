@@ -69,13 +69,22 @@ pub enum RecordOutcome {
     /// The provider replaced its session in-process (Claude `/clear`): a
     /// `context_reset` segment now runs on a new native row with this id.
     Reset { segment_id: String },
+    /// The active segment had not run a turn yet, so a differing id was the
+    /// adapter still resolving its own native id for this spawn (Codex
+    /// reports a local placeholder immediately, then the real thread id once
+    /// `thread/started` names it) rather than a genuine context reset: the
+    /// same native row and segment were rebound to the new id in place.
+    Rebound,
     /// The chat has no segment rows (it does not exist).
     NoChat,
 }
 
-/// The `record_native_id` rule: set when empty, ignore when equal, and open a
-/// `context_reset` segment when different — an id closed segments rely on is
-/// never overwritten.
+/// The `record_native_id` rule: set when empty, ignore when equal, rebind in
+/// place when different but the active segment never ran a turn (#772 live
+/// QA: Codex's spawn-time placeholder resolving into the real thread id from
+/// `thread/started` must not look like a context reset), and otherwise open a
+/// `context_reset` segment — an id closed segments rely on is never
+/// overwritten.
 pub(crate) fn record_native_id(
     db: &Connection,
     chat_id: &str,
@@ -96,6 +105,10 @@ pub(crate) fn record_native_id(
                 natives::set_native_id(db, &native.id, Some(native_id), path)?;
             }
             RecordOutcome::Unchanged
+        }
+        Some(_) if active(db, chat_id)?.is_some_and(|s| s.turn_count == 0) => {
+            natives::set_native_id(db, &native.id, Some(native_id), path)?;
+            RecordOutcome::Rebound
         }
         Some(_) => {
             let segment =

@@ -5,9 +5,9 @@
 use rusqlite::Connection;
 
 use mainframe_db::migrations::run_migrations;
-use mainframe_db::{ChatUpdate, DatabaseManager, RecordOutcome};
+use mainframe_db::{ChatUpdate, DatabaseManager, RecordOutcome, SegmentResultDelta};
 use mainframe_types::chat::{Chat, NewChat};
-use mainframe_types::segment::SegmentKind;
+use mainframe_types::segment::{HandoffRecord, HandoffStatus, HandoffStrategy, SegmentKind};
 
 fn open() -> (tempfile::TempDir, DatabaseManager, String) {
     let dir = tempfile::tempdir().unwrap();
@@ -143,10 +143,16 @@ fn record_native_id_sets_ignores_and_resets() {
         db.segments.record_native_id(&chat.id, "a", path).unwrap(),
         RecordOutcome::Unchanged
     );
+    // A turn must have actually run on "a" for a later, different id to be a
+    // genuine context reset (Claude `/clear` mid-conversation) rather than
+    // the adapter still resolving its own native id for this spawn.
+    db.segments
+        .add_result(&chat.id, &SegmentResultDelta::default())
+        .unwrap();
     let RecordOutcome::Reset { segment_id } =
         db.segments.record_native_id(&chat.id, "b", None).unwrap()
     else {
-        panic!("a different id must open a context reset");
+        panic!("a different id after a turn ran must open a context reset");
     };
     let layout = db.segments.layout(&chat.id).unwrap();
     assert_eq!(layout.segments.len(), 2);
@@ -166,6 +172,81 @@ fn record_native_id_sets_ignores_and_resets() {
             .claude_session_id
             .as_deref(),
         Some("b")
+    );
+}
+
+/// #772 live QA: a Claude→Codex round trip got 4 segment rows instead of 3,
+/// and the handoff into the Codex segment stayed `pending` forever. Codex's
+/// `on_init` fires twice per spawn — immediately with a local placeholder id,
+/// then again with the real native thread id once `thread/started` names it
+/// — and the active segment has not run a turn between the two calls. That
+/// must rebind the same native row and segment, not open a `context_reset`
+/// that orphans the pending handoff on a segment nothing will ever mark
+/// active again.
+#[test]
+fn record_native_id_rebinds_a_still_empty_segment_instead_of_resetting() {
+    let (_dir, db, pid) = open();
+    let chat = new_chat(&db, &pid, "codex");
+    // `chats.rs::update` routes `claude_session_id` and `session_file_path`
+    // through separate `EventChatUpdate`s (see `handle_init`), so the path
+    // argument here is `None`, matching the real call site.
+    assert_eq!(
+        db.segments
+            .record_native_id(&chat.id, "placeholder-nanoid", None)
+            .unwrap(),
+        RecordOutcome::Set
+    );
+    let layout = db.segments.layout(&chat.id).unwrap();
+    let segment_id = layout.active().unwrap().id.clone();
+    db.handoffs
+        .insert_pending(
+            &HandoffRecord {
+                id: "ho1".into(),
+                chat_id: chat.id.clone(),
+                target_segment_id: segment_id.clone(),
+                strategy: HandoffStrategy::Full,
+                covered_from_ordinal: 0,
+                covered_to_ordinal: 0,
+                item_count: 2,
+                omitted_count: 0,
+                budget_bytes: 100,
+                used_bytes: 10,
+                fell_back_to_fresh: false,
+                status: HandoffStatus::Pending,
+                created_at: "2026-10-08T08:32:00Z".into(),
+                delivered_at: None,
+            },
+            "m1",
+        )
+        .unwrap();
+
+    // `thread/started` names the real thread, before any turn ran.
+    assert_eq!(
+        db.segments
+            .record_native_id(&chat.id, "thread_real", None)
+            .unwrap(),
+        RecordOutcome::Rebound
+    );
+
+    let layout = db.segments.layout(&chat.id).unwrap();
+    assert_eq!(layout.segments.len(), 1, "no stray context_reset segment");
+    let active = layout.active().unwrap();
+    assert_eq!(active.id, segment_id, "the original segment stays active");
+    let native = layout.native(&active.native_session_ref).unwrap();
+    assert_eq!(native.native_session_id.as_deref(), Some("thread_real"));
+    // The handoff is still live on the (unchanged) active segment, so the
+    // next turn result will mark it delivered instead of leaving it pending
+    // forever.
+    let handoff = layout.handoff_for(&segment_id).unwrap();
+    assert_eq!(handoff.status, HandoffStatus::Pending);
+    assert_eq!(
+        db.chats
+            .get(&chat.id)
+            .unwrap()
+            .unwrap()
+            .claude_session_id
+            .as_deref(),
+        Some("thread_real")
     );
 }
 
