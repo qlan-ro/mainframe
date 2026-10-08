@@ -65,22 +65,22 @@ pub fn mode_rank(mode: ExecutionMode) -> u8 {
 }
 
 /// The mode's real privilege on `adapter_id`, for the ceiling. Mode *labels*
-/// do not carry the same privilege on every provider: Codex has no "ask
-/// before every edit" mode. Its `default`, `acceptEdits`, and `auto` all map
-/// to approval `on-request` plus sandbox `workspace-write`
-/// (`mainframe-adapter-codex::session_thread::permission_mode_policy`), so a
-/// Codex chat in any of those three edits files without a prompt — the same
-/// real privilege as Claude's `acceptEdits`, never Claude's `default`. Only
-/// Codex `yolo` (`never` approval, `danger-full-access`) is more privileged.
-/// Ranking Codex's `default` at 0 would let a cautious, prompt-before-every-edit
-/// Claude parent (`default`, rank 0) delegate to a Codex child that edits
-/// unprompted, because the label rank alone compared equal (0 ≤ 0).
+/// do not carry the same privilege on every provider. Codex `default` now
+/// really does ask before every edit and every command (approval
+/// `untrusted` plus sandbox `read-only`
+/// (`mainframe-adapter-codex::session_thread::permission_mode_policy`)) — the
+/// same real privilege as Claude's `default`, rank 0. Codex `acceptEdits`
+/// and `auto` both map to approval `on-request` plus sandbox
+/// `workspace-write`: they edit the workspace unprompted, the same real
+/// privilege as Claude's `acceptEdits`, rank 1. Only Codex `yolo` (`never`
+/// approval, `danger-full-access`) is more privileged, rank 3.
 #[must_use]
 pub fn effective_mode_rank(adapter_id: &str, mode: ExecutionMode) -> u8 {
     if adapter_id == "codex" {
         match mode {
+            ExecutionMode::Default => 0,
+            ExecutionMode::AcceptEdits | ExecutionMode::Auto => 1,
             ExecutionMode::Yolo => 3,
-            ExecutionMode::Default | ExecutionMode::AcceptEdits | ExecutionMode::Auto => 1,
         }
     } else {
         mode_rank(mode)
@@ -244,15 +244,12 @@ mod tests {
     }
 
     #[test]
-    fn codex_default_accept_edits_and_auto_rank_equal_and_below_yolo() {
-        // All three let Codex edit the workspace without a prompt
-        // (`permission_mode_policy`): none may delegate to another at a
-        // higher rank, and all three may delegate to each other.
-        for a in [
-            ExecutionMode::Default,
-            ExecutionMode::AcceptEdits,
-            ExecutionMode::Auto,
-        ] {
+    fn codex_accept_edits_and_auto_rank_equal_and_above_default_and_below_yolo() {
+        // `acceptEdits` and `auto` both let Codex edit the workspace without
+        // a prompt (`permission_mode_policy`): they may delegate to each
+        // other and to `default` (which now really does ask first, a lower
+        // real privilege), but not to `yolo`.
+        for a in [ExecutionMode::AcceptEdits, ExecutionMode::Auto] {
             for b in [
                 ExecutionMode::Default,
                 ExecutionMode::AcceptEdits,
@@ -274,16 +271,20 @@ mod tests {
     }
 
     #[test]
-    fn a_cautious_claude_default_parent_cannot_delegate_to_an_unprompted_codex_child() {
-        // Claude `default` really does ask before every edit (rank 0). Codex
-        // `default` and `acceptEdits` do not: both already edit unprompted
-        // (effective rank 1). The label-only comparison (0 <= 0, 0 <= 1)
-        // used to allow both; the ceiling must refuse both now.
-        for codex_mode in [
-            ExecutionMode::Default,
-            ExecutionMode::AcceptEdits,
-            ExecutionMode::Auto,
-        ] {
+    fn a_cautious_claude_default_parent_may_delegate_to_a_cautious_codex_default_child() {
+        // Codex `default` now really does ask before every edit and every
+        // command (approval `untrusted`, sandbox `read-only`) — the same
+        // real privilege as Claude's `default`, rank 0. A Claude `default`
+        // parent may reach it, but not Codex `acceptEdits`/`auto`, which
+        // still edit the workspace unprompted (rank 1).
+        assert!(
+            check_ceiling(
+                &priv_for("claude", ExecutionMode::Default, false),
+                &priv_for("codex", ExecutionMode::Default, false),
+            )
+            .is_ok()
+        );
+        for codex_mode in [ExecutionMode::AcceptEdits, ExecutionMode::Auto] {
             let err = check_ceiling(
                 &priv_for("claude", ExecutionMode::Default, false),
                 &priv_for("codex", codex_mode, false),
@@ -295,8 +296,9 @@ mod tests {
 
     #[test]
     fn a_claude_accept_edits_parent_may_delegate_to_an_unprompted_codex_child() {
-        // Claude `acceptEdits` (rank 1) already edits unprompted itself, the
-        // same real privilege as Codex `default`/`acceptEdits`/`auto` (rank 1).
+        // Claude `acceptEdits` (rank 1) already edits unprompted itself, at
+        // least the same real privilege as Codex `default` (rank 0, asks
+        // first) and exactly the same as Codex `acceptEdits`/`auto` (rank 1).
         for codex_mode in [
             ExecutionMode::Default,
             ExecutionMode::AcceptEdits,
@@ -321,21 +323,25 @@ mod tests {
 
     #[test]
     fn a_codex_default_parent_cannot_delegate_to_a_claude_accept_edits_child() {
-        // Reverse direction: Codex default is effective rank 1 (same as
-        // Claude acceptEdits), so it may reach acceptEdits but not auto.
+        // Reverse direction: Codex `default` is now effective rank 0 (it
+        // really does ask first), strictly below Claude `acceptEdits`
+        // (rank 1), so it may reach neither `acceptEdits` nor `auto`.
+        for claude_mode in [ExecutionMode::AcceptEdits, ExecutionMode::Auto] {
+            let err = check_ceiling(
+                &priv_for("codex", ExecutionMode::Default, false),
+                &priv_for("claude", claude_mode, false),
+            )
+            .unwrap_err();
+            assert_eq!(err.code, ErrorCode::PermissionModeEscalationDenied);
+        }
+        // Codex `default` may still reach Claude `default` (both rank 0).
         assert!(
             check_ceiling(
                 &priv_for("codex", ExecutionMode::Default, false),
-                &priv_for("claude", ExecutionMode::AcceptEdits, false),
+                &priv_for("claude", ExecutionMode::Default, false),
             )
             .is_ok()
         );
-        let err = check_ceiling(
-            &priv_for("codex", ExecutionMode::Default, false),
-            &priv_for("claude", ExecutionMode::Auto, false),
-        )
-        .unwrap_err();
-        assert_eq!(err.code, ErrorCode::PermissionModeEscalationDenied);
     }
 
     struct FakeClock {

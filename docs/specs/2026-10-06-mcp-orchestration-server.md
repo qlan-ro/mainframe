@@ -521,14 +521,17 @@ entry does not exist, and it is behind the normal auth layer.
   This is the `resolveAndValidatePath` equivalent, because worktrees live outside the project root.
 - **Privilege ceiling.** Ranks: `default 0 < acceptEdits 1 < auto 2 < yolo 3` **by label**, but the
   ceiling compares *effective* rank (`policy::effective_mode_rank(adapter_id, mode)`), not the label.
-  Codex has no "ask before every edit" mode: its `default`, `acceptEdits`, and `auto` all map to
-  approval `on-request` plus sandbox `workspace-write`
-  (`mainframe-adapter-codex::session_thread::permission_mode_policy`), i.e. unprompted edits, the same
-  real privilege as Claude's `acceptEdits` — never Claude's `default`. Comparing labels alone let a
-  cautious, prompt-before-every-edit Claude `default` parent (label rank 0) delegate to a Codex child
-  in `default` or `acceptEdits` (label rank 0 or 1) because 0 ≤ 0 or the check even ran against the
-  wrong adapter's rank table; `effective_mode_rank` ranks every Codex mode but `yolo` at 1, so that
-  delegation is now refused. Plan mode is narrower than not-plan, compared as before. A delegated
+  Codex `default` really does ask before every edit and every command — approval `untrusted` plus
+  sandbox `read-only` (`mainframe-adapter-codex::session_thread::permission_mode_policy`, todo #772) —
+  the same real privilege as Claude's `default`, effective rank 0. Codex `acceptEdits` and `auto` both
+  map to approval `on-request` plus sandbox `workspace-write`, i.e. unprompted edits, the same real
+  privilege as Claude's `acceptEdits`, effective rank 1. Only Codex `yolo` (`never`/`danger-full-access`)
+  is effective rank 3. (Before todo #772, Codex `default` also mapped to `on-request`/`workspace-write`
+  — the same unprompted-edit privilege as `acceptEdits` — so comparing labels alone let a cautious,
+  prompt-before-every-edit Claude `default` parent delegate to a Codex child that edited unprompted;
+  `effective_mode_rank` ranking Codex `default` at 1 closed that gap, at the cost of refusing a Claude
+  `default` parent delegating to Codex altogether, which todo #772 then reopened correctly by making
+  Codex `default` actually prompt.) Plan mode is narrower than not-plan, compared as before. A delegated
   child, a launched chat, and the target of `chat_send` or `chat_interrupt` must each have effective
   rank ≤ the caller's, and a plan-mode caller may only create or target plan-mode chats. The target
   check runs again immediately before dispatch, against the live `ActiveChat` (`chat_send`,
@@ -541,13 +544,16 @@ entry does not exist, and it is behind the normal auth layer.
   adapter allows within the caller's effective rank, not checked verbatim against the ceiling: a
   caller's own mode label does not mean the same real privilege on another provider, so carrying it
   across providers unchanged can read as an escalation (and be refused) for a mode the agent never
-  asked for — a Codex `auto` parent (effective rank 1) delegating to Claude with no `permissionMode`
-  gets Claude's `acceptEdits` (also rank 1), not a refusal for Claude's `auto` (rank 2). An *explicit*
-  mode is still checked as asked, including when no mode on the target can satisfy it at all (Codex
-  has no rank-0 mode, so a Claude `default` caller inheriting into Codex is refused, not silently
-  granted Codex's lowest). `capabilities`' `allowedPermissionModes` is keyed by adapter id for the
-  same reason — a flat list compared against the label-only rank would disagree with the ceiling
-  itself the moment the caller or a listed adapter is Codex.
+  asked for — a Claude `auto` parent (rank 2) delegating to Codex with no `permissionMode` gets Codex's
+  `acceptEdits` (effective rank 1, the highest Codex offers at or under rank 2), not `default` (now a
+  strictly lower effective rank) and never `auto`, which Codex cannot select at all. A Claude `default`
+  parent (rank 0) delegating to Codex with no `permissionMode` gets Codex's `default` back (both
+  effective rank 0 since todo #772), not a refusal. An *explicit* mode is still checked as asked: a
+  Codex `default` parent (effective rank 0) explicitly requesting a Claude `acceptEdits` child (rank 1)
+  is refused as an escalation even though both labels read "default"-adjacent. `capabilities`'
+  `allowedPermissionModes` is keyed by adapter id for the same reason — a flat list compared against
+  the label-only rank would disagree with the ceiling itself the moment the caller or a listed adapter
+  is Codex.
 
   The ceiling is also re-checked when a *queued* `chat_send` entry (one held in the outbox because
   the target was busy) is actually flushed, not only when it was enqueued: the sender's or the
@@ -929,6 +935,48 @@ A QA and code review of this feature found daemon-side issues; fixed here, with 
   while the first's cascade is still in flight — is not separately covered; the lock shapes
   (`tree_lock`, `task_lock`) make a concurrent second cascade on the *same* tree safe by construction,
   but that is argued, not tested.
+
+### Codex `default` actually asks, closing the delegation gap it opened (2026-10-09, todo #772)
+
+Live QA found a Claude parent in `default` could never delegate to Codex at all: Codex's `default`
+mapped to the same `(on-request, workspace-write)` policy as `acceptEdits` (unprompted edits), so the
+2026-10-08 fix above correctly ranked it at effective rank 1 — but that left Codex with no mode a
+`default`-mode Claude parent (rank 0) could reach, refusing every such delegation outright, not just
+an unsafe one. Fixed by making Codex's own `default` actually match its label instead of changing the
+ceiling again:
+
+- **`permission_mode_policy` maps `default` to `(untrusted, read-only)`**
+  (`mainframe-adapter-codex::session_thread::permission_mode_policy`), schema-confirmed on codex-cli
+  0.155.1 (`codex app-server generate-json-schema --experimental`; see
+  `docs/research/adapters/codex/CONSUMED-SURFACE.md` CODEX-RPC-02b). `acceptEdits` is unchanged
+  (`on-request`/`workspace-write`); the Claude-only `auto` label still coerces to that same policy
+  (previously it coerced to `default`'s policy, which was identical — a no-op now that `default`
+  itself changed, so `auto` keeps its real "unprompted edits" behavior rather than silently becoming
+  prompt-before-every-edit). `yolo` is unchanged.
+- **`effective_mode_rank("codex", Default) == 0`** (was 1), matching Claude's `default`; `acceptEdits`
+  and `auto` stay at 1; `yolo` stays at 3. `clamp_inherited_mode` and `capabilities`'
+  `allowedPermissionModes` need no changes beyond reading the updated rank — both already dispatch
+  through `effective_mode_rank`.
+- **Net effect:** a Claude `default` parent can now delegate to Codex, and the child gets Codex
+  `default` (both rank 0) rather than being refused; a Claude `auto` parent (rank 2) inheriting into
+  Codex now gets Codex `acceptEdits` (the highest Codex offers at or under rank 2) instead of
+  `default`, since `default` dropped to a strictly lower real privilege; a Codex `default` parent
+  (rank 0) still cannot create a Claude `acceptEdits` child (rank 1) — the ceiling now correctly
+  refuses that direction too, which the 2026-10-08 fix's label-rank bug had accidentally allowed.
+- **Approval-flow check.** Under `untrusted`/`read-only`, Codex is expected to raise
+  `item/commandExecution/requestApproval` for nearly every command and
+  `item/fileChange/requestApproval` for file edits — both already mapped to a permission prompt
+  (`src/approval_handler.rs`). `delegate_task`'s `mode: "wait"` already returns on a child's
+  permission gate generically (`waitReturned: "waiting_for_permission"`,
+  `tools::delegate_task_tests::wait_mode_returns_when_the_child_needs_a_permission_answer`), so a
+  Codex `default` child waiting on an approval surfaces to an async-waiting parent the same way any
+  other adapter's gate does. One request type this policy *could* trigger is not handled:
+  `item/permissions/requestApproval` auto-declines with the wrong reply shape — tracked as a known
+  gap, not fixed here, because schema evidence says it pairs with the `permissions` named-profile
+  param Mainframe never sends (see CODEX-CTRL-01 for the citation and the belief that this makes it
+  unreachable, unverified live).
+- **Changeset:** `codex-default-asks-before-editing.md` — existing Codex chats left in `default` will
+  start seeing approval prompts; `acceptEdits` keeps the old auto-edit behavior.
 
 ### Pending live verification (Gate 0)
 

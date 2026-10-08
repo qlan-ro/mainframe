@@ -177,10 +177,21 @@ mod tests {
         assert_eq!(path.as_deref(), Some("/opt/homebrew/bin:/usr/bin"));
     }
     #[test]
-    fn permission_mode_policy_coerces_auto_to_interactive() {
-        let interactive = ("on-request".to_string(), "workspace-write".to_string());
-        assert_eq!(permission_mode_policy(ExecutionMode::Default), interactive);
-        assert_eq!(permission_mode_policy(ExecutionMode::Auto), interactive);
+    fn permission_mode_policy_asks_before_every_edit_on_default() {
+        assert_eq!(
+            permission_mode_policy(ExecutionMode::Default),
+            ("untrusted".to_string(), "read-only".to_string())
+        );
+    }
+
+    #[test]
+    fn permission_mode_policy_coerces_auto_to_accept_edits() {
+        let accept_edits = ("on-request".to_string(), "workspace-write".to_string());
+        assert_eq!(
+            permission_mode_policy(ExecutionMode::AcceptEdits),
+            accept_edits
+        );
+        assert_eq!(permission_mode_policy(ExecutionMode::Auto), accept_edits);
         assert_eq!(
             permission_mode_policy(ExecutionMode::Yolo),
             ("never".to_string(), "danger-full-access".to_string())

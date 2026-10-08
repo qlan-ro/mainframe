@@ -125,10 +125,10 @@ pub(super) fn resolve_privileges(
 ///    but `auto` always is; `auto` needs `target_auto_mode`) and still
 ///    within the caller's effective rank there, keep it unchanged. This is
 ///    the common case — same adapter, or a label that genuinely carries
-///    over — and it is why a Codex `default` chat delegating to Codex with
-///    no `permissionMode` gets `default` back, not a different label
-///    picked by rank alone (Codex's `default`/`acceptEdits`/`auto` all
-///    share effective rank 1, so ranking alone cannot tell them apart).
+///    over — and it is why a Claude `default` chat delegating to Codex with
+///    no `permissionMode` gets Codex `default` back (both rank 0, since
+///    Codex `default` now really does ask before every edit and command),
+///    and a Codex `default` chat delegating to Codex keeps `default` too.
 /// 2. Otherwise, among the target's labels that both: (a) the target
 ///    actually supports (`mode_label_supported`, so `auto` is never
 ///    offered when `target_auto_mode` is false even though its rank may
@@ -136,11 +136,10 @@ pub(super) fn resolve_privileges(
 ///    at the HIGHEST fitting rank, and the LOWEST label (`EXECUTION_MODES`'
 ///    own order) among ties at that rank. This is what a cross-adapter
 ///    inherit needs: a Claude `auto` parent (rank 2) delegating to Codex
-///    gets Codex's `default` (the lowest of the rank-1 labels tied there),
-///    not `auto`, which Codex cannot select at all.
-/// 3. If nothing on the target fits rule 2 either (a Claude `default`
-///    caller, rank 0, inheriting into Codex, whose floor is rank 1 —
-///    Codex has no "ask before every edit" mode), returns the target's
+///    gets Codex's `acceptEdits` (the highest-fitting rank there, since
+///    Codex `default` is now a strictly lower real privilege, rank 0), not
+///    `auto`, which Codex cannot select at all.
+/// 3. If nothing on the target fits rule 2 either, returns the target's
 ///    own least-privileged SUPPORTED mode instead of guessing: its rank
 ///    still exceeds the caller's, so `check_ceiling` refuses clearly
 ///    rather than this function silently granting something unsafe.
@@ -291,17 +290,17 @@ mod tests {
     }
 
     #[test]
-    fn claude_auto_delegating_to_codex_gets_default_not_auto() {
+    fn claude_auto_delegating_to_codex_gets_accept_edits_not_auto() {
         // Claude `auto` (rank 2) is not itself valid on Codex
         // (`auto_mode: false`), so rule 2 picks among Codex's SUPPORTED
-        // labels at or under rank 2: `default` and `acceptEdits` tie at
-        // rank 1 there: the lowest label wins the tie, `auto` is never a
-        // candidate regardless of rank.
+        // labels at or under rank 2, at the HIGHEST fitting rank:
+        // `acceptEdits` (rank 1), not `default` (rank 0, which now really
+        // does ask first) and never `auto` regardless of rank.
         let mut caller = chat_view("claude-caller");
         caller.adapter_id = "claude".into();
         caller.permission_mode = ExecutionMode::Auto;
         let target = resolve("codex", None, &caller).unwrap();
-        assert_eq!(target.mode, ExecutionMode::Default);
+        assert_eq!(target.mode, ExecutionMode::AcceptEdits);
     }
 
     #[test]
@@ -342,12 +341,29 @@ mod tests {
     }
 
     #[test]
-    fn an_inherited_mode_is_refused_when_the_target_has_no_equivalent_at_all() {
-        // Claude `default` is rank 0; Codex's floor is rank 1 (no "ask
-        // before every edit" mode). Nothing on Codex is safe to inherit
-        // into, so the call must be refused, not silently granted.
+    fn a_claude_default_parent_can_delegate_to_codex_and_the_child_gets_codex_default() {
+        // Codex `default` now really does ask before every edit and every
+        // command (approval `untrusted`, sandbox `read-only`), the same
+        // real privilege as Claude's `default` (rank 0 on both). Rule 1
+        // (keep the caller's own valid label) applies: a Claude `default`
+        // caller with no explicit `permissionMode` must be able to
+        // delegate to Codex, and the child must get Codex `default`, not be
+        // refused.
         let caller = chat_view("claude-caller");
-        let err = resolve("codex", None, &caller).unwrap_err();
+        let target = resolve("codex", None, &caller).unwrap();
+        assert_eq!(target.mode, ExecutionMode::Default);
+    }
+
+    #[test]
+    fn a_codex_default_parent_cannot_create_a_claude_accept_edits_child() {
+        // Reverse direction: a Codex `default` caller (rank 0) explicitly
+        // asking for a Claude `acceptEdits` child (rank 1) must be refused
+        // as an escalation, even though both labels say "default"-adjacent
+        // things on paper.
+        let mut caller = chat_view("codex-caller");
+        caller.adapter_id = "codex".into();
+        caller.permission_mode = ExecutionMode::Default;
+        let err = resolve("claude", Some(ExecutionMode::AcceptEdits), &caller).unwrap_err();
         assert_eq!(err.code, ErrorCode::PermissionModeEscalationDenied);
     }
 }
