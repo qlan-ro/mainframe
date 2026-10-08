@@ -239,23 +239,16 @@ impl ChatManager {
         let (transient_metadata, message_uuid, is_queued) =
             self.queued_message_metadata(post, session, &outgoing.attachment_previews);
 
-        // Steering calls the adapter FIRST, unlike an ordinary send below:
-        // it never queues and has none of a composer send's optimistic-
-        // display need, so there is nothing to lose by waiting for the
-        // result, and something to avoid — a steer that loses the turn-end
-        // race (Codex rejects `turn/steer` once its `expectedTurnId` has
-        // ended, `turn_steer.rs`) would otherwise still store a message the
-        // CLI never received, appearing in the transcript as if it had
-        // been delivered.
+        // Both the stored message AND (when queued) its `QueuedMessageRef`
+        // are recorded BEFORE the adapter call below: a fast-arriving replay
+        // ack (Claude's queued-send path, `is_queued` below) can land while
+        // that call is still in flight, and must find the message already
+        // in the transcript with its ref already registered, or it looks for
+        // state that does not exist yet. A steer that then fails never got
+        // the CLI's attention at all, so both are rolled back rather than
+        // left to look delivered/queued.
         let handoff = match delivery {
             Delivery::Steer => {
-                // Stored BEFORE the adapter call, unlike the comment above
-                // used to suggest: a fast-arriving replay ack (Claude's
-                // queued-send path, `is_queued` below) must find the message
-                // already in the transcript, or it looks for a ref that does
-                // not exist yet. A steer that then fails never got the CLI's
-                // attention at all, so the stored message is rolled back
-                // rather than left to look delivered.
                 let message = self.store_user_message(
                     chat_id,
                     outgoing.message_content,
@@ -263,10 +256,25 @@ impl ChatManager {
                     attachment_ids,
                     Some(message_uuid.clone()),
                 );
+                // Claude's steer is also a queued send when replay-ack
+                // applies (`queued_message_metadata`): the running
+                // transition is reported once, on the ack, not here too.
+                if is_queued {
+                    self.record_queued_ref(
+                        chat_id,
+                        &message,
+                        message_uuid.clone(),
+                        content,
+                        attachment_ids,
+                    );
+                }
                 if let Err(err) = session
                     .steer(outgoing.text, Some(message_uuid.clone()))
                     .await
                 {
+                    if is_queued {
+                        self.remove_queued_ref(chat_id, &message_uuid);
+                    }
                     self.messages
                         .lock()
                         .unwrap_or_else(|e| e.into_inner())
@@ -281,18 +289,7 @@ impl ChatManager {
                     });
                 }
                 self.assign_initial_title(post, chat_id, content);
-                // Claude's steer is also a queued send when replay-ack
-                // applies (`queued_message_metadata`): the running
-                // transition is reported once, on the ack, not here too.
-                if is_queued {
-                    self.record_queued_ref(
-                        chat_id,
-                        &message,
-                        message_uuid,
-                        content,
-                        attachment_ids,
-                    );
-                } else {
+                if !is_queued {
                     self.event_handler.notify_chat_surface(
                         crate::chat_surface::ChatSurfaceEvent::TurnStarted {
                             chat_id: chat_id.to_string(),

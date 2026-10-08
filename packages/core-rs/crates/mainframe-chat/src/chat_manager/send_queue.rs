@@ -81,4 +81,16 @@ impl ChatManager {
             "message sent to CLI while busy (queued)"
         );
     }
+
+    /// Rolls back `record_queued_ref`: a steer recorded the ref before
+    /// calling the adapter so a fast-arriving replay ack would find it, but
+    /// the call itself then failed — the CLI never got it, so it must not
+    /// look queued either.
+    pub(super) fn remove_queued_ref(&self, chat_id: &str, uuid: &str) {
+        self.queued_refs
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .retain(|q| q.uuid != uuid);
+        self.notify_queue_changed(chat_id);
+    }
 }
