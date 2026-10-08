@@ -134,7 +134,7 @@ pub fn strategy_line(
 
 pub fn recovery_line(chat_id: &str) -> String {
     format!(
-        "To read an omitted item, call the Mainframe tool `read_chat` with chatId \"{chat_id}\"."
+        "To read an omitted item, call the Mainframe tool `chat_read` with chatId \"{chat_id}\"."
     )
 }
 

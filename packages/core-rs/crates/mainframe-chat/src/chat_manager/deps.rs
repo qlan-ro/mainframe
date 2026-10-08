@@ -291,7 +291,7 @@ pub trait ChatManagerDeps: Send + Sync {
         let _ = adapter_id;
         None
     }
-    /// Whether the orchestration MCP server's `read_chat` tool reaches this
+    /// Whether the orchestration MCP server's `chat_read` tool reaches this
     /// chat's sessions; the handoff header then points at it for omitted
     /// items. `false` until that server exists.
     fn orchestration_mcp_attached(&self, chat_id: &str) -> bool {

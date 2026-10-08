@@ -29,8 +29,8 @@ pub struct HandoffIdentity {
     pub strategy: HandoffStrategy,
     pub title: String,
     pub chat_id: String,
-    /// Whether the orchestration server's `read_chat` tool reaches the target.
-    pub read_chat_available: bool,
+    /// Whether the orchestration server's `chat_read` tool reaches the target.
+    pub chat_read_available: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -61,7 +61,7 @@ pub fn build_handoff(
         chat_id: identity.chat_id.clone(),
         strategy_line: render::strategy_line(identity.strategy, mapped.turns, &mapped.providers),
         recovery_line: identity
-            .read_chat_available
+            .chat_read_available
             .then(|| render::recovery_line(&identity.chat_id)),
     };
     let total = mapped.items.len();

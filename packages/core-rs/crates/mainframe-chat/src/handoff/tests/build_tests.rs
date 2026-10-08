@@ -14,7 +14,7 @@ fn identity() -> HandoffIdentity {
         strategy: HandoffStrategy::Full,
         title: "Chat".into(),
         chat_id: "chat_1".into(),
-        read_chat_available: false,
+        chat_read_available: false,
     }
 }
 

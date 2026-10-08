@@ -157,7 +157,7 @@ impl ChatManager {
             strategy: planned.coverage.strategy,
             title: chat.title.clone().unwrap_or_default(),
             chat_id: chat.id.clone(),
-            read_chat_available: self.deps.orchestration_mcp_attached(&chat.id),
+            chat_read_available: self.deps.orchestration_mcp_attached(&chat.id),
         };
         let built = self.build_block(chat, &identity, &planned).await?;
         let record = handoff_record(&identity, active, &planned, &built);

@@ -39,10 +39,10 @@ hi\n\
 }
 
 #[test]
-fn the_recovery_line_appears_only_when_read_chat_is_available() {
+fn the_recovery_line_appears_only_when_chat_read_is_available() {
     let with = render_block(&header(true), &[], 0);
-    assert!(with.contains("call the Mainframe tool `read_chat` with chatId \"chat_1\""));
-    assert!(!render_block(&header(false), &[], 0).contains("read_chat"));
+    assert!(with.contains("call the Mainframe tool `chat_read` with chatId \"chat_1\""));
+    assert!(!render_block(&header(false), &[], 0).contains("chat_read"));
 }
 
 #[test]
