@@ -15,7 +15,7 @@ use crate::policy::{
     READ_DEFAULT_CHARS, READ_DEFAULT_ITEMS, READ_MAX_CHARS, READ_MAX_ITEMS, READ_MIN_CHARS,
     RESULT_BUDGET_BYTES,
 };
-use crate::service::OrchestrationService;
+use crate::service::{CallCtx, OrchestrationService};
 
 pub(super) fn definition() -> ToolDef {
     ToolDef {
@@ -90,9 +90,14 @@ impl Validate for Input {
     }
 }
 
-pub(super) async fn run(svc: &OrchestrationService, args: Value) -> Result<Value, ToolError> {
+pub(super) async fn run(
+    svc: &OrchestrationService,
+    ctx: &CallCtx,
+    args: Value,
+) -> Result<Value, ToolError> {
     let input: Input = parse_args(args)?;
-    let chat = svc.target_chat(&input.chat_id).await?;
+    let caller = svc.caller_chat(ctx).await?;
+    let chat = svc.target_chat(&input.chat_id, &caller.project_id).await?;
     let state = svc.state_of(&chat).as_str();
     let messages = svc.port.messages(&chat.id).await;
     let max_chars = input.max_chars.map_or(READ_DEFAULT_CHARS, |v| v as usize);

@@ -53,8 +53,8 @@ pub(super) async fn run(
 ) -> Result<Value, ToolError> {
     let input: Input = parse_args(args)?;
     let caller = svc.active_caller(ctx).await?;
-    let target = svc.target_chat(&input.chat_id).await?;
-    check_ceiling(caller.privileges(), target.privileges())?;
+    let target = svc.target_chat(&input.chat_id, &caller.project_id).await?;
+    check_ceiling(&caller.privileges(), &target.privileges())?;
     if !matches!(
         svc.state_of(&target),
         ChatState::Working | ChatState::WaitingForPermission
@@ -116,5 +116,22 @@ mod tests {
             .await
             .unwrap_err();
         assert_eq!(err.code, ErrorCode::NoActiveTurn);
+    }
+
+    #[tokio::test]
+    async fn a_chat_in_another_project_reads_as_not_found() {
+        let port = FakePort::new();
+        let mut caller = port.add_chat("caller");
+        caller.working = true;
+        port.put(caller);
+        let mut target = port.add_chat("target");
+        target.working = true;
+        target.project_id = "other-project".into();
+        port.put(target);
+        let (svc, ctx) = service_with(port.clone(), "caller");
+        let err = run(&svc, &ctx, json!({ "chatId": "target" }))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, ErrorCode::ChatNotFound);
     }
 }

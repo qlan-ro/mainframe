@@ -84,7 +84,7 @@ pub(crate) async fn call(
     match name {
         "capabilities" => capabilities::run(svc, ctx, args).await,
         "chat_list" => chat_list::run(svc, ctx, args).await,
-        "chat_read" => chat_read::run(svc, args).await,
+        "chat_read" => chat_read::run(svc, ctx, args).await,
         "chat_wait" => chat_wait::run(svc, ctx, args).await,
         "chat_launch" => chat_launch::run(svc, ctx, args).await,
         "chat_send" => chat_send::run(svc, ctx, args).await,

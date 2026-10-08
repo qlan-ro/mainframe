@@ -68,11 +68,11 @@ pub(super) async fn run(
 ) -> Result<Value, ToolError> {
     let input: Input = parse_args(args)?;
     let caller = svc.active_caller(ctx).await?;
-    let target = sendable_target(svc, &input.chat_id).await?;
+    let target = sendable_target(svc, &input.chat_id, &caller.project_id).await?;
     let body = wrap_agent_message(&caller.id, AgentMessageKind::Send, &input.message);
     // Re-read right before dispatch: the user may have raised the target's
     // mode since the caller last looked.
-    check_ceiling(caller.privileges(), target.privileges())?;
+    check_ceiling(&caller.privileges(), &target.privileges())?;
     let state = svc.state_of(&target);
     let (delivery, entry_id) = match (state, input.mode) {
         (ChatState::Idle, Mode::Steer) => {
@@ -109,13 +109,22 @@ pub(super) async fn run(
     }))
 }
 
-/// The target must exist, be agent-addressable, and still be live. Side,
-/// temporary, and automation chats exist but are not sendable.
-async fn sendable_target(svc: &OrchestrationService, chat_id: &str) -> Result<ChatView, ToolError> {
-    let target =
-        svc.port.chat(chat_id).await.ok_or_else(|| {
-            ToolError::new(ErrorCode::ChatNotFound, format!("No chat {chat_id}."))
-        })?;
+/// The target must exist in the caller's own project, be agent-addressable,
+/// and still be live. Side, temporary, and automation chats exist but are
+/// not sendable (`chat_not_sendable`, not `chat_not_found`: the spec's send
+/// table names these explicitly). A chat in another project, like an
+/// unknown id, reads as not found, so a caller cannot learn it exists.
+async fn sendable_target(
+    svc: &OrchestrationService,
+    chat_id: &str,
+    caller_project_id: &str,
+) -> Result<ChatView, ToolError> {
+    let target = svc
+        .port
+        .chat(chat_id)
+        .await
+        .filter(|c| c.project_id == caller_project_id)
+        .ok_or_else(|| ToolError::new(ErrorCode::ChatNotFound, format!("No chat {chat_id}.")))?;
     let ended = matches!(
         svc.state_of(&target),
         ChatState::Ended | ChatState::Archived

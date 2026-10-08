@@ -10,7 +10,7 @@ use crate::errors::{ErrorCode, ToolError, cap_chars};
 use crate::input::{
     Validate, check_id, check_timeout, id_schema, object_schema, parse_args, timeout_schema,
 };
-use crate::policy::{DEFAULT_WAIT_MS, LAST_TEXT_CAP};
+use crate::policy::{DEFAULT_WAIT_MS, LAST_TEXT_CAP, MAX_SINGLE_WAIT_MS};
 use crate::ports::ChatView;
 use crate::service::{CallCtx, OrchestrationService};
 use crate::state::{ChatState, last_assistant_text};
@@ -23,7 +23,10 @@ pub(super) fn definition() -> ToolDef {
         description: "Block until a chat is idle, waiting for a permission answer, or ended \
             (default: any of these), or until timeoutMs passes. Returns the chat's state, its \
             last assistant text, and any pending permission. A timeout never affects the chat. \
-            Prefer ending your turn over long waits when nothing depends on the answer.",
+            Each call is capped well under a minute regardless of timeoutMs: when the budget is \
+            not yet exhausted, it returns early with stillWaiting true and waitTimedOut false — \
+            call chat_wait again with the same arguments to keep waiting. Prefer ending your \
+            turn over long waits when nothing depends on the answer.",
         input_schema: object_schema(
             json!({
                 "chatId": id_schema("The chat to wait on."),
@@ -85,7 +88,14 @@ pub(super) async fn run(
     args: Value,
 ) -> Result<Value, ToolError> {
     let input: Input = parse_args(args)?;
-    svc.target_chat(&input.chat_id).await?;
+    let caller = svc.caller_chat(ctx).await?;
+    if input.chat_id == caller.id {
+        return Err(ToolError::new(
+            ErrorCode::InvalidRequest,
+            "A chat may not wait on itself.",
+        ));
+    }
+    svc.target_chat(&input.chat_id, &caller.project_id).await?;
     let until = input
         .until
         .unwrap_or_else(|| vec![Until::Idle, Until::WaitingForPermission, Until::Ended]);
@@ -95,7 +105,8 @@ pub(super) async fn run(
             "Too many concurrent waits for this chat.",
         )
     })?;
-    let timeout = Duration::from_millis(input.timeout_ms.unwrap_or(DEFAULT_WAIT_MS));
+    let requested = Duration::from_millis(input.timeout_ms.unwrap_or(DEFAULT_WAIT_MS));
+    let capped = requested.min(Duration::from_millis(MAX_SINGLE_WAIT_MS));
     let watched = [input.chat_id.clone()];
     let probe = || async {
         let chat = svc.port.chat(&input.chat_id).await?;
@@ -105,11 +116,15 @@ pub(super) async fn run(
             .any(|u| u.matches(state))
             .then_some((chat, state))
     };
-    match wait_for(svc, ctx, timeout, &watched, probe).await {
-        WaitEnd::Matched((chat, state)) => Ok(result(svc, &chat, state, true).await),
+    match wait_for(svc, ctx, capped, &watched, probe).await {
+        WaitEnd::Matched((chat, state)) => Ok(result(svc, &chat, state, true, false).await),
         WaitEnd::TimedOut => {
-            let chat = svc.target_chat(&input.chat_id).await?;
-            Ok(result(svc, &chat, svc.state_of(&chat), false).await)
+            let chat = svc.target_chat(&input.chat_id, &caller.project_id).await?;
+            // Only a genuine exhaustion of the caller's own requested budget
+            // is a final `waitTimedOut`; hitting our own safety cap first is
+            // reported as `stillWaiting` so the agent knows to call again.
+            let still_waiting = capped < requested;
+            Ok(result(svc, &chat, svc.state_of(&chat), false, still_waiting).await)
         }
         WaitEnd::Cancelled => Err(ToolError::new(
             ErrorCode::CallerNotActive,
@@ -123,13 +138,15 @@ async fn result(
     chat: &ChatView,
     state: ChatState,
     matched: bool,
+    still_waiting: bool,
 ) -> Value {
     let text = last_assistant_text(&svc.port.messages(&chat.id).await);
     json!({
         "chatId": chat.id,
         "state": state,
         "matched": if matched { json!(state) } else { Value::Null },
-        "waitTimedOut": !matched,
+        "waitTimedOut": !matched && !still_waiting,
+        "stillWaiting": still_waiting,
         "lastAssistantText": if text.is_empty() { Value::Null } else { json!(cap_chars(&text, LAST_TEXT_CAP)) },
         "pendingPermission": chat.pending_permission.as_ref()
             .map(|p| json!({ "toolName": p.tool_name, "summary": p.summary })),
@@ -204,5 +221,45 @@ mod tests {
             .unwrap();
         assert_eq!(out["matched"], "waiting_for_permission");
         assert_eq!(out["pendingPermission"]["toolName"], "Bash");
+    }
+
+    #[tokio::test]
+    async fn a_chat_may_not_wait_on_itself() {
+        let (svc, ctx, _port) = setup();
+        let err = run(&svc, &ctx, json!({ "chatId": "caller" }))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, ErrorCode::InvalidRequest);
+    }
+
+    /// A request above the internal safety cap never actually holds the
+    /// call open for the full requested duration: it returns `stillWaiting`
+    /// once the cap elapses, not a final `waitTimedOut`.
+    #[tokio::test(start_paused = true)]
+    async fn a_request_above_the_safety_cap_returns_still_waiting_at_the_cap() {
+        let (svc, ctx, _port) = setup();
+        let start = tokio::time::Instant::now();
+        let out = run(
+            &svc,
+            &ctx,
+            json!({ "chatId": "target", "timeoutMs": MAX_SINGLE_WAIT_MS * 10 }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(out["waitTimedOut"], false);
+        assert_eq!(out["stillWaiting"], true);
+        assert_eq!(start.elapsed(), Duration::from_millis(MAX_SINGLE_WAIT_MS));
+    }
+
+    /// A request at or under the cap behaves exactly as before: a real
+    /// timeout at the caller's own requested duration.
+    #[tokio::test(start_paused = true)]
+    async fn a_request_under_the_safety_cap_still_times_out_for_real() {
+        let (svc, ctx, _port) = setup();
+        let out = run(&svc, &ctx, json!({ "chatId": "target", "timeoutMs": 1000 }))
+            .await
+            .unwrap();
+        assert_eq!(out["waitTimedOut"], true);
+        assert_eq!(out["stillWaiting"], false);
     }
 }

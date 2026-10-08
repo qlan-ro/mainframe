@@ -107,3 +107,9 @@ async fn ended_archived_side_and_escalated_targets_are_refused() {
     let result = run(&svc, &ctx, json!({ "chatId": "ghost", "message": "hi" })).await;
     assert_eq!(code(&result), Some(ErrorCode::ChatNotFound));
 }
+
+#[tokio::test]
+async fn a_chat_in_another_project_reads_as_not_found_not_leaking_its_existence() {
+    let (result, _) = send("auto", |c| c.project_id = "other-project".into()).await;
+    assert_eq!(code(&result), Some(ErrorCode::ChatNotFound));
+}

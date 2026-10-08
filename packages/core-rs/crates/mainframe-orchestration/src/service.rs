@@ -37,6 +37,11 @@ pub struct OrchestrationService {
     /// `child chat id → task id` for every started, nonterminal task: the
     /// event loop's in-memory index of which chat events advance a task.
     pub(crate) active_children: Mutex<HashMap<String, String>>,
+    /// One lock per delegation-tree root, so two concurrent `delegate_task`
+    /// calls in the same tree cannot both pass the idempotency and limit
+    /// checks before either inserts (`tools/delegate_task.rs::run`). Trees
+    /// rooted at different chats never contend.
+    pub(crate) tree_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
     /// Parents whose owed deliveries survived a restart; held until the
     /// parent's CLI spawns again, so a restart never wakes every parent.
     pub(crate) boot_held: Mutex<HashSet<String>>,
@@ -67,6 +72,7 @@ impl OrchestrationService {
             flush_lock: tokio::sync::Mutex::new(()),
             task_lock: tokio::sync::Mutex::new(()),
             active_children: Mutex::new(HashMap::new()),
+            tree_locks: Mutex::new(HashMap::new()),
             boot_held: Mutex::new(HashSet::new()),
             version: version.to_string(),
             // The daemon binds 127.0.0.1 only, so loopback is always right.
@@ -175,11 +181,22 @@ impl OrchestrationService {
         Ok(chat)
     }
 
-    /// A chat an agent may address. Side, temporary, and automation chats
-    /// read as not found.
-    pub(crate) async fn target_chat(&self, chat_id: &str) -> Result<ChatView, ToolError> {
+    /// A chat an agent may address: in the caller's own project, agent-
+    /// addressable (not side, temporary, or automation). A chat in another
+    /// project reads as not found, same as a chat that does not exist, so a
+    /// caller cannot learn that an out-of-project id exists at all.
+    /// Delegated children always inherit their parent's project (see
+    /// `delegate_task::build_request`), so a parent and its whole task tree
+    /// stay reachable from each other.
+    pub(crate) async fn target_chat(
+        &self,
+        chat_id: &str,
+        caller_project_id: &str,
+    ) -> Result<ChatView, ToolError> {
         match self.port.chat(chat_id).await {
-            Some(chat) if chat.is_agent_addressable() => Ok(chat),
+            Some(chat) if chat.is_agent_addressable() && chat.project_id == caller_project_id => {
+                Ok(chat)
+            }
             _ => Err(ToolError::new(
                 ErrorCode::ChatNotFound,
                 format!("No chat {chat_id}."),
@@ -190,6 +207,22 @@ impl OrchestrationService {
     #[must_use]
     pub fn state_of(&self, chat: &ChatView) -> ChatState {
         derive_state(chat, self.outbox.has_for(&chat.id))
+    }
+
+    /// The lock for the whole tree `root_id` roots: `delegate_task` awaits
+    /// it (`.lock().await`) across its idempotency check, limit check, and
+    /// insert, so that sequence runs atomically with respect to every other
+    /// concurrent delegation in the same tree. Find the root first with
+    /// `tasks_ops::tree_root`. Trees rooted at different chats never
+    /// contend; this map only grows, but by at most one entry per root chat
+    /// that has ever delegated, which is bounded by how many chats exist.
+    pub(crate) fn tree_lock(&self, root_id: &str) -> Arc<tokio::sync::Mutex<()>> {
+        self.tree_locks
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .entry(root_id.to_string())
+            .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+            .clone()
     }
 
     /// Length of the `created_by` chain above `chat`, capped one past
