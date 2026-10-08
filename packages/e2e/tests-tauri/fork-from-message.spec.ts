@@ -39,11 +39,12 @@ async function sendBothPrompts(page: Page) {
 test.describe('§fork-from-message (fork-capable mock)', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
+  let parentChatId: string;
 
   test.beforeAll(async () => {
     app = await launchTauriApp({ recordingKey: 'messaging', mockFork: true });
     project = await createTauriProject(app.page);
-    await createTauriChat(app.page, project.projectId, 'acceptEdits');
+    parentChatId = await createTauriChat(app.page, project.projectId, 'acceptEdits');
     await sendBothPrompts(app.page);
   });
 
@@ -60,7 +61,7 @@ test.describe('§fork-from-message (fork-capable mock)', () => {
     await expect(page.getByRole('tooltip')).toContainText('Nothing before this message to fork');
   });
 
-  test('forks before the second message and prefills its text', async () => {
+  test('forks before the second message, prefills its text, and cuts the transcript there', async () => {
     const { page } = app;
     const button = await forkButton(page, 1);
     await expect(button).toBeEnabled();
@@ -74,6 +75,36 @@ test.describe('§fork-from-message (fork-capable mock)', () => {
           .evaluateAll((els) => els.map((el) => (el as HTMLTextAreaElement).value)),
       )
       .toContain(PROMPT_2);
+
+    // The parent was on screen, so the fork opens beside it as a split pair
+    // (forkAnchor). Scope the transcript checks per zone so each chat's own
+    // messages are asserted, not the union of both. `chat-zone-` also prefixes
+    // the column strip's own `chat-zone-strip-<id>` / `chat-zone-close-<id>`
+    // testids, so exclude those to isolate the zone root itself.
+    const zones = page.locator(
+      '[data-testid^="chat-zone-"]:not([data-testid*="-strip-"]):not([data-testid*="-close-"])',
+    );
+    await expect(zones).toHaveCount(2);
+    const zoneTestIds = await zones.evaluateAll((els) => els.map((el) => el.getAttribute('data-testid')));
+    const forkZoneTestId = zoneTestIds.find((id) => id !== `chat-zone-${parentChatId}`);
+    expect(forkZoneTestId).toBeTruthy();
+    const parentZone = page.getByTestId(`chat-zone-${parentChatId}`);
+    const forkZone = page.getByTestId(forkZoneTestId!);
+
+    // The parent is untouched: both prompts (and the fork point itself) still
+    // show in its own transcript.
+    const parentMessages = parentZone.locator('[data-testid="chat-user-message"]');
+    await expect(parentMessages).toHaveCount(2);
+    await expect(parentMessages.nth(0)).toContainText(PROMPT_1);
+    await expect(parentMessages.nth(1)).toContainText(PROMPT_2);
+
+    // The fork holds everything the parent showed BEFORE the chosen message:
+    // PROMPT_1 renders read-only. PROMPT_2 is the cut point — it is absent
+    // from the fork's transcript (it waits, unsent, in the composer instead).
+    const forkMessages = forkZone.locator('[data-testid="chat-user-message"]');
+    await expect(forkMessages).toHaveCount(1);
+    await expect(forkMessages.first()).toContainText(PROMPT_1);
+    await expect(forkMessages).not.toContainText(PROMPT_2);
   });
 });
 

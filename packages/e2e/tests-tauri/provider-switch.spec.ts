@@ -24,6 +24,7 @@ import { sessionsSidebar } from '../helpers/tauri/page-objects.js';
 
 const PROMPT_1 = 'What is 2 + 2? Reply with just the number.';
 const PROMPT_2 = 'List the files in this project using bash ls.';
+const PROMPT_3 = 'What is 3 + 3? Reply with just the number.';
 const MODEL = 'claude-haiku-4-5-20251001';
 const HANDOFF_TAG = 'mainframe-context-handoff';
 
@@ -90,5 +91,17 @@ test.describe('§provider-switch (two mock adapters)', () => {
     await expect(dividers(page)).toHaveCount(2);
     await expect(dividers(page).last()).toContainText('Back to Mock CLI');
     await expect(dividers(page).last()).toContainText('resumes its earlier session with your next message');
+
+    // The pending "Back to" divider only resolves once a message actually
+    // hands the context off — assert the round trip, not just the pending copy.
+    await sendMessage(page, PROMPT_3);
+    await waitForIdle(page, 90_000);
+    await expect(dividers(page)).toHaveCount(2);
+    await expect(dividers(page).last()).toContainText('Back to Mock CLI');
+    await expect(dividers(page).last()).toContainText('resumed earlier session');
+    await expect(dividers(page).last()).toContainText('caught up');
+    const users = page.locator('[data-testid="chat-user-message"]');
+    await expect(users.last()).toContainText(PROMPT_3);
+    await expect(users.last()).not.toContainText(HANDOFF_TAG);
   });
 });
