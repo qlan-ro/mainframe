@@ -60,6 +60,22 @@ function run(overrides: Partial<ClaudeWorkflowRun> = {}): ClaudeWorkflowRun {
   };
 }
 
+it('labels combined phase work as agent time rather than elapsed time', () => {
+  render(
+    <WorkflowRunPanel
+      run={run({
+        status: 'completed',
+        phases: [phase({ index: 0, title: 'Plan' })],
+        agents: [
+          agent({ agentId: 'author', phaseIndex: 0, state: 'done', durationMs: 60_000 }),
+          agent({ agentId: 'reviewer', phaseIndex: 0, state: 'done', durationMs: 120_000 }),
+        ],
+      })}
+    />,
+  );
+  expect(screen.getByTestId('chat-workflow-phase-toggle-0').textContent).toContain('3m 0s agent time');
+});
+
 describe('WorkflowRunPanel — header (AC 7)', () => {
   it('shows the workflow name, the status pill and one done/total · tokens · duration meta line', () => {
     render(

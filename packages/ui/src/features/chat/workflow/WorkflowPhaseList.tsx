@@ -58,7 +58,7 @@ function WorkflowPhaseRow({ view, run, last }: { view: PhaseView; run: ViewRun; 
         >
           {phase.title}
         </span>
-        {hasSteps && <span className={MONO_META}>{formatAgentDuration(durationMs)}</span>}
+        {hasSteps && <span className={MONO_META}>{formatAgentDuration(durationMs)} agent time</span>}
         {hasSteps && <ChevronDown size={10} className={cn(CHEVRON, !open && '-rotate-90')} aria-hidden />}
       </button>
       {hasSteps && open && <StepBlock agents={agents} run={run} />}
