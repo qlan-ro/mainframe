@@ -13,7 +13,7 @@ use crate::input::{
     Validate, check_id, check_opt_id, check_opt_len, check_range, id_schema, object_schema,
     parse_args, string_schema,
 };
-use crate::policy::{MAX_WAIT_MS, REASON_MAX};
+use crate::policy::{MAX_SINGLE_WAIT_MS, MAX_WAIT_MS, REASON_MAX};
 use crate::service::{CallCtx, OrchestrationService};
 use crate::tasks::task_not_found;
 
@@ -24,9 +24,12 @@ pub(super) fn status_definition() -> ToolDef {
         name: "task_status",
         title: "Delegated task status",
         description: "Read one of this chat's delegated tasks, optionally waiting up to waitMs for \
-            it to finish (returns early when its chat needs a permission answer). Without taskId, \
-            list this chat's 50 newest tasks. Reading a finished task here means its result is \
-            not sent again as a message.",
+            it to finish (returns early when its chat needs a permission answer). Each call \
+            actually blocks for well under a minute: waitReturned timeout before waitMs has \
+            elapsed does not mean anything is wrong, and does not cancel the task — call \
+            task_status again with the same taskId to keep waiting. Without taskId, list this \
+            chat's 50 newest tasks. Reading a finished task here means its result is not sent \
+            again as a message.",
         input_schema: object_schema(
             json!({
                 "taskId": id_schema("The task to read."),
@@ -132,9 +135,12 @@ pub(super) async fn run_status(
             "Too many concurrent waits for this chat.",
         )
     })?;
-    let (task, returned) = svc
-        .wait_task(ctx, &task_id, Duration::from_millis(wait))
-        .await?;
+    // Capped well under a minute per call regardless of waitMs: see
+    // `policy::MAX_SINGLE_WAIT_MS`. `waitReturned: "timeout"` already tells
+    // the agent the task is not finished and not cancelled, so no separate
+    // "still waiting" signal is needed here the way `chat_wait` needs one.
+    let capped = Duration::from_millis(wait).min(Duration::from_millis(MAX_SINGLE_WAIT_MS));
+    let (task, returned) = svc.wait_task(ctx, &task_id, capped).await?;
     Ok(svc.task_result(&task, Some(returned)).await)
 }
 

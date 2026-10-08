@@ -110,26 +110,42 @@ impl OrchestrationService {
         cancelled
     }
 
-    /// Open tasks in the tree rooted where `chat_id`'s delegation chain starts.
-    pub(crate) async fn open_tasks_in_tree(&self, chat_id: &str) -> usize {
-        let open = self.tasks.nonterminal().await;
+    /// The chat where `chat_id`'s delegation chain starts: walks `open`'s
+    /// child → parent edges up to `MAX_DEPTH` steps. `chat_id` itself when
+    /// nothing delegates to it. Shared by the per-tree task limit and the
+    /// per-tree creation lock (`tree_lock`), so both agree on what one tree
+    /// is.
+    fn tree_root_of(open: &[DelegatedTask], chat_id: &str) -> String {
         let parent_of: HashMap<&str, &str> = open
             .iter()
             .map(|t| (t.child_chat_id.as_str(), t.parent_chat_id.as_str()))
             .collect();
-        let root = |start: &str| {
-            let mut id = start.to_string();
-            for _ in 0..=MAX_DEPTH {
-                match parent_of.get(id.as_str()) {
-                    Some(parent) => id = (*parent).to_string(),
-                    None => break,
-                }
+        let mut id = chat_id.to_string();
+        for _ in 0..=MAX_DEPTH {
+            match parent_of.get(id.as_str()) {
+                Some(parent) => id = (*parent).to_string(),
+                None => break,
             }
-            id
-        };
-        let mine = root(chat_id);
+        }
+        id
+    }
+
+    /// The root of the delegation tree `chat_id` sits in, read from the
+    /// current nonterminal tasks. Concurrent delegations at or below
+    /// `chat_id` cannot change this answer (they only add children of
+    /// `chat_id`, never new ancestors of it), so it is safe to compute
+    /// before taking `tree_lock`.
+    pub(crate) async fn tree_root(&self, chat_id: &str) -> String {
+        let open = self.tasks.nonterminal().await;
+        Self::tree_root_of(&open, chat_id)
+    }
+
+    /// Open tasks in the tree rooted where `chat_id`'s delegation chain starts.
+    pub(crate) async fn open_tasks_in_tree(&self, chat_id: &str) -> usize {
+        let open = self.tasks.nonterminal().await;
+        let mine = Self::tree_root_of(&open, chat_id);
         open.iter()
-            .filter(|t| root(&t.parent_chat_id) == mine)
+            .filter(|t| Self::tree_root_of(&open, &t.parent_chat_id) == mine)
             .count()
     }
 

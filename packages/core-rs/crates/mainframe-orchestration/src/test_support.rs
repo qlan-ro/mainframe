@@ -112,6 +112,12 @@ impl FakePort {
         self.lock().chats.insert(chat.id.clone(), chat);
     }
 
+    /// Simulates a discard: the row is gone before `ChatEnded` is emitted
+    /// (`chat_manager/discard.rs::discard_chat`).
+    pub fn remove(&self, id: &str) {
+        self.lock().chats.remove(id);
+    }
+
     pub fn update(&self, id: &str, f: impl FnOnce(&mut ChatView)) {
         if let Some(chat) = self.lock().chats.get_mut(id) {
             f(chat);
@@ -173,6 +179,12 @@ impl OrchestrationPort for FakePort {
             {
                 return Err(ToolError::new(ErrorCode::WorkspaceInvalid, "not a worktree").into());
             }
+            // A deliberate scheduling point: on a cooperative (even
+            // single-threaded) executor, concurrent `delegate_task` calls
+            // that raced past their own checks before either reached this
+            // point would now interleave here, widening the check-then-
+            // insert race a correct caller must close with its own lock.
+            tokio::task::yield_now().await;
             let mut state = self.lock();
             let id = format!("launched{}", state.launched.len() + 1);
             let mut chat = chat_view(&id);

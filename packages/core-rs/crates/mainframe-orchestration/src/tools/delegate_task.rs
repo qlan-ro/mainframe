@@ -19,7 +19,7 @@ use crate::input::{
     check_timeout, id_schema, object_schema, parse_args, permission_mode_schema, string_schema,
     text_schema, timeout_schema, workspace_schema,
 };
-use crate::policy::{DEFAULT_WAIT_MS, TITLE_MAX};
+use crate::policy::{DEFAULT_WAIT_MS, MAX_SINGLE_WAIT_MS, TITLE_MAX};
 use crate::ports::{ChatView, LaunchRequest};
 use crate::service::{CallCtx, OrchestrationService};
 use crate::state::{AgentMessageKind, wrap_agent_message};
@@ -34,8 +34,10 @@ pub(super) fn definition() -> ToolDef {
             model, modes, and working directory (workspace inherit); new_worktree gives it its \
             own worktree. mode async (default) returns at once and the result arrives later as a \
             message in this chat: end your turn instead of polling. mode wait blocks until the \
-            task finishes, the child needs a permission answer, or timeoutMs passes. Reuse \
-            clientRequestId when retrying so the task is not started twice.",
+            task finishes, the child needs a permission answer, or timeoutMs passes, but each \
+            call actually blocks for well under a minute: waitReturned timeout before timeoutMs \
+            has elapsed does not cancel the task, call task_status with the returned taskId to \
+            keep waiting. Reuse clientRequestId when retrying so the task is not started twice.",
         input_schema: object_schema(
             json!({
                 "task": text_schema("The complete task prompt."),
@@ -113,13 +115,6 @@ pub(super) async fn run(
 ) -> Result<Value, ToolError> {
     let input: Input = parse_args(args)?;
     let caller = svc.active_caller(ctx).await?;
-    if let Some(key) = &input.client_request_id
-        && let Some(existing) = svc.tasks.by_request(&caller.id, key).await
-    {
-        return Ok(svc.task_result(&existing, None).await);
-    }
-    let request = build_request(svc, &input, &caller).await?;
-    svc.check_task_limits(&caller.id).await?;
     // Claimed before anything is created, so a refused wait starts nothing.
     let slot = match input.mode {
         Mode::Wait => Some(ctx.caller.try_begin_wait().ok_or_else(|| {
@@ -130,13 +125,36 @@ pub(super) async fn run(
         })?),
         Mode::Async => None,
     };
-    admit_creation(svc, &caller).await?;
-    let child = svc.port.launch_chat(request).await?;
-    let task = start(svc, &input, &caller, &child).await?;
+    // The idempotency check, the per-parent/per-tree limit check, and the
+    // insert must run as one step: otherwise two concurrent calls (with or
+    // without the same clientRequestId) can both pass every check before
+    // either has inserted, both creating a task and together exceeding the
+    // limits the second call's own check just said were not exceeded. The
+    // lock is per delegation tree, not global, so unrelated trees never
+    // contend; it is released before a `wait` call blocks, so it never
+    // holds up a sibling delegation for the duration of someone else's wait.
+    let root = svc.tree_root(&caller.id).await;
+    let tree_lock = svc.tree_lock(&root);
+    let task = {
+        let _guard = tree_lock.lock().await;
+        if let Some(key) = &input.client_request_id
+            && let Some(existing) = svc.tasks.by_request(&caller.id, key).await
+        {
+            return Ok(svc.task_result(&existing, None).await);
+        }
+        let request = build_request(svc, &input, &caller).await?;
+        svc.check_task_limits(&caller.id).await?;
+        admit_creation(svc, &caller).await?;
+        let child = svc.port.launch_chat(request).await?;
+        start(svc, &input, &caller, &child).await?
+    };
     if slot.is_none() {
         return Ok(svc.task_result(&task, None).await);
     }
-    let timeout = Duration::from_millis(input.timeout_ms.unwrap_or(DEFAULT_WAIT_MS));
+    // Capped well under a minute per call regardless of timeoutMs: see
+    // `policy::MAX_SINGLE_WAIT_MS`.
+    let timeout = Duration::from_millis(input.timeout_ms.unwrap_or(DEFAULT_WAIT_MS))
+        .min(Duration::from_millis(MAX_SINGLE_WAIT_MS));
     let (task, returned) = svc.wait_task(ctx, &task.id, timeout).await?;
     Ok(svc.task_result(&task, Some(returned)).await)
 }
@@ -153,7 +171,8 @@ async fn build_request(
         caller,
     )
     .await?;
-    let privileges = resolve_privileges(input.permission_mode, input.plan_mode, caller)?;
+    let privileges =
+        resolve_privileges(&adapter_id, input.permission_mode, input.plan_mode, caller)?;
     let workspace = resolve_workspace(
         input.workspace.as_ref(),
         WorkspaceMode::Inherit,

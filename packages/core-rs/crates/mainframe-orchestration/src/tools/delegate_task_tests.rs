@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent};
 use mainframe_types::content::LeafContent;
-use mainframe_types::orchestration::TaskDelivery;
+use mainframe_types::orchestration::{TaskDelivery, TaskStatus};
 use serde_json::json;
 
 use super::*;
@@ -165,6 +165,52 @@ async fn sibling_results_are_held_until_the_parent_is_idle_then_batched() {
     );
 }
 
+/// A child interrupted directly (its own Stop, not a cascade from the
+/// parent) still owes the parent a delivery: the reactive event-loop path
+/// (`lifecycle.rs::on_event`) must finalize the task as `interrupted`, not
+/// leave it open forever, and `finalize` must still queue it (delivery is
+/// only ever dropped for a `cancelled` task, one the parent asked for
+/// itself). An async-waiting parent that never polls must still receive it
+/// once idle, the same as any other outcome.
+#[tokio::test]
+async fn a_directly_interrupted_child_still_delivers_to_an_async_waiting_parent() {
+    let f = fixture();
+    let child = delegate(&f, &f.ctx, "a").await["childChatId"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    // The child's own Stop: its turn ends with no trailing error, which the
+    // idle_outcome alone would read as "completed" — only the `Interrupted`
+    // reason distinguishes it.
+    f.port.update(&child, |c| c.working = false);
+    f.svc
+        .on_event(&DaemonEvent::ChatUpdated {
+            chat: crate::test_support::wire_chat(&child),
+            reason: Some(mainframe_types::events::ChatUpdatedReason::Interrupted),
+        })
+        .await;
+
+    let task = f.tasks.all().into_iter().next().unwrap();
+    assert_eq!(task.status, TaskStatus::Interrupted);
+    assert_eq!(task.delivery, TaskDelivery::Owed);
+
+    f.port.update("parent", |c| c.working = false);
+    f.svc
+        .on_event(&DaemonEvent::ChatUpdated {
+            chat: crate::test_support::wire_chat("parent"),
+            reason: None,
+        })
+        .await;
+    let (to, body) = f.port.lock().sent.last().unwrap().clone();
+    assert_eq!(to, "parent");
+    assert!(body.contains("status=\"interrupted\""), "{body}");
+    assert_eq!(
+        f.tasks.all()[0].delivery,
+        TaskDelivery::Delivered,
+        "an interrupted task must still be delivered, not dropped"
+    );
+}
+
 #[tokio::test]
 async fn a_child_with_open_subtasks_waits_for_their_results() {
     let f = fixture();
@@ -246,4 +292,54 @@ async fn limits_and_ceilings_hold() {
         .await
         .unwrap_err();
     assert_eq!(err.code, ErrorCode::TaskLimitExceeded);
+}
+
+/// Concurrent calls with the same `clientRequestId` must create exactly one
+/// task: the idempotency check and the insert run under one lock
+/// (`OrchestrationService::tree_lock`), so a second caller that raced past
+/// the first's check (widened by `FakePort::launch_chat`'s deliberate
+/// `yield_now`) still finds the first's row once it is its own turn.
+#[tokio::test]
+async fn concurrent_calls_with_the_same_request_id_create_exactly_one_task() {
+    let f = fixture();
+    let call = |n: u32| {
+        run(
+            &f.svc,
+            &f.ctx,
+            json!({ "task": format!("t{n}"), "clientRequestId": "k1" }),
+        )
+    };
+    let (a, b, c, d) = tokio::join!(call(0), call(1), call(2), call(3));
+    let ids: std::collections::HashSet<String> = [a, b, c, d]
+        .into_iter()
+        .map(|r| r.unwrap()["taskId"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(ids.len(), 1, "every caller must see the same task id");
+    assert_eq!(f.tasks.all().len(), 1, "exactly one task row was inserted");
+}
+
+/// Concurrent calls must not together exceed `MAX_ACTIVE_TASKS_PER_PARENT`,
+/// even though each one's own limit check, taken alone, would have allowed
+/// it (the count it read did not yet include the others' in-flight inserts).
+#[tokio::test]
+async fn concurrent_calls_cannot_together_exceed_the_per_parent_limit() {
+    let f = fixture();
+    let call = |n: u32| run(&f.svc, &f.ctx, json!({ "task": format!("t{n}") }));
+    let (a, b, c, d, e, g) = tokio::join!(call(0), call(1), call(2), call(3), call(4), call(5));
+    let outcomes = [a, b, c, d, e, g];
+    let ok = outcomes.iter().filter(|r| r.is_ok()).count();
+    let limited = outcomes
+        .iter()
+        .filter(|r| {
+            r.as_ref()
+                .err()
+                .is_some_and(|e| e.code == ErrorCode::TaskLimitExceeded)
+        })
+        .count();
+    assert_eq!(ok, crate::policy::MAX_ACTIVE_TASKS_PER_PARENT);
+    assert_eq!(ok + limited, outcomes.len());
+    assert_eq!(
+        f.tasks.all().len(),
+        crate::policy::MAX_ACTIVE_TASKS_PER_PARENT
+    );
 }
