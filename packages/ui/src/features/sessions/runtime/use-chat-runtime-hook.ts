@@ -22,6 +22,19 @@
  * renders) always wins `draft-stash`'s one-shot take and seeds a composer
  * nobody sees, leaving a "Fork from here" prefill (or a #178 offload-release
  * restore) empty in the zone that actually displays.
+ *
+ * Zone MEMBERSHIP alone over-skips: `ChatSurface` only renders the split (and
+ * mounts `ChatZone`, the other consumer) when `splitFits` is ALSO true (the
+ * surface is wide enough for two zones — see `zones-store`'s `splitFits` and
+ * `ChatSurface`'s split branch). In a narrow window, a zone member still
+ * renders through THIS hook's instance as the plain single-chat view, so
+ * skipping here too would leave NEITHER consumer taking the stash: the
+ * composer renders empty now, and a later `ChatZone` mount (once the window
+ * widens) would apply the stash stale, overwriting anything the user typed or
+ * sent in the meantime. Skip only when the split will actually render this
+ * chat: it's a zone member, the FOCUSED chat is in the same pair, and the
+ * surface currently fits two zones — or the pair is still queued
+ * (`pendingPair`) for a surface that already fits.
  */
 import { useAuiState } from '@assistant-ui/react';
 import type { AssistantRuntime } from '@assistant-ui/react';
@@ -40,13 +53,17 @@ export function useChatRuntimeHook(): AssistantRuntime {
   const isActive = useAuiState(
     (s) => s.threads.mainThreadId === s.threadListItem.id && s.threadListItem.remoteId != null,
   );
+  const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
   const port = useDaemonPort();
 
   const controller = chatControllerRegistry.getOrCreate(chatId, port);
 
   const zones = useZonesStore((s) => s.zones);
+  const splitFits = useZonesStore((s) => s.splitFits);
   const pendingPairTarget = useZonesStore((s) => s.pendingPair?.[1]);
-  const skipDraftRestore = isVisibleZone(zones, chatId) || pendingPairTarget === chatId;
+  const splitWillRender = splitFits && isVisibleZone(zones, mainThreadId);
+  const skipDraftRestore =
+    (isVisibleZone(zones, chatId) && splitWillRender) || (pendingPairTarget === chatId && splitFits);
 
   return useChatThreadRuntime(controller, port, { active: isActive, chatId, skipDraftRestore });
 }

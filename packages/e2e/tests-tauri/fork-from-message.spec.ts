@@ -108,6 +108,64 @@ test.describe('§fork-from-message (fork-capable mock)', () => {
   });
 });
 
+/**
+ * A narrow surface parks the split behind the single-chat view (ChatSurface's
+ * `splitFits` gate, `MIN_ZONE_WIDTH` in zones-store.ts) even though the fork
+ * is still a `zones` member. The review follow-up on 3e34c95c: zone
+ * membership alone must not defer the draft-stash take, or the prefill is
+ * lost here (nothing renders `ChatZone`) and, if the window is later
+ * widened, reapplied stale over whatever the user already typed or sent.
+ */
+test.describe('§fork-from-message (narrow viewport — split parked behind single view)', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'messaging', mockFork: true });
+    await app.page.setViewportSize({ width: 820, height: 800 });
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'acceptEdits');
+    await sendBothPrompts(app.page);
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('prefills the fork in the parked single view, and widening never reapplies it stale', async () => {
+    const { page } = app;
+    const button = await forkButton(page, 1);
+    await expect(button).toBeEnabled();
+    await button.click();
+
+    await expect(page.getByTestId('chat-header-parent-link').first()).toBeVisible({ timeout: 15_000 });
+    // Too narrow for the split: ChatSurface renders the single view, so the
+    // fork's composer is this hook instance's own — not a ChatZone's. The
+    // prefill must still land here, or it is lost outright (review follow-up
+    // on 3e34c95c: zone-membership-only skip left NEITHER consumer taking it).
+    await expect(page.getByTestId('chat-split-row')).toHaveCount(0);
+    const composer = page.getByTestId('chat-composer-input');
+    await expect(composer).toHaveValue(PROMPT_2);
+
+    // The user edits the prefill before the window ever widens.
+    const edited = 'edited before widening — must survive';
+    await composer.fill(edited);
+
+    // Widening now makes the split fit; the fork renders through its OWN
+    // ChatZone for the first time. ZoneDraftRestore's one-shot take must find
+    // nothing left — the stash was already consumed by the instance actually
+    // displayed while narrow — so it never overwrites the edit with the
+    // stale PROMPT_2 prefill. (Carrying the live edit itself across the
+    // single-view → split-view transition is a separate, pre-existing gap:
+    // neither render mode's composer state is bridged to the other for ANY
+    // typed text, stash-seeded or not — out of scope here.)
+    await page.setViewportSize({ width: 1600, height: 900 });
+    await expect(page.getByTestId('chat-split-row')).toBeVisible();
+    await expect(page.locator('[data-testid="chat-composer-input"]').first()).not.toHaveValue(PROMPT_2);
+  });
+});
+
 test.describe('§fork-from-message (mock without fork)', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
