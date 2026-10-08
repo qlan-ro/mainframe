@@ -50,7 +50,7 @@ vi.mock('../../gates/select-front', () => ({
 
 import { useChatThreadRuntime } from '../use-chat-thread-runtime';
 import { createChatThreadState } from '../../controller/chat-thread-state';
-import { markForStash, takeStash } from '../draft-stash';
+import { markForStash, seedDraft, takeStash } from '../draft-stash';
 
 function makeController(chatId: string): AcpChatController {
   const stableState: ChatThreadState = createChatThreadState(chatId);
@@ -169,5 +169,53 @@ describe('useChatThreadRuntime — draft-stash capture on unmount', () => {
       attachments: [],
     });
     expect(takeStash('__LOCALID_alias1')).toEqual({ text: '', attachments: [] });
+  });
+});
+
+// `splitFits` lags `zones` (its ResizeObserver settles async, after the
+// workspace panel parks to free the width — review follow-up on 214de9d4):
+// this instance can correctly be "the one displayed" for a beat, take the
+// stash, and then lose that status once `ChatZone` mounts. The handoff below
+// hands whatever the composer holds back to the stash at that exact moment,
+// so `ChatZone`'s own restore still finds it instead of a now-empty composer.
+describe('useChatThreadRuntime — handoff when losing displayed status mid-flight', () => {
+  it('re-stashes the composer’s CURRENT content (the user’s edit, not the stale original) when skipDraftRestore flips true', () => {
+    seedDraft('chat-handoff-1', 'original prefill');
+    composerState = { text: 'original prefill', attachments: [] };
+    const controller = makeController('chat-handoff-1');
+    const { rerender, unmount } = renderHook(
+      ({ skip }: { skip: boolean }) =>
+        useChatThreadRuntime(controller, PORT, { active: false, chatId: 'chat-handoff-1', skipDraftRestore: skip }),
+      { initialProps: { skip: false } },
+    );
+    expect(setTextSpy).toHaveBeenCalledWith('original prefill');
+    expect(takeStash('chat-handoff-1')).toBeUndefined(); // one-shot: already taken
+
+    // The user edits it before the layout (e.g. a split catching up with a
+    // just-parked workspace panel) makes this instance stop being displayed.
+    composerState = { text: 'user edited text', attachments: [] };
+    rerender({ skip: true });
+
+    // Handed off for the next consumer (ChatZone's own restore) to take.
+    expect(takeStash('chat-handoff-1')).toEqual({ text: 'user edited text', attachments: [] });
+    // Cleared locally too, so an unsplit back to this instance later doesn't
+    // resurrect the handed-off text stale.
+    expect(setTextSpy).toHaveBeenLastCalledWith('');
+    unmount();
+  });
+
+  it('does nothing when this instance never took anything (no stash to hand off)', () => {
+    const controller = makeController('chat-handoff-2');
+    const { rerender, unmount } = renderHook(
+      ({ skip }: { skip: boolean }) =>
+        useChatThreadRuntime(controller, PORT, { active: false, chatId: 'chat-handoff-2', skipDraftRestore: skip }),
+      { initialProps: { skip: true } },
+    );
+    rerender({ skip: false }); // takes — nothing stashed, so a no-op
+    rerender({ skip: true }); // loses displayed status with nothing to hand off
+
+    expect(takeStash('chat-handoff-2')).toBeUndefined();
+    expect(setTextSpy).not.toHaveBeenCalledWith('');
+    unmount();
   });
 });

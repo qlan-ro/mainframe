@@ -28,7 +28,7 @@ import { TranscriptProjector } from '../controller/transcript-projector';
 import { buildChatExtras, isRunningFromState, useChatExtrasState } from './chat-extras';
 import { createForLocal } from '../../sessions/runtime/new-thread-coordinator';
 import { chatControllerRegistry } from '../../sessions/runtime/chat-controller-registry';
-import { captureIfMarked, takeStash } from './draft-stash';
+import { captureIfMarked, handoffDraft, takeStash } from './draft-stash';
 
 // ---------------------------------------------------------------------------
 // Controller state → useSyncExternalStore
@@ -175,19 +175,21 @@ export function useChatThreadRuntime(
   // controller registry header) is restored into the composer once, mirroring
   // the load-once effect above.
   //
-  // `skipDraftRestore` (set by `useChatRuntimeHook` when this id is a split
-  // zone's member, or its queued pending-pair target) defers the take to
-  // `ChatZone`'s own restore effect instead. Without it, this hook's hidden
-  // kept-warm instance — mounted by aui's RemoteThreadListHookInstanceManager
-  // well before the zone itself renders — always wins the one-shot take and
-  // seeds a composer nobody displays, leaving the visible zone's composer
-  // empty (a "Fork from here" prefill landing beside its parent, #343/fork-
-  // from-message).
+  // `skipDraftRestore` (set by `useChatRuntimeHook` when this id is NOT the
+  // instance ChatSurface actually displays — a split zone's member, or its
+  // queued pending-pair target) defers the take to `ChatZone`'s own restore
+  // effect instead. Without it, this hook's hidden kept-warm instance —
+  // mounted by aui's RemoteThreadListHookInstanceManager well before the zone
+  // itself renders — always wins the one-shot take and seeds a composer
+  // nobody displays, leaving the visible zone's composer empty (a "Fork from
+  // here" prefill landing beside its parent, #343/fork-from-message).
   const skipDraftRestore = opts?.skipDraftRestore ?? false;
+  const tookDraftRef = useRef(false);
   useEffect(() => {
     if (skipDraftRestore) return;
     const draft = takeStash(stashKey);
     if (draft == null) return;
+    tookDraftRef.current = true;
     const composer = runtimeRef.current?.thread?.composer;
     if (composer == null) return;
     composer.setText(draft.text);
@@ -196,6 +198,32 @@ export function useChatThreadRuntime(
         console.warn('[chat-runtime] could not restore a stashed attachment', error);
       });
     }
+  }, [stashKey, skipDraftRestore]);
+
+  // Handoff: `splitFits` lags `zones` by a render or more (its ResizeObserver
+  // settles after the workspace panel parks to free the width), so this
+  // instance can correctly be the one displayed, take the stash above, and
+  // THEN lose that status to `ChatZone` once the split catches up — before
+  // the user ever saw it render there. If we took something and are now
+  // losing displayed status, hand the composer's CURRENT content (the
+  // original stash, or whatever the user edited into it meanwhile) back to
+  // the stash so the consumer taking over picks up the latest state instead
+  // of a now-empty `ChatZone` composer. Clears the local composer too, so a
+  // later unsplit back to this same instance doesn't resurrect it stale.
+  const wasSkippedRef = useRef(skipDraftRestore);
+  useEffect(() => {
+    const previouslySkipped = wasSkippedRef.current;
+    wasSkippedRef.current = skipDraftRestore;
+    if (!tookDraftRef.current || previouslySkipped || !skipDraftRestore) return;
+    const composer = runtimeRef.current?.thread?.composer;
+    if (composer == null) return;
+    const composerState = composer.getState();
+    const attachments = composerState.attachments
+      .map((attachment) => attachment.file)
+      .filter((file): file is File => file != null);
+    handoffDraft(stashKey, { text: composerState.text, attachments });
+    tookDraftRef.current = false;
+    composer.setText('');
   }, [stashKey, skipDraftRestore]);
 
   // Capture the composer draft on unmount, but only when OffloadRelease marked

@@ -136,7 +136,7 @@ describe('use-chat-runtime-hook — active:true when main thread and remoteId is
 // ---------------------------------------------------------------------------
 
 describe('use-chat-runtime-hook — active:false when mainThreadId differs', () => {
-  it('calls useChatThreadRuntime with { active:false } when item.id !== mainThreadId', () => {
+  it('calls useChatThreadRuntime with { active:false, skipDraftRestore:true } when item.id !== mainThreadId', () => {
     fakeAuiState = {
       threadListItem: { id: 'chat-9', remoteId: 'chat-9' },
       threads: { mainThreadId: 'other' },
@@ -145,7 +145,11 @@ describe('use-chat-runtime-hook — active:false when mainThreadId differs', () 
     renderHook(() => useChatRuntimeHook());
 
     const thirdArg = mockUseChatThreadRuntime.mock.calls[0]?.[2];
-    expect(thirdArg).toEqual({ active: false, chatId: 'chat-9', skipDraftRestore: false });
+    // skipDraftRestore is keyed off `mainThreadId === chatId` (the instance
+    // ChatSurface actually displays), independent of `active`: a warm
+    // background instance for a chat nobody is looking at must never win the
+    // one-shot draft-stash take ahead of whichever instance IS displayed.
+    expect(thirdArg).toEqual({ active: false, chatId: 'chat-9', skipDraftRestore: true });
   });
 });
 
@@ -168,15 +172,15 @@ describe('use-chat-runtime-hook — active:false when remoteId is absent (new lo
 });
 
 // ---------------------------------------------------------------------------
-// 6. skipDraftRestore — this id is a split zone's member, or its queued
-//    pending-pair target (finding 1: a "Fork from here" prefill opening
-//    beside its parent). This hidden instance must defer to ChatZone's own
-//    restore effect, or the one-shot draft-stash take lands on a composer
-//    nobody displays.
+// 6. skipDraftRestore — only the instance ChatSurface actually displays
+//    (`mainThreadId === chatId && !splitWillRender`) ever takes the stash;
+//    every other instance defers, including a queued `pendingPair` target
+//    and a plain background (non-focused, non-split) thread (finding 1 /
+//    review follow-ups on 3e34c95c and 214de9d4).
 // ---------------------------------------------------------------------------
 
-describe('use-chat-runtime-hook — skipDraftRestore defers to a split zone', () => {
-  it('is true when this id is already a visible zone member', () => {
+describe('use-chat-runtime-hook — skipDraftRestore: only the displayed instance takes', () => {
+  it('WIDE — defers when this id is the focused half of a pair that already fits', () => {
     fakeAuiState = {
       threadListItem: { id: 'chat-9', remoteId: 'chat-9' },
       threads: { mainThreadId: 'chat-9' },
@@ -189,43 +193,20 @@ describe('use-chat-runtime-hook — skipDraftRestore defers to a split zone', ()
     expect(thirdArg).toEqual({ active: true, chatId: 'chat-9', skipDraftRestore: true });
   });
 
-  it('is true when this id is the queued pending-pair target (not listed yet)', () => {
+  it('WIDE — defers for the pair’s OTHER (unfocused) half too; ChatZone renders both', () => {
     fakeAuiState = {
-      threadListItem: { id: 'chat-9', remoteId: 'chat-9' },
+      threadListItem: { id: 'chat-parent', remoteId: 'chat-parent' },
       threads: { mainThreadId: 'chat-9' },
     };
-    fakeZonesState = { zones: null, pendingPair: ['chat-parent', 'chat-9'], splitFits: true };
+    fakeZonesState = { zones: ['chat-parent', 'chat-9'], pendingPair: null, splitFits: true };
 
     renderHook(() => useChatRuntimeHook());
 
     const thirdArg = mockUseChatThreadRuntime.mock.calls[0]?.[2];
-    expect(thirdArg).toEqual({ active: true, chatId: 'chat-9', skipDraftRestore: true });
+    expect(thirdArg).toEqual({ active: false, chatId: 'chat-parent', skipDraftRestore: true });
   });
 
-  it('is false for an unrelated thread while some other pair is split', () => {
-    fakeAuiState = {
-      threadListItem: { id: 'chat-9', remoteId: 'chat-9' },
-      threads: { mainThreadId: 'chat-9' },
-    };
-    fakeZonesState = { zones: ['chat-a', 'chat-b'], pendingPair: null, splitFits: true };
-
-    renderHook(() => useChatRuntimeHook());
-
-    const thirdArg = mockUseChatThreadRuntime.mock.calls[0]?.[2];
-    expect(thirdArg).toEqual({ active: true, chatId: 'chat-9', skipDraftRestore: false });
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 7. skipDraftRestore — a narrow window (splitFits:false) parks the pair
-//    behind the single view (ChatSurface's split branch also checks
-//    splitFits), so THIS hook's instance is what actually renders — it must
-//    take the stash itself, or it is lost (never applied narrow, applied
-//    stale once widened: review follow-up on 3e34c95c).
-// ---------------------------------------------------------------------------
-
-describe('use-chat-runtime-hook — skipDraftRestore never skips a split that will not render', () => {
-  it('is false for a visible zone member when the surface no longer fits two zones', () => {
+  it('NARROW — takes when a zone member never fits (ChatSurface parks it behind the single view)', () => {
     fakeAuiState = {
       threadListItem: { id: 'chat-9', remoteId: 'chat-9' },
       threads: { mainThreadId: 'chat-9' },
@@ -238,7 +219,12 @@ describe('use-chat-runtime-hook — skipDraftRestore never skips a split that wi
     expect(thirdArg).toEqual({ active: true, chatId: 'chat-9', skipDraftRestore: false });
   });
 
-  it('is false for a queued pending-pair target when the surface no longer fits two zones', () => {
+  it('PENDING — always defers while queued, regardless of the CURRENT splitFits reading', () => {
+    // `switchToThread` already points mainThreadId at the incoming chat before
+    // the reconciler resolves pendingPair into `zones` — without this
+    // unconditional defer, a pending fork would read as "focused, no split
+    // yet" (splitWillRender false, since zones doesn't include it yet) and
+    // take immediately, which is the finding-1 bug all over again.
     fakeAuiState = {
       threadListItem: { id: 'chat-9', remoteId: 'chat-9' },
       threads: { mainThreadId: 'chat-9' },
@@ -248,13 +234,48 @@ describe('use-chat-runtime-hook — skipDraftRestore never skips a split that wi
     renderHook(() => useChatRuntimeHook());
 
     const thirdArg = mockUseChatThreadRuntime.mock.calls[0]?.[2];
+    expect(thirdArg).toEqual({ active: true, chatId: 'chat-9', skipDraftRestore: true });
+  });
+
+  it('MID-WIDTH — takes right after pendingPair resolves into zones, even while splitFits still reads stale', () => {
+    // `splitFits` lags `zones`: opening the pair parks the workspace panel to
+    // free the width, and that resize is measured asynchronously
+    // (`useMeasuredWidth`'s ResizeObserver), not in the same commit. The
+    // moment pendingPair resolves, zones already includes this chat but
+    // splitFits can still read its PRE-parking (false) value — this hook
+    // still takes here (it's the only state it CAN act on); the handoff
+    // effect in `useChatThreadRuntime` covers the hand-off to `ChatZone` once
+    // splitFits catches up and skipDraftRestore flips true.
+    fakeAuiState = {
+      threadListItem: { id: 'chat-9', remoteId: 'chat-9' },
+      threads: { mainThreadId: 'chat-9' },
+    };
+    fakeZonesState = { zones: ['chat-parent', 'chat-9'], pendingPair: null, splitFits: false };
+
+    renderHook(() => useChatRuntimeHook());
+
+    const thirdArg = mockUseChatThreadRuntime.mock.calls[0]?.[2];
     expect(thirdArg).toEqual({ active: true, chatId: 'chat-9', skipDraftRestore: false });
   });
 
-  it('is false for a zone member when the FOCUSED chat is not in the same pair (parked)', () => {
+  it('defers for a plain background thread nobody is looking at (not focused, no zones at all)', () => {
+    fakeAuiState = {
+      threadListItem: { id: 'chat-9', remoteId: 'chat-9' },
+      threads: { mainThreadId: 'chat-other' },
+    };
+    fakeZonesState = { zones: null, pendingPair: null, splitFits: true };
+
+    renderHook(() => useChatRuntimeHook());
+
+    const thirdArg = mockUseChatThreadRuntime.mock.calls[0]?.[2];
+    expect(thirdArg).toEqual({ active: false, chatId: 'chat-9', skipDraftRestore: true });
+  });
+
+  it('defers for a zone member whose pair is parked (the FOCUSED chat is not in the same pair)', () => {
     // zones includes chat-9, but mainThreadId points elsewhere — ChatSurface's
     // split branch keys off `zones.includes(mainThreadId)`, not this chat's
-    // own membership, so a parked pair's member also renders single-view.
+    // own membership, so a parked pair's member also renders single-view —
+    // but not THIS instance's single view, since it isn't mainThreadId either.
     fakeAuiState = {
       threadListItem: { id: 'chat-9', remoteId: 'chat-9' },
       threads: { mainThreadId: 'chat-elsewhere' },
@@ -264,6 +285,6 @@ describe('use-chat-runtime-hook — skipDraftRestore never skips a split that wi
     renderHook(() => useChatRuntimeHook());
 
     const thirdArg = mockUseChatThreadRuntime.mock.calls[0]?.[2];
-    expect(thirdArg).toEqual({ active: false, chatId: 'chat-9', skipDraftRestore: false });
+    expect(thirdArg).toEqual({ active: false, chatId: 'chat-9', skipDraftRestore: true });
   });
 });

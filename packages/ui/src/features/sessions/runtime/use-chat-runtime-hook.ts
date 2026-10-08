@@ -31,10 +31,26 @@
  * skipping here too would leave NEITHER consumer taking the stash: the
  * composer renders empty now, and a later `ChatZone` mount (once the window
  * widens) would apply the stash stale, overwriting anything the user typed or
- * sent in the meantime. Skip only when the split will actually render this
- * chat: it's a zone member, the FOCUSED chat is in the same pair, and the
- * surface currently fits two zones — or the pair is still queued
- * (`pendingPair`) for a surface that already fits.
+ * sent in the meantime.
+ *
+ * Take only when THIS instance is the one ChatSurface actually displays —
+ * it's the focused chat, and the split will not render (`!splitWillRender`).
+ * A queued `pendingPair` always defers: `switchToThread` already points
+ * `mainThreadId` at the incoming chat before the pair resolves into `zones`,
+ * so without this a pending fork would read as "focused, no split yet" and
+ * take immediately.
+ *
+ * `splitFits` itself can lag `zones` by a render or more — opening the pair
+ * parks the workspace panel to free the width, and that resize is measured
+ * asynchronously (`useMeasuredWidth`'s `ResizeObserver`), not applied in the
+ * same commit. So `zones` can already include this chat, with `splitFits`
+ * still reading its pre-parking (false) value: this hook reads
+ * "focused, no split" for a beat, takes the stash, and then loses that
+ * status once `splitFits` catches up and `ChatZone` mounts. Predicting that
+ * ahead of time isn't reliable; `useChatThreadRuntime`'s handoff effect
+ * covers it instead — it hands whatever this instance's composer holds back
+ * to the stash the moment `skipDraftRestore` flips true, so `ChatZone`'s own
+ * restore still finds it.
  */
 import { useAuiState } from '@assistant-ui/react';
 import type { AssistantRuntime } from '@assistant-ui/react';
@@ -62,8 +78,8 @@ export function useChatRuntimeHook(): AssistantRuntime {
   const splitFits = useZonesStore((s) => s.splitFits);
   const pendingPairTarget = useZonesStore((s) => s.pendingPair?.[1]);
   const splitWillRender = splitFits && isVisibleZone(zones, mainThreadId);
-  const skipDraftRestore =
-    (isVisibleZone(zones, chatId) && splitWillRender) || (pendingPairTarget === chatId && splitFits);
+  const isDisplayedHere = mainThreadId === chatId && !splitWillRender;
+  const skipDraftRestore = pendingPairTarget === chatId || !isDisplayedHere;
 
   return useChatThreadRuntime(controller, port, { active: isActive, chatId, skipDraftRestore });
 }

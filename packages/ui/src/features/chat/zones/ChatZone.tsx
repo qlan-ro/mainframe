@@ -28,7 +28,7 @@ import { useDaemonPort } from '../../sessions/runtime/daemon-port-context';
 import { CHAT_ATTACHMENT_ADAPTER, useControllerState } from '../runtime/use-chat-thread-runtime';
 import { buildChatExtras, isRunningFromState, useChatExtrasState } from '../runtime/chat-extras';
 import { useNativeThreadMessages } from '../runtime/use-native-thread-messages';
-import { takeStash } from '../runtime/draft-stash';
+import { takeStash, waitForStash, type DraftStash } from '../runtime/draft-stash';
 import { ChatThread } from '../thread/ChatThread';
 import { ChatColumnHeader } from '../thread/ChatColumnHeader';
 import { SideChatHost } from '@/features/side-chat/SideChatHost';
@@ -40,19 +40,36 @@ import { SideChatHost } from '@/features/side-chat/SideChatHost';
  * `ExternalThread` client, not the outer/main one — `useChatRuntimeHook`'s
  * hidden kept-warm instance for this same chatId defers to this effect
  * (`skipDraftRestore`) so the one-shot take lands here, where it is visible.
+ *
+ * `takeStash` can find nothing on the FIRST check even when a draft is
+ * coming: a split that only fits once the workspace panel parks hands its
+ * draft off from the instance that was displaying it (review follow-up on
+ * 214de9d4) via that instance's OWN re-render — a separate commit from the
+ * one that mounts this zone, with no ordering guarantee between the two.
+ * `waitForStash` covers the gap: it fires the moment the handoff lands,
+ * however late.
  */
 function ZoneDraftRestore({ chatId }: { chatId: string }): null {
   const aui = useAui();
   useEffect(() => {
+    const apply = (draft: DraftStash): void => {
+      const composer = aui.thread.composer();
+      composer.setText(draft.text);
+      for (const file of draft.attachments) {
+        void composer.addAttachment(file).catch((error: unknown) => {
+          console.warn('[chat-zone] could not restore a stashed attachment', error);
+        });
+      }
+    };
     const draft = takeStash(chatId);
-    if (draft == null) return;
-    const composer = aui.thread.composer();
-    composer.setText(draft.text);
-    for (const file of draft.attachments) {
-      void composer.addAttachment(file).catch((error: unknown) => {
-        console.warn('[chat-zone] could not restore a stashed attachment', error);
-      });
+    if (draft != null) {
+      apply(draft);
+      return;
     }
+    return waitForStash(chatId, () => {
+      const handedOff = takeStash(chatId);
+      if (handedOff != null) apply(handedOff);
+    });
   }, [chatId, aui]);
   return null;
 }

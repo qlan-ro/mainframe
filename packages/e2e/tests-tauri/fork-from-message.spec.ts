@@ -36,6 +36,22 @@ async function sendBothPrompts(page: Page) {
   await waitForIdle(page, 90_000);
 }
 
+/**
+ * The fork zone's own composer — NOT `.first()`, which is DOM order and
+ * picks the PARENT zone whenever it renders first (the parent never holds
+ * PROMPT_2, so a stale-reapply assertion against `.first()` proves nothing).
+ * `chat-zone-` also prefixes the column strip's own `chat-zone-strip-<id>` /
+ * `chat-zone-close-<id>` testids, so exclude those to isolate zone roots.
+ */
+async function forkZoneComposer(page: Page, parentChatId: string) {
+  const zones = page.locator('[data-testid^="chat-zone-"]:not([data-testid*="-strip-"]):not([data-testid*="-close-"])');
+  await expect(zones).toHaveCount(2);
+  const zoneTestIds = await zones.evaluateAll((els) => els.map((el) => el.getAttribute('data-testid')));
+  const forkZoneTestId = zoneTestIds.find((id) => id !== `chat-zone-${parentChatId}`);
+  expect(forkZoneTestId).toBeTruthy();
+  return page.getByTestId(forkZoneTestId!).locator('[data-testid="chat-composer-input"]');
+}
+
 test.describe('§fork-from-message (fork-capable mock)', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
@@ -119,12 +135,13 @@ test.describe('§fork-from-message (fork-capable mock)', () => {
 test.describe('§fork-from-message (narrow viewport — split parked behind single view)', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
+  let parentChatId: string;
 
   test.beforeAll(async () => {
     app = await launchTauriApp({ recordingKey: 'messaging', mockFork: true });
     await app.page.setViewportSize({ width: 820, height: 800 });
     project = await createTauriProject(app.page);
-    await createTauriChat(app.page, project.projectId, 'acceptEdits');
+    parentChatId = await createTauriChat(app.page, project.projectId, 'acceptEdits');
     await sendBothPrompts(app.page);
   });
 
@@ -133,7 +150,7 @@ test.describe('§fork-from-message (narrow viewport — split parked behind sing
     await closeTauriApp(app);
   });
 
-  test('prefills the fork in the parked single view, and widening never reapplies it stale', async () => {
+  test('prefills the fork in the parked single view, and widening hands the edit to its OWN zone, never the stale prefill', async () => {
     const { page } = app;
     const button = await forkButton(page, 1);
     await expect(button).toBeEnabled();
@@ -153,16 +170,66 @@ test.describe('§fork-from-message (narrow viewport — split parked behind sing
     await composer.fill(edited);
 
     // Widening now makes the split fit; the fork renders through its OWN
-    // ChatZone for the first time. ZoneDraftRestore's one-shot take must find
-    // nothing left — the stash was already consumed by the instance actually
-    // displayed while narrow — so it never overwrites the edit with the
-    // stale PROMPT_2 prefill. (Carrying the live edit itself across the
-    // single-view → split-view transition is a separate, pre-existing gap:
-    // neither render mode's composer state is bridged to the other for ANY
-    // typed text, stash-seeded or not — out of scope here.)
+    // ChatZone for the first time. The single-view instance's handoff effect
+    // (review follow-up on 214de9d4) re-stashes whatever the composer holds
+    // — the user's edit, not the stale PROMPT_2 — the moment it loses
+    // displayed status, so ZoneDraftRestore picks up the LATEST state rather
+    // than finding nothing (losing the edit) or re-applying the original
+    // prefill stale over it.
     await page.setViewportSize({ width: 1600, height: 900 });
     await expect(page.getByTestId('chat-split-row')).toBeVisible();
-    await expect(page.locator('[data-testid="chat-composer-input"]').first()).not.toHaveValue(PROMPT_2);
+    const forkComposer = await forkZoneComposer(page, parentChatId);
+    await expect(forkComposer).toHaveValue(edited);
+    await expect(forkComposer).not.toHaveValue(PROMPT_2);
+  });
+});
+
+/**
+ * Mid-width: the surface doesn't fit a split until the WORKSPACE PANEL parks
+ * (ChatSurface measures the chat column alone; with the workspace open
+ * beside it, that column is too narrow, until `use-zones-reconciler` parks
+ * the workspace to the bottom strip on the pair becoming visible). This is
+ * the exact race review follow-up B on 214de9d4 describes: `splitFits`
+ * reads false for a beat right after the pair resolves into `zones` (its
+ * ResizeObserver settles asynchronously, after the park), so the hook
+ * instance can be "displayed" and take the stash before `ChatZone` ever
+ * mounts — the handoff effect must still deliver it there once `splitFits`
+ * catches up, not just leave it flashing in the single view.
+ */
+test.describe('§fork-from-message (mid-width viewport — fits only once the workspace panel parks)', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+  let parentChatId: string;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'messaging', mockFork: true });
+    await app.page.setViewportSize({ width: 1500, height: 900 });
+    project = await createTauriProject(app.page);
+    parentChatId = await createTauriChat(app.page, project.projectId, 'acceptEdits');
+    await sendBothPrompts(app.page);
+    // Open the workspace beside the chat (⌘⇧W) so the chat column alone is
+    // too narrow for a split — until the fork's pair parks it.
+    await app.page.keyboard.press('ControlOrMeta+Shift+W');
+    await expect(app.page.getByTestId('workspace-surface')).toBeVisible({ timeout: 10_000 });
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('prefills the fork once the split catches up after the workspace parks', async () => {
+    const { page } = app;
+    const button = await forkButton(page, 1);
+    await expect(button).toBeEnabled();
+    await button.click();
+
+    await expect(page.getByTestId('chat-header-parent-link').first()).toBeVisible({ timeout: 15_000 });
+    // The pair parks the workspace, splitFits catches up, and ChatZone mounts
+    // — the prefill must land in ITS composer, not vanish in the hand-off.
+    await expect(page.getByTestId('chat-split-row')).toBeVisible({ timeout: 15_000 });
+    const forkComposer = await forkZoneComposer(page, parentChatId);
+    await expect(forkComposer).toHaveValue(PROMPT_2);
   });
 });
 
