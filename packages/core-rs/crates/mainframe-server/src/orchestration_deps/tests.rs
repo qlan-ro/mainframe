@@ -187,6 +187,47 @@ async fn a_delegated_child_reports_its_task_and_boot_interrupts_open_tasks() {
     assert_eq!(after.delivery, TaskDelivery::Dropped);
 }
 
+/// The Stop cascade through the *real* hook (`ChatManager::interrupt_chat`
+/// calling `OrchestrationHooks::on_chat_stopping`), not `FakePort` driven
+/// directly by a unit test. Depth two, so the cascade must actually recurse
+/// through the real `ChatManager`/DB/event-broadcast wiring, not merely
+/// iterate an in-memory fixture.
+#[tokio::test]
+async fn interrupting_a_chat_through_the_real_hook_cascades_through_its_whole_task_tree() {
+    let (ctx, port, project_id, caller) = setup().await;
+    let store = super::DbTaskStore::new(ctx.db.clone());
+    let mut launch = request(&project_id, &caller, LaunchWorkspace::ProjectRoot);
+    launch.parent_chat_id = Some(caller.clone());
+    let child = port.launch_chat(launch).await.unwrap();
+    let mut launch = request(&project_id, &child.id, LaunchWorkspace::ProjectRoot);
+    launch.parent_chat_id = Some(child.id.clone());
+    let grandchild = port.launch_chat(launch).await.unwrap();
+    store
+        .insert(running_task("task_1", &caller, &child.id))
+        .await
+        .unwrap();
+    store
+        .insert(running_task("task_2", &child.id, &grandchild.id))
+        .await
+        .unwrap();
+
+    let chats = ctx.chat_manager.clone().unwrap();
+    // The real path: `ChatManager::interrupt_chat` → `OrchestrationHooks::
+    // on_chat_stopping` → `OrchestrationService::cascade_stop`, not a direct
+    // call into the service and not `FakePort`.
+    chats.interrupt_chat(&caller).await;
+
+    let task_1 = store.get("task_1").await.unwrap();
+    let task_2 = store.get("task_2").await.unwrap();
+    assert_eq!(task_1.status, TaskStatus::Cancelled);
+    assert_eq!(task_2.status, TaskStatus::Cancelled);
+    assert_eq!(task_1.delivery, TaskDelivery::Dropped);
+    assert_eq!(task_2.delivery, TaskDelivery::Dropped);
+    // Both child chats are kept, open and readable, not archived or deleted.
+    assert!(chats.get_chat(&child.id).is_some());
+    assert!(chats.get_chat(&grandchild.id).is_some());
+}
+
 #[tokio::test]
 async fn a_task_chats_permission_push_names_its_parent_and_opens_the_top_level_chat() {
     use super::push::{DelegatedPush, delegated_permission_push};

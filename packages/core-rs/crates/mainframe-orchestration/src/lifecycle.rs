@@ -113,7 +113,11 @@ impl OrchestrationService {
             return;
         };
         // Only a stopped chat needs the re-read; most events skip the port.
-        if self.is_stopping(chat_id) && self.port.chat(chat_id).await.is_some_and(|c| !c.working) {
+        // A chat that is now gone (discard deletes the row before emitting
+        // `ChatEnded`, so `port.chat` reads `None`) can never run another
+        // turn to go idle on, so its stopping flag must clear here too, or
+        // it outlives the Stop and leaks for the rest of the process.
+        if self.is_stopping(chat_id) && self.port.chat(chat_id).await.is_none_or(|c| !c.working) {
             self.clear_stopping(chat_id);
         }
         if let Some(task_id) = self.tracked_task(chat_id) {
@@ -233,6 +237,25 @@ mod tests {
         assert!(!svc.cancel_outbox_entry("caller", &id).await);
         svc.try_flush("caller").await;
         assert!(port.lock().sent.is_empty());
+    }
+
+    /// Discard deletes the chat row before emitting `ChatEnded`
+    /// (`chat_manager/discard.rs`), so `port.chat` reads `None` by the time
+    /// the orchestration event loop sees it. The stopping flag must still
+    /// clear, or it leaks for the rest of the process (the chat can never
+    /// run another turn to go idle on).
+    #[tokio::test]
+    async fn a_discarded_chats_stopping_flag_clears_even_though_its_row_is_gone() {
+        let port = FakePort::new();
+        port.add_chat("caller");
+        let (svc, _ctx) = service_with(port.clone(), "caller");
+        svc.mark_stopping("gone");
+        port.remove("gone");
+        svc.on_event(&DaemonEvent::ChatEnded {
+            chat_id: "gone".to_string(),
+        })
+        .await;
+        assert!(!svc.is_stopping("gone"));
     }
 
     #[tokio::test]
