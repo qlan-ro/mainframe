@@ -889,3 +889,21 @@ the mirror has no session id in that state, so `fork_chat` refuses with "Nothing
 before a plan is made. The DB copy supports the plan's `pending_active` case; reaching it needs
 a fork without a native pin (`pending_fork` optional on the insert), which is left for a
 follow-up.
+
+### Post-review fix (2026-10-08)
+
+A switch before the first message is sent (`switch_api.rs::switch_claimed`'s `BeforeFirstMessage`
+outcome) bypasses `plan_switch` — there is no native session yet to plan a handoff against — and
+wrote the new adapter id straight through `update_chat_config`. It was passing the chat's existing
+`planMode` through unchanged instead of applying this doc's own rule ("Plan mode: kept when
+`capabilities.planMode`, else `false`"), so a plan-mode chat that switched, before its first
+message, to a provider without plan mode kept a stale `planMode: true` the new provider cannot
+honor. Fixed by computing the same `chat.plan_mode && target_plan_mode` narrowing `plan_switch`
+uses, before taking this shortcut path. Test:
+`chat_manager::tests::provider_switch::a_switch_before_the_first_message_clears_plan_mode_the_target_cannot_support`.
+
+A related review note, not changed here: "dual-write mirror columns can drift across a
+downgrade/upgrade cycle" (Decision 2's mirror, written only by the segment repository) is an
+inherent cost of that design, already marked `reversible` there; closing it needs migration-time
+reconciliation on boot (detecting and re-syncing a mirror an older binary wrote to directly), which
+is a separate task from this review.

@@ -348,7 +348,7 @@ Shared definitions (JSON Schema draft 2020-12; every object has `additionalPrope
 | `capabilities` | `{}` | `{caller:{chatId,projectId,adapterId,model,permissionMode,planMode,depth}, adapters:[{id,name,installed,available,unavailableReason,models:[{id,label}],steer:bool}], allowedPermissionModes:[PermissionMode], limits:{maxDepth,maxActiveTasksPerTree,activeTasksInTree,launchesRemaining,defaultWaitMs,maxWaitMs,readMaxItems,readMaxChars}}` |
 | `chat_list` | `projectId: Id` (default: caller's), `status: "active"\|"archived"\|"all"` (default active), `titleContains: string ≤200`, `includeDelegated: bool` (default true), `limit: 1–100` (default 50), `offset: ≥0` | `{projectId, chats:[ChatSummary], total, nextOffset\|null}`. Side chats, temporary chats, and automation chats are excluded. |
 | `chat_read` | **`chatId: Id`**, `view: "messages"\|"activity"` (default messages), `cursor: string ≤128`, `limit: 1–100` (default 20), `maxChars: 200–8000` (default 2000), `fromEnd: bool` (default true when no cursor), `messageId: Id` + `textOffset: ≥0` (continue one truncated item) | `{chatId, state, items:[{position, messageId, role:"user"\|"assistant"\|"tool"\|"system"\|"error"\|"permission", origin:"human"\|"agent"\|"provider"\|"mainframe", toolName\|null, text, textTruncated, nextTextOffset\|null, timestamp}], nextCursor\|null, lastPosition}` |
-| `chat_wait` | **`chatId: Id`**, `until: ["idle","waiting_for_permission","ended"]` subset (default all), `timeoutMs: TimeoutMs` (default 600000) | `{chatId, state, matched, waitTimedOut, lastAssistantText\|null (≤4000), pendingPermission:{toolName,summary}\|null}` |
+| `chat_wait` | **`chatId: Id`**, `until: ["idle","waiting_for_permission","ended"]` subset (default all), `timeoutMs: TimeoutMs` (default 600000); the caller may not name its own `chatId` (`invalid_request`) | `{chatId, state, matched, waitTimedOut, stillWaiting, lastAssistantText\|null (≤4000), pendingPermission:{toolName,summary}\|null}`. Each call actually blocks for at most `policy::MAX_SINGLE_WAIT_MS` (45 s), well under `timeoutMs`; see Security. A call that returns before `timeoutMs` has elapsed because it hit that cap, not because anything happened, reports `stillWaiting: true` and `waitTimedOut: false` — call again with the same arguments. `waitTimedOut: true` means the caller's own `timeoutMs` is now exhausted. |
 | `chat_launch` | `projectId: Id` (default caller's; `"no-project"` allowed), `prompt: Text100k`, `title: string ≤200`, `adapterId: Id`, `model: string ≤200`, `permissionMode`, `planMode: bool`, `workspace: Workspace` (default `project_root`; `inherit` only within the caller's project) | `{chatId, projectId, adapterId, model, permissionMode, planMode, worktreePath, branchName, state, promptDelivery:"started"\|"none"}` |
 | `chat_send` | **`chatId: Id`**, **`message: Text100k`**, `mode: "auto"\|"queue"\|"steer"` (default auto) | `{chatId, delivery:"started"\|"queued"\|"steered", outboxEntryId\|null, state}` |
 | `chat_interrupt` | **`chatId: Id`**, `reason: string ≤500` | `{chatId, interrupted:bool, state, cancelledTaskIds:[Id]}` |
@@ -475,13 +475,35 @@ entry does not exist, and it is behind the normal auth layer.
   `git rev-parse --verify` (array args). `existing_worktree` canonicalizes `worktreePath`
   asynchronously and requires it to equal a path from `git worktree list --porcelain` for the project.
   This is the `resolveAndValidatePath` equivalent, because worktrees live outside the project root.
-- **Privilege ceiling.** Ranks: `default 0 < acceptEdits 1 < auto 2 < yolo 3`; plan mode is narrower
-  than not-plan. A delegated child, a launched chat, and the target of `chat_send` or `chat_interrupt`
-  must each have rank ≤ the caller's, and a plan-mode caller may only create or target plan-mode
-  chats. The target check runs again in the port immediately before dispatch, against the live
-  `ActiveChat`, because the user may have raised the target meanwhile (t3code `DispatchModeLimit`). A
-  residual race remains: a mode change that lands between the check and the adapter write.
-  `task_cancel` on the caller's own task is always allowed, because cancelling only narrows.
+- **Privilege ceiling.** Ranks: `default 0 < acceptEdits 1 < auto 2 < yolo 3` **by label**, but the
+  ceiling compares *effective* rank (`policy::effective_mode_rank(adapter_id, mode)`), not the label.
+  Codex has no "ask before every edit" mode: its `default`, `acceptEdits`, and `auto` all map to
+  approval `on-request` plus sandbox `workspace-write`
+  (`mainframe-adapter-codex::session_thread::permission_mode_policy`), i.e. unprompted edits, the same
+  real privilege as Claude's `acceptEdits` — never Claude's `default`. Comparing labels alone let a
+  cautious, prompt-before-every-edit Claude `default` parent (label rank 0) delegate to a Codex child
+  in `default` or `acceptEdits` (label rank 0 or 1) because 0 ≤ 0 or the check even ran against the
+  wrong adapter's rank table; `effective_mode_rank` ranks every Codex mode but `yolo` at 1, so that
+  delegation is now refused. Plan mode is narrower than not-plan, compared as before. A delegated
+  child, a launched chat, and the target of `chat_send` or `chat_interrupt` must each have effective
+  rank ≤ the caller's, and a plan-mode caller may only create or target plan-mode chats. The target
+  check runs again immediately before dispatch, against the live `ActiveChat` (`chat_send`,
+  `chat_interrupt`) read right before the ceiling check with no intervening await, because the user
+  may have raised the target meanwhile (t3code `DispatchModeLimit`); `chat_launch` and `delegate_task`
+  check only once, against the caller, because they create a new chat rather than driving an existing
+  one — the residual race there is a caller mode change landing between that check and the adapter
+  write, same as before. `task_cancel` on the caller's own task is always allowed, because cancelling
+  only narrows.
+- **Project scoping.** Every tool that targets an existing chat by id (`chat_read`, `chat_wait`,
+  `chat_send`, `chat_interrupt`) resolves it through `OrchestrationService::target_chat`, which
+  requires the target's `projectId` to equal the *caller's* `projectId`. A chat in another project
+  reads exactly like an unknown id (`chat_not_found` / `chat_not_sendable`, per tool), so a caller
+  cannot learn that an out-of-project id exists. Delegated children always inherit the parent's
+  project (`delegate_task::build_request`), so a parent and its whole task tree stay reachable from
+  each other regardless of which project the parent itself is in. `chat_list`'s own `projectId` input
+  is a deliberate exception — it is how an agent discovers chats in a *different* project it was
+  told about, not a target-by-id lookup — but it already excludes side, temporary, and automation
+  chats the same way `target_chat` does.
 - **Caller liveness.** Mutating tools require the caller to be `working` and not stopping. This also
   stops a stale Codex process, which survives `turn/interrupt`, from acting after its turn ended.
 - **Recursion and rate limits.** Orchestration depth is the length of the `created_by_chat_id` chain,
@@ -755,6 +777,83 @@ gate; the push opening the top-level chat (`data.chatId`) and naming the child
 **Not run.** The Playwright scenario (`packages/e2e/tests-tauri/mcp-delegate.spec.ts`), updated for
 task chats in the card, has not been run; Rust tests cover the `mcp_call` step against a local server, against the real `/mcp` route,
 and the recording's shape.
+
+### Post-review fixes (2026-10-08)
+
+A QA and code review of this feature found daemon-side issues; fixed here, with tests:
+
+- **Privilege ceiling by effective privilege, not label (`policy.rs`).** See Security; the ceiling
+  now reads `effective_mode_rank(adapter_id, mode)` instead of the bare label rank, so a Codex
+  `default`/`acceptEdits`/`auto` chat (all unprompted edits) never compares as lower-privilege than a
+  Claude `default` chat (prompts on every edit) just because the labels did.
+- **Project scoping on every chat-id-targeting tool (`service.rs::target_chat`, `chat_send.rs`).** See
+  Security; `chat_read`, `chat_wait`, `chat_send`, and `chat_interrupt` now read a chat in another
+  project as not found. `chat_list`'s own cross-project `projectId` parameter is unchanged — it is a
+  project-id lookup the spec always documented, not a chat-id guess, and a different threat model.
+- **`chat_wait` capped well under a minute per call (`policy::MAX_SINGLE_WAIT_MS`, `chat_wait.rs`).**
+  The injected `timeout`/`tool_timeout_sec` (Injection sections above) raise each *client's* own
+  per-tool-call ceiling to 3 900 000 ms, above the server's 3 600 000 ms maximum — but that relies on
+  the raised value actually taking effect end to end (unverified live, Gate 0) and is silently lost if
+  a user's own MCP server named `mainframe` wins the collision the Claude section calls out. Rather
+  than depend on that, every single wait call (`chat_wait`, `task_status` `waitMs`, `delegate_task`
+  `mode: "wait"`) now actually blocks for at most 45 s regardless of the caller's requested timeout,
+  safely under both clients' *un-configured* default (60 s). `chat_wait` reports the distinction
+  explicitly (`stillWaiting: true`, `waitTimedOut: false`) so the agent knows to call again rather than
+  give up; the task tools needed no new field, because their existing `waitReturned: "timeout"`
+  already means "not finished, not cancelled, ask again" per their docs above.
+- **`chat_wait` rejects a self-wait.** A chat could pass its own `chatId`, which would never resolve
+  until the internal cap (previously: up to the full 60-minute maximum) because nothing else runs on
+  its own turn to flip its own state. Added as a dedicated `invalid_request`, not folded into the
+  project-scope or not-found checks, since the caller *can* read its own state at any time — it was
+  never not-found, just a guaranteed stall.
+- **Concurrent `delegate_task` calls can no longer pass the per-parent/per-tree limits or the
+  idempotency check together (`service.rs::tree_lock`, `tasks_ops.rs::tree_root`,
+  `delegate_task.rs`).** The idempotency check, the limit check, and the insert now run under one
+  lock per delegation-tree root (not global), closing the check-then-insert race; released before a
+  `wait` call blocks, so one caller's wait never holds up a sibling delegation in the same tree.
+- **A Codex steer that loses the turn-end race no longer relatches the chat to Working
+  (`chat_manager/send.rs::send_plain_text`).** Steering no longer calls `set_working`: it only ever
+  folds into a turn the caller already confirmed is Working, so re-asserting it was always redundant
+  on success and, on a steer that raced the turn's own end (Codex rejects `turn/steer` once its
+  `expectedTurnId` has ended), was actively wrong — nothing else would ever flip the chat back, since
+  the real turn had already finished.
+- **A switch before the first message now narrows plan mode the same way `plan_switch` does
+  (`chat_manager/switch_api.rs`).** That path bypasses `plan_switch` (no native session exists yet to
+  plan against) and wrote the config directly; it was passing plan mode through unchanged instead of
+  applying "kept when `capabilities.planMode`, else `false`", so a plan-mode chat that switched to a
+  provider without plan mode, before ever sending a message, silently kept a plan-mode flag the new
+  provider cannot honor.
+- **A `chat_launch`/`delegate_task` config-mode-apply failure (`finish`) no longer leaves an orphaned
+  chat (`orchestration_deps/launch.rs`).** Setting plan mode on the freshly created chat now archives
+  it on failure, the same cleanup the adjacent worktree-provisioning failure already did — previously
+  only that one path cleaned up; the plan-mode path left a stray chat the caller never learns the id
+  of (the tool call itself fails).
+- **A chat's `is_stopping` flag could outlive its Stop (`lifecycle.rs::on_event`).** Discard deletes
+  the chat row before emitting `ChatEnded`, so `port.chat` reads `None` by the time the event loop
+  sees it; the flag only cleared on a chat confirmed present and idle, so a discarded chat's entry
+  leaked for the rest of the process (harmless — the chat is unreachable either way — but unbounded).
+  Clearing now also covers "the chat is gone".
+- **Dead tool-name reference in the handoff recovery line (`mainframe-chat/src/handoff/render.rs`).**
+  `recovery_line` pointed agents at a tool named `read_chat`; the real tool is `chat_read`. Also fixed
+  in the surrounding doc comments and the `chat_read_available` field name (was `read_chat_available`).
+- **Not a bug, evidence recorded by a new test.** "Interrupted tasks never reported to an
+  async-waiting parent": `finalize` already sets `delivery: Owed` for every non-`cancelled` terminal
+  status, `interrupted` included — only a `task_cancel`'d task (the parent's own request) drops
+  delivery. `a_directly_interrupted_child_still_delivers_to_an_async_waiting_parent` pins this.
+  "Children are interrupted rather than stopped on cascade": the Stop cascade section above already
+  specifies "interrupt the child chat" for each cancelled task, and `cancel_task` does exactly that
+  (`self.port.interrupt(&child)`); archiving or deleting children was never the design — see "Child
+  chats are kept after a cascade" in the same section.
+- **Not fixed here.** "Dual-write mirror columns can drift across a downgrade/upgrade cycle"
+  (provider-switch spec, `chats` as a segment-repository-only mirror) is an inherent cost of that
+  design, already called out as "reversible" in that spec's Decision 2; closing it needs
+  migration-time reconciliation, a separate task. "Stop-cascade re-entrancy tested only against
+  `FakePort`" is addressed by a new integration test exercising the real hook
+  (`interrupting_a_chat_through_the_real_hook_cascades_through_its_whole_task_tree`,
+  `mainframe-server/src/orchestration_deps/tests.rs`), but true re-entrancy — a second Stop arriving
+  while the first's cascade is still in flight — is not separately covered; the lock shapes
+  (`tree_lock`, `task_lock`) make a concurrent second cascade on the *same* tree safe by construction,
+  but that is argued, not tested.
 
 ### Pending live verification (Gate 0)
 
