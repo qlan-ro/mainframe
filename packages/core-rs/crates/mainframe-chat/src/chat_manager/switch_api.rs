@@ -15,8 +15,14 @@ use crate::segments::switch_rules::{SwitchCheck, SwitchError, check_switch_allow
 
 enum SwitchOutcome {
     Done(Box<Chat>),
-    /// No native session has started yet: an ordinary config edit.
-    BeforeFirstMessage,
+    /// No native session has started yet: an ordinary config edit. Carries
+    /// the plan mode to write, already narrowed to the target's capability
+    /// (see `plan_switch`'s own `plan_mode: chat.plan_mode && target_plan_mode`,
+    /// which this path must match: spec "Plan mode: kept when
+    /// `capabilities.planMode`, else `false`").
+    BeforeFirstMessage {
+        plan_mode: bool,
+    },
 }
 
 impl ChatManager {
@@ -45,13 +51,13 @@ impl ChatManager {
         };
         match outcome {
             SwitchOutcome::Done(chat) => Ok(*chat),
-            SwitchOutcome::BeforeFirstMessage => {
+            SwitchOutcome::BeforeFirstMessage { plan_mode } => {
                 self.update_chat_config(
                     chat_id,
                     Some(req.adapter_id.clone()),
                     req.model.clone(),
                     None,
-                    None,
+                    Some(plan_mode),
                 )
                 .await
                 .map_err(|e| SwitchError::Failed(e.to_string()))?;
@@ -101,7 +107,12 @@ impl ChatManager {
             .ok_or_else(|| SwitchError::Failed("Provider switching is unavailable".into()))?;
         let unsent_fork = self.deps.get_pending_fork(chat_id).is_some();
         if !unsent_fork && !store.has_native_id(chat_id) {
-            return Ok(SwitchOutcome::BeforeFirstMessage);
+            let target_plan_mode = self
+                .deps
+                .adapter_info(&req.adapter_id)
+                .is_some_and(|a| a.capabilities.plan_mode);
+            let plan_mode = chat.plan_mode.unwrap_or(false) && target_plan_mode;
+            return Ok(SwitchOutcome::BeforeFirstMessage { plan_mode });
         }
         let mut layout = store
             .layout(chat_id)

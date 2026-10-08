@@ -20,6 +20,16 @@ pub(super) fn codex_info() -> AdapterInfo {
     .unwrap()
 }
 
+/// An adapter with no plan mode at all, for the narrowing test below.
+pub(super) fn no_plan_mode_info() -> AdapterInfo {
+    serde_json::from_value(serde_json::json!({
+        "id": "noplan", "name": "noplan", "description": "", "installed": true,
+        "models": [{"id": "default", "label": "Default"}],
+        "capabilities": {"planMode": false, "autoMode": false}
+    }))
+    .unwrap()
+}
+
 pub(super) fn text_message(id: &str, kind: ChatMessageType, text: &str) -> ChatMessage {
     ChatMessage {
         id: id.into(),
@@ -167,5 +177,44 @@ async fn the_first_send_carries_the_block_and_the_result_delivers_it() {
     assert_eq!(
         marker.handoff.as_ref().map(|h| h.status),
         Some(HandoffStatus::Delivered)
+    );
+}
+
+/// A switch before the first message is sent bypasses `plan_switch` (no
+/// native session exists yet to plan against) and writes the config
+/// directly. It must still apply the same narrowing rule `plan_switch` uses
+/// (spec "Plan mode: kept when `capabilities.planMode`, else `false`"),
+/// not silently leave plan mode on for a target that cannot honor it.
+#[tokio::test]
+async fn a_switch_before_the_first_message_clears_plan_mode_the_target_cannot_support() {
+    let layout = SegmentLayout {
+        segments: vec![segment("s0", 0, "ns_c", SegmentKind::Initial)],
+        natives: vec![native("ns_c", "claude", None)],
+        handoffs: vec![],
+    };
+    let mut chat = test_chat("c1");
+    chat.adapter_id = "claude".into();
+    chat.plan_mode = Some(true);
+    let deps = StoreDeps::with_chats(vec![chat]);
+    let store = Arc::new(FakeStore {
+        layout: Mutex::new(layout),
+        ..Default::default()
+    });
+    deps.set_segment_store(store.clone());
+    deps.set_adapter_info(no_plan_mode_info());
+    let mgr = ChatManager::new(deps.clone());
+
+    let req = SwitchProviderRequest {
+        adapter_id: "noplan".into(),
+        model: Some("default".into()),
+        tuning: None,
+    };
+    let chat = mgr.switch_provider("c1", &req).await.unwrap();
+
+    assert_eq!(chat.adapter_id, "noplan");
+    assert_eq!(
+        chat.plan_mode,
+        Some(false),
+        "plan mode must be cleared, not left on, for a target without planMode"
     );
 }
