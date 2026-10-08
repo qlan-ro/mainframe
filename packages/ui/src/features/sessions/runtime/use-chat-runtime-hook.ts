@@ -49,8 +49,17 @@
  * status once `splitFits` catches up and `ChatZone` mounts. Predicting that
  * ahead of time isn't reliable; `useChatThreadRuntime`'s handoff effect
  * covers it instead — it hands whatever this instance's composer holds back
- * to the stash the moment `skipDraftRestore` flips true, so `ChatZone`'s own
- * restore still finds it.
+ * to the stash the moment `isVisibleSplitZone` (`isVisibleZone(zones, chatId)
+ * && splitFits`) flips true, so `ChatZone`'s own restore still finds it.
+ *
+ * `isVisibleSplitZone` is deliberately NOT `skipDraftRestore`: the latter
+ * also flips true on an ordinary focus change to any other chat (every warm
+ * instance's `isDisplayedHere` goes false the moment it isn't
+ * `mainThreadId`), which must never trigger the handoff — doing so stashes
+ * and clears a draft nobody is giving away a composer for, and the later
+ * real eviction (`OffloadRelease`) overwrites it with that now-empty
+ * composer (#178 regression). `isVisibleSplitZone` only turns true when this
+ * chat is actually about to render inside `ChatZone`.
  */
 import { useAuiState } from '@assistant-ui/react';
 import type { AssistantRuntime } from '@assistant-ui/react';
@@ -80,6 +89,7 @@ export function useChatRuntimeHook(): AssistantRuntime {
   const splitWillRender = splitFits && isVisibleZone(zones, mainThreadId);
   const isDisplayedHere = mainThreadId === chatId && !splitWillRender;
   const skipDraftRestore = pendingPairTarget === chatId || !isDisplayedHere;
+  const isVisibleSplitZone = isVisibleZone(zones, chatId) && splitFits;
 
-  return useChatThreadRuntime(controller, port, { active: isActive, chatId, skipDraftRestore });
+  return useChatThreadRuntime(controller, port, { active: isActive, chatId, skipDraftRestore, isVisibleSplitZone });
 }

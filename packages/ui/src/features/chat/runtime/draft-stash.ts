@@ -32,9 +32,25 @@ export function markForStash(chatId: string): void {
   pending.add(chatId);
 }
 
-/** Call from the runtime hook's unmount cleanup. No-op unless `markForStash` was called for this id. */
+function isEmptyDraft(draft: DraftStash): boolean {
+  return draft.text === '' && draft.attachments.length === 0;
+}
+
+/**
+ * Call from the runtime hook's unmount cleanup. No-op unless `markForStash`
+ * was called for this id.
+ *
+ * Guards against a lost-draft race (the chat-switch regression this fixed):
+ * `handoffDraft` can land a non-empty stash for this SAME id (this instance
+ * handed off whatever the user typed before it lost displayed status)
+ * BEFORE `OffloadRelease` later marks and evicts this now-empty instance. An
+ * empty capture must never clobber that — it would overwrite the user's real
+ * draft with the cleared composer nobody is looking at.
+ */
 export function captureIfMarked(chatId: string, draft: DraftStash): void {
   if (!pending.delete(chatId)) return;
+  const existing = stash.get(chatId);
+  if (isEmptyDraft(draft) && existing != null && !isEmptyDraft(existing)) return;
   stash.set(chatId, draft);
   notifyWaiters(chatId);
 }

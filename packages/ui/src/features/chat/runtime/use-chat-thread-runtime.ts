@@ -78,7 +78,7 @@ async function restoreAttachments(
 export function useChatThreadRuntime(
   controller: AcpChatController,
   port: number,
-  opts?: { active?: boolean; chatId?: string; skipDraftRestore?: boolean },
+  opts?: { active?: boolean; chatId?: string; skipDraftRestore?: boolean; isVisibleSplitZone?: boolean },
 ): AssistantRuntime {
   const state = useControllerState(controller); // uses controller.subscribeState (always)
 
@@ -204,17 +204,32 @@ export function useChatThreadRuntime(
   // settles after the workspace panel parks to free the width), so this
   // instance can correctly be the one displayed, take the stash above, and
   // THEN lose that status to `ChatZone` once the split catches up — before
-  // the user ever saw it render there. If we took something and are now
-  // losing displayed status, hand the composer's CURRENT content (the
-  // original stash, or whatever the user edited into it meanwhile) back to
-  // the stash so the consumer taking over picks up the latest state instead
-  // of a now-empty `ChatZone` composer. Clears the local composer too, so a
-  // later unsplit back to this same instance doesn't resurrect it stale.
-  const wasSkippedRef = useRef(skipDraftRestore);
+  // the user ever saw it render there. If we took something and this chat is
+  // now BECOMING a visible split-zone member (`isVisibleSplitZone` flips
+  // false → true — `useChatRuntimeHook` computes it as
+  // `isVisibleZone(zones, chatId) && splitFits`), hand the composer's CURRENT
+  // content (the original stash, or whatever the user edited into it
+  // meanwhile) back to the stash so `ChatZone`'s own restore picks up the
+  // latest state instead of a now-empty composer. Clears the local composer
+  // too, so a later unsplit back to this same instance doesn't resurrect it
+  // stale.
+  //
+  // Gated on `isVisibleSplitZone`, NOT `skipDraftRestore`: the latter also
+  // flips true on an ORDINARY focus change (`skipDraftRestore = pendingPair
+  // || !isDisplayedHere` — simply switching to another chat flips
+  // `isDisplayedHere` false for every other warm instance). Reacting to that
+  // used to stash-and-clear a chat's draft every time the user looked away
+  // from it, so `OffloadRelease`'s later `captureIfMarked` on actual eviction
+  // overwrote the real draft with the already-cleared (empty) composer — the
+  // draft was lost. A plain focus change never makes this chat a split-zone
+  // member, so `isVisibleSplitZone` stays false and the handoff correctly
+  // does nothing.
+  const isVisibleSplitZone = opts?.isVisibleSplitZone ?? false;
+  const wasVisibleSplitZoneRef = useRef(isVisibleSplitZone);
   useEffect(() => {
-    const previouslySkipped = wasSkippedRef.current;
-    wasSkippedRef.current = skipDraftRestore;
-    if (!tookDraftRef.current || previouslySkipped || !skipDraftRestore) return;
+    const wasVisibleSplitZone = wasVisibleSplitZoneRef.current;
+    wasVisibleSplitZoneRef.current = isVisibleSplitZone;
+    if (!tookDraftRef.current || wasVisibleSplitZone || !isVisibleSplitZone) return;
     const composer = runtimeRef.current?.thread?.composer;
     if (composer == null) return;
     const composerState = composer.getState();
@@ -224,7 +239,7 @@ export function useChatThreadRuntime(
     handoffDraft(stashKey, { text: composerState.text, attachments });
     tookDraftRef.current = false;
     composer.setText('');
-  }, [stashKey, skipDraftRestore]);
+  }, [stashKey, isVisibleSplitZone]);
 
   // Capture the composer draft on unmount, but only when OffloadRelease marked
   // this thread first (markForStash) — an unmount from delete/archive never

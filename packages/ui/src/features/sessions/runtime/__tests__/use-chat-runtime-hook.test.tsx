@@ -127,7 +127,7 @@ describe('use-chat-runtime-hook — active:true when main thread and remoteId is
     renderHook(() => useChatRuntimeHook());
 
     const thirdArg = mockUseChatThreadRuntime.mock.calls[0]?.[2];
-    expect(thirdArg).toEqual({ active: true, chatId: 'chat-9', skipDraftRestore: false });
+    expect(thirdArg).toEqual({ active: true, chatId: 'chat-9', skipDraftRestore: false, isVisibleSplitZone: false });
   });
 });
 
@@ -149,7 +149,7 @@ describe('use-chat-runtime-hook — active:false when mainThreadId differs', () 
     // ChatSurface actually displays), independent of `active`: a warm
     // background instance for a chat nobody is looking at must never win the
     // one-shot draft-stash take ahead of whichever instance IS displayed.
-    expect(thirdArg).toEqual({ active: false, chatId: 'chat-9', skipDraftRestore: true });
+    expect(thirdArg).toEqual({ active: false, chatId: 'chat-9', skipDraftRestore: true, isVisibleSplitZone: false });
   });
 });
 
@@ -167,7 +167,12 @@ describe('use-chat-runtime-hook — active:false when remoteId is absent (new lo
     renderHook(() => useChatRuntimeHook());
 
     const thirdArg = mockUseChatThreadRuntime.mock.calls[0]?.[2];
-    expect(thirdArg).toEqual({ active: false, chatId: '__LOCALID_x', skipDraftRestore: false });
+    expect(thirdArg).toEqual({
+      active: false,
+      chatId: '__LOCALID_x',
+      skipDraftRestore: false,
+      isVisibleSplitZone: false,
+    });
   });
 });
 
@@ -190,7 +195,9 @@ describe('use-chat-runtime-hook — skipDraftRestore: only the displayed instanc
     renderHook(() => useChatRuntimeHook());
 
     const thirdArg = mockUseChatThreadRuntime.mock.calls[0]?.[2];
-    expect(thirdArg).toEqual({ active: true, chatId: 'chat-9', skipDraftRestore: true });
+    // isVisibleSplitZone: true — this id IS a member of a pair that fits, so
+    // the handoff effect (in useChatThreadRuntime) is armed for it.
+    expect(thirdArg).toEqual({ active: true, chatId: 'chat-9', skipDraftRestore: true, isVisibleSplitZone: true });
   });
 
   it('WIDE — defers for the pair’s OTHER (unfocused) half too; ChatZone renders both', () => {
@@ -203,7 +210,12 @@ describe('use-chat-runtime-hook — skipDraftRestore: only the displayed instanc
     renderHook(() => useChatRuntimeHook());
 
     const thirdArg = mockUseChatThreadRuntime.mock.calls[0]?.[2];
-    expect(thirdArg).toEqual({ active: false, chatId: 'chat-parent', skipDraftRestore: true });
+    expect(thirdArg).toEqual({
+      active: false,
+      chatId: 'chat-parent',
+      skipDraftRestore: true,
+      isVisibleSplitZone: true,
+    });
   });
 
   it('NARROW — takes when a zone member never fits (ChatSurface parks it behind the single view)', () => {
@@ -216,7 +228,9 @@ describe('use-chat-runtime-hook — skipDraftRestore: only the displayed instanc
     renderHook(() => useChatRuntimeHook());
 
     const thirdArg = mockUseChatThreadRuntime.mock.calls[0]?.[2];
-    expect(thirdArg).toEqual({ active: true, chatId: 'chat-9', skipDraftRestore: false });
+    // isVisibleSplitZone: false — splitFits is false, so the split never
+    // renders here; no handoff is ever armed for this parked member.
+    expect(thirdArg).toEqual({ active: true, chatId: 'chat-9', skipDraftRestore: false, isVisibleSplitZone: false });
   });
 
   it('PENDING — always defers while queued, regardless of the CURRENT splitFits reading', () => {
@@ -234,7 +248,7 @@ describe('use-chat-runtime-hook — skipDraftRestore: only the displayed instanc
     renderHook(() => useChatRuntimeHook());
 
     const thirdArg = mockUseChatThreadRuntime.mock.calls[0]?.[2];
-    expect(thirdArg).toEqual({ active: true, chatId: 'chat-9', skipDraftRestore: true });
+    expect(thirdArg).toEqual({ active: true, chatId: 'chat-9', skipDraftRestore: true, isVisibleSplitZone: false });
   });
 
   it('MID-WIDTH — takes right after pendingPair resolves into zones, even while splitFits still reads stale', () => {
@@ -255,7 +269,9 @@ describe('use-chat-runtime-hook — skipDraftRestore: only the displayed instanc
     renderHook(() => useChatRuntimeHook());
 
     const thirdArg = mockUseChatThreadRuntime.mock.calls[0]?.[2];
-    expect(thirdArg).toEqual({ active: true, chatId: 'chat-9', skipDraftRestore: false });
+    // isVisibleSplitZone: false — stays false until splitFits catches up; the
+    // handoff effect arms itself on that later transition, not here.
+    expect(thirdArg).toEqual({ active: true, chatId: 'chat-9', skipDraftRestore: false, isVisibleSplitZone: false });
   });
 
   it('defers for a plain background thread nobody is looking at (not focused, no zones at all)', () => {
@@ -268,7 +284,7 @@ describe('use-chat-runtime-hook — skipDraftRestore: only the displayed instanc
     renderHook(() => useChatRuntimeHook());
 
     const thirdArg = mockUseChatThreadRuntime.mock.calls[0]?.[2];
-    expect(thirdArg).toEqual({ active: false, chatId: 'chat-9', skipDraftRestore: true });
+    expect(thirdArg).toEqual({ active: false, chatId: 'chat-9', skipDraftRestore: true, isVisibleSplitZone: false });
   });
 
   it('defers for a zone member whose pair is parked (the FOCUSED chat is not in the same pair)', () => {
@@ -285,6 +301,12 @@ describe('use-chat-runtime-hook — skipDraftRestore: only the displayed instanc
     renderHook(() => useChatRuntimeHook());
 
     const thirdArg = mockUseChatThreadRuntime.mock.calls[0]?.[2];
-    expect(thirdArg).toEqual({ active: false, chatId: 'chat-9', skipDraftRestore: true });
+    // isVisibleSplitZone is membership + splitFits only (`isVisibleZone(zones,
+    // chatId) && splitFits`), independent of mainThreadId, so it reads true
+    // here even though the split isn't actually rendering (mainThreadId
+    // isn't a zone member). Harmless: this instance's skipDraftRestore is
+    // already true from mount (never took a draft, nothing for the handoff
+    // effect to act on) — see use-chat-thread-runtime.ts's handoff comment.
+    expect(thirdArg).toEqual({ active: false, chatId: 'chat-9', skipDraftRestore: true, isVisibleSplitZone: true });
   });
 });
