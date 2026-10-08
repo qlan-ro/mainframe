@@ -41,6 +41,7 @@ import { useZoneShortcutActions } from '@/features/chat/zones/use-zone-shortcut-
 import { useShortcutAction } from '@/features/shortcuts/action-store';
 import { focusVisibleComposer } from '@/features/chat/composer/focus-composer';
 import { ZoneDropLayer } from '@/features/chat/zones/ZoneDropLayer';
+import { useFindInChatStore } from '@/features/chat/find/find-in-chat-store';
 import { ChatThread } from '../../chat/thread/ChatThread';
 import { ChatColumnHeader } from '../../chat/thread/ChatColumnHeader';
 import { SideChatHost } from '@/features/side-chat/SideChatHost';
@@ -78,6 +79,11 @@ export function ChatSurface() {
   const panelState = useSessionPanelState('main');
 
   const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
+  // Find state is one global store, but its query and matches belong to the
+  // chat it was opened in: switching chats (or starting a draft) closes it.
+  useEffect(() => {
+    useFindInChatStore.getState().close();
+  }, [mainThreadId]);
   // s.threadListItem is the native active ThreadListItemState; its `status`
   // ('new' | 'regular' | 'archived' | 'deleted') is read directly — the
   // SessionItem projection would collapse 'new' to 'regular' and break the

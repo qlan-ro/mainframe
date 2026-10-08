@@ -106,6 +106,7 @@ class RecordingResizeObserver {
 (globalThis as { ResizeObserver?: unknown }).ResizeObserver = RecordingResizeObserver;
 
 import { ChatSurface } from '../ChatSurface';
+import { useFindInChatStore } from '@/features/chat/find/find-in-chat-store';
 
 describe('ChatSurface', () => {
   beforeEach(() => {
@@ -192,6 +193,27 @@ describe('ChatSurface', () => {
     const column = container.querySelector('[data-chat-column]') as HTMLElement;
     expect(column.contains(host)).toBe(true);
     expect(column.contains(screen.getByTestId('session-panel-root'))).toBe(true);
+  });
+
+  it('closes the find bar when the active chat changes, e.g. to a new draft', () => {
+    __mainThreadId = 'chat-123';
+    __itemStatus = 'regular';
+    __messageCount = 4;
+    const { rerender } = render(<ChatSurface />);
+    act(() => {
+      useFindInChatStore.getState().open();
+      useFindInChatStore.getState().setQuery('needle');
+    });
+
+    // A re-render of the same chat keeps the user's search.
+    rerender(<ChatSurface />);
+    expect(useFindInChatStore.getState()).toMatchObject({ isOpen: true, query: 'needle' });
+
+    __mainThreadId = '__LOCALID_1';
+    __itemStatus = 'new';
+    __messageCount = 0;
+    rerender(<ChatSurface />);
+    expect(useFindInChatStore.getState()).toMatchObject({ isOpen: false, query: '' });
   });
 
   it('hides ChatThread and its composer while initialization is pending', () => {
