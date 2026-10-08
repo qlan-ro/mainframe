@@ -10,11 +10,12 @@ import { render, screen, within } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import type { ReactNode } from 'react';
 
+const mockUseAui = vi.fn(() => ({}) as { thread?: { composer: () => unknown } });
 vi.mock('@assistant-ui/react', () => ({
   AuiProvider: ({ children }: { children?: ReactNode }) => <>{children}</>,
   AuiConfig: (v: unknown) => v,
   ExternalThread: (v: unknown) => v,
-  useAui: () => ({}),
+  useAui: () => mockUseAui(),
 }));
 vi.mock('@assistant-ui/store', () => ({ Derived: (v: unknown) => v }));
 
@@ -74,6 +75,7 @@ vi.mock('../../thread/ChatColumnHeader', () => ({
 }));
 
 import { ChatZone } from '../ChatZone';
+import { seedDraft } from '../../runtime/draft-stash';
 
 describe('ChatZone — side-chat host placement (todo #344)', () => {
   it("mounts SideChatHost inside its own zone, keyed by that zone's chat id", () => {
@@ -107,5 +109,36 @@ describe('ChatZone — side-chat host placement (todo #344)', () => {
     // Both zones still render their own thread — the host is additive, not a replacement.
     expect(within(zoneA).getByTestId('chat-thread-stub')).toBeInTheDocument();
     expect(within(zoneB).getByTestId('chat-thread-stub')).toBeInTheDocument();
+  });
+});
+
+/**
+ * ChatZone — draft-stash restore (finding 1, fork-from-message prefill).
+ *
+ * A fork opened beside its parent renders through ChatZone, not through
+ * `useChatRuntimeHook`'s hidden kept-warm instance — so ChatZone must apply a
+ * seeded draft (`seedDraft`) to ITS OWN composer, the one actually displayed.
+ */
+describe('ChatZone — draft-stash restore', () => {
+  it("seeds the zone's own composer with a stashed draft on mount", () => {
+    const setText = vi.fn();
+    const addAttachment = vi.fn().mockResolvedValue(undefined);
+    mockUseAui.mockReturnValue({ thread: { composer: () => ({ setText, addAttachment }) } });
+
+    seedDraft('chat-fork-1', 'List the files in this project using bash ls.');
+
+    render(<ChatZone chatId="chat-fork-1" focused onFocus={() => {}} onClose={() => {}} />);
+
+    expect(setText).toHaveBeenCalledWith('List the files in this project using bash ls.');
+    expect(addAttachment).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when no draft is stashed for this chat id', () => {
+    const setText = vi.fn();
+    mockUseAui.mockReturnValue({ thread: { composer: () => ({ setText, addAttachment: vi.fn() }) } });
+
+    render(<ChatZone chatId="chat-no-draft" focused onFocus={() => {}} onClose={() => {}} />);
+
+    expect(setText).not.toHaveBeenCalled();
   });
 });

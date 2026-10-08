@@ -28,9 +28,34 @@ import { useDaemonPort } from '../../sessions/runtime/daemon-port-context';
 import { CHAT_ATTACHMENT_ADAPTER, useControllerState } from '../runtime/use-chat-thread-runtime';
 import { buildChatExtras, isRunningFromState, useChatExtrasState } from '../runtime/chat-extras';
 import { useNativeThreadMessages } from '../runtime/use-native-thread-messages';
+import { takeStash } from '../runtime/draft-stash';
 import { ChatThread } from '../thread/ChatThread';
 import { ChatColumnHeader } from '../thread/ChatColumnHeader';
 import { SideChatHost } from '@/features/side-chat/SideChatHost';
+
+/**
+ * Restores a `draft-stash` seed (a "Fork from here" prefill, or a #178
+ * offload-release draft) into THIS zone's own composer. Mounted inside the
+ * zone's rebound `AuiProvider`, so `useAui().thread` resolves to its
+ * `ExternalThread` client, not the outer/main one — `useChatRuntimeHook`'s
+ * hidden kept-warm instance for this same chatId defers to this effect
+ * (`skipDraftRestore`) so the one-shot take lands here, where it is visible.
+ */
+function ZoneDraftRestore({ chatId }: { chatId: string }): null {
+  const aui = useAui();
+  useEffect(() => {
+    const draft = takeStash(chatId);
+    if (draft == null) return;
+    const composer = aui.thread.composer();
+    composer.setText(draft.text);
+    for (const file of draft.attachments) {
+      void composer.addAttachment(file).catch((error: unknown) => {
+        console.warn('[chat-zone] could not restore a stashed attachment', error);
+      });
+    }
+  }, [chatId, aui]);
+  return null;
+}
 
 export function ChatZone({
   chatId,
@@ -109,6 +134,7 @@ export function ChatZone({
 
   return (
     <AuiProvider extends={aui} config={config}>
+      <ZoneDraftRestore chatId={chatId} />
       <div
         data-testid={`chat-zone-${chatId}`}
         data-focused={focused}

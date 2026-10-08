@@ -12,12 +12,23 @@
  * - active = this thread is mainThreadId AND it has a daemon chat (remoteId set);
  *   only then does the controller open a live WS sub (D4). A brand-new local
  *   thread with no remoteId is never live.
+ *
+ * `skipDraftRestore`: this hook's hidden instance is kept warm for every alive
+ * thread, regardless of what the chat surface actually renders for it. A chat
+ * that is (or is about to become, via a queued `pendingPair`) a split zone's
+ * member is displayed through `ChatZone`'s OWN `ExternalThread`, with its own
+ * composer — this hidden instance's composer is never shown. Without the
+ * skip, this hook's mount effect (which runs well before the zone itself
+ * renders) always wins `draft-stash`'s one-shot take and seeds a composer
+ * nobody sees, leaving a "Fork from here" prefill (or a #178 offload-release
+ * restore) empty in the zone that actually displays.
  */
 import { useAuiState } from '@assistant-ui/react';
 import type { AssistantRuntime } from '@assistant-ui/react';
 import { chatControllerRegistry } from './chat-controller-registry';
 import { useDaemonPort } from './daemon-port-context';
 import { useChatThreadRuntime } from '../../chat/runtime/use-chat-thread-runtime';
+import { isVisibleZone, useZonesStore } from '../../chat/zones/zones-store';
 
 export function useChatRuntimeHook(): AssistantRuntime {
   const chatId = useAuiState((s) => s.threadListItem.id);
@@ -33,5 +44,9 @@ export function useChatRuntimeHook(): AssistantRuntime {
 
   const controller = chatControllerRegistry.getOrCreate(chatId, port);
 
-  return useChatThreadRuntime(controller, port, { active: isActive, chatId });
+  const zones = useZonesStore((s) => s.zones);
+  const pendingPairTarget = useZonesStore((s) => s.pendingPair?.[1]);
+  const skipDraftRestore = isVisibleZone(zones, chatId) || pendingPairTarget === chatId;
+
+  return useChatThreadRuntime(controller, port, { active: isActive, chatId, skipDraftRestore });
 }

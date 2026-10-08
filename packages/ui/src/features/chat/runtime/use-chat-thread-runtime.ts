@@ -78,7 +78,7 @@ async function restoreAttachments(
 export function useChatThreadRuntime(
   controller: AcpChatController,
   port: number,
-  opts?: { active?: boolean; chatId?: string },
+  opts?: { active?: boolean; chatId?: string; skipDraftRestore?: boolean },
 ): AssistantRuntime {
   const state = useControllerState(controller); // uses controller.subscribeState (always)
 
@@ -174,7 +174,18 @@ export function useChatThreadRuntime(
   // OffloadRelease for this SAME thread id (no id-flip on reopen — see the
   // controller registry header) is restored into the composer once, mirroring
   // the load-once effect above.
+  //
+  // `skipDraftRestore` (set by `useChatRuntimeHook` when this id is a split
+  // zone's member, or its queued pending-pair target) defers the take to
+  // `ChatZone`'s own restore effect instead. Without it, this hook's hidden
+  // kept-warm instance — mounted by aui's RemoteThreadListHookInstanceManager
+  // well before the zone itself renders — always wins the one-shot take and
+  // seeds a composer nobody displays, leaving the visible zone's composer
+  // empty (a "Fork from here" prefill landing beside its parent, #343/fork-
+  // from-message).
+  const skipDraftRestore = opts?.skipDraftRestore ?? false;
   useEffect(() => {
+    if (skipDraftRestore) return;
     const draft = takeStash(stashKey);
     if (draft == null) return;
     const composer = runtimeRef.current?.thread?.composer;
@@ -185,7 +196,7 @@ export function useChatThreadRuntime(
         console.warn('[chat-runtime] could not restore a stashed attachment', error);
       });
     }
-  }, [stashKey]);
+  }, [stashKey, skipDraftRestore]);
 
   // Capture the composer draft on unmount, but only when OffloadRelease marked
   // this thread first (markForStash) — an unmount from delete/archive never

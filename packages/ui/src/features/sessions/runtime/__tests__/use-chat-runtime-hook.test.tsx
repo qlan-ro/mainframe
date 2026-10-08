@@ -51,6 +51,20 @@ vi.mock('../daemon-port-context', () => ({
   useDaemonPort: vi.fn(() => 31415),
 }));
 
+// Split-zone membership: a thread that is (or is queued to become) a
+// `ChatZone` member defers its draft-stash take to the zone (finding 1,
+// fork-from-message prefill). Defaults to "no split" unless a test opts in.
+let fakeZonesState: { zones: [string, string] | null; pendingPair: [string, string] | null } = {
+  zones: null,
+  pendingPair: null,
+};
+
+vi.mock('../../../chat/zones/zones-store', () => ({
+  isVisibleZone: (zones: [string, string] | null, id: string | null | undefined) =>
+    id != null && zones != null && zones.includes(id),
+  useZonesStore: vi.fn((selector: (s: typeof fakeZonesState) => unknown) => selector(fakeZonesState)),
+}));
+
 // ---------------------------------------------------------------------------
 // Imports — after mocks
 // ---------------------------------------------------------------------------
@@ -70,6 +84,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockGetOrCreate.mockReturnValue(FAKE_CONTROLLER as unknown as ReturnType<typeof chatControllerRegistry.getOrCreate>);
   mockUseChatThreadRuntime.mockReturnValue(SENTINEL_RUNTIME as unknown as ReturnType<typeof useChatThreadRuntime>);
+  fakeZonesState = { zones: null, pendingPair: null };
 });
 
 // ---------------------------------------------------------------------------
@@ -104,7 +119,7 @@ describe('use-chat-runtime-hook — active:true when main thread and remoteId is
     renderHook(() => useChatRuntimeHook());
 
     const thirdArg = mockUseChatThreadRuntime.mock.calls[0]?.[2];
-    expect(thirdArg).toEqual({ active: true, chatId: 'chat-9' });
+    expect(thirdArg).toEqual({ active: true, chatId: 'chat-9', skipDraftRestore: false });
   });
 });
 
@@ -122,7 +137,7 @@ describe('use-chat-runtime-hook — active:false when mainThreadId differs', () 
     renderHook(() => useChatRuntimeHook());
 
     const thirdArg = mockUseChatThreadRuntime.mock.calls[0]?.[2];
-    expect(thirdArg).toEqual({ active: false, chatId: 'chat-9' });
+    expect(thirdArg).toEqual({ active: false, chatId: 'chat-9', skipDraftRestore: false });
   });
 });
 
@@ -140,6 +155,55 @@ describe('use-chat-runtime-hook — active:false when remoteId is absent (new lo
     renderHook(() => useChatRuntimeHook());
 
     const thirdArg = mockUseChatThreadRuntime.mock.calls[0]?.[2];
-    expect(thirdArg).toEqual({ active: false, chatId: '__LOCALID_x' });
+    expect(thirdArg).toEqual({ active: false, chatId: '__LOCALID_x', skipDraftRestore: false });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6. skipDraftRestore — this id is a split zone's member, or its queued
+//    pending-pair target (finding 1: a "Fork from here" prefill opening
+//    beside its parent). This hidden instance must defer to ChatZone's own
+//    restore effect, or the one-shot draft-stash take lands on a composer
+//    nobody displays.
+// ---------------------------------------------------------------------------
+
+describe('use-chat-runtime-hook — skipDraftRestore defers to a split zone', () => {
+  it('is true when this id is already a visible zone member', () => {
+    fakeAuiState = {
+      threadListItem: { id: 'chat-9', remoteId: 'chat-9' },
+      threads: { mainThreadId: 'chat-9' },
+    };
+    fakeZonesState = { zones: ['chat-parent', 'chat-9'], pendingPair: null };
+
+    renderHook(() => useChatRuntimeHook());
+
+    const thirdArg = mockUseChatThreadRuntime.mock.calls[0]?.[2];
+    expect(thirdArg).toEqual({ active: true, chatId: 'chat-9', skipDraftRestore: true });
+  });
+
+  it('is true when this id is the queued pending-pair target (not listed yet)', () => {
+    fakeAuiState = {
+      threadListItem: { id: 'chat-9', remoteId: 'chat-9' },
+      threads: { mainThreadId: 'chat-9' },
+    };
+    fakeZonesState = { zones: null, pendingPair: ['chat-parent', 'chat-9'] };
+
+    renderHook(() => useChatRuntimeHook());
+
+    const thirdArg = mockUseChatThreadRuntime.mock.calls[0]?.[2];
+    expect(thirdArg).toEqual({ active: true, chatId: 'chat-9', skipDraftRestore: true });
+  });
+
+  it('is false for an unrelated thread while some other pair is split', () => {
+    fakeAuiState = {
+      threadListItem: { id: 'chat-9', remoteId: 'chat-9' },
+      threads: { mainThreadId: 'chat-9' },
+    };
+    fakeZonesState = { zones: ['chat-a', 'chat-b'], pendingPair: null };
+
+    renderHook(() => useChatRuntimeHook());
+
+    const thirdArg = mockUseChatThreadRuntime.mock.calls[0]?.[2];
+    expect(thirdArg).toEqual({ active: true, chatId: 'chat-9', skipDraftRestore: false });
   });
 });
