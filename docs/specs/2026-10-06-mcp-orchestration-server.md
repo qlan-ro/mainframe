@@ -345,10 +345,10 @@ Shared definitions (JSON Schema draft 2020-12; every object has `additionalPrope
 
 | Tool | Input (`properties`; required in **bold**) | Result |
 |---|---|---|
-| `capabilities` | `{}` | `{caller:{chatId,projectId,adapterId,model,permissionMode,planMode,depth}, adapters:[{id,name,installed,available,unavailableReason,models:[{id,label}],steer:bool}], allowedPermissionModes:[PermissionMode], limits:{maxDepth,maxActiveTasksPerTree,activeTasksInTree,launchesRemaining,defaultWaitMs,maxWaitMs,readMaxItems,readMaxChars}}` |
+| `capabilities` | `{}` | `{caller:{chatId,projectId,adapterId,model,permissionMode,planMode,depth}, adapters:[{id,name,installed,available,unavailableReason,models:[{id,label}],steer:bool}], allowedPermissionModes:{[adapterId]:[PermissionMode]}, limits:{maxDepth,maxActiveTasksPerTree,activeTasksInTree,launchesRemaining,defaultWaitMs,maxWaitMs,maxSingleWaitMs,readMaxItems,readMaxChars}}`. `allowedPermissionModes` is keyed by adapter id, not one flat list: the ceiling compares *effective* privilege (Security), which a mode's label does not carry across providers, so the same caller's allowed set can differ by target adapter. `maxSingleWaitMs` is the per-call cap every blocking wait tool actually honors (see `chat_wait`), so an agent reading `timeoutMs`/`waitMs` back lower than it asked for knows why. |
 | `chat_list` | `projectId: Id` (default: caller's), `status: "active"\|"archived"\|"all"` (default active), `titleContains: string ≤200`, `includeDelegated: bool` (default true), `limit: 1–100` (default 50), `offset: ≥0` | `{projectId, chats:[ChatSummary], total, nextOffset\|null}`. Side chats, temporary chats, and automation chats are excluded. |
 | `chat_read` | **`chatId: Id`**, `view: "messages"\|"activity"` (default messages), `cursor: string ≤128`, `limit: 1–100` (default 20), `maxChars: 200–8000` (default 2000), `fromEnd: bool` (default true when no cursor), `messageId: Id` + `textOffset: ≥0` (continue one truncated item) | `{chatId, state, items:[{position, messageId, role:"user"\|"assistant"\|"tool"\|"system"\|"error"\|"permission", origin:"human"\|"agent"\|"provider"\|"mainframe", toolName\|null, text, textTruncated, nextTextOffset\|null, timestamp}], nextCursor\|null, lastPosition}` |
-| `chat_wait` | **`chatId: Id`**, `until: ["idle","waiting_for_permission","ended"]` subset (default all), `timeoutMs: TimeoutMs` (default 600000); the caller may not name its own `chatId` (`invalid_request`) | `{chatId, state, matched, waitTimedOut, stillWaiting, lastAssistantText\|null (≤4000), pendingPermission:{toolName,summary}\|null}`. Each call actually blocks for at most `policy::MAX_SINGLE_WAIT_MS` (45 s), well under `timeoutMs`; see Security. A call that returns before `timeoutMs` has elapsed because it hit that cap, not because anything happened, reports `stillWaiting: true` and `waitTimedOut: false` — call again with the same arguments. `waitTimedOut: true` means the caller's own `timeoutMs` is now exhausted. |
+| `chat_wait` | **`chatId: Id`**, `until: ["idle","waiting_for_permission","ended"]` subset (default all), `timeoutMs: TimeoutMs` (default 600000); the caller may not name its own `chatId` (`invalid_request`) | `{chatId, state, matched, waitTimedOut, stillWaiting, remainingMs\|null, lastAssistantText\|null (≤4000), pendingPermission:{toolName,summary}\|null}`. Each call actually blocks for at most `policy::MAX_SINGLE_WAIT_MS` (45 s), well under `timeoutMs`; see Security. A call that returns before `timeoutMs` has elapsed because it hit that cap, not because anything happened, reports `stillWaiting: true`, `waitTimedOut: false`, and `remainingMs` set to what is left of the *original* `timeoutMs` — call again with `timeoutMs: remainingMs` to keep waiting against the same overall budget, not a fresh one; passing the same `timeoutMs` back on every call instead would make `stillWaiting` true forever, since every call would then recompute against a full, unspent-looking budget. `waitTimedOut: true` (with `remainingMs: null`) means a call's own (possibly already-reduced) `timeoutMs` is itself now exhausted with nothing happening. |
 | `chat_launch` | `projectId: Id` (default caller's; `"no-project"` allowed), `prompt: Text100k`, `title: string ≤200`, `adapterId: Id`, `model: string ≤200`, `permissionMode`, `planMode: bool`, `workspace: Workspace` (default `project_root`; `inherit` only within the caller's project) | `{chatId, projectId, adapterId, model, permissionMode, planMode, worktreePath, branchName, state, promptDelivery:"started"\|"none"}` |
 | `chat_send` | **`chatId: Id`**, **`message: Text100k`**, `mode: "auto"\|"queue"\|"steer"` (default auto) | `{chatId, delivery:"started"\|"queued"\|"steered", outboxEntryId\|null, state}` |
 | `chat_interrupt` | **`chatId: Id`**, `reason: string ≤500` | `{chatId, interrupted:bool, state, cancelledTaskIds:[Id]}` |
@@ -493,17 +493,48 @@ entry does not exist, and it is behind the normal auth layer.
   check only once, against the caller, because they create a new chat rather than driving an existing
   one — the residual race there is a caller mode change landing between that check and the adapter
   write, same as before. `task_cancel` on the caller's own task is always allowed, because cancelling
-  only narrows.
-- **Project scoping.** Every tool that targets an existing chat by id (`chat_read`, `chat_wait`,
-  `chat_send`, `chat_interrupt`) resolves it through `OrchestrationService::target_chat`, which
-  requires the target's `projectId` to equal the *caller's* `projectId`. A chat in another project
-  reads exactly like an unknown id (`chat_not_found` / `chat_not_sendable`, per tool), so a caller
-  cannot learn that an out-of-project id exists. Delegated children always inherit the parent's
-  project (`delegate_task::build_request`), so a parent and its whole task tree stay reachable from
-  each other regardless of which project the parent itself is in. `chat_list`'s own `projectId` input
-  is a deliberate exception — it is how an agent discovers chats in a *different* project it was
-  told about, not a target-by-id lookup — but it already excludes side, temporary, and automation
-  chats the same way `target_chat` does.
+  only narrows. An *inherited* mode (the caller named none) is clamped to the highest mode the target
+  adapter allows within the caller's effective rank, not checked verbatim against the ceiling: a
+  caller's own mode label does not mean the same real privilege on another provider, so carrying it
+  across providers unchanged can read as an escalation (and be refused) for a mode the agent never
+  asked for — a Codex `auto` parent (effective rank 1) delegating to Claude with no `permissionMode`
+  gets Claude's `acceptEdits` (also rank 1), not a refusal for Claude's `auto` (rank 2). An *explicit*
+  mode is still checked as asked, including when no mode on the target can satisfy it at all (Codex
+  has no rank-0 mode, so a Claude `default` caller inheriting into Codex is refused, not silently
+  granted Codex's lowest). `capabilities`' `allowedPermissionModes` is keyed by adapter id for the
+  same reason — a flat list compared against the label-only rank would disagree with the ceiling
+  itself the moment the caller or a listed adapter is Codex.
+
+  The ceiling is also re-checked when a *queued* `chat_send` entry (one held in the outbox because
+  the target was busy) is actually flushed, not only when it was enqueued: the sender's or the
+  target's mode can change while it sits queued. A sender that no longer passes has its entry dropped
+  (not delivered, not kept for a retry) and logged; a task result is never subject to this check,
+  since delivering a task's own outcome is not "driving" the parent the way a `chat_send` is.
+- **Scoping.** Every tool that targets an existing chat by id (`chat_read`, `chat_wait`, `chat_send`,
+  `chat_interrupt`) resolves it through `OrchestrationService::target_chat` /
+  `OrchestrationService::in_scope`. A target is in scope when either holds:
+  - it shares the caller's `projectId` (delegated children already inherit the parent's project —
+    `delegate_task::build_request` — so a task tree is always in scope this way), or
+  - the caller created it, directly or transitively: walking the *target's* `created_by_chat_id`
+    chain (bounded like `depth_of`) finds the caller's id. This is what a `chat_launch` into another
+    project, or `"no-project"`, needs — the new chat's own `projectId` differs from the caller's, but
+    its `created_by_chat_id` names the caller — and it also covers a chain of plain launches (the
+    caller launched X, X later launched Y: the caller may still reach Y).
+
+  Anything else reads exactly like an unknown id (`chat_not_found` / `chat_not_sendable`, per tool),
+  so a caller cannot learn that an out-of-scope id exists.
+
+  `chat_list`'s own `projectId` input stays an unrestricted, deliberate exception — it is how an
+  agent discovers chats in a *different* project it was told about (its own description: "check
+  whether a launch whose result was lost created a chat before retrying it"), not a target-by-id
+  lookup, and the project id itself is not a guessable secret. A `chat_list` result is consistent
+  with the other tools for the use case the description names (a lost `chat_launch`'s own chat is
+  always in the caller's lineage, hence in scope for every other tool too), but a listed chat the
+  caller did not create and whose project is not its own is intentionally visible-but-not-actionable:
+  `chat_list` still excludes side, temporary, and automation chats the same way `target_chat` does,
+  but does not additionally filter by scope, so a caller can browse what a project holds without
+  being able to act on everything it sees. Listing and acting are different privilege tiers; this is
+  not an inconsistency to close further.
 - **Caller liveness.** Mutating tools require the caller to be `working` and not stopping. This also
   stops a stale Codex process, which survives `turn/interrupt`, from acting after its turn ended.
 - **Recursion and rate limits.** Orchestration depth is the length of the `created_by_chat_id` chain,

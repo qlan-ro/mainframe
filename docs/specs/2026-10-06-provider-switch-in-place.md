@@ -459,7 +459,7 @@ Strategy lines:
 - `full`: "Earlier turns 1–{n} ran in {providers, in order}. You have not seen them."
 - `delta`: "While you were inactive, turns {a}–{b} ran in {providers}. Your own earlier turns are
   already in your context."
-- Recovery line: "To read an omitted item, call the Mainframe tool `read_chat` with chatId
+- Recovery line: "To read an omitted item, call the Mainframe tool `chat_read` with chatId
   "{chat_id}"."
 
 ### Delivery and recording (`chat_manager/handoff_send.rs`)
@@ -621,9 +621,9 @@ when the session is spawned and live background tasks exist.
   MCP code. A send that arrives during a switch waits on the switch claim.
 - If the server exposes a provider switch tool, it must call `ChatManager::switch_provider` and
   surface the same refusals. This spec adds no MCP tool.
-- When the server's `read_chat` tool is available to the target session
+- When the server's `chat_read` tool is available to the target session
   (`deps.orchestration_mcp_attached(chat_id)`), the handoff header advertises it for omitted items.
-  `read_chat` should read the composed history, dividers included.
+  `chat_read` should read the composed history, dividers included.
 
 **Side chats (#344).** A side chat cannot switch (refusal row 4). A parent's switch never changes
 its side chat's adapter.
