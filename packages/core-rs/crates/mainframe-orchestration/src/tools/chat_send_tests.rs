@@ -113,3 +113,16 @@ async fn a_chat_in_another_project_reads_as_not_found_not_leaking_its_existence(
     let (result, _) = send("auto", |c| c.project_id = "other-project".into()).await;
     assert_eq!(code(&result), Some(ErrorCode::ChatNotFound));
 }
+
+/// A chat the caller `chat_launch`ed into another project stays reachable:
+/// lineage (`created_by_chat_id`) keeps it in scope even though its project
+/// differs from the caller's.
+#[tokio::test]
+async fn a_chat_the_caller_launched_into_another_project_is_still_sendable() {
+    let (result, _) = send("auto", |c| {
+        c.project_id = "other-project".into();
+        c.created_by_chat_id = Some("caller".into());
+    })
+    .await;
+    assert_eq!(result.unwrap()["delivery"], "started");
+}

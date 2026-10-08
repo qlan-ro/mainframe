@@ -171,3 +171,41 @@ async fn a_chat_in_another_project_reads_as_not_found() {
         .unwrap_err();
     assert_eq!(err.code, ErrorCode::ChatNotFound);
 }
+
+/// A chat the caller `chat_launch`ed into another project (or "no-project")
+/// stays reachable: project scoping alone would read it as not found, since
+/// it is not in the caller's own project, but the caller's own lineage
+/// (`created_by_chat_id` on the launched chat) keeps it in scope.
+#[tokio::test]
+async fn a_chat_the_caller_launched_into_another_project_stays_in_scope() {
+    let (svc, ctx, port) = setup(Vec::new());
+    port.update("target", |c| {
+        c.project_id = "other-project".into();
+        c.created_by_chat_id = Some("caller".into());
+    });
+    let out = run(&svc, &ctx, json!({ "chatId": "target" }))
+        .await
+        .unwrap();
+    assert_eq!(out["chatId"], "target");
+}
+
+/// Lineage reaches transitively: the caller launched X, X later launched Y.
+/// The caller may still read Y, even though neither Y's project nor its
+/// direct `created_by_chat_id` names the caller.
+#[tokio::test]
+async fn lineage_scope_reaches_through_a_chain_of_plain_launches() {
+    let (svc, ctx, port) = setup(Vec::new());
+    port.add_chat("x");
+    port.update("x", |c| {
+        c.project_id = "other-project".into();
+        c.created_by_chat_id = Some("caller".into());
+    });
+    port.update("target", |c| {
+        c.project_id = "third-project".into();
+        c.created_by_chat_id = Some("x".into());
+    });
+    let out = run(&svc, &ctx, json!({ "chatId": "target" }))
+        .await
+        .unwrap();
+    assert_eq!(out["chatId"], "target");
+}

@@ -53,7 +53,7 @@ pub(super) async fn run(
 ) -> Result<Value, ToolError> {
     let input: Input = parse_args(args)?;
     let caller = svc.active_caller(ctx).await?;
-    let target = svc.target_chat(&input.chat_id, &caller.project_id).await?;
+    let target = svc.target_chat(&input.chat_id, &caller).await?;
     check_ceiling(&caller.privileges(), &target.privileges())?;
     if !matches!(
         svc.state_of(&target),
@@ -133,5 +133,26 @@ mod tests {
             .await
             .unwrap_err();
         assert_eq!(err.code, ErrorCode::ChatNotFound);
+    }
+
+    /// A chat the caller `chat_launch`ed into another project stays
+    /// interruptible: lineage keeps it in scope even though its project
+    /// differs from the caller's.
+    #[tokio::test]
+    async fn a_chat_the_caller_launched_into_another_project_is_still_interruptible() {
+        let port = FakePort::new();
+        let mut caller = port.add_chat("caller");
+        caller.working = true;
+        port.put(caller);
+        let mut target = port.add_chat("target");
+        target.working = true;
+        target.project_id = "other-project".into();
+        target.created_by_chat_id = Some("caller".into());
+        port.put(target);
+        let (svc, ctx) = service_with(port.clone(), "caller");
+        let out = run(&svc, &ctx, json!({ "chatId": "target" }))
+            .await
+            .unwrap();
+        assert_eq!(out["interrupted"], true);
     }
 }

@@ -181,20 +181,18 @@ impl OrchestrationService {
         Ok(chat)
     }
 
-    /// A chat an agent may address: in the caller's own project, agent-
-    /// addressable (not side, temporary, or automation). A chat in another
-    /// project reads as not found, same as a chat that does not exist, so a
-    /// caller cannot learn that an out-of-project id exists at all.
-    /// Delegated children always inherit their parent's project (see
-    /// `delegate_task::build_request`), so a parent and its whole task tree
-    /// stay reachable from each other.
+    /// A chat an agent may address: agent-addressable (not side, temporary,
+    /// or automation), and either in the caller's own project or within the
+    /// caller's own lineage (see [`Self::in_scope`]). Anything else reads as
+    /// not found, same as a chat that does not exist, so a caller cannot
+    /// learn that an out-of-scope id exists at all.
     pub(crate) async fn target_chat(
         &self,
         chat_id: &str,
-        caller_project_id: &str,
+        caller: &ChatView,
     ) -> Result<ChatView, ToolError> {
         match self.port.chat(chat_id).await {
-            Some(chat) if chat.is_agent_addressable() && chat.project_id == caller_project_id => {
+            Some(chat) if chat.is_agent_addressable() && self.in_scope(caller, &chat).await => {
                 Ok(chat)
             }
             _ => Err(ToolError::new(
@@ -202,6 +200,34 @@ impl OrchestrationService {
                 format!("No chat {chat_id}."),
             )),
         }
+    }
+
+    /// Whether `caller` may address `target`: they share a project, or
+    /// `caller` created `target` directly or transitively — walking
+    /// `target`'s own `created_by_chat_id` chain, not `caller`'s, because a
+    /// `chat_launch` into another project (or "no-project") puts the new
+    /// chat's `created_by_chat_id` on the NEW chat, pointing back at the
+    /// caller, while the two chats' `projectId`s differ. Delegated children
+    /// always inherit their parent's project already (`delegate_task::
+    /// build_request`), so same-project alone already covers a task tree;
+    /// this walk is what `chat_launch` into another project (or
+    /// "no-project") needs, and it also covers a chain of plain launches
+    /// (the caller launched X, X later launched Y: the caller may still
+    /// reach Y). Bounded the same way `depth_of` is, so a corrupt cycle
+    /// cannot spin.
+    pub(crate) async fn in_scope(&self, caller: &ChatView, target: &ChatView) -> bool {
+        if target.project_id == caller.project_id {
+            return true;
+        }
+        let mut next = target.created_by_chat_id.clone();
+        for _ in 0..=MAX_DEPTH {
+            match next {
+                Some(id) if id == caller.id => return true,
+                Some(id) => next = self.port.chat(&id).await.and_then(|c| c.created_by_chat_id),
+                None => return false,
+            }
+        }
+        false
     }
 
     #[must_use]

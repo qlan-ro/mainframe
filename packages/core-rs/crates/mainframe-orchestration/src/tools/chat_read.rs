@@ -97,7 +97,7 @@ pub(super) async fn run(
 ) -> Result<Value, ToolError> {
     let input: Input = parse_args(args)?;
     let caller = svc.caller_chat(ctx).await?;
-    let chat = svc.target_chat(&input.chat_id, &caller.project_id).await?;
+    let chat = svc.target_chat(&input.chat_id, &caller).await?;
     let state = svc.state_of(&chat).as_str();
     let messages = svc.port.messages(&chat.id).await;
     let max_chars = input.max_chars.map_or(READ_DEFAULT_CHARS, |v| v as usize);
