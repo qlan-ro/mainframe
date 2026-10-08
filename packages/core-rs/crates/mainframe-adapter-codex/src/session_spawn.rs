@@ -32,7 +32,20 @@ impl CodexSession {
             resume = self.resume_thread_id.is_some(),
             "codex session spawned"
         );
-        sink.on_init(&self.id);
+        // #772: `self.id` is a local nanoid placeholder, never a real native
+        // session id. A fresh chat has no stored id yet, so reporting it here
+        // is harmless — `ensure_thread`'s real id just rebinds this same
+        // still-empty segment in place (chat_segments::RecordOutcome::Rebound)
+        // once the first turn starts. Resuming a chat is different: the real
+        // thread id is already on file, so reporting the placeholder here
+        // would make `record_native_id` see it as a differing id on a segment
+        // that *has* run turns, opening a spurious `context_reset` — an extra
+        // segment and a false "context reset" divider on every respawn (idle
+        // exit, daemon restart). Skip it: `ensure_thread` reports the
+        // resumed thread's real id once a turn actually starts.
+        if self.resume_thread_id.is_none() {
+            sink.on_init(&self.id);
+        }
 
         self.get_process_info()
             .ok_or_else(|| AdapterError::Message("no process info".to_string()))
