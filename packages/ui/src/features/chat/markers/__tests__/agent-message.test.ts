@@ -16,6 +16,18 @@ describe('parseAgentMessage', () => {
     expect(parseAgentMessage(AGENT.replace('kind="send"', 'kind="other"'))).toBeNull();
     expect(parseAgentMessage(`${AGENT}\nand more`)).toBeNull();
   });
+
+  it('reads a dropped-send delivery notice', () => {
+    const dropped =
+      '<mainframe-agent-message from="chat_2" kind="dropped">\n' +
+      "Your queued message to chat_2 was not delivered: chat_2's permission mode changed.\n" +
+      '</mainframe-agent-message>';
+    expect(parseAgentMessage(dropped)).toEqual({
+      fromChatId: 'chat_2',
+      kind: 'dropped',
+      body: "Your queued message to chat_2 was not delivered: chat_2's permission mode changed.",
+    });
+  });
 });
 
 describe('parseTaskResults', () => {

@@ -2,8 +2,11 @@
  * Whole-message markers the daemon's orchestration MCP server writes, so a
  * message another agent sent never reads as the user's own words:
  *
- *   `<mainframe-agent-message from="<chatId>" kind="send|launch|task">…</…>`
- *       a `chat_send` / `chat_launch` prompt or a delegated task prompt
+ *   `<mainframe-agent-message from="<chatId>" kind="send|launch|task|dropped">…</…>`
+ *       a `chat_send` / `chat_launch` prompt, a delegated task prompt, or a
+ *       `dropped` notice (a queued `chat_send` the ceiling re-check refused
+ *       at delivery time — `from` carries the TARGET chat it was headed to,
+ *       not a sender; see `mainframe-orchestration::lifecycle::notify_send_dropped`)
  *   `<mainframe-task-result task="<taskId>" chat="<childChatId>" status="…">…</…>`
  *       one finished task; several sibling results batch into one message
  *
@@ -11,7 +14,7 @@
  * an agent launched is titled after its prompt, not the marker.
  */
 
-export type AgentMessageKind = 'send' | 'launch' | 'task';
+export type AgentMessageKind = 'send' | 'launch' | 'task' | 'dropped';
 
 export interface AgentMessage {
   fromChatId: string;
@@ -30,7 +33,7 @@ export type ParsedAgentText =
   { type: 'agent-message'; message: AgentMessage } | { type: 'task-results'; results: TaskResultMarker[] };
 
 const AGENT_MESSAGE_RE =
-  /^<mainframe-agent-message from="([A-Za-z0-9_-]{1,64})" kind="(send|launch|task)">\n?([\s\S]*?)\n?<\/mainframe-agent-message>$/;
+  /^<mainframe-agent-message from="([A-Za-z0-9_-]{1,64})" kind="(send|launch|task|dropped)">\n?([\s\S]*?)\n?<\/mainframe-agent-message>$/;
 
 const TASK_RESULT_RE =
   /<mainframe-task-result task="([A-Za-z0-9_-]{1,128})" chat="([A-Za-z0-9_-]{1,64})" status="([a-z_]+)">\n?([\s\S]*?)\n?<\/mainframe-task-result>/g;

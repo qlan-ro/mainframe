@@ -2,15 +2,19 @@
  * AgentMessageCard — a user turn another agent wrote through the orchestration
  * MCP server (see `markers/agent-message.ts`). Rendered as a card, not the
  * user's own bubble, so the reader can tell who spoke: a `chat_send` /
- * `chat_launch` prompt, a delegated task prompt, or a batch of task results.
+ * `chat_launch` prompt, a delegated task prompt, a batch of task results, or
+ * (`kind: 'dropped'`) a delivery notice for a queued `chat_send` the daemon's
+ * permission-ceiling re-check refused — rendered as a clear "not delivered"
+ * notice rather than attributed to a sender, since its `fromChatId` carries
+ * the TARGET chat the send was headed to, not a speaker.
  *
  * Same shell as ReviewCommentCard: a bordered card, a muted header band naming
- * the sender, then the markdown body.
+ * the sender (or the notice), then the markdown body.
  */
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
-import { Bot, ListChecks } from 'lucide-react';
+import { Bot, ListChecks, TriangleAlert } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { markdownComponents } from '../parts/markdown-text';
 import { urlTransform, remarkAppLinks } from '../parts/markdown-url-transform';
@@ -22,6 +26,7 @@ const KIND_LABELS: Record<AgentMessage['kind'], string> = {
   send: 'Message from chat',
   launch: 'Started by chat',
   task: 'Task from chat',
+  dropped: 'Message not delivered',
 };
 
 function CardShell({ testId, children }: { testId: string; children: ReactNode }) {
@@ -78,6 +83,17 @@ export function AgentMessageCard({ parsed, messageId }: { parsed: ParsedAgentTex
     );
   }
   const { message } = parsed;
+  // `dropped` is a delivery notice, not an attributed turn: its `fromChatId`
+  // is the target the send was headed to, not a speaker, so the header names
+  // only the notice — the body (the daemon's note) already says which chat.
+  if (message.kind === 'dropped') {
+    return (
+      <CardShell testId={`chat-agent-message-card-${messageId}`}>
+        <Header icon={<TriangleAlert className="size-3.5 shrink-0 text-destructive" />}>{KIND_LABELS.dropped}</Header>
+        <Body text={message.body} />
+      </CardShell>
+    );
+  }
   return (
     <CardShell testId={`chat-agent-message-card-${messageId}`}>
       <Header icon={<Bot className="size-3.5 shrink-0 text-muted-foreground" />}>
