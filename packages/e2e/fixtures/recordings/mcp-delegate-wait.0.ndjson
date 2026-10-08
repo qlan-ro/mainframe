@@ -1,0 +1,6 @@
+{"dir":"in","method":"sendMessage","args":["Delegate and wait for the result in this same turn"],"delayMs":0}
+{"dir":"out","method":"onInit","args":["e2e-mcp-delegate-wait-parent"],"delayMs":20}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Delegating and waiting."}],null],"delayMs":40}
+{"dir":"out","method":"mcp_call","args":[{"toolUseId":"toolu_mcp_wait_1","tool":"delegate_task","arguments":{"task":"Quick check.","mode":"wait","timeoutMs":5000}}],"delayMs":80}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Got the result directly from the wait."}],null],"delayMs":2000}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.004,"usage":{"input_tokens":14,"output_tokens":10},"subtype":"success","is_error":false}],"delayMs":2040}

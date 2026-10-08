@@ -1,0 +1,6 @@
+{"dir":"in","method":"sendMessage","args":["Delegate a long task, I will stop you after"],"delayMs":0}
+{"dir":"out","method":"onInit","args":["e2e-mcp-delegate-stop-parent"],"delayMs":20}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Delegating a long task."}],null],"delayMs":40}
+{"dir":"out","method":"mcp_call","args":[{"toolUseId":"toolu_mcp_stop_1","tool":"delegate_task","arguments":{"task":"Run a long analysis.","role":"research","title":"Long analysis"}}],"delayMs":80}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Delegated; it is running now."}],null],"delayMs":120}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.003,"usage":{"input_tokens":11,"output_tokens":8},"subtype":"success","is_error":false}],"delayMs":160}

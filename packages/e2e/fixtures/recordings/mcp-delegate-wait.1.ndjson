@@ -1,0 +1,4 @@
+{"dir":"in","method":"sendMessage","args":["(the daemon sends the delegated task prompt here)"],"delayMs":0}
+{"dir":"out","method":"onInit","args":["e2e-mcp-delegate-wait-child"],"delayMs":20}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Quick check done: all good."}],null],"delayMs":60}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.001,"usage":{"input_tokens":8,"output_tokens":6},"subtype":"success","is_error":false}],"delayMs":100}
