@@ -49,6 +49,13 @@ vi.mock('@/features/sessions/use-active-identity', () => ({
 }));
 vi.mock('@/features/sessions/use-add-project', () => ({ useAddProject: () => vi.fn() }));
 vi.mock('@/features/sessions/use-remove-project', () => ({ useRemoveProject: () => vi.fn() }));
+// The scope strip orders projects by session activity, read from the assistant-ui runtime.
+vi.mock('@assistant-ui/react', () => {
+  const threadItems: never[] = [];
+  return {
+    useAuiState: (sel: (s: { threads: { threadItems: never[] } }) => unknown) => sel({ threads: { threadItems } }),
+  };
+});
 
 const startTodoSession = vi.fn();
 vi.mock('../../use-start-todo-session', () => ({
