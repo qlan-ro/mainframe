@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Test environment for mainframe — test-worktree skill contract. Thin dispatcher over
+# Test environment for mainframe — live-qa skill contract. Thin dispatcher over
 # the per-target launch scripts (which own build, isolated ports, and readiness waits).
 #   test-env.sh prepare [tauri|browser]  install + types + sidecar + ports, no launch
 #   test-env.sh up [tauri|browser]       prepare (idempotent) then launch; default: tauri
@@ -9,7 +9,7 @@
 # Targets: tauri = native shell via tauri-mcp bridge (max 1);
 # tauri-qa = packaged build via tauri-mcp bridge, isolated port/data dir (max 1);
 # browser = renderer+daemon only, cheapest — use when no scenario needs the native shell.
-# Project QA knowledge (fixtures, seeding, gotchas): .agents/test-worktree.md
+# Project QA knowledge (fixtures, seeding, gotchas): .agents/live-qa.md
 set -uo pipefail
 
 AGENTS="$(cd "$(dirname "$0")" && pwd -P)"

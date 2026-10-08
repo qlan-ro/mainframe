@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Launch the Tauri target for test-worktree: fresh-worktree provisioning,
+# Launch the Tauri target for live-qa: fresh-worktree provisioning,
 # isolated env, background launch, readiness wait. Blocks until ready; prints
 # READY + facts, or exits 1 with the log tail.
 #   MF_TARGET  checkout to act on (default: this script's checkout)
@@ -24,7 +24,11 @@ set -a
 # shellcheck disable=SC1091
 . ./.env
 set +a
-export MAINFRAME_DATA_DIR="${MAINFRAME_DATA_DIR:-$HOME/.mainframe_dev}"
+if [ -n "${MF_QA_RUN_DIR:-}" ]; then
+  export MAINFRAME_DATA_DIR="$MF_QA_RUN_DIR/data"
+else
+  export MAINFRAME_DATA_DIR="${MAINFRAME_DATA_DIR:-$HOME/.mainframe_dev}"
+fi
 
 if [ "${DAEMON_PORT:-}" = "31415" ] || [ -z "${DAEMON_PORT:-}" ]; then
   echo "REFUSED: .env must allocate a non-production DAEMON_PORT — re-run scripts/setup-ports.sh" >&2
@@ -46,6 +50,7 @@ fi
 
 if [ "$MODE" = prepare ]; then
   echo "PREPARED"
+  echo "DATA_DIR=$MAINFRAME_DATA_DIR"
   echo "DAEMON_PORT=$DAEMON_PORT"
   echo "VITE_PORT=$VITE_PORT"
   exit 0
@@ -66,7 +71,7 @@ disown 2>/dev/null || true
 # too rather than waiting out a timeout on a run that is already dead.
 wait_for() {
   what="$1"; url="$2"; deadline=$((SECONDS + $3))
-  until curl -sf "$url" >/dev/null 2>&1; do
+  until curl --connect-timeout 2 --max-time 3 -sf "$url" >/dev/null 2>&1; do
     if ! kill -0 "$APP_PID" 2>/dev/null; then
       echo "LAUNCH_FAILED: tauri:dev exited before $what was ready — log tail:" >&2
       tail -40 "$LOG" >&2

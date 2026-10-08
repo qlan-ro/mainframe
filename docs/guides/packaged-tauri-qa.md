@@ -3,7 +3,7 @@
 A recipe for driving a **packaged** Mainframe build with the `tauri-mcp`
 bridge, for the QA scenarios `pnpm tauri:dev` cannot reproduce: CSP
 enforcement, code signing, the auto-updater. Everything else belongs on the
-`tauri` (dev) or `browser` target — see `.agents/test-worktree.md`.
+`tauri` (dev) or `browser` target — see `.agents/live-qa.md`.
 
 ## 1. What this is for
 

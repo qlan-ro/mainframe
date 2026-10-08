@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Launch the BROWSER target for test-worktree: daemon + shared renderer in a
+# Launch the BROWSER target for live-qa: daemon + shared renderer in a
 # plain browser — no Tauri shell. For renderer/daemon-only scenario sets (no
 # native shell surfaces). Blocks until ready; prints READY + facts. Bring-up is
 # 1-2 minutes on a warm worktree, several more if the daemon compiles cold.
@@ -26,7 +26,16 @@ set -a
 # shellcheck disable=SC1091
 source .env
 set +a
-export MAINFRAME_DATA_DIR="${MAINFRAME_DATA_DIR:-$HOME/.mainframe_dev}"
+if [ -n "${MF_QA_RUN_DIR:-}" ]; then
+  export MAINFRAME_DATA_DIR="$MF_QA_RUN_DIR/data"
+else
+  export MAINFRAME_DATA_DIR="${MAINFRAME_DATA_DIR:-$HOME/.mainframe_dev}"
+fi
+
+if [ "${DAEMON_PORT:-}" = "31415" ] || [ -z "${DAEMON_PORT:-}" ]; then
+  echo "REFUSED: .env must allocate a non-production DAEMON_PORT" >&2
+  exit 1
+fi
 
 DAEMON_LOG="/tmp/mf-daemon-${DAEMON_PORT}.log"
 UI_LOG="/tmp/mf-ui-${DAEMON_PORT}.log"
@@ -40,15 +49,27 @@ cargo build --manifest-path packages/core-rs/Cargo.toml -p mainframe-daemon
 
 if [ "$MODE" = prepare ]; then
   echo "PREPARED"
+  echo "DATA_DIR=$MAINFRAME_DATA_DIR"
   echo "DAEMON_PORT=$DAEMON_PORT"
   echo "VITE_PORT=$VITE_PORT"
   exit 0
 fi
 
+for port in "$DAEMON_PORT" "$VITE_PORT"; do
+  if lsof -tiTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "ALREADY_RUNNING: port $port is occupied; verify and reuse the recorded run before launching" >&2
+    exit 1
+  fi
+done
+mkdir -p "$MAINFRAME_DATA_DIR"
+echo "DATA_DIR=$MAINFRAME_DATA_DIR"
+
 DAEMON_PORT="$DAEMON_PORT" \
 MAINFRAME_DATA_DIR="$MAINFRAME_DATA_DIR" \
 LOG_LEVEL=debug \
-  packages/core-rs/target/debug/mainframe-daemon > "$DAEMON_LOG" 2>&1 &
+  nohup packages/core-rs/target/debug/mainframe-daemon > "$DAEMON_LOG" 2>&1 &
+DAEMON_PID=$!
+echo "DAEMON_PID=$DAEMON_PID"
 
 # 4. Shared renderer (Vite). Browser dev mode reads VITE_DAEMON_PORT (singular)
 # in fake-adapter.ts — the HTTP/WS pair is the electron/tauri shape and is NOT
@@ -58,12 +79,14 @@ VITE_DAEMON_PORT="$DAEMON_PORT" \
 VITE_DAEMON_HTTP_PORT="$DAEMON_PORT" \
 VITE_DAEMON_WS_PORT="$DAEMON_PORT" \
 MAINFRAME_DATA_DIR="$MAINFRAME_DATA_DIR" \
-  pnpm --filter @qlan-ro/mainframe-ui run dev > "$UI_LOG" 2>&1 &
+  nohup pnpm --filter @qlan-ro/mainframe-ui run dev > "$UI_LOG" 2>&1 &
+UI_PID=$!
+echo "UI_PID=$UI_PID"
 
 # 5. Block until ready.
 deadline=$((SECONDS + 180))
-until curl -sf "http://127.0.0.1:${DAEMON_PORT}/api/projects" >/dev/null 2>&1; do
-  if [ $SECONDS -ge $deadline ]; then
+until curl --connect-timeout 2 --max-time 3 -sf "http://127.0.0.1:${DAEMON_PORT}/api/projects" >/dev/null 2>&1; do
+  if ! kill -0 "$DAEMON_PID" 2>/dev/null || [ $SECONDS -ge $deadline ]; then
     echo "LAUNCH_FAILED: daemon not ready on :${DAEMON_PORT} — log tail:" >&2
     tail -40 "$DAEMON_LOG" >&2
     exit 1
@@ -72,8 +95,8 @@ until curl -sf "http://127.0.0.1:${DAEMON_PORT}/api/projects" >/dev/null 2>&1; d
 done
 deadline=$((SECONDS + 120))
 # localhost, not 127.0.0.1 — Vite 6 binds ::1
-until curl -sf "http://localhost:${VITE_PORT}" >/dev/null 2>&1; do
-  if [ $SECONDS -ge $deadline ]; then
+until curl --connect-timeout 2 --max-time 3 -sf "http://localhost:${VITE_PORT}" >/dev/null 2>&1; do
+  if ! kill -0 "$UI_PID" 2>/dev/null || [ $SECONDS -ge $deadline ]; then
     echo "LAUNCH_FAILED: Vite not ready on :${VITE_PORT} — log tail:" >&2
     tail -40 "$UI_LOG" >&2
     exit 1
@@ -87,3 +110,4 @@ echo "VITE_PORT=$VITE_PORT"
 echo "APP_URL=http://localhost:$VITE_PORT"
 echo "DAEMON_LOG=$DAEMON_LOG"
 echo "UI_LOG=$UI_LOG"
+echo "DATA_DIR=$MAINFRAME_DATA_DIR"
