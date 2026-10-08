@@ -7,6 +7,10 @@ name: CI
 on:
   pull_request:
     branches: [main]
+    # `labeled` is the version PR's e2e button: adding the `run-e2e` label runs
+    # the mock e2e suite in THIS run, so its result is the PR's own check.
+    # Any other label just re-runs CI on the same head.
+    types: [opened, synchronize, reopened, labeled]
 
 # A new push to the same PR supersedes the in-flight run — cancel it.
 concurrency:
@@ -106,20 +110,32 @@ jobs:
       - name: Check for changeset
         run: pnpm changeset status --since=origin/main
 
-  # The mock e2e suite (~1h, workers:1) gates ONLY the changesets version PR:
-  # that PR is the last stop before a release, and the Release workflow used to
-  # be the first time the suite saw any of a release's merges — a red suite
-  # there meant a merged version bump and a failed release. It does not run
-  # here even on the version PR: that branch is force-pushed after every merge
-  # to main. `require-manual` fails the check at once instead; e2e-gate.yml
-  # is the manual run on the final head, and it re-runs this job afterwards
-  # so the check turns green here (the merge box only counts this run).
-  # Feature PRs get `skip` (a skipped job satisfies the required check). The
-  # decision is passed INTO the reusable workflow rather than put on this job:
-  # a `uses:` job skipped here reports as "e2e-mock", but when it runs the
-  # check is "e2e-mock / e2e-mock" — deciding inside keeps the one name main's
-  # ruleset requires.
+  # The mock e2e suite gates ONLY the changesets version PR: that PR is the
+  # last stop before a release, and a red suite after merging it means a
+  # merged version bump and a failed release. It does not run on every update
+  # of that PR (the branch is force-pushed after every merge to main); adding
+  # the `run-e2e` label runs it on the current head instead (`run`). Until it
+  # has passed on the head, the version PR gets `require-manual`, which fails
+  # with a pointer to the label. Feature PRs get `skip` (a skipped job
+  # satisfies the required check) unless labelled too. The decision is passed
+  # INTO the reusable workflow rather than put on this job: a `uses:` job
+  # skipped here reports as "e2e-mock", but when it runs the check is
+  # "e2e-mock / e2e-mock" — deciding inside keeps the one name main's ruleset
+  # requires.
   e2e-mock:
     uses: ./.github/workflows/e2e-mock.yml
     with:
-      mode: ${{ github.head_ref == 'changeset-release/main' && 'require-manual' || 'skip' }}
+      mode: ${{ (github.event.action == 'labeled' && github.event.label.name == 'run-e2e') && 'run' || (github.head_ref == 'changeset-release/main' && 'require-manual' || 'skip') }}
+
+  # Take the label straight back off, so adding it again runs the suite on a
+  # later head. Done at the start, not after the suite: a run cancelled by a
+  # force-push must not leave the label on with nothing running.
+  consume-run-e2e-label:
+    if: ${{ github.event.action == 'labeled' && github.event.label.name == 'run-e2e' }}
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr edit "${{ github.event.pull_request.number }}" --repo "${GITHUB_REPOSITORY}" --remove-label run-e2e
