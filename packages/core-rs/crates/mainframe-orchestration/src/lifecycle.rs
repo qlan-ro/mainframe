@@ -8,6 +8,8 @@ use mainframe_types::orchestration::{AgentOutboxEntry, TaskDelivery};
 use tokio::sync::broadcast::error::RecvError;
 
 use crate::outbox::{OutboxEntry, OutboxKind, batch_body};
+use crate::policy::check_ceiling;
+use crate::ports::ChatView;
 use crate::service::OrchestrationService;
 use crate::state::ChatState;
 use crate::tasks::now;
@@ -37,12 +39,50 @@ impl OrchestrationService {
         if entries.is_empty() {
             return;
         }
-        if let Err(err) = self.port.send(chat_id, &batch_body(&entries)).await {
-            tracing::warn!(chat_id, ?err, "outbox delivery failed; keeping entries");
-            self.outbox.restore(entries);
+        // The ceiling was checked once, at `chat_send` time; the sender's or
+        // the target's mode may have been raised or lowered since. A task
+        // result is never subject to it (delivering a task's own outcome is
+        // not "driving" the parent), only a queued `chat_send` is. A sender
+        // that no longer passes is dropped, visibly: logged here, and never
+        // delivered — there is no queued-send record to mark failed (the
+        // outbox is in-memory only), so the trace line is the record.
+        let mut deliverable = Vec::with_capacity(entries.len());
+        for entry in entries {
+            if matches!(entry.kind, OutboxKind::Send)
+                && !self
+                    .sender_still_passes_ceiling(&entry.from_chat_id, &chat)
+                    .await
+            {
+                tracing::warn!(
+                    chat_id,
+                    from_chat_id = entry.from_chat_id,
+                    entry_id = entry.entry_id,
+                    "queued chat_send dropped: sender no longer passes the ceiling at delivery time"
+                );
+                continue;
+            }
+            deliverable.push(entry);
+        }
+        if deliverable.is_empty() {
             return;
         }
-        self.set_delivery(&entries, TaskDelivery::Delivered).await;
+        if let Err(err) = self.port.send(chat_id, &batch_body(&deliverable)).await {
+            tracing::warn!(chat_id, ?err, "outbox delivery failed; keeping entries");
+            self.outbox.restore(deliverable);
+            return;
+        }
+        self.set_delivery(&deliverable, TaskDelivery::Delivered)
+            .await;
+    }
+
+    /// Whether `sender_id` may still reach `target` under the ceiling, read
+    /// fresh at delivery time. A sender that is gone cannot be verified, so
+    /// it reads as refused rather than assumed safe.
+    async fn sender_still_passes_ceiling(&self, sender_id: &str, target: &ChatView) -> bool {
+        let Some(sender) = self.port.chat(sender_id).await else {
+            return false;
+        };
+        check_ceiling(&sender.privileges(), &target.privileges()).is_ok()
     }
 
     /// Records where each task result among `entries` ended up.
@@ -174,6 +214,8 @@ impl OrchestrationService {
 
 #[cfg(test)]
 mod tests {
+    use mainframe_types::settings::ExecutionMode;
+
     use super::*;
     use crate::outbox::OutboxKind;
     use crate::test_support::{FakePort, service_with};
@@ -185,6 +227,8 @@ mod tests {
         target.working = true;
         port.put(target);
         port.add_chat("caller");
+        port.add_chat("a");
+        port.add_chat("b");
         let (svc, _ctx) = service_with(port.clone(), "caller");
         svc.outbox
             .push("target", "a", OutboxKind::Send, "one".into(), "one");
@@ -210,6 +254,7 @@ mod tests {
         let port = FakePort::new();
         port.add_chat("target");
         port.add_chat("caller");
+        port.add_chat("a");
         let (svc, _ctx) = service_with(port.clone(), "caller");
         svc.outbox
             .push("target", "a", OutboxKind::Send, "one".into(), "one");
@@ -237,6 +282,64 @@ mod tests {
         assert!(!svc.cancel_outbox_entry("caller", &id).await);
         svc.try_flush("caller").await;
         assert!(port.lock().sent.is_empty());
+    }
+
+    /// The ceiling is checked once, at `chat_send` time; a queued entry's
+    /// sender or target may have its mode raised or lowered before the
+    /// target actually goes idle and the entry is flushed. A sender that no
+    /// longer passes must not have its message delivered.
+    #[tokio::test]
+    async fn a_queued_send_that_no_longer_passes_the_ceiling_is_dropped_not_delivered() {
+        let port = FakePort::new();
+        let mut sender = port.add_chat("sender");
+        sender.permission_mode = ExecutionMode::Default;
+        port.put(sender);
+        let mut target = port.add_chat("target");
+        target.working = true;
+        port.put(target);
+        let (svc, _ctx) = service_with(port.clone(), "sender");
+        svc.outbox
+            .push("target", "sender", OutboxKind::Send, "hi".into(), "hi");
+
+        // The target is raised above the sender's mode while the entry sits
+        // queued, then goes idle.
+        port.update("target", |c| {
+            c.working = false;
+            c.permission_mode = ExecutionMode::Yolo;
+        });
+        svc.try_flush("target").await;
+
+        assert!(
+            port.lock().sent.is_empty(),
+            "the raised target must not receive it"
+        );
+        assert!(
+            !svc.outbox.has_for("target"),
+            "the dropped entry is not kept for a retry"
+        );
+    }
+
+    /// The companion case: nothing changed, so the queued send still
+    /// delivers normally — the re-check must not be a no-op that always
+    /// refuses.
+    #[tokio::test]
+    async fn a_queued_send_that_still_passes_the_ceiling_delivers_normally() {
+        let port = FakePort::new();
+        port.add_chat("sender");
+        let mut target = port.add_chat("target");
+        target.working = true;
+        port.put(target);
+        let (svc, _ctx) = service_with(port.clone(), "sender");
+        svc.outbox
+            .push("target", "sender", OutboxKind::Send, "hi".into(), "hi");
+
+        port.update("target", |c| c.working = false);
+        svc.try_flush("target").await;
+
+        assert_eq!(
+            port.lock().sent,
+            vec![("target".to_string(), "hi".to_string())]
+        );
     }
 
     /// Discard deletes the chat row before emitting `ChatEnded`
