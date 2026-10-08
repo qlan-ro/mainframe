@@ -115,17 +115,11 @@ fn build_legacy_intermediate() -> Connection {
     db
 }
 
-/// Versions reserved for a migration landing from a parallel branch. Each
-/// entry must be removed once that migration merges.
-const RESERVED_VERSIONS: [i64; 1] = [31];
-
 #[test]
 fn latest_version_is_highest_migration_contiguous_from_1() {
     let versions: Vec<i64> = migrations().iter().map(|m| m.version).collect();
     let last = *versions.last().unwrap();
-    let expected: Vec<i64> = (1..=last)
-        .filter(|v| !RESERVED_VERSIONS.contains(v))
-        .collect();
+    let expected: Vec<i64> = (1..=last).collect();
     assert_eq!(versions, expected);
     assert_eq!(LATEST_VERSION, *versions.last().unwrap());
 }

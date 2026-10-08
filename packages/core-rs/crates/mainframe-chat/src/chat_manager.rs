@@ -48,6 +48,8 @@ use mainframe_types::events::DaemonEvent;
 use mainframe_types::settings::ExecutionMode;
 use tracing::info;
 
+use delivery::Delivery;
+
 use crate::config_manager::{ChatConfigManager, ChatFieldUpdate, ConfigError, ConfigManagerDeps};
 use crate::degraded_recovery::{DegradedRecoveryDeps, DegradedRecoveryError, RecoverySync};
 use crate::event_handler::{EventChatUpdate, EventHandler, EventHandlerDeps, PushOut};

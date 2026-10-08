@@ -37,6 +37,7 @@ pub fn spawn_options(executable_path: String) -> SessionSpawnOptions {
         small_fast_model: None,
         default_model: None,
         no_persistence: None,
+        orchestration_mcp: None,
     }
 }
 

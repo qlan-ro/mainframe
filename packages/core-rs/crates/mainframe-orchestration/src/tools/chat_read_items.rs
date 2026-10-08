@@ -100,6 +100,13 @@ fn render_node(node: &MessageContentNode) -> Option<(String, Option<String>)> {
         )),
         MessageContentNode::Error { message, .. } => Some((message.clone(), None)),
         MessageContentNode::Compaction { .. } => Some(("[context compacted]".into(), None)),
+        MessageContentNode::ProviderSwitch { marker } => Some((
+            format!(
+                "[switched from {} to {}]",
+                marker.from_adapter_name, marker.to_adapter_name
+            ),
+            None,
+        )),
     }
 }
 
@@ -153,5 +160,28 @@ mod tests {
         let cursor = encode_cursor(7, "msg-1");
         assert_eq!(decode_cursor(&cursor), Some((7, "msg-1".to_string())));
         assert_eq!(decode_cursor("!!!"), None);
+    }
+
+    #[test]
+    fn a_provider_switch_reads_as_a_one_line_marker() {
+        let marker = mainframe_types::segment::ProviderSwitchMarker {
+            segment_id: "seg-2".into(),
+            kind: mainframe_types::segment::SegmentKind::ProviderSwitch,
+            from_adapter_id: "claude".into(),
+            to_adapter_id: "codex".into(),
+            from_adapter_name: "Claude".into(),
+            to_adapter_name: "Codex".into(),
+            to_model: None,
+            resumed: false,
+            previous: Default::default(),
+            handoff: None,
+        };
+        let block = MessageContent::Node(MessageContentNode::ProviderSwitch { marker });
+
+        assert_eq!(
+            render_block(&block, true),
+            Some(("[switched from Claude to Codex]".to_string(), None))
+        );
+        assert_eq!(render_block(&block, false), None);
     }
 }

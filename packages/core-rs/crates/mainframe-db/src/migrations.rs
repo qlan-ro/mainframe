@@ -539,7 +539,7 @@ pub fn migrations() -> Vec<Migration> {
             up: v31_segments::up,
         },
         // Agent orchestration (MCP server): agent provenance on chats and the
-        // delegated-task table. 31 is reserved for the provider-switch migration.
+        // delegated-task table.
         Migration {
             version: orchestration::VERSION,
             up: orchestration::up,
