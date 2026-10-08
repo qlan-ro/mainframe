@@ -50,6 +50,10 @@ pub enum AgentMessageKind {
     Send,
     Launch,
     Task,
+    /// A queued `chat_send` that was dropped at delivery time (the ceiling
+    /// re-check failed): reported to the original sender as a notice, `from`
+    /// the chat it was headed to.
+    Dropped,
 }
 
 impl AgentMessageKind {
@@ -58,6 +62,7 @@ impl AgentMessageKind {
             Self::Send => "send",
             Self::Launch => "launch",
             Self::Task => "task",
+            Self::Dropped => "dropped",
         }
     }
 }

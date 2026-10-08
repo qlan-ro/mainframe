@@ -18,6 +18,10 @@ pub enum OutboxKind {
     Send,
     /// A delegated task's completion owed to its parent.
     TaskResult { task_id: String },
+    /// An infrastructure notice (e.g. a queued `Send` dropped at delivery
+    /// time), never subject to the ceiling re-check: it reports on a `Send`,
+    /// it is not one.
+    Notice,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

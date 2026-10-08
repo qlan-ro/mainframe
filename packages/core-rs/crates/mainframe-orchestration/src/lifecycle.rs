@@ -11,7 +11,7 @@ use crate::outbox::{OutboxEntry, OutboxKind, batch_body};
 use crate::policy::check_ceiling;
 use crate::ports::ChatView;
 use crate::service::OrchestrationService;
-use crate::state::ChatState;
+use crate::state::{AgentMessageKind, ChatState, wrap_agent_message};
 use crate::tasks::now;
 use crate::waiter::event_chat_id;
 
@@ -43,9 +43,11 @@ impl OrchestrationService {
         // the target's mode may have been raised or lowered since. A task
         // result is never subject to it (delivering a task's own outcome is
         // not "driving" the parent), only a queued `chat_send` is. A sender
-        // that no longer passes is dropped, visibly: logged here, and never
-        // delivered — there is no queued-send record to mark failed (the
-        // outbox is in-memory only), so the trace line is the record.
+        // that no longer passes is dropped: logged here, and reported back
+        // to the sender as a `Notice` entry (there is no queued-send record
+        // to mark failed — the outbox is in-memory only — so this is the
+        // sender's only signal; it was told `delivery: "queued"` with an
+        // `outboxEntryId` and would otherwise never learn the message died).
         let mut deliverable = Vec::with_capacity(entries.len());
         for entry in entries {
             if matches!(entry.kind, OutboxKind::Send)
@@ -59,6 +61,7 @@ impl OrchestrationService {
                     entry_id = entry.entry_id,
                     "queued chat_send dropped: sender no longer passes the ceiling at delivery time"
                 );
+                self.notify_send_dropped(chat_id, &entry);
                 continue;
             }
             deliverable.push(entry);
@@ -83,6 +86,26 @@ impl OrchestrationService {
             return false;
         };
         check_ceiling(&sender.privileges(), &target.privileges()).is_ok()
+    }
+
+    /// Reports a dropped queued `Send` back to its sender, as a `Notice`
+    /// entry: it rides the same outbox (delivered next time the sender goes
+    /// idle), but is never itself subject to the ceiling re-check — it is
+    /// infrastructure reporting on a `Send`, not one.
+    fn notify_send_dropped(&self, target_chat_id: &str, entry: &OutboxEntry) {
+        let note = format!(
+            "Your queued message to {target_chat_id} was not delivered: \
+             {target_chat_id}'s permission mode changed and no longer allows \
+             this chat to reach it."
+        );
+        let body = wrap_agent_message(target_chat_id, AgentMessageKind::Dropped, &note);
+        self.outbox.push(
+            &entry.from_chat_id,
+            target_chat_id,
+            OutboxKind::Notice,
+            body,
+            &note,
+        );
     }
 
     /// Records where each task result among `entries` ended up.
@@ -316,6 +339,27 @@ mod tests {
         assert!(
             !svc.outbox.has_for("target"),
             "the dropped entry is not kept for a retry"
+        );
+        // The sender was told `delivery: "queued"` with an `outboxEntryId`
+        // and has no other way to learn the message died: a `Notice` entry
+        // now rides the same outbox back to it.
+        let notice = svc
+            .outbox
+            .list_for("sender")
+            .into_iter()
+            .next()
+            .expect("a dropped send is reported back to its sender");
+        assert_eq!(notice.kind, OutboxKind::Notice);
+        assert_eq!(notice.from_chat_id, "target");
+        assert!(notice.body.contains("<mainframe-agent-message"));
+        assert!(notice.body.contains("kind=\"dropped\""));
+
+        // It delivers like any other outbox entry, once the sender is idle,
+        // and is never itself subject to the ceiling re-check.
+        svc.try_flush("sender").await;
+        assert_eq!(
+            port.lock().sent,
+            vec![("sender".to_string(), notice.body.clone())]
         );
     }
 
