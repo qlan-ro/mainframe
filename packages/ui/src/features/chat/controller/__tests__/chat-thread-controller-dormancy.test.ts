@@ -217,3 +217,46 @@ describe('dormancy — a new thread attaches once its remote id is adopted (D2, 
     expect(acpClient.resumeCalls).toContainEqual({ sessionId: 'chat-adopted', cursor: { type: 'start' } });
   });
 });
+
+describe('dormancy — the draft-to-remote handoff during the first attach', () => {
+  // After adoption the session router switches from the `__LOCALID_*` item to
+  // the remote one: the draft subtree's cleanup deactivates the shared
+  // controller, the remote subtree reactivates it. When that lands while the
+  // first `session/resume` is still in flight, the detach cancels its replay
+  // window — a superseded attach, not a failed load.
+  it('a deactivate/reactivate during the first resume re-attaches instead of failing the load', async () => {
+    vi.mocked(getChat).mockResolvedValue(makeChat({ id: 'chat-adopted' }));
+    const acpClient = makeFakeAcpClient({ capabilities: { replayComplete: true } });
+    const ws = makeFakeWs();
+    const ctrl = new AcpChatController('__LOCALID_new', PORT, ws.fakeClient, () => acpClient);
+    ctrl.setActive(true);
+
+    ctrl.setRemoteId('chat-adopted');
+    await new Promise((r) => setTimeout(r, 0));
+    expect(acpClient.resumeCalls).toHaveLength(1); // the first attach's window is open
+
+    ctrl.setActive(false);
+    ctrl.setActive(true);
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(ctrl.getState().loadState.type).not.toBe('error');
+    expect(acpClient.resumeCalls[1]).toEqual({ sessionId: 'chat-adopted', cursor: { type: 'start' } });
+    acpClient.emitReplayComplete('chat-adopted'); // the cancelled window's marker
+    acpClient.emitReplayComplete('chat-adopted'); // the re-attach's marker
+    await new Promise((r) => setTimeout(r, 0));
+    expect(ctrl.getState().loadState.type).toBe('ready');
+  });
+
+  it('a gap during the first resume leaves the load ready — the gap resume takes over', async () => {
+    vi.mocked(getChat).mockResolvedValue(makeChat());
+    const { ctrl, acpClient } = makeController(CHAT_ID, { capabilities: { replayComplete: true } });
+
+    const load = ctrl.load();
+    await new Promise((r) => setTimeout(r, 0));
+    acpClient.emitGap();
+    await load;
+
+    expect(ctrl.getState().loadState.type).toBe('ready');
+    expect(acpClient.resumeCalls).toHaveLength(2); // the first attach, then the gap resume
+  });
+});

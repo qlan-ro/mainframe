@@ -17,6 +17,7 @@
  */
 import { getChat, getChatWorkflowRuns } from '../../../lib/api/chats';
 import type { AcpClientHandle } from './acp-chat-controller';
+import { ReplayCancelledError } from './acp-replay-window';
 import type { ChatStateEvent } from './chat-thread-state';
 
 export interface ChatLoaderHost {
@@ -96,6 +97,27 @@ export class ChatPlaneLoader {
     if (host.isDisposed()) return;
     this.client = client;
     host.bindPlane(client);
-    if (host.isActive()) await host.reactivatePlane(client);
+    if (host.isActive()) await this.subscribeWhileActive(client);
+  }
+
+  /**
+   * A cancelled replay is a superseded attach, not a failed load: a detach,
+   * gap, or resync took over its window. The draft-to-remote handoff hits
+   * this on a new chat — the draft item's cleanup deactivates the shared
+   * controller mid-resume and the remote item reactivates it, piggybacking
+   * on this same in-flight load — so re-subscribe while still active.
+   * `reactivatePlane` is a no-op when a gap or resync left the plane
+   * subscribed (their own resume carries on).
+   */
+  private async subscribeWhileActive(client: AcpClientHandle): Promise<void> {
+    for (;;) {
+      try {
+        await this.host.reactivatePlane(client);
+        return;
+      } catch (error) {
+        if (!(error instanceof ReplayCancelledError)) throw error;
+        if (this.host.isDisposed() || !this.host.isActive()) return;
+      }
+    }
   }
 }
