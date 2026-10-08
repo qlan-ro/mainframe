@@ -63,6 +63,12 @@ pub struct FakeState {
     pub send_marks_working: bool,
     /// Every `chat_changed` call, in order.
     pub changed: Vec<String>,
+    /// Called synchronously right after `launch_chat` creates the chat, and
+    /// before it returns. Lets a test land a state change (a Stop) exactly
+    /// between "the child exists" and "the task is inserted" deterministically:
+    /// `FakePort`'s other async methods complete without yielding, so there
+    /// is no real race to win there otherwise.
+    pub after_launch: Option<Arc<dyn Fn() + Send + Sync>>,
 }
 
 #[derive(Clone)]
@@ -198,6 +204,11 @@ impl OrchestrationPort for FakePort {
             chat.parent_chat_id = request.parent_chat_id.clone();
             state.chats.insert(id, chat.clone());
             state.launched.push(request);
+            let hook = state.after_launch.clone();
+            drop(state);
+            if let Some(hook) = hook {
+                hook();
+            }
             Ok(chat)
         })
     }

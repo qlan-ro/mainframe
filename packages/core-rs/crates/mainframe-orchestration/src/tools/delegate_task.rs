@@ -115,6 +115,15 @@ pub(super) async fn run(
 ) -> Result<Value, ToolError> {
     let input: Input = parse_args(args)?;
     let caller = svc.active_caller(ctx).await?;
+    // Idempotency first, before claiming a wait slot: a `mode: "wait"` retry
+    // with the same clientRequestId must not be refused by the concurrent-
+    // wait limit just because it is retrying — it may not need a new slot
+    // at all, since the task this returns is already there.
+    if let Some(key) = &input.client_request_id
+        && let Some(existing) = svc.tasks.by_request(&caller.id, key).await
+    {
+        return Ok(svc.task_result(&existing, None).await);
+    }
     // Claimed before anything is created, so a refused wait starts nothing.
     let slot = match input.mode {
         Mode::Wait => Some(ctx.caller.try_begin_wait().ok_or_else(|| {
@@ -137,6 +146,13 @@ pub(super) async fn run(
     let tree_lock = svc.tree_lock(&root);
     let task = {
         let _guard = tree_lock.lock().await;
+        // Re-check: the caller may have been stopped while this call waited
+        // for the lock. Without this, a delegation that started before the
+        // Stop can still land after it — the cascade's own sweep only
+        // cancels tasks that existed when it ran, so a task this call is
+        // about to insert would otherwise outlive a Stop that landed while
+        // it queued for the lock.
+        svc.active_caller(ctx).await?;
         if let Some(key) = &input.client_request_id
             && let Some(existing) = svc.tasks.by_request(&caller.id, key).await
         {
@@ -146,7 +162,20 @@ pub(super) async fn run(
         svc.check_task_limits(&caller.id).await?;
         admit_creation(svc, &caller).await?;
         let child = svc.port.launch_chat(request).await?;
-        start(svc, &input, &caller, &child).await?
+        let task = start(svc, &input, &caller, &child).await?;
+        // Re-check again: launch_chat (worktree provisioning) and start
+        // (the DB insert and first send) can each take a while, and the
+        // same race applies — a Stop landing during either leaves the task
+        // and its child running unless caught here too.
+        if let Err(err) = svc.active_caller(ctx).await {
+            svc.cancel_task(
+                task,
+                Some("the caller was stopped while this task was starting".to_string()),
+            )
+            .await;
+            return Err(err);
+        }
+        task
     };
     if slot.is_none() {
         return Ok(svc.task_result(&task, None).await);

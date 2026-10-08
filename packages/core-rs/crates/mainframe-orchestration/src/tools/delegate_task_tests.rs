@@ -343,3 +343,71 @@ async fn concurrent_calls_cannot_together_exceed_the_per_parent_limit() {
         crate::policy::MAX_ACTIVE_TASKS_PER_PARENT
     );
 }
+
+/// A Stop that lands while a call is queued for the tree lock (another
+/// delegation from the same tree is mid-launch) must not let the queued
+/// call's task and child outlive it: the cascade's own sweep only cancels
+/// tasks that existed when it ran, so a task inserted after that point
+/// would otherwise keep running. `run` re-checks the caller right after
+/// acquiring the lock and must refuse (and leave nothing non-terminal)
+/// once the Stop has landed.
+#[tokio::test]
+async fn a_stop_that_lands_while_queued_for_the_tree_lock_cancels_nothing_new() {
+    let f = fixture();
+    let root = f.svc.tree_root(&f.ctx.caller.chat_id).await;
+    let lock = f.svc.tree_lock(&root);
+    let guard = lock.clone().lock_owned().await;
+
+    // Simulates call A holding the lock during its own launch_chat: while
+    // this call (B, below) queues for the lock, the user stops the parent,
+    // then A's hold on the lock ends.
+    let svc = f.svc.clone();
+    let port = f.port.clone();
+    let caller_id = f.ctx.caller.chat_id.clone();
+    tokio::spawn(async move {
+        tokio::task::yield_now().await;
+        svc.mark_stopping(&caller_id);
+        port.update(&caller_id, |c| c.working = false);
+        drop(guard);
+    });
+
+    let err = run(&f.svc, &f.ctx, json!({ "task": "t" }))
+        .await
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::CallerNotActive);
+    assert!(
+        f.tasks.all().iter().all(|t| t.status.is_terminal()),
+        "no task may be left running past the Stop"
+    );
+}
+
+/// The same race one level further in: a Stop lands after `launch_chat`
+/// has created the child but before the task row and its delivery are
+/// settled. The new task and its child must be cancelled, not merely
+/// refused. `FakePort::after_launch` lands the Stop deterministically
+/// right after the child exists, in place of racing two tasks for a
+/// window FakePort's own methods complete without yielding across.
+#[tokio::test]
+async fn a_stop_that_lands_after_the_child_is_launched_cancels_the_new_task() {
+    let f = fixture();
+    let svc = f.svc.clone();
+    let port = f.port.clone();
+    let caller_id = f.ctx.caller.chat_id.clone();
+    f.port.lock().after_launch = Some(Arc::new(move || {
+        svc.mark_stopping(&caller_id);
+        port.update(&caller_id, |c| c.working = false);
+    }));
+
+    let err = run(&f.svc, &f.ctx, json!({ "task": "t" }))
+        .await
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::CallerNotActive);
+    let tasks = f.tasks.all();
+    assert_eq!(tasks.len(), 1);
+    assert_eq!(tasks[0].status, TaskStatus::Cancelled);
+    assert_eq!(tasks[0].delivery, TaskDelivery::Dropped);
+    assert_eq!(
+        f.port.lock().interrupted,
+        vec![tasks[0].child_chat_id.clone()]
+    );
+}
