@@ -25,11 +25,6 @@ vi.mock('@assistant-ui/react', () => {
       ScrollToBottom: ({ children }: { children?: ReactNode }) => <>{children}</>,
       Messages: () => <div data-testid="tp-messages" />,
     },
-    // `asChild` semantics aren't exercised here — Button carries its own
-    // testid, the wrapper just needs to not swallow its child.
-    ComposerPrimitive: {
-      Cancel: ({ children }: { children?: ReactNode }) => <>{children}</>,
-    },
     // isRunning selector → true; messages.length selector → 1.
     useAuiState: (sel: (s: { thread: { isRunning: boolean; messages: unknown[] } }) => unknown) =>
       sel({ thread: { isRunning: true, messages: [{}] } }),
@@ -46,7 +41,9 @@ vi.mock('../../composer/edit/composer-edit-context', () => ({
 }));
 vi.mock('../../gates/ChatGateMount', () => ({ ChatGateMount: () => <div data-testid="chat-thread-gate-slot" /> }));
 vi.mock('../DegradedChatCard', () => ({ DegradedChatCard: () => null }));
-vi.mock('../../runtime/chat-extras', () => ({ useChatExtras: () => undefined }));
+// `undefined` (no extras) by default; a test sets a run state to drive "Stopping".
+let __extras: { state: { runState: { type: string }; loadState: { type: string } } } | undefined;
+vi.mock('../../runtime/chat-extras', () => ({ useChatExtras: () => __extras }));
 vi.mock('@/features/skills/use-chat-skills', () => ({
   SkillsProvider: ({ children }: { children?: ReactNode }) => <>{children}</>,
 }));
@@ -60,6 +57,10 @@ vi.mock('@/features/shortcuts/platform', () => ({ isMacPlatform: () => true }));
 import { ChatThread } from '../ChatThread';
 import { useFindInChatStore } from '../../find/find-in-chat-store';
 import { useShortcutDispatcher } from '@/features/shortcuts/use-shortcut-dispatcher';
+
+beforeEach(() => {
+  __extras = undefined;
+});
 
 describe('ChatThread — status-line placement (D18 reverses #214)', () => {
   it('renders the running indicator while a run is active', () => {
@@ -85,10 +86,16 @@ describe('ChatThread — status-line placement (D18 reverses #214)', () => {
     expect(running.compareDocumentPosition(gateSlot) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('carries the fixed "Working" text and a ghost Stop button, not a rotating phrase', () => {
+  it('carries the fixed "Working" text, not a rotating phrase, and no Stop (that is the composer\'s send slot)', () => {
     render(<ChatThread />);
     expect(screen.getByTestId('chat-thread-running-text')).toHaveTextContent('Working');
-    expect(screen.getByTestId('chat-composer-cancel')).toBeInTheDocument();
+    expect(screen.queryByTestId('chat-composer-cancel')).toBeNull();
+  });
+
+  it('reads "Stopping" once Stop was clicked and the run is cancelling', () => {
+    __extras = { state: { runState: { type: 'cancelling' }, loadState: { type: 'ready' } } };
+    render(<ChatThread />);
+    expect(screen.getByTestId('chat-thread-running-text')).toHaveTextContent('Stopping');
   });
 });
 

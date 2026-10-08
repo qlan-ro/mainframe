@@ -53,7 +53,9 @@ vi.mock('@/features/sessions/runtime/draft-config', () => ({
 let __chatConfig: { id: string; contextLostAt: string | null } | undefined;
 vi.mock('../../runtime/chat-extras', () => ({
   useChatExtras: () =>
-    __chatConfig ? { state: { chatConfig: __chatConfig, loadState: { type: 'idle' } } } : undefined,
+    __chatConfig
+      ? { state: { chatConfig: __chatConfig, loadState: { type: 'idle' }, runState: { type: 'idle' } } }
+      : undefined,
 }));
 
 let capturedComposerProps: { variant?: string } | null = null;

@@ -1,6 +1,6 @@
-import { ComposerPrimitive, useAuiState } from '@assistant-ui/react';
+import { useAuiState } from '@assistant-ui/react';
 import { useSideAwareThreadId } from '@/features/side-chat/side-chat-scope';
-import { AlertTriangleIcon, Loader2Icon, SquareIcon } from 'lucide-react';
+import { AlertTriangleIcon, Loader2Icon } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { useChatExtras } from '../runtime/chat-extras';
@@ -45,11 +45,12 @@ export function ChatThreadLoadingSpinner() {
 }
 /**
  * The status line above the composer while a turn runs: a pulsing `primary`
- * dot, a fixed "Working", the one live clock, and a ghost Stop — the
- * `ComposerPrimitive.Cancel`, so the composer's send slot shows send only.
+ * dot, "Working" (or "Stopping" once Stop was clicked), and the one live
+ * clock. Stop itself is the composer's send slot.
  */
 export function GeneratingIndicator() {
   const isRunning = useAuiState((s: { thread: { isRunning: boolean } }) => s.thread.isRunning);
+  const stopping = useChatExtras()?.state.runState.type === 'cancelling';
   const elapsed = useRunElapsed(isRunning);
   if (!isRunning) return null;
   return (
@@ -59,7 +60,7 @@ export function GeneratingIndicator() {
         className="size-1.5 shrink-0 animate-pulse rounded-full bg-primary motion-reduce:animate-none"
       />
       <span data-testid="chat-thread-running-text" className="text-xs font-medium text-muted-foreground">
-        Working
+        {stopping ? 'Stopping' : 'Working'}
       </span>
       {elapsed !== undefined && (
         <span
@@ -69,19 +70,6 @@ export function GeneratingIndicator() {
           {formatElapsedSeconds(elapsed)}
         </span>
       )}
-      <span className="flex-1" />
-      <ComposerPrimitive.Cancel asChild>
-        <Button
-          data-testid="chat-composer-cancel"
-          aria-label="Stop"
-          variant="ghost"
-          size="xs"
-          className="text-muted-foreground"
-        >
-          <SquareIcon fill="currentColor" />
-          Stop
-        </Button>
-      </ComposerPrimitive.Cancel>
     </div>
   );
 }

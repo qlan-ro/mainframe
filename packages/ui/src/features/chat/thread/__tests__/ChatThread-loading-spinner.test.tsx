@@ -14,7 +14,7 @@ import type { ReactNode, HTMLAttributes } from 'react';
 type LoadState = { type: 'idle' | 'loading' | 'ready' } | { type: 'error'; error: string };
 
 const testState = vi.hoisted(() => ({
-  extrasState: { compacting: false, loadState: { type: 'ready' } as LoadState },
+  extrasState: { compacting: false, loadState: { type: 'ready' } as LoadState, runState: { type: 'idle' } },
   threadListItemId: 'chat-9' as string | null,
   messages: [] as unknown[],
 }));
@@ -70,7 +70,7 @@ vi.mock('../../runtime/chat-extras', () => ({
 import { ChatThread } from '../ChatThread';
 
 beforeEach(() => {
-  testState.extrasState = { compacting: false, loadState: { type: 'ready' } };
+  testState.extrasState = { compacting: false, loadState: { type: 'ready' }, runState: { type: 'idle' } };
   testState.threadListItemId = 'chat-9';
   testState.messages = [];
 });

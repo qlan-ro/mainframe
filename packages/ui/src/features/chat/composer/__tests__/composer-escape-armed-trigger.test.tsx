@@ -36,7 +36,11 @@ vi.mock('../segments/ComposerSegments', () => ({ ComposerSegments: () => null })
 vi.mock('../../runtime/chat-extras', () => ({
   useChatExtras: () => ({
     port: 31415,
-    state: { chatId: 'chat-1', chatConfig: { projectId: 'proj-1', adapterId: 'claude' } },
+    state: {
+      chatId: 'chat-1',
+      chatConfig: { projectId: 'proj-1', adapterId: 'claude' },
+      runState: { type: 'idle' },
+    },
   }),
 }));
 vi.mock('@/features/sessions/runtime/draft-config', () => ({ useDraftConfig: () => undefined }));
