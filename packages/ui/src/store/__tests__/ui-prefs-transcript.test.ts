@@ -7,6 +7,7 @@ const savedPreferences = {
   sidebarWidth: 320,
   sidebarView: 'tasks' as const,
   dontWarnOnTuningChange: true,
+  dontConfirmProviderSwitch: false,
   sessionPanelOpen: true,
   sessionPanelSections: { plan: true, context: false },
   dialogSizes: { settings: { width: 920, height: 720 } },
