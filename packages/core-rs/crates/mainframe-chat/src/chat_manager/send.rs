@@ -257,9 +257,19 @@ impl ChatManager {
         self.assign_initial_title(post, chat_id, content);
 
         let now = now_iso8601();
-        self.set_working(post, chat_id, &now);
-        let chat = post.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
-        self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
+        // Only a new turn needs this: steering folds into one that is already
+        // marked Working (the caller just checked). Re-asserting it here for
+        // Steer raced a turn that finished between that check and this call
+        // (Codex rejects `turn/steer` once its `expectedTurnId` has ended, via
+        // `turn_steer.rs`): the adapter call below then fails, but nothing
+        // ever flips the chat back to idle, since the real turn already did
+        // and will not do so again. Leaving the flag alone keeps the chat's
+        // state whatever the turn's own completion event set it to.
+        if matches!(delivery, Delivery::Turn { .. }) {
+            self.set_working(post, chat_id, &now);
+            let chat = post.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
+            self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
+        }
 
         let uuid = Some(message_uuid.clone());
         match delivery {

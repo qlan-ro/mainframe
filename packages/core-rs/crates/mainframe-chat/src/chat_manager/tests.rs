@@ -886,6 +886,9 @@ struct RecSession {
     permission_mode_calls: Mutex<Vec<ExecutionMode>>,
     /// Every `steer` call's message, in order. Steering is always supported.
     steer_calls: Mutex<Vec<String>>,
+    /// When set, `steer` fails with this message instead of recording the
+    /// call (a Codex `turn/steer` rejected because the turn already ended).
+    steer_err: Mutex<Option<String>>,
 }
 
 impl RecSession {
@@ -903,6 +906,7 @@ impl RecSession {
             responded_calls: Mutex::new(Vec::new()),
             permission_mode_calls: Mutex::new(Vec::new()),
             steer_calls: Mutex::new(Vec::new()),
+            steer_err: Mutex::new(None),
         })
     }
     fn with_order(label: &str, order: Arc<Mutex<Vec<String>>>) -> Arc<Self> {
@@ -919,6 +923,7 @@ impl RecSession {
             responded_calls: Mutex::new(Vec::new()),
             permission_mode_calls: Mutex::new(Vec::new()),
             steer_calls: Mutex::new(Vec::new()),
+            steer_err: Mutex::new(None),
         })
     }
 }
@@ -982,6 +987,9 @@ impl AdapterSession for RecSession {
         message: String,
         _uuid: Option<String>,
     ) -> BoxFuture<'_, Result<(), AdapterError>> {
+        if let Some(msg) = self.steer_err.lock().unwrap().clone() {
+            return Box::pin(async move { Err(AdapterError::Message(msg)) });
+        }
         self.steer_calls.lock().unwrap().push(message);
         ok()
     }
@@ -1136,6 +1144,39 @@ async fn steer_folds_into_a_working_turn_and_refuses_an_idle_one() {
     );
     assert!(mgr.steer_message("c2", "x").await.is_err());
     assert!(idle.steer_calls.lock().unwrap().is_empty());
+}
+
+/// A steer that races the turn's own end (Codex rejects `turn/steer` once the
+/// `expectedTurnId` it names has ended, `turn_steer.rs`) must not leave the
+/// chat falsely marked Working: nothing else will ever flip it back, since
+/// the real turn already finished. Steering never needs to (re)assert
+/// Working at all, so the fix is that it never writes `process_state`.
+#[tokio::test]
+async fn a_steer_that_loses_the_turn_end_race_does_not_relatch_working() {
+    let deps = StoreDeps::arc();
+    let mgr = ChatManager::new(deps.clone());
+    let session = RecSession::new("c1", true, true);
+    *session.steer_err.lock().unwrap() = Some("turn already ended".to_string());
+    seed_active(
+        &mgr,
+        "c1",
+        working_chat("c1", Some("t"), true),
+        session.clone(),
+    );
+
+    let err = mgr.steer_message("c1", "also run the tests").await;
+    assert!(err.is_err());
+    assert!(session.steer_calls.lock().unwrap().is_empty());
+    // Steering must never write `process_state`, successful or not: a new
+    // turn's `set_working` is the only legitimate source of that patch.
+    assert!(
+        deps.updates
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|(_, patch)| patch.process_state.is_none()),
+        "steer must not (re)assert the chat's working state"
+    );
 }
 
 #[tokio::test]
