@@ -60,7 +60,7 @@ export function ProviderTabs({ adapters, selectedId, activeId, blockedReason, on
           // rides on a wrapper span.
           return (
             <Hint key={a.id} label={blockedReason} side="top">
-              <span data-testid={`composer-adapter-switch-blocked-${a.id}`} className="h-full flex-1">
+              <span data-testid={`composer-adapter-switch-blocked-${a.id}`} className="h-full min-w-0 flex-1">
                 {trigger}
               </span>
             </Hint>
