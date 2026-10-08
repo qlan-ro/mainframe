@@ -64,7 +64,7 @@ vi.mock('@assistant-ui/react', () => ({
   },
   // useAuiState invokes the selector against a fake state object. This means
   // the component's real selectors are exercised and the return value tracks
-  // the mutable cells above. Composer, SendOrCancelButton, and the placeholder
+  // the mutable cells above. Composer, SendOrStopButton, and the placeholder
   // logic all call useAuiState with selectors over this same fake state object.
   useAuiState: (
     selector: (s: { thread: { isRunning: boolean; messages: unknown[] }; threadListItem: { id: string } }) => unknown,
@@ -91,6 +91,12 @@ vi.mock('@assistant-ui/react', () => ({
 // the store directly instead, since Composer computes hasLiveQuote itself.
 vi.mock('../segments/ComposerSegments', () => ({
   ComposerSegments: () => null,
+}));
+
+// The run state the Stop button reads — 'running' unless a test sets 'cancelling'.
+let __runStateType = 'running';
+vi.mock('../../runtime/chat-extras', () => ({
+  useChatExtras: () => ({ state: { runState: { type: __runStateType } } }),
 }));
 
 // Edit context — editing is null so Composer renders the normal shell, not ComposerEditMode.
@@ -176,6 +182,46 @@ describe('Composer — healthy shell', () => {
     expect(input).toHaveAttribute('role', 'combobox');
     expect(input).toHaveAttribute('aria-expanded', 'false');
     expect(input).toHaveAttribute('aria-haspopup', 'listbox');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Send ↔ Stop swap in the send slot
+// ---------------------------------------------------------------------------
+
+describe('Composer — Send ↔ Stop swap', () => {
+  beforeEach(() => {
+    __runStateType = 'running';
+  });
+
+  it('shows Send, and no Stop, while idle', () => {
+    __isRunning = false;
+    renderComposer();
+
+    expect(screen.getByTestId('chat-composer-send')).toBeInTheDocument();
+    expect(screen.queryByTestId('chat-composer-cancel')).toBeNull();
+  });
+
+  it('swaps Send for an enabled Stop while a turn runs', () => {
+    __isRunning = true;
+    renderComposer();
+
+    const stop = screen.getByTestId('chat-composer-cancel');
+    expect(stop).toHaveAttribute('aria-label', 'Stop');
+    expect(stop).not.toBeDisabled();
+    expect(stop).not.toHaveAttribute('data-stopping');
+    expect(screen.queryByTestId('chat-composer-send')).toBeNull();
+  });
+
+  it('shows a disabled "Stopping" state once the run is cancelling', () => {
+    __isRunning = true;
+    __runStateType = 'cancelling';
+    renderComposer();
+
+    const stop = screen.getByTestId('chat-composer-cancel');
+    expect(stop).toHaveAttribute('aria-label', 'Stopping');
+    expect(stop).toHaveAttribute('data-stopping', 'true');
+    expect(stop).toBeDisabled();
   });
 });
 

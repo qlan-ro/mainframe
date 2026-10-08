@@ -3,9 +3,8 @@
 /**
  * Composer shell — the v2 skin over the native `ComposerPrimitive`.
  *
- * Native ~90%: Root/Input own the draft + submit. The send slot shows send
- * only — Stop lives on the status line above the composer (D18) — and a
- * mid-run Enter still queues. The bottom bar's left slot carries the
+ * Native ~90%: Root/Input own the draft + submit; Send↔Stop swaps on
+ * `thread.isRunning`, and a mid-run Enter still queues. The bottom bar's left slot carries the
  * attachment affordances and the config toolbar (model · permission · plan ·
  * temporary · worktree · context).
  *
@@ -14,7 +13,7 @@
  */
 import { useCallback, useRef, type RefObject, type KeyboardEvent } from 'react';
 import { ComposerPrimitive, useAuiState } from '@assistant-ui/react';
-import { ArrowUpIcon } from 'lucide-react';
+import { ArrowUpIcon, Loader2Icon, SquareIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
@@ -23,6 +22,7 @@ import { ComposerEditMode } from './edit/ComposerEditMode';
 import { useComposerEdit } from './edit/composer-edit-context';
 import { ComposerAttachments, ComposerAddAttachment, ComposerAddMention } from './attachments/ComposerAttachmentStrip';
 import { useActiveThreadId } from '../runtime/use-active-thread-id';
+import { useChatExtras } from '../runtime/chat-extras';
 import { ComposerTriggers } from './triggers/ComposerTriggers';
 import { useTriggerFieldAria } from './triggers/trigger-field-aria-context';
 import { focusOwningTranscript } from './focus-composer';
@@ -32,15 +32,44 @@ import { useComposerSegments } from './segments/segment-store';
 import { useSubmitComposition, useCanSubmit } from './segments/use-submit-composition';
 
 /**
- * Send — a 32px `primary` square, disabled while empty. While a turn runs it
- * stays a send: Enter queues, and so does this.
+ * Send (idle, disabled while empty) ↔ Stop (running) — swapped on
+ * `thread.isRunning`. Once Stop is clicked the run is `cancelling` until the
+ * daemon reports the turn over, which can take seconds while the CLI finishes
+ * a tool call; the button shows a disabled spinner meanwhile so the click
+ * visibly registered (a repeat click during `cancelling` is a no-op anyway).
  *
  * `useCanSubmit` is subscribed HERE, not in `Composer`: it reads the live
  * draft text, so hoisting it would re-render the whole composer (segments,
  * triggers, toolbar, highlight overlay) on every keystroke.
  */
-function SendButton() {
+function SendOrStopButton() {
+  const isRunning = useAuiState((s) => s.thread.isRunning);
+  const stopping = useChatExtras()?.state.runState.type === 'cancelling';
   const canSubmit = useCanSubmit();
+
+  if (isRunning) {
+    // A soft destructive fill — it swaps in for the primary Send, so it must
+    // read as THE action, unlike the incidental ghost stops elsewhere.
+    return (
+      <ComposerPrimitive.Cancel asChild>
+        <Button
+          data-testid="chat-composer-cancel"
+          data-stopping={stopping || undefined}
+          aria-label={stopping ? 'Stopping' : 'Stop'}
+          variant="ghost"
+          size="icon-sm"
+          disabled={stopping}
+          className="bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive"
+        >
+          {stopping ? (
+            <Loader2Icon className="animate-spin motion-reduce:animate-none" />
+          ) : (
+            <SquareIcon fill="currentColor" />
+          )}
+        </Button>
+      </ComposerPrimitive.Cancel>
+    );
+  }
   return (
     <Button type="submit" data-testid="chat-composer-send" aria-label="Send" size="icon-sm" disabled={!canSubmit}>
       <ArrowUpIcon />
@@ -211,7 +240,7 @@ export function Composer({ variant = 'main' }: { variant?: 'main' | 'side' } = {
               <Separator orientation="vertical" className="mx-1 h-3 data-vertical:self-center" />
               <ComposerToolbar variant={variant} />
             </div>
-            <SendButton />
+            <SendOrStopButton />
           </div>
         </ComposerPrimitive.AttachmentDropzone>
       </ComposerPrimitive.Root>

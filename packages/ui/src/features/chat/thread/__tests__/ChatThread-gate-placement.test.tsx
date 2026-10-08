@@ -16,6 +16,7 @@ const testState = vi.hoisted(() => ({
   extrasState: {
     compacting: false,
     loadState: { type: 'ready' as const },
+    runState: { type: 'idle' as const },
     chatConfig: null as Partial<Chat> | null,
   },
 }));

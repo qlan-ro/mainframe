@@ -47,7 +47,7 @@ vi.mock('../../find/FindBar', () => ({ FindBar: () => null }));
 vi.mock('../../tools/register-cards', () => ({}));
 
 // Mutable extras state so a rerender can flip `compacting`.
-const extrasState = { compacting: true, loadState: { type: 'ready' } };
+const extrasState = { compacting: true, loadState: { type: 'ready' }, runState: { type: 'idle' } };
 vi.mock('../../runtime/chat-extras', () => ({
   useChatExtras: () => ({ state: extrasState, retry: () => Promise.resolve() }),
 }));
