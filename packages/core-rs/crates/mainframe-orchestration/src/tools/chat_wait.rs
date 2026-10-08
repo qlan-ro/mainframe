@@ -23,10 +23,12 @@ pub(super) fn definition() -> ToolDef {
         description: "Block until a chat is idle, waiting for a permission answer, or ended \
             (default: any of these), or until timeoutMs passes. Returns the chat's state, its \
             last assistant text, and any pending permission. A timeout never affects the chat. \
-            Each call is capped well under a minute regardless of timeoutMs: when the budget is \
-            not yet exhausted, it returns early with stillWaiting true and waitTimedOut false — \
-            call chat_wait again with the same arguments to keep waiting. Prefer ending your \
-            turn over long waits when nothing depends on the answer.",
+            Each call actually blocks for well under a minute regardless of timeoutMs: when the \
+            caller's own budget is not yet used up, it returns early with stillWaiting true, \
+            waitTimedOut false, and remainingMs set — call chat_wait again with timeoutMs: \
+            remainingMs to keep waiting. waitTimedOut only becomes true once a call's own \
+            (possibly reduced) timeoutMs is itself used up with nothing happening. Prefer ending \
+            your turn over long waits when nothing depends on the answer.",
         input_schema: object_schema(
             json!({
                 "chatId": id_schema("The chat to wait on."),
@@ -95,7 +97,7 @@ pub(super) async fn run(
             "A chat may not wait on itself.",
         ));
     }
-    svc.target_chat(&input.chat_id, &caller.project_id).await?;
+    svc.target_chat(&input.chat_id, &caller).await?;
     let until = input
         .until
         .unwrap_or_else(|| vec![Until::Idle, Until::WaitingForPermission, Until::Ended]);
@@ -117,14 +119,17 @@ pub(super) async fn run(
             .then_some((chat, state))
     };
     match wait_for(svc, ctx, capped, &watched, probe).await {
-        WaitEnd::Matched((chat, state)) => Ok(result(svc, &chat, state, true, false).await),
+        WaitEnd::Matched((chat, state)) => Ok(result(svc, &chat, state, true, 0).await),
         WaitEnd::TimedOut => {
-            let chat = svc.target_chat(&input.chat_id, &caller.project_id).await?;
+            let chat = svc.target_chat(&input.chat_id, &caller).await?;
             // Only a genuine exhaustion of the caller's own requested budget
-            // is a final `waitTimedOut`; hitting our own safety cap first is
-            // reported as `stillWaiting` so the agent knows to call again.
-            let still_waiting = capped < requested;
-            Ok(result(svc, &chat, svc.state_of(&chat), false, still_waiting).await)
+            // is a final `waitTimedOut`; hitting our own safety cap first,
+            // with budget still left, is reported as `stillWaiting` plus
+            // how much is left, so a retry loop actually terminates once
+            // the ORIGINAL budget (not a fresh one each call) runs out,
+            // rather than resetting to the full cap forever.
+            let remaining_ms = requested.saturating_sub(capped).as_millis() as u64;
+            Ok(result(svc, &chat, svc.state_of(&chat), false, remaining_ms).await)
         }
         WaitEnd::Cancelled => Err(ToolError::new(
             ErrorCode::CallerNotActive,
@@ -138,15 +143,17 @@ async fn result(
     chat: &ChatView,
     state: ChatState,
     matched: bool,
-    still_waiting: bool,
+    remaining_ms: u64,
 ) -> Value {
     let text = last_assistant_text(&svc.port.messages(&chat.id).await);
+    let still_waiting = !matched && remaining_ms > 0;
     json!({
         "chatId": chat.id,
         "state": state,
         "matched": if matched { json!(state) } else { Value::Null },
         "waitTimedOut": !matched && !still_waiting,
         "stillWaiting": still_waiting,
+        "remainingMs": if still_waiting { json!(remaining_ms) } else { Value::Null },
         "lastAssistantText": if text.is_empty() { Value::Null } else { json!(cap_chars(&text, LAST_TEXT_CAP)) },
         "pendingPermission": chat.pending_permission.as_ref()
             .map(|p| json!({ "toolName": p.tool_name, "summary": p.summary })),
@@ -238,17 +245,50 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn a_request_above_the_safety_cap_returns_still_waiting_at_the_cap() {
         let (svc, ctx, _port) = setup();
+        let requested = MAX_SINGLE_WAIT_MS * 10;
         let start = tokio::time::Instant::now();
         let out = run(
             &svc,
             &ctx,
-            json!({ "chatId": "target", "timeoutMs": MAX_SINGLE_WAIT_MS * 10 }),
+            json!({ "chatId": "target", "timeoutMs": requested }),
         )
         .await
         .unwrap();
         assert_eq!(out["waitTimedOut"], false);
         assert_eq!(out["stillWaiting"], true);
+        assert_eq!(out["remainingMs"], requested - MAX_SINGLE_WAIT_MS);
         assert_eq!(start.elapsed(), Duration::from_millis(MAX_SINGLE_WAIT_MS));
+    }
+
+    /// The caller's original budget must actually run out: passing
+    /// `remainingMs` back as the next call's `timeoutMs` (the tool's own
+    /// instruction) eventually reaches a real `waitTimedOut`, instead of
+    /// every call resetting to a fresh cap's worth of `stillWaiting`
+    /// forever.
+    #[tokio::test(start_paused = true)]
+    async fn passing_remaining_ms_back_eventually_reaches_a_real_timeout() {
+        let (svc, ctx, _port) = setup();
+        let requested = MAX_SINGLE_WAIT_MS + 1000;
+        let first = run(
+            &svc,
+            &ctx,
+            json!({ "chatId": "target", "timeoutMs": requested }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(first["stillWaiting"], true);
+        assert_eq!(first["remainingMs"], 1000);
+
+        let second = run(
+            &svc,
+            &ctx,
+            json!({ "chatId": "target", "timeoutMs": first["remainingMs"].as_u64().unwrap() }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(second["waitTimedOut"], true);
+        assert_eq!(second["stillWaiting"], false);
+        assert_eq!(second["remainingMs"], Value::Null);
     }
 
     /// A request at or under the cap behaves exactly as before: a real
@@ -261,5 +301,31 @@ mod tests {
             .unwrap();
         assert_eq!(out["waitTimedOut"], true);
         assert_eq!(out["stillWaiting"], false);
+    }
+
+    #[tokio::test]
+    async fn a_chat_in_another_project_reads_as_not_found() {
+        let (svc, ctx, port) = setup();
+        port.update("target", |c| c.project_id = "other-project".into());
+        let err = run(&svc, &ctx, json!({ "chatId": "target" }))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, ErrorCode::ChatNotFound);
+    }
+
+    /// A chat the caller `chat_launch`ed into another project is still
+    /// waitable: lineage keeps it in scope even though its project differs.
+    #[tokio::test]
+    async fn a_chat_the_caller_launched_into_another_project_is_still_waitable() {
+        let (svc, ctx, port) = setup();
+        port.update("target", |c| {
+            c.project_id = "other-project".into();
+            c.created_by_chat_id = Some("caller".into());
+            c.working = false;
+        });
+        let out = run(&svc, &ctx, json!({ "chatId": "target" }))
+            .await
+            .unwrap();
+        assert_eq!(out["matched"], "idle");
     }
 }
