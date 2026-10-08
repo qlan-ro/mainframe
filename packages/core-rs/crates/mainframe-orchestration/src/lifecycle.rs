@@ -18,26 +18,45 @@ use crate::waiter::event_chat_id;
 impl OrchestrationService {
     /// Sends everything held for `chat_id` as one message once it is idle.
     /// Deliveries a restart left owed wait until the chat spawns again.
+    ///
+    /// A dropped queued `Send` reports back to its sender as a `Notice` entry
+    /// in the same outbox (`notify_send_dropped`); an idle sender has no
+    /// other event coming to flush it on, so this recurses into the
+    /// sender's own `try_flush` once `chat_id`'s flush is done — after
+    /// `flush_locked`'s guard has dropped, so it never deadlocks on
+    /// `flush_lock` (not reentrant).
     pub async fn try_flush(&self, chat_id: &str) {
         if !self.outbox.has_for(chat_id) || self.is_boot_held(chat_id) {
             return;
         }
+        let dropped_senders = self.flush_locked(chat_id).await;
+        for sender in dropped_senders {
+            // Boxed: `try_flush` calling itself is otherwise an infinitely
+            // sized async fn.
+            Box::pin(self.try_flush(&sender)).await;
+        }
+    }
+
+    /// `try_flush`'s work under `flush_lock`, returning the senders a
+    /// ceiling-dropped `Send` was reported back to — left for the caller to
+    /// flush once the lock is released.
+    async fn flush_locked(&self, chat_id: &str) -> Vec<String> {
         let _guard = self.flush_lock.lock().await;
         let Some(chat) = self.port.chat(chat_id).await else {
             self.outbox.drop_for_target(chat_id);
-            return;
+            return Vec::new();
         };
         match crate::state::derive_state(&chat, false) {
             ChatState::Idle => {}
             ChatState::Ended | ChatState::Archived => {
                 self.outbox.drop_for_target(chat_id);
-                return;
+                return Vec::new();
             }
-            _ => return,
+            _ => return Vec::new(),
         }
         let entries = self.outbox.take_for(chat_id);
         if entries.is_empty() {
-            return;
+            return Vec::new();
         }
         // The ceiling was checked once, at `chat_send` time; the sender's or
         // the target's mode may have been raised or lowered since. A task
@@ -49,6 +68,7 @@ impl OrchestrationService {
         // sender's only signal; it was told `delivery: "queued"` with an
         // `outboxEntryId` and would otherwise never learn the message died).
         let mut deliverable = Vec::with_capacity(entries.len());
+        let mut dropped_senders = Vec::new();
         for entry in entries {
             if matches!(entry.kind, OutboxKind::Send)
                 && !self
@@ -61,21 +81,23 @@ impl OrchestrationService {
                     entry_id = entry.entry_id,
                     "queued chat_send dropped: sender no longer passes the ceiling at delivery time"
                 );
+                dropped_senders.push(entry.from_chat_id.clone());
                 self.notify_send_dropped(chat_id, &entry);
                 continue;
             }
             deliverable.push(entry);
         }
         if deliverable.is_empty() {
-            return;
+            return dropped_senders;
         }
         if let Err(err) = self.port.send(chat_id, &batch_body(&deliverable)).await {
             tracing::warn!(chat_id, ?err, "outbox delivery failed; keeping entries");
             self.outbox.restore(deliverable);
-            return;
+            return dropped_senders;
         }
         self.set_delivery(&deliverable, TaskDelivery::Delivered)
             .await;
+        dropped_senders
     }
 
     /// Whether `sender_id` may still reach `target` under the ceiling, read
@@ -332,34 +354,38 @@ mod tests {
         });
         svc.try_flush("target").await;
 
-        assert!(
-            port.lock().sent.is_empty(),
-            "the raised target must not receive it"
+        // The sender was told `delivery: "queued"` with an `outboxEntryId`
+        // and has no other way to learn the message died: a `Notice` entry
+        // rides the same outbox back to it. The sender is already idle, and
+        // nothing else will ever flush it on its behalf, so `try_flush`
+        // itself must deliver the notice — not just this test calling it a
+        // second time by hand.
+        let sent = port.lock().sent.clone();
+        assert_eq!(
+            sent,
+            sent.iter()
+                .filter(|(id, _)| id == "sender")
+                .cloned()
+                .collect::<Vec<_>>(),
+            "the raised target must not receive it; only the sender's own notice is sent"
         );
+        assert_eq!(
+            sent.len(),
+            1,
+            "the idle sender must be flushed automatically"
+        );
+        let (notice_target, notice_body) = &sent[0];
+        assert_eq!(notice_target, "sender");
+        assert!(notice_body.contains("<mainframe-agent-message"));
+        assert!(notice_body.contains("kind=\"dropped\""));
+
         assert!(
             !svc.outbox.has_for("target"),
             "the dropped entry is not kept for a retry"
         );
-        // The sender was told `delivery: "queued"` with an `outboxEntryId`
-        // and has no other way to learn the message died: a `Notice` entry
-        // now rides the same outbox back to it.
-        let notice = svc
-            .outbox
-            .list_for("sender")
-            .into_iter()
-            .next()
-            .expect("a dropped send is reported back to its sender");
-        assert_eq!(notice.kind, OutboxKind::Notice);
-        assert_eq!(notice.from_chat_id, "target");
-        assert!(notice.body.contains("<mainframe-agent-message"));
-        assert!(notice.body.contains("kind=\"dropped\""));
-
-        // It delivers like any other outbox entry, once the sender is idle,
-        // and is never itself subject to the ceiling re-check.
-        svc.try_flush("sender").await;
-        assert_eq!(
-            port.lock().sent,
-            vec![("sender".to_string(), notice.body.clone())]
+        assert!(
+            !svc.outbox.has_for("sender"),
+            "the notice was delivered, not left queued"
         );
     }
 
