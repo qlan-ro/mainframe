@@ -52,6 +52,12 @@ struct PendingConfig {
     tuning: Option<ResolvedTuning>,
     codex_provider_tuning: CodexProviderTuning,
     no_persistence: bool,
+    /// Set from `SessionSpawnOptions::orchestration_mcp.is_some()` at spawn
+    /// time: whether this chat's `codex app-server` actually has the
+    /// `mainframe` MCP server, so `turn/start` only carries the orchestration
+    /// `additionalContext` entry (`session_prompt.rs::prompt_params`) for a
+    /// chat that really has the tools.
+    orchestration_enabled: bool,
 }
 
 impl Default for PendingConfig {
@@ -63,6 +69,7 @@ impl Default for PendingConfig {
             tuning: None,
             codex_provider_tuning: CodexProviderTuning::default(),
             no_persistence: false,
+            orchestration_enabled: false,
         }
     }
 }

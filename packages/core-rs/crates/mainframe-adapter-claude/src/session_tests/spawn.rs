@@ -279,6 +279,56 @@ fn includes_append_system_prompt_when_enabled() {
 }
 
 #[test]
+fn omits_the_orchestration_prompt_when_no_orchestration_mcp_is_attached() {
+    let (args, _) = build_args(&spawn_opts(None), &crate::fork::ResumeTarget::Fresh, false);
+    assert!(!args.iter().any(|a| a == "--append-system-prompt"));
+}
+
+#[test]
+fn appends_the_orchestration_prompt_once_an_orchestration_mcp_launch_is_set() {
+    let mut o = spawn_opts(None);
+    o.orchestration_mcp = Some(mainframe_types::orchestration::OrchestrationMcpLaunch {
+        url: "http://127.0.0.1:31415/mcp".into(),
+        token: mainframe_types::orchestration::SecretToken::new("tok".into()),
+    });
+    let (args, _) = build_args(&o, &crate::fork::ResumeTarget::Fresh, false);
+    let i = args
+        .iter()
+        .position(|a| a == "--append-system-prompt")
+        .unwrap();
+    assert_eq!(
+        args[i + 1],
+        mainframe_orchestration::ORCHESTRATION_SYSTEM_PROMPT
+    );
+}
+
+#[test]
+fn combines_the_askuserquestion_and_orchestration_prompts_into_one_flag() {
+    let mut o = spawn_opts(None);
+    o.system_prompt = Some("enabled".to_string());
+    o.orchestration_mcp = Some(mainframe_types::orchestration::OrchestrationMcpLaunch {
+        url: "http://127.0.0.1:31415/mcp".into(),
+        token: mainframe_types::orchestration::SecretToken::new("tok".into()),
+    });
+    let (args, _) = build_args(&o, &crate::fork::ResumeTarget::Fresh, false);
+    // Exactly one `--append-system-prompt` occurrence: the CLI's own argParser
+    // keeps only the last value of a repeated flag, so both pieces of text
+    // must ride in the same argv slot (see `append_system_prompt_text`).
+    assert_eq!(
+        args.iter()
+            .filter(|a| *a == "--append-system-prompt")
+            .count(),
+        1
+    );
+    let i = args
+        .iter()
+        .position(|a| a == "--append-system-prompt")
+        .unwrap();
+    assert!(args[i + 1].contains(MAINFRAME_SYSTEM_PROMPT_APPEND));
+    assert!(args[i + 1].contains(mainframe_orchestration::ORCHESTRATION_SYSTEM_PROMPT));
+}
+
+#[test]
 fn no_persistence_true_adds_the_flag() {
     let mut o = spawn_opts(None);
     o.no_persistence = Some(true);

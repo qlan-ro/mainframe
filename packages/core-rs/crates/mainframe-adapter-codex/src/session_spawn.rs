@@ -76,6 +76,7 @@ impl CodexSession {
             cfg.plan_mode = options.plan_mode.unwrap_or(false);
             cfg.tuning = options.tuning.clone();
             cfg.no_persistence = options.no_persistence.unwrap_or(false);
+            cfg.orchestration_enabled = options.orchestration_mcp.is_some();
         }
 
         (options, sink)

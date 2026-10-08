@@ -22,6 +22,7 @@ mainframe-types = { workspace = true }
 mainframe-adapter-api = { workspace = true }
 mainframe-display = { workspace = true }
 mainframe-background-tasks = { workspace = true }
+mainframe-orchestration = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

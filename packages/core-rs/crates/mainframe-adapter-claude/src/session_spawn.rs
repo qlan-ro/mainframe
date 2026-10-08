@@ -180,9 +180,9 @@ pub(super) fn build_args(
         args.push("--include-partial-messages".to_string());
     }
 
-    if options.system_prompt.as_deref() == Some("enabled") {
+    if let Some(text) = append_system_prompt_text(options) {
         args.push("--append-system-prompt".to_string());
-        args.push(MAINFRAME_SYSTEM_PROMPT_APPEND.to_string());
+        args.push(text);
     }
 
     append_resume_args(&mut args, options, resume);
@@ -207,6 +207,25 @@ pub(super) fn build_args(
         options.orchestration_mcp.as_ref(),
     ));
     (args, base_mode)
+}
+
+/// The combined `--append-system-prompt` value, or `None` to omit the flag.
+///
+/// The CLI's `--append-system-prompt` option has no `variadic`/accumulating
+/// `argParser` (verified against the installed `@anthropic-ai/claude-code`
+/// `cli.js`: `.addOption(new zH("--append-system-prompt <prompt>", …)
+/// .argParser(String))`), so passing the flag twice has the second value win,
+/// not both — any orchestration text must be joined into the same single
+/// value as the user-configured append, never a second flag occurrence.
+fn append_system_prompt_text(options: &SessionSpawnOptions) -> Option<String> {
+    let mut parts: Vec<&str> = Vec::new();
+    if options.system_prompt.as_deref() == Some("enabled") {
+        parts.push(MAINFRAME_SYSTEM_PROMPT_APPEND);
+    }
+    if options.orchestration_mcp.is_some() {
+        parts.push(mainframe_orchestration::ORCHESTRATION_SYSTEM_PROMPT);
+    }
+    (!parts.is_empty()).then(|| parts.join("\n\n"))
 }
 
 fn append_resume_args(

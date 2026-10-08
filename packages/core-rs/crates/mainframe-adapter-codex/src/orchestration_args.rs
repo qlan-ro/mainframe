@@ -42,6 +42,32 @@ fn toml_string(value: &str) -> String {
     Value::String(value.to_string()).to_string()
 }
 
+/// The `turn/start.additionalContext` entry that carries the orchestration
+/// "when to delegate" guidance, mirroring T3 Code's channel choice for the
+/// same problem (`docs/research/2026-10-09-t3code-agent-instructions-and-mcp-
+/// tools.md`, section 1) rather than `collaborationMode.settings.
+/// developer_instructions`: T3's code comment on its Codex adapter explains
+/// that when the model catalog ships its own text for a mode, Codex uses
+/// that text and drops the client's `developer_instructions` entirely, so a
+/// client-supplied value there is not reliably seen by the model.
+/// `additionalContext` has no such override — confirmed against the
+/// installed codex-cli 0.155.1's own generated schema
+/// (`codex app-server generate-json-schema --experimental`,
+/// `v2/TurnStartParams.json`): `additionalContext` is a map of
+/// `{kind, value}` entries keyed by an opaque source id, independent of
+/// `collaborationMode`. `kind: "application"` (the other option is
+/// `"untrusted"`) marks this as Mainframe's own trusted guidance rather than
+/// agent- or user-supplied content, matching how Codex's own built-in mode
+/// text is scoped.
+pub(crate) fn additional_context() -> Value {
+    json!({
+        "mainframe_orchestration": {
+            "kind": "application",
+            "value": mainframe_orchestration::ORCHESTRATION_SYSTEM_PROMPT,
+        }
+    })
+}
+
 /// The answer to `mcpServer/elicitation/request`. Mainframe's own server is
 /// accepted without a prompt because the daemon enforces the privilege
 /// ceiling itself; any other server's elicitation is declined, in the shape
@@ -104,6 +130,17 @@ mod tests {
         let mut cmd = tokio::process::Command::new("codex");
         apply_orchestration(&mut cmd, None);
         assert!(argv(&cmd).is_empty());
+    }
+
+    #[test]
+    fn additional_context_carries_the_orchestration_prompt_as_application_kind() {
+        let ctx = additional_context();
+        let entry = &ctx["mainframe_orchestration"];
+        assert_eq!(entry["kind"], "application");
+        assert_eq!(
+            entry["value"].as_str().unwrap(),
+            mainframe_orchestration::ORCHESTRATION_SYSTEM_PROMPT
+        );
     }
 
     #[test]
