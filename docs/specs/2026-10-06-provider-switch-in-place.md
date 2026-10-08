@@ -907,3 +907,22 @@ downgrade/upgrade cycle" (Decision 2's mirror, written only by the segment repos
 inherent cost of that design, already marked `reversible` there; closing it needs migration-time
 reconciliation on boot (detecting and re-syncing a mirror an older binary wrote to directly), which
 is a separate task from this review.
+
+### Known limitation: a handoff double-send window (2026-10-08)
+
+`prepare_handoff` (`chat_manager/handoff_send.rs`) holds `HandoffLocks` for its whole
+check-then-insert — `resolve_live_handoff` through `insert_pending_handoff` — specifically so two
+sends racing for the same chat cannot both see no live handoff and both record one. But the lock
+is released when `prepare_handoff` returns the rendered block, which is *before* its caller,
+`send_plain_text`, actually writes that block to the native session. A second send that reaches
+`prepare_handoff` in that window finds the first send's row `pending`, not yet in the target
+transcript (`resolve_live_handoff`'s `transcript_has_marker` scan correctly finds nothing there
+yet), marks it `superseded`, and builds and records its own. The first send still writes its
+(now-superseded) block to the transcript when it finally runs, so the target can receive two
+handoff blocks back to back — the race `HandoffLocks` was added for, just moved one step later.
+Narrowing is possible (e.g. holding the lock through the send, or having `send_plain_text` confirm
+its own row is still the live one before writing), but is left for a follow-up: the window is
+narrow (one send mid-flight exactly when a second reaches the same still-pending segment) and no
+live occurrence has been observed, only live QA's related finding that a native id's late
+resolution can orphan a `pending` row (see this PR's `mainframe-db/src/chat_segments.rs`
+`record_native_id` fix).
