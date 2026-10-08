@@ -125,10 +125,19 @@ impl DaemonOrchestrationPort {
         }
         let (id, creator) = (chat_id.to_string(), request.created_by_chat_id.clone());
         let parent = request.parent_chat_id.clone();
-        self.db
+        if let Err(err) = self
+            .db
             .call(move |d| d.chats.set_agent_lineage(&id, &creator, parent.as_deref()))
             .await
-            .map_err(|err| PortError::Internal(format!("record provenance: {err}")))?;
+        {
+            // Same reasoning as the worktree and plan-mode failures above:
+            // the caller never learns this chat's id, so an orphan here
+            // would be unreachable and, with no recorded provenance,
+            // misleading if anyone found it by other means.
+            tracing::warn!(chat_id, %err, "recording provenance failed; archiving the new chat");
+            self.chats.archive_chat(chat_id, false).await;
+            return Err(PortError::Internal(format!("record provenance: {err}")));
+        }
         // The live cell was built before the lineage write; pull it in so the
         // sidebar nests a child (and names its creator) without a reload.
         self.chats.refresh_agent_lineage(chat_id);
