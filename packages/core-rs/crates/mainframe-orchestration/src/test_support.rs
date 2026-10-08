@@ -92,6 +92,7 @@ impl FakePort {
                     label: "Default".into(),
                 }],
                 steer: true,
+                auto_mode: true,
             }],
             projects: HashSet::from(["p".to_string()]),
             send_marks_working: true,

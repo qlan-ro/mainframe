@@ -83,6 +83,14 @@ pub struct AdapterView {
     pub unavailable_reason: Option<String>,
     pub models: Vec<ModelView>,
     pub steer: bool,
+    /// Whether this adapter has a distinct `auto` permission mode
+    /// (`AdapterCapabilities::auto_mode`). Codex does not: its `default`,
+    /// `acceptEdits`, and `auto` all map to the same real privilege
+    /// (`permission_mode_policy`), the UI cannot select it, and
+    /// `switch_plan.rs` converts `auto` to `default` on a switch there —
+    /// so an inherited mode must never land on `auto` for an adapter this
+    /// is `false` for (`tools::launch_common::clamp_inherited_mode`).
+    pub auto_mode: bool,
 }
 
 /// Where a new chat runs.

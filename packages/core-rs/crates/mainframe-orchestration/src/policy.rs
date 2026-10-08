@@ -87,6 +87,18 @@ pub fn effective_mode_rank(adapter_id: &str, mode: ExecutionMode) -> u8 {
     }
 }
 
+/// Whether `mode`'s label is one `adapter_auto_mode` (the adapter's
+/// `AdapterCapabilities::auto_mode`, carried on `ports::AdapterView`) would
+/// actually let the chat select: every label but `auto` always is: `auto`
+/// needs the adapter's own distinct auto mode, which Codex does not have
+/// (`auto_mode: false`) even though its `effective_mode_rank` for `auto`
+/// happens to equal `default`/`acceptEdits`'s — a rank match is not the
+/// same as the label being valid on that adapter.
+#[must_use]
+pub fn mode_label_supported(mode: ExecutionMode, adapter_auto_mode: bool) -> bool {
+    mode != ExecutionMode::Auto || adapter_auto_mode
+}
+
 /// A caller's privileges: its adapter, permission mode, and whether it is in
 /// plan mode. The adapter travels with the mode because the mode alone does
 /// not say how privileged it really is (see [`effective_mode_rank`]).

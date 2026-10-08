@@ -110,15 +110,20 @@ async fn build_request(
     caller: &ChatView,
 ) -> Result<LaunchRequest, ToolError> {
     let project_id = resolve_project(svc, input.project_id.as_deref(), caller).await?;
-    let (adapter_id, model) = resolve_adapter(
+    let (adapter_id, model, adapter_auto_mode) = resolve_adapter(
         svc,
         input.adapter_id.as_deref(),
         input.model.as_deref(),
         caller,
     )
     .await?;
-    let privileges =
-        resolve_privileges(&adapter_id, input.permission_mode, input.plan_mode, caller)?;
+    let privileges = resolve_privileges(
+        &adapter_id,
+        adapter_auto_mode,
+        input.permission_mode,
+        input.plan_mode,
+        caller,
+    )?;
     let workspace = resolve_workspace(
         input.workspace.as_ref(),
         WorkspaceMode::ProjectRoot,

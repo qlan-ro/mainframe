@@ -7,7 +7,9 @@ use mainframe_types::settings::{EXECUTION_MODES, ExecutionMode};
 
 use crate::errors::{ErrorCode, ToolError};
 use crate::input::{WorkspaceInput, WorkspaceMode};
-use crate::policy::{MAX_DEPTH, Privileges, check_ceiling, effective_mode_rank};
+use crate::policy::{
+    MAX_DEPTH, Privileges, check_ceiling, effective_mode_rank, mode_label_supported,
+};
 use crate::ports::{ChatView, LaunchWorkspace};
 use crate::service::OrchestrationService;
 
@@ -33,14 +35,17 @@ pub(super) async fn resolve_project(
     Ok(project_id)
 }
 
-/// The adapter (default: the caller's) and model (default: the caller's when
-/// the adapter is unchanged, else the adapter's own default).
+/// The adapter (default: the caller's), its model (default: the caller's
+/// when the adapter is unchanged, else the adapter's own default), and
+/// whether it has a distinct `auto` mode (`AdapterCapabilities::auto_mode`)
+/// — `resolve_privileges` needs that to clamp an inherited mode onto a
+/// label the target can actually select.
 pub(super) async fn resolve_adapter(
     svc: &OrchestrationService,
     adapter_id: Option<&str>,
     model: Option<&str>,
     caller: &ChatView,
-) -> Result<(String, Option<String>), ToolError> {
+) -> Result<(String, Option<String>, bool), ToolError> {
     let adapter_id = adapter_id.unwrap_or(&caller.adapter_id).to_string();
     let adapters = svc.port.adapters().await;
     let adapter = adapters
@@ -75,38 +80,34 @@ pub(super) async fn resolve_adapter(
         None if adapter_id == caller.adapter_id => caller.model.clone(),
         None => None,
     };
-    Ok((adapter_id, model))
+    Ok((adapter_id, model, adapter.auto_mode))
 }
 
 /// The new chat's mode and plan flag: the caller's unless overridden, and
 /// never above the caller's *effective* privilege on `target_adapter_id`
 /// (the adapter the new chat will actually run on, which may differ from
-/// the caller's own).
+/// the caller's own). `target_auto_mode` is that adapter's own
+/// `AdapterCapabilities::auto_mode` (from the already-resolved
+/// `ports::AdapterView`, via `resolve_adapter`).
 ///
 /// An explicit `mode` is checked against the ceiling as asked: refusing it
 /// is correct, because the agent asked for that exact privilege. A missing
-/// `mode` is *inherited*, not asked for, so it is clamped to the highest
-/// mode `target_adapter_id` allows within the caller's effective rank
-/// instead of being checked verbatim: the caller's own mode label can mean
-/// a different real privilege on another provider
-/// (`policy::effective_mode_rank`), so carrying the label across providers
-/// unchanged can "escalate" on paper (and get refused) for a mode the
-/// agent never requested. A Codex `auto` parent (effective rank 1)
-/// delegating to Claude with no `permissionMode` gets Claude's
-/// `acceptEdits` (also rank 1), not a refusal for Claude's `auto`
-/// (rank 2), which is a real escalation the label alone does not show.
+/// `mode` is *inherited*, not asked for, so it is clamped instead of being
+/// checked verbatim: the caller's own mode label can mean a different real
+/// privilege on another provider (`policy::effective_mode_rank`), so
+/// carrying the label across providers unchanged can "escalate" on paper
+/// (and get refused) for a mode the agent never requested. See
+/// `clamp_inherited_mode` for how the replacement is chosen.
 pub(super) fn resolve_privileges(
     target_adapter_id: &str,
+    target_auto_mode: bool,
     mode: Option<ExecutionMode>,
     plan: Option<bool>,
     caller: &ChatView,
 ) -> Result<Privileges, ToolError> {
     let resolved_mode = match mode {
         Some(explicit) => explicit,
-        None => {
-            let caller_rank = effective_mode_rank(&caller.adapter_id, caller.permission_mode);
-            clamp_inherited_mode(target_adapter_id, caller_rank)
-        }
+        None => clamp_inherited_mode(target_adapter_id, target_auto_mode, caller),
     };
     let target = Privileges {
         adapter_id: target_adapter_id.to_string(),
@@ -117,26 +118,66 @@ pub(super) fn resolve_privileges(
     Ok(target)
 }
 
-/// The highest-ranked mode on `target_adapter_id` whose effective privilege
-/// does not exceed `caller_rank`. When no mode on the target fits at all
-/// (a Claude `default` caller, rank 0, inheriting into Codex, whose floor
-/// is rank 1 — Codex has no "ask before every edit" mode to offer), returns
-/// the target's own least-privileged mode instead of guessing: its rank
-/// still exceeds `caller_rank`, so `check_ceiling` refuses clearly rather
-/// than this function silently granting something unsafe.
-fn clamp_inherited_mode(target_adapter_id: &str, caller_rank: u8) -> ExecutionMode {
-    EXECUTION_MODES
-        .into_iter()
-        .rev()
-        .find(|&m| effective_mode_rank(target_adapter_id, m) <= caller_rank)
-        .unwrap_or_else(|| lowest_rank_mode(target_adapter_id))
-}
-
-fn lowest_rank_mode(target_adapter_id: &str) -> ExecutionMode {
-    EXECUTION_MODES
-        .into_iter()
-        .min_by_key(|&m| effective_mode_rank(target_adapter_id, m))
-        .unwrap_or(ExecutionMode::Default)
+/// The mode an inherited (unspecified) `permissionMode` resolves to on
+/// `target_adapter_id`:
+///
+/// 1. If the caller's OWN label is itself valid on the target (every label
+///    but `auto` always is; `auto` needs `target_auto_mode`) and still
+///    within the caller's effective rank there, keep it unchanged. This is
+///    the common case — same adapter, or a label that genuinely carries
+///    over — and it is why a Codex `default` chat delegating to Codex with
+///    no `permissionMode` gets `default` back, not a different label
+///    picked by rank alone (Codex's `default`/`acceptEdits`/`auto` all
+///    share effective rank 1, so ranking alone cannot tell them apart).
+/// 2. Otherwise, among the target's labels that both: (a) the target
+///    actually supports (`mode_label_supported`, so `auto` is never
+///    offered when `target_auto_mode` is false even though its rank may
+///    fit), and (b) fit under the caller's effective rank — pick the one
+///    at the HIGHEST fitting rank, and the LOWEST label (`EXECUTION_MODES`'
+///    own order) among ties at that rank. This is what a cross-adapter
+///    inherit needs: a Claude `auto` parent (rank 2) delegating to Codex
+///    gets Codex's `default` (the lowest of the rank-1 labels tied there),
+///    not `auto`, which Codex cannot select at all.
+/// 3. If nothing on the target fits rule 2 either (a Claude `default`
+///    caller, rank 0, inheriting into Codex, whose floor is rank 1 —
+///    Codex has no "ask before every edit" mode), returns the target's
+///    own least-privileged SUPPORTED mode instead of guessing: its rank
+///    still exceeds the caller's, so `check_ceiling` refuses clearly
+///    rather than this function silently granting something unsafe.
+fn clamp_inherited_mode(
+    target_adapter_id: &str,
+    target_auto_mode: bool,
+    caller: &ChatView,
+) -> ExecutionMode {
+    let caller_rank = effective_mode_rank(&caller.adapter_id, caller.permission_mode);
+    if mode_label_supported(caller.permission_mode, target_auto_mode)
+        && effective_mode_rank(target_adapter_id, caller.permission_mode) <= caller_rank
+    {
+        return caller.permission_mode;
+    }
+    let supported = || {
+        EXECUTION_MODES
+            .into_iter()
+            .filter(move |&m| mode_label_supported(m, target_auto_mode))
+    };
+    let mut best: Option<(u8, ExecutionMode)> = None;
+    for mode in supported() {
+        let rank = effective_mode_rank(target_adapter_id, mode);
+        if rank > caller_rank {
+            continue;
+        }
+        // `EXECUTION_MODES` is ascending by label; keep the first (lowest
+        // label) seen at the best rank, so a later tie at the same rank
+        // does not overwrite it.
+        if best.is_none_or(|(best_rank, _)| rank > best_rank) {
+            best = Some((rank, mode));
+        }
+    }
+    best.map(|(_, mode)| mode).unwrap_or_else(|| {
+        supported()
+            .min_by_key(|&m| effective_mode_rank(target_adapter_id, m))
+            .unwrap_or(ExecutionMode::Default)
+    })
 }
 
 pub(super) fn resolve_workspace(
@@ -202,12 +243,73 @@ mod tests {
     use crate::errors::ErrorCode;
     use crate::test_support::chat_view;
 
+    /// `false` for Codex, `true` for Claude — matches
+    /// `AdapterCapabilities::auto_mode` in each adapter crate.
+    fn auto_mode(adapter_id: &str) -> bool {
+        adapter_id != "codex"
+    }
+
+    fn resolve(
+        target_adapter_id: &str,
+        mode: Option<ExecutionMode>,
+        caller: &ChatView,
+    ) -> Result<Privileges, ToolError> {
+        resolve_privileges(
+            target_adapter_id,
+            auto_mode(target_adapter_id),
+            mode,
+            None,
+            caller,
+        )
+    }
+
     #[test]
-    fn an_inherited_mode_is_clamped_to_the_targets_real_equivalent_not_refused() {
+    fn codex_default_delegating_to_codex_keeps_default() {
+        // The bug this regresses: a top-down rank sweep over
+        // [Default, AcceptEdits, Auto, Yolo] picked `auto` for ANY caller
+        // rank 1–2, because Codex ranks all three the same. `auto` is not
+        // a mode Codex supports at all (`auto_mode: false`; the UI cannot
+        // select it, and switch_plan.rs converts it to `default` on a
+        // switch there) — rule 1 (keep the caller's own valid label)
+        // avoids ever needing to choose among the tied labels here.
+        let mut caller = chat_view("codex-caller");
+        caller.adapter_id = "codex".into();
+        caller.permission_mode = ExecutionMode::Default;
+        let target = resolve("codex", None, &caller).unwrap();
+        assert_eq!(target.mode, ExecutionMode::Default);
+    }
+
+    #[test]
+    fn claude_accept_edits_delegating_to_codex_keeps_accept_edits() {
+        // The label itself carries over: Claude's `acceptEdits` (rank 1)
+        // is both valid on Codex and within the caller's rank there.
+        let mut caller = chat_view("claude-caller");
+        caller.adapter_id = "claude".into();
+        caller.permission_mode = ExecutionMode::AcceptEdits;
+        let target = resolve("codex", None, &caller).unwrap();
+        assert_eq!(target.mode, ExecutionMode::AcceptEdits);
+    }
+
+    #[test]
+    fn claude_auto_delegating_to_codex_gets_default_not_auto() {
+        // Claude `auto` (rank 2) is not itself valid on Codex
+        // (`auto_mode: false`), so rule 2 picks among Codex's SUPPORTED
+        // labels at or under rank 2: `default` and `acceptEdits` tie at
+        // rank 1 there: the lowest label wins the tie, `auto` is never a
+        // candidate regardless of rank.
+        let mut caller = chat_view("claude-caller");
+        caller.adapter_id = "claude".into();
+        caller.permission_mode = ExecutionMode::Auto;
+        let target = resolve("codex", None, &caller).unwrap();
+        assert_eq!(target.mode, ExecutionMode::Default);
+    }
+
+    #[test]
+    fn codex_auto_delegating_to_claude_gets_accept_edits() {
         let mut caller = chat_view("codex-caller");
         caller.adapter_id = "codex".into();
         caller.permission_mode = ExecutionMode::Auto; // effective rank 1 on codex
-        let target = resolve_privileges("claude", None, None, &caller).unwrap();
+        let target = resolve("claude", None, &caller).unwrap();
         // Claude's own rank-1 mode, not the inherited "auto" label, which
         // would be Claude's rank-2 mode and get refused as an escalation.
         assert_eq!(target.mode, ExecutionMode::AcceptEdits);
@@ -218,39 +320,23 @@ mod tests {
         let mut caller = chat_view("codex-caller");
         caller.adapter_id = "codex".into();
         caller.permission_mode = ExecutionMode::Auto;
-        let err =
-            resolve_privileges("claude", Some(ExecutionMode::Auto), None, &caller).unwrap_err();
+        let err = resolve("claude", Some(ExecutionMode::Auto), &caller).unwrap_err();
         assert_eq!(err.code, ErrorCode::PermissionModeEscalationDenied);
     }
 
     #[test]
-    fn clamp_inherited_mode_stays_under_the_cap_whenever_the_target_can() {
-        for rank in 0..=3u8 {
-            for adapter in ["claude", "codex"] {
-                let achievable = EXECUTION_MODES
-                    .into_iter()
-                    .any(|m| effective_mode_rank(adapter, m) <= rank);
-                let mode = clamp_inherited_mode(adapter, rank);
-                if achievable {
-                    assert!(
-                        effective_mode_rank(adapter, mode) <= rank,
-                        "{adapter} rank {rank}"
-                    );
-                } else {
-                    // No mode fits (e.g. Codex has no rank-0 mode): the
-                    // lowest-privilege one on the target, left for
-                    // check_ceiling to refuse.
-                    let lowest = EXECUTION_MODES
-                        .into_iter()
-                        .map(|m| effective_mode_rank(adapter, m))
-                        .min()
-                        .unwrap();
-                    assert_eq!(
-                        effective_mode_rank(adapter, mode),
-                        lowest,
-                        "{adapter} rank {rank}"
-                    );
-                }
+    fn clamp_inherited_mode_never_offers_auto_on_an_adapter_without_it() {
+        for caller_adapter in ["claude", "codex"] {
+            for caller_mode in EXECUTION_MODES {
+                let mut caller = chat_view("caller");
+                caller.adapter_id = caller_adapter.into();
+                caller.permission_mode = caller_mode;
+                let mode = clamp_inherited_mode("codex", false, &caller);
+                assert_ne!(
+                    mode,
+                    ExecutionMode::Auto,
+                    "{caller_adapter} {caller_mode:?} -> codex"
+                );
             }
         }
     }
@@ -261,7 +347,7 @@ mod tests {
         // before every edit" mode). Nothing on Codex is safe to inherit
         // into, so the call must be refused, not silently granted.
         let caller = chat_view("claude-caller");
-        let err = resolve_privileges("codex", None, None, &caller).unwrap_err();
+        let err = resolve("codex", None, &caller).unwrap_err();
         assert_eq!(err.code, ErrorCode::PermissionModeEscalationDenied);
     }
 }

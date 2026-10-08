@@ -148,6 +148,7 @@ impl OrchestrationPort for DaemonOrchestrationPort {
                         .is_some_and(|a| a.supports_steer()),
                     available: info.installed,
                     unavailable_reason: (!info.installed).then(|| "not installed".to_string()),
+                    auto_mode: info.capabilities.auto_mode,
                     id: info.id,
                     name: info.name,
                     installed: info.installed,

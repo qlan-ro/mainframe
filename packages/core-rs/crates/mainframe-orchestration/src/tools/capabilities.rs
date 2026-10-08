@@ -10,7 +10,7 @@ use crate::errors::ToolError;
 use crate::input::{Validate, object_schema, parse_args};
 use crate::policy::{
     DEFAULT_WAIT_MS, MAX_ACTIVE_TASKS_PER_TREE, MAX_DEPTH, MAX_SINGLE_WAIT_MS, MAX_WAIT_MS,
-    READ_MAX_CHARS, READ_MAX_ITEMS, effective_mode_rank,
+    READ_MAX_CHARS, READ_MAX_ITEMS, effective_mode_rank, mode_label_supported,
 };
 use crate::ports::AdapterView;
 use crate::service::{CallCtx, OrchestrationService};
@@ -60,6 +60,7 @@ pub(super) async fn run(
         .map(|a| {
             let allowed: Vec<_> = EXECUTION_MODES
                 .into_iter()
+                .filter(|m| mode_label_supported(*m, a.auto_mode))
                 .filter(|m| effective_mode_rank(&a.id, *m) <= caller_rank)
                 .collect();
             (a.id.clone(), json!(allowed))
@@ -150,8 +151,11 @@ mod tests {
     #[tokio::test]
     async fn allowed_permission_modes_are_per_adapter_not_one_flat_list() {
         // A Codex caller in `acceptEdits` (effective rank 1, same as
-        // `default`/`auto` on Codex) must see all three allowed on Codex,
-        // but only up through Claude's own rank-1 mode on Claude.
+        // `default` on Codex) must see `default` and `acceptEdits` allowed
+        // on Codex, but never `auto` — Codex has no distinct auto mode
+        // (`auto_mode: false`) even though its effective rank for `auto`
+        // happens to match — and only up through Claude's own rank-1 mode
+        // on Claude.
         let port = FakePort::new();
         port.lock().adapters.push(crate::ports::AdapterView {
             id: "codex".into(),
@@ -161,6 +165,7 @@ mod tests {
             unavailable_reason: None,
             models: vec![],
             steer: false,
+            auto_mode: false,
         });
         let mut caller = port.add_chat("caller");
         caller.adapter_id = "codex".into();
@@ -170,7 +175,7 @@ mod tests {
         let out = run(&svc, &ctx, json!({})).await.unwrap();
         assert_eq!(
             out["allowedPermissionModes"]["codex"],
-            json!(["default", "acceptEdits", "auto"])
+            json!(["default", "acceptEdits"])
         );
         assert_eq!(
             out["allowedPermissionModes"]["claude"],
