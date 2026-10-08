@@ -19,6 +19,23 @@ pub const MAX_CONCURRENT_WAITS: usize = 4;
 pub const DEFAULT_WAIT_MS: u64 = 600_000;
 pub const MAX_WAIT_MS: u64 = 3_600_000;
 pub const MIN_WAIT_MS: u64 = 1_000;
+/// The longest any single blocking tool call (`chat_wait`, `task_status`
+/// `waitMs`, `delegate_task` `mode: "wait"`) actually holds its HTTP request
+/// open for, regardless of the caller's requested timeout. Both adapters are
+/// configured to raise their own per-tool-call timeout to 3 900 000 ms (see
+/// `orchestration_args.rs` in each adapter crate), but that relies on the
+/// raised value actually taking effect end to end — unverified live (spec
+/// Gate 0), and silently lost if a user's own MCP server is also named
+/// `mainframe` and wins the name collision. Both clients' *un-configured*
+/// default is 60 s (Claude's own fallback, and Codex's `tool_timeout_sec`
+/// default), so this cap stays safely under that floor instead of trusting
+/// the raised value. A call that hits this cap before the caller's own
+/// requested timeout elapses returns a non-final, resumable result instead
+/// of the HTTP request staying open: `chat_wait` reports `stillWaiting:
+/// true` with `waitTimedOut: false`; the task tools' existing
+/// `waitReturned: "timeout"` already has that meaning (the task is not
+/// cancelled and can be waited on again).
+pub const MAX_SINGLE_WAIT_MS: u64 = 45_000;
 pub const READ_MAX_ITEMS: usize = 100;
 pub const READ_MAX_CHARS: usize = 8_000;
 pub const READ_MIN_CHARS: usize = 200;
@@ -34,7 +51,9 @@ pub const TEXT_MAX: usize = 100_000;
 pub const TITLE_MAX: usize = 200;
 pub const REASON_MAX: usize = 500;
 
-/// `default 0 < acceptEdits 1 < auto 2 < yolo 3`.
+/// `default 0 < acceptEdits 1 < auto 2 < yolo 3`. This is the mode's label
+/// rank, not its real-world privilege: use [`effective_mode_rank`] for the
+/// ceiling, which is adapter-aware.
 #[must_use]
 pub fn mode_rank(mode: ExecutionMode) -> u8 {
     match mode {
@@ -45,18 +64,49 @@ pub fn mode_rank(mode: ExecutionMode) -> u8 {
     }
 }
 
-/// A caller's privileges: the permission mode and whether it is in plan mode.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// The mode's real privilege on `adapter_id`, for the ceiling. Mode *labels*
+/// do not carry the same privilege on every provider: Codex has no "ask
+/// before every edit" mode. Its `default`, `acceptEdits`, and `auto` all map
+/// to approval `on-request` plus sandbox `workspace-write`
+/// (`mainframe-adapter-codex::session_thread::permission_mode_policy`), so a
+/// Codex chat in any of those three edits files without a prompt — the same
+/// real privilege as Claude's `acceptEdits`, never Claude's `default`. Only
+/// Codex `yolo` (`never` approval, `danger-full-access`) is more privileged.
+/// Ranking Codex's `default` at 0 would let a cautious, prompt-before-every-edit
+/// Claude parent (`default`, rank 0) delegate to a Codex child that edits
+/// unprompted, because the label rank alone compared equal (0 ≤ 0).
+#[must_use]
+pub fn effective_mode_rank(adapter_id: &str, mode: ExecutionMode) -> u8 {
+    if adapter_id == "codex" {
+        match mode {
+            ExecutionMode::Yolo => 3,
+            ExecutionMode::Default | ExecutionMode::AcceptEdits | ExecutionMode::Auto => 1,
+        }
+    } else {
+        mode_rank(mode)
+    }
+}
+
+/// A caller's privileges: its adapter, permission mode, and whether it is in
+/// plan mode. The adapter travels with the mode because the mode alone does
+/// not say how privileged it really is (see [`effective_mode_rank`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Privileges {
+    pub adapter_id: String,
     pub mode: ExecutionMode,
     pub plan: bool,
 }
 
 /// A target (a new chat, or a chat the caller drives) may never hold more
-/// privilege than the caller: no higher mode, and a plan-mode caller may only
-/// reach plan-mode chats.
-pub fn check_ceiling(caller: Privileges, target: Privileges) -> Result<(), ToolError> {
-    if mode_rank(target.mode) > mode_rank(caller.mode) {
+/// privilege than the caller: no higher *effective* mode, and a plan-mode
+/// caller may only reach plan-mode chats. The comparison is cross-provider:
+/// a Claude caller's rank and a Codex target's rank are both read through
+/// [`effective_mode_rank`] before comparing, so the same label on different
+/// providers does not compare as equal unless it really is.
+pub fn check_ceiling(caller: &Privileges, target: &Privileges) -> Result<(), ToolError> {
+    let caller_rank = effective_mode_rank(&caller.adapter_id, caller.mode);
+    let target_rank = effective_mode_rank(&target.adapter_id, target.mode);
+    if target_rank > caller_rank {
         return Err(ToolError::new(
             ErrorCode::PermissionModeEscalationDenied,
             "The target's permission mode is higher than the caller's.",
@@ -150,22 +200,24 @@ mod tests {
         ExecutionMode::Yolo,
     ];
 
+    fn priv_for(adapter_id: &str, mode: ExecutionMode, plan: bool) -> Privileges {
+        Privileges {
+            adapter_id: adapter_id.to_string(),
+            mode,
+            plan,
+        }
+    }
+
     #[test]
-    fn ceiling_matrix_covers_every_mode_and_plan_pair() {
+    fn ceiling_matrix_covers_every_mode_and_plan_pair_on_one_adapter() {
         for caller_mode in MODES {
             for target_mode in MODES {
                 for (caller_plan, target_plan) in
                     [(false, false), (false, true), (true, false), (true, true)]
                 {
                     let result = check_ceiling(
-                        Privileges {
-                            mode: caller_mode,
-                            plan: caller_plan,
-                        },
-                        Privileges {
-                            mode: target_mode,
-                            plan: target_plan,
-                        },
+                        &priv_for("claude", caller_mode, caller_plan),
+                        &priv_for("claude", target_mode, target_plan),
                     );
                     let mode_ok = mode_rank(target_mode) <= mode_rank(caller_mode);
                     let plan_ok = !caller_plan || target_plan;
@@ -177,6 +229,101 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn codex_default_accept_edits_and_auto_rank_equal_and_below_yolo() {
+        // All three let Codex edit the workspace without a prompt
+        // (`permission_mode_policy`): none may delegate to another at a
+        // higher rank, and all three may delegate to each other.
+        for a in [
+            ExecutionMode::Default,
+            ExecutionMode::AcceptEdits,
+            ExecutionMode::Auto,
+        ] {
+            for b in [
+                ExecutionMode::Default,
+                ExecutionMode::AcceptEdits,
+                ExecutionMode::Auto,
+            ] {
+                assert!(
+                    check_ceiling(&priv_for("codex", a, false), &priv_for("codex", b, false))
+                        .is_ok()
+                );
+            }
+            assert!(
+                check_ceiling(
+                    &priv_for("codex", a, false),
+                    &priv_for("codex", ExecutionMode::Yolo, false)
+                )
+                .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn a_cautious_claude_default_parent_cannot_delegate_to_an_unprompted_codex_child() {
+        // Claude `default` really does ask before every edit (rank 0). Codex
+        // `default` and `acceptEdits` do not: both already edit unprompted
+        // (effective rank 1). The label-only comparison (0 <= 0, 0 <= 1)
+        // used to allow both; the ceiling must refuse both now.
+        for codex_mode in [
+            ExecutionMode::Default,
+            ExecutionMode::AcceptEdits,
+            ExecutionMode::Auto,
+        ] {
+            let err = check_ceiling(
+                &priv_for("claude", ExecutionMode::Default, false),
+                &priv_for("codex", codex_mode, false),
+            )
+            .unwrap_err();
+            assert_eq!(err.code, ErrorCode::PermissionModeEscalationDenied);
+        }
+    }
+
+    #[test]
+    fn a_claude_accept_edits_parent_may_delegate_to_an_unprompted_codex_child() {
+        // Claude `acceptEdits` (rank 1) already edits unprompted itself, the
+        // same real privilege as Codex `default`/`acceptEdits`/`auto` (rank 1).
+        for codex_mode in [
+            ExecutionMode::Default,
+            ExecutionMode::AcceptEdits,
+            ExecutionMode::Auto,
+        ] {
+            assert!(
+                check_ceiling(
+                    &priv_for("claude", ExecutionMode::AcceptEdits, false),
+                    &priv_for("codex", codex_mode, false),
+                )
+                .is_ok()
+            );
+        }
+        // Yolo is still a strictly higher rank than Claude acceptEdits.
+        let err = check_ceiling(
+            &priv_for("claude", ExecutionMode::AcceptEdits, false),
+            &priv_for("codex", ExecutionMode::Yolo, false),
+        )
+        .unwrap_err();
+        assert_eq!(err.code, ErrorCode::PermissionModeEscalationDenied);
+    }
+
+    #[test]
+    fn a_codex_default_parent_cannot_delegate_to_a_claude_accept_edits_child() {
+        // Reverse direction: Codex default is effective rank 1 (same as
+        // Claude acceptEdits), so it may reach acceptEdits but not auto.
+        assert!(
+            check_ceiling(
+                &priv_for("codex", ExecutionMode::Default, false),
+                &priv_for("claude", ExecutionMode::AcceptEdits, false),
+            )
+            .is_ok()
+        );
+        let err = check_ceiling(
+            &priv_for("codex", ExecutionMode::Default, false),
+            &priv_for("claude", ExecutionMode::Auto, false),
+        )
+        .unwrap_err();
+        assert_eq!(err.code, ErrorCode::PermissionModeEscalationDenied);
     }
 
     struct FakeClock {

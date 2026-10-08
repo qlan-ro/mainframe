@@ -79,17 +79,21 @@ pub(super) async fn resolve_adapter(
 }
 
 /// The new chat's mode and plan flag: the caller's unless overridden, and
-/// never above the caller's.
+/// never above the caller's *effective* privilege on `target_adapter_id`
+/// (the adapter the new chat will actually run on, which may differ from
+/// the caller's own).
 pub(super) fn resolve_privileges(
+    target_adapter_id: &str,
     mode: Option<ExecutionMode>,
     plan: Option<bool>,
     caller: &ChatView,
 ) -> Result<Privileges, ToolError> {
     let target = Privileges {
+        adapter_id: target_adapter_id.to_string(),
         mode: mode.unwrap_or(caller.permission_mode),
         plan: plan.unwrap_or(caller.plan_mode),
     };
-    check_ceiling(caller.privileges(), target)?;
+    check_ceiling(&caller.privileges(), &target)?;
     Ok(target)
 }
 

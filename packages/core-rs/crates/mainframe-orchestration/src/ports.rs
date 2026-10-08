@@ -54,6 +54,7 @@ impl ChatView {
     #[must_use]
     pub fn privileges(&self) -> Privileges {
         Privileges {
+            adapter_id: self.adapter_id.clone(),
             mode: self.permission_mode,
             plan: self.plan_mode,
         }

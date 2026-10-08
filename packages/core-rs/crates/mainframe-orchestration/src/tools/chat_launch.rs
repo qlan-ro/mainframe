@@ -117,7 +117,8 @@ async fn build_request(
         caller,
     )
     .await?;
-    let privileges = resolve_privileges(input.permission_mode, input.plan_mode, caller)?;
+    let privileges =
+        resolve_privileges(&adapter_id, input.permission_mode, input.plan_mode, caller)?;
     let workspace = resolve_workspace(
         input.workspace.as_ref(),
         WorkspaceMode::ProjectRoot,
