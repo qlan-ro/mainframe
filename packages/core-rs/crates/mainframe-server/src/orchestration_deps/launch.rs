@@ -105,11 +105,20 @@ impl DaemonOrchestrationPort {
 
     /// Plan mode, title, and provenance, then the chat as it now stands.
     async fn finish(&self, chat_id: &str, request: &LaunchRequest) -> Result<ChatView, PortError> {
-        if request.plan_mode {
-            self.chats
+        if request.plan_mode
+            && let Err(err) = self
+                .chats
                 .update_chat_config(chat_id, None, None, None, Some(true))
                 .await
-                .map_err(|err| PortError::Internal(format!("set plan mode: {err}")))?;
+        {
+            // Same reasoning as the worktree failure above: the caller never
+            // learns this chat's id (the tool call fails), so an orphan here
+            // would be unreachable and, with plan mode never applied,
+            // misleading if anyone found it by other means. Retire it
+            // instead of leaving a stray.
+            tracing::warn!(chat_id, %err, "setting plan mode failed; archiving the new chat");
+            self.chats.archive_chat(chat_id, false).await;
+            return Err(PortError::Internal(format!("set plan mode: {err}")));
         }
         if let Some(title) = &request.title {
             self.chats.rename_chat(chat_id, title);
