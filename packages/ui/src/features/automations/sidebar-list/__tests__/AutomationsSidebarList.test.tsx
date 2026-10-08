@@ -17,6 +17,13 @@ import type { AutomationSummary } from '../../contract';
 vi.mock('@/features/sessions/use-projects', () => ({
   useProjects: () => ({ projects: [], loading: false, reloadProjects: vi.fn(), removeProjectFromList: vi.fn() }),
 }));
+// It also orders the projects by session activity, read from the assistant-ui runtime.
+vi.mock('@assistant-ui/react', () => {
+  const threadItems: never[] = [];
+  return {
+    useAuiState: (sel: (s: { threads: { threadItems: never[] } }) => unknown) => sel({ threads: { threadItems } }),
+  };
+});
 import { createFakeGateway as fakeGateway } from '../../data/__tests__/fake-gateway';
 import { useAutomationsNav } from '../../data/use-automations-nav';
 import { useAutomationsStore } from '../../data/use-automations-store';
