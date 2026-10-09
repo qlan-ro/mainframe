@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { NoProjectLabel } from '@/features/sessions/NoProjectLabel';
 import { projectColor } from '@/features/sessions/sidebar/project-color';
-import { regularThreadItemsToSessionItems } from '@/features/sessions/view-model/chat-to-thread-custom';
+import { listedThreadItemsToSessionItems } from '@/features/sessions/view-model/task-chats';
 import { sortProjectsByRecentActivity } from '@/features/sessions/view-model/project-activity';
 import { ProjectAvatar } from '../ProjectAvatar';
 import { useProjects } from '../use-projects';
@@ -76,7 +76,7 @@ function WelcomeProjectTrigger({
 export function WelcomeProjectPicker({ projectId, onSelect }: WelcomeProjectPickerProps) {
   const { projects } = useProjects();
   const threadItems = useAuiState((s) => s.threads.threadItems);
-  const sortedProjects = sortProjectsByRecentActivity(projects, regularThreadItemsToSessionItems(threadItems));
+  const sortedProjects = sortProjectsByRecentActivity(projects, listedThreadItemsToSessionItems(threadItems));
   const projectName = projectId == null ? null : (projects.find((p) => p.id === projectId)?.name ?? projectId);
   const resolvedDefaultId = useResolvedDefaultProjectId(projectId);
 

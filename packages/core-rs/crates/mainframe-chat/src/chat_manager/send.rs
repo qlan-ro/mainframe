@@ -165,6 +165,7 @@ impl ChatManager {
         session: &Arc<dyn AdapterSession>,
         chat_id: &str,
         content: &str,
+        handoff: Option<&str>,
     ) -> Result<(), SendError> {
         // A command dispatched while another turn is already running (T17,
         // R3.12) is not a turn start — a turn is already in progress. Only a
@@ -193,7 +194,9 @@ impl ChatManager {
                 .clone()
                 .or_else(|| find_mainframe_command(&cmd.name).and_then(|c| c.prompt_template));
             let wrapped = wrap_mainframe_command(&cmd.name, content, resolved_args.as_deref());
-            session.send_message(wrapped, Vec::new(), None).await?;
+            session
+                .send_message(with_handoff(handoff, wrapped), Vec::new(), None)
+                .await?;
         } else {
             session
                 .send_command(cmd.name.clone(), cmd.args.clone())
@@ -227,6 +230,7 @@ impl ChatManager {
         chat_id: &str,
         content: &str,
         attachment_ids: Option<&[String]>,
+        delivery: Delivery<'_>,
     ) -> Result<(), SendError> {
         let outgoing = self
             .prepare_outgoing(chat_id, content, attachment_ids)
@@ -234,6 +238,68 @@ impl ChatManager {
 
         let (transient_metadata, message_uuid, is_queued) =
             self.queued_message_metadata(post, session, &outgoing.attachment_previews);
+
+        // Both the stored message AND (when queued) its `QueuedMessageRef`
+        // are recorded BEFORE the adapter call below: a fast-arriving replay
+        // ack (Claude's queued-send path, `is_queued` below) can land while
+        // that call is still in flight, and must find the message already
+        // in the transcript with its ref already registered, or it looks for
+        // state that does not exist yet. A steer that then fails never got
+        // the CLI's attention at all, so both are rolled back rather than
+        // left to look delivered/queued.
+        let handoff = match delivery {
+            Delivery::Steer => {
+                let message = self.store_user_message(
+                    chat_id,
+                    outgoing.message_content,
+                    transient_metadata,
+                    attachment_ids,
+                    Some(message_uuid.clone()),
+                );
+                // Claude's steer is also a queued send when replay-ack
+                // applies (`queued_message_metadata`): the running
+                // transition is reported once, on the ack, not here too.
+                if is_queued {
+                    self.record_queued_ref(
+                        chat_id,
+                        &message,
+                        message_uuid.clone(),
+                        content,
+                        attachment_ids,
+                    );
+                }
+                if let Err(err) = session
+                    .steer(outgoing.text, Some(message_uuid.clone()))
+                    .await
+                {
+                    if is_queued {
+                        self.remove_queued_ref(chat_id, &message_uuid);
+                    }
+                    self.messages
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .remove_by_id(chat_id, &message.id);
+                    self.event_handler.emit_display(chat_id);
+                    return Err(err.into());
+                }
+                if self.deps.extract_mentions_from_text(chat_id, content) {
+                    self.emit(DaemonEvent::ContextUpdated {
+                        chat_id: chat_id.to_string(),
+                        file_paths: None,
+                    });
+                }
+                self.assign_initial_title(post, chat_id, content);
+                if !is_queued {
+                    self.event_handler.notify_chat_surface(
+                        crate::chat_surface::ChatSurfaceEvent::TurnStarted {
+                            chat_id: chat_id.to_string(),
+                        },
+                    );
+                }
+                return Ok(());
+            }
+            Delivery::Turn { handoff } => handoff,
+        };
 
         let message = self.store_user_message(
             chat_id,
@@ -257,9 +323,11 @@ impl ChatManager {
         let chat = post.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
         self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
 
-        session
-            .send_message(outgoing.text, outgoing.images, Some(message_uuid.clone()))
-            .await?;
+        let uuid = Some(message_uuid.clone());
+        // The provider gets the handoff block; the stored message keeps
+        // only the user's own text, so live and cold history match.
+        let text = with_handoff(handoff, outgoing.text);
+        session.send_message(text, outgoing.images, uuid).await?;
 
         if is_queued {
             self.record_queued_ref(chat_id, &message, message_uuid, content, attachment_ids);
@@ -273,5 +341,12 @@ impl ChatManager {
             );
         }
         Ok(())
+    }
+}
+
+fn with_handoff(handoff: Option<&str>, text: String) -> String {
+    match handoff {
+        Some(block) => crate::handoff::render::prepend_block(block, &text),
+        None => text,
     }
 }

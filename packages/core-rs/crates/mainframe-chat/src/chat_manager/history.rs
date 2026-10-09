@@ -56,6 +56,12 @@ impl ChatManager {
     /// next time; either way, cache in memory + restore any pending
     /// permission found in the transcript (when non-empty).
     async fn load_history_into_cache(&self, chat_id: &str) -> Vec<ChatMessage> {
+        // Multi-segment chats compose from several transcripts; the snapshot
+        // cache keys on one session's sources, so they bypass it.
+        if let Some(composed) = deps_lifecycle::compose_if_multi(self.deps.as_ref(), chat_id).await
+        {
+            return self.finish_composed_load(chat_id, composed);
+        }
         let Some(session) = self.history_session(chat_id) else {
             return Vec::new();
         };
@@ -102,9 +108,35 @@ impl ChatManager {
         remapped
     }
 
+    /// A pending permission is restored only from the active segment's slice:
+    /// a dangling request in an earlier segment's transcript is never revived.
+    fn finish_composed_load(
+        &self,
+        chat_id: &str,
+        composed: crate::segments::compose::Composed,
+    ) -> Vec<ChatMessage> {
+        if composed.messages.is_empty() {
+            return composed.messages;
+        }
+        let stored = {
+            let mut messages = self.messages.lock().unwrap_or_else(|e| e.into_inner());
+            messages.set_and_snapshot(chat_id, composed.messages)
+        };
+        let active_slice = &stored[composed.active_from.min(stored.len())..];
+        self.permissions
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .restore_pending_permission(chat_id, active_slice);
+        stored
+    }
+
     /// Load messages from disk, bypassing the in-memory cache (session-files route
     /// needs subagent file changes absent from the cache during an active session).
     pub async fn get_messages_from_disk(&self, chat_id: &str) -> Vec<ChatMessage> {
+        if let Some(composed) = deps_lifecycle::compose_if_multi(self.deps.as_ref(), chat_id).await
+        {
+            return composed.messages;
+        }
         let Some(session) = self.history_session(chat_id) else {
             return Vec::new();
         };

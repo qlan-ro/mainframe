@@ -32,3 +32,5 @@ mainframe-runtime = { workspace = true, features = ["test-support"] }
 # `display_snapshot`-then-`append` regression test needs the actual
 # `IncrementalProjector`, not the deps-trait fake every other test here uses.
 mainframe-adapter-claude = { workspace = true }
+# The handoff marker round trip through the Codex history loaders.
+mainframe-adapter-codex = { workspace = true }

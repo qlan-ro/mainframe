@@ -172,10 +172,12 @@ describe('ProviderModelSelect — footer shows in both locked and unlocked state
     await userEvent.click(screen.getByTestId('composer-model-select'));
   }
 
-  it('locked=true shows "Provider stays fixed for this session."', async () => {
+  it('locked=true shows the switching footer', async () => {
     await openPopover(true);
     const footer = screen.getByTestId('composer-provider-footer');
-    expect(footer.textContent).toBe('Provider stays fixed for this session.');
+    expect(footer.textContent).toBe(
+      'Switching keeps this chat. The new provider gets its history with your next message.',
+    );
   });
 
   it('locked=false shows "Pick a provider before your first message."', async () => {

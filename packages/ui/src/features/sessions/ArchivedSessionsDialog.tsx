@@ -17,7 +17,11 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
 import { unarchiveChat } from '@/lib/api/chats';
 import { DialogRowList } from './DialogRowList';
-import { archivedThreadItemsToSessionItems } from '@/features/sessions/view-model/chat-to-thread-custom';
+import {
+  archivedThreadItemsToSessionItems,
+  threadItemsToSessionItems,
+} from '@/features/sessions/view-model/chat-to-thread-custom';
+import { withoutTaskChats } from '@/features/sessions/view-model/task-chats';
 import { archivedRowProjectName, filterArchivedSessions } from '@/features/sessions/view-model/archived-sessions';
 import { soleProjectId } from '@/store/session-filters';
 import { formatRelativeTime } from '@/features/sessions/view-model/relative-time';
@@ -95,7 +99,12 @@ export function ArchivedSessionsDialog({
 
   const items = useMemo(() => {
     if (!open) return [];
-    const all = archivedThreadItemsToSessionItems(aui.threads.getState().threadItems);
+    const threadItems = aui.threads.getState().threadItems;
+    // An archived task chat restores from its parent's card (opening it unarchives).
+    const all = withoutTaskChats(
+      archivedThreadItemsToSessionItems(threadItems),
+      threadItemsToSessionItems(threadItems),
+    );
     return filterArchivedSessions(all, filterProjectIds).filter((item) => !restoredIds.has(item.id));
   }, [open, aui, filterProjectIds, restoredIds]);
 

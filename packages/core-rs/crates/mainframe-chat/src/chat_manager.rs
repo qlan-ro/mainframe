@@ -48,6 +48,8 @@ use mainframe_types::events::DaemonEvent;
 use mainframe_types::settings::ExecutionMode;
 use tracing::info;
 
+use delivery::Delivery;
+
 use crate::config_manager::{ChatConfigManager, ChatFieldUpdate, ConfigError, ConfigManagerDeps};
 use crate::degraded_recovery::{DegradedRecoveryDeps, DegradedRecoveryError, RecoverySync};
 use crate::event_handler::{EventChatUpdate, EventHandler, EventHandlerDeps, PushOut};
@@ -71,6 +73,7 @@ use mainframe_types::worktree_offer::WorktreeSwitchOffer;
 
 mod config_api;
 mod construct;
+mod delivery;
 mod deps;
 mod deps_config;
 mod deps_event;
@@ -79,9 +82,14 @@ mod deps_offer;
 mod deps_permission;
 mod deps_recovery;
 mod discard;
+mod enrich;
 mod errors;
 mod external_facade;
 mod fork_api;
+mod fork_sweep;
+mod handoff_locks;
+mod handoff_resolve;
+mod handoff_send;
 mod history;
 mod lifecycle_api;
 mod reads;
@@ -90,31 +98,34 @@ mod send_entry;
 mod send_queue;
 mod shared;
 mod side_chat;
+mod steer;
+mod switch_api;
 mod update;
 
 pub use deps::ChatManagerDeps;
 pub use errors::{ChatFieldsPartial, CommandMeta, ForkError, SendError, TrustWorkspaceError};
 pub use external_facade::ExternalSessionFacade;
 pub use history::ResumeSnapshot;
+pub(crate) use shared::remap_history as remap_history_for;
 pub use side_chat::OpenSideChatError;
 pub use update::{ChatUpdate, ProcessedAttachments};
 
 // `ForkChatError` (todo #343's fork-a-chat action, `fork_api.rs`) is distinct
 // from `ForkError` above (the pre-existing `forkToWorktree` action).
-pub use crate::fork::{AdapterForkInfo, ForkChatError, ForkCreateInput};
+pub use crate::fork::{AdapterForkInfo, ForkChatError, ForkCreateInput, ForkPoint};
 
 use deps_config::CmDeps;
 use deps_event::EhDeps;
 use deps_lifecycle::LcDeps;
 use deps_permission::PhDeps;
 use deps_recovery::PresenceDeps;
+use enrich::Enricher;
 // `enrich_chat`/`is_working` have no direct caller left in this file — every
-// caller (reads.rs, construct.rs) reaches them through this re-import via its
+// caller (enrich.rs, construct.rs) reaches them through this re-import via its
 // own `use super::*`, so removing this line would break the glob for them.
 use shared::{
-    apply_tuning_impl, build_history_session, clear_all_queued_for_chat, enrich_and_emit,
-    enrich_chat, handle_queued_processed, is_working, now_ms, queued_for_chat, remap_history,
-    side_chat_waiting_for,
+    apply_tuning_impl, build_history_session, clear_all_queued_for_chat, enrich_chat,
+    handle_queued_processed, is_working, now_ms, queued_for_chat, remap_history,
 };
 use side_chat::is_side_chat;
 
@@ -145,6 +156,12 @@ pub struct ChatManager {
     /// in-memory per-chat cache above), which stays the source of truth for
     /// any chat that's actually hot.
     history_cache: Arc<HistorySnapshotCache>,
+    /// Every derived `Chat` field, for reads and emits alike.
+    enricher: Enricher,
+    /// One lock per chat, held across `prepare_handoff`'s check-then-insert
+    /// (`handoff_send.rs`), so two sends racing for the same chat cannot
+    /// both build and record a handoff.
+    handoff_locks: handoff_locks::HandoffLocks,
 }
 
 #[cfg(test)]

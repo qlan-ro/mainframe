@@ -98,7 +98,7 @@ describe('SessionRowMetaLine — glyph cluster order (D15: provider mark ends th
         worktreePath="/repo/wt"
         detectedPrs={[{ url: 'https://x/pull/1', owner: 'a', repo: 'b', number: 1, source: 'created' }]}
         temporary
-        forkFallback={{ hint: 'Forked from main' }}
+        forkFallback={{ hint: 'Forked from main', relation: 'fork' }}
         tags={['bug']}
         colorOf={() => 'blue'}
       />,

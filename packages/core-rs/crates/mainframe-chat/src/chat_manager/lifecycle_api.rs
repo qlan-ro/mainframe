@@ -58,8 +58,19 @@ impl ChatManager {
         self.lifecycle.start_chat(chat_id).await;
     }
 
+    /// The user's Stop: delegated work is cancelled before the turn stops.
     pub async fn interrupt_chat(&self, chat_id: &str) {
+        self.lifecycle.orchestration().stopping(chat_id).await;
         self.lifecycle.interrupt_chat(chat_id).await;
+    }
+
+    /// Attaches the orchestration MCP hooks (daemon boot, once). Until then
+    /// chats spawn without the tools.
+    pub fn set_orchestration_hooks(
+        &self,
+        hooks: Arc<dyn crate::orchestration_hooks::OrchestrationHooks>,
+    ) {
+        self.lifecycle.orchestration().attach(hooks);
     }
 
     /// Rule 6: a chat's side chat (if any) is discarded before the lifecycle
@@ -67,6 +78,7 @@ impl ChatManager {
     /// happens there, and discarding first keeps the side chat from
     /// referencing a worktree the archive is about to remove.
     pub async fn archive_chat(&self, chat_id: &str, delete_worktree: bool) {
+        self.lifecycle.orchestration().stopping(chat_id).await;
         if let Some(chat) = self.deps.chats_get(chat_id)
             && let Some(side_chat_id) = chat.side_chat_id.clone()
             && let Err(err) = self.discard_chat(&side_chat_id).await

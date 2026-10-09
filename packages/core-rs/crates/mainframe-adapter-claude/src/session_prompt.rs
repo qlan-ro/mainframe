@@ -46,6 +46,21 @@ impl ClaudeSession {
         self.write_stdin(payload.to_string());
         Ok(())
     }
+    /// A user message the CLI folds into the running turn at its next tool
+    /// boundary (`priority: "next"`). Never `"now"`: that aborts in-flight
+    /// tool batches (`terminal_reason: "aborted_tools"`).
+    pub async fn steer(&self, message: String, uuid: Option<String>) -> Result<(), AdapterError> {
+        if !self.is_spawned() {
+            return Err(AdapterError::Message(format!(
+                "Session {} not spawned",
+                self.id
+            )));
+        }
+        let chat_id = self.state().chat_id.clone();
+        let payload = crate::user_payload::build_steer_payload(&chat_id, &message, uuid.as_deref());
+        self.write_stdin(payload.to_string());
+        Ok(())
+    }
     pub async fn respond_to_permission(
         &self,
         response: ControlResponse,

@@ -4,9 +4,11 @@
  * SystemMessage — centered marker for system-level chat events.
  *
  * Priority (highest wins):
- *   1. isCompacted  → CompactionMarker ("Context compacted")
- *   2. skillLoaded  → the rich SkillLoadedCard ("Using skill: X", expandable)
- *   3. plain text   → quiet marker (AlertTriangle for CLI errors, else Zap)
+ *   1. providerSwitch → ProviderSwitchMarker (the segment divider; its text
+ *      part is the fallback label older clients show, so it is not rendered)
+ *   2. isCompacted  → CompactionMarker ("Context compacted")
+ *   3. skillLoaded  → the rich SkillLoadedCard ("Using skill: X", expandable)
+ *   4. plain text   → quiet marker (AlertTriangle for CLI errors, else Zap)
  *
  * All three are the v2 `Marker variant="separator"` recipe: a centered label
  * between two hairlines. Metadata via the one `useMainframeMeta()` contract.
@@ -18,6 +20,7 @@ import { cn } from '@/lib/utils';
 import { Marker, MarkerContent, MarkerIcon } from '@/components/ui/marker';
 import { useMainframeMeta } from '../view-model/message-meta';
 import { SkillLoadedCard } from '../tools/cards/SkillLoadedCard';
+import { ProviderSwitchMarker } from './ProviderSwitchMarker';
 
 /** "Context compacted" centered marker. */
 export function CompactionPill() {
@@ -60,12 +63,13 @@ function SystemTextMarker({ text }: { text: string }) {
 }
 
 export function SystemMessage() {
-  const { isCompacted, skillLoaded } = useMainframeMeta();
+  const { isCompacted, skillLoaded, providerSwitch } = useMainframeMeta();
 
   let body = (
     <MessagePrimitive.Parts components={{ Text: ({ text }) => (text ? <SystemTextMarker text={text} /> : null) }} />
   );
-  if (isCompacted) body = <CompactionPill />;
+  if (providerSwitch) body = <ProviderSwitchMarker marker={providerSwitch} />;
+  else if (isCompacted) body = <CompactionPill />;
   else if (skillLoaded) {
     body = <SkillLoadedCard skillName={skillLoaded.skillName} path={skillLoaded.path} content={skillLoaded.content} />;
   }

@@ -146,3 +146,23 @@ describe('pickInitialSession — pinned state does not affect selection', () => 
     expect(pickInitialSession(items)).toBe('unpinned-new');
   });
 });
+
+// ---------------------------------------------------------------------------
+// pickInitialSession — task chats live in their parent's card
+// ---------------------------------------------------------------------------
+
+describe('pickInitialSession — task chats', () => {
+  const delegation = { taskId: 'task_kid', role: 'review' as const, status: 'running' as const };
+  const items = [
+    item('parent', { updatedAt: 1000 }),
+    item('kid', { remoteId: 'kid', parentChatId: 'parent', delegation, updatedAt: 9000 }),
+  ];
+
+  it('never auto-opens a task chat as the most recent session', () => {
+    expect(pickInitialSession(items)).toBe('parent');
+  });
+
+  it('still restores a task chat the user had open', () => {
+    expect(pickInitialSession(items, 'kid')).toBe('kid');
+  });
+});

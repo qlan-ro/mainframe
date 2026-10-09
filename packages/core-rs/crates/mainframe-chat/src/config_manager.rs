@@ -3,16 +3,15 @@
 use std::sync::{Arc, Mutex};
 
 use mainframe_adapter_api::{AdapterError, AdapterSession, BoxFuture};
-use mainframe_services::workspace::{
-    create_worktree, get_claude_project_dir, move_session_files, remove_worktree,
-};
+use mainframe_services::workspace::{create_worktree, move_session_files, remove_worktree};
 use mainframe_types::adapter::model_endpoint;
 use mainframe_types::chat::Project;
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::settings::{ExecutionMode, GeneralConfig};
 use tracing::warn;
 
-use crate::event_handler::compute_session_file_path;
+use crate::config_respawn_guard::{model_changed, respawn_refusal};
+use crate::config_transcripts::{ActiveSession, OwnedNativeSession, relocate_claude_transcripts};
 use crate::types::ActiveChat;
 
 #[path = "config_locks.rs"]
@@ -72,6 +71,30 @@ pub trait ConfigManagerDeps: Send + Sync {
     /// Fired after a binding change persists — the offer registry's single
     /// source of `resolved{accepted}`.
     fn on_binding_changed(&self, _chat_id: &str, _worktree_path: Option<&str>) {}
+    /// Whether any owned native session of the chat has a provider id — after
+    /// that, an adapter change is a provider switch, not a config edit.
+    /// `false` (the default) for a deps impl that stores no segments; the
+    /// mirrored `claude_session_id` check still applies.
+    fn has_native_session(&self, _chat_id: &str) -> bool {
+        false
+    }
+    /// Live background tasks (shells, agents) the CLI owns: a respawn would
+    /// end them. `0` (the default) for a deps impl with no task tracker.
+    fn live_background_tasks(&self, _chat_id: &str) -> usize {
+        0
+    }
+    /// An adapter's display name, for refusal copy.
+    fn adapter_name(&self, adapter_id: &str) -> String {
+        adapter_id.to_string()
+    }
+    /// The chat's owned native sessions that have a provider id, which a
+    /// worktree move relocates. Empty (the default) for a deps impl that
+    /// stores no segments: the mirrored active session moves as before.
+    fn owned_native_sessions(&self, _chat_id: &str) -> Vec<OwnedNativeSession> {
+        Vec::new()
+    }
+    /// Records a relocated transcript path on one native row.
+    fn set_native_session_file_path(&self, _native_ref: &str, _path: &str) {}
     /// Relocate a Claude session's transcript files between project dirs. A seam
     /// only so tests can exercise the failure path without touching a real `$HOME`.
     fn move_claude_session_files<'a>(
@@ -117,6 +140,11 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
             deps,
             changes: config_locks::ConfigLocks::default(),
         }
+    }
+
+    /// Serializes a provider switch with config changes on the same chat.
+    pub(crate) async fn lock_changes(&self, chat_id: &str) -> tokio::sync::OwnedMutexGuard<()> {
+        self.changes.acquire(chat_id).await
     }
 
     fn require_active_chat(&self, chat_id: &str) -> Result<Arc<Mutex<ActiveChat>>, ConfigError> {
@@ -334,18 +362,15 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
 
         if let Some(ref new_adapter) = adapter_id
             && *new_adapter != cur_adapter
-            && has_claude_session
+            && (has_claude_session || self.deps.has_native_session(chat_id))
         {
             return Err(ConfigError::Message(
-                "Cannot change adapter after a session has started".to_string(),
+                "Use switch-provider to change this chat's provider".to_string(),
             ));
         }
 
         let adapter_changed = adapter_id.as_ref().is_some_and(|a| *a != cur_adapter);
-        let model_changed = match &model {
-            Some(m) => cur_model.as_deref() != Some(m.as_str()),
-            None => false,
-        };
+        let model_changed = model_changed(cur_model.as_deref(), model.as_deref());
         let mode_changed = match permission_mode {
             Some(pm) => cur_mode != Some(pm),
             None => false,
@@ -390,6 +415,11 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
             return Ok(());
         }
 
+        let name = self.deps.adapter_name(&cur_adapter);
+        let live = self.deps.live_background_tasks(chat_id);
+        if let Some(refusal) = respawn_refusal(session_spawned, live, &name) {
+            return Err(ConfigError::Message(refusal));
+        }
         self.respawn_with_config(
             chat_id,
             &cell,
@@ -449,20 +479,19 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
             .await
             .map_err(|e| ConfigError::Message(e.to_string()))?;
 
-            let mut moved_transcript = None;
-            if adapter == "claude" {
-                let old_dir = get_claude_project_dir(&project.path);
-                let new_dir = get_claude_project_dir(&info.worktree_path);
-                move_session_files(
-                    &session_id,
-                    &old_dir.to_string_lossy(),
-                    &new_dir.to_string_lossy(),
-                )
-                .await
-                .map_err(|e| ConfigError::Message(e.to_string()))?;
-                moved_transcript =
-                    Some(compute_session_file_path(&info.worktree_path, &session_id));
-            }
+            let active = ActiveSession {
+                adapter_id: &adapter,
+                session_id: Some(&session_id),
+            };
+            let moved_transcript = relocate_claude_transcripts(
+                &self.deps,
+                chat_id,
+                active,
+                &project.path,
+                &info.worktree_path,
+            )
+            .await
+            .map_err(ConfigError::Message)?;
 
             self.apply_worktree_update(
                 &cell,
@@ -486,6 +515,21 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
         )
         .await
         .map_err(|e| ConfigError::Message(e.to_string()))?;
+        // A switched chat whose new segment hasn't sent yet still owns its
+        // earlier sessions; returning to one resumes it from the worktree.
+        let active = ActiveSession {
+            adapter_id: &adapter,
+            session_id: None,
+        };
+        relocate_claude_transcripts(
+            &self.deps,
+            chat_id,
+            active,
+            &project.path,
+            &info.worktree_path,
+        )
+        .await
+        .map_err(ConfigError::Message)?;
         self.apply_worktree_update(
             &cell,
             chat_id,
@@ -536,22 +580,22 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
                 fut.await;
             }
 
-            let mut moved_transcript = None;
-            if adapter == "claude" {
-                let old_dir = get_claude_project_dir(effective_dir(
-                    current_worktree.as_deref(),
-                    &project.path,
-                ));
-                let new_dir = get_claude_project_dir(worktree_path);
-                if let Err(err) = self
-                    .deps
-                    .move_claude_session_files(
-                        &session_id,
-                        &old_dir.to_string_lossy(),
-                        &new_dir.to_string_lossy(),
-                    )
-                    .await
-                {
+            let active = ActiveSession {
+                adapter_id: &adapter,
+                session_id: Some(&session_id),
+            };
+            let old_dir = effective_dir(current_worktree.as_deref(), &project.path);
+            let moved_transcript = match relocate_claude_transcripts(
+                &self.deps,
+                chat_id,
+                active,
+                old_dir,
+                worktree_path,
+            )
+            .await
+            {
+                Ok(path) => path,
+                Err(err) => {
                     // The chat is already stopped at this point — leaving it that way
                     // would strand the session with no running CLI and no new binding.
                     tracing::error!(
@@ -565,8 +609,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
                         "Moving the session's history into the worktree failed. The session stayed where it was.".to_string(),
                     ));
                 }
-                moved_transcript = Some(compute_session_file_path(worktree_path, &session_id));
-            }
+            };
 
             self.apply_worktree_update(
                 &cell,
@@ -607,7 +650,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
         let Some(worktree_path) = worktree_path else {
             return Ok(());
         };
-        if has_claude_session {
+        if has_claude_session || self.deps.has_native_session(chat_id) {
             return Err(ConfigError::Message(
                 "Cannot disable worktree after session has started".to_string(),
             ));

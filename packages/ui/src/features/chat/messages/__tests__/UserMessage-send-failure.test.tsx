@@ -50,6 +50,9 @@ vi.mock('@assistant-ui/react', () => ({
   },
 }));
 
+// The fork bar reads thread-list and runtime scopes this harness doesn't build;
+// UserMessageActionBar.test.tsx covers it.
+vi.mock('../UserMessageActionBar', () => ({ UserMessageActionBar: () => null }));
 vi.mock('../UserAttachments', () => ({
   UserAttachments: () => <div data-testid="chat-user-attachments" />,
 }));

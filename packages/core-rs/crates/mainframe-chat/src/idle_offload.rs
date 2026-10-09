@@ -106,6 +106,7 @@ impl<L: LifecycleManagerDeps + 'static, E: EventHandlerDeps + 'static> ChatOfflo
         {
             warn!(?err, chat_id, "idle offload: failed to kill session");
         }
+        self.lifecycle.orchestration().revoke(chat_id);
 
         // Step 4: drop the registry cell, the cache entry, and per-chat
         // bookkeeping (partial-overlay + permission state). Do NOT emit

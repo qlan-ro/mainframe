@@ -203,6 +203,9 @@ impl Adapter for CodexAdapter {
     fn name(&self) -> &str {
         "Codex"
     }
+    fn supports_steer(&self) -> bool {
+        true
+    }
     fn capabilities(&self) -> AdapterCapabilities {
         let version = self
             .observed_version

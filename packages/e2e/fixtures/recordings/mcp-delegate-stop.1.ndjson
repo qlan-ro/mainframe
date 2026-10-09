@@ -1,0 +1,3 @@
+{"dir":"in","method":"sendMessage","args":["(the daemon sends the delegated task prompt here)"],"delayMs":0}
+{"dir":"out","method":"onInit","args":["e2e-mcp-delegate-stop-child"],"delayMs":20}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Starting the long analysis..."}],null],"delayMs":60}

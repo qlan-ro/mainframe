@@ -16,18 +16,11 @@ use mainframe_chat::chat_manager::OpenSideChatError;
 
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok};
+use crate::routes::identifier::is_identifier;
 use crate::routes::projects::parse_body;
 
 #[cfg(test)]
 mod tests;
-
-/// Same identifier convention as the rest of the daemon (`^[a-zA-Z0-9_-]+$`).
-fn id_ok(id: &str) -> bool {
-    !id.is_empty()
-        && id
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
-}
 
 /// The body is optional; when present it must be an empty JSON object — an
 /// unknown field 400s rather than being silently ignored.
@@ -44,7 +37,7 @@ async fn open_side_chat(
     Path(id): Path<String>,
     body: Bytes,
 ) -> Response {
-    if !id_ok(&id) {
+    if !is_identifier(&id) {
         return fail(StatusCode::BAD_REQUEST, "Invalid chat id");
     }
     if parse_body::<OpenSideChatBody>(&body).is_none() {

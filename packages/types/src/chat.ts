@@ -3,8 +3,10 @@ import type { CommandExecutionMetadata } from './command-execution.js';
 import type { SessionMention } from './context.js';
 import type { BackgroundActivity } from './background-task.js';
 import type { DetectedPr, ControlRequest, EffortLevel } from './adapter.js';
+import type { ProviderSwitchMarker } from './segment.js';
 import type { ExecutionMode } from './settings.js';
 import type { LeafContent } from './content.js';
+import type { AgentOutboxEntry, ChatDelegation } from './orchestration.js';
 
 export interface TodoItem {
   content: string;
@@ -125,6 +127,32 @@ export interface Chat {
    * the parent's badge (todo #344).
    */
   sideChatWaiting?: boolean;
+  /**
+   * The chat whose agent created this one through the orchestration MCP
+   * server (`chat_launch` or `delegate_task`). Stored; absent for a chat the
+   * user started.
+   */
+  createdByChatId?: string;
+  /** Set on a delegated child: the task it runs. Derived on every read. */
+  delegation?: ChatDelegation;
+  /**
+   * Set on a chat with unfinished delegated tasks: whether any of those
+   * children, or any unfinished task below them, waits on a permission or
+   * question gate. Same pattern as `sideChatWaiting` — this chat's own
+   * `displayStatus` is unaffected.
+   */
+  delegatedWaiting?: boolean;
+  /** Messages Mainframe holds for this chat until it is idle, oldest first. Absent when none. */
+  agentOutbox?: AgentOutboxEntry[];
+}
+
+/**
+ * Body of `POST /api/chats/{id}/fork`. Omitted or `null` `fromMessageId`
+ * forks the whole chat (todo #343). An id forks immediately before that sent
+ * user message: the fork holds everything the parent showed before it.
+ */
+export interface ForkChatRequest {
+  fromMessageId?: string | null;
 }
 
 export interface Project {
@@ -201,7 +229,8 @@ export type MessageContent =
     }
   | { type: 'permission_request'; request: ControlRequest; parentToolUseId?: string }
   | { type: 'error'; message: string; parentToolUseId?: string }
-  | { type: 'compaction'; parentToolUseId?: string };
+  | { type: 'compaction'; parentToolUseId?: string }
+  | { type: 'provider_switch'; marker: ProviderSwitchMarker };
 
 export type ToolResultMessageContent = Extract<MessageContent, { type: 'tool_result' }>;
 

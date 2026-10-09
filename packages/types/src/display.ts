@@ -4,6 +4,7 @@ import type { DiffHunk, ToolResultImage } from './chat.js';
 import type { ControlRequest } from './adapter.js';
 import type { ClaudeWorkflowRun } from './claude-workflow.js';
 import type { LeafContent } from './content.js';
+import type { ProviderSwitchMarker } from './segment.js';
 
 export interface AskUserQuestionAnswer {
   question: string;
@@ -66,7 +67,8 @@ export type DisplayContent =
     }
   | { type: 'permission_request'; request: ControlRequest; parentToolUseId?: string }
   | { type: 'error'; message: string }
-  | { type: 'compaction'; parentToolUseId?: string };
+  | { type: 'compaction'; parentToolUseId?: string }
+  | { type: 'provider_switch'; marker: ProviderSwitchMarker };
 
 export interface DisplayMessage {
   id: string;

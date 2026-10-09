@@ -57,9 +57,12 @@ pub fn build_app(ctx: Arc<AppCtx>) -> Router {
         // the manager is unwired (its construction is a documented blocker).
         .merge(routes::chats::router())
         .merge(routes::chat_commands::router())
+        .merge(routes::chat_fork::router())
         .merge(routes::chat_create::router())
         .merge(routes::chat_discard::router())
         .merge(routes::chat_side_chat::router())
+        .merge(routes::chat_switch::router())
+        .merge(routes::agent_outbox::router())
         .merge(routes::context::router())
         .merge(routes::worktree::router())
         .merge(routes::worktree_offer::router())
@@ -122,6 +125,10 @@ pub fn build_app(ctx: Arc<AppCtx>) -> Router {
         // ACP v2 chat-facade WS upgrade (todo #350) — self-authenticates like
         // the routes above; `{profile}` must name a registered adapter.
         .route("/acp/{profile}", any(acp_ws_handler))
+        // Orchestration MCP endpoint — authenticates itself with per-spawn
+        // bearer tokens; outside the auth layer (its loopback bypass would
+        // admit any local process) and outside the compressor.
+        .merge(routes::mcp::router())
         // axum's built-in 2 MB extractor limit shadows the layer below unless
         // disabled — without this, any body over ~2 MB (a ~1.5 MB attachment,
         // base64-inflated) gets an empty-bodied 413 before the handler runs.

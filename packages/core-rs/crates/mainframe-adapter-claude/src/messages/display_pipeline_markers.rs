@@ -57,6 +57,12 @@ fn marker_content(kind: ChatMessageType, content: &MessageContent) -> DisplayCon
             })
         }
         (
+            ChatMessageType::System,
+            MessageContent::Node(MessageContentNode::ProviderSwitch { marker }),
+        ) => DisplayContent::Node(DisplayNode::ProviderSwitch {
+            marker: marker.clone(),
+        }),
+        (
             ChatMessageType::Error,
             MessageContent::Node(MessageContentNode::Error { message, .. }),
         ) => DisplayContent::Node(DisplayNode::Error {

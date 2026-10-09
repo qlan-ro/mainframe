@@ -61,6 +61,9 @@ pub struct FakeSession {
     /// post-spawn `send_message` instead of failing at `require_live_session`.
     pub spawn_ok: bool,
     pub(crate) spawned_after_spawn: AtomicBool,
+    /// The options of the last `spawn` call, recorded before `spawn_ok` is
+    /// consulted so a test can inspect what a spawn would have carried.
+    pub spawn_options: Mutex<Option<SessionSpawnOptions>>,
 }
 
 impl FakeSession {
@@ -123,9 +126,10 @@ impl AdapterSession for FakeSession {
 
     fn spawn(
         &self,
-        _options: Option<SessionSpawnOptions>,
+        options: Option<SessionSpawnOptions>,
         _sink: Option<Arc<dyn SessionSink>>,
     ) -> BoxFuture<'_, Result<AdapterProcess, AdapterError>> {
+        *self.spawn_options.lock().unwrap() = options;
         if !self.spawn_ok {
             return err("unused");
         }

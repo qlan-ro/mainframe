@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use mainframe_adapter_api::{AdapterError, SessionSink};
 use mainframe_types::adapter::{AdapterProcess, AdapterProcessStatus, SessionOptions};
+use mainframe_types::orchestration::OrchestrationMcpLaunch;
 
 use crate::fixture::{RecordedEvent, ReplayState};
 use crate::history::recorded_session_id;
@@ -72,18 +73,33 @@ pub struct ReplaySession {
     pub(crate) project_path: String,
     pub(crate) spawned: AtomicBool,
     pub(crate) sink: Arc<Mutex<Option<Arc<dyn SessionSink>>>>,
+    /// The orchestration credential of the current spawn, for `mcp_call`.
+    pub(crate) orchestration: Mutex<Option<OrchestrationMcpLaunch>>,
     pub(crate) state: Arc<Mutex<SessionState>>,
     source: tokio::sync::Mutex<ReplaySource>,
+    /// An unsent from-message fork's cut: the history replays the parent's
+    /// recording up to, not including, the message with this id.
+    pub(crate) fork_cut: Option<String>,
 }
 
 impl ReplaySession {
     pub fn new(options: SessionOptions, events: Vec<RecordedEvent>) -> Self {
+        // Once the fork has sent, it has its own session and no cut applies.
+        let fork_cut = match options.chat_id {
+            Some(_) => None,
+            None => options
+                .fork_source
+                .as_ref()
+                .and_then(|source| source.last_turn_id.clone()),
+        };
         Self {
+            fork_cut,
             id: options.mainframe_chat_id,
             task_bridge: None,
             project_path: options.project_path,
             spawned: AtomicBool::new(false),
             sink: Arc::new(Mutex::new(None)),
+            orchestration: Mutex::new(None),
             state: Arc::new(Mutex::new(SessionState {
                 replay: ReplayState::new(events),
                 last_delay: 0,
@@ -187,6 +203,11 @@ impl ReplaySession {
             state: self.state.clone(),
             sink,
             bridge: self.task_bridge.clone(),
+            orchestration: self
+                .orchestration
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone(),
         }
         .spawn(outputs, base);
     }
@@ -237,55 +258,5 @@ impl ReplaySession {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use mainframe_adapter_api::AdapterSession;
-
-    #[tokio::test]
-    async fn missing_fixture_fails_spawn_with_path() {
-        let options = SessionOptions {
-            project_path: "/tmp/project".to_string(),
-            chat_id: None,
-            mainframe_chat_id: "chat-1".to_string(),
-            session_file_path: None,
-            fork_source: None,
-        };
-        let session = ReplaySession::from_fixture(
-            options,
-            PathBuf::from("/tmp/missing-recording.ndjson"),
-            Arc::new(ReplayCache::default()),
-        );
-
-        let error = session.spawn(None, None).await.unwrap_err();
-
-        assert!(error.to_string().contains("/tmp/missing-recording.ndjson"));
-        assert!(error.to_string().contains("fixture not found"));
-    }
-
-    #[tokio::test]
-    async fn fixture_project_path_placeholder_resolves_to_the_live_project() {
-        let dir = tempfile::tempdir().unwrap();
-        let fixture = dir.path().join("recording.ndjson");
-        tokio::fs::write(
-            &fixture,
-            r#"{"dir":"out","method":"onMessage","args":[[{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"{{PROJECT_PATH}}/index.ts"}}]],"delayMs":0}"#,
-        )
-        .await
-        .unwrap();
-        let options = SessionOptions {
-            project_path: "/tmp/live-project".to_string(),
-            chat_id: None,
-            mainframe_chat_id: "chat-1".to_string(),
-            session_file_path: None,
-            fork_source: None,
-        };
-        let session =
-            ReplaySession::from_fixture(options, fixture, Arc::new(ReplayCache::default()));
-
-        session.ensure_loaded().await.unwrap();
-
-        let state = session.state.lock().unwrap();
-        let file_path = state.replay.events[0].args[0][0]["input"]["file_path"].as_str();
-        assert_eq!(file_path, Some("/tmp/live-project/index.ts"));
-    }
-}
+#[path = "session_tests.rs"]
+mod tests;

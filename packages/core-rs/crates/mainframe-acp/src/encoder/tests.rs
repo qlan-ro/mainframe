@@ -11,6 +11,7 @@ mod command_metadata_tests;
 mod container_tests;
 mod marker_tests;
 mod meta_tests;
+mod provider_switch_tests;
 mod result_content_tests;
 mod result_image_tests;
 mod segment_tests;

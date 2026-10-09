@@ -19,7 +19,7 @@ fn chat_with(id: &str, adapter_id: &str, claude_session_id: Option<&str>) -> Cha
 async fn unknown_chat_id_is_not_found() {
     let deps = StoreDeps::arc();
     let mgr = ChatManager::new(deps);
-    let err = mgr.fork_chat("nope").await.unwrap_err();
+    let err = mgr.fork_chat("nope", ForkPoint::Current).await.unwrap_err();
     assert_eq!(err, ForkChatError::NotFound("nope".to_string()));
     assert_eq!(err.status_code(), 404);
 }
@@ -30,7 +30,7 @@ async fn adapter_without_fork_capability_is_unsupported_422() {
     let deps = StoreDeps::with_chats(vec![chat]);
     // adapter_fork_info defaults to `{ fork: false }` unless configured.
     let mgr = ChatManager::new(deps);
-    let err = mgr.fork_chat("c1").await.unwrap_err();
+    let err = mgr.fork_chat("c1", ForkPoint::Current).await.unwrap_err();
     assert_eq!(err, ForkChatError::Unsupported("codex".to_string()));
     assert_eq!(err.status_code(), 422);
 }
@@ -46,7 +46,7 @@ async fn adapter_with_a_version_specific_reason_surfaces_it_422() {
         "Forking Codex chats needs Codex CLI 0.143.0 or newer (installed: 0.140.0)",
     );
     let mgr = ChatManager::new(deps);
-    let err = mgr.fork_chat("c1").await.unwrap_err();
+    let err = mgr.fork_chat("c1", ForkPoint::Current).await.unwrap_err();
     assert_eq!(
         err,
         ForkChatError::UnavailableWithReason(
@@ -67,7 +67,7 @@ async fn a_temporary_chat_is_refused_409() {
     let deps = StoreDeps::with_chats(vec![chat]);
     deps.set_fork_capable(true);
     let mgr = ChatManager::new(deps);
-    let err = mgr.fork_chat("c1").await.unwrap_err();
+    let err = mgr.fork_chat("c1", ForkPoint::Current).await.unwrap_err();
     assert_eq!(err, ForkChatError::Temporary);
     assert_eq!(err.status_code(), 409);
 }
@@ -80,7 +80,7 @@ async fn a_no_project_chat_is_refused_409() {
     let deps = StoreDeps::with_chats(vec![chat]);
     deps.set_fork_capable(true);
     let mgr = ChatManager::new(deps);
-    let err = mgr.fork_chat("c1").await.unwrap_err();
+    let err = mgr.fork_chat("c1", ForkPoint::Current).await.unwrap_err();
     assert_eq!(err, ForkChatError::NoProject);
     assert_eq!(err.status_code(), 409);
 }
@@ -91,7 +91,7 @@ async fn no_provider_session_is_nothing_to_fork_yet_409() {
     let deps = StoreDeps::with_chats(vec![chat]);
     deps.set_fork_capable(true);
     let mgr = ChatManager::new(deps);
-    let err = mgr.fork_chat("c1").await.unwrap_err();
+    let err = mgr.fork_chat("c1", ForkPoint::Current).await.unwrap_err();
     assert_eq!(err, ForkChatError::NothingToForkYet);
     assert_eq!(err.status_code(), 409);
 }
@@ -103,7 +103,7 @@ async fn missing_transcript_is_refused_409() {
     let deps = StoreDeps::with_chats(vec![chat]);
     deps.set_fork_capable(true);
     let mgr = ChatManager::new(deps);
-    let err = mgr.fork_chat("c1").await.unwrap_err();
+    let err = mgr.fork_chat("c1", ForkPoint::Current).await.unwrap_err();
     assert_eq!(err, ForkChatError::TranscriptMissing);
     assert_eq!(err.status_code(), 409);
 }
@@ -115,7 +115,7 @@ async fn a_running_turn_is_refused_409() {
     let deps = StoreDeps::with_chats(vec![chat]);
     deps.set_fork_capable(true);
     let mgr = ChatManager::new(deps);
-    let err = mgr.fork_chat("c1").await.unwrap_err();
+    let err = mgr.fork_chat("c1", ForkPoint::Current).await.unwrap_err();
     assert_eq!(err, ForkChatError::TurnInFlight);
     assert_eq!(err.status_code(), 409);
 }
@@ -137,7 +137,7 @@ async fn an_idle_chat_with_background_tasks_only_still_forks() {
     let deps = StoreDeps::with_chats(vec![chat]);
     deps.set_fork_capable(true);
     let mgr = ChatManager::new(deps);
-    assert!(mgr.fork_chat("c1").await.is_ok());
+    assert!(mgr.fork_chat("c1", ForkPoint::Current).await.is_ok());
 }
 
 #[tokio::test]
@@ -147,7 +147,10 @@ async fn success_creates_the_fork_and_emits_chat_created() {
     deps.set_fork_capable(true);
     let mgr = ChatManager::new(deps.clone());
 
-    let fork = mgr.fork_chat("c1").await.expect("fork should succeed");
+    let fork = mgr
+        .fork_chat("c1", ForkPoint::Current)
+        .await
+        .expect("fork should succeed");
     assert_eq!(fork.parent_chat_id, Some(Some("c1".to_string())));
     assert!(mgr.get_chat(&fork.id).is_some());
     assert!(
@@ -165,7 +168,7 @@ async fn a_pin_failure_leaves_no_new_chat() {
     deps.fail_pin("cli crashed");
     let mgr = ChatManager::new(deps.clone());
     let before = deps.chat_count();
-    let err = mgr.fork_chat("c1").await.unwrap_err();
+    let err = mgr.fork_chat("c1", ForkPoint::Current).await.unwrap_err();
     assert_eq!(err, ForkChatError::PinFailed("cli crashed".to_string()));
     assert_eq!(err.status_code(), 500);
     assert_eq!(deps.chat_count(), before);
@@ -178,7 +181,7 @@ async fn a_pin_transcript_missing_maps_to_409_not_500() {
     deps.set_fork_capable(true);
     deps.fail_pin_transcript_missing();
     let mgr = ChatManager::new(deps);
-    let err = mgr.fork_chat("c1").await.unwrap_err();
+    let err = mgr.fork_chat("c1", ForkPoint::Current).await.unwrap_err();
     assert_eq!(err, ForkChatError::TranscriptMissing);
     assert_eq!(err.status_code(), 409);
 }
@@ -193,7 +196,7 @@ async fn a_pin_unsupported_after_capability_passed_is_still_422() {
     deps.set_fork_capable(true);
     deps.fail_pin_unsupported();
     let mgr = ChatManager::new(deps);
-    let err = mgr.fork_chat("c1").await.unwrap_err();
+    let err = mgr.fork_chat("c1", ForkPoint::Current).await.unwrap_err();
     assert_eq!(err, ForkChatError::Unsupported("claude".to_string()));
     assert_eq!(err.status_code(), 422);
 }
@@ -206,7 +209,7 @@ async fn an_insert_failure_leaves_no_new_chat() {
     deps.fail_create_fork("db is full");
     let mgr = ChatManager::new(deps.clone());
     let before = deps.chat_count();
-    let err = mgr.fork_chat("c1").await.unwrap_err();
+    let err = mgr.fork_chat("c1", ForkPoint::Current).await.unwrap_err();
     assert_eq!(err, ForkChatError::InsertFailed("db is full".to_string()));
     assert_eq!(err.status_code(), 500);
     assert_eq!(deps.chat_count(), before);

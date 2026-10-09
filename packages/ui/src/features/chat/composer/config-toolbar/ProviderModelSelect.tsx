@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Lock } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import type {
   AdapterInfo,
   AdapterModel,
@@ -20,15 +20,16 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Hint } from '@/components/ui/hint';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ProviderDot } from '@/features/shared/ProviderDot';
-import { ProviderLogo } from '@/features/shared/ProviderLogo';
 import { modelSelectionHint } from '@/lib/cli-model';
 import { cn } from '@/lib/utils';
 import { displayEffort, effortOptions, EFFORT_META } from '@/lib/model-tuning';
 import { RunningHint } from './RunningHint';
 import { ModelMenuRow } from './ModelMenuRow';
 import { groupSlug, modelRows, partitionModels } from './model-menu-rows';
+import { PROVIDER_PICK_FOOTER, PROVIDER_SWITCH_FOOTER } from './provider-switch';
+import { ProviderTabs } from './ProviderTabs';
+import type { ProviderSwitchRequest } from './use-provider-switch';
 
 export interface ProviderModelSelectProps {
   chat: Chat;
@@ -38,8 +39,13 @@ export interface ProviderModelSelectProps {
   model: AdapterModel | null;
   runningModel?: AdapterModel | null;
   showCurrentModel?: boolean;
-  /** True once the chat has messages — locks the provider (agent) for the session. */
+  /** True once the chat has messages: a provider tab then browses its catalog,
+   *  and picking one of its models asks to switch the chat in place. */
   locked: boolean;
+  /** Why switching providers is unavailable right now (shown on the tabs), or null. */
+  switchBlockedReason?: string | null;
+  /** Asks to continue the chat on another provider (opens the confirmation). */
+  onSwitchProvider?: (request: ProviderSwitchRequest) => void;
   /** True while a turn is running — the whole picker goes inert, as the other controls do. */
   disabled: boolean;
   providerDefaults?: ProviderConfig;
@@ -79,61 +85,6 @@ function CollapsibleModelSection({ label, testId, containsCurrent, children }: M
   );
 }
 
-/** One full-width segment per provider — the Folder/GitHub tab treatment. */
-function ProviderTabs({
-  adapters,
-  activeId,
-  locked,
-  onSelect,
-}: {
-  adapters: AdapterInfo[];
-  activeId: string;
-  locked: boolean;
-  onSelect: (id: string) => void;
-}) {
-  return (
-    // manual activation: automatic mode also fires onValueChange on FOCUS,
-    // which would double-issue the adapter PATCH on every click.
-    <Tabs
-      value={activeId}
-      activationMode="manual"
-      onValueChange={(v) => {
-        if (v) onSelect(v);
-      }}
-    >
-      <TabsList variant="line" className="w-full">
-        {adapters.map((a) => {
-          const lockedOut = a.installed && locked && a.id !== activeId;
-          const trigger = (
-            <TabsTrigger
-              key={a.id}
-              value={a.id}
-              data-testid={`composer-adapter-select-option-${a.id}`}
-              aria-label={`Provider: ${a.name}`}
-              disabled={!a.installed || lockedOut}
-              className={cn(lockedOut && 'w-full')}
-            >
-              <ProviderLogo adapterId={a.id} testId={`composer-adapter-logo-${a.id}`} className="size-4 shrink-0" />
-              <span className="truncate">{a.name}</span>
-              {!a.installed && <Lock className="size-3 shrink-0" />}
-            </TabsTrigger>
-          );
-          if (!lockedOut) return trigger;
-          // A disabled button swallows pointer events, so the mid-session
-          // explanation rides on a wrapper span.
-          return (
-            <Hint key={a.id} label="Locked for this session — start a new session to switch providers." side="top">
-              <span data-testid={`composer-adapter-locked-${a.id}`} className="h-full flex-1">
-                {trigger}
-              </span>
-            </Hint>
-          );
-        })}
-      </TabsList>
-    </Tabs>
-  );
-}
-
 export function ProviderModelSelect({
   chat,
   adapters,
@@ -150,8 +101,12 @@ export function ProviderModelSelect({
   setEffort,
   setFeature,
   hideProviderSwitch = false,
+  switchBlockedReason = null,
+  onSwitchProvider,
 }: ProviderModelSelectProps) {
   const [open, setOpen] = useState(false);
+  // Mid-session, a tab only browses: which provider's catalog the menu shows.
+  const [browseId, setBrowseId] = useState<string | null>(null);
   if (adapters.length === 0) return null;
 
   const active = adapter ?? adapters.find((a) => a.installed) ?? adapters[0] ?? null;
@@ -170,11 +125,25 @@ export function ProviderModelSelect({
       : null;
   const triggerLabel = effortLabel != null ? `${modelLabel} · ${effortLabel}` : modelLabel;
   const activeId = chat.adapterId ?? active?.id ?? '';
+  const shownId = locked ? (browseId ?? activeId) : activeId;
+  const browsingOther = shownId !== activeId;
+  const shown = browsingOther ? (adapters.find((a) => a.id === shownId) ?? active) : active;
+  const catalog = browsingOther ? partitionModels(modelRows(shown, '')) : { current, older, groups };
 
+  const onOpenChange = (next: boolean): void => {
+    setOpen(next);
+    if (!next) setBrowseId(null);
+  };
   const onPickProvider = (id: string): void => {
-    if (id !== activeId) setAdapter(id);
+    if (locked) setBrowseId(id);
+    else if (id !== activeId) setAdapter(id);
+  };
+  const requestSwitch = (model: string, tuning?: SessionTuning): void => {
+    onSwitchProvider?.({ adapterId: shownId, model, ...(tuning && { tuning }) });
+    onOpenChange(false);
   };
   const onPickModel = (id: string): void => {
+    if (browsingOther) return requestSwitch(id);
     if (id !== currentModelId) setModel(id);
     setOpen(false);
   };
@@ -183,11 +152,11 @@ export function ProviderModelSelect({
     <ModelMenuRow
       key={m.id}
       option={m}
-      active={m.id === currentModelId}
+      active={!browsingOther && m.id === currentModelId}
       chat={chat}
       providerDefaults={providerDefaults}
       onSelect={onPickModel}
-      setModelTuning={setModelTuning}
+      setModelTuning={browsingOther ? requestSwitch : setModelTuning}
       setEffort={setEffort}
       setFeature={setFeature}
     />
@@ -195,7 +164,7 @@ export function ProviderModelSelect({
 
   return (
     <RunningHint active={disabled}>
-      <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenu open={open} onOpenChange={onOpenChange}>
         <Hint label={modelSelectionHint(model, runningModel, showCurrentModel)} side="top">
           {/* Radix gates opening on the TRIGGER's own `disabled`; a disabled
               child button alone still lets pointerdown open the menu. */}
@@ -242,7 +211,13 @@ export function ProviderModelSelect({
                   if (e.key !== 'Escape') e.stopPropagation();
                 }}
               >
-                <ProviderTabs adapters={adapters} activeId={activeId} locked={locked} onSelect={onPickProvider} />
+                <ProviderTabs
+                  adapters={adapters}
+                  selectedId={shownId}
+                  activeId={activeId}
+                  blockedReason={locked ? switchBlockedReason : null}
+                  onSelect={onPickProvider}
+                />
               </div>
               <DropdownMenuSeparator />
             </>
@@ -259,23 +234,23 @@ export function ProviderModelSelect({
               the same panel size, so switching tabs or expanding a section
               scrolls instead of resizing the (bottom-anchored) menu. */}
           <div className="h-72 overflow-y-auto">
-            <DropdownMenuLabel>{active?.name ?? 'Models'} models</DropdownMenuLabel>
-            {current.map(renderRow)}
-            {older.length > 0 && (
+            <DropdownMenuLabel>{shown?.name ?? 'Models'} models</DropdownMenuLabel>
+            {catalog.current.map(renderRow)}
+            {catalog.older.length > 0 && (
               <CollapsibleModelSection
                 label="Older models"
                 testId="composer-model-older-header"
-                containsCurrent={older.some((m) => m.id === currentModelId)}
+                containsCurrent={!browsingOther && catalog.older.some((m) => m.id === currentModelId)}
               >
-                {older.map(renderRow)}
+                {catalog.older.map(renderRow)}
               </CollapsibleModelSection>
             )}
-            {groups.map(([label, models]) => (
+            {catalog.groups.map(([label, models]) => (
               <CollapsibleModelSection
                 key={label}
                 label={label}
                 testId={`composer-model-group-header-${groupSlug(label)}`}
-                containsCurrent={models.some((m) => m.id === currentModelId)}
+                containsCurrent={!browsingOther && models.some((m) => m.id === currentModelId)}
               >
                 {models.map(renderRow)}
               </CollapsibleModelSection>
@@ -283,7 +258,7 @@ export function ProviderModelSelect({
           </div>
 
           <p data-testid="composer-provider-footer" className="px-2 pt-2 text-xs text-muted-foreground">
-            {locked ? 'Provider stays fixed for this session.' : 'Pick a provider before your first message.'}
+            {locked ? PROVIDER_SWITCH_FOOTER : PROVIDER_PICK_FOOTER}
           </p>
         </DropdownMenuContent>
       </DropdownMenu>

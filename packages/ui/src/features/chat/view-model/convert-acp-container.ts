@@ -204,6 +204,7 @@ function systemContainer(items: readonly ParsedItem[], base: { id: string; creat
   const mf: MainframeMessageMeta = {
     ...(message?.meta.isCompacted && { isCompacted: true }),
     ...(message?.meta.skillLoaded && { skillLoaded: message.meta.skillLoaded }),
+    ...(message?.meta.providerSwitch && { providerSwitch: message.meta.providerSwitch }),
   };
   return {
     role: 'system',

@@ -13,6 +13,7 @@ use mainframe_chat::chat_manager::ChatManager;
 use mainframe_claude_workflows::store::ClaudeWorkflowStore;
 use mainframe_launch::{LaunchRegistry, PortTunnelRegistry, TunnelManager};
 use mainframe_lsp::LspManager;
+use mainframe_orchestration::OrchestrationService;
 use mainframe_plugins::PluginManager;
 use mainframe_runtime::ResolvedPath;
 use mainframe_services::attachment::AttachmentStore;
@@ -152,6 +153,10 @@ pub struct AppCtx {
     /// the route-unit harness — automation routes answer 503 while absent
     /// (Node parity: "automation service not available").
     pub automations: Option<Arc<AutomationsEngine>>,
+    /// The orchestration MCP server behind `POST /mcp`. `Some` in the daemon
+    /// boot; `None` in harnesses that do not exercise it (the route answers
+    /// 503 while absent).
+    pub orchestration: Option<Arc<OrchestrationService>>,
     /// The account-wide provider quota service (`quota` handle). Backs the
     /// `/api/providers/:id/quota*` routes; `None` in the route-unit harness and
     /// when quota harvesting is not wired — routes answer `okEmpty` / `503`.
@@ -247,6 +252,12 @@ impl AppCtx {
     /// id (see `chat_test_support::StubAdapter`).
     pub(crate) fn test_ctx_with_chat_manager() -> Arc<AppCtx> {
         crate::chat_test_support::test_ctx_with_chat_manager()
+    }
+
+    /// Like [`Self::test_ctx_with_chat_manager`], with the orchestration MCP
+    /// service attached as the daemon boot attaches it.
+    pub(crate) fn test_ctx_with_orchestration() -> Arc<AppCtx> {
+        crate::chat_test_support::test_ctx_with_orchestration()
     }
 }
 

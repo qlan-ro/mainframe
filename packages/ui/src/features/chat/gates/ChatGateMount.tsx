@@ -1,8 +1,5 @@
 import { useChatExtras, useChatPermissionFront } from '../runtime/chat-extras';
-import { useAdapters } from '@/store/adapters';
-import { PermissionGate } from './PermissionGate';
-import { AskUserQuestionGate } from './AskUserQuestionGate';
-import { PlanGate } from './PlanGate';
+import { GateCard } from './GateCard';
 
 /**
  * Renders the single pending gate (permission / question / plan) in the thread's
@@ -35,40 +32,22 @@ import { PlanGate } from './PlanGate';
  * the delivery re-read finds nothing to restore. An approved plan's durable
  * record is the transcript's PlanBubble, not this card.
  *
- * The chat's adapter is resolved here rather than in `PlanGate`, which stays
- * prop-driven: the plan gate offers the CLI's `auto` execution mode only when
- * that adapter advertises `capabilities.autoMode`.
+ * The chat's adapter is read here and handed to `GateCard`, which keeps the
+ * gate cards prop-driven: the plan gate offers the CLI's `auto` execution
+ * mode only when that adapter advertises `capabilities.autoMode`.
  */
 export function ChatGateMount() {
   const { front, reply } = useChatPermissionFront();
   const extras = useChatExtras();
-  const adapters = useAdapters();
 
   if (!front) return null;
-
-  const adapterId = extras?.state.chatConfig?.adapterId;
-  const adapter = adapters.find((a) => a.id === adapterId);
-
-  // A synthesized request (no daemon _meta.controlRequest) never carries the
-  // `input` the rich Plan/AskUserQuestion cards read — route it to the
-  // generic options-only card regardless of toolName (spec decision 27).
-  const { toolName } = front.request;
-  const card = front.synthesizedRequest ? (
-    <PermissionGate entry={front} reply={reply} />
-  ) : toolName === 'AskUserQuestion' ? (
-    <AskUserQuestionGate entry={front} reply={reply} />
-  ) : toolName === 'ExitPlanMode' ? (
-    <PlanGate entry={front} reply={reply} autoAllowed={adapter?.capabilities.autoMode === true} />
-  ) : (
-    <PermissionGate entry={front} reply={reply} />
-  );
 
   return (
     <div
       data-testid="chat-thread-gate-slot"
       className="-mx-1 mb-2 min-h-24 max-h-[45cqh] shrink-[100] overflow-y-auto px-1 py-1 [scrollbar-width:none]"
     >
-      {card}
+      <GateCard entry={front} reply={reply} adapterId={extras?.state.chatConfig?.adapterId} />
     </div>
   );
 }

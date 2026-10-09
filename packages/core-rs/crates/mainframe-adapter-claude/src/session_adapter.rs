@@ -33,6 +33,7 @@ impl AdapterSession for ClaudeSession {
             small_fast_model: None,
             default_model: None,
             no_persistence: None,
+            orchestration_mcp: None,
         });
         Box::pin(ClaudeSession::spawn(self, options, sink))
     }
@@ -49,6 +50,16 @@ impl AdapterSession for ClaudeSession {
         uuid: Option<String>,
     ) -> BoxFuture<'_, Result<(), AdapterError>> {
         Box::pin(ClaudeSession::send_message(self, message, images, uuid))
+    }
+    fn supports_steer(&self) -> bool {
+        true
+    }
+    fn steer(
+        &self,
+        message: String,
+        uuid: Option<String>,
+    ) -> BoxFuture<'_, Result<(), AdapterError>> {
+        Box::pin(ClaudeSession::steer(self, message, uuid))
     }
     fn respond_to_permission(
         &self,

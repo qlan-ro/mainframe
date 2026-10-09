@@ -2,7 +2,7 @@
  * draft-stash — pure module tests (#178 AC14: the draft survives a release).
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { markForStash, captureIfMarked, takeStash } from '../draft-stash';
+import { markForStash, captureIfMarked, takeStash, seedDraft, handoffDraft } from '../draft-stash';
 
 function file(name: string): File {
   return new File(['x'], name);
@@ -76,5 +76,41 @@ describe('draft-stash — no leakage across unrelated ids', () => {
     // (e.g. StrictMode double-invoke). A later capture for the SAME id still stashes once.
     captureIfMarked('chat-6', { text: 'late', attachments: [] });
     expect(takeStash('chat-6')).toEqual({ text: 'late', attachments: [] });
+  });
+});
+
+describe('draft-stash — captureIfMarked cannot clobber a handed-off draft (chat-switch regression)', () => {
+  it('ignores an empty capture when a non-empty stash already landed for this id', () => {
+    markForStash('chat-race-1');
+    // A handoff (another instance giving up displayed status) lands a real
+    // draft for this SAME id BEFORE the mark's own (now-empty) capture fires.
+    handoffDraft('chat-race-1', { text: 'handed-off draft', attachments: [] });
+    captureIfMarked('chat-race-1', { text: '', attachments: [] });
+
+    expect(takeStash('chat-race-1')).toEqual({ text: 'handed-off draft', attachments: [] });
+  });
+
+  it('still records an empty capture when there is nothing non-empty to protect', () => {
+    markForStash('chat-race-2');
+    captureIfMarked('chat-race-2', { text: '', attachments: [] });
+
+    expect(takeStash('chat-race-2')).toEqual({ text: '', attachments: [] });
+  });
+
+  it('a genuinely non-empty capture still overwrites (not a blanket no-op)', () => {
+    markForStash('chat-race-3');
+    handoffDraft('chat-race-3', { text: 'stale', attachments: [] });
+    captureIfMarked('chat-race-3', { text: 'fresher at unmount', attachments: [] });
+
+    expect(takeStash('chat-race-3')).toEqual({ text: 'fresher at unmount', attachments: [] });
+  });
+});
+
+describe('draft-stash — seedDraft (fork-from-message prefill)', () => {
+  it('a seeded draft is taken exactly once, with no attachments', () => {
+    seedDraft('chat-fork-1', 'try this another way');
+
+    expect(takeStash('chat-fork-1')).toEqual({ text: 'try this another way', attachments: [] });
+    expect(takeStash('chat-fork-1')).toBeUndefined();
   });
 });

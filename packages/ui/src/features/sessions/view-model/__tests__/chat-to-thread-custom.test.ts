@@ -234,6 +234,18 @@ describe('chatToThreadCustom — side chat fields (todo #344)', () => {
   ]);
 });
 
+describe('chatToThreadCustom — agent provenance fields (orchestration MCP server)', () => {
+  const delegation = { taskId: 'task_1', role: 'review' as const, status: 'running' as const };
+  const held = [{ entryId: 'ob1', fromChatId: 'boss', preview: 'hi' }];
+  runFieldRows([
+    ['custom.createdByChatId forwards it', { createdByChatId: 'boss' }, (r) => r.custom.createdByChatId, 'boss'],
+    ['custom.delegation forwards it', { delegation }, (r) => r.custom.delegation, delegation],
+    ['custom.delegatedWaiting defaults to false', {}, (r) => r.custom.delegatedWaiting, false],
+    ['custom.agentOutbox defaults to empty', {}, (r) => r.custom.agentOutbox, []],
+    ['custom.agentOutbox forwards held entries', { agentOutbox: held }, (r) => r.custom.agentOutbox, held],
+  ]);
+});
+
 // ---------------------------------------------------------------------------
 // activeSessionCustom — freshest custom for the ACTIVE thread-list item
 // ---------------------------------------------------------------------------

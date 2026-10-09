@@ -3,7 +3,7 @@ use super::*;
 
 pub(super) struct LcDeps {
     deps: Arc<dyn ChatManagerDeps>,
-    permissions: Arc<Mutex<PermissionManager>>,
+    enricher: Enricher,
     event_handler: Arc<EventHandler<EhDeps>>,
     worktree_offers: Arc<WorktreeOfferRegistry>,
 }
@@ -50,7 +50,7 @@ impl LifecycleManagerDeps for LcDeps {
             .build_sink(chat_id, Some(session_id.to_string()))
     }
     fn emit_event(&self, event: DaemonEvent) {
-        enrich_and_emit(self.deps.as_ref(), &self.permissions, event);
+        self.enricher.emit(event);
     }
     fn attachment_delete_chat<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()> {
         self.deps.attachment_delete_chat(chat_id)
@@ -126,26 +126,52 @@ impl LifecycleManagerDeps for LcDeps {
     fn get_pending_fork(&self, chat_id: &str) -> Option<PendingForkState> {
         self.deps.get_pending_fork(chat_id)
     }
+    fn compose_history<'a>(
+        &'a self,
+        chat_id: &'a str,
+    ) -> BoxFuture<'a, Option<(Vec<ChatMessage>, usize)>> {
+        Box::pin(async move {
+            let composed = compose_if_multi(self.deps.as_ref(), chat_id).await?;
+            Some((composed.messages, composed.active_from))
+        })
+    }
+}
+
+/// Composes a multi-segment chat's history; `None` for a single-segment chat
+/// (or a deps impl without segments), whose one session loads as before.
+pub(super) async fn compose_if_multi(
+    deps: &dyn ChatManagerDeps,
+    chat_id: &str,
+) -> Option<crate::segments::compose::Composed> {
+    let store = deps.segment_store()?;
+    let layout = store
+        .layout(chat_id)
+        .filter(mainframe_types::segment::SegmentLayout::is_multi_segment)?;
+    let chat = deps.chats_get(chat_id)?;
+    Some(crate::segments::compose::compose(deps, &chat, &layout).await)
 }
 
 pub(super) fn build(
     deps: &Arc<dyn ChatManagerDeps>,
     active_chats: &Registry,
     messages: &Arc<Mutex<MessageCache>>,
-    permissions: &Arc<Mutex<PermissionManager>>,
+    enricher: &Enricher,
     event_handler: &Arc<EventHandler<EhDeps>>,
     worktree_offers: &Arc<WorktreeOfferRegistry>,
 ) -> Arc<ChatLifecycleManager<LcDeps>> {
     let lc_deps = Arc::new(LcDeps {
         deps: deps.clone(),
-        permissions: permissions.clone(),
+        enricher: enricher.clone(),
         event_handler: event_handler.clone(),
         worktree_offers: worktree_offers.clone(),
     });
-    Arc::new(ChatLifecycleManager::new(
-        lc_deps,
-        active_chats.clone(),
-        messages.clone(),
-        permissions.clone(),
-    ))
+    Arc::new(
+        ChatLifecycleManager::new(
+            lc_deps,
+            active_chats.clone(),
+            messages.clone(),
+            enricher.permissions().clone(),
+        )
+        .with_orchestration(enricher.orchestration().clone()),
+    )
 }

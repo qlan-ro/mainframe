@@ -18,16 +18,51 @@ export interface DraftStash {
 
 const pending = new Set<string>();
 const stash = new Map<string, DraftStash>();
+const waiters = new Map<string, Set<() => void>>();
+
+function notifyWaiters(chatId: string): void {
+  const set = waiters.get(chatId);
+  if (set == null) return;
+  waiters.delete(chatId);
+  for (const callback of set) callback();
+}
 
 /** Call BEFORE detaching a thread whose composer draft should survive the unmount. */
 export function markForStash(chatId: string): void {
   pending.add(chatId);
 }
 
-/** Call from the runtime hook's unmount cleanup. No-op unless `markForStash` was called for this id. */
+function isEmptyDraft(draft: DraftStash): boolean {
+  return draft.text === '' && draft.attachments.length === 0;
+}
+
+/**
+ * Call from the runtime hook's unmount cleanup. No-op unless `markForStash`
+ * was called for this id.
+ *
+ * Guards against a lost-draft race (the chat-switch regression this fixed):
+ * `handoffDraft` can land a non-empty stash for this SAME id (this instance
+ * handed off whatever the user typed before it lost displayed status)
+ * BEFORE `OffloadRelease` later marks and evicts this now-empty instance. An
+ * empty capture must never clobber that — it would overwrite the user's real
+ * draft with the cleared composer nobody is looking at.
+ */
 export function captureIfMarked(chatId: string, draft: DraftStash): void {
   if (!pending.delete(chatId)) return;
+  const existing = stash.get(chatId);
+  if (isEmptyDraft(draft) && existing != null && !isEmptyDraft(existing)) return;
   stash.set(chatId, draft);
+  notifyWaiters(chatId);
+}
+
+/**
+ * Seed a thread's composer before it first mounts — a from-message fork puts
+ * the chosen message's text here, unsent. Read by the same one-shot
+ * `takeStash`, so it lands exactly once and never survives a later remount.
+ */
+export function seedDraft(chatId: string, text: string): void {
+  stash.set(chatId, { text, attachments: [] });
+  notifyWaiters(chatId);
 }
 
 /** Call from the runtime hook's mount effect. One-shot: consumes the stash. */
@@ -35,4 +70,48 @@ export function takeStash(chatId: string): DraftStash | undefined {
   const draft = stash.get(chatId);
   stash.delete(chatId);
   return draft;
+}
+
+/**
+ * Re-seed a draft this SAME runtime instance already took, the moment it
+ * stops being the one actually displayed for `chatId` — a split zone that
+ * only fits once the workspace panel parks, for instance: `splitFits` lags
+ * `zones` by a render or more (ResizeObserver settles async), so the hidden
+ * per-item hook can correctly be the displayed one, take the stash, and then
+ * lose that status to `ChatZone` before the user ever sees it render there.
+ * Captures whatever the composer holds NOW — the original stash text, or the
+ * user's own edit — so the consumer that takes over picks up the latest
+ * state instead of losing it. Unlike `seedDraft`, this is an unconditional
+ * handoff between two runtime instances for the same chat id, not a
+ * fork-prefill seed before first mount.
+ */
+export function handoffDraft(chatId: string, draft: DraftStash): void {
+  stash.set(chatId, draft);
+  notifyWaiters(chatId);
+}
+
+/**
+ * Wait for a draft to arrive for `chatId` when `takeStash` found nothing YET.
+ * `ZoneDraftRestore` needs this: whether the outgoing hook instance's
+ * handoff effect has already run by the time `ChatZone` mounts and checks is
+ * NOT guaranteed — the handoff reacts to that instance's OWN re-render
+ * (`skipDraftRestore` flipping true), a separate commit from the one that
+ * mounted `ChatZone`, so either side can run first. Call `takeStash` first;
+ * only register a waiter if it returns nothing. Returns an unsubscribe
+ * function — call it on cleanup so an unmounted consumer that never got a
+ * draft doesn't leak a listener.
+ */
+export function waitForStash(chatId: string, onReady: () => void): () => void {
+  let set = waiters.get(chatId);
+  if (set == null) {
+    set = new Set();
+    waiters.set(chatId, set);
+  }
+  set.add(onReady);
+  return () => {
+    const current = waiters.get(chatId);
+    if (current == null) return;
+    current.delete(onReady);
+    if (current.size === 0) waiters.delete(chatId);
+  };
 }

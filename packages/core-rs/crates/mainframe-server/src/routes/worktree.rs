@@ -27,24 +27,9 @@ use mainframe_chat::config_manager::ConfigError;
 use mainframe_services::workspace::{get_worktrees, remove_worktree, short_branch};
 
 use crate::ctx::AppCtx;
+use crate::orchestration_deps::branch_name_ok;
 use crate::respond::{fail, ok, ok_empty};
 use crate::routes::projects::parse_body;
-
-/// `branchNameSchema`: non-empty, `^[a-zA-Z0-9][a-zA-Z0-9._/-]*$`, no `..`.
-fn branch_name_ok(name: &str) -> bool {
-    if name.is_empty() || name.contains("..") {
-        return false;
-    }
-    let mut chars = name.chars();
-    let Some(first) = chars.next() else {
-        return false;
-    };
-    if !first.is_ascii_alphanumeric() {
-        return false;
-    }
-    name.chars()
-        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '/' | '-'))
-}
 
 // The `Err` carries a built axum `Response` (intentionally large); boxing it
 // would only add an allocation for a value we return by move once.

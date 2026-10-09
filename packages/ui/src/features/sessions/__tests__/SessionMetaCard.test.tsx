@@ -60,3 +60,26 @@ describe('SessionMetaCard — fork lineage lines', () => {
     expect(screen.getByTestId('sessions-meta-card-fork-count')).toHaveTextContent('1x');
   });
 });
+
+describe('SessionMetaCard — agent provenance lines', () => {
+  it('names the delegator, role and live status on a delegated child, not "Forked from"', () => {
+    render(
+      <SessionMetaCard
+        {...BASE_PROPS}
+        parentState={{ kind: 'linked', title: 'Release prep' }}
+        delegation={{ taskId: 'task_1', role: 'review', status: 'waiting' }}
+      />,
+    );
+
+    expect(screen.getByTestId('sessions-meta-card-delegated-by')).toHaveTextContent(
+      'Delegated by"Release prep" · review · waiting',
+    );
+    expect(screen.queryByTestId('sessions-meta-card-forked-from')).toBeNull();
+  });
+
+  it('names the launching chat on a chat an agent started', () => {
+    render(<SessionMetaCard {...BASE_PROPS} startedBy={'"Release prep"'} />);
+
+    expect(screen.getByTestId('sessions-meta-card-started-by')).toHaveTextContent('Started by"Release prep"');
+  });
+});

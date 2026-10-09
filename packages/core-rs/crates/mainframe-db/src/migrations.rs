@@ -6,6 +6,9 @@ use rusqlite::Connection;
 
 use crate::DbError;
 
+mod orchestration;
+pub(crate) mod v31_segments;
+
 type MigrationFn = fn(&Connection) -> Result<(), DbError>;
 
 pub struct Migration {
@@ -530,11 +533,22 @@ pub fn migrations() -> Vec<Migration> {
                 )?)
             },
         },
+        // Provider segments: one chat, many provider-native sessions.
+        Migration {
+            version: 31,
+            up: v31_segments::up,
+        },
+        // Agent orchestration (MCP server): agent provenance on chats and the
+        // delegated-task table.
+        Migration {
+            version: orchestration::VERSION,
+            up: orchestration::up,
+        },
     ]
 }
 
 /// Highest migration version — the target a fresh DB stamps to.
-pub const LATEST_VERSION: i64 = 30;
+pub const LATEST_VERSION: i64 = 32;
 
 fn user_version(db: &Connection) -> Result<i64, DbError> {
     Ok(db.pragma_query_value(None, "user_version", |row| row.get(0))?)

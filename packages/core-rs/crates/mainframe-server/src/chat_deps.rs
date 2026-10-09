@@ -17,6 +17,7 @@
 //!      small local bridge types (`RtDeps`, `CtxDbHandle`) satisfy those bounds by
 //!      routing each call back through `Db::call_blocking`.
 
+use mainframe_chat::segments::categories::{segment_adapters, union_categories};
 use std::sync::{Arc, OnceLock, Weak};
 
 use mainframe_adapter_api::pr_detection::scan_history_for_prs;
@@ -184,6 +185,7 @@ fn to_db_fork_insert<'a>(
         branch_name: input.branch_name.as_deref(),
         title: input.title.as_deref(),
         pending_fork,
+        segments: input.segments.as_ref(),
     }
 }
 
@@ -317,6 +319,8 @@ impl ChatManagerDeps for DaemonChatDeps {
         let _ = self.broadcast.send(event);
     }
 
+    /// The union over every adapter the chat's segments ran on, so a
+    /// switched chat folds each segment's tools by their own adapter's rules.
     fn get_tool_categories(&self, chat_id: &str) -> Option<ToolCategories> {
         let id = chat_id.to_string();
         let chat = self
@@ -324,9 +328,13 @@ impl ChatManagerDeps for DaemonChatDeps {
             .call_blocking(move |d| d.chats.get(&id))
             .ok()
             .flatten()?;
-        self.adapters
-            .get(&chat.adapter_id)
-            .and_then(|a| a.get_tool_categories())
+        let layout = mainframe_chat::segments::SegmentStore::layout(self, chat_id);
+        let adapters = segment_adapters(&chat.adapter_id, layout.as_ref());
+        union_categories(adapters.iter().filter_map(|adapter_id| {
+            self.adapters
+                .get(adapter_id)
+                .and_then(|a| a.get_tool_categories())
+        }))
     }
 
     fn prepare_messages_for_client(
@@ -870,10 +878,33 @@ impl ChatManagerDeps for DaemonChatDeps {
 
     fn send_push(&self, msg: PushOut) {
         let push = Arc::clone(&self.push);
+        // A delegated child's gate names its parent and opens the top-level
+        // chat whose card holds it (`taskChatId` names the card's chat);
+        // every other push keeps the body its sink wrote and opens its chat.
+        let delegated = match msg.push_type.as_str() {
+            "permission" => {
+                crate::orchestration_deps::push::delegated_permission_push(&self.db, &msg.chat_id)
+            }
+            _ => None,
+        };
+        let (body, data) = match delegated {
+            Some(push) => (
+                push.body,
+                serde_json::json!({
+                    "chatId": push.open_chat_id,
+                    "taskChatId": msg.chat_id,
+                    "type": msg.push_type,
+                }),
+            ),
+            None => (
+                msg.body,
+                serde_json::json!({ "chatId": msg.chat_id, "type": msg.push_type }),
+            ),
+        };
         let message = PushMessage {
             title: msg.title,
-            body: msg.body,
-            data: serde_json::json!({ "chatId": msg.chat_id, "type": msg.push_type }),
+            body,
+            data,
             priority: if msg.priority == "high" {
                 PushPriority::High
             } else {
@@ -995,7 +1026,21 @@ impl ChatManagerDeps for DaemonChatDeps {
             .call_blocking(move |d| d.chats.find_or_create_side_chat(&parent))
             .map_err(|err| err.to_string())
     }
+
+    fn segment_store(&self) -> Option<&dyn mainframe_chat::segments::SegmentStore> {
+        Some(self)
+    }
+
+    fn adapter_info(&self, adapter_id: &str) -> Option<mainframe_types::adapter::AdapterInfo> {
+        self.adapters
+            .get_snapshots()
+            .into_iter()
+            .find(|info| info.id == adapter_id)
+    }
 }
+
+#[path = "chat_deps_segments.rs"]
+mod segments;
 
 /// The daemon-side `ExternalSessionDeps` (`getExternalSessionService()`'s
 /// backing instance). `listExternalSessions` is not on the ported `Adapter`
@@ -1408,6 +1453,7 @@ pub(crate) fn fallback_chat(new_chat: &NewChat) -> Chat {
         parent_chat_id: None,
         side_chat_id: None,
         side_chat_waiting: None,
+        orchestration: Default::default(),
     }
 }
 

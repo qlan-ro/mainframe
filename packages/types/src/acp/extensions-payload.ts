@@ -11,6 +11,7 @@ import { PresentationSourcesSchema } from '../transcript-presentation.js';
 import { z } from 'zod';
 import { ToolCallTimingSchema } from '../tool-call-timing.js';
 import { CommandExecutionMetadataSchema } from '../command-execution.js';
+import { ProviderSwitchMarkerSchema } from '../segment.js';
 
 /**
  * The CLI's own context-occupancy percentage riding a `usage_update`'s
@@ -115,6 +116,8 @@ export const ItemMetaSchema = z
     errorText: z.string().optional(),
     skillLoaded: SkillLoadedMetaSchema.optional(),
     isCompacted: z.boolean().optional(),
+    /** The divider a provider switch (or context reset) opens a segment with. */
+    providerSwitch: ProviderSwitchMarkerSchema.optional().catch(undefined),
     messageMeta: z.record(z.string(), z.unknown()).optional(),
     groupId: z.string().optional(),
     subagent: z.boolean().optional(),

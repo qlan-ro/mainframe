@@ -15,6 +15,7 @@ beforeEach(() => {
     sidebarWidth: SIDEBAR_DEFAULT_WIDTH,
     sidebarView: 'chats',
     dontWarnOnTuningChange: false,
+    dontConfirmProviderSwitch: false,
     sessionPanelOpen: true,
     sessionPanelSections: {},
     dialogSizes: {},
@@ -180,6 +181,7 @@ describe('useUiPrefs persistence', () => {
     expect(Object.keys(parsed.state).sort()).toEqual(
       [
         'dialogSizes',
+        'dontConfirmProviderSwitch',
         'dontWarnOnTuningChange',
         'sessionPanelOpen',
         'sessionPanelSections',

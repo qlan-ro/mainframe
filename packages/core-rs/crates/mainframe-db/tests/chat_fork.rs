@@ -69,6 +69,7 @@ fn create_fork_round_trips_every_inherited_field_and_parent_chat_id() {
             branch_name: Some("feature/fork"),
             title: Some("Parent title (fork)"),
             pending_fork: &pf,
+            segments: None,
         })
         .unwrap();
 
@@ -121,6 +122,7 @@ fn parent_chat_id_survives_archive_and_unarchive() {
             branch_name: None,
             title: None,
             pending_fork: &pending_fork("parent-session-2"),
+            segments: None,
         })
         .unwrap();
 
@@ -172,6 +174,7 @@ fn list_filtered_and_get_return_parent_chat_id() {
             branch_name: None,
             title: None,
             pending_fork: &pending_fork("parent-session-3"),
+            segments: None,
         })
         .unwrap();
 
@@ -205,6 +208,7 @@ fn pending_fork_get_and_clear() {
             branch_name: None,
             title: None,
             pending_fork: &pf,
+            segments: None,
         })
         .unwrap();
 

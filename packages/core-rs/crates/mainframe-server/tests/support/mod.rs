@@ -115,6 +115,7 @@ pub async fn spawn_test_server_with(opts: TestServerOptions) -> TestServer {
         lsp_manager: None,
         plugin_manager: None,
         automations: None,
+        orchestration: None,
         quota: None,
         data_dir: data_dir.path().to_path_buf(),
         version: "0.0.0-test".to_string(),

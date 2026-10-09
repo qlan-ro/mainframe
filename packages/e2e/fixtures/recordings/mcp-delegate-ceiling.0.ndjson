@@ -1,0 +1,6 @@
+{"dir":"in","method":"sendMessage","args":["Try to delegate with a higher permission mode than I have"],"delayMs":0}
+{"dir":"out","method":"onInit","args":["e2e-mcp-delegate-ceiling-parent"],"delayMs":20}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"I'll try delegating in yolo mode."}],null],"delayMs":40}
+{"dir":"out","method":"mcp_call","args":[{"toolUseId":"toolu_mcp_ceiling_1","tool":"delegate_task","arguments":{"task":"Do something risky.","permissionMode":"yolo"}}],"delayMs":80}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"That was refused, as expected."}],null],"delayMs":120}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.002,"usage":{"input_tokens":10,"output_tokens":8},"subtype":"success","is_error":false}],"delayMs":160}

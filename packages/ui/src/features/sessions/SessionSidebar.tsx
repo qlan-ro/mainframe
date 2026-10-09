@@ -26,7 +26,7 @@ import { chordHint } from '@/features/shortcuts/chord-hint';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useStartNewSession } from '@/features/sessions/new-thread/use-start-new-session';
 import type { SessionItem } from '@/features/sessions/view-model/chat-to-thread-custom';
-import { regularThreadItemsToSessionItems } from '@/features/sessions/view-model/chat-to-thread-custom';
+import { listedThreadItemsToSessionItems } from '@/features/sessions/view-model/task-chats';
 import { arrangeSessions } from '@/features/sessions/view-model/group-sessions';
 import { sortProjectsByRecentActivity } from '@/features/sessions/view-model/project-activity';
 import { applySessionFilters } from '@/features/sessions/filter/apply-session-filters';
@@ -68,7 +68,8 @@ export function SessionSidebar() {
   const threadItems = useAuiState((s) => s.threads.threadItems);
 
   // Project outside the selector — a fresh array inside it would loop useAuiState's Object.is.
-  const allItems = useMemo<SessionItem[]>(() => regularThreadItemsToSessionItems(threadItems), [threadItems]);
+  // Task chats have no row: each lives in its parent's `delegate_task` card.
+  const allItems = useMemo<SessionItem[]>(() => listedThreadItemsToSessionItems(threadItems), [threadItems]);
 
   const { filterProjectIds, selectedTags, selectedSynthetic, sortMode } = useSessionFilters();
 

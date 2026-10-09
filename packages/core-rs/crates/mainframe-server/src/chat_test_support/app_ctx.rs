@@ -13,6 +13,7 @@ use mainframe_adapter_api::AdapterRegistry;
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_chat::chat_manager::ChatManager;
 use mainframe_claude_workflows::store::ClaudeWorkflowStore;
+use mainframe_orchestration::OrchestrationService;
 use mainframe_runtime::ResolvedPath;
 use mainframe_services::attachment::AttachmentStore;
 use mainframe_services::files::FileWatcherService;
@@ -34,6 +35,7 @@ fn test_ctx_from(
     adapter_registry: Arc<AdapterRegistry>,
     chat_manager: Option<Arc<ChatManager>>,
     data_dir: PathBuf,
+    orchestration: Option<Arc<OrchestrationService>>,
 ) -> Arc<AppCtx> {
     let watcher = FileWatcherService::new(|_| {});
     Arc::new(AppCtx {
@@ -55,6 +57,7 @@ fn test_ctx_from(
         lsp_manager: None,
         plugin_manager: None,
         automations: None,
+        orchestration,
         quota: None,
         data_dir,
         version: "0.0.0-test".into(),
@@ -85,6 +88,7 @@ pub(crate) fn test_ctx() -> Arc<AppCtx> {
         Arc::new(AdapterRegistry::new()),
         None,
         std::env::temp_dir().join("mf-routes-test"),
+        None,
     )
 }
 
@@ -97,6 +101,48 @@ pub(crate) fn test_ctx() -> Arc<AppCtx> {
 /// `adapter_registry` before creating a chat under its id (see
 /// `super::StubAdapter`).
 pub(crate) fn test_ctx_with_chat_manager() -> Arc<AppCtx> {
+    let parts = chat_manager_parts();
+    test_ctx_from(
+        parts.db,
+        parts.broadcast,
+        parts.adapter_registry,
+        Some(parts.manager),
+        parts.data_dir,
+        None,
+    )
+}
+
+/// Like [`test_ctx_with_chat_manager`], plus the orchestration MCP service
+/// wired exactly as the daemon boot wires it (hooks attached to the manager).
+pub(crate) fn test_ctx_with_orchestration() -> Arc<AppCtx> {
+    let parts = chat_manager_parts();
+    let orchestration = crate::orchestration_deps::build_orchestration(
+        Arc::clone(&parts.manager),
+        parts.db.clone(),
+        Arc::clone(&parts.adapter_registry),
+        parts.broadcast.clone(),
+        "0.0.0-test",
+        0,
+    );
+    test_ctx_from(
+        parts.db,
+        parts.broadcast,
+        parts.adapter_registry,
+        Some(parts.manager),
+        parts.data_dir,
+        Some(orchestration),
+    )
+}
+
+struct ChatManagerParts {
+    db: Db,
+    broadcast: broadcast::Sender<DaemonEvent>,
+    adapter_registry: Arc<AdapterRegistry>,
+    manager: Arc<ChatManager>,
+    data_dir: PathBuf,
+}
+
+fn chat_manager_parts() -> ChatManagerParts {
     use mainframe_db::DatabaseManager;
     use mainframe_services::quota::{QuotaManager, QuotaManagerDeps, QuotaSettingsStore};
 
@@ -140,5 +186,11 @@ pub(crate) fn test_ctx_with_chat_manager() -> Arc<AppCtx> {
         None,
         data_dir.clone(),
     );
-    test_ctx_from(db, broadcast, adapter_registry, Some(manager), data_dir)
+    ChatManagerParts {
+        db,
+        broadcast,
+        adapter_registry,
+        manager,
+        data_dir,
+    }
 }

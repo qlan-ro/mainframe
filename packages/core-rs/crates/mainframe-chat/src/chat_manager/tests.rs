@@ -15,15 +15,20 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 mod chat_surface_wiring;
 mod fork_chat;
+mod fork_from_message;
 mod fork_history;
+mod fork_segments;
 mod fork_sweep;
 mod fork_title;
 mod history_eviction;
 mod history_snapshot;
 mod offload;
+mod orchestration;
 mod plan_mode;
+mod provider_switch;
 mod resume_overlay;
 mod resume_snapshot;
+mod segment_fake;
 mod side_chat;
 
 // ── fake ChatManagerDeps ─────────────────────────────────────────────────────
@@ -92,8 +97,13 @@ pub(crate) struct StoreDeps {
     /// When `Some`, `pin_fork_point` fails with this instead of echoing the
     /// source session id back as the snapshot path.
     pin_failure: Mutex<Option<PinFailure>>,
+    /// Every `pin_fork_point` request, in order — the from-message tests
+    /// assert the cut the chat layer resolved.
+    pin_requests: Mutex<Vec<ForkPinRequest>>,
     /// When `Some`, `create_fork` fails with this message instead of inserting.
     create_fork_failure: Mutex<Option<String>>,
+    /// Every `create_fork` input, so tests can assert the copied segments.
+    fork_inserts: Mutex<Vec<ForkCreateInput>>,
     /// `db.chats.pendingFork` per chat id, for the lifecycle/history/title tests
     /// that resume an unsent fork.
     pending_forks: Mutex<HashMap<String, PendingForkState>>,
@@ -108,6 +118,11 @@ pub(crate) struct StoreDeps {
     /// `history_cache_dir()` override, for the same test (a real tempdir it
     /// alone owns, so it can't collide with any other test's chat ids).
     history_cache_dir: Mutex<Option<String>>,
+    /// `segment_store()` — set once by the provider-switch tests; every other
+    /// test leaves it unset (single-segment chats, as before segments existed).
+    segment_store: std::sync::OnceLock<Arc<dyn crate::segments::SegmentStore>>,
+    /// `adapter_info(adapter_id)` answers, keyed by adapter id.
+    adapter_infos: Mutex<HashMap<String, mainframe_types::adapter::AdapterInfo>>,
 }
 
 /// `pin_fork_point`'s configurable failure, for fork_chat's status-mapping tests.
@@ -116,6 +131,7 @@ pub(crate) enum PinFailure {
     Unsupported,
     TranscriptMissing,
     Failed(String),
+    PointNotFound(String),
 }
 
 impl StoreDeps {
@@ -159,6 +175,18 @@ impl StoreDeps {
     pub(crate) fn fail_pin_unsupported(&self) {
         *self.pin_failure.lock().unwrap() = Some(PinFailure::Unsupported);
     }
+    pub(crate) fn fail_pin_point_not_found(&self, reason: &str) {
+        *self.pin_failure.lock().unwrap() = Some(PinFailure::PointNotFound(reason.to_string()));
+    }
+    pub(crate) fn fork_inserts(&self) -> Vec<ForkCreateInput> {
+        self.fork_inserts.lock().unwrap().clone()
+    }
+    pub(crate) fn pin_requests(&self) -> Vec<ForkPinRequest> {
+        self.pin_requests.lock().unwrap().clone()
+    }
+    pub(crate) fn set_history(&self, history: Vec<ChatMessage>) {
+        *self.history.lock().unwrap() = Some(history);
+    }
     pub(crate) fn fail_create_fork(&self, message: &str) {
         *self.create_fork_failure.lock().unwrap() = Some(message.to_string());
     }
@@ -176,6 +204,15 @@ impl StoreDeps {
     }
     pub(crate) fn set_history_sources(&self, sources: Vec<std::path::PathBuf>) {
         *self.history_sources.lock().unwrap() = sources;
+    }
+    pub(crate) fn set_segment_store(&self, store: Arc<dyn crate::segments::SegmentStore>) {
+        let _ = self.segment_store.set(store);
+    }
+    pub(crate) fn set_adapter_info(&self, info: mainframe_types::adapter::AdapterInfo) {
+        self.adapter_infos
+            .lock()
+            .unwrap()
+            .insert(info.id.clone(), info);
     }
     pub(crate) fn set_history_cache_dir(&self, dir: &str) {
         *self.history_cache_dir.lock().unwrap() = Some(dir.to_string());
@@ -647,15 +684,19 @@ impl ChatManagerDeps for StoreDeps {
         request: ForkPinRequest,
     ) -> BoxFuture<'a, Result<ForkSource, ForkPinError>> {
         let failure = self.pin_failure.lock().unwrap().clone();
+        self.pin_requests.lock().unwrap().push(request.clone());
         Box::pin(async move {
             match failure {
                 Some(PinFailure::Unsupported) => Err(ForkPinError::Unsupported),
                 Some(PinFailure::TranscriptMissing) => Err(ForkPinError::TranscriptMissing),
                 Some(PinFailure::Failed(message)) => Err(ForkPinError::Failed(message)),
+                Some(PinFailure::PointNotFound(reason)) => Err(ForkPinError::PointNotFound(reason)),
+                // A cut is echoed as the pinned turn so tests can see it
+                // survive into the stored pending fork.
                 None => Ok(ForkSource {
                     source_session_id: request.source_session_id,
                     resume_path: Some(format!("{}/snapshot.jsonl", request.dest_dir)),
-                    last_turn_id: None,
+                    last_turn_id: request.cut.map(|cut| cut.vendor_message_id),
                 }),
             }
         })
@@ -664,6 +705,7 @@ impl ChatManagerDeps for StoreDeps {
         if let Some(message) = self.create_fork_failure.lock().unwrap().clone() {
             return Err(message);
         }
+        self.fork_inserts.lock().unwrap().push(insert.clone());
         let id = format!("fork-{}", self.store.lock().unwrap().len());
         let chat = Chat {
             id: id.clone(),
@@ -714,6 +756,7 @@ impl ChatManagerDeps for StoreDeps {
             parent_chat_id: Some(Some(insert.parent_chat_id.clone())),
             side_chat_id: None,
             side_chat_waiting: None,
+            orchestration: Default::default(),
         };
         self.store.lock().unwrap().insert(id.clone(), chat.clone());
         self.pending_forks
@@ -751,6 +794,12 @@ impl ChatManagerDeps for StoreDeps {
                     .to_string_lossy()
                     .into_owned()
             })
+    }
+    fn segment_store(&self) -> Option<&dyn crate::segments::SegmentStore> {
+        self.segment_store.get().map(|store| store.as_ref())
+    }
+    fn adapter_info(&self, adapter_id: &str) -> Option<mainframe_types::adapter::AdapterInfo> {
+        self.adapter_infos.lock().unwrap().get(adapter_id).cloned()
     }
     fn chats_find_or_create_side_chat(&self, parent: &Chat) -> Result<(Chat, bool), String> {
         let all = self.raw_chats();
@@ -810,6 +859,7 @@ impl ChatManagerDeps for StoreDeps {
             parent_chat_id: Some(Some(parent.id.clone())),
             side_chat_id: None,
             side_chat_waiting: None,
+            orchestration: Default::default(),
         };
         self.store.lock().unwrap().insert(id, side_chat.clone());
         Ok((side_chat, true))
@@ -834,6 +884,11 @@ struct RecSession {
     responded_calls: Mutex<Vec<ControlResponse>>,
     /// Every `set_permission_mode` call, in order.
     permission_mode_calls: Mutex<Vec<ExecutionMode>>,
+    /// Every `steer` call's message, in order. Steering is always supported.
+    steer_calls: Mutex<Vec<String>>,
+    /// When set, `steer` fails with this message instead of recording the
+    /// call (a Codex `turn/steer` rejected because the turn already ended).
+    steer_err: Mutex<Option<String>>,
 }
 
 impl RecSession {
@@ -850,6 +905,8 @@ impl RecSession {
             images_calls: Mutex::new(Vec::new()),
             responded_calls: Mutex::new(Vec::new()),
             permission_mode_calls: Mutex::new(Vec::new()),
+            steer_calls: Mutex::new(Vec::new()),
+            steer_err: Mutex::new(None),
         })
     }
     fn with_order(label: &str, order: Arc<Mutex<Vec<String>>>) -> Arc<Self> {
@@ -865,6 +922,8 @@ impl RecSession {
             images_calls: Mutex::new(Vec::new()),
             responded_calls: Mutex::new(Vec::new()),
             permission_mode_calls: Mutex::new(Vec::new()),
+            steer_calls: Mutex::new(Vec::new()),
+            steer_err: Mutex::new(None),
         })
     }
 }
@@ -918,6 +977,20 @@ impl AdapterSession for RecSession {
             .lock()
             .unwrap()
             .push((message, uuid));
+        ok()
+    }
+    fn supports_steer(&self) -> bool {
+        true
+    }
+    fn steer(
+        &self,
+        message: String,
+        _uuid: Option<String>,
+    ) -> BoxFuture<'_, Result<(), AdapterError>> {
+        if let Some(msg) = self.steer_err.lock().unwrap().clone() {
+            return Box::pin(async move { Err(AdapterError::Message(msg)) });
+        }
+        self.steer_calls.lock().unwrap().push(message);
         ok()
     }
     fn respond_to_permission(
@@ -1041,6 +1114,121 @@ async fn writes_to_cli_immediately_with_uuid_and_records_queued_ref() {
     assert!(calls[0].1.is_some(), "sendMessage carried a uuid");
     drop(calls);
     assert_eq!(mgr.get_queued_for_chat("c1").len(), 1);
+}
+
+#[tokio::test]
+async fn steer_folds_into_a_working_turn_and_refuses_an_idle_one() {
+    let deps = StoreDeps::arc();
+    let mgr = ChatManager::new(deps);
+    let session = RecSession::new("c1", true, true);
+    seed_active(
+        &mgr,
+        "c1",
+        working_chat("c1", Some("t"), true),
+        session.clone(),
+    );
+
+    mgr.steer_message("c1", "also run the tests").await.unwrap();
+    assert_eq!(
+        *session.steer_calls.lock().unwrap(),
+        vec!["also run the tests".to_string()]
+    );
+    assert!(session.send_message_calls.lock().unwrap().is_empty());
+
+    let idle = RecSession::new("c2", true, true);
+    seed_active(
+        &mgr,
+        "c2",
+        working_chat("c2", Some("t"), false),
+        idle.clone(),
+    );
+    assert!(mgr.steer_message("c2", "x").await.is_err());
+    assert!(idle.steer_calls.lock().unwrap().is_empty());
+}
+
+/// A steer that races the turn's own end (Codex rejects `turn/steer` once the
+/// `expectedTurnId` it names has ended, `turn_steer.rs`) must not leave the
+/// chat falsely marked Working: nothing else will ever flip it back, since
+/// the real turn already finished. Steering never needs to (re)assert
+/// Working at all, so the fix is that it never writes `process_state`.
+#[tokio::test]
+async fn a_steer_that_loses_the_turn_end_race_does_not_relatch_working() {
+    let deps = StoreDeps::arc();
+    let mgr = ChatManager::new(deps.clone());
+    let session = RecSession::new("c1", true, true);
+    *session.steer_err.lock().unwrap() = Some("turn already ended".to_string());
+    seed_active(
+        &mgr,
+        "c1",
+        working_chat("c1", Some("t"), true),
+        session.clone(),
+    );
+
+    let err = mgr.steer_message("c1", "also run the tests").await;
+    assert!(err.is_err());
+    assert!(session.steer_calls.lock().unwrap().is_empty());
+    // Steering must never write `process_state`, successful or not: a new
+    // turn's `set_working` is the only legitimate source of that patch.
+    assert!(
+        deps.updates
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|(_, patch)| patch.process_state.is_none()),
+        "steer must not (re)assert the chat's working state"
+    );
+    // A failed steer calls the adapter before storing anything: the CLI
+    // never received this message, so it must not appear in the
+    // transcript as if it had been.
+    assert!(
+        mgr.get_messages("c1").await.is_empty(),
+        "a failed steer must not store a message the CLI never received"
+    );
+}
+
+/// Review follow-up on 3c86aa74: a steer into a replay-ack adapter (Claude)
+/// is also a queued send (`queued_message_metadata`'s `is_queued`), and must
+/// go through the same `record_queued_ref`/wait-for-the-ack bookkeeping an
+/// ordinary queued `send_message` does — not fire `TurnStarted` itself, or
+/// the chat gets that transition twice: once here, once on the replay ack
+/// (`on_queued_processed`).
+#[tokio::test]
+async fn a_queued_steer_records_a_ref_instead_of_restarting_the_turn() {
+    let deps = StoreDeps::arc();
+    let mgr = ChatManager::new(deps.clone());
+    let session = RecSession::new("c1", true, true);
+    seed_active(
+        &mgr,
+        "c1",
+        working_chat("c1", Some("t"), true),
+        session.clone(),
+    );
+    deps.events.lock().unwrap().clear();
+
+    mgr.steer_message("c1", "also run the tests").await.unwrap();
+
+    assert_eq!(
+        *session.steer_calls.lock().unwrap(),
+        vec!["also run the tests".to_string()]
+    );
+    assert_eq!(
+        mgr.get_queued_for_chat("c1").len(),
+        1,
+        "a steer the adapter also replay-acks must record a queued ref"
+    );
+    assert!(
+        mgr.get_messages("c1").await.iter().any(|m| {
+            m.content.iter().any(|c| {
+                matches!(
+                    c,
+                    mainframe_types::chat::MessageContent::Leaf(
+                        mainframe_types::content::LeafContent::Text { text, .. },
+                    ) if text.contains("also run the tests")
+                )
+            })
+        }),
+        "the steered message is stored, not just queued"
+    );
 }
 
 #[tokio::test]

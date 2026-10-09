@@ -31,8 +31,8 @@ pub mod resolve_executable;
 pub mod title;
 
 pub use adapter::{
-    Adapter, AdapterSession, ContextFiles, ForkPinError, ForkPinRequest, ImageInput, LoadedSkill,
-    SessionSink, StopBackgroundTaskResult,
+    Adapter, AdapterSession, ContextFiles, FORK_CUT_NOT_FOUND_REASON, ForkCut, ForkPinError,
+    ForkPinRequest, ImageInput, LoadedSkill, SessionSink, StopBackgroundTaskResult,
 };
 pub use plan_mode_actions::{
     PlanActionContext, PlanChatUpdate, PlanModeActionHandler, clear_context_and_restart,
@@ -266,13 +266,18 @@ impl AdapterRegistry {
     }
 
     async fn run_refresh(&self, adapter_id: &str) -> Result<(), AdapterError> {
-        // In E2E the only adapter whose live state matters is the mock replay CLI.
-        // Probing claude/codex here costs a `--version` spawn plus a model-catalog
-        // spawn each (~1s a piece when those CLIs are actually installed on the dev
-        // machine), and `/api/adapters` blocks on this refresh — a cost the harness
-        // pays on every describe's daemon boot (100+ a run). Skip the real adapters
-        // and leave them on their seeded fallback snapshot.
-        if adapter_id != "mock-cli" && std::env::var_os("E2E_MODE").is_some() {
+        // In E2E the only adapters whose live state matters are the mock replay
+        // CLIs: the default `mock-cli` and, when the provider-switch harness
+        // registers a second identity for switching between two mocks
+        // (`mainframe-daemon/src/e2e_mock.rs::SECOND_MOCK_ID`), `mock-cli-b`.
+        // This crate sits below `mainframe-daemon` and cannot import that
+        // constant, so the match is by prefix; probing claude/codex here costs
+        // a `--version` spawn plus a model-catalog spawn each (~1s a piece when
+        // those CLIs are actually installed on the dev machine), and
+        // `/api/adapters` blocks on this refresh — a cost the harness pays on
+        // every describe's daemon boot (100+ a run). Skip the real adapters and
+        // leave them on their seeded fallback snapshot.
+        if !adapter_id.starts_with("mock-cli") && std::env::var_os("E2E_MODE").is_some() {
             return Ok(());
         }
         let Some(adapter) = self.adapters.get(adapter_id).map(|e| e.value().clone()) else {

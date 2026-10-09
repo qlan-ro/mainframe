@@ -11,6 +11,7 @@ workspace = true
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+reqwest = { workspace = true }
 tracing = { workspace = true }
 mainframe-types = { workspace = true }
 mainframe-adapter-api = { workspace = true }

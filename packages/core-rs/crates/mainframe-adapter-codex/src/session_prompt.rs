@@ -110,6 +110,12 @@ impl CodexSession {
         if let Some(sum) = &turn_cfg.summary {
             p.insert("summary".into(), json!(sum));
         }
+        if cfg.orchestration_enabled {
+            p.insert(
+                "additionalContext".into(),
+                crate::orchestration_args::additional_context(),
+            );
+        }
         Ok(p)
     }
 

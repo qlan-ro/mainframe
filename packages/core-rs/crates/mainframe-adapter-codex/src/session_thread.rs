@@ -101,12 +101,11 @@ impl CodexSession {
 pub(super) fn permission_mode_policy(mode: ExecutionMode) -> (String, String) {
     match mode {
         ExecutionMode::Yolo => ("never".to_string(), "danger-full-access".to_string()),
-        ExecutionMode::Default | ExecutionMode::AcceptEdits => {
-            ("on-request".to_string(), "workspace-write".to_string())
-        }
+        ExecutionMode::Default => ("untrusted".to_string(), "read-only".to_string()),
+        ExecutionMode::AcceptEdits => ("on-request".to_string(), "workspace-write".to_string()),
         ExecutionMode::Auto => {
             tracing::warn!(
-                "chat is set to the Claude-only `auto` permission mode; Codex runs it as Interactive"
+                "chat is set to the Claude-only `auto` permission mode; Codex runs it as Accept Edits"
             );
             ("on-request".to_string(), "workspace-write".to_string())
         }

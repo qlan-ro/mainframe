@@ -5,6 +5,7 @@ mod adapter;
 mod dispatch;
 mod fixture;
 mod history;
+pub mod mcp_call;
 mod plan_mode_handler;
 mod pump;
 mod session;

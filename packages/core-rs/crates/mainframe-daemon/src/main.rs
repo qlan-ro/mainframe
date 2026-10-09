@@ -14,6 +14,7 @@
 
 mod builtin_plugins;
 mod cli;
+mod e2e_mock;
 mod github_issues_port;
 mod plugin_host_db;
 mod quota_store;
@@ -44,7 +45,6 @@ use mainframe_adapter_claude::trust_store::{
 use mainframe_adapter_codex::CodexAdapter;
 use mainframe_adapter_codex::quota_pull::pull_codex_quota_via_temp_app_server;
 use mainframe_adapter_codex::{CODEX_IDENTITY_TRANSIENT, read_codex_account_identity_from_disk};
-use mainframe_adapter_mock::MockCliAdapter;
 use mainframe_background_tasks::liveness::{LivenessDeps, start_liveness_scheduler};
 use mainframe_background_tasks::reconcile::{
     ReconcileDb, ReconcileDeps, reconcile_background_tasks,
@@ -64,7 +64,7 @@ use mainframe_server::ctx::{AppCtx, DefaultRunner, GitFactory, Services};
 use mainframe_server::db::Db;
 use mainframe_server::{
     RegistryLaunchStopper, RegistryScopeTunnelStopper, build_app, build_automations_engine,
-    build_chat_manager, spawn_broadcast_pump,
+    build_chat_manager, build_orchestration, spawn_broadcast_pump,
 };
 use mainframe_services::attachment::AttachmentStore;
 use mainframe_services::files::FileWatcherService;
@@ -211,11 +211,12 @@ async fn run_daemon() {
         resolved_path.clone(),
     )));
     if std::env::var("E2E_MODE").as_deref() == Ok("mock") {
-        tracing::warn!("E2E mock mode enabled; registering the native replay adapter");
-        adapters.register(Arc::new(MockCliAdapter::with_tracker(
-            Arc::clone(&background_tasks),
-            Arc::clone(&claude_workflows),
-        )));
+        tracing::warn!("E2E mock mode enabled; registering the native replay adapters");
+        for mock in e2e_mock::mock_adapters(&background_tasks, &claude_workflows, |name| {
+            std::env::var(name).ok()
+        }) {
+            adapters.register(Arc::new(mock));
+        }
     }
     adapters.seed_static_snapshots();
 
@@ -313,6 +314,19 @@ async fn run_daemon() {
     // (todo #343): a crash between pin and insert, or a chat row a project
     // removal deleted directly, both bypass on_result's normal retirement.
     chats.sweep_unreferenced_fork_snapshots().await;
+
+    // Orchestration MCP server: attached to the ChatManager before any chat
+    // can spawn, so every spawn carries a credential. Its event loop revokes
+    // credentials on process exit and flushes held agent messages on idle.
+    let orchestration = build_orchestration(
+        Arc::clone(&chats),
+        db.clone(),
+        Arc::clone(&adapters),
+        broadcast.clone(),
+        DAEMON_VERSION,
+        port,
+    );
+    let orchestration_events = orchestration.spawn_event_loop();
 
     // Automations v2 engine (T9.2): built over its own automations.db after the
     // ChatManager exists (the agent port drives chats). A build failure logs and
@@ -413,6 +427,7 @@ async fn run_daemon() {
         lsp_manager: Some(Arc::clone(&lsp_manager)),
         plugin_manager: Some(Arc::clone(&plugin_manager)),
         automations: automations.clone(),
+        orchestration: Some(Arc::clone(&orchestration)),
         quota: Some(quota_manager.clone() as Arc<dyn QuotaService>),
     });
 
@@ -455,6 +470,9 @@ async fn run_daemon() {
         interval_ms: None,
     });
     spawn_reconcile(db.clone(), Arc::clone(&background_tasks));
+    // Tasks whose CLIs died with the previous daemon become interrupted; owed
+    // deliveries wait for each parent's next spawn.
+    orchestration.reconcile_boot().await;
     spawn_worktree_backfill(db.clone());
 
     // allowRefresh() gates a pre-configure probe; refreshAll enriches
@@ -535,6 +553,10 @@ async fn run_daemon() {
     if let Some(automations) = &automations {
         automations.stop();
     }
+    // Credentials are in memory only and the CLIs die with the daemon; revoke
+    // first so no call made during the drain outlives it.
+    orchestration.credentials().revoke_all();
+    orchestration_events.abort();
     chats.dispose();
     plugin_manager.unload_all();
     adapters.kill_all();

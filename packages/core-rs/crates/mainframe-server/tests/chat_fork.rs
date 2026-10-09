@@ -135,6 +135,7 @@ async fn harness(fork_capable: bool, update: ChatUpdate) -> Harness {
         lsp_manager: None,
         plugin_manager: None,
         automations: None,
+        orchestration: None,
         quota: None,
         data_dir: data_dir.path().to_path_buf(),
         version: "0.0.0-test".to_string(),
@@ -308,4 +309,46 @@ async fn an_unknown_body_field_returns_400() {
     let resp = h.fork(&h.chat_id, r#"{"unexpected":true}"#).await;
     assert_eq!(resp.status(), 400);
     assert_eq!(h.chat_count(), before);
+}
+
+// ---- Fork from a message (docs/specs/2026-10-06-fork-from-message.md) ----
+
+#[tokio::test]
+async fn a_null_from_message_id_is_the_whole_chat_fork() {
+    let h = harness(true, with_session()).await;
+    let resp = h.fork(&h.chat_id, r#"{"fromMessageId":null}"#).await;
+    assert_eq!(resp.status(), 200);
+}
+
+#[tokio::test]
+async fn an_invalid_from_message_id_returns_400() {
+    let h = harness(true, with_session()).await;
+    let before = h.chat_count();
+    for body in [r#"{"fromMessageId":""}"#, r#"{"fromMessageId":"a/b"}"#] {
+        let resp = h.fork(&h.chat_id, body).await;
+        assert_eq!(resp.status(), 400, "{body}");
+    }
+    assert_eq!(h.chat_count(), before);
+}
+
+/// The mock chat has no messages, so any id is absent from it — the
+/// eligibility checks pass first, then the message lookup 404s.
+#[tokio::test]
+async fn a_message_not_in_the_chat_returns_404_message_not_found() {
+    let h = harness(true, with_session()).await;
+    let before = h.chat_count();
+    let resp = h.fork(&h.chat_id, r#"{"fromMessageId":"m-unknown"}"#).await;
+    assert_eq!(resp.status(), 404);
+    let body: Value = resp.json().await.unwrap();
+    assert_eq!(body["error"], "Message not found");
+    assert_eq!(h.chat_count(), before);
+}
+
+/// Eligibility runs before the message rules: an adapter that can't fork is
+/// a 422 even when the message id is bogus.
+#[tokio::test]
+async fn adapter_capability_is_checked_before_the_message() {
+    let h = harness(false, with_session()).await;
+    let resp = h.fork(&h.chat_id, r#"{"fromMessageId":"m-unknown"}"#).await;
+    assert_eq!(resp.status(), 422);
 }

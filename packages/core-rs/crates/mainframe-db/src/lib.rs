@@ -12,10 +12,18 @@ use std::rc::Rc;
 
 use rusqlite::Connection;
 
+pub mod chat_handoffs;
+mod chat_native_sessions;
+pub mod chat_segments;
+mod chat_segments_fork;
+mod chat_segments_repo;
+mod chat_segments_switch;
 pub mod chat_tags;
 pub mod chats;
+pub mod delegated_tasks;
 pub mod devices;
 pub mod migrations;
+mod orchestration;
 pub mod projects;
 pub mod schema;
 pub mod settings;
@@ -24,8 +32,11 @@ pub mod tag_color;
 pub mod tags;
 pub mod validate_tag_name;
 
+pub use chat_handoffs::HandoffsRepository;
+pub use chat_segments::{RecordOutcome, SegmentResultDelta, SegmentsRepository};
 pub use chat_tags::ChatTagsRepository;
 pub use chats::{ChatListFilters, ChatUpdate, ChatsRepository, ForkInsert, PendingFork};
+pub use delegated_tasks::DelegatedTasksRepository;
 pub use devices::DevicesRepository;
 pub use projects::ProjectsRepository;
 pub use settings::SettingsRepository;
@@ -89,6 +100,9 @@ pub struct DatabaseManager {
     pub devices: DevicesRepository,
     pub tags: TagsRepository,
     pub chat_tags: ChatTagsRepository,
+    pub segments: SegmentsRepository,
+    pub handoffs: HandoffsRepository,
+    pub delegated_tasks: DelegatedTasksRepository,
 }
 
 impl DatabaseManager {
@@ -115,6 +129,9 @@ impl DatabaseManager {
         let chats = ChatsRepository::new(Rc::clone(&db), Some(chat_tags.clone()));
         let settings = SettingsRepository::new(Rc::clone(&db));
         let devices = DevicesRepository::new(Rc::clone(&db));
+        let segments = SegmentsRepository::new(Rc::clone(&db));
+        let handoffs = HandoffsRepository::new(Rc::clone(&db));
+        let delegated_tasks = DelegatedTasksRepository::new(Rc::clone(&db));
 
         Ok(Self {
             db,
@@ -124,6 +141,9 @@ impl DatabaseManager {
             devices,
             tags,
             chat_tags,
+            segments,
+            handoffs,
+            delegated_tasks,
         })
     }
 

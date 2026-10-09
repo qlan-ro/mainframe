@@ -17,16 +17,16 @@ impl Collaborators {
         deps: &Arc<dyn ChatManagerDeps>,
         active_chats: &Registry,
         messages: &Arc<Mutex<MessageCache>>,
-        permissions: &Arc<Mutex<PermissionManager>>,
+        enricher: &Enricher,
         queued_refs: &QueuedRefs,
         self_ref: &Arc<std::sync::OnceLock<std::sync::Weak<ChatManager>>>,
     ) -> Self {
-        let worktree_offers = deps_offer::build(deps, active_chats, permissions);
+        let worktree_offers = deps_offer::build(deps, active_chats, enricher);
         let event_handler = deps_event::build(
             deps,
             active_chats,
             messages,
-            permissions,
+            enricher,
             queued_refs,
             &worktree_offers,
         );
@@ -34,7 +34,7 @@ impl Collaborators {
             deps,
             active_chats,
             messages,
-            permissions,
+            enricher,
             &event_handler,
             &worktree_offers,
         );
@@ -42,18 +42,12 @@ impl Collaborators {
             deps,
             active_chats,
             messages,
-            permissions,
+            enricher,
             &event_handler,
             &lifecycle,
             self_ref,
         );
-        let config = deps_config::build(
-            deps,
-            active_chats,
-            permissions,
-            &lifecycle,
-            &worktree_offers,
-        );
+        let config = deps_config::build(deps, active_chats, enricher, &lifecycle, &worktree_offers);
         Self {
             event_handler,
             lifecycle,
@@ -70,6 +64,13 @@ impl ChatManager {
         let messages = Arc::new(Mutex::new(MessageCache::new()));
         let permissions = Arc::new(Mutex::new(PermissionManager::new()));
         let queued_refs: QueuedRefs = Arc::new(Mutex::new(Vec::new()));
+        // One slot shared by the lifecycle manager (spawn credentials) and
+        // every enrich (the agent outbox); the daemon attaches it after boot.
+        let enricher = Enricher::new(
+            deps.clone(),
+            permissions.clone(),
+            crate::orchestration_hooks::OrchestrationSlot::default(),
+        );
 
         // Unset until `attach_self()` runs (called from `build_chat_manager` once
         // the manager is behind an `Arc`); until then plan-mode's clear-context
@@ -81,7 +82,7 @@ impl ChatManager {
             &deps,
             &active_chats,
             &messages,
-            &permissions,
+            &enricher,
             &queued_refs,
             &self_ref,
         );
@@ -118,6 +119,8 @@ impl ChatManager {
             worktree_offers: collab.worktree_offers,
             self_ref,
             history_cache,
+            enricher,
+            handoff_locks: super::handoff_locks::HandoffLocks::default(),
         }
     }
 
@@ -158,7 +161,7 @@ impl ChatManager {
     }
 
     pub(super) fn emit(&self, event: DaemonEvent) {
-        enrich_and_emit(self.deps.as_ref(), &self.permissions, event);
+        self.enricher.emit(event);
     }
 
     pub(super) fn get_active(&self, chat_id: &str) -> Option<Arc<Mutex<ActiveChat>>> {

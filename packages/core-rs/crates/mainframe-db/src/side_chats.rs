@@ -51,6 +51,7 @@ impl ChatsRepository {
                 now,
             ],
         )?;
+        crate::chat_segments::ensure_seeded(&self.db, &id)?;
 
         let chat = self
             .get(&id)?

@@ -7,14 +7,15 @@
  * DOMRect because no hover-card primitive was installed there; v2 has one, so
  * the manual portal and `use-row-hover-card` are dropped.
  */
-import { AlertTriangle, FolderGit2, GitBranch, GitFork } from 'lucide-react';
-import type { DetectedPr, TagColor } from '@qlan-ro/mainframe-types';
+import { AlertTriangle, Bot, FolderGit2, GitBranch, GitFork, ListChecks } from 'lucide-react';
+import type { ChatDelegation, DetectedPr, TagColor } from '@qlan-ro/mainframe-types';
 import { Badge } from '@/components/ui/badge';
 import { NoProjectLabel } from '@/features/sessions/NoProjectLabel';
 import { projectColor } from '@/features/sessions/sidebar/project-color';
 import { TAG_CHIP_STYLE } from '@/features/sessions/tags/tag-colors';
 import { worktreeBasename } from '@/features/sessions/sidebar/worktree-basename';
 import { parentLineageValue, type ParentLineageState } from './view-model/fork-lineage';
+import { delegatedByValue } from './view-model/agent-provenance';
 import { ProjectAvatar } from './ProjectAvatar';
 
 /** Fixed-width caption naming the row's value, so the card never leans on icon semantics alone. */
@@ -109,6 +110,45 @@ function ForkedFromRow({ parentState }: { parentState: ParentLineageState }) {
   );
 }
 
+function DelegatedByRow({ parentState, delegation }: { parentState: ParentLineageState; delegation: ChatDelegation }) {
+  return (
+    <div data-testid="sessions-meta-card-delegated-by" className="flex items-center gap-1.5 text-xs">
+      <FieldLabel>Delegated by</FieldLabel>
+      <ListChecks aria-hidden className="size-3 shrink-0 text-muted-foreground" />
+      <span className="truncate">{delegatedByValue(parentLineageValue(parentState), delegation)}</span>
+    </div>
+  );
+}
+
+function StartedByRow({ startedBy }: { startedBy: string }) {
+  return (
+    <div data-testid="sessions-meta-card-started-by" className="flex items-center gap-1.5 text-xs">
+      <FieldLabel>Started by</FieldLabel>
+      <Bot aria-hidden className="size-3 shrink-0 text-muted-foreground" />
+      <span className="truncate">{startedBy}</span>
+    </div>
+  );
+}
+
+/** A delegated child names its parent as the delegator; any other child as the chat it forked from. */
+function LineageRows({
+  parentState,
+  delegation,
+  startedBy,
+}: Pick<SessionMetaCardProps, 'parentState' | 'delegation' | 'startedBy'>) {
+  return (
+    <>
+      {parentState != null &&
+        (delegation != null ? (
+          <DelegatedByRow parentState={parentState} delegation={delegation} />
+        ) : (
+          <ForkedFromRow parentState={parentState} />
+        ))}
+      {startedBy != null && <StartedByRow startedBy={startedBy} />}
+    </>
+  );
+}
+
 function ForkCountRow({ count }: { count: number }) {
   if (count === 0) return null;
   return (
@@ -158,8 +198,12 @@ interface SessionMetaCardProps {
   detectedPrs: DetectedPr[];
   tags: string[];
   colorOf?: (name: string) => TagColor;
-  /** Set only on a fork — the "Forked from" line. */
+  /** Set on any child — the "Forked from" line, or "Delegated by" with `delegation`. */
   parentState?: ParentLineageState;
+  /** Set on a delegated child: its role and live task status. */
+  delegation?: ChatDelegation;
+  /** The quoted title of the chat whose agent launched this one (`chat_launch`). */
+  startedBy?: string;
   /** Listed, non-archived direct forks of this chat — the "Forked Nx" line (omitted at 0). */
   forkCount?: number;
 }
@@ -180,6 +224,8 @@ export function SessionMetaCard({
   tags,
   colorOf,
   parentState,
+  delegation,
+  startedBy,
   forkCount = 0,
 }: SessionMetaCardProps) {
   return (
@@ -194,7 +240,7 @@ export function SessionMetaCard({
         {title}
       </span>
       <ProjectRow projectId={projectId} projectName={projectName} noProject={noProject} />
-      {parentState != null && <ForkedFromRow parentState={parentState} />}
+      <LineageRows parentState={parentState} delegation={delegation} startedBy={startedBy} />
       <ForkCountRow count={forkCount} />
       <WorktreeOrBranchRow worktreePath={worktreePath} branchName={branchName} />
       <PrRow detectedPrs={detectedPrs} />

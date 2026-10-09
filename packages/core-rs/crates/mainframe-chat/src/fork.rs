@@ -1,6 +1,6 @@
 //! Pure helpers for todo #343's fork feature — the pieces `ChatManager::fork_chat`
 //! (`chat_manager/fork_api.rs`) needs that don't touch the registry, the DB or an
-//! adapter: the provisional title rule, the deps-boundary data shapes (so
+//! adapter: the fork point, the provisional title rule, the deps-boundary data shapes (so
 //! `mainframe-chat` never depends on `mainframe-db`'s `PendingFork`/`ForkInsert`),
 //! and the REST-status mapping for `ForkChatError`.
 //!
@@ -8,6 +8,16 @@
 
 use mainframe_types::adapter::{EffortLevel, ForkSource};
 use mainframe_types::settings::ExecutionMode;
+
+/// Where `ChatManager::fork_chat` cuts the parent's conversation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ForkPoint {
+    /// The parent's current end (todo #343's whole-chat fork).
+    Current,
+    /// Immediately before this chat message id, which must name a sent user
+    /// message. The fork holds everything before it and nothing after.
+    BeforeMessage(String),
+}
 
 /// `chats.pending_fork`'s in-memory shape, as it crosses the `ChatManagerDeps` /
 /// `LifecycleManagerDeps` / `EventHandlerDeps` boundary. Mirrors
@@ -51,6 +61,9 @@ pub struct ForkCreateInput {
     pub branch_name: Option<String>,
     pub title: Option<String>,
     pub pending_fork: PendingForkState,
+    /// A multi-segment parent's segments, as the fork copies them. `None`
+    /// gives the fork one initial segment.
+    pub segments: Option<mainframe_types::segment::ForkPlan>,
 }
 
 /// The fork's provisional title: `<parent title> (fork)`, without stacking a
@@ -94,6 +107,27 @@ pub enum ForkChatError {
     DirectoryMissing,
     #[error("Wait for the current turn to finish or interrupt it")]
     TurnInFlight,
+    #[error("Message not found")]
+    MessageNotFound,
+    #[error("fromMessageId must name a user message")]
+    NotAUserMessage,
+    #[error("This message hasn't been sent yet")]
+    MessageNotSent,
+    #[error("Nothing before this message to fork")]
+    NothingBeforeMessage,
+    /// The message lies before the chat's latest provider switch, or opens
+    /// the segment that switch started (it carries the handoff). Names the
+    /// provider switched to.
+    #[error("Can't fork from before the switch to {0}")]
+    BeforeProviderSwitch(String),
+    /// The same rule for a segment a context reset (`/clear`, plan "clear
+    /// context") started: the earlier session is no longer the chat's.
+    #[error("Can't fork from before this chat's context was cleared")]
+    BeforeContextReset,
+    /// The message can't be placed in the provider transcript. The reason
+    /// names why ("Couldn't find this message…", "…joined a turn…").
+    #[error("{0}")]
+    ForkPointUnresolved(String),
     #[error("{0}")]
     PinFailed(String),
     #[error("{0}")]
@@ -104,14 +138,20 @@ impl ForkChatError {
     /// The REST status the Daemon contract table assigns this failure.
     pub fn status_code(&self) -> u16 {
         match self {
-            ForkChatError::NotFound(_) => 404,
+            ForkChatError::NotFound(_) | ForkChatError::MessageNotFound => 404,
+            ForkChatError::NotAUserMessage => 400,
             ForkChatError::Unsupported(_) | ForkChatError::UnavailableWithReason(_) => 422,
             ForkChatError::Temporary
             | ForkChatError::NoProject
             | ForkChatError::NothingToForkYet
             | ForkChatError::TranscriptMissing
             | ForkChatError::DirectoryMissing
-            | ForkChatError::TurnInFlight => 409,
+            | ForkChatError::TurnInFlight
+            | ForkChatError::MessageNotSent
+            | ForkChatError::NothingBeforeMessage
+            | ForkChatError::BeforeProviderSwitch(_)
+            | ForkChatError::BeforeContextReset
+            | ForkChatError::ForkPointUnresolved(_) => 409,
             ForkChatError::PinFailed(_) | ForkChatError::InsertFailed(_) => 500,
         }
     }
@@ -159,6 +199,19 @@ mod tests {
         assert_eq!(ForkChatError::TranscriptMissing.status_code(), 409);
         assert_eq!(ForkChatError::DirectoryMissing.status_code(), 409);
         assert_eq!(ForkChatError::TurnInFlight.status_code(), 409);
+        assert_eq!(ForkChatError::MessageNotFound.status_code(), 404);
+        assert_eq!(ForkChatError::NotAUserMessage.status_code(), 400);
+        assert_eq!(ForkChatError::MessageNotSent.status_code(), 409);
+        assert_eq!(ForkChatError::NothingBeforeMessage.status_code(), 409);
+        assert_eq!(
+            ForkChatError::BeforeProviderSwitch("Codex".into()).status_code(),
+            409
+        );
+        assert_eq!(ForkChatError::BeforeContextReset.status_code(), 409);
+        assert_eq!(
+            ForkChatError::ForkPointUnresolved("gone".into()).status_code(),
+            409
+        );
         assert_eq!(ForkChatError::PinFailed("boom".into()).status_code(), 500);
         assert_eq!(
             ForkChatError::InsertFailed("boom".into()).status_code(),
@@ -175,6 +228,10 @@ mod tests {
         assert_eq!(
             ForkChatError::NothingToForkYet.to_string(),
             "Nothing to fork yet"
+        );
+        assert_eq!(
+            ForkChatError::BeforeProviderSwitch("Codex".into()).to_string(),
+            "Can't fork from before the switch to Codex"
         );
         assert_eq!(
             ForkChatError::UnavailableWithReason(

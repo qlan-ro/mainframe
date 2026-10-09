@@ -1,0 +1,25 @@
+[package]
+name = "mainframe-orchestration"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+sha2 = { workspace = true }
+rand = { workspace = true }
+base64 = { workspace = true }
+chrono = { workspace = true }
+mainframe-types = { workspace = true }
+
+[dev-dependencies]
+# test-util enables the paused clock the wait tests use to prove a wait ends
+# on an event, not a timer.
+tokio = { workspace = true, features = ["test-util"] }

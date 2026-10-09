@@ -162,6 +162,7 @@ fn fallback_chat(project_id: &str, adapter_id: &str, permission_mode: Option<&st
         parent_chat_id: None,
         side_chat_id: None,
         side_chat_waiting: None,
+        orchestration: Default::default(),
     })
 }
 

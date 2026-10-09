@@ -19,6 +19,26 @@ pub trait AdapterSession: Send + Sync {
     fn last_activity_at(&self) -> Option<i64> {
         None
     }
+    /// Whether [`AdapterSession::steer`] can fold a message into a running
+    /// turn. Defaulted to `false`: an adapter without a steer mechanism keeps
+    /// today's behavior, and agents queue instead (`not_steerable`).
+    fn supports_steer(&self) -> bool {
+        false
+    }
+    /// Delivers `message` into the active turn at its next tool boundary,
+    /// never aborting in-flight tool calls.
+    fn steer(
+        &self,
+        message: String,
+        uuid: Option<String>,
+    ) -> BoxFuture<'_, Result<(), AdapterError>> {
+        let _ = (message, uuid);
+        Box::pin(async {
+            Err(AdapterError::Message(
+                "this adapter cannot steer a running turn".to_string(),
+            ))
+        })
+    }
 
     fn spawn(
         &self,

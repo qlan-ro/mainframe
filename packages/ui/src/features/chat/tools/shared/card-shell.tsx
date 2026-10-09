@@ -57,6 +57,9 @@ export interface CollapsibleCardShellProps {
   isError: boolean | undefined;
   /** When true the card body is open on first render (Edit/Todo default true). */
   defaultOpen?: boolean;
+  /** Controlled open state, for a card that opens itself (the `delegate_task` card on a pending gate). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   /** Disable the trigger (no body to show yet). */
   disableTrigger?: boolean;
   /** Leading family glyph — a bare lucide icon; the trigger sizes and inks it. */
@@ -113,6 +116,8 @@ export function CollapsibleCardShell(props: CollapsibleCardShellProps) {
     <Collapsible
       data-testid={props.testId}
       defaultOpen={compactDetail || props.defaultOpen || false}
+      open={props.open}
+      onOpenChange={props.onOpenChange}
       className={cn(cardStyle(props.result, props.isError), 'w-full', props.className)}
     >
       <CardHeader {...props} />

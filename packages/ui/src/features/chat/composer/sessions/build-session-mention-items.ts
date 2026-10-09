@@ -4,8 +4,8 @@
  *
  * Offerability is decided by the daemon's resolution alone: only `resolved`
  * sessions become rows, so `never-started` and `transcript-missing` need no
- * second client-side rule. Archived sessions never arrive here — the caller
- * projects through `regularThreadItemsToSessionItems`.
+ * second client-side rule. Archived sessions and task chats never arrive
+ * here — the caller projects through `listedThreadItemsToSessionItems`.
  */
 import type { TranscriptResolution } from '@qlan-ro/mainframe-types';
 import type { TriggerItem } from '@/components/trigger-engine/types';

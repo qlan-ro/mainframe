@@ -124,6 +124,13 @@ pub enum DaemonEvent {
     /// client reaches every subscriber, not only one subscribed to this chat.
     #[serde(rename = "chat.offloaded")]
     ChatOffloaded { chat_id: String },
+    /// A delegated task's status, work state, or delivery changed. Carries no
+    /// top-level `chatId`, so every client sees it (a parent's row and its
+    /// tasks chip update without subscribing to the child).
+    #[serde(rename = "delegated_task.updated")]
+    DelegatedTaskUpdated {
+        task: crate::orchestration::DelegatedTask,
+    },
     #[serde(rename = "process.started")]
     ProcessStarted {
         chat_id: String,

@@ -131,6 +131,10 @@ pub struct SessionSpawnOptions {
     /// spawn never carries a resume target (todo #346).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub no_persistence: Option<bool>,
+    /// The orchestration MCP endpoint + this spawn's bearer token. Never
+    /// serialized: the token lives only here and in the child's environment.
+    #[serde(skip)]
+    pub orchestration_mcp: Option<crate::orchestration::OrchestrationMcpLaunch>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -702,6 +706,7 @@ mod tests {
             small_fast_model: None,
             default_model: None,
             no_persistence: None,
+            orchestration_mcp: None,
         };
         let v = serde_json::to_value(&opts).unwrap();
         assert!(v.as_object().unwrap().get("noPersistence").is_none());
@@ -719,6 +724,7 @@ mod tests {
             small_fast_model: None,
             default_model: None,
             no_persistence: Some(true),
+            orchestration_mcp: None,
         };
         let v = serde_json::to_value(&opts).unwrap();
         assert_eq!(v["noPersistence"], json!(true));

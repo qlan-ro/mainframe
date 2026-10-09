@@ -75,6 +75,8 @@ interface UiPrefsState {
   sidebarView: SidebarView;
   /** Once true, the mid-session model/effort/feature change warning is suppressed for good. */
   dontWarnOnTuningChange: boolean;
+  /** Once true, switching a chat's provider no longer asks for confirmation. */
+  dontConfirmProviderSwitch: boolean;
   /** Whether the session panel is open. ONE bit for the whole panel — it is a
    *  single docked column of sections, not a stack of cards. This store is the
    *  sole owner so the choice survives a remount and a session switch. */
@@ -92,6 +94,7 @@ interface UiPrefsState {
   setSidebarWidth: (width: number) => void;
   setSidebarView: (view: SidebarView) => void;
   dismissTuningChangeWarning: () => void;
+  dismissProviderSwitchConfirm: () => void;
   toggleSessionPanel: () => void;
   setSessionPanelOpen: (open: boolean) => void;
   toggleSessionPanelSection: (id: SessionPanelOpenSectionId) => void;
@@ -109,6 +112,7 @@ function partializeUiPrefs(s: UiPrefsState) {
     sidebarWidth: s.sidebarWidth,
     sidebarView: s.sidebarView,
     dontWarnOnTuningChange: s.dontWarnOnTuningChange,
+    dontConfirmProviderSwitch: s.dontConfirmProviderSwitch,
     sessionPanelOpen: s.sessionPanelOpen,
     sessionPanelSections: s.sessionPanelSections,
     dialogSizes: s.dialogSizes,
@@ -178,6 +182,7 @@ export const useUiPrefs = create<UiPrefsState>()(
       sidebarWidth: SIDEBAR_DEFAULT_WIDTH,
       sidebarView: 'chats',
       dontWarnOnTuningChange: false,
+      dontConfirmProviderSwitch: false,
       sessionPanelOpen: true,
       sessionPanelSections: {},
       dialogSizes: {},
@@ -187,6 +192,7 @@ export const useUiPrefs = create<UiPrefsState>()(
       setSidebarWidth: (width) => set({ sidebarWidth: clampSidebarWidth(width) }),
       setSidebarView: (sidebarView) => set({ sidebarView }),
       dismissTuningChangeWarning: () => set({ dontWarnOnTuningChange: true }),
+      dismissProviderSwitchConfirm: () => set({ dontConfirmProviderSwitch: true }),
       toggleSessionPanel: () => set((s) => ({ sessionPanelOpen: !s.sessionPanelOpen })),
       setSessionPanelOpen: (sessionPanelOpen) => set({ sessionPanelOpen }),
       toggleSessionPanelSection: (id) =>

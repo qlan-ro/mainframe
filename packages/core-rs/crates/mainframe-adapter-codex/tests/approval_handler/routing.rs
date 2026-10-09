@@ -61,6 +61,32 @@ fn routes_to_ask_user_question_when_plan_mode_false() {
 }
 
 #[test]
+fn mcp_elicitations_are_answered_without_a_gate() {
+    let rec = Recorder::new();
+    let handler = ApprovalHandler::new(rec.sink());
+    let (respond, calls) = recording_respond();
+    handler.handle_request(
+        "mcpServer/elicitation/request",
+        &json!({ "serverName": "mainframe", "message": "Allow?" }),
+        RequestId::Number(50),
+        respond,
+    );
+    let (respond_other, other_calls) = recording_respond();
+    handler.handle_request(
+        "mcpServer/elicitation/request",
+        &json!({ "serverName": "someone-else" }),
+        RequestId::Number(51),
+        respond_other,
+    );
+    assert!(rec.permissions().is_empty());
+    assert_eq!(calls.lock().unwrap()[0].1, json!({ "action": "accept" }));
+    assert_eq!(
+        other_calls.lock().unwrap()[0].1,
+        json!({ "action": "decline" })
+    );
+}
+
+#[test]
 fn routes_to_ask_user_question_when_no_plan_captured() {
     let rec = Recorder::new();
     let handler = ApprovalHandler::new(rec.sink());

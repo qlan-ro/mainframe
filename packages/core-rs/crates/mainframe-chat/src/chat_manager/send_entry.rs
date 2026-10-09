@@ -1,7 +1,7 @@
 //! The message send path + CLI-owned queue delegations off the `ChatManager` facade.
 use super::*;
 
-type LiveSession = (Arc<Mutex<ActiveChat>>, Arc<dyn AdapterSession>);
+pub(super) type LiveSession = (Arc<Mutex<ActiveChat>>, Arc<dyn AdapterSession>);
 
 impl ChatManager {
     pub async fn send_message(
@@ -28,6 +28,20 @@ impl ChatManager {
 
         self.lifecycle.wait_for_interrupt(chat_id).await;
 
+        // Before the spawn: a returning session too full for a delta moves
+        // the segment onto a fresh native session, which the spawn must see.
+        // A CLI-native slash command carries no handoff; it stays pending.
+        let handoff = match &command {
+            Some(cmd) if cmd.source != "mainframe" => None,
+            _ => {
+                let size = handoff_send::OutgoingSize {
+                    text_bytes: content.len() as u64,
+                    attachments: attachment_ids.map_or(0, |ids| ids.len() as u64),
+                };
+                self.prepare_handoff(chat_id, size).await?
+            }
+        };
+
         if !self.session_is_spawned(chat_id) {
             self.lifecycle.start_chat(chat_id).await;
         }
@@ -38,11 +52,20 @@ impl ChatManager {
 
         if let Some(cmd) = command {
             return self
-                .dispatch_command(cmd, &post, &session, chat_id, content)
+                .dispatch_command(cmd, &post, &session, chat_id, content, handoff.as_deref())
                 .await;
         }
-        self.send_plain_text(&post, &session, chat_id, content, attachment_ids)
-            .await
+        self.send_plain_text(
+            &post,
+            &session,
+            chat_id,
+            content,
+            attachment_ids,
+            Delivery::Turn {
+                handoff: handoff.as_deref(),
+            },
+        )
+        .await
     }
 
     /// Stamp turn start (for `onResult`'s `turnDurationMs`) and tell the chat
@@ -115,7 +138,7 @@ impl ChatManager {
         Ok(())
     }
 
-    fn require_live_session(&self, chat_id: &str) -> Result<LiveSession, SendError> {
+    pub(super) fn require_live_session(&self, chat_id: &str) -> Result<LiveSession, SendError> {
         let post = self
             .get_active(chat_id)
             .ok_or_else(|| SendError(format!("Chat {chat_id} not running")))?;

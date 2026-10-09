@@ -13,7 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import type { TranscriptResolution } from '@qlan-ro/mainframe-types';
 import type { TriggerItem } from '@/components/trigger-engine/types';
-import { regularThreadItemsToSessionItems } from '@/features/sessions/view-model/chat-to-thread-custom';
+import { listedThreadItemsToSessionItems } from '@/features/sessions/view-model/task-chats';
 import { resolveSessionTranscripts } from '@/lib/api/session-transcripts';
 import { buildSessionMentionItems, sessionResolutionCandidates } from './build-session-mention-items';
 
@@ -35,7 +35,7 @@ export function useSessionMentionSource(args: {
   // Select the stable store array, derive outside the selector — a derived
   // array inside it returns a fresh reference every read and loops getSnapshot.
   const threadItems = useAuiState((s) => s.threads.threadItems);
-  const sessions = useMemo(() => regularThreadItemsToSessionItems(threadItems), [threadItems]);
+  const sessions = useMemo(() => listedThreadItemsToSessionItems(threadItems), [threadItems]);
 
   // Round-tripped through a joined key so the array's IDENTITY changes only when
   // its CONTENTS do — every thread-list update reprojects `sessions`, and an

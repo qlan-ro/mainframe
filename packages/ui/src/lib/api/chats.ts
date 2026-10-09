@@ -3,7 +3,17 @@
  * All routes are unauthenticated when called from localhost (daemon auth middleware
  * isLocalhost() bypass confirmed in packages/core/src/server/middleware/auth.ts).
  */
-import type { Chat, ClaudeWorkflowRun, SessionTuning, ExecutionMode, PermissionMode } from '@qlan-ro/mainframe-types';
+import type {
+  Chat,
+  ChatSegment,
+  ClaudeWorkflowRun,
+  SessionTuning,
+  ExecutionMode,
+  ForkChatRequest,
+  PermissionMode,
+  SwitchProviderBody,
+} from '@qlan-ro/mainframe-types';
+import { SwitchProviderBodySchema } from '@qlan-ro/mainframe-types';
 import { apiBase, request, requestEmpty } from './http';
 
 /** Body for PATCH /api/chats/:id/config — adapter / model / permission / plan. */
@@ -159,13 +169,24 @@ export const discardChat = (port: number, chatId: string): Promise<void> =>
   requestEmpty('POST', `${apiBase(port)}/api/chats/${chatId}/discard`);
 
 /**
- * Branch a chat's conversation into a new chat (todo #343). No body — the
- * daemon's `deny_unknown_fields` empty struct accepts either no body or `{}`.
- * On failure the daemon's `fail` message (adapter name, or the reason from
- * the Behavior list) surfaces via `ApiRequestError.message`.
+ * Cancel a message the daemon holds for `chatId` until its turn ends (an
+ * agent's `chat_send`, or a task result). 404s once it was delivered.
  */
-export const forkChat = (port: number, chatId: string): Promise<Chat> =>
-  request<Chat>('POST', `${apiBase(port)}/api/chats/${chatId}/fork`);
+export const cancelAgentOutboxEntry = (port: number, chatId: string, entryId: string): Promise<void> =>
+  requestEmpty(
+    'DELETE',
+    `${apiBase(port)}/api/chats/${encodeURIComponent(chatId)}/agent-outbox/${encodeURIComponent(entryId)}`,
+  );
+
+/**
+ * Branch a chat's conversation into a new chat (todo #343). No body forks
+ * the whole chat; `{ fromMessageId }` forks immediately before that sent
+ * user message. The daemon rejects unknown body fields. On failure the
+ * daemon's `fail` message (adapter name, or the reason from the Behavior
+ * list) surfaces via `ApiRequestError.message`.
+ */
+export const forkChat = (port: number, chatId: string, body?: ForkChatRequest): Promise<Chat> =>
+  request<Chat>('POST', `${apiBase(port)}/api/chats/${chatId}/fork`, body);
 
 /**
  * Open (or reveal) a chat's side chat (todo #344). Idempotent — a parent with
@@ -177,3 +198,16 @@ export const forkChat = (port: number, chatId: string): Promise<Chat> =>
  */
 export const openSideChat = (port: number, parentChatId: string): Promise<Chat> =>
   request<Chat>('POST', `${apiBase(port)}/api/chats/${parentChatId}/side-chat`);
+
+/**
+ * Continue a chat on another provider. The daemon kills the current CLI and
+ * spawns nothing; the next send carries the context handoff. The body is
+ * validated before it leaves, and a refusal (turn running, queued messages,
+ * background work, …) surfaces via `ApiRequestError.message`.
+ */
+export const switchChatProvider = (port: number, chatId: string, body: SwitchProviderBody): Promise<Chat> =>
+  request<Chat>('POST', `${apiBase(port)}/api/chats/${chatId}/switch-provider`, SwitchProviderBodySchema.parse(body));
+
+/** The chat's provider segments, in order. */
+export const getChatSegments = (port: number, chatId: string): Promise<ChatSegment[]> =>
+  request<ChatSegment[]>('GET', `${apiBase(port)}/api/chats/${chatId}/segments`);

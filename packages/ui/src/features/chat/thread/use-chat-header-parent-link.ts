@@ -14,13 +14,17 @@ import { useAui, useAuiState } from '@assistant-ui/react';
 import { activeSessionCustom } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { useParentChat } from '@/features/sessions/use-parent-chat';
 import {
+  lineageRelation,
   parentLineageInteractive,
   parentLineageText,
+  type LineageRelation,
   type ParentLineageState,
 } from '@/features/sessions/view-model/fork-lineage';
 
 export interface ChatHeaderParentLink {
   text: string;
+  /** A delegated child reads "Delegated by" and draws the task glyph. */
+  relation: LineageRelation;
   onActivate?: () => void;
 }
 
@@ -50,5 +54,10 @@ export function useChatHeaderParentLink(): ChatHeaderParentLink | null {
   }
 
   if (state == null) return null; // still resolving
-  return { text: parentLineageText(state), onActivate: parentLineageInteractive(state) ? activateParent : undefined };
+  const relation = lineageRelation(custom ?? {});
+  return {
+    text: parentLineageText(state, relation),
+    relation,
+    onActivate: parentLineageInteractive(state) ? activateParent : undefined,
+  };
 }

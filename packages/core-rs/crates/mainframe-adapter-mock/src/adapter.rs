@@ -33,7 +33,16 @@ pub struct MockCliAdapter {
     /// the source instead of returning `Unsupported` (todo #343). Tests opt in
     /// via `with_fork_capable(true)`; default `false` mirrors Codex today.
     fork_capable: bool,
+    /// The last `pin_fork_point` request, so tests can assert the cut the
+    /// chat layer resolved.
+    last_pin_request: Mutex<Option<ForkPinRequest>>,
+    /// A second registration's id and name (the provider-switch e2e needs two
+    /// adapters); `None` is the default `mock-cli` / "Mock CLI".
+    identity: Option<(String, String)>,
 }
+
+const DEFAULT_ID: &str = "mock-cli";
+const DEFAULT_NAME: &str = "Mock CLI";
 
 impl MockCliAdapter {
     /// Build an adapter that reports replayed subagent / background-bash work to
@@ -61,6 +70,39 @@ impl MockCliAdapter {
     pub fn with_fork_capable(mut self, fork_capable: bool) -> Self {
         self.fork_capable = fork_capable;
         self
+    }
+
+    /// Register under another id and display name, so two mock adapters can
+    /// run side by side. Its recordings key comes from
+    /// `E2E_RECORDING_KEY_<ID>` (upper-cased, `-` as `_`) when set, else the
+    /// shared `E2E_RECORDING_KEY`.
+    pub fn with_identity(mut self, id: &str, name: &str) -> Self {
+        self.identity = Some((id.to_string(), name.to_string()));
+        self
+    }
+
+    /// The environment variable naming this adapter's recordings key.
+    pub fn recording_key_var(&self) -> Option<String> {
+        let (id, _) = self.identity.as_ref()?;
+        Some(format!(
+            "E2E_RECORDING_KEY_{}",
+            id.to_ascii_uppercase().replace('-', "_")
+        ))
+    }
+
+    fn recording_key(&self) -> String {
+        self.recording_key_var()
+            .and_then(|var| std::env::var(var).ok())
+            .or_else(|| std::env::var("E2E_RECORDING_KEY").ok())
+            .unwrap_or_else(|| "session".to_string())
+    }
+
+    /// The last request `pin_fork_point` received, if any.
+    pub fn last_pin_request(&self) -> Option<ForkPinRequest> {
+        self.last_pin_request
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 
     fn bridge(&self) -> Option<Arc<TaskBridge>> {
@@ -143,10 +185,12 @@ fn model(
 
 impl Adapter for MockCliAdapter {
     fn id(&self) -> &str {
-        "mock-cli"
+        self.identity.as_ref().map_or(DEFAULT_ID, |(id, _)| id)
     }
     fn name(&self) -> &str {
-        "Mock CLI"
+        self.identity
+            .as_ref()
+            .map_or(DEFAULT_NAME, |(_, name)| name)
     }
     fn capabilities(&self) -> AdapterCapabilities {
         AdapterCapabilities {
@@ -170,7 +214,14 @@ impl Adapter for MockCliAdapter {
     }
 
     fn create_session(&self, options: SessionOptions) -> Arc<dyn AdapterSession> {
-        if let Some(session_id) = options.chat_id.as_deref()
+        // An unsent fork has no session of its own yet; it replays its parent's.
+        let replay_id = options.chat_id.clone().or_else(|| {
+            options
+                .fork_source
+                .as_ref()
+                .map(|source| source.source_session_id.clone())
+        });
+        if let Some(session_id) = replay_id.as_deref()
             && let Some(events) = self.cache.lookup(session_id)
         {
             return Arc::new(ReplaySession::new(options, events).with_bridge(self.bridge()));
@@ -184,7 +235,7 @@ impl Adapter for MockCliAdapter {
                 ));
             }
         };
-        let key = std::env::var("E2E_RECORDING_KEY").unwrap_or_else(|_| "session".to_string());
+        let key = self.recording_key();
         let index = {
             let mut indexes = self.indexes.lock().unwrap_or_else(|e| e.into_inner());
             let index = *indexes.get(&key).unwrap_or(&0);
@@ -218,44 +269,24 @@ impl Adapter for MockCliAdapter {
         &self,
         request: ForkPinRequest,
     ) -> BoxFuture<'_, Result<ForkSource, ForkPinError>> {
+        *self
+            .last_pin_request
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(request.clone());
         if !self.fork_capable {
             return Box::pin(async { Err(ForkPinError::Unsupported) });
         }
+        // The mock has no turns, so `last_turn_id` carries the cut message id
+        // itself; `ReplaySession::load_history` truncates the replay there.
         let source = ForkSource {
             source_session_id: request.source_session_id,
             resume_path: request.session_file_path,
-            last_turn_id: None,
+            last_turn_id: request.cut.map(|cut| cut.vendor_message_id),
         };
         Box::pin(async move { Ok(source) })
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn adapter_trait_resolves_a_plan_mode_handler() {
-        assert!(Adapter::create_plan_mode_handler(&MockCliAdapter::default()).is_some());
-    }
-
-    #[test]
-    fn no_persistence_defaults_to_false() {
-        assert!(!Adapter::capabilities(&MockCliAdapter::default()).no_persistence);
-    }
-
-    #[test]
-    fn with_no_persistence_reports_the_requested_value() {
-        let adapter = MockCliAdapter::default().with_no_persistence(true);
-        assert!(Adapter::capabilities(&adapter).no_persistence);
-    }
-
-    #[test]
-    fn fork_capability_and_pin_follow_the_constructor_flag() {
-        let uncapable = MockCliAdapter::default();
-        assert!(!Adapter::capabilities(&uncapable).fork);
-
-        let capable = MockCliAdapter::default().with_fork_capable(true);
-        assert!(Adapter::capabilities(&capable).fork);
-    }
-}
+#[path = "adapter_tests.rs"]
+mod tests;

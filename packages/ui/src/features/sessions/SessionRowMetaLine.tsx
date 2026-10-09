@@ -14,7 +14,7 @@
  * works, its checkout is just gone; true `destructive` is reserved for the
  * irreversible actions in the menus.
  */
-import { FolderGit2, GitBranch, GitFork, GitPullRequest, Timer } from 'lucide-react';
+import { FolderGit2, GitBranch, GitPullRequest, Timer } from 'lucide-react';
 import type { DetectedPr, TagColor } from '@qlan-ro/mainframe-types';
 import { FadeLabel } from '@/components/ui/fade-label';
 import { Hint } from '@/components/ui/hint';
@@ -22,10 +22,14 @@ import { NoProjectLabel } from '@/features/sessions/NoProjectLabel';
 import { ProviderLogo } from '@/features/shared/ProviderLogo';
 import { TAG_DOT_STYLE } from '@/features/sessions/tags/tag-colors';
 import { cn } from '@/lib/utils';
+import { LINEAGE_GLYPH } from './lineage-glyph';
+import type { LineageRelation } from './view-model/fork-lineage';
 
 /** The fallback fork glyph's content — a non-nested fork whose parent isn't adjacent in this group. */
 export interface ForkFallback {
   hint: string;
+  /** A delegated child's fallback draws the task glyph, not the fork's. */
+  relation: LineageRelation;
   /** Absent when the parent is archived or deleted — the glyph is then inert. */
   onActivate?: () => void;
 }
@@ -61,8 +65,9 @@ interface SessionRowMetaLineProps {
   forkFallback?: ForkFallback;
 }
 
-/** The fallback glyph for a fork whose parent isn't nestable here — a Hint-wrapped GitFork. */
+/** The fallback glyph for a child whose parent isn't nestable here — Hint-wrapped. */
 function ForkFallbackGlyph({ forkFallback }: { forkFallback: ForkFallback }) {
+  const Glyph = LINEAGE_GLYPH[forkFallback.relation];
   return (
     <Hint label={forkFallback.hint}>
       <span
@@ -77,7 +82,7 @@ function ForkFallbackGlyph({ forkFallback }: { forkFallback: ForkFallback }) {
               }
         }
       >
-        <GitFork aria-hidden className={cn(GLYPH_SIZE, 'shrink-0')} />
+        <Glyph aria-hidden className={cn(GLYPH_SIZE, 'shrink-0')} />
       </span>
     </Hint>
   );

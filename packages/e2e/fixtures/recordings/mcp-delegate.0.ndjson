@@ -1,0 +1,9 @@
+{"dir":"in","method":"sendMessage","args":["Delegate a race review of the diff to a child chat"],"delayMs":0}
+{"dir":"out","method":"onInit","args":["e2e-mcp-delegate-parent"],"delayMs":20}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"I'll hand the review to a child chat."}],null],"delayMs":40}
+{"dir":"out","method":"mcp_call","args":[{"toolUseId":"toolu_mcp_delegate_1","tool":"delegate_task","arguments":{"task":"Review the diff for data races. Reply with your findings.","role":"review","title":"Race review"}}],"delayMs":80}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Delegated. I'll pick the result up when it lands."}],null],"delayMs":120}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.004,"usage":{"input_tokens":12,"output_tokens":9},"subtype":"success","is_error":false}],"delayMs":160}
+{"dir":"in","method":"sendMessage","args":["(the daemon delivers the task result here)"],"delayMs":200}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"The child chat found no data races in the diff."}],null],"delayMs":240}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.003,"usage":{"input_tokens":20,"output_tokens":11},"subtype":"success","is_error":false}],"delayMs":280}

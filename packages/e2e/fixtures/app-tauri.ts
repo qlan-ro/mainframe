@@ -52,10 +52,14 @@ export async function launchTauriApp(opts?: {
   recordingKey?: string;
   suppressTour?: boolean;
   mockMaxDelayMs?: number;
+  mockFork?: boolean;
+  mockSwitch?: boolean;
 }): Promise<TauriAppFixture> {
   const daemonHandle = await startDaemon({
     recordingKey: opts?.recordingKey,
     mockMaxDelayMs: opts?.mockMaxDelayMs,
+    mockFork: opts?.mockFork,
+    mockSwitch: opts?.mockSwitch,
   });
   let context: BrowserContext | undefined;
   try {

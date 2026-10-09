@@ -6,12 +6,12 @@ use super::*;
 pub(super) struct OfferDeps {
     deps: Arc<dyn ChatManagerDeps>,
     active_chats: Registry,
-    permissions: Arc<Mutex<PermissionManager>>,
+    enricher: Enricher,
 }
 
 impl WorktreeOfferDeps for OfferDeps {
     fn emit_event(&self, event: DaemonEvent) {
-        enrich_and_emit(self.deps.as_ref(), &self.permissions, event);
+        self.enricher.emit(event);
     }
     fn projects_get_path(&self, project_id: &str) -> Option<String> {
         self.deps.projects_get_path(project_id)
@@ -49,11 +49,11 @@ impl WorktreeOfferDeps for OfferDeps {
 pub(super) fn build(
     deps: &Arc<dyn ChatManagerDeps>,
     active_chats: &Registry,
-    permissions: &Arc<Mutex<PermissionManager>>,
+    enricher: &Enricher,
 ) -> Arc<WorktreeOfferRegistry> {
     Arc::new(WorktreeOfferRegistry::new(Arc::new(OfferDeps {
         deps: deps.clone(),
         active_chats: active_chats.clone(),
-        permissions: permissions.clone(),
+        enricher: enricher.clone(),
     })))
 }

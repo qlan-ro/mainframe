@@ -261,6 +261,8 @@ pub(crate) fn with_parent(block: MessageContent, pid: &str) -> MessageContent {
         MessageContent::Node(N::Compaction { .. }) => MessageContent::Node(N::Compaction {
             parent_tool_use_id: pid,
         }),
+        // A segment divider is chat-level; it never belongs to a subagent.
+        divider @ MessageContent::Node(N::ProviderSwitch { .. }) => divider,
     }
 }
 

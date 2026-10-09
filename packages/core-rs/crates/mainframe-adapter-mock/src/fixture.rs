@@ -1,5 +1,6 @@
 use mainframe_adapter_api::AdapterError;
 use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent};
+use mainframe_types::content::LeafContent;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -101,13 +102,16 @@ pub(crate) fn messages_from_events(events: &[RecordedEvent], chat_id: &str) -> V
 }
 
 fn event_message(event: &RecordedEvent, index: usize, chat_id: &str) -> Option<ChatMessage> {
-    let r#type = match (event.dir.clone(), event.method.as_str()) {
-        (EventDirection::Out, "onMessage") => ChatMessageType::Assistant,
-        (EventDirection::Out, "onToolResult") => ChatMessageType::ToolResult,
+    let (r#type, content) = match (event.dir.clone(), event.method.as_str()) {
+        (EventDirection::Out, "onMessage") => (ChatMessageType::Assistant, event_content(event)?),
+        (EventDirection::Out, "onToolResult") => {
+            (ChatMessageType::ToolResult, event_content(event)?)
+        }
+        // A recorded prompt is a user turn, as in a real CLI's transcript —
+        // a from-message fork resolves its cut against these.
+        (EventDirection::In, "sendMessage") => (ChatMessageType::User, prompt_content(event)?),
         _ => return None,
     };
-    let content =
-        serde_json::from_value::<Vec<MessageContent>>(event.args.first()?.clone()).ok()?;
     Some(ChatMessage {
         id: format!("mock-history-{index}"),
         chat_id: chat_id.to_string(),
@@ -116,4 +120,16 @@ fn event_message(event: &RecordedEvent, index: usize, chat_id: &str) -> Option<C
         timestamp: String::new(),
         metadata: None,
     })
+}
+
+fn event_content(event: &RecordedEvent) -> Option<Vec<MessageContent>> {
+    serde_json::from_value::<Vec<MessageContent>>(event.args.first()?.clone()).ok()
+}
+
+fn prompt_content(event: &RecordedEvent) -> Option<Vec<MessageContent>> {
+    let text = event.args.first()?.as_str()?.to_string();
+    Some(vec![MessageContent::Leaf(LeafContent::Text {
+        text,
+        parent_tool_use_id: None,
+    })])
 }

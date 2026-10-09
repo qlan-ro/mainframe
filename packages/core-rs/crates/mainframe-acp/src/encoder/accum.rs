@@ -30,6 +30,7 @@ pub(super) struct Accum {
     pub(super) error_text: Option<String>,
     pub(super) skill_loaded: Option<SkillLoadedMeta>,
     pub(super) is_compacted: bool,
+    pub(super) provider_switch: Option<mainframe_types::segment::ProviderSwitchMarker>,
 }
 
 impl Accum {
@@ -43,6 +44,7 @@ impl Accum {
             error_text: None,
             skill_loaded: None,
             is_compacted: false,
+            provider_switch: None,
         }
     }
 
@@ -102,6 +104,7 @@ impl Accum {
                     error_text: self.error_text.take(),
                     skill_loaded: self.skill_loaded.take(),
                     is_compacted: std::mem::take(&mut self.is_compacted).then_some(true),
+                    provider_switch: self.provider_switch.take(),
                     streaming,
                     presentation_sources,
                     ..container.base_meta()

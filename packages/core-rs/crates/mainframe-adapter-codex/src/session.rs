@@ -38,6 +38,8 @@ use crate::types::{ThreadStartResult, TurnStartResult};
 
 #[path = "session_model.rs"]
 mod model;
+#[path = "turn_steer.rs"]
+mod steer;
 
 const HANDSHAKE_TIMEOUT_MS: u64 = 10_000;
 type OnExitCallback = Box<dyn FnOnce() + Send>;
@@ -50,6 +52,12 @@ struct PendingConfig {
     tuning: Option<ResolvedTuning>,
     codex_provider_tuning: CodexProviderTuning,
     no_persistence: bool,
+    /// Set from `SessionSpawnOptions::orchestration_mcp.is_some()` at spawn
+    /// time: whether this chat's `codex app-server` actually has the
+    /// `mainframe` MCP server, so `turn/start` only carries the orchestration
+    /// `additionalContext` entry (`session_prompt.rs::prompt_params`) for a
+    /// chat that really has the tools.
+    orchestration_enabled: bool,
 }
 
 impl Default for PendingConfig {
@@ -61,6 +69,7 @@ impl Default for PendingConfig {
             tuning: None,
             codex_provider_tuning: CodexProviderTuning::default(),
             no_persistence: false,
+            orchestration_enabled: false,
         }
     }
 }
@@ -168,10 +177,21 @@ mod tests {
         assert_eq!(path.as_deref(), Some("/opt/homebrew/bin:/usr/bin"));
     }
     #[test]
-    fn permission_mode_policy_coerces_auto_to_interactive() {
-        let interactive = ("on-request".to_string(), "workspace-write".to_string());
-        assert_eq!(permission_mode_policy(ExecutionMode::Default), interactive);
-        assert_eq!(permission_mode_policy(ExecutionMode::Auto), interactive);
+    fn permission_mode_policy_asks_before_every_edit_on_default() {
+        assert_eq!(
+            permission_mode_policy(ExecutionMode::Default),
+            ("untrusted".to_string(), "read-only".to_string())
+        );
+    }
+
+    #[test]
+    fn permission_mode_policy_coerces_auto_to_accept_edits() {
+        let accept_edits = ("on-request".to_string(), "workspace-write".to_string());
+        assert_eq!(
+            permission_mode_policy(ExecutionMode::AcceptEdits),
+            accept_edits
+        );
+        assert_eq!(permission_mode_policy(ExecutionMode::Auto), accept_edits);
         assert_eq!(
             permission_mode_policy(ExecutionMode::Yolo),
             ("never".to_string(), "danger-full-access".to_string())
