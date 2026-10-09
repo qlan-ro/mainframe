@@ -1,5 +1,14 @@
 # @qlan-ro/mainframe-app-tauri
 
+## 2.2.8
+
+### Patch Changes
+
+- [#772](https://github.com/qlan-ro/mainframe/pull/772) [`1bea6f0`](https://github.com/qlan-ro/mainframe/commit/1bea6f060be230257a163787e290a98c34e59f8c) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Codex's Default permission mode now asks before every edit and every command, matching what "Interactive" already promises in the permission menu. It used to edit files and run commands without asking, just like Accept Edits. Existing Codex chats left in Default mode will start seeing approval prompts; pick Accept Edits for the old auto-edit behavior. This also lets a Claude chat in Default mode delegate to a Codex chat, since both now carry the same real privilege.
+
+- Updated dependencies [[`1bea6f0`](https://github.com/qlan-ro/mainframe/commit/1bea6f060be230257a163787e290a98c34e59f8c), [`1bea6f0`](https://github.com/qlan-ro/mainframe/commit/1bea6f060be230257a163787e290a98c34e59f8c), [`1bea6f0`](https://github.com/qlan-ro/mainframe/commit/1bea6f060be230257a163787e290a98c34e59f8c), [`1bea6f0`](https://github.com/qlan-ro/mainframe/commit/1bea6f060be230257a163787e290a98c34e59f8c), [`1bea6f0`](https://github.com/qlan-ro/mainframe/commit/1bea6f060be230257a163787e290a98c34e59f8c), [`1bea6f0`](https://github.com/qlan-ro/mainframe/commit/1bea6f060be230257a163787e290a98c34e59f8c)]:
+  - @qlan-ro/mainframe-ui@2.8.0
+
 ## 2.2.7
 
 ### Patch Changes
