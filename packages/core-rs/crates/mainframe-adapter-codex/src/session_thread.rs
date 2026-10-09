@@ -101,7 +101,7 @@ impl CodexSession {
 pub(super) fn permission_mode_policy(mode: ExecutionMode) -> (String, String) {
     match mode {
         ExecutionMode::Yolo => ("never".to_string(), "danger-full-access".to_string()),
-        ExecutionMode::Default => ("untrusted".to_string(), "read-only".to_string()),
+        ExecutionMode::Default => ("on-request".to_string(), "read-only".to_string()),
         ExecutionMode::AcceptEdits => ("on-request".to_string(), "workspace-write".to_string()),
         ExecutionMode::Auto => {
             tracing::warn!(

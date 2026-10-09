@@ -25,6 +25,7 @@ import { useAui } from '@assistant-ui/react';
 import { ExternalLink, ListChecks } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
+import { openInSplit } from '@/features/chat/zones/open-in-split';
 import { CollapsibleCardShell, ErrorBody, StatusDot, resolveResultText } from '../tools/shared';
 import { useCompactDetail } from '../tools/shared/compact-detail-context';
 import { useTranscriptScope } from '../messages/compact/transcript-scope';
@@ -43,7 +44,7 @@ function argText(args: Record<string, unknown>, key: string): string | undefined
 
 function OpenChild({ taskId, archived, onOpen }: { taskId: string; archived: boolean; onOpen?: () => void }) {
   // aui's switchToThread unarchives an archived thread before opening it.
-  const label = archived ? "Restore and open the task's chat" : "Open the task's chat";
+  const label = archived ? "Restore and open the task's chat beside this one" : "Open the task's chat beside this one";
   return (
     <Hint label={label}>
       <Button
@@ -73,13 +74,31 @@ function useAutoOpen(needsYou: boolean): [boolean, (open: boolean) => void] {
   return [open, setOpen];
 }
 
-/** The child's list row, whether it (or a task below it) waits on the user, and how to open it. */
+/**
+ * The child's list row, whether it (or a task below it) waits on the user,
+ * and how to open it: beside the parent (the chat this card lives in), via
+ * the same `openInSplit` gesture the tab strip's ⌘-click and "Fork from
+ * here" use, never a plain `switchToThread` that would replace the parent on
+ * screen. `openInSplit` opens a fresh pair, or retargets the split's other
+ * slot, with the parent's slot and visibility untouched either way; when the
+ * child is already a member of the visible split it is a no-op, and the
+ * `switchToThread` below only moves focus onto it (also unarchiving it, for
+ * an archived child). A window too narrow for two zones parks the pair
+ * exactly as fork leaves it — rendering, not this call, decides that.
+ */
 function useTaskChild(childChatId: string | undefined) {
   const aui = useAui();
   const items = useSessionItems();
   const child = childChatId == null ? undefined : findSession(items, childChatId);
   const needsYou = child != null && (child.custom.hasPending || child.custom.delegatedWaiting === true);
-  const openChild = child == null ? undefined : () => aui.threads.switchToThread(child.id);
+  const openChild =
+    child == null
+      ? undefined
+      : () => {
+          const { mainThreadId } = aui.threads.getState();
+          openInSplit(mainThreadId, child.id);
+          aui.threads.switchToThread(child.id);
+        };
   return { child, needsYou, openChild };
 }
 

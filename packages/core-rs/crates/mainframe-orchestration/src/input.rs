@@ -125,7 +125,10 @@ pub fn text_schema(description: &str) -> Value {
 pub fn permission_mode_schema() -> Value {
     json!({
         "enum": ["default", "acceptEdits", "auto", "yolo"],
-        "description": "Permission mode; may not exceed the caller's."
+        "description": "Permission mode for the child; never exceeds the caller's effective \
+            privilege (see capabilities). Omit it to inherit the caller's mode, clamped to \
+            what the target adapter supports. Set it only to restrict the child on purpose, \
+            or when the user asks."
     })
 }
 

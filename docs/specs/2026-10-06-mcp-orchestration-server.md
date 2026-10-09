@@ -389,7 +389,7 @@ Shared definitions (JSON Schema draft 2020-12; every object has `additionalPrope
 
 | Tool | Input (`properties`; required in **bold**) | Result |
 |---|---|---|
-| `capabilities` | `{}` | `{caller:{chatId,projectId,adapterId,model,permissionMode,planMode,depth}, adapters:[{id,name,installed,available,unavailableReason,models:[{id,label}],steer:bool}], allowedPermissionModes:{[adapterId]:[PermissionMode]}, limits:{maxDepth,maxActiveTasksPerTree,activeTasksInTree,launchesRemaining,defaultWaitMs,maxWaitMs,maxSingleWaitMs,readMaxItems,readMaxChars}}`. `allowedPermissionModes` is keyed by adapter id, not one flat list: the ceiling compares *effective* privilege (Security), which a mode's label does not carry across providers, so the same caller's allowed set can differ by target adapter. `maxSingleWaitMs` is the per-call cap every blocking wait tool actually honors (see `chat_wait`), so an agent reading `timeoutMs`/`waitMs` back lower than it asked for knows why. |
+| `capabilities` | `{}` | `{caller:{chatId,projectId,adapterId,model,permissionMode,planMode,depth}, adapters:[{id,name,installed,available,unavailableReason,models:[{id,label}],steer:bool}], allowedPermissionModes:{[adapterId]:[PermissionMode]}, permissionModeMeanings:{[adapterId]:{[PermissionMode]:string}}, limits:{maxDepth,maxActiveTasksPerTree,activeTasksInTree,launchesRemaining,defaultWaitMs,maxWaitMs,maxSingleWaitMs,readMaxItems,readMaxChars}}`. `allowedPermissionModes` is keyed by adapter id, not one flat list: the ceiling compares *effective* privilege (Security), which a mode's label does not carry across providers, so the same caller's allowed set can differ by target adapter. `permissionModeMeanings` carries the same keys, one-line each (e.g. Codex `default`: "asks before writes and network; reads run free in the read-only sandbox") — a static string table (`policy::mode_meaning`), not a live probe, so an agent can tell what a mode actually does on a given adapter before choosing to override the caller's inherited one. `maxSingleWaitMs` is the per-call cap every blocking wait tool actually honors (see `chat_wait`), so an agent reading `timeoutMs`/`waitMs` back lower than it asked for knows why. |
 | `chat_list` | `projectId: Id` (default: caller's), `status: "active"\|"archived"\|"all"` (default active), `titleContains: string ≤200`, `includeDelegated: bool` (default true), `limit: 1–100` (default 50), `offset: ≥0` | `{projectId, chats:[ChatSummary], total, nextOffset\|null}`. Side chats, temporary chats, and automation chats are excluded. |
 | `chat_read` | **`chatId: Id`**, `view: "messages"\|"activity"` (default messages), `cursor: string ≤128`, `limit: 1–100` (default 20), `maxChars: 200–8000` (default 2000), `fromEnd: bool` (default true when no cursor), `messageId: Id` + `textOffset: ≥0` (continue one truncated item) | `{chatId, state, items:[{position, messageId, role:"user"\|"assistant"\|"tool"\|"system"\|"error"\|"permission", origin:"human"\|"agent"\|"provider"\|"mainframe", toolName\|null, text, textTruncated, nextTextOffset\|null, timestamp}], nextCursor\|null, lastPosition}` |
 | `chat_wait` | **`chatId: Id`**, `until: ["idle","waiting_for_permission","ended"]` subset (default all), `timeoutMs: TimeoutMs` (default 600000); the caller may not name its own `chatId` (`invalid_request`) | `{chatId, state, matched, waitTimedOut, stillWaiting, remainingMs\|null, lastAssistantText\|null (≤4000), pendingPermission:{toolName,summary}\|null}`. Each call actually blocks for at most `policy::MAX_SINGLE_WAIT_MS` (45 s), well under `timeoutMs`; see Security. A call that returns before `timeoutMs` has elapsed because it hit that cap, not because anything happened, reports `stillWaiting: true`, `waitTimedOut: false`, and `remainingMs` set to what is left of the *original* `timeoutMs` — call again with `timeoutMs: remainingMs` to keep waiting against the same overall budget, not a fresh one; passing the same `timeoutMs` back on every call instead would make `stillWaiting` true forever, since every call would then recompute against a full, unspent-looking budget. `waitTimedOut: true` (with `remainingMs: null`) means a call's own (possibly already-reduced) `timeoutMs` is itself now exhausted with nothing happening. |
@@ -521,8 +521,9 @@ entry does not exist, and it is behind the normal auth layer.
   This is the `resolveAndValidatePath` equivalent, because worktrees live outside the project root.
 - **Privilege ceiling.** Ranks: `default 0 < acceptEdits 1 < auto 2 < yolo 3` **by label**, but the
   ceiling compares *effective* rank (`policy::effective_mode_rank(adapter_id, mode)`), not the label.
-  Codex `default` really does ask before every edit and every command — approval `untrusted` plus
-  sandbox `read-only` (`mainframe-adapter-codex::session_thread::permission_mode_policy`, todo #772) —
+  Codex `default` asks before anything that writes or needs the network; reads and searches run
+  inside the sandbox with no prompt — approval `on-request` plus sandbox `read-only`
+  (`mainframe-adapter-codex::session_thread::permission_mode_policy`, todo #772) —
   the same real privilege as Claude's `default`, effective rank 0. Codex `acceptEdits` and `auto` both
   map to approval `on-request` plus sandbox `workspace-write`, i.e. unprompted edits, the same real
   privilege as Claude's `acceptEdits`, effective rank 1. Only Codex `yolo` (`never`/`danger-full-access`)
@@ -977,6 +978,43 @@ ceiling again:
   unreachable, unverified live).
 - **Changeset:** `codex-default-asks-before-editing.md` — existing Codex chats left in `default` will
   start seeing approval prompts; `acceptEdits` keeps the old auto-edit behavior.
+
+### Codex `default` moves from `untrusted` to `on-request`, so it stays usable (2026-10-09, todo #772 continued)
+
+Live use found `untrusted` asks about nearly every command, not just writes: a delegated Codex
+`default` child's commands are typically unique compound `zsh -c "rg …; git diff …"` lines, so
+Accept-for-session (`acceptForSession`, `approval_handler/answers.rs`) never matches a second one,
+and the user saw an endless stream of `command_execution` approval prompts even for read-only
+commands. Fixed by changing the sandbox-escalation trigger instead of the approval policy's
+asking frequency:
+
+- **`permission_mode_policy` maps `default` to `(on-request, read-only)`** (was
+  `(untrusted, read-only)` from earlier the same day), reconfirmed on a freshly regenerated schema
+  (`codex app-server generate-json-schema --experimental`, codex-cli 0.155.1 — see
+  `docs/research/adapters/codex/CONSUMED-SURFACE.md` CODEX-RPC-02b). The sandbox, not the approval
+  policy, is what makes `default` safe: `read-only` blocks every write and all network access
+  regardless of approval policy, so reads and searches now run freely inside it with no prompt at
+  all, while anything that writes or needs the network still fails inside the sandbox and has to
+  explicitly ask to escalate — `default` still never edits or reaches the network without approval,
+  it just stops asking about reads. `acceptEdits`, `auto`, and `yolo` are unchanged.
+- **`effective_mode_rank("codex", Default)` stays `0`.** The real privilege did not change: both
+  `untrusted`/`read-only` and `on-request`/`read-only` block every write and all network access
+  without a prompt-free path, so Codex `default` is still exactly as privileged as Claude's
+  `default` — only how often it *asks about reads* changed, and the ceiling only ever compares
+  what a mode can do unprompted, not how it is implemented.
+- **Escalation request type confirmed unchanged.** The schema's `ServerRequest` union names the
+  escalation path exactly as before: `item/commandExecution/requestApproval`
+  (`CommandExecutionRequestApprovalParams`, carrying `additionalPermissions` for the requested
+  filesystem/network grant) for a shell command the sandbox denies, and
+  `item/fileChange/requestApproval` for a non-shell edit — both already mapped to a permission
+  prompt (CODEX-CTRL-01). Switching from `untrusted` to `on-request` does not introduce the
+  `permissions` named-profile thread/turn param that pairs with the believed-unreachable
+  `item/permissions/requestApproval` (CODEX-CTRL-01's known gap): Mainframe still only ever sends
+  `sandbox`/`sandboxPolicy`, never `permissions`, on every mode including this one, so that gap
+  stays unreached, not newly exposed.
+- **Changeset:** `codex-default-asks-before-editing.md` updated in place (not a second entry) —
+  Default now asks before edits, commands that write, and network access, while reads run freely;
+  it no longer asks about nearly every command the way the same-day `untrusted` version did.
 
 ### Pending live verification (Gate 0)
 

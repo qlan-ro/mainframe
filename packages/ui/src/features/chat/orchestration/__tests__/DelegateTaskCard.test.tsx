@@ -6,10 +6,15 @@ import type { SessionCustom } from '@/features/sessions/view-model/chat-to-threa
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { auiState, entry, setSessions, switchToThread } from './fixtures';
 
+const { openInSplit } = vi.hoisted(() => ({ openInSplit: vi.fn(() => true) }));
+
 vi.mock('@assistant-ui/react', () => ({
   useAuiState: (sel: (s: typeof auiState) => unknown) => sel(auiState),
-  useAui: () => ({ threads: { switchToThread } }),
+  useAui: () => ({
+    threads: { switchToThread, getState: () => ({ mainThreadId: auiState.threadListItem?.id }) },
+  }),
 }));
+vi.mock('@/features/chat/zones/open-in-split', () => ({ openInSplit }));
 vi.mock('../TaskChatTranscript', () => ({
   TaskChatTranscript: ({ chatId, taskId }: { chatId: string; taskId: string }) => (
     <div data-testid="stub-task-chat">{`${chatId}:${taskId}`}</div>
@@ -48,7 +53,10 @@ function withChild(custom: Partial<SessionCustom> = {}, status: 'regular' | 'arc
   setSessions(entry('parent'), [{ ...kid, title: 'Race review', status }]);
 }
 
-beforeEach(() => switchToThread.mockReset());
+beforeEach(() => {
+  switchToThread.mockReset();
+  openInSplit.mockReset().mockReturnValue(true);
+});
 
 describe('DelegateTaskCard — header', () => {
   it('follows the child row: its title, its live status, and an open link', async () => {
@@ -61,6 +69,22 @@ describe('DelegateTaskCard — header', () => {
     expect(screen.getByTestId('chat-tool-delegate-task-status')).toHaveAttribute('data-status', 'waiting');
 
     await userEvent.click(screen.getByTestId('chat-tool-delegate-task-open-task_kid'));
+    // Opens beside the parent (the active thread, 'parent') rather than
+    // replacing it outright: the split absorbs the gesture first, and
+    // `switchToThread` only moves focus onto the now-visible child.
+    expect(openInSplit).toHaveBeenCalledWith('parent', 'kid');
+    expect(switchToThread).toHaveBeenCalledWith('kid');
+  });
+
+  it("does not replace the active thread when the split can't absorb the gesture", async () => {
+    // e.g. the child is already a member of the visible split — openInSplit
+    // falls through (returns false) and the card still just focuses it.
+    openInSplit.mockReturnValue(false);
+    withChild();
+    render(card({ result: RESULT }));
+
+    await userEvent.click(screen.getByTestId('chat-tool-delegate-task-open-task_kid'));
+    expect(openInSplit).toHaveBeenCalledWith('parent', 'kid');
     expect(switchToThread).toHaveBeenCalledWith('kid');
   });
 
@@ -68,7 +92,7 @@ describe('DelegateTaskCard — header', () => {
     withChild({}, 'archived');
     render(card({ result: RESULT }));
     expect(screen.getByTestId('chat-tool-delegate-task-open-task_kid')).toHaveAccessibleName(
-      "Restore and open the task's chat",
+      "Restore and open the task's chat beside this one",
     );
   });
 

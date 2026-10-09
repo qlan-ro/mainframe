@@ -177,10 +177,10 @@ mod tests {
         assert_eq!(path.as_deref(), Some("/opt/homebrew/bin:/usr/bin"));
     }
     #[test]
-    fn permission_mode_policy_asks_before_every_edit_on_default() {
+    fn permission_mode_policy_asks_before_writes_and_network_on_default() {
         assert_eq!(
             permission_mode_policy(ExecutionMode::Default),
-            ("untrusted".to_string(), "read-only".to_string())
+            ("on-request".to_string(), "read-only".to_string())
         );
     }
 
