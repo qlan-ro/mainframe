@@ -29,6 +29,7 @@
  *   chat-task-result-card-<taskId> — the delivered result in the parent
  *   chat-header-tasks-chip / chat-header-task-row-<taskId> — the parent's tasks chip
  *   chat-header-parent-link     — the child's "Delegated by" link
+ *   chat-zone-<chatId>          — a split zone, one per chat shown side by side
  */
 
 import { test, expect } from '@playwright/test';
@@ -80,9 +81,20 @@ test.describe('§mcp-delegate (mock CLI calls the real /mcp endpoint)', () => {
     await expect(transcript).toContainText('No data races found', { timeout: 15_000 });
   });
 
-  test('the card opens the child, which links back to its delegator', async () => {
+  test('the card opens the child in a split beside the parent, which links back to its delegator', async () => {
     const { page } = app;
+    const card = page.getByTestId('chat-tool-delegate-task-card');
+    await expect(card).toBeVisible();
+
     await page.locator('[data-testid^="chat-tool-delegate-task-open-"]').click();
+
+    // Opened beside the parent, not instead of it: two zones on screen, and
+    // the parent's own delegate card is still visible in its zone. Scoped to
+    // `data-focused` (only each zone's own root carries it) so it doesn't also
+    // pick up that zone's `chat-zone-strip-<id>` header and `chat-zone-close-<id>` button.
+    await expect(page.locator('[data-testid^="chat-zone-"][data-focused]')).toHaveCount(2);
+    await expect(card).toBeVisible();
+
     const parentLink = page.getByTestId('chat-header-parent-link').first();
     await expect(parentLink).toContainText('Delegated by', { timeout: 15_000 });
     await expect(page.getByTestId('sessions-row')).toHaveCount(1);

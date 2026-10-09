@@ -41,6 +41,11 @@ export const auiState: { threadListItem: FakeEntry | undefined; threads: { threa
   threads: { threadItems: [] },
 };
 
+/** The card's own chat — the parent — is always the active thread in these tests. */
+export function mainThreadId(): string | undefined {
+  return auiState.threadListItem?.id;
+}
+
 export function setSessions(active: FakeEntry, others: FakeEntry[] = []): void {
   auiState.threadListItem = active;
   auiState.threads = { threadItems: [active, ...others] };
