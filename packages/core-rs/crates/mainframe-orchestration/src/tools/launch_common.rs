@@ -342,9 +342,10 @@ mod tests {
 
     #[test]
     fn a_claude_default_parent_can_delegate_to_codex_and_the_child_gets_codex_default() {
-        // Codex `default` now really does ask before every edit and every
-        // command (approval `untrusted`, sandbox `read-only`), the same
-        // real privilege as Claude's `default` (rank 0 on both). Rule 1
+        // Codex `default` (approval `on-request`, sandbox `read-only`) asks
+        // before anything that writes or needs the network; reads run free
+        // in the sandbox — the same real privilege as Claude's `default`
+        // (rank 0 on both). Rule 1
         // (keep the caller's own valid label) applies: a Claude `default`
         // caller with no explicit `permissionMode` must be able to
         // delegate to Codex, and the child must get Codex `default`, not be

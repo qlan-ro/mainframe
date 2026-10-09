@@ -65,12 +65,14 @@ pub fn mode_rank(mode: ExecutionMode) -> u8 {
 }
 
 /// The mode's real privilege on `adapter_id`, for the ceiling. Mode *labels*
-/// do not carry the same privilege on every provider. Codex `default` now
-/// really does ask before every edit and every command (approval
-/// `untrusted` plus sandbox `read-only`
-/// (`mainframe-adapter-codex::session_thread::permission_mode_policy`)) — the
-/// same real privilege as Claude's `default`, rank 0. Codex `acceptEdits`
-/// and `auto` both map to approval `on-request` plus sandbox
+/// do not carry the same privilege on every provider. Codex `default` maps
+/// to approval `on-request` plus sandbox `read-only`
+/// (`mainframe-adapter-codex::session_thread::permission_mode_policy`): reads
+/// and searches run inside the read-only sandbox without a prompt, but
+/// anything that writes or needs the network is blocked by the sandbox and
+/// has to ask for escalation first, so it still never edits without
+/// approval — the same real privilege as Claude's `default`, rank 0. Codex
+/// `acceptEdits` and `auto` both map to approval `on-request` plus sandbox
 /// `workspace-write`: they edit the workspace unprompted, the same real
 /// privilege as Claude's `acceptEdits`, rank 1. Only Codex `yolo` (`never`
 /// approval, `danger-full-access`) is more privileged, rank 3.
@@ -84,6 +86,37 @@ pub fn effective_mode_rank(adapter_id: &str, mode: ExecutionMode) -> u8 {
         }
     } else {
         mode_rank(mode)
+    }
+}
+
+/// A one-line, human-readable meaning of `mode` on `adapter_id`, for
+/// `capabilities` — a static string table, cheap to report alongside the
+/// rank, not a live probe. Codex's values restate `permission_mode_policy`'s
+/// approval/sandbox pair in plain language; Claude's restate its CLI's own
+/// documented mode behavior (`docs/research/adapters/claude/PERMISSIONS.md`).
+#[must_use]
+pub fn mode_meaning(adapter_id: &str, mode: ExecutionMode) -> &'static str {
+    if adapter_id == "codex" {
+        match mode {
+            ExecutionMode::Default => {
+                "asks before writes and network; reads run free in the read-only sandbox"
+            }
+            ExecutionMode::AcceptEdits | ExecutionMode::Auto => {
+                "edits the workspace without asking; network still asks"
+            }
+            ExecutionMode::Yolo => "no sandbox, no prompts",
+        }
+    } else {
+        match mode {
+            ExecutionMode::Default => "asks before edits, commands, and network",
+            ExecutionMode::AcceptEdits => {
+                "edits files and a fixed set of safe commands without asking; everything else still asks"
+            }
+            ExecutionMode::Auto => "edits, commands, and network run without asking",
+            ExecutionMode::Yolo => {
+                "no prompts; still blocked by deny rules and a few safety checks"
+            }
+        }
     }
 }
 
@@ -272,9 +305,10 @@ mod tests {
 
     #[test]
     fn a_cautious_claude_default_parent_may_delegate_to_a_cautious_codex_default_child() {
-        // Codex `default` now really does ask before every edit and every
-        // command (approval `untrusted`, sandbox `read-only`) — the same
-        // real privilege as Claude's `default`, rank 0. A Claude `default`
+        // Codex `default` (approval `on-request`, sandbox `read-only`) asks
+        // before anything that writes or needs the network; reads run free
+        // in the sandbox — the same real privilege as Claude's `default`,
+        // rank 0. A Claude `default`
         // parent may reach it, but not Codex `acceptEdits`/`auto`, which
         // still edit the workspace unprompted (rank 1).
         assert!(
@@ -342,6 +376,23 @@ mod tests {
             )
             .is_ok()
         );
+    }
+
+    #[test]
+    fn mode_meaning_covers_every_mode_on_both_adapters_with_a_nonempty_line() {
+        for adapter_id in ["claude", "codex"] {
+            for mode in MODES {
+                assert!(!mode_meaning(adapter_id, mode).is_empty());
+            }
+        }
+    }
+
+    #[test]
+    fn codex_default_meaning_says_it_asks_before_writes_and_network_but_not_reads() {
+        let meaning = mode_meaning("codex", ExecutionMode::Default);
+        assert!(meaning.contains("writes"));
+        assert!(meaning.contains("network"));
+        assert!(meaning.contains("read"));
     }
 
     struct FakeClock {

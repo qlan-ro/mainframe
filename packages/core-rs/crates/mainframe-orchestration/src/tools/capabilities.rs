@@ -3,14 +3,14 @@
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use mainframe_types::settings::EXECUTION_MODES;
+use mainframe_types::settings::{EXECUTION_MODES, ExecutionMode};
 
 use super::ToolDef;
 use crate::errors::ToolError;
 use crate::input::{Validate, object_schema, parse_args};
 use crate::policy::{
     DEFAULT_WAIT_MS, MAX_ACTIVE_TASKS_PER_TREE, MAX_DEPTH, MAX_SINGLE_WAIT_MS, MAX_WAIT_MS,
-    READ_MAX_CHARS, READ_MAX_ITEMS, effective_mode_rank, mode_label_supported,
+    READ_MAX_CHARS, READ_MAX_ITEMS, effective_mode_rank, mode_label_supported, mode_meaning,
 };
 use crate::ports::AdapterView;
 use crate::service::{CallCtx, OrchestrationService};
@@ -55,7 +55,7 @@ pub(super) async fn run(
     // edit" mode, so its `default`/`acceptEdits`/`auto` share one allowed-
     // or-not answer that can differ from Claude's for the same caller).
     let caller_rank = effective_mode_rank(&caller.adapter_id, caller.permission_mode);
-    let allowed_by_adapter: Value = adapters
+    let allowed_modes_by_adapter: Vec<(String, Vec<ExecutionMode>)> = adapters
         .iter()
         .map(|a| {
             let allowed: Vec<_> = EXECUTION_MODES
@@ -63,7 +63,27 @@ pub(super) async fn run(
                 .filter(|m| mode_label_supported(*m, a.auto_mode))
                 .filter(|m| effective_mode_rank(&a.id, *m) <= caller_rank)
                 .collect();
-            (a.id.clone(), json!(allowed))
+            (a.id.clone(), allowed)
+        })
+        .collect();
+    let allowed_by_adapter: Value = allowed_modes_by_adapter
+        .iter()
+        .map(|(id, allowed)| (id.clone(), json!(allowed)))
+        .collect::<serde_json::Map<_, _>>()
+        .into();
+    // One-line meaning per allowed mode, per adapter — cheap (a static
+    // string table, not a live probe) and the reason a caller might reach
+    // for a mode other than "inherit": e.g. Codex `default` really does ask
+    // before writes and network now (todo #772), where before it silently
+    // edited unprompted.
+    let permission_mode_meanings: Value = allowed_modes_by_adapter
+        .iter()
+        .map(|(id, allowed)| {
+            let meanings: serde_json::Map<String, Value> = allowed
+                .iter()
+                .map(|m| (mode_label(*m), json!(mode_meaning(id, *m))))
+                .collect();
+            (id.clone(), Value::Object(meanings))
         })
         .collect::<serde_json::Map<_, _>>()
         .into();
@@ -79,6 +99,7 @@ pub(super) async fn run(
         },
         "adapters": adapters.iter().map(adapter_json).collect::<Vec<_>>(),
         "allowedPermissionModes": allowed_by_adapter,
+        "permissionModeMeanings": permission_mode_meanings,
         "limits": {
             "maxDepth": MAX_DEPTH,
             "maxActiveTasksPerTree": MAX_ACTIVE_TASKS_PER_TREE,
@@ -91,6 +112,15 @@ pub(super) async fn run(
             "readMaxChars": READ_MAX_CHARS,
         },
     }))
+}
+
+/// `ExecutionMode`'s own camelCase wire label, for use as a JSON object key
+/// (`json!` can only serialize an `ExecutionMode` as a value, not a key).
+fn mode_label(mode: ExecutionMode) -> String {
+    match serde_json::to_value(mode) {
+        Ok(Value::String(s)) => s,
+        other => unreachable!("ExecutionMode always serializes to a string, got {other:?}"),
+    }
 }
 
 fn adapter_json(adapter: &AdapterView) -> Value {
@@ -109,7 +139,6 @@ fn adapter_json(adapter: &AdapterView) -> Value {
 
 #[cfg(test)]
 mod tests {
-    use mainframe_types::settings::ExecutionMode;
     use serde_json::json;
 
     use super::*;
@@ -146,6 +175,26 @@ mod tests {
         assert_eq!(out["adapters"][0]["id"], "claude");
         assert_eq!(out["limits"]["launchesRemaining"], 20);
         assert_eq!(out["limits"]["maxSingleWaitMs"], MAX_SINGLE_WAIT_MS);
+        // One meaning per allowed mode, keyed the same way as
+        // `allowedPermissionModes`, and non-empty.
+        assert_eq!(
+            out["permissionModeMeanings"]["claude"]
+                .as_object()
+                .unwrap()
+                .keys()
+                .cloned()
+                .collect::<std::collections::HashSet<_>>(),
+            ["default", "acceptEdits"]
+                .into_iter()
+                .map(String::from)
+                .collect::<std::collections::HashSet<_>>()
+        );
+        assert!(
+            !out["permissionModeMeanings"]["claude"]["default"]
+                .as_str()
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[tokio::test]
