@@ -6,18 +6,19 @@
 
 use std::collections::BTreeMap;
 
+use mainframe_github::github_http::{GITHUB_API, github_headers};
+use mainframe_types::BoxFuture;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::engine::BoxFuture;
 use crate::tokens::TokenValue;
-use mainframe_github::github_http::{GITHUB_API, github_headers};
 
+use super::super::http::{client, send_json};
 use super::super::manifest::{
-    ActionAuth, ActionField, ActionGroup, ActionManifest, ActionOutput, ActionOutputType,
+    ActionAuth, ActionField, ActionGroup, ActionManifest, ActionMeta, ActionOutput,
+    ActionOutputType, ActionParam,
 };
-use super::super::{Action, ActionCtx, ActionError, ActionOutputs, http_failure, parse_input};
-use super::parse_json;
+use super::super::{Action, ActionCtx, ActionError, ActionOutputs, parse_input};
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -61,9 +62,7 @@ impl GithubListPrsAction {
     pub fn with_base_url(base: impl Into<String>) -> Self {
         Self {
             base: base.into(),
-            client: mainframe_runtime::http::builder()
-                .user_agent(super::super::USER_AGENT)
-                .build(),
+            client: client(),
         }
     }
 }
@@ -76,24 +75,22 @@ impl Default for GithubListPrsAction {
 
 impl Action for GithubListPrsAction {
     fn manifest(&self) -> ActionManifest {
-        ActionManifest {
-            id: "github.list_prs",
-            title: "GitHub: list my open pull requests",
-            group: ActionGroup::Connector,
-            auth: ActionAuth::Token,
-            credential_label_hint: Some("github"),
-            params_schema: json!({
-                "type": "object",
-                "properties": {
-                    "author": {"type": "string", "default": "@me"}
-                },
-                "additionalProperties": false
-            }),
-            fields: vec![ActionField::text("author", "Author").placeholder("@me")],
-            has_output_as: false,
-            outputs: vec![ActionOutput::new("prs", ActionOutputType::List)],
-            idempotent: true,
-        }
+        ActionManifest::new(
+            ActionMeta {
+                id: "github.list_prs",
+                title: "GitHub: list my open pull requests",
+                group: ActionGroup::Connector,
+                auth: ActionAuth::Token,
+                credential_label_hint: Some("github"),
+                outputs: vec![ActionOutput::new("prs", ActionOutputType::List)],
+                idempotent: true,
+            },
+            vec![ActionParam::field(
+                ActionField::text("author", "Author").placeholder("@me"),
+                json!({"type": "string", "default": "@me"}),
+            )],
+            Value::Bool(false),
+        )
     }
 
     fn execute<'a>(
@@ -116,19 +113,7 @@ impl Action for GithubListPrsAction {
             if let Some(creds) = &ctx.creds {
                 request = request.bearer_auth(&creds.token);
             }
-            let response = request
-                .send()
-                .await
-                .map_err(|err| ActionError(format!("{OP} failed: {err}")))?;
-            let status = response.status().as_u16();
-            let body = response
-                .text()
-                .await
-                .map_err(|err| ActionError(format!("{OP} failed: {err}")))?;
-            if status >= 400 {
-                return Err(http_failure(OP, status, ctx, &body));
-            }
-            let found: SearchIssuesResponse = parse_json(&body, OP)?;
+            let found: SearchIssuesResponse = send_json(request, OP, ctx, |_| None).await?;
 
             let prs = found
                 .items

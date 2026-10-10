@@ -4,16 +4,18 @@
 //! body is a JSON-patch document (`application/json-patch+json`) per the ADO
 //! REST API — "patch" here is the body format, not the HTTP verb.
 
+use mainframe_types::BoxFuture;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::engine::BoxFuture;
 use crate::tokens::TokenValue;
 
+use super::http::{client, send_json};
 use super::manifest::{
-    ActionAuth, ActionField, ActionGroup, ActionManifest, ActionOutput, ActionOutputType,
+    ActionAuth, ActionField, ActionGroup, ActionManifest, ActionMeta, ActionOutput,
+    ActionOutputType, ActionParam,
 };
-use super::{Action, ActionCtx, ActionError, ActionOutputs, http_failure, parse_input};
+use super::{Action, ActionCtx, ActionError, ActionOutputs, parse_input};
 
 const ADO_API: &str = "https://dev.azure.com";
 const API_VERSION: &str = "7.1";
@@ -59,9 +61,7 @@ impl AdoCreateItemAction {
     pub fn with_base_url(base: impl Into<String>) -> Self {
         Self {
             base: base.into(),
-            client: mainframe_runtime::http::builder()
-                .user_agent(super::USER_AGENT)
-                .build(),
+            client: client(),
         }
     }
 }
@@ -74,38 +74,47 @@ impl Default for AdoCreateItemAction {
 
 impl Action for AdoCreateItemAction {
     fn manifest(&self) -> ActionManifest {
-        ActionManifest {
-            id: "ado.create_item",
-            title: "Azure DevOps: create work item",
-            group: ActionGroup::Connector,
-            auth: ActionAuth::Token,
-            credential_label_hint: Some("ado"),
-            params_schema: json!({
-                "type": "object",
-                "properties": {
-                    "org": {"type": "string", "minLength": 1},
-                    "project": {"type": "string", "minLength": 1},
-                    "type": {"type": "string", "minLength": 1},
-                    "title": {"type": "string", "minLength": 1},
-                    "description": {"type": "string", "default": ""}
-                },
-                "required": ["org", "project", "type", "title"],
-                "additionalProperties": false
-            }),
-            fields: vec![
-                ActionField::text("org", "Organization").placeholder("my-org"),
-                ActionField::text("project", "Project").placeholder("my-project"),
-                ActionField::select("type", "Type", &["Task", "Bug", "User Story"]),
-                ActionField::chip("title", "Title"),
-                ActionField::chiparea("description", "Description"),
+        ActionManifest::new(
+            ActionMeta {
+                id: "ado.create_item",
+                title: "Azure DevOps: create work item",
+                group: ActionGroup::Connector,
+                auth: ActionAuth::Token,
+                credential_label_hint: Some("ado"),
+                outputs: vec![
+                    ActionOutput::new("workItemId", ActionOutputType::Number),
+                    ActionOutput::new("url", ActionOutputType::Text),
+                ],
+                idempotent: false,
+            },
+            vec![
+                ActionParam::field(
+                    ActionField::text("org", "Organization").placeholder("my-org"),
+                    json!({"type": "string", "minLength": 1}),
+                )
+                .required(),
+                ActionParam::field(
+                    ActionField::text("project", "Project").placeholder("my-project"),
+                    json!({"type": "string", "minLength": 1}),
+                )
+                .required(),
+                ActionParam::field(
+                    ActionField::select("type", "Type", &["Task", "Bug", "User Story"]),
+                    json!({"type": "string", "minLength": 1}),
+                )
+                .required(),
+                ActionParam::field(
+                    ActionField::chip("title", "Title"),
+                    json!({"type": "string", "minLength": 1}),
+                )
+                .required(),
+                ActionParam::field(
+                    ActionField::chiparea("description", "Description"),
+                    json!({"type": "string", "default": ""}),
+                ),
             ],
-            has_output_as: false,
-            outputs: vec![
-                ActionOutput::new("workItemId", ActionOutputType::Number),
-                ActionOutput::new("url", ActionOutputType::Text),
-            ],
-            idempotent: false,
-        }
+            Value::Bool(false),
+        )
     }
 
     fn execute<'a>(
@@ -137,20 +146,7 @@ impl Action for AdoCreateItemAction {
             if let Some(creds) = &ctx.creds {
                 request = request.basic_auth("", Some(&creds.token));
             }
-            let response = request
-                .send()
-                .await
-                .map_err(|err| ActionError(format!("{OP} failed: {err}")))?;
-            let status = response.status().as_u16();
-            let body = response
-                .text()
-                .await
-                .map_err(|err| ActionError(format!("{OP} failed: {err}")))?;
-            if status >= 400 {
-                return Err(http_failure(OP, status, ctx, &body));
-            }
-            let item: WorkItem = serde_json::from_str(&body)
-                .map_err(|err| ActionError(format!("{OP} failed: unexpected response ({err})")))?;
+            let item: WorkItem = send_json(request, OP, ctx, |_| None).await?;
 
             let mut outputs = ActionOutputs::new();
             outputs.insert("workItemId".to_string(), TokenValue::Number(item.id));

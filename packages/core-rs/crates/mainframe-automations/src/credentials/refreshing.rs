@@ -17,7 +17,6 @@ use std::sync::Arc;
 use mainframe_runtime::sync::KeyedMutex;
 use serde::Deserialize;
 
-use crate::USER_AGENT;
 use crate::ports::Clock;
 use mainframe_github::github_device::{GITHUB_APP_CLIENT_ID, TOKEN_URL};
 
@@ -47,9 +46,7 @@ impl RefreshingCredentialStore {
         token_url: String,
         client_id: &'static str,
     ) -> Self {
-        let client = mainframe_runtime::http::builder()
-            .user_agent(USER_AGENT)
-            .build();
+        let client = crate::actions::http::client();
         Self {
             inner,
             clock,

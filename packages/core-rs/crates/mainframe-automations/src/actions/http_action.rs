@@ -6,21 +6,22 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
+use mainframe_types::BoxFuture;
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderName, HeaderValue};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::engine::BoxFuture;
 use crate::tokens::TokenValue;
 
+use super::http::{body_snippet, client};
 use super::manifest::{
-    ActionAuth, ActionField, ActionGroup, ActionManifest, ActionOutput, ActionOutputType,
+    ActionAuth, ActionField, ActionGroup, ActionManifest, ActionMeta, ActionOutput,
+    ActionOutputType, ActionParam,
 };
 use super::{Action, ActionCtx, ActionError, ActionOutputs, parse_input};
 
 const DEFAULT_TIMEOUT_MS: u64 = 30_000;
 const MAX_TIMEOUT_MS: u64 = 120_000;
-const ERROR_BODY_SNIPPET_CHARS: usize = 500;
 
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
@@ -65,11 +66,7 @@ pub struct HttpRequestAction {
 
 impl HttpRequestAction {
     pub fn new() -> Self {
-        Self {
-            client: mainframe_runtime::http::builder()
-                .user_agent(super::USER_AGENT)
-                .build(),
-        }
+        Self { client: client() }
     }
 }
 
@@ -81,29 +78,22 @@ impl Default for HttpRequestAction {
 
 impl Action for HttpRequestAction {
     fn manifest(&self) -> ActionManifest {
-        ActionManifest {
-            id: "http.request",
-            title: "HTTP request",
-            group: ActionGroup::Builtin,
-            auth: ActionAuth::Token,
-            credential_label_hint: None,
-            params_schema: params_schema(),
-            fields: vec![
-                ActionField::select(
-                    "method",
-                    "Method",
-                    &["GET", "POST", "PUT", "PATCH", "DELETE"],
-                ),
-                ActionField::chip("url", "URL").placeholder("https://api.example.com/…"),
-                ActionField::chiparea("body", "Body"),
-            ],
-            has_output_as: false,
-            outputs: vec![
-                ActionOutput::new("status", ActionOutputType::Number),
-                ActionOutput::new("body", ActionOutputType::Text),
-            ],
-            idempotent: false,
-        }
+        ActionManifest::new(
+            ActionMeta {
+                id: "http.request",
+                title: "HTTP request",
+                group: ActionGroup::Builtin,
+                auth: ActionAuth::Token,
+                credential_label_hint: None,
+                outputs: vec![
+                    ActionOutput::new("status", ActionOutputType::Number),
+                    ActionOutput::new("body", ActionOutputType::Text),
+                ],
+                idempotent: false,
+            },
+            param_specs(),
+            Value::Bool(false),
+        )
     }
 
     fn execute<'a>(
@@ -166,7 +156,7 @@ impl Action for HttpRequestAction {
                 ActionError(format!("HTTP request to {} failed: {err}", input.url))
             })?;
             if status >= 400 {
-                let snippet: String = body.chars().take(ERROR_BODY_SNIPPET_CHARS).collect();
+                let snippet = body_snippet(&body);
                 return Err(ActionError(format!(
                     "HTTP {status} from {}: {snippet}",
                     input.url
@@ -199,17 +189,32 @@ fn invalid(detail: String) -> ActionError {
     ActionError(format!("invalid input for 'http.request': {detail}"))
 }
 
-fn params_schema() -> Value {
-    json!({
-        "type": "object",
-        "properties": {
-            "method": {"type": "string", "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"], "default": "GET"},
-            "url": {"type": "string", "format": "uri"},
-            "headers": {"type": "object", "additionalProperties": {"type": "string"}},
-            "body": {"anyOf": [{"type": "string"}, {"type": "object"}, {"type": "array"}]},
-            "timeoutMs": {"type": "integer", "minimum": 1, "maximum": 120000, "default": 30000}
-        },
-        "required": ["url"],
-        "additionalProperties": false
-    })
+fn param_specs() -> Vec<ActionParam> {
+    vec![
+        ActionParam::field(
+            ActionField::select(
+                "method",
+                "Method",
+                &["GET", "POST", "PUT", "PATCH", "DELETE"],
+            ),
+            json!({"type": "string", "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"], "default": "GET"}),
+        ),
+        ActionParam::field(
+            ActionField::chip("url", "URL").placeholder("https://api.example.com/…"),
+            json!({"type": "string", "format": "uri"}),
+        )
+        .required(),
+        ActionParam::hidden(
+            "headers",
+            json!({"type": "object", "additionalProperties": {"type": "string"}}),
+        ),
+        ActionParam::field(
+            ActionField::chiparea("body", "Body"),
+            json!({"anyOf": [{"type": "string"}, {"type": "object"}, {"type": "array"}]}),
+        ),
+        ActionParam::hidden(
+            "timeoutMs",
+            json!({"type": "integer", "minimum": 1, "maximum": 120000, "default": 30000}),
+        ),
+    ]
 }

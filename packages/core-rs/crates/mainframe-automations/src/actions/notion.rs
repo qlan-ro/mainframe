@@ -6,16 +6,18 @@
 
 use std::collections::BTreeMap;
 
+use mainframe_types::BoxFuture;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
-use crate::engine::BoxFuture;
 use crate::tokens::TokenValue;
 
+use super::http::{client, send_json};
 use super::manifest::{
-    ActionAuth, ActionField, ActionGroup, ActionManifest, ActionOutput, ActionOutputType,
+    ActionAuth, ActionField, ActionGroup, ActionManifest, ActionMeta, ActionOutput,
+    ActionOutputType, ActionParam,
 };
-use super::{Action, ActionCtx, ActionError, ActionOutputs, http_failure, parse_input};
+use super::{Action, ActionCtx, ActionError, ActionOutputs, parse_input};
 
 const NOTION_API: &str = "https://api.notion.com";
 const NOTION_VERSION: &str = "2022-06-28";
@@ -48,9 +50,7 @@ impl NotionAddRowAction {
     pub fn with_base_url(base: impl Into<String>) -> Self {
         Self {
             base: base.into(),
-            client: mainframe_runtime::http::builder()
-                .user_agent(super::USER_AGENT)
-                .build(),
+            client: client(),
         }
     }
 }
@@ -63,30 +63,25 @@ impl Default for NotionAddRowAction {
 
 impl Action for NotionAddRowAction {
     fn manifest(&self) -> ActionManifest {
-        ActionManifest {
-            id: "notion.add_row",
-            title: "Notion: add database row",
-            group: ActionGroup::Connector,
-            auth: ActionAuth::Token,
-            credential_label_hint: Some("notion"),
-            params_schema: json!({
-                "type": "object",
-                "properties": {
-                    "databaseId": {"type": "string", "minLength": 1}
-                },
-                "required": ["databaseId"],
-                "additionalProperties": {"type": "string"}
-            }),
-            // Only `databaseId` is a named field: the row's column values are
-            // `additionalProperties` (any string key), and there is no
-            // per-database schema-lookup endpoint to enumerate them into
-            // structured rows (module doc) — so they have no field-schema
-            // entry, same as before this fix.
-            fields: vec![ActionField::chip("databaseId", "Database")],
-            has_output_as: false,
-            outputs: vec![ActionOutput::new("pageUrl", ActionOutputType::Text)],
-            idempotent: false,
-        }
+        ActionManifest::new(
+            ActionMeta {
+                id: "notion.add_row",
+                title: "Notion: add database row",
+                group: ActionGroup::Connector,
+                auth: ActionAuth::Token,
+                credential_label_hint: Some("notion"),
+                outputs: vec![ActionOutput::new("pageUrl", ActionOutputType::Text)],
+                idempotent: false,
+            },
+            vec![
+                ActionParam::field(
+                    ActionField::chip("databaseId", "Database"),
+                    json!({"type": "string", "minLength": 1}),
+                )
+                .required(),
+            ],
+            json!({"type": "string"}),
+        )
     }
 
     fn execute<'a>(
@@ -116,20 +111,7 @@ impl Action for NotionAddRowAction {
             if let Some(creds) = &ctx.creds {
                 request = request.bearer_auth(&creds.token);
             }
-            let response = request
-                .send()
-                .await
-                .map_err(|err| ActionError(format!("{OP} failed: {err}")))?;
-            let status = response.status().as_u16();
-            let body = response
-                .text()
-                .await
-                .map_err(|err| ActionError(format!("{OP} failed: {err}")))?;
-            if status >= 400 {
-                return Err(http_failure(OP, status, ctx, &body));
-            }
-            let page: CreatedPage = serde_json::from_str(&body)
-                .map_err(|err| ActionError(format!("{OP} failed: unexpected response ({err})")))?;
+            let page: CreatedPage = send_json(request, OP, ctx, |_| None).await?;
 
             let mut outputs = ActionOutputs::new();
             outputs.insert("pageUrl".to_string(), TokenValue::Text(page.url));

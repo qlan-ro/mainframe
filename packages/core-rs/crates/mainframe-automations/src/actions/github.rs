@@ -2,31 +2,24 @@
 //! credential label, same shape as `notion`/`ado`. Params arrive pre-rendered
 //! plain strings — the run_action executor renders ChipText before invoking any
 //! action other than run_command. `github.create_pr` lives here;
-//! `github.list_prs` is `github_list_prs.rs` (split to stay under the file line
-//! cap, sharing `parse_json` from here).
+//! `github.list_prs` is `github_list_prs.rs`.
 
+use mainframe_github::github_http::{GITHUB_API, github_headers};
+use mainframe_types::BoxFuture;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::engine::BoxFuture;
 use crate::tokens::TokenValue;
-use mainframe_github::github_http::{GITHUB_API, github_headers};
 
+use super::http::{client, send_json};
 use super::manifest::{
-    ActionAuth, ActionField, ActionGroup, ActionManifest, ActionOutput, ActionOutputType,
+    ActionAuth, ActionField, ActionGroup, ActionManifest, ActionMeta, ActionOutput,
+    ActionOutputType, ActionParam,
 };
-use super::{Action, ActionCtx, ActionError, ActionOutputs, http_failure, parse_input};
+use super::{Action, ActionCtx, ActionError, ActionOutputs, parse_input};
 
 mod github_list_prs;
 pub use github_list_prs::GithubListPrsAction;
-
-pub(super) fn parse_json<T: serde::de::DeserializeOwned>(
-    body: &str,
-    op: &str,
-) -> Result<T, ActionError> {
-    serde_json::from_str(body)
-        .map_err(|err| ActionError(format!("{op} failed: unexpected response ({err})")))
-}
 
 /// A GitHub App must be INSTALLED on a repo/org, not just authorized — a
 /// user can finish device flow and still get a bare 404 from every repo
@@ -107,9 +100,7 @@ impl GithubCreatePrAction {
     pub fn with_base_url(base: impl Into<String>) -> Self {
         Self {
             base: base.into(),
-            client: mainframe_runtime::http::builder()
-                .user_agent(super::USER_AGENT)
-                .build(),
+            client: client(),
         }
     }
 }
@@ -122,38 +113,47 @@ impl Default for GithubCreatePrAction {
 
 impl Action for GithubCreatePrAction {
     fn manifest(&self) -> ActionManifest {
-        ActionManifest {
-            id: "github.create_pr",
-            title: "GitHub: create pull request",
-            group: ActionGroup::Connector,
-            auth: ActionAuth::Token,
-            credential_label_hint: Some("github"),
-            params_schema: json!({
-                "type": "object",
-                "properties": {
-                    "repo": {"type": "string", "minLength": 1},
-                    "title": {"type": "string", "minLength": 1},
-                    "body": {"type": "string", "default": ""},
-                    "head": {"type": "string", "minLength": 1},
-                    "base": {"type": "string", "minLength": 1}
-                },
-                "required": ["repo", "title", "head", "base"],
-                "additionalProperties": false
-            }),
-            fields: vec![
-                ActionField::text("repo", "Repository").placeholder("org/repo"),
-                ActionField::chip("title", "Title"),
-                ActionField::chiparea("body", "Body"),
-                ActionField::chip("head", "Branch").placeholder("feature/…"),
-                ActionField::text("base", "Base branch").placeholder("main"),
+        ActionManifest::new(
+            ActionMeta {
+                id: "github.create_pr",
+                title: "GitHub: create pull request",
+                group: ActionGroup::Connector,
+                auth: ActionAuth::Token,
+                credential_label_hint: Some("github"),
+                outputs: vec![
+                    ActionOutput::new("prUrl", ActionOutputType::Text),
+                    ActionOutput::new("prNumber", ActionOutputType::Number),
+                ],
+                idempotent: false,
+            },
+            vec![
+                ActionParam::field(
+                    ActionField::text("repo", "Repository").placeholder("org/repo"),
+                    json!({"type": "string", "minLength": 1}),
+                )
+                .required(),
+                ActionParam::field(
+                    ActionField::chip("title", "Title"),
+                    json!({"type": "string", "minLength": 1}),
+                )
+                .required(),
+                ActionParam::field(
+                    ActionField::chiparea("body", "Body"),
+                    json!({"type": "string", "default": ""}),
+                ),
+                ActionParam::field(
+                    ActionField::chip("head", "Branch").placeholder("feature/…"),
+                    json!({"type": "string", "minLength": 1}),
+                )
+                .required(),
+                ActionParam::field(
+                    ActionField::text("base", "Base branch").placeholder("main"),
+                    json!({"type": "string", "minLength": 1}),
+                )
+                .required(),
             ],
-            has_output_as: false,
-            outputs: vec![
-                ActionOutput::new("prUrl", ActionOutputType::Text),
-                ActionOutput::new("prNumber", ActionOutputType::Number),
-            ],
-            idempotent: false,
-        }
+            Value::Bool(false),
+        )
     }
 
     fn execute<'a>(
@@ -181,22 +181,10 @@ impl Action for GithubCreatePrAction {
             if let Some(creds) = &ctx.creds {
                 request = request.bearer_auth(&creds.token);
             }
-            let response = request
-                .send()
-                .await
-                .map_err(|err| ActionError(format!("{OP} failed: {err}")))?;
-            let status = response.status().as_u16();
-            let body = response
-                .text()
-                .await
-                .map_err(|err| ActionError(format!("{OP} failed: {err}")))?;
-            if status == 404 && is_app_issued(ctx) {
-                return Err(not_installed_error(OP, &input.repo));
-            }
-            if status >= 400 {
-                return Err(http_failure(OP, status, ctx, &body));
-            }
-            let created: CreatedPr = parse_json(&body, OP)?;
+            let created: CreatedPr = send_json(request, OP, ctx, |status| {
+                (status == 404 && is_app_issued(ctx)).then(|| not_installed_error(OP, &input.repo))
+            })
+            .await?;
 
             let mut outputs = ActionOutputs::new();
             outputs.insert("prUrl".to_string(), TokenValue::Text(created.html_url));
