@@ -74,6 +74,7 @@ pub struct CreateChatResult {
 
 /// `PluginDatabaseContext` — per-plugin SQLite (`storage`).
 pub trait PluginDatabase: Send + Sync {
+    fn actor(&self) -> Result<&crate::db_context::PluginSqlite, PluginError>;
     fn run_migration(&self, sql: String) -> BoxFuture<'_, Result<(), PluginError>>;
     fn execute(&self, sql: String, params: Vec<SqlValue>)
     -> BoxFuture<'_, Result<(), PluginError>>;
@@ -267,6 +268,7 @@ mod guards {
 
     pub struct GuardDb;
     impl PluginDatabase for GuardDb {
+        fn actor(&self) -> Result<&crate::db_context::PluginSqlite, PluginError> { Err(cap_err("storage")) }
         fn run_migration(&self, _sql: String) -> BoxFuture<'_, Result<(), PluginError>> {
             Box::pin(async { Err(cap_err("storage")) })
         }

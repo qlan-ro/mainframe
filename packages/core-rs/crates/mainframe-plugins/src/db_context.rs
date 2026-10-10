@@ -16,10 +16,11 @@ use crate::context::PluginDatabase;
 /// A single database row as a JSON object (column name → value), matching the
 /// plain object better-sqlite3 hands back.
 pub type Row = Map<String, Value>;
+pub type PluginSqlite = SqliteActor<Connection, PluginError>;
 
 #[derive(Clone)]
 pub struct PluginDatabaseContext {
-    actor: SqliteActor<Connection, PluginError>,
+    actor: PluginSqlite,
 }
 
 impl From<ActorError> for PluginError {
@@ -53,6 +54,8 @@ impl PluginDatabaseContext {
 }
 
 impl PluginDatabase for PluginDatabaseContext {
+    fn actor(&self) -> Result<&PluginSqlite, PluginError> { Ok(&self.actor) }
+
     /// `runMigration(sql)` — `db.exec(sql)`.
     fn run_migration(&self, sql: String) -> BoxFuture<'_, Result<(), PluginError>> {
         Box::pin(self.call(move |conn| {

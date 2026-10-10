@@ -54,3 +54,14 @@ pub enum PluginError {
     #[error("{0}")]
     Message(String),
 }
+
+impl From<mainframe_db::DbError> for PluginError {
+    fn from(error: mainframe_db::DbError) -> Self {
+        match error {
+            mainframe_db::DbError::Sqlite(error) => Self::Sqlite(error),
+            mainframe_db::DbError::Json(error) => Self::Json(error),
+            mainframe_db::DbError::Io(error) => Self::Io(error),
+            mainframe_db::DbError::Message(message) => Self::Message(message),
+        }
+    }
+}
