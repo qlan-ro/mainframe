@@ -140,7 +140,7 @@ pub(crate) async fn run_liveness_sweep(
 type Clock = Arc<dyn Fn() -> i64 + Send + Sync>;
 
 pub fn start_liveness_scheduler(deps: LivenessDeps) -> LivenessSchedulerHandle {
-    let clock: Clock = Arc::new(|| chrono::Utc::now().timestamp_millis());
+    let clock: Clock = Arc::new(mainframe_types::time::now_ms);
     start_liveness_scheduler_with_clock(deps, clock)
 }
 
@@ -210,9 +210,7 @@ mod tests {
         })
     }
 
-    fn now_ms() -> i64 {
-        chrono::Utc::now().timestamp_millis()
-    }
+    use mainframe_types::time::now_ms;
 
     #[tokio::test]
     async fn skips_tasks_younger_than_grace_ms() {

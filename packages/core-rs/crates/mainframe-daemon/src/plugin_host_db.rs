@@ -3,9 +3,9 @@
 //! SYNC-DB BRIDGE the `ChatManagerDeps` accessors use).
 
 use mainframe_plugins::PluginHostDb;
-use mainframe_runtime::time::now_iso8601;
 use mainframe_server::db::Db;
 use mainframe_types::chat::{Chat, ChatStatus};
+use mainframe_types::time::now_iso8601;
 use serde_json::json;
 
 pub struct DaemonPluginHostDb {

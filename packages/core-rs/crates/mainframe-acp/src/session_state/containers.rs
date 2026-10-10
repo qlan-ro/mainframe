@@ -30,7 +30,7 @@ impl SessionState {
                     .insert(item.id().to_string(), self.previewed(item).into_owned());
             }
         }
-        self.set_container_index(containers);
+        self.containers.seed(containers);
     }
 
     /// Apply one container delta, returning the same `session/update`
@@ -60,7 +60,7 @@ impl SessionState {
     fn apply_full(&mut self, containers: &[Vec<EncodedItem>]) -> Vec<SessionUpdate> {
         let flattened: Vec<EncodedItem> = containers.iter().flatten().cloned().collect();
         let updates = self.diff(&flattened);
-        self.set_container_index(containers);
+        self.containers.seed(containers);
         updates
     }
 
@@ -68,7 +68,7 @@ impl SessionState {
     /// old ids no longer cover, then create or revise exactly the changed
     /// containers' items, comparing only them.
     fn apply_incremental(&mut self, delta: &EncodedDelta) -> Vec<SessionUpdate> {
-        let old_ids = self.old_ids_for(delta);
+        let old_ids = self.containers.old_ids_for(delta);
         let new_ids: HashSet<&str> = delta
             .changes
             .iter()
@@ -100,40 +100,8 @@ impl SessionState {
             }
         }
 
-        self.update_container_index(delta);
+        self.containers.update(delta);
         updates
-    }
-
-    /// The old ids owned by every ordinal this delta touches — the changed
-    /// ordinals, plus any ordinal at or above the new `len` (removed).
-    fn old_ids_for(&self, delta: &EncodedDelta) -> HashSet<String> {
-        let mut ids = HashSet::new();
-        for (ordinal, _) in &delta.changes {
-            if let Some(container_ids) = self.containers.get(*ordinal) {
-                ids.extend(container_ids.iter().cloned());
-            }
-        }
-        for container_ids in self.containers.iter().skip(delta.len) {
-            ids.extend(container_ids.iter().cloned());
-        }
-        ids
-    }
-
-    fn update_container_index(&mut self, delta: &EncodedDelta) {
-        if self.containers.len() < delta.len {
-            self.containers.resize(delta.len, Vec::new());
-        }
-        for (ordinal, items) in &delta.changes {
-            self.containers[*ordinal] = items.iter().map(|item| item.id().to_string()).collect();
-        }
-        self.containers.truncate(delta.len);
-    }
-
-    fn set_container_index(&mut self, containers: &[Vec<EncodedItem>]) {
-        self.containers = containers
-            .iter()
-            .map(|items| items.iter().map(|item| item.id().to_string()).collect())
-            .collect();
     }
 }
 

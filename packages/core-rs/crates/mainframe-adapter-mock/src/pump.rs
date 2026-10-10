@@ -2,6 +2,7 @@
 //! the daemon queued behind it. Split out of `session.rs`: the hand-off runs
 //! inside the spawned replay task, so it cannot borrow the session.
 
+use mainframe_types::sync::LockExt as _;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -103,7 +104,7 @@ impl Pump {
     /// turn. `None` leaves the session idle.
     fn next_queued_turn(&self) -> Option<Result<(Vec<RecordedEvent>, i64), String>> {
         let (uuid, batch, base, error) = {
-            let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+            let mut state = self.state.lock_recover();
             if !state.turn_in_flight {
                 return None;
             }

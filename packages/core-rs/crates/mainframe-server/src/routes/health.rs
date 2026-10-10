@@ -31,7 +31,7 @@ pub(crate) async fn get_health(State(ctx): State<Arc<AppCtx>>) -> Json<HealthRes
         status: "ok",
         version: ctx.version.clone(),
         pid: std::process::id(),
-        timestamp: mainframe_runtime::time::now_iso8601(),
+        timestamp: mainframe_types::time::now_iso8601(),
         // The tunnel URL is interior-mutable, so this reflects the daemon-tunnel
         // boot start and the tunnel routes' `set_tunnel_url`.
         tunnel_url: ctx.tunnel_url(),

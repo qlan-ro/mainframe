@@ -4,6 +4,7 @@
 //! and re-advances. There is no agent_waits table: the checkpoint entry IS
 //! the durable record, and `resume_run_watches` re-attaches after a restart.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex as StdMutex, MutexGuard, OnceLock};
 
@@ -187,9 +188,7 @@ impl AgentVerb {
 
     /// Poisoned-map recovery matches advance.rs's lock_map rationale.
     fn lock_waits(&self) -> MutexGuard<'_, HashMap<String, WaitKey>> {
-        self.waits
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+        self.waits.lock_recover()
     }
 }
 

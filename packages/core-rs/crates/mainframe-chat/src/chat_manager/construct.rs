@@ -1,5 +1,6 @@
 //! `ChatManager` construction and top-level lifecycle plumbing.
 use super::*;
+use mainframe_types::sync::LockExt as _;
 
 /// The five sub-manager collaborators, built in dependency order (offers →
 /// event handler → lifecycle → permission handler → config) so `new` stays a
@@ -127,7 +128,7 @@ impl ChatManager {
             self_ref,
             history_cache,
             enricher,
-            handoff_locks: super::handoff_locks::HandoffLocks::default(),
+            handoff_locks: mainframe_runtime::sync::KeyedMutex::default(),
             teardown,
         }
     }
@@ -179,7 +180,7 @@ impl ChatManager {
     /// behind by one write.
     pub fn is_chat_working(&self, chat_id: &str) -> bool {
         self.get_active(chat_id)
-            .is_some_and(|cell| is_working(&cell.lock().unwrap_or_else(|e| e.into_inner()).chat))
+            .is_some_and(|cell| is_working(&cell.lock_recover().chat))
     }
 
     /// On boot: reset orphaned `processState: 'working'` chats to idle.
@@ -190,10 +191,7 @@ impl ChatManager {
 
     /// Stop background timers. Idempotent.
     pub fn dispose(&self) {
-        self.idle_scanner
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .stop();
+        self.idle_scanner.lock_recover().stop();
     }
 
     /// Exposed for tests — runs one idle-eviction pass immediately. The scanner

@@ -3,8 +3,8 @@
 //! `CHAT_SELECT_FIELDS` subquery, the row mapping, and the `list_filtered`
 //! exclusion clause.
 
-use mainframe_runtime::time::now_iso8601;
 use mainframe_types::chat::Chat;
+use mainframe_types::time::now_iso8601;
 
 use crate::chats::{CHAT_SELECT_FIELDS, ChatsRepository};
 use crate::{DbError, enum_to_db_string};

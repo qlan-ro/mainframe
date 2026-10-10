@@ -7,8 +7,6 @@
 //! implement in tests.
 
 use std::collections::HashSet;
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Mutex;
 
 use mainframe_types::acp::extensions::MAINFRAME_META_NAMESPACE;
@@ -19,7 +17,6 @@ use mainframe_types::acp::update::{
     IdleStateUpdate, SessionState as WireSessionState, SessionUpdate,
 };
 use mainframe_types::adapter::ControlRequest;
-use mainframe_types::display::{DisplayMessage, StreamingLeafKind};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -32,7 +29,7 @@ use crate::session_state::SessionState;
 
 mod revision;
 
-pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+pub use mainframe_types::BoxFuture;
 
 /// The cursor `ResumeSessionRequest.replayFrom` carries — an opaque `Value` on
 /// the vendored wire type, so the scheme is defined here. `Start` always
@@ -53,16 +50,8 @@ pub enum ReplayCursor {
     Revision { epoch: String, revision: u64 },
 }
 
-/// `ResumePort::resume_snapshot`'s result: display history, the
-/// `StreamingLeafKind` of the in-flight partial overlay projected into it (if
-/// any — mirrors `mainframe_chat::chat_manager::ResumeSnapshot`, kept as a
-/// separate type since this crate depends only on `mainframe-types`, not
-/// `mainframe-chat`), and any still-open permission gate.
-pub struct ResumeSnapshot {
-    pub messages: Vec<DisplayMessage>,
-    pub streaming: Option<StreamingLeafKind>,
-    pub pending: Option<ControlRequest>,
-}
+/// Shared snapshot of history, streaming overlay, and an open permission gate.
+pub use mainframe_types::resume::ResumeSnapshot;
 
 /// The chat-manager surface `session/resume` needs: display history plus any
 /// still-open gate for `session_id`, gathered in one call — a production

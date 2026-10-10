@@ -27,6 +27,7 @@ mainframe-runtime = { workspace = true }
 mainframe-db = { workspace = true }
 mainframe-services = { workspace = true }
 mainframe-types = { workspace = true }
+mainframe-github = { workspace = true }
 mainframe-adapter-api = { workspace = true }
 mainframe-adapter-claude = { workspace = true }
 mainframe-adapter-codex = { workspace = true }

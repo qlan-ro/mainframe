@@ -42,7 +42,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
     fn promote_working(&self) {
         if let Some(cell) = self.deps.get_active_chat(&self.chat_id) {
             let updated = {
-                let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+                let mut guard = cell.lock_recover();
                 if guard.chat.process_state != Some(Some(ProcessState::Working)) {
                     guard.chat.process_state = Some(Some(ProcessState::Working));
                     Some(guard.chat.clone())
@@ -74,29 +74,23 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
                     && let Some(fp) = input.get("file_path").and_then(|v| v.as_str())
                 {
                     self.pending_file_paths
-                        .lock()
-                        .unwrap_or_else(|e| e.into_inner())
+                        .lock_recover()
                         .insert(id.clone(), fp.to_string());
                 }
                 if categories
                     .as_ref()
                     .is_some_and(|c| c.subagent.contains(name))
                 {
-                    self.pending_subagent_ids
-                        .lock()
-                        .unwrap_or_else(|e| e.into_inner())
-                        .insert(id.clone());
+                    self.pending_subagent_ids.lock_recover().insert(id.clone());
                 }
                 if creates_worktree(name, input) {
                     self.pending_worktree_triggers
-                        .lock()
-                        .unwrap_or_else(|e| e.into_inner())
+                        .lock_recover()
                         .insert(id.clone());
                 }
                 if moves_transcript(name) {
                     self.pending_transcript_moves
-                        .lock()
-                        .unwrap_or_else(|e| e.into_inner())
+                        .lock_recover()
                         .insert(id.clone());
                 }
             }
@@ -108,7 +102,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         });
         if has_enter_plan_mode && let Some(cell) = self.deps.get_active_chat(&self.chat_id) {
             let updated = {
-                let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+                let mut guard = cell.lock_recover();
                 if guard.chat.plan_mode != Some(true) {
                     guard.chat.plan_mode = Some(true);
                     Some(guard.chat.clone())
@@ -152,8 +146,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         metadata: Option<MessageMetadata>,
     ) -> (HashMap<String, serde_json::Value>, Option<String>) {
         let adapter_id = self.deps.get_active_chat(&self.chat_id).and_then(|c| {
-            c.lock()
-                .unwrap_or_else(|e| e.into_inner())
+            c.lock_recover()
                 .session
                 .as_ref()
                 .map(|s| s.adapter_id().to_string())

@@ -15,15 +15,8 @@ use axum::routing::{get, post};
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok, ok_empty};
 
-/// `QuotaProviderParams.id`: `^[a-zA-Z0-9_-]+$`.
-fn is_valid_provider_id(s: &str) -> bool {
-    !s.is_empty()
-        && s.bytes()
-            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'))
-}
-
 async fn get_quota(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
-    if !is_valid_provider_id(&id) {
+    if !mainframe_types::ids::is_safe_identifier(&id) {
         return fail(StatusCode::BAD_REQUEST, "invalid provider id");
     }
     match ctx.quota.as_ref().and_then(|q| q.get(&id)) {
@@ -33,7 +26,7 @@ async fn get_quota(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Re
 }
 
 async fn refresh_quota(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
-    if !is_valid_provider_id(&id) {
+    if !mainframe_types::ids::is_safe_identifier(&id) {
         return fail(StatusCode::BAD_REQUEST, "invalid provider id");
     }
     let Some(quota) = ctx.quota.as_ref() else {

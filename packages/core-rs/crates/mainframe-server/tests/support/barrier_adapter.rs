@@ -5,6 +5,7 @@
 //! Every other method is a trivial success stub: the test that uses this
 //! adapter only cares about the spawn barrier.
 
+use mainframe_types::sync::LockExt as _;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -117,7 +118,7 @@ impl AdapterSession for BarrierSession {
         _sink: Option<Arc<dyn mainframe_adapter_api::SessionSink>>,
     ) -> BoxFuture<'_, Result<AdapterProcess, AdapterError>> {
         Box::pin(async move {
-            let rx = self.gate.lock().unwrap_or_else(|e| e.into_inner()).take();
+            let rx = self.gate.lock_recover().take();
             if let Some(rx) = rx {
                 let _ = rx.await;
             }
@@ -157,8 +158,7 @@ impl AdapterSession for BarrierSession {
     fn interrupt(&self) -> BoxFuture<'_, Result<(), AdapterError>> {
         Box::pin(async {
             self.interrupts
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
+                .lock_recover()
                 .push(self.spawned.load(Ordering::SeqCst));
             Ok(())
         })

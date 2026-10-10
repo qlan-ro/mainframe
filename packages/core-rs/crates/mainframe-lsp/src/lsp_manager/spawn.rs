@@ -1,18 +1,5 @@
 use super::*;
 
-struct SpawnClaim<'a> {
-    state: &'a ManagerState,
-    key: String,
-    notify: Arc<Notify>,
-}
-
-impl Drop for SpawnClaim<'_> {
-    fn drop(&mut self) {
-        self.state.lock_guards().remove(&self.key);
-        self.notify.notify_waiters();
-    }
-}
-
 impl ManagerState {
     pub(super) async fn get_or_spawn(
         self: &Arc<Self>,
@@ -39,45 +26,20 @@ impl ManagerState {
     ) -> Result<Arc<LspServerHandle>, LspError> {
         let k = key(project_id, language);
         loop {
-            let claim = {
-                let mut guards = self.lock_guards();
-                if let Some(existing) = self.handles.get(&k) {
-                    let existing = existing.clone();
-                    self.cancel_idle_timer(&existing);
-                    if !existing.has_client() {
-                        self.start_idle_timer(&k, &existing);
+            match self.guards.claim(&k) {
+                Ok(_claim) => {
+                    if let Some(existing) = self.handles.get(&k) {
+                        let existing = existing.clone();
+                        self.cancel_idle_timer(&existing);
+                        if !existing.has_client() {
+                            self.start_idle_timer(&k, &existing);
+                        }
+                        return Ok(existing);
                     }
-                    return Ok(existing);
+                    return self.do_spawn(&k, language, project_path).await;
                 }
-                if let Some(notify) = guards.get(&k) {
-                    Err(notify.clone())
-                } else {
-                    let notify = Arc::new(Notify::new());
-                    guards.insert(k.clone(), notify.clone());
-                    Ok(SpawnClaim {
-                        state: self,
-                        key: k.clone(),
-                        notify,
-                    })
-                }
-            };
-            match claim {
-                Ok(_claim) => return self.do_spawn(&k, language, project_path).await,
-                Err(notify) => self.wait_for_spawn(&k, &notify).await,
+                Err(waiter) => waiter.wait().await,
             }
-        }
-    }
-
-    async fn wait_for_spawn(&self, k: &str, notify: &Arc<Notify>) {
-        let notified = notify.notified();
-        tokio::pin!(notified);
-        notified.as_mut().enable();
-        let in_flight = self
-            .lock_guards()
-            .get(k)
-            .is_some_and(|current| Arc::ptr_eq(current, notify));
-        if in_flight {
-            notified.await;
         }
     }
 
@@ -103,7 +65,7 @@ impl ManagerState {
         project_path: &str,
         resolved: ResolvedCommand,
     ) -> Result<Arc<LspServerHandle>, LspError> {
-        let _gate = self.spawn_gate.lock().unwrap_or_else(|e| e.into_inner());
+        let _gate = self.spawn_gate.lock_recover();
         if *self.shutting_down.borrow() {
             return Err(LspError::ShuttingDown);
         }

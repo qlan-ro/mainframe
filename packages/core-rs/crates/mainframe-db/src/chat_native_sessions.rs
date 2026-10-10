@@ -6,9 +6,9 @@
 //! Every write to those columns goes through this module, inside the caller's
 //! transaction, so the two never disagree.
 
-use mainframe_runtime::time::now_iso8601;
 use mainframe_types::chat::SessionTuning;
 use mainframe_types::segment::NativeSessionRecord;
+use mainframe_types::time::now_iso8601;
 use rusqlite::{Connection, OptionalExtension};
 
 use crate::DbError;

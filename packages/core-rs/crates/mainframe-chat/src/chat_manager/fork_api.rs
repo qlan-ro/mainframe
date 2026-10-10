@@ -3,6 +3,7 @@
 //! from-message cut, pinning the fork point through the parent's adapter, and
 //! the single INSERT that creates the fork.
 use mainframe_adapter_api::ForkCut;
+use mainframe_types::sync::LockExt as _;
 
 use mainframe_types::segment::ForkPlan;
 
@@ -198,10 +199,7 @@ impl ChatManager {
             new_chat.id.clone(),
             Arc::new(Mutex::new(ActiveChat::new(new_chat.clone(), None))),
         );
-        self.messages
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .pin(&new_chat.id);
+        self.messages.lock_recover().pin(&new_chat.id);
         self.emit(DaemonEvent::ChatCreated {
             chat: new_chat.clone(),
             source: None,

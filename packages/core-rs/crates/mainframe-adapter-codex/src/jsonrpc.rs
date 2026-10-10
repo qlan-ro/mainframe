@@ -2,6 +2,7 @@
 //! framing (multiple objects per line, partial-object scanning). 30s request
 //! timeout; notification + server-request handlers; close listeners.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -209,7 +210,7 @@ impl JsonRpcClient {
                         saw_panic.store(true, Ordering::SeqCst);
                     }
 
-                    let mut tail = recent_stderr.lock().unwrap_or_else(|e| e.into_inner());
+                    let mut tail = recent_stderr.lock_recover();
                     tail.push_back(message.to_string());
                     while tail.len() > STDERR_TAIL_LINES {
                         tail.pop_front();
@@ -266,12 +267,7 @@ impl JsonRpcClient {
                         (None, true) => "panicked".to_string(),
                         (None, false) => "was killed by a signal".to_string(),
                     };
-                    let tail: Vec<String> = recent_stderr
-                        .lock()
-                        .unwrap_or_else(|e| e.into_inner())
-                        .iter()
-                        .cloned()
-                        .collect();
+                    let tail: Vec<String> = recent_stderr.lock_recover().iter().cloned().collect();
                     (handlers.on_error)(if tail.is_empty() {
                         format!("codex {reason}")
                     } else {
@@ -307,20 +303,14 @@ impl JsonRpcClient {
         let req_id = RequestId::Number(id);
         let msg = serde_json::json!({ "id": id, "method": method, "params": params.unwrap_or(Value::Object(Map::new())) });
         let (tx, rx) = oneshot::channel();
-        self.pending
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .insert(req_id.clone(), tx);
+        self.pending.lock_recover().insert(req_id.clone(), tx);
         self.write(&msg);
 
         match tokio::time::timeout(Duration::from_millis(self.request_timeout_ms), rx).await {
             Ok(Ok(result)) => result,
             Ok(Err(_recv)) => Err(JsonRpcError("Client closed".to_string())),
             Err(_elapsed) => {
-                self.pending
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .remove(&req_id);
+                self.pending.lock_recover().remove(&req_id);
                 Err(JsonRpcError(format!(
                     "Request {method} (id={id}) timed out after {}ms",
                     self.request_timeout_ms
@@ -380,10 +370,7 @@ fn dispatch(
 ) {
     if is_json_rpc_response(msg) {
         if let Some(id) = msg.get("id").and_then(request_id_from_value)
-            && let Some(tx) = pending
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .remove(&id)
+            && let Some(tx) = pending.lock_recover().remove(&id)
         {
             let _ = tx.send(Ok(msg.get("result").cloned().unwrap_or(Value::Null)));
         }
@@ -392,10 +379,7 @@ fn dispatch(
 
     if is_json_rpc_error(msg) {
         if let Some(id) = msg.get("id").and_then(request_id_from_value)
-            && let Some(tx) = pending
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .remove(&id)
+            && let Some(tx) = pending.lock_recover().remove(&id)
         {
             let message = msg
                 .get("error")
@@ -439,12 +423,7 @@ fn dispatch(
 }
 
 fn reject_all_pending(pending: &Arc<Mutex<HashMap<RequestId, PendingTx>>>, err: JsonRpcError) {
-    let drained: Vec<PendingTx> = pending
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .drain()
-        .map(|(_, tx)| tx)
-        .collect();
+    let drained: Vec<PendingTx> = pending.lock_recover().drain().map(|(_, tx)| tx).collect();
     for tx in drained {
         let _ = tx.send(Err(JsonRpcError(err.0.clone())));
     }

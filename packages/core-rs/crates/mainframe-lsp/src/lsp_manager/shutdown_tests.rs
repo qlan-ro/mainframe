@@ -85,7 +85,7 @@ async fn shutdown_cancels_blocked_resolver_and_single_flight_waiters() {
         manager.get_or_spawn("new", "python", "/tmp").await,
         Err(LspError::ShuttingDown)
     ));
-    assert!(manager.state.lock_guards().is_empty());
+    assert!(manager.state.guards.is_empty());
     assert!(manager.state.handles.is_empty());
     assert_eq!(resolver.calls.load(Ordering::SeqCst), 1);
     assert!(!marker.exists());
@@ -110,7 +110,7 @@ async fn cancelling_spawn_owner_allows_waiter_to_resolve_and_spawn() {
     })
     .await;
     assert_eq!(resolver.calls.load(Ordering::SeqCst), 2);
-    assert!(manager.state.lock_guards().is_empty());
+    assert!(manager.state.guards.is_empty());
     bounded(manager.shutdown_all()).await;
     assert!(handle.exited.load(Ordering::SeqCst));
 }
@@ -128,7 +128,7 @@ async fn stalled_resolver_does_not_delay_shutdown_or_its_waiters() {
         bounded(task).await.unwrap(),
         Err(LspError::ShuttingDown)
     ));
-    assert!(manager.state.lock_guards().is_empty());
+    assert!(manager.state.guards.is_empty());
     assert!(manager.state.handles.is_empty());
 }
 

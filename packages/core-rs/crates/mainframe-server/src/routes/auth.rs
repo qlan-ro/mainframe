@@ -7,6 +7,7 @@
 //! `AppCtx` handles. The token payload set by the auth middleware is read back
 //! from request extensions as `Extension<TokenPayload>`.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::{Arc, LazyLock, Mutex};
@@ -62,9 +63,7 @@ struct AuthState {
 
 static AUTH_STATE: LazyLock<Mutex<AuthState>> = LazyLock::new(|| Mutex::new(AuthState::default()));
 
-fn now_ms() -> i64 {
-    chrono::Utc::now().timestamp_millis()
-}
+use mainframe_types::time::now_ms;
 
 fn clean_recent_pairings(state: &mut AuthState) {
     let now = now_ms();
@@ -197,7 +196,7 @@ async fn pair(State(ctx): State<Arc<AppCtx>>) -> Response {
         return fail(StatusCode::BAD_REQUEST, "Auth not configured");
     }
     let code = generate_pairing_code();
-    let mut state = AUTH_STATE.lock().unwrap_or_else(|e| e.into_inner());
+    let mut state = AUTH_STATE.lock_recover();
     state.pending.insert(
         code.clone(),
         PendingPairing {
@@ -229,7 +228,7 @@ async fn confirm(
 
     let Some(parsed): Option<ConfirmBody> = parse_body(&body) else {
         // Rate limit is checked before body parse in the TS; mirror that order.
-        let mut state = AUTH_STATE.lock().unwrap_or_else(|e| e.into_inner());
+        let mut state = AUTH_STATE.lock_recover();
         if is_rate_limited(&mut state, &ip) {
             return fail(
                 StatusCode::TOO_MANY_REQUESTS,
@@ -246,7 +245,7 @@ async fn confirm(
         || parsed.device_name.as_deref() == Some("")
         || !is_valid_uuid(&parsed.client_device_id)
     {
-        let mut state = AUTH_STATE.lock().unwrap_or_else(|e| e.into_inner());
+        let mut state = AUTH_STATE.lock_recover();
         if is_rate_limited(&mut state, &ip) {
             return fail(
                 StatusCode::TOO_MANY_REQUESTS,
@@ -257,7 +256,7 @@ async fn confirm(
     }
 
     let outcome = {
-        let mut state = AUTH_STATE.lock().unwrap_or_else(|e| e.into_inner());
+        let mut state = AUTH_STATE.lock_recover();
         if is_rate_limited(&mut state, &ip) {
             return fail(
                 StatusCode::TOO_MANY_REQUESTS,
@@ -323,18 +322,14 @@ async fn confirm(
 
     let token = generate_token(&secret, &device_id, Some(epoch));
 
-    AUTH_STATE
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .recent
-        .insert(
-            parsed.pairing_code.clone(),
-            RecentPairing {
-                device_id: device_id.clone(),
-                device_name: name,
-                consumed_at: now_ms(),
-            },
-        );
+    AUTH_STATE.lock_recover().recent.insert(
+        parsed.pairing_code.clone(),
+        RecentPairing {
+            device_id: device_id.clone(),
+            device_name: name,
+            consumed_at: now_ms(),
+        },
+    );
 
     ok(json!({ "token": token, "deviceId": device_id }))
 }
@@ -401,7 +396,7 @@ async fn pair_status(Query(params): Query<HashMap<String, String>>) -> Response 
     if !is_valid_pair_code(code) {
         return fail(StatusCode::BAD_REQUEST, "Invalid code");
     }
-    let mut state = AUTH_STATE.lock().unwrap_or_else(|e| e.into_inner());
+    let mut state = AUTH_STATE.lock_recover();
     clean_recent_pairings(&mut state);
     match state.recent.get(code) {
         None => ok(json!({ "paired": false })),

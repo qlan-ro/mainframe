@@ -1,11 +1,11 @@
 use std::rc::Rc;
 
-use mainframe_runtime::time::now_iso8601;
 use mainframe_types::adapter::{DetectedPr, DetectedPrSource, EffortLevel, ForkSource};
 use mainframe_types::chat::{Chat, ChatStatus, NO_PROJECT_ID, NewChat, ProcessState, TodoItem};
 use mainframe_types::context::{SessionMention, SkillFileEntry};
 use mainframe_types::segment::ForkPlan;
 use mainframe_types::settings::ExecutionMode;
+use mainframe_types::time::now_iso8601;
 use rusqlite::types::Value as SqlValue;
 use rusqlite::{Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};

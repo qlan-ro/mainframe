@@ -1,6 +1,7 @@
 //! Lifecycle and permission delegations off the `ChatManager` facade.
 use super::*;
 use crate::chat_teardown::TeardownMode;
+use mainframe_types::sync::LockExt as _;
 
 impl ChatManager {
     pub async fn create_chat(&self, new_chat: NewChat) -> Chat {
@@ -129,7 +130,7 @@ impl ChatManager {
             },
         );
         if let Some(cell) = self.get_active(chat_id) {
-            cell.lock().unwrap_or_else(|e| e.into_inner()).chat.title = Some(title.to_string());
+            cell.lock_recover().chat.title = Some(title.to_string());
         }
         if let Some(chat) = self.deps.chats_get(chat_id) {
             self.emit(DaemonEvent::ChatUpdated { chat, reason: None });

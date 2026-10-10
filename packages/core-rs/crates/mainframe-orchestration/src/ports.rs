@@ -2,9 +2,6 @@
 //! implements them over `ChatManager`, the DB, git, and the event broadcast
 //! (`mainframe-server/src/orchestration_deps/`); tests use in-memory fakes.
 
-use std::future::Future;
-use std::pin::Pin;
-
 use mainframe_types::chat::{ChatMessage, ChatStatus};
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::orchestration::DelegatedTask;
@@ -14,7 +11,7 @@ use tokio::sync::broadcast;
 use crate::errors::PortError;
 use crate::policy::Privileges;
 
-pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+pub use mainframe_types::BoxFuture;
 
 /// A pending permission or question gate, as `chat_wait` reports it.
 #[derive(Debug, Clone, PartialEq, Eq)]

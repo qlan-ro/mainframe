@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
-use mainframe_runtime::time::now_iso8601;
 use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent};
+use mainframe_types::time::now_iso8601;
 
 const MAX_CHATS: usize = 50;
 

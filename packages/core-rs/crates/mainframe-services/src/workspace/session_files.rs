@@ -15,16 +15,7 @@ pub enum SessionFilesError {
 }
 
 pub fn get_claude_project_dir(project_path: &str) -> PathBuf {
-    let encoded: String = project_path
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '-' {
-                c
-            } else {
-                '-'
-            }
-        })
-        .collect();
+    let encoded = mainframe_types::paths::encode_claude_project_path(project_path);
     let home = dirs::home_dir().unwrap_or_default();
     home.join(".claude").join("projects").join(encoded)
 }

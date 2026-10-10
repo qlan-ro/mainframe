@@ -18,10 +18,7 @@ use axum::response::Response;
 use axum::routing::{get, post};
 use serde::Deserialize;
 
-use mainframe_adapter_api::{AdapterSession, BoxFuture};
-use mainframe_background_tasks::kill::{
-    KillTasksForChatArgs, SessionLike, StopResult, kill_tasks_for_chat,
-};
+use mainframe_background_tasks::kill::{KillTasksForChatArgs, SessionLike, kill_tasks_for_chat};
 use mainframe_chat::config_manager::ConfigError;
 use mainframe_services::workspace::{get_worktrees, remove_worktree, short_branch};
 
@@ -288,7 +285,7 @@ async fn validate_and_delete_worktree(
             .chat_manager
             .as_ref()
             .and_then(|cm| cm.get_session_for_chat(&chat.id))
-            .map(SessionKillBridge);
+            .map(crate::session_kill_bridge::SessionKillBridge);
         let session_ref = session.as_ref().map(|s| s as &dyn SessionLike);
         kill_tasks_for_chat(KillTasksForChatArgs {
             chat_id: &chat.id,
@@ -306,30 +303,6 @@ async fn validate_and_delete_worktree(
         cm.notify_worktree_deleted(worktree_path);
     }
     Ok(())
-}
-
-/// Bridges the live `AdapterSession` to the `SessionLike` the kill sweep expects
-/// (identical to `chat_deps::SessionKillAdapter`; a per-request local so the route
-/// stays self-contained).
-struct SessionKillBridge(Arc<dyn AdapterSession>);
-
-impl SessionLike for SessionKillBridge {
-    fn stop_background_task<'a>(&'a self, task_id: &'a str) -> BoxFuture<'a, StopResult> {
-        let session = Arc::clone(&self.0);
-        let task_id = task_id.to_string();
-        Box::pin(async move {
-            match session.stop_background_task(task_id).await {
-                Ok(r) => StopResult {
-                    ok: r.ok,
-                    error: r.error,
-                },
-                Err(err) => StopResult {
-                    ok: false,
-                    error: Some(err.to_string()),
-                },
-            }
-        })
-    }
 }
 
 pub fn router() -> Router<Arc<AppCtx>> {

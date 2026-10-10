@@ -22,7 +22,6 @@ use mainframe_adapter_api::{
     AdapterError, AdapterSession, BoxFuture, ForkPinError, ForkPinRequest, ImageInput,
     PlanModeActionHandler, SessionSink,
 };
-use mainframe_runtime::time::now_iso8601;
 use mainframe_services::commands::{find_mainframe_command, wrap_mainframe_command};
 use mainframe_services::workspace::is_worktree_present;
 use mainframe_services::workspace::worktree::is_directory_present;
@@ -43,6 +42,7 @@ use mainframe_types::display::ChatHistoryPayload;
 use mainframe_types::display::{DisplayMessage, ToolCategories};
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::settings::ExecutionMode;
+use mainframe_types::time::now_iso8601;
 use tracing::info;
 
 use delivery::Delivery;
@@ -84,7 +84,6 @@ mod errors;
 mod external_facade;
 mod fork_api;
 mod fork_sweep;
-mod handoff_locks;
 mod handoff_resolve;
 mod handoff_send;
 mod history;
@@ -158,7 +157,7 @@ pub struct ChatManager {
     /// One lock per chat, held across `prepare_handoff`'s check-then-insert
     /// (`handoff_send.rs`), so two sends racing for the same chat cannot
     /// both build and record a handoff.
-    handoff_locks: handoff_locks::HandoffLocks,
+    handoff_locks: mainframe_runtime::sync::KeyedMutex,
     teardown: Arc<crate::chat_teardown::ChatTeardown<EhDeps>>,
 }
 

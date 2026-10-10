@@ -1,3 +1,4 @@
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
@@ -10,7 +11,6 @@ use mainframe_adapter_api::SessionSink;
 use mainframe_types::chat::MessageContent;
 use mainframe_types::content::LeafContent;
 
-use crate::adapter::first_version_triple;
 use crate::session::ClaudeSession;
 const PARTIAL_MESSAGES_MIN_VERSION: (u64, u64, u64) = (1, 0, 109);
 const PARTIAL_EMIT_INTERVAL_MS: i64 = 50;
@@ -59,13 +59,7 @@ fn emit_due(last: Option<i64>, interval_ms: i64, now_ms: i64) -> bool {
     last.is_none_or(|last| now_ms - last >= interval_ms)
 }
 
-fn now_ms() -> i64 {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
-}
+use mainframe_types::time::now_ms;
 
 fn leaf_for(kind: PartialBlockKind, text: String) -> MessageContent {
     match kind {
@@ -93,7 +87,7 @@ pub(crate) fn handle_stream_event(session: &ClaudeSession, event: &Value, sink: 
         return;
     };
 
-    let mut guard = session.state.lock().unwrap_or_else(|e| e.into_inner());
+    let mut guard = session.state.lock_recover();
     let id = if inner.get("type").and_then(Value::as_str) == Some("message_start") {
         inner
             .get("message")
@@ -154,8 +148,7 @@ pub(crate) async fn supports_partial_messages(executable: &str, resolved_path: &
     static CACHE: OnceLock<Mutex<HashMap<String, Arc<OnceCell<bool>>>>> = OnceLock::new();
     let cache = CACHE.get_or_init(Default::default);
     let cell = cache
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
+        .lock_recover()
         .entry(executable.to_string())
         .or_insert_with(|| Arc::new(OnceCell::new()))
         .clone();
@@ -198,17 +191,20 @@ async fn probe_version(executable: &str, resolved_path: &str) -> Option<String> 
     if !output.status.success() {
         return None;
     }
-    first_version_triple(&String::from_utf8_lossy(&output.stdout))
+    mainframe_adapter_api::version::CliVersion::parse(&String::from_utf8_lossy(&output.stdout))
+        .map(|version| version.to_string())
 }
 
 fn version_at_least(version: &str, min: (u64, u64, u64)) -> bool {
-    let mut parts = version.split('.').map(str::parse::<u64>);
-    let (Some(Ok(major)), Some(Ok(minor)), Some(Ok(patch))) =
-        (parts.next(), parts.next(), parts.next())
-    else {
+    let Some(patch) = version.split('.').nth(2) else {
         return false;
     };
-    (major, minor, patch) >= min
+    if patch.is_empty() || !patch.bytes().all(|byte| byte.is_ascii_digit()) {
+        return false;
+    }
+    mainframe_adapter_api::version::CliVersion::parse_leading(version)
+        .and_then(|parsed| parsed.components_u64())
+        .is_some_and(|parts| parts >= min)
 }
 
 #[cfg(test)]

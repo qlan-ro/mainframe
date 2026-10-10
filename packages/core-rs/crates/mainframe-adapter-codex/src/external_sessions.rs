@@ -5,8 +5,9 @@
 //! rather than trusting an index. A session belongs to a project when the `cwd`
 //! recorded in its session_meta is the project root or nested under it.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::{HashMap, HashSet};
-use std::path::{MAIN_SEPARATOR, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -69,31 +70,14 @@ fn prompt_cache() -> &'static Mutex<HashMap<String, PromptCacheEntry>> {
 }
 
 pub fn clear_codex_external_session_cache() {
-    meta_cache()
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .clear();
-    prompt_cache()
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .clear();
+    meta_cache().lock_recover().clear();
+    prompt_cache().lock_recover().clear();
 }
 
 pub(crate) fn codex_sessions_root() -> PathBuf {
     dirs::home_dir()
         .map(|h| h.join(".codex").join("sessions"))
         .unwrap_or_else(|| PathBuf::from(".codex").join("sessions"))
-}
-
-/// Belongs to this project if cwd equals the root or is nested under it.
-fn cwd_belongs_to_project(cwd: Option<&str>, project_path: &str) -> bool {
-    let Some(cwd) = cwd else {
-        return false;
-    };
-    if cwd == project_path {
-        return true;
-    }
-    cwd.starts_with(&format!("{project_path}{MAIN_SEPARATOR}"))
 }
 
 fn system_time_to_ms(t: Option<SystemTime>) -> f64 {
@@ -132,34 +116,10 @@ fn parse_rollout_uuid(name: &str) -> Option<String> {
         return None;
     }
     let uuid: String = chars[uuid_start..base_len].iter().collect();
-    if !is_uuid(&uuid) {
+    if !mainframe_types::paths::is_uuid(&uuid) {
         return None;
     }
     Some(uuid)
-}
-
-fn is_uuid(s: &str) -> bool {
-    let c: Vec<char> = s.chars().collect();
-    if c.len() != 36 {
-        return false;
-    }
-    let groups = [8usize, 4, 4, 4, 12];
-    let mut idx = 0;
-    for (gi, &g) in groups.iter().enumerate() {
-        if gi > 0 {
-            if c[idx] != '-' {
-                return false;
-            }
-            idx += 1;
-        }
-        for _ in 0..g {
-            if !c[idx].is_ascii_hexdigit() {
-                return false;
-            }
-            idx += 1;
-        }
-    }
-    idx == 36
 }
 
 fn walk_rollouts<'a>(
@@ -213,7 +173,7 @@ async fn read_head(file_path: &Path, bytes: u64) -> std::io::Result<String> {
 
 async fn load_meta(candidate: &Candidate) -> Option<RolloutMeta> {
     if let Some(hit) = {
-        let cache = meta_cache().lock().unwrap_or_else(|e| e.into_inner());
+        let cache = meta_cache().lock_recover();
         cache.get(&candidate.session_id).and_then(|c| {
             (c.mtime_bits == candidate.mtime_ms.to_bits() && c.size == candidate.size)
                 .then(|| c.meta.clone())
@@ -235,23 +195,20 @@ async fn load_meta(candidate: &Candidate) -> Option<RolloutMeta> {
         }
     };
     let meta = extract_meta(&parse_lines(&head), &head);
-    meta_cache()
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .insert(
-            candidate.session_id.clone(),
-            MetaCacheEntry {
-                mtime_bits: candidate.mtime_ms.to_bits(),
-                size: candidate.size,
-                meta: meta.clone(),
-            },
-        );
+    meta_cache().lock_recover().insert(
+        candidate.session_id.clone(),
+        MetaCacheEntry {
+            mtime_bits: candidate.mtime_ms.to_bits(),
+            size: candidate.size,
+            meta: meta.clone(),
+        },
+    );
     Some(meta)
 }
 
 async fn load_first_prompt(candidate: &Candidate) -> Option<String> {
     if let Some(hit) = {
-        let cache = prompt_cache().lock().unwrap_or_else(|e| e.into_inner());
+        let cache = prompt_cache().lock_recover();
         cache.get(&candidate.session_id).and_then(|c| {
             (c.mtime_bits == candidate.mtime_ms.to_bits() && c.size == candidate.size)
                 .then(|| c.first_prompt.clone())
@@ -272,17 +229,14 @@ async fn load_first_prompt(candidate: &Candidate) -> Option<String> {
             None
         }
     };
-    prompt_cache()
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .insert(
-            candidate.session_id.clone(),
-            PromptCacheEntry {
-                mtime_bits: candidate.mtime_ms.to_bits(),
-                size: candidate.size,
-                first_prompt: first_prompt.clone(),
-            },
-        );
+    prompt_cache().lock_recover().insert(
+        candidate.session_id.clone(),
+        PromptCacheEntry {
+            mtime_bits: candidate.mtime_ms.to_bits(),
+            size: candidate.size,
+            first_prompt: first_prompt.clone(),
+        },
+    );
     first_prompt
 }
 
@@ -316,7 +270,7 @@ async fn collect_candidates(root: &Path, exclude: &HashSet<String>) -> Vec<Candi
 /// `new Date(mtimeMs).toISOString()` (Date truncates fractional ms toward zero).
 fn ms_to_iso(mtime_ms: f64) -> String {
     DateTime::from_timestamp_millis(mtime_ms.trunc() as i64)
-        .map(mainframe_runtime::time::to_iso8601)
+        .map(mainframe_types::time::to_iso8601)
         .unwrap_or_default()
 }
 
@@ -365,7 +319,7 @@ pub async fn list_external_sessions(
     let mut matched: Vec<MatchedSession> = Vec::new();
     for candidate in &candidates {
         if let Some(meta) = load_meta(candidate).await
-            && cwd_belongs_to_project(meta.cwd.as_deref(), project_path)
+            && mainframe_types::paths::cwd_belongs_to_project(meta.cwd.as_deref(), project_path)
         {
             matched.push(MatchedSession {
                 meta,
@@ -418,9 +372,20 @@ mod tests {
 
     #[test]
     fn cwd_nesting() {
-        assert!(cwd_belongs_to_project(Some("/a/b"), "/a/b"));
-        assert!(cwd_belongs_to_project(Some("/a/b/c"), "/a/b"));
-        assert!(!cwd_belongs_to_project(Some("/a/bc"), "/a/b"));
-        assert!(!cwd_belongs_to_project(None, "/a/b"));
+        assert!(mainframe_types::paths::cwd_belongs_to_project(
+            Some("/a/b"),
+            "/a/b"
+        ));
+        assert!(mainframe_types::paths::cwd_belongs_to_project(
+            Some("/a/b/c"),
+            "/a/b"
+        ));
+        assert!(!mainframe_types::paths::cwd_belongs_to_project(
+            Some("/a/bc"),
+            "/a/b"
+        ));
+        assert!(!mainframe_types::paths::cwd_belongs_to_project(
+            None, "/a/b"
+        ));
     }
 }

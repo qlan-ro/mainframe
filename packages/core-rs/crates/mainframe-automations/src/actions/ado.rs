@@ -48,7 +48,7 @@ struct WorkItem {
 
 pub struct AdoCreateItemAction {
     base: String,
-    client: reqwest::Client,
+    client: Result<reqwest::Client, reqwest::Error>,
 }
 
 impl AdoCreateItemAction {
@@ -59,7 +59,9 @@ impl AdoCreateItemAction {
     pub fn with_base_url(base: impl Into<String>) -> Self {
         Self {
             base: base.into(),
-            client: super::http_client(),
+            client: mainframe_runtime::http::builder()
+                .user_agent(super::USER_AGENT)
+                .build(),
         }
     }
 }
@@ -121,6 +123,8 @@ impl Action for AdoCreateItemAction {
 
             let mut request = self
                 .client
+                .as_ref()
+                .map_err(|err| ActionError(format!("HTTP client initialization failed: {err}")))?
                 .post(url)
                 .header("Content-Type", "application/json-patch+json")
                 .body(

@@ -12,13 +12,7 @@ pub use crate::item_types::ThreadItem;
 
 // --- JSON-RPC 2.0 framing ---
 
-/// `RequestId = string | number`. Hash/Eq so it keys the pending-request map.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum RequestId {
-    Number(i64),
-    String(String),
-}
+pub use mainframe_types::acp::jsonrpc::RequestId;
 
 /// `'id' in msg && 'result' in msg`.
 pub(crate) fn is_json_rpc_response(msg: &Map<String, Value>) -> bool {

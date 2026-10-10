@@ -15,7 +15,7 @@ pub(crate) fn derive_title_from_message(content: &str) -> String {
         Some(idx) if idx > 20 => truncated[..idx].iter().collect(),
         _ => truncated.iter().collect(),
     };
-    format!("{head}\u{2026}")
+    mainframe_types::chat_text::with_ellipsis(&head)
 }
 
 /// Which CLI generates the title for `adapter_id`. The `provider.<adapterId>.titleBinary`

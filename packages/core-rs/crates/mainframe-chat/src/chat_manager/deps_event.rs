@@ -1,5 +1,6 @@
 //! `EventHandlerDeps` adapter and its sub-manager construction.
 use super::*;
+use mainframe_types::sync::LockExt as _;
 
 // ── sub-manager Deps wrappers ────────────────────────────────────────────────
 
@@ -88,7 +89,7 @@ impl EventHandlerDeps for EhDeps {
         let Some(cell) = self.get_active_chat(chat_id) else {
             return;
         };
-        let mut chat = cell.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
+        let mut chat = cell.lock_recover().chat.clone();
         let presence = PresenceDeps {
             deps: self.deps.clone(),
             active_chats: self.active_chats.clone(),

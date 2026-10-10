@@ -9,17 +9,13 @@
 /// request without one, and reqwest sends none by default. No version suffix:
 /// the Rust crates are all pinned at the workspace's placeholder `0.0.0`, so
 /// one would advertise a number that never moves.
-pub const USER_AGENT: &str = "mainframe";
+pub use mainframe_github::USER_AGENT;
 
 pub mod actions;
 pub mod credentials;
 pub mod domain;
 pub mod engine;
 pub mod error;
-pub mod github_device;
-pub mod github_http;
-pub mod github_issues;
-mod github_issues_types;
 pub mod interactions;
 pub mod ports;
 pub mod scheduler;
@@ -35,15 +31,6 @@ pub use service::{
 
 #[cfg(test)]
 mod credentials_tests;
-
-#[cfg(test)]
-mod github_device_tests;
-
-#[cfg(test)]
-mod github_issues_errors_tests;
-
-#[cfg(test)]
-mod github_issues_tests;
 
 #[cfg(test)]
 mod interactions_tests;

@@ -1,3 +1,4 @@
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU8, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
@@ -99,18 +100,15 @@ impl ClaudeSession {
         let _ = self.weak_self.set(Arc::downgrade(self));
     }
     pub fn set_on_exit(&self, cb: Box<dyn Fn() + Send + Sync>) {
-        *self.on_exit.lock().unwrap_or_else(|e| e.into_inner()) = Some(cb);
+        *self.on_exit.lock_recover() = Some(cb);
     }
 
     fn state(&self) -> std::sync::MutexGuard<'_, ClaudeSessionState> {
-        self.state.lock().unwrap_or_else(|e| e.into_inner())
+        self.state.lock_recover()
     }
 
     fn stdin_clone(&self) -> Option<StdinTx> {
-        self.stdin_tx
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone()
+        self.stdin_tx.lock_recover().clone()
     }
     fn available_stdin(&self) -> Option<StdinTx> {
         match self.stdin_clone() {

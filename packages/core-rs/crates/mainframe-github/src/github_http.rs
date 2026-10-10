@@ -7,7 +7,7 @@ use reqwest::RequestBuilder;
 pub const GITHUB_API: &str = "https://api.github.com";
 pub const API_VERSION: &str = "2022-11-28";
 
-pub(crate) fn github_headers(request: RequestBuilder) -> RequestBuilder {
+pub fn github_headers(request: RequestBuilder) -> RequestBuilder {
     request
         .header("Accept", "application/vnd.github+json")
         .header("X-GitHub-Api-Version", API_VERSION)

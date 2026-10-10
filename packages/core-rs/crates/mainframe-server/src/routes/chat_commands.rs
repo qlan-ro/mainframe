@@ -26,14 +26,6 @@ use crate::routes::projects::parse_body;
 /// key. Wrapping in `Some` here keeps absent → outer `None` and present
 /// (including `null`) → outer `Some`, which is what the `projectId` presence
 /// check needs.
-fn double_option<'de, D, T>(de: D) -> Result<Option<Option<T>>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-    T: serde::Deserialize<'de>,
-{
-    serde::Deserialize::deserialize(de).map(Some)
-}
-
 async fn chat_exists(ctx: &Arc<AppCtx>, id: &str) -> Result<bool, Response> {
     let lookup = id.to_string();
     match ctx.db.call(move |db| db.chats.get(&lookup)).await {
@@ -57,7 +49,11 @@ struct UpdateChatConfigBody {
     /// A chat's project is fixed at creation. Detected as an explicit
     /// field (present at all, any value including `null`) rather than
     /// `deny_unknown_fields`, because other clients may send extra keys today.
-    #[serde(rename = "projectId", default, deserialize_with = "double_option")]
+    #[serde(
+        rename = "projectId",
+        default,
+        deserialize_with = "mainframe_types::serde_util::double_option"
+    )]
     project_id: Option<Option<serde_json::Value>>,
 }
 

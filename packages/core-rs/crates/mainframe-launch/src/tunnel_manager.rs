@@ -16,7 +16,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex as StdMutex, MutexGuard, PoisonError, TryLockError};
+use std::sync::{Arc, Mutex as StdMutex, MutexGuard, TryLockError};
 use std::time::{Duration, Instant};
 
 use dashmap::DashMap;
@@ -154,7 +154,7 @@ pub struct TunnelManager {
     verified_at: Arc<DashMap<String, VerifyResult>>,
     broadcast: BroadcastFn,
     config: TunnelConfig,
-    client: reqwest::Client,
+    client: Result<reqwest::Client, reqwest::Error>,
     /// Pidfile registry so a crashed daemon's next startup sweep can reap tunnels
     /// it leaked. Defaults to `NoopChildRegistry`.
     registry: Arc<dyn ChildRegistryPort>,

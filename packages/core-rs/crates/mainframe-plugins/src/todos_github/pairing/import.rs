@@ -2,7 +2,7 @@
 //! `import_one`'s errors are plain strings — the caller in `mod.rs` turns
 //! them into a `Skipped` row rather than failing the whole batch.
 
-use mainframe_runtime::time::now_iso8601;
+use mainframe_types::time::now_iso8601;
 
 use crate::PluginError;
 use crate::context::PluginContext;

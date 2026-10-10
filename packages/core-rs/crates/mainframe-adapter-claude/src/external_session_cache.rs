@@ -4,6 +4,7 @@
 //! `Arc<Mutex<HashMap<..>>>` owned by the adapter; every accessor takes the
 //! handle. `new_external_session_cache` constructs it at adapter init.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -28,7 +29,7 @@ pub(crate) fn get_cached(
     mtime_ms: f64,
     size: u64,
 ) -> Option<ExternalSession> {
-    let map = cache.lock().unwrap_or_else(|e| e.into_inner());
+    let map = cache.lock_recover();
     let e = map.get(session_id)?;
     if e.mtime_ms != mtime_ms || e.size != size {
         return None;
@@ -43,7 +44,7 @@ pub(crate) fn set_cached(
     size: u64,
     meta: ExternalSession,
 ) {
-    cache.lock().unwrap_or_else(|e| e.into_inner()).insert(
+    cache.lock_recover().insert(
         session_id.to_string(),
         Entry {
             mtime_ms,
@@ -55,7 +56,7 @@ pub(crate) fn set_cached(
 
 #[cfg(test)]
 pub(crate) fn clear_external_session_cache(cache: &ExternalSessionCache) {
-    cache.lock().unwrap_or_else(|e| e.into_inner()).clear();
+    cache.lock_recover().clear();
 }
 
 #[cfg(test)]

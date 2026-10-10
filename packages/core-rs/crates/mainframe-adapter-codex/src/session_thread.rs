@@ -22,10 +22,7 @@ impl CodexSession {
         p
     }
     pub(super) async fn resolve_target(&self, no_persistence: bool) -> ThreadTarget {
-        let override_present = *self
-            .transcript_present_override
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let override_present = *self.transcript_present_override.lock_recover();
         crate::fork::resolve_target(
             self.resume_thread_id.as_deref(),
             self.fork_source.as_ref(),
@@ -41,13 +38,7 @@ impl CodexSession {
         permission_mode: ExecutionMode,
         no_persistence: bool,
     ) -> Result<(), AdapterError> {
-        if self
-            .state
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .thread_id
-            .is_some()
-        {
+        if self.state.lock_recover().thread_id.is_some() {
             return Ok(());
         }
 
@@ -71,16 +62,12 @@ impl CodexSession {
         let (new_thread_id, reported_model) = (res.thread.id, res.model);
 
         {
-            let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+            let mut state = self.state.lock_recover();
             state.command_state.clear();
             state.thread_id = Some(new_thread_id.clone());
             state.reported_model = non_empty(reported_model.as_deref()).map(str::to_string);
         }
-        self.sink
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone()
-            .on_init(&new_thread_id);
+        self.sink.lock_recover().clone().on_init(&new_thread_id);
         Ok(())
     }
     fn check_fork_source(&self, res: &ThreadStartResult, expected_fork_source: Option<&str>) {

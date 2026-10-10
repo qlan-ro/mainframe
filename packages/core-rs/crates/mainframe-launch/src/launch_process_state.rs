@@ -15,8 +15,9 @@
 //! State: `statuses` = `Arc<Mutex<HashMap<String, LaunchProcessStatus>>>`,
 //! `outputBuffers` = `Arc<Mutex<HashMap<String, VecDeque<LaunchOutputEntry>>>>`.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::{HashMap, VecDeque};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use mainframe_types::events::LaunchStream;
 use mainframe_types::launch::LaunchProcessStatus;
@@ -50,7 +51,7 @@ impl LaunchProcessState {
     }
 
     fn lock(&self) -> MutexGuard<'_, State> {
-        self.inner.lock().unwrap_or_else(PoisonError::into_inner)
+        self.inner.lock_recover()
     }
 
     /// Call at the start of a fresh run — clears any prior run's output/status.

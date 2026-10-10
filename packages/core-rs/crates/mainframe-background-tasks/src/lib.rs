@@ -8,6 +8,9 @@
     allow(clippy::unwrap_used, clippy::expect_used, clippy::await_holding_lock)
 )]
 
+#[cfg(test)]
+use mainframe_types::sync::LockExt as _;
+
 pub mod encoding;
 pub mod kill;
 pub mod liveness;
@@ -25,5 +28,5 @@ pub mod tracker;
 #[cfg(test)]
 pub(crate) fn seam_test_guard() -> std::sync::MutexGuard<'static, ()> {
     static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    LOCK.lock_recover()
 }

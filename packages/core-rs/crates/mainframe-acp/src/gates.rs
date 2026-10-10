@@ -125,7 +125,7 @@ fn subject_for(request: &ControlRequest) -> RequestPermissionSubject {
 /// and resume redelivery, so a client answering a redelivered gate correlates
 /// against the same id it would have seen live.
 pub fn gate_request_id(request_id: &str) -> RequestId {
-    RequestId::Str(format!("gate-{request_id}"))
+    RequestId::String(format!("gate-{request_id}"))
 }
 
 /// Build the `session/request_permission` request a facade connection sends

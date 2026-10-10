@@ -14,8 +14,9 @@
 //! map's back. Every read of a ready entry is therefore liveness-checked
 //! against the manager.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use tokio::sync::watch;
 
@@ -94,7 +95,7 @@ impl PortTunnelRegistry {
     }
 
     fn lock(&self) -> MutexGuard<'_, HashMap<u16, Entry>> {
-        self.inner.lock().unwrap_or_else(PoisonError::into_inner)
+        self.inner.lock_recover()
     }
 
     /// Starts a tunnel for `port`, or joins the one already running or starting.

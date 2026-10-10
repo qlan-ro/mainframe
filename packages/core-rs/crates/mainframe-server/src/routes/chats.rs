@@ -462,18 +462,11 @@ async fn session_files(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -
     ok(serde_json::json!({ "files": files }))
 }
 
-fn tool_use_id_ok(id: &str) -> bool {
-    !id.is_empty()
-        && id
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
-}
-
 async fn tool_result(
     State(ctx): State<Arc<AppCtx>>,
     Path((id, tool_use_id)): Path<(String, String)>,
 ) -> Response {
-    if id.is_empty() || !tool_use_id_ok(&tool_use_id) {
+    if id.is_empty() || !mainframe_types::ids::is_safe_identifier(&tool_use_id) {
         return fail(StatusCode::BAD_REQUEST, "Invalid parameters");
     }
     let lookup_id = id.clone();

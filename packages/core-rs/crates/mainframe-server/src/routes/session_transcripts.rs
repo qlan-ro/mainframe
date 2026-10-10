@@ -19,8 +19,8 @@ use mainframe_types::transcript::{
 
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok};
-use crate::routes::identifier::is_identifier;
 use crate::routes::projects::parse_body;
+use mainframe_types::ids::is_safe_identifier;
 
 const MAX_CHAT_IDS: usize = 500;
 
@@ -39,7 +39,7 @@ fn parse_chat_ids(body: &Bytes) -> Result<Vec<String>, &'static str> {
     if chat_ids.len() > MAX_CHAT_IDS {
         return Err("chatIds exceeds the 500-entry limit");
     }
-    if !chat_ids.iter().all(|id| is_identifier(id)) {
+    if !chat_ids.iter().all(|id| is_safe_identifier(id)) {
         return Err("chatIds contains an invalid id");
     }
     Ok(chat_ids)

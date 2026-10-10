@@ -104,6 +104,7 @@ fn recorded_error(event: &RecordedEvent) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
+    use mainframe_types::sync::LockExt as _;
     use std::sync::Mutex;
 
     use serde_json::json;
@@ -126,10 +127,7 @@ mod tests {
         fn on_tool_result(&self, _content: Vec<MessageContent>, _vendor_id: Option<String>) {}
         fn on_permission(&self, _request: ControlRequest) {}
         fn on_permission_cancelled(&self, request_id: &str) {
-            self.cancelled
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .push(request_id.to_string());
+            self.cancelled.lock_recover().push(request_id.to_string());
         }
         fn on_result(&self, _data: SessionResult) {}
         fn on_exit(&self, _code: Option<i32>) {}
@@ -146,15 +144,11 @@ mod tests {
         fn on_skill_loaded(&self, _entry: LoadedSkill) {}
         fn on_subagent_child(&self, _parent_tool_use_id: &str, _blocks: Vec<MessageContent>) {}
         fn on_api_retry(&self, attempt: i64, reason: Option<String>) {
-            self.api_retries
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .push((attempt, reason));
+            self.api_retries.lock_recover().push((attempt, reason));
         }
         fn on_message_partial(&self, api_message_id: &str, content: Vec<MessageContent>) {
             self.partials
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
+                .lock_recover()
                 .push((api_message_id.to_string(), content));
         }
     }
@@ -178,10 +172,7 @@ mod tests {
 
         dispatch(&dyn_sink, &event).unwrap();
 
-        assert_eq!(
-            *sink.cancelled.lock().unwrap_or_else(|e| e.into_inner()),
-            vec!["req_1".to_string()]
-        );
+        assert_eq!(*sink.cancelled.lock_recover(), vec!["req_1".to_string()]);
     }
 
     #[test]
@@ -193,7 +184,7 @@ mod tests {
         dispatch(&dyn_sink, &event).unwrap();
 
         assert_eq!(
-            *sink.api_retries.lock().unwrap_or_else(|e| e.into_inner()),
+            *sink.api_retries.lock_recover(),
             vec![(2, Some("overloaded_error".to_string()))]
         );
     }
@@ -209,7 +200,7 @@ mod tests {
 
         dispatch(&dyn_sink, &event).unwrap();
 
-        let partials = sink.partials.lock().unwrap_or_else(|e| e.into_inner());
+        let partials = sink.partials.lock_recover();
         assert_eq!(partials.len(), 1);
         assert_eq!(partials[0].0, "msg_a");
         assert_eq!(
@@ -229,11 +220,6 @@ mod tests {
 
         dispatch(&dyn_sink, &event).unwrap();
 
-        assert!(
-            sink.cancelled
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .is_empty()
-        );
+        assert!(sink.cancelled.lock_recover().is_empty());
     }
 }

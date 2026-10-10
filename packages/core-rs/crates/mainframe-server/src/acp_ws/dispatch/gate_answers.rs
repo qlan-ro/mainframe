@@ -19,7 +19,7 @@ pub(super) async fn handle_gate_answer(
     ports: &dyn GatePort,
     connection: &std::sync::Arc<FacadeConnection>,
 ) {
-    let Some(RequestId::Str(rpc_id)) = response.id.clone() else {
+    let Some(RequestId::String(rpc_id)) = response.id.clone() else {
         debug!("acp facade: response with no recognizable id dropped");
         return;
     };

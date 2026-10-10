@@ -69,6 +69,8 @@ pub enum GitHubError {
     Network(String),
     #[error("request failed ({status}): {message}")]
     Request { status: u16, message: String },
+    #[error("{0}")]
+    Unavailable(String),
 }
 
 #[derive(Debug, Deserialize)]
@@ -145,4 +147,24 @@ pub(crate) fn patch_body(patch: IssuePatch) -> Value {
         body.insert("state_reason".to_string(), json!(reason));
     }
     Value::Object(body)
+}
+
+#[cfg(test)]
+mod golden_tests {
+    use super::{IssuePatch, IssueState, patch_body};
+
+    #[test]
+    fn issue_patch_serializes_the_github_wire_fields() {
+        let body = patch_body(IssuePatch {
+            title: Some("Fix sync".into()),
+            body: Some("Details".into()),
+            labels: Some(vec!["bug".into()]),
+            state: Some(IssueState::Closed),
+            state_reason: Some("completed".into()),
+        });
+        assert_eq!(
+            body.to_string(),
+            r#"{"body":"Details","labels":["bug"],"state":"closed","state_reason":"completed","title":"Fix sync"}"#
+        );
+    }
 }

@@ -1,4 +1,5 @@
 use super::*;
+use mainframe_types::sync::LockExt as _;
 
 impl TunnelManager {
     /// Hand a spawned child to the watcher task that owns it until it is reaped.
@@ -48,9 +49,7 @@ impl TunnelManager {
                     None
                 }
             };
-            live.lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .remove(&id);
+            live.lock_recover().remove(&id);
             exit_tx.send_replace(Some(TunnelExit { code }));
         });
         process

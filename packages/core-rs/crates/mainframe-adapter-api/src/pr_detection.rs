@@ -1,6 +1,5 @@
-//! The workspace has no `regex` crate in the allowlist (as with
-//! `mainframe-adapter-api::parse_version`), so every pattern here is
-//! hand-rolled.
+//! The workspace has no `regex` crate in the allowlist, so every pattern here
+//! is hand-rolled.
 //!
 //! PR detection is adapter-neutral, so it lives next to the `SessionSink` trait
 //! it decorates rather than inside one adapter crate.

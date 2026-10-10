@@ -82,7 +82,7 @@ graph TB
 
 ## The Rust daemon (`packages/core-rs`)
 
-The daemon is a Cargo workspace of 21 crates. `mainframe-daemon` is the only
+The daemon is a Cargo workspace of 22 crates. `mainframe-daemon` is the only
 binary; everything else is a library crate. Each crate's module documentation
 and manifest describe its current responsibility.
 
@@ -97,6 +97,7 @@ Tier 0  mainframe-types                        foundation: serde structs/enums, 
 Tier 1  mainframe-runtime          config, logging, auth, login-shell PATH capture
         mainframe-db               SQLite via rusqlite: migrations, repositories
         mainframe-git               git subprocess + porcelain parsers
+        mainframe-github            GitHub device flow, Issues client and DTOs
         mainframe-display           adapter-agnostic message/tool display pipeline
         mainframe-background-tasks  spool tracking, process-group kill/liveness
         mainframe-claude-workflows  /workflows run store

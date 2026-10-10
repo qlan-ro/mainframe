@@ -2,6 +2,7 @@
 //! socket loop drains, per-session stream state, and gates delivered but not
 //! yet answered.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::future::Future;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -50,7 +51,7 @@ pub struct FacadeConnection {
     /// queue position and the queue's tail ordering both depend on which of two
     /// concurrent prompts enqueues first — while leaving different sessions
     /// free to run their prompts in parallel.
-    prompt_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
+    prompt_locks: mainframe_runtime::sync::KeyedMutex,
     /// Consecutive failed `session/resume` deliveries per session. NOT
     /// reclaimed by `forget_chat`: the failure path detaches the session
     /// itself, and reclaiming there would reset the very count that stops a
@@ -69,7 +70,7 @@ impl FacadeConnection {
             revision_cursors_opted_in: AtomicBool::new(false),
             replay_result_previews_opted_in: AtomicBool::new(false),
             compressed_replay_opted_in: AtomicBool::new(false),
-            prompt_locks: Mutex::new(HashMap::new()),
+            prompt_locks: mainframe_runtime::sync::KeyedMutex::default(),
             resume_failures: Mutex::new(HashMap::new()),
         }
     }
@@ -98,12 +99,7 @@ impl FacadeConnection {
     /// first use. Held by the caller for the lifetime of one spawned prompt
     /// dispatch.
     pub(crate) fn session_prompt_lock(&self, session_id: &str) -> Arc<tokio::sync::Mutex<()>> {
-        self.prompt_locks
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .entry(session_id.to_string())
-            .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
-            .clone()
+        self.prompt_locks.get(session_id)
     }
 
     /// Count one failed resume for `chat_id` and report how many in a row
@@ -121,9 +117,7 @@ impl FacadeConnection {
     }
 
     fn locked_resume_failures(&self) -> std::sync::MutexGuard<'_, HashMap<String, u32>> {
-        self.resume_failures
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+        self.resume_failures.lock_recover()
     }
 
     pub(crate) fn is_negotiated(&self) -> bool {
@@ -164,11 +158,11 @@ impl FacadeConnection {
     pub(super) fn locked_sessions(
         &self,
     ) -> std::sync::MutexGuard<'_, HashMap<String, SessionSlot>> {
-        self.sessions.lock().unwrap_or_else(|e| e.into_inner())
+        self.sessions.lock_recover()
     }
 
     fn locked_gates(&self) -> std::sync::MutexGuard<'_, HashMap<String, PendingGate>> {
-        self.pending_gates.lock().unwrap_or_else(|e| e.into_inner())
+        self.pending_gates.lock_recover()
     }
 
     pub fn is_attached(&self, chat_id: &str) -> bool {
@@ -200,22 +194,12 @@ impl FacadeConnection {
     /// otherwise all three outlive the chat for the connection's whole
     /// lifetime.
     ///
-    /// The prompt lock goes only when nothing else holds it. A call still in
-    /// flight owns a clone, and replacing the entry would hand the next call
-    /// for that session a different mutex — two calls then enqueue
-    /// concurrently, which is the ordering the lock exists to prevent. The
-    /// entry a running call keeps alive is reclaimed by the next teardown.
+    /// Pruning weak entries never replaces a lock held by an active prompt.
     pub fn forget_chat(&self, chat_id: &str) {
         self.locked_sessions().remove(chat_id);
         self.locked_gates()
             .retain(|_, gate| gate.chat_id != chat_id);
-        let mut locks = self.prompt_locks.lock().unwrap_or_else(|e| e.into_inner());
-        if locks
-            .get(chat_id)
-            .is_some_and(|lock| Arc::strong_count(lock) == 1)
-        {
-            locks.remove(chat_id);
-        }
+        self.prompt_locks.prune();
     }
 
     fn send_frame(&self, payload: String) {
@@ -297,7 +281,7 @@ impl FacadeConnection {
 /// remembered — the string form of [`gate_request_id`].
 pub fn rpc_id_string(request_id: &str) -> String {
     match gate_request_id(request_id) {
-        RequestId::Str(s) => s,
+        RequestId::String(s) => s,
         RequestId::Number(n) => n.to_string(),
     }
 }

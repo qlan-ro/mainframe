@@ -33,10 +33,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
     }
 
     pub(super) fn append_and_display(&self, message: ChatMessage) {
-        self.messages
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .append(&self.chat_id, message);
+        self.messages.lock_recover().append(&self.chat_id, message);
         self.emit_display();
     }
 
@@ -59,8 +56,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         vendor_id: Option<String>,
     ) -> ChatMessage {
         self.messages
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .create_transient_message_with_vendor_id(
                 &self.chat_id,
                 r#type,
@@ -92,7 +88,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
             }
         }
         if let Some(cell) = self.deps.get_active_chat(&self.chat_id) {
-            let chat = cell.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
+            let chat = cell.lock_recover().chat.clone();
             self.deps
                 .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
         }

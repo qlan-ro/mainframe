@@ -115,7 +115,7 @@ impl ManagerState {
     /// stretch the others' grace periods.
     pub(super) async fn shutdown_all(self: &Arc<Self>) {
         let keys: Vec<String> = {
-            let _gate = self.spawn_gate.lock().unwrap_or_else(|e| e.into_inner());
+            let _gate = self.spawn_gate.lock_recover();
             self.shutting_down.send_replace(true);
             self.handles.iter().map(|e| e.key().clone()).collect()
         };

@@ -1,5 +1,6 @@
 //! `WorktreeOfferDeps` adapter and its sub-manager construction.
 use super::*;
+use mainframe_types::sync::LockExt as _;
 
 /// Shared-internals wrapper backing the worktree offer registry. Built before the
 /// sub-manager wrappers so each of them can hold an `Arc` to the same registry.
@@ -20,13 +21,7 @@ impl WorktreeOfferDeps for OfferDeps {
         let chat = self
             .active_chats
             .get(chat_id)
-            .map(|c| {
-                c.value()
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .chat
-                    .clone()
-            })
+            .map(|c| c.value().lock_recover().chat.clone())
             .or_else(|| self.deps.chats_get(chat_id))?;
         Some((chat.project_id, chat.worktree_path))
     }

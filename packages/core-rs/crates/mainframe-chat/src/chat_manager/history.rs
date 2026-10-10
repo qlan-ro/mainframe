@@ -1,15 +1,8 @@
 //! History, context, and degraded-recovery delegations off the `ChatManager` facade.
 use super::*;
+use mainframe_types::sync::LockExt as _;
 
-/// `get_resume_snapshot`'s result: the display history, the `StreamingLeafKind`
-/// of the in-flight partial overlay projected into it (if any), and any
-/// still-open permission gate — the three inputs `session/resume` needs to
-/// `encode_revision` and redeliver a gate, gathered in one call.
-pub struct ResumeSnapshot {
-    pub messages: Vec<DisplayMessage>,
-    pub streaming: Option<mainframe_types::display::StreamingLeafKind>,
-    pub pending: Option<mainframe_types::adapter::ControlRequest>,
-}
+pub use mainframe_types::resume::ResumeSnapshot;
 
 impl ChatManager {
     /// Cached messages, falling back to a one-shot on-disk history load (Claude
@@ -31,21 +24,17 @@ impl ChatManager {
         // Single-flight the on-disk read (Established facts: two concurrent
         // misses used to both hit disk). The follower re-reads the cache the
         // leader just populated instead of loading a second time.
-        if !self.lifecycle.claim_history(chat_id).await {
+        let Some(claim) = self.lifecycle.claim_history(chat_id).await else {
             return self.cached_messages(chat_id).unwrap_or_default();
-        }
+        };
         let result = self.load_history_into_cache(chat_id).await;
-        self.lifecycle.release_history(chat_id);
+        self.lifecycle.touch(chat_id);
+        drop(claim);
         result
     }
 
     fn cached_messages(&self, chat_id: &str) -> Option<Vec<ChatMessage>> {
-        let cached = self
-            .messages
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .get(chat_id)
-            .cloned();
+        let cached = self.messages.lock_recover().get(chat_id).cloned();
         cached.filter(|c| !c.is_empty())
     }
 
@@ -97,12 +86,11 @@ impl ChatManager {
             return remapped;
         }
         let remapped = {
-            let mut messages = self.messages.lock().unwrap_or_else(|e| e.into_inner());
+            let mut messages = self.messages.lock_recover();
             messages.set_and_snapshot(chat_id, remapped)
         };
         self.permissions
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .restore_pending_permission(chat_id, &remapped);
         remapped
     }
@@ -118,13 +106,12 @@ impl ChatManager {
             return composed.messages;
         }
         let stored = {
-            let mut messages = self.messages.lock().unwrap_or_else(|e| e.into_inner());
+            let mut messages = self.messages.lock_recover();
             messages.set_and_snapshot(chat_id, composed.messages)
         };
         let active_slice = &stored[composed.active_from.min(stored.len())..];
         self.permissions
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .restore_pending_permission(chat_id, active_slice);
         stored
     }

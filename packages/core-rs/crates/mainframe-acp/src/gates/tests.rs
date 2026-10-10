@@ -45,7 +45,7 @@ fn control_request() -> ControlRequest {
 fn build_request_carries_the_full_control_request_in_meta() {
     let request = build_request(
         "chat_9f2a3b1c",
-        RequestId::Str("gate-req_001".into()),
+        RequestId::String("gate-req_001".into()),
         &control_request(),
     );
     let params = request.params.unwrap();

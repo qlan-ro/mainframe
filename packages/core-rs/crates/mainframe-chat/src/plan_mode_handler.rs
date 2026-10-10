@@ -1,3 +1,4 @@
+use mainframe_types::sync::LockExt as _;
 use std::sync::{Arc, Mutex};
 
 use mainframe_adapter_api::{AdapterError, PlanActionContext, PlanModeActionHandler};
@@ -53,7 +54,7 @@ impl<C: PlanModeContext> PlanModeHandler<C> {
     ) {
         let exec = response.execution_mode.unwrap_or(ExecutionMode::Default);
         let snapshot = {
-            let mut guard = active.lock().unwrap_or_else(|e| e.into_inner());
+            let mut guard = active.lock_recover();
             if Some(exec) != guard.chat.permission_mode || guard.chat.plan_mode == Some(true) {
                 guard.chat.permission_mode = Some(exec);
                 guard.chat.plan_mode = Some(false);
@@ -76,12 +77,7 @@ impl<C: PlanModeContext> PlanModeHandler<C> {
         active: &Arc<Mutex<ActiveChat>>,
         response: ControlResponse,
     ) -> Result<(), AdapterError> {
-        let adapter_id = active
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .chat
-            .adapter_id
-            .clone();
+        let adapter_id = active.lock_recover().chat.adapter_id.clone();
         let Some(handler) = self.ctx.resolve_plan_mode_handler(&adapter_id) else {
             warn!(chat_id, adapter_id, "no plan-mode handler for adapter");
             return Ok(());
@@ -99,12 +95,7 @@ impl<C: PlanModeContext> PlanModeHandler<C> {
         active: &Arc<Mutex<ActiveChat>>,
         response: ControlResponse,
     ) -> Result<(), AdapterError> {
-        let adapter_id = active
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .chat
-            .adapter_id
-            .clone();
+        let adapter_id = active.lock_recover().chat.adapter_id.clone();
         let Some(handler) = self.ctx.resolve_plan_mode_handler(&adapter_id) else {
             warn!(chat_id, adapter_id, "no plan-mode handler for adapter");
             return Ok(());

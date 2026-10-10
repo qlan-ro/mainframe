@@ -1,5 +1,6 @@
+use mainframe_types::sync::LockExt as _;
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -58,7 +59,7 @@ struct Inner {
 pub struct PushService {
     inner: Arc<Mutex<Inner>>,
     rt: Option<Handle>,
-    client: reqwest::Client,
+    client: Result<reqwest::Client, reqwest::Error>,
     url: String,
 }
 
@@ -77,13 +78,13 @@ impl PushService {
                 staleness_handle: None,
             })),
             rt: Handle::try_current().ok(),
-            client: reqwest::Client::new(),
+            client: mainframe_runtime::http::client(),
             url: EXPO_PUSH_URL.to_string(),
         }
     }
 
     fn lock(&self) -> MutexGuard<'_, Inner> {
-        self.inner.lock().unwrap_or_else(PoisonError::into_inner)
+        self.inner.lock_recover()
     }
 
     pub fn register_device(&self, device_id: &str, push_token: &str) {
@@ -142,7 +143,7 @@ impl PushService {
             let inner = Arc::clone(&self.inner);
             let handle = rt.spawn(async move {
                 tokio::time::sleep(Duration::from_millis(STALENESS_MS)).await;
-                let mut guard = inner.lock().unwrap_or_else(PoisonError::into_inner);
+                let mut guard = inner.lock_recover();
                 guard.desktop_active = false;
                 tracing::info!(module = "push", "desktop staleness timeout — resuming push");
             });
@@ -163,7 +164,14 @@ impl PushService {
             return;
         }
 
-        match self.client.post(&self.url).json(&messages).send().await {
+        let client = match &self.client {
+            Ok(client) => client,
+            Err(err) => {
+                tracing::error!(module = "push", ?err, "failed to send push notification");
+                return;
+            }
+        };
+        match client.post(&self.url).json(&messages).send().await {
             Ok(res) => {
                 if !res.status().is_success() {
                     tracing::error!(

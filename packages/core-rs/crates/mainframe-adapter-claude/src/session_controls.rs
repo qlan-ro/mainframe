@@ -8,10 +8,7 @@ impl ClaudeSession {
             )));
         }
         let cli_mode = execution_mode_cli(mode).to_string();
-        *self
-            .base_permission_mode
-            .lock()
-            .unwrap_or_else(|e| e.into_inner()) = cli_mode.clone();
+        *self.base_permission_mode.lock_recover() = cli_mode.clone();
         self.write_cli_permission_mode(&cli_mode);
         Ok(())
     }
@@ -25,10 +22,7 @@ impl ClaudeSession {
         let mode = if on {
             "plan".to_string()
         } else {
-            self.base_permission_mode
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .clone()
+            self.base_permission_mode.lock_recover().clone()
         };
         self.write_cli_permission_mode(&mode);
         Ok(())
@@ -83,11 +77,7 @@ impl ClaudeSession {
             )));
         }
         let model = if model == "default" {
-            let executable = self
-                .executable
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .clone();
+            let executable = self.executable.lock_recover().clone();
             crate::effective_model::required_probe(
                 &executable,
                 self.resolved_path.as_str(),

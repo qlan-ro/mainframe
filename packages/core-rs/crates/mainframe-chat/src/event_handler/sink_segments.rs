@@ -3,8 +3,9 @@
 //! that carried the block, interrupted or not).
 
 use mainframe_types::segment::{HandoffStatus, SegmentLayout, SegmentResultDelta};
+use mainframe_types::sync::LockExt as _;
 
-use super::*;
+use super::{ChatMessageType, EventHandlerDeps, SessionResult, SessionSinkImpl};
 use crate::segments::divider::{divider_for, divider_id, is_divider, refresh_divider};
 
 impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
@@ -64,7 +65,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
             return;
         };
         let appended = {
-            let mut messages = self.messages.lock().unwrap_or_else(|e| e.into_inner());
+            let mut messages = self.messages.lock_recover();
             let id = divider_id(&active.id);
             let warm = messages.get(&self.chat_id).is_some_and(|m| !m.is_empty());
             let present = messages
@@ -82,7 +83,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
 
     /// The turn's user message (the latest one) and its last message.
     fn turn_message_ids(&self) -> (Option<String>, Option<String>) {
-        let messages = self.messages.lock().unwrap_or_else(|e| e.into_inner());
+        let messages = self.messages.lock_recover();
         let Some(list) = messages.get(&self.chat_id) else {
             return (None, None);
         };

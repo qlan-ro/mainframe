@@ -1,3 +1,4 @@
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
@@ -115,10 +116,7 @@ impl CodexAdapter {
     /// Test-only override for `pin_fork_point`'s temp-app-server executable — see
     /// the field doc comment.
     pub fn set_pin_executable(&self, executable: &str) {
-        *self
-            .pin_executable
-            .lock()
-            .unwrap_or_else(|e| e.into_inner()) = executable.to_string();
+        *self.pin_executable.lock_recover() = executable.to_string();
     }
 
     pub fn create_plan_mode_handler(&self) -> CodexPlanModeHandler {
@@ -138,12 +136,7 @@ impl CodexAdapter {
     }
 
     async fn load_models(&self, executable: &str) -> Vec<AdapterModel> {
-        if let Some(cached) = self
-            .cached_models
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone()
-        {
+        if let Some(cached) = self.cached_models.lock_recover().clone() {
             return cached;
         }
         let client = match spawn_temp_app_server(
@@ -181,7 +174,7 @@ impl CodexAdapter {
         client.close();
         // Don't cache transient failures (empty).
         if !models.is_empty() {
-            *self.cached_models.lock().unwrap_or_else(|e| e.into_inner()) = Some(models.clone());
+            *self.cached_models.lock_recover() = Some(models.clone());
         }
         models
     }
@@ -204,11 +197,7 @@ impl Adapter for CodexAdapter {
         true
     }
     fn capabilities(&self) -> AdapterCapabilities {
-        let version = self
-            .observed_version
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone();
+        let version = self.observed_version.lock_recover().clone();
         AdapterCapabilities {
             plan_mode: true,
             auto_mode: false,
@@ -227,18 +216,11 @@ impl Adapter for CodexAdapter {
     /// `apply_refresh`), on both the primary and fallback version-detection
     /// path, so `capabilities().fork`'s version gate stays synchronous.
     fn observe_cli_version(&self, version: Option<&str>) {
-        *self
-            .observed_version
-            .lock()
-            .unwrap_or_else(|e| e.into_inner()) = version.map(str::to_string);
+        *self.observed_version.lock_recover() = version.map(str::to_string);
     }
 
     fn fork_unavailable_reason(&self) -> Option<String> {
-        let version = self
-            .observed_version
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone();
+        let version = self.observed_version.lock_recover().clone();
         fork_unavailable_reason_for(version.as_deref())
     }
 
@@ -250,11 +232,7 @@ impl Adapter for CodexAdapter {
         request: ForkPinRequest,
     ) -> BoxFuture<'_, Result<ForkSource, ForkPinError>> {
         let path = self.resolved_path.clone();
-        let executable = self
-            .pin_executable
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone();
+        let executable = self.pin_executable.lock_recover().clone();
         Box::pin(async move { pin_fork_point(request, &executable, path.as_str()).await })
     }
 
@@ -285,7 +263,9 @@ impl Adapter for CodexAdapter {
                 Ok(out) if out.status.success() => {
                     let stdout = String::from_utf8_lossy(&out.stdout);
                     Ok(Some(
-                        parse_version(&stdout).unwrap_or_else(|| stdout.trim().to_string()),
+                        mainframe_adapter_api::version::CliVersion::parse(&stdout)
+                            .map(|v| v.to_string())
+                            .unwrap_or_else(|| stdout.trim().to_string()),
                     ))
                 }
                 _ => Ok(None),
@@ -373,25 +353,14 @@ impl Adapter for CodexAdapter {
         let sessions = self.sessions.clone();
         let id = session.id().to_string();
         session.set_on_exit(Box::new(move || {
-            sessions
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .retain(|s| s.id() != id);
+            sessions.lock_recover().retain(|s| s.id() != id);
         }));
-        self.sessions
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .push(session.clone());
+        self.sessions.lock_recover().push(session.clone());
         session
     }
 
     fn kill_all(&self) {
-        let drained: Vec<Arc<CodexSession>> = self
-            .sessions
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .drain(..)
-            .collect();
+        let drained: Vec<Arc<CodexSession>> = self.sessions.lock_recover().drain(..).collect();
         for session in drained {
             tokio::spawn(async move {
                 if let Err(err) = session.kill().await {
@@ -400,40 +369,6 @@ impl Adapter for CodexAdapter {
             });
         }
     }
-}
-
-/// The first `N.N.N` triple in `stdout` (`/(\d+\.\d+\.\d+)/`).
-fn parse_version(stdout: &str) -> Option<String> {
-    let b = stdout.as_bytes();
-    let n = b.len();
-    let mut i = 0;
-    while i < n {
-        if b[i].is_ascii_digit() {
-            let mut j = i;
-            while j < n && b[j].is_ascii_digit() {
-                j += 1;
-            }
-            if j < n && b[j] == b'.' {
-                j += 1;
-                let g2 = j;
-                while j < n && b[j].is_ascii_digit() {
-                    j += 1;
-                }
-                if j > g2 && j < n && b[j] == b'.' {
-                    j += 1;
-                    let g3 = j;
-                    while j < n && b[j].is_ascii_digit() {
-                        j += 1;
-                    }
-                    if j > g3 {
-                        return Some(stdout[i..j].to_string());
-                    }
-                }
-            }
-        }
-        i += 1;
-    }
-    None
 }
 
 #[cfg(test)]

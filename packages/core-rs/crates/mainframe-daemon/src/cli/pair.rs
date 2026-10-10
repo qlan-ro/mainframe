@@ -22,7 +22,13 @@ pub(crate) async fn run_pair() {
         }
     };
     let base_url = format!("http://127.0.0.1:{port}");
-    let client = reqwest::Client::new();
+    let client = match mainframe_runtime::http::client() {
+        Ok(client) => client,
+        Err(_) => {
+            eprintln!("{}", connect_failure_message(&base_url));
+            std::process::exit(1);
+        }
+    };
 
     // Check the daemon is running + read the tunnel URL from /health.
     let health: Value = match client.get(format!("{base_url}/health")).send().await {

@@ -77,7 +77,7 @@ pub struct RevisionLog {
     /// affected or removed ordinal's old ids without scanning every item.
     /// Maintained only by `record_delta`/`seed_containers`; `record`/`seed`
     /// (the flat path) leave it alone.
-    containers: Vec<Vec<String>>,
+    containers: crate::container_index::ContainerIndex,
     /// Cumulative count of items `record`/`record_delta` has compared
     /// against their previous value — the deterministic gate an
     /// incremental `record_delta` must not grow past the affected
@@ -94,7 +94,7 @@ impl RevisionLog {
             items: HashMap::new(),
             tombstones: VecDeque::new(),
             floor: 0,
-            containers: Vec::new(),
+            containers: crate::container_index::ContainerIndex::default(),
             items_compared: 0,
         }
     }

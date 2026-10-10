@@ -15,7 +15,7 @@ struct GateSurface {
 
 impl GateSurface {
     fn gate_events_since(&self, from: usize) -> Vec<ChatSurfaceEvent> {
-        self.events.lock().unwrap_or_else(|e| e.into_inner())[from..]
+        self.events.lock_recover()[from..]
             .iter()
             .filter(|e| {
                 matches!(
@@ -28,16 +28,13 @@ impl GateSurface {
     }
 
     fn event_count(&self) -> usize {
-        self.events.lock().unwrap_or_else(|e| e.into_inner()).len()
+        self.events.lock_recover().len()
     }
 }
 
 impl ChatSurface for GateSurface {
     fn on_chat_surface_event(&self, event: ChatSurfaceEvent) {
-        self.events
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .push(event);
+        self.events.lock_recover().push(event);
     }
 }
 
@@ -55,11 +52,11 @@ impl CancelDeps {
     }
 
     fn events_since(&self, from: usize) -> Vec<DaemonEvent> {
-        self.events.lock().unwrap_or_else(|e| e.into_inner())[from..].to_vec()
+        self.events.lock_recover()[from..].to_vec()
     }
 
     fn event_count(&self) -> usize {
-        self.events.lock().unwrap_or_else(|e| e.into_inner()).len()
+        self.events.lock_recover().len()
     }
 }
 
@@ -68,10 +65,7 @@ impl EventHandlerDeps for CancelDeps {
         Some(self.cell.clone())
     }
     fn emit_event(&self, event: DaemonEvent) {
-        self.events
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .push(event);
+        self.events.lock_recover().push(event);
     }
     fn get_tool_categories(&self, _chat_id: &str) -> Option<ToolCategories> {
         None

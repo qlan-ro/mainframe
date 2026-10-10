@@ -23,8 +23,14 @@ impl TunnelManager {
             tunnel.url.clone()
         };
 
-        match self
-            .client
+        let client = match &self.client {
+            Ok(client) => client,
+            Err(err) => {
+                tracing::debug!(target: "tunnel", label, ?err, "verify failed: network error");
+                return false;
+            }
+        };
+        match client
             .get(format!("{url}/health"))
             .timeout(self.config.verify_timeout)
             .send()

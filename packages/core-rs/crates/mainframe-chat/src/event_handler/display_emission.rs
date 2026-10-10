@@ -19,7 +19,7 @@ pub(super) fn emit_display_for<D: EventHandlerDeps>(
     // message id the completed message will keep), so the surface streams
     // the growing block instead of waiting for its completion.
     let overlay = partial_overlays.message_for(chat_id);
-    let mut msgs = messages.lock().unwrap_or_else(|e| e.into_inner());
+    let mut msgs = messages.lock_recover();
     let delta = msgs.project_display(chat_id, overlay.as_ref(), categories, || {
         deps.display_projector()
     });

@@ -33,8 +33,12 @@ fn encodes_non_alphanumerics_to_dashes() {
 #[test]
 fn sanitizes_a_malicious_session_id_so_it_cannot_traverse() {
     let p = compute_session_file_path("/proj", "../../etc/passwd");
-    assert!(!p.contains(".."));
-    assert!(p.ends_with(".jsonl"));
+    let expected = dirs::home_dir()
+        .unwrap()
+        .join(".claude/projects/-proj/------etc-passwd.jsonl")
+        .to_string_lossy()
+        .into_owned();
+    assert_eq!(p, expected);
 }
 
 fn lookup(adapter_id: &str, session_id: &str) -> (String, String, String) {

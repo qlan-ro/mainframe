@@ -85,8 +85,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
             return;
         }
         self.messages
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .update_in_place(&self.chat_id, |message| {
                 update_message_presentation(message, &update)
             });

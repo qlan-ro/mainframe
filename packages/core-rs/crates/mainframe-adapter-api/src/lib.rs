@@ -13,21 +13,21 @@
 #![forbid(unsafe_code)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
-use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use dashmap::{DashMap, DashSet};
+use mainframe_runtime::sync::SingleFlight;
 use mainframe_types::adapter::{AdapterInfo, AdapterModel, CatalogSource};
 use mainframe_types::events::DaemonEvent;
-use tokio::sync::Notify;
 
 pub mod adapter;
 pub mod plan_mode_actions;
 pub mod pr_detection;
 pub mod resolve_executable;
 pub mod title;
+pub mod version;
 
 pub use adapter::{
     Adapter, AdapterSession, ContextFiles, FORK_CUT_NOT_FOUND_REASON, ForkCut, ForkPinError,
@@ -43,7 +43,7 @@ pub use mainframe_types::adapter::{ControlRequest, ControlResponse};
 
 /// A boxed, `Send` future — the manual async-fn-in-trait building block used by
 /// every `dyn`-compatible async trait method in this crate.
-pub type BoxFuture<'a, T> = Pin<Box<dyn std::future::Future<Output = T> + Send + 'a>>;
+pub use mainframe_types::BoxFuture;
 
 /// Result of a spawned child process (`{ ok, stdout }`). Shared by `RefreshDeps`
 /// and the `resolve_executable` `Runner`.
@@ -63,41 +63,6 @@ pub enum AdapterError {
 }
 
 const REFRESH_LIST_CAP_MS: u64 = 2_000;
-
-/// `\d+\.\d+\.\d+` — the first `N.N.N` triple in `stdout`. Hand-rolled (no regex
-/// crate in the allowlist).
-fn parse_version(stdout: &str) -> Option<String> {
-    let b = stdout.as_bytes();
-    let n = b.len();
-    let mut i = 0;
-    while i < n {
-        if b[i].is_ascii_digit() {
-            let mut j = i;
-            while j < n && b[j].is_ascii_digit() {
-                j += 1;
-            }
-            if j < n && b[j] == b'.' {
-                j += 1;
-                let g2 = j;
-                while j < n && b[j].is_ascii_digit() {
-                    j += 1;
-                }
-                if j > g2 && j < n && b[j] == b'.' {
-                    j += 1;
-                    let g3 = j;
-                    while j < n && b[j].is_ascii_digit() {
-                        j += 1;
-                    }
-                    if j > g3 {
-                        return Some(stdout[i..j].to_string());
-                    }
-                }
-            }
-        }
-        i += 1;
-    }
-    None
-}
 
 /// Injected refresh dependencies, set once via `configure_refresh`.
 pub trait RefreshDeps: Send + Sync {
@@ -127,13 +92,8 @@ pub struct AdapterRegistry {
     snapshots: Arc<DashMap<String, AdapterInfo>>,
     deps: OnceLock<Arc<dyn RefreshDeps>>,
     refresh_allowed: AtomicBool,
-    /// Per-adapter single-flight. Modelled with `Notify` rather than
-    /// `futures::future::Shared` because `futures` is a deferred workspace dep;
-    /// a concurrent caller awaits the in-flight run's `Notify` instead of
-    /// re-running. (A late waiter that subscribes after `notify_waiters()` fires
-    /// re-runs rather than blocks — benign, and untriggered by the sequential
-    /// tests; revisit if `futures::Shared` lands.)
-    in_flight: Arc<DashMap<String, Arc<Notify>>>,
+    /// Concurrent refreshes share a cancellation-safe completion claim.
+    in_flight: SingleFlight,
     succeeded: Arc<DashSet<String>>,
 }
 
@@ -235,27 +195,13 @@ impl AdapterRegistry {
         if !self.refresh_allowed.load(Ordering::SeqCst) || self.succeeded.contains(adapter_id) {
             return Ok(());
         }
-        // Single-flight: atomically claim the slot, or await an in-flight run.
-        let notify = {
-            use dashmap::mapref::entry::Entry;
-            match self.in_flight.entry(adapter_id.to_string()) {
-                Entry::Occupied(e) => {
-                    let existing = e.get().clone();
-                    drop(e); // release the shard guard before awaiting
-                    existing.notified().await;
-                    return Ok(());
-                }
-                Entry::Vacant(e) => {
-                    let n = Arc::new(Notify::new());
-                    e.insert(n.clone());
-                    n
-                }
+        match self.in_flight.claim(adapter_id) {
+            Ok(_claim) => self.run_refresh(adapter_id).await,
+            Err(waiter) => {
+                waiter.wait().await;
+                Ok(())
             }
-        };
-        let result = self.run_refresh(adapter_id).await;
-        self.in_flight.remove(adapter_id); // mirrors `.finally(() => inFlight.delete)`
-        notify.notify_waiters();
-        result
+        }
     }
 
     async fn run_refresh(&self, adapter_id: &str) -> Result<(), AdapterError> {
@@ -290,7 +236,7 @@ impl AdapterRegistry {
             .await;
         let mut installed = ver.ok;
         let mut version = if ver.ok {
-            parse_version(&ver.stdout)
+            crate::version::CliVersion::parse(&ver.stdout).map(|v| v.to_string())
         } else {
             None
         };

@@ -1,6 +1,6 @@
 //! Publishing an existing local task as a new GitHub issue (AC6).
 
-use mainframe_runtime::time::now_iso8601;
+use mainframe_types::time::now_iso8601;
 use serde_json::Value;
 
 use crate::PluginError;

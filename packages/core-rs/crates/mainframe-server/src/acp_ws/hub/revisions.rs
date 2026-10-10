@@ -5,6 +5,7 @@
 //! as a full replay — nothing on the wire distinguishes "evicted" from "the
 //! daemon restarted".
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 
@@ -86,7 +87,7 @@ impl RevisionRegistry {
     }
 
     fn locked(&self) -> std::sync::MutexGuard<'_, RegistryState> {
-        self.state.lock().unwrap_or_else(|err| err.into_inner())
+        self.state.lock_recover()
     }
 
     fn touch(&self, state: &mut RegistryState, chat_id: &str) {
@@ -130,7 +131,7 @@ impl FacadeHub {
         full: impl FnOnce() -> Vec<Vec<EncodedItem>>,
     ) -> Option<RevisionCursor> {
         let log = self.revisions.get(chat_id)?;
-        let mut locked = log.lock().unwrap_or_else(|err| err.into_inner());
+        let mut locked = log.lock_recover();
         match locked.record_delta(delta, full) {
             RecordOutcome::Recorded(_) => Some(locked.boundary()),
             RecordOutcome::Unchanged => None,
@@ -157,7 +158,7 @@ impl FacadeHub {
     #[cfg(test)]
     pub(super) fn revision_boundary(&self, chat_id: &str) -> Option<RevisionCursor> {
         let log = self.revisions.get(chat_id)?;
-        Some(log.lock().unwrap_or_else(|err| err.into_inner()).boundary())
+        Some(log.lock_recover().boundary())
     }
 
     /// `TranscriptCleared`, `Resync`, and a finished `Compaction` all

@@ -17,7 +17,13 @@ pub async fn run_status() {
         }
     };
     let base_url = format!("http://127.0.0.1:{}", config.port);
-    let client = reqwest::Client::new();
+    let client = match mainframe_runtime::http::client() {
+        Ok(client) => client,
+        Err(_) => {
+            eprintln!("{}", connect_failure_message(&base_url));
+            std::process::exit(1);
+        }
+    };
 
     let health: Value = match client.get(format!("{base_url}/health")).send().await {
         Ok(res) => res.json().await.unwrap_or(Value::Null),

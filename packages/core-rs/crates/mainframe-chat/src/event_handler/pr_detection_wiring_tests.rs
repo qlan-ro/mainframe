@@ -20,10 +20,7 @@ impl PrWiringDeps {
     }
 
     fn events(&self) -> Vec<DaemonEvent> {
-        self.events
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone()
+        self.events.lock_recover().clone()
     }
 }
 
@@ -32,10 +29,7 @@ impl EventHandlerDeps for PrWiringDeps {
         Some(self.cell.clone())
     }
     fn emit_event(&self, event: DaemonEvent) {
-        self.events
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .push(event);
+        self.events.lock_recover().push(event);
     }
     fn get_tool_categories(&self, _chat_id: &str) -> Option<ToolCategories> {
         None
@@ -70,10 +64,7 @@ impl EventHandlerDeps for PrWiringDeps {
     }
     fn update_todos(&self, _chat_id: &str, _todos: &[TodoItem]) {}
     fn add_detected_prs(&self, _chat_id: &str, prs: &[DetectedPr]) -> Vec<DetectedPr> {
-        self.persisted_prs
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .extend_from_slice(prs);
+        self.persisted_prs.lock_recover().extend_from_slice(prs);
         prs.to_vec()
     }
     fn should_notify_permission(&self, _tool_name: Option<&str>) -> bool {
@@ -144,10 +135,7 @@ fn a_bash_pr_create_and_its_result_persist_and_emit_through_the_wired_sink() {
         source: mainframe_types::adapter::DetectedPrSource::Created,
     };
     assert_eq!(
-        deps.persisted_prs
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .as_slice(),
+        deps.persisted_prs.lock_recover().as_slice(),
         std::slice::from_ref(&expected)
     );
     // The real sink also emits ChatUpdated/MessageAdded for the underlying

@@ -5,7 +5,7 @@ impl ClaudeSession {
         state.presentation.invalidate(sink);
         state.child = None;
         drop(state);
-        *self.stdin_tx.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        *self.stdin_tx.lock_recover() = None;
     }
     pub async fn kill(&self) -> Result<(), AdapterError> {
         self.state().presentation.invalidate(&NullSink);
@@ -47,7 +47,7 @@ impl ClaudeSession {
         let session_id = self.id.clone();
         let handle = tokio::spawn(async move {
             tokio::time::sleep(Duration::from_millis(10_000)).await;
-            let mut st = state.lock().unwrap_or_else(|e| e.into_inner());
+            let mut st = state.lock_recover();
             st.interrupt_timer = None;
             let same = st
                 .child

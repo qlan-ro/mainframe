@@ -1,11 +1,11 @@
 //! Route-level device-flow tests. The HTTP semantics of `start`/`poll_once`
 //! itself (interval, slow_down, expired_token, access_denied...) are covered
-//! against a mock GitHub in `mainframe-automations`'s `github_device_tests`;
+//! against a mock GitHub in `mainframe-github`'s `github_device_tests`;
 //! this file covers the route's own job: outcome→response mapping and that
 //! a `Connected` poll persists the token without echoing it back.
 
 use axum::body::to_bytes;
-use mainframe_automations::github_device::GithubDeviceFlow;
+use mainframe_github::github_device::GithubDeviceFlow;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 

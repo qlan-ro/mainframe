@@ -2,6 +2,7 @@
 //! candidate scan across matching `~/.claude/projects` dirs, then bounded-
 //! concurrency enrichment with a process-lifetime cache.
 
+use mainframe_types::sync::LockExt as _;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -124,12 +125,12 @@ async fn enrich_window(
                 }
                 let c = &window[i];
                 if let Some(cached) = get_cached(&cache, &c.session_id, c.mtime_ms, c.size) {
-                    out.lock().unwrap_or_else(|e| e.into_inner())[i] = Some(cached);
+                    out.lock_recover()[i] = Some(cached);
                     continue;
                 }
                 if let Some(meta) = enrich_session(c, &project_path).await {
                     set_cached(&cache, &c.session_id, c.mtime_ms, c.size, meta.clone());
-                    out.lock().unwrap_or_else(|e| e.into_inner())[i] = Some(meta);
+                    out.lock_recover()[i] = Some(meta);
                 }
             }
         }));
@@ -138,7 +139,7 @@ async fn enrich_window(
         let _ = h.await;
     }
 
-    let results = out.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    let results = out.lock_recover().clone();
     results
         .into_iter()
         .flatten()

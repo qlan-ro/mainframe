@@ -22,9 +22,10 @@ use serde::Serialize;
 use crate::async_err::internal_error;
 use crate::ctx::AppCtx;
 use crate::fs_utils::{has_binary_extension, is_ignored_dir, path_resolve, relative};
-use crate::path_utils::{resolve_and_validate_path, resolve_readable_path};
+use crate::path_utils::resolve_readable_path;
 use crate::respond::{fail, ok};
 use crate::ripgrep::{ListFilesOptions, list_files_with_ripgrep};
+use mainframe_runtime::fs::resolve_and_validate_path;
 
 const TREE_HIDDEN: &[&str] = &[".git"];
 
@@ -345,7 +346,7 @@ async fn file_content(
     };
     if is_base64 {
         ok(
-            serde_json::json!({ "path": file_path, "content": base64_encode(&bytes), "encoding": "base64" }),
+            serde_json::json!({ "path": file_path, "content": mainframe_types::base64_data::encode(&bytes), "encoding": "base64" }),
         )
     } else {
         ok(serde_json::json!({ "path": file_path, "content": String::from_utf8_lossy(&bytes) }))
@@ -581,7 +582,7 @@ async fn external_file_content(Query(q): Query<HashMap<String, String>>) -> Resp
         Ok(bytes) => {
             if is_base64 {
                 ok(
-                    serde_json::json!({ "path": resolved, "content": base64_encode(&bytes), "encoding": "base64" }),
+                    serde_json::json!({ "path": resolved, "content": mainframe_types::base64_data::encode(&bytes), "encoding": "base64" }),
                 )
             } else {
                 ok(
@@ -726,34 +727,6 @@ fn require_nonempty_string<'a>(v: &'a serde_json::Value, key: &str) -> Result<&'
     }
 }
 
-const B64: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-/// Standard base64 with padding.
-fn base64_encode(input: &[u8]) -> String {
-    let mut out = String::with_capacity(input.len().div_ceil(3) * 4);
-    for chunk in input.chunks(3) {
-        let b = [
-            chunk[0],
-            *chunk.get(1).unwrap_or(&0),
-            *chunk.get(2).unwrap_or(&0),
-        ];
-        let n = (u32::from(b[0]) << 16) | (u32::from(b[1]) << 8) | u32::from(b[2]);
-        out.push(B64[((n >> 18) & 63) as usize] as char);
-        out.push(B64[((n >> 12) & 63) as usize] as char);
-        out.push(if chunk.len() > 1 {
-            B64[((n >> 6) & 63) as usize] as char
-        } else {
-            '='
-        });
-        out.push(if chunk.len() > 2 {
-            B64[(n & 63) as usize] as char
-        } else {
-            '='
-        });
-    }
-    out
-}
-
 pub fn router() -> Router<Arc<AppCtx>> {
     Router::new()
         .route("/api/filesystem/browse", get(browse_filesystem))
@@ -774,11 +747,14 @@ mod tests {
 
     #[test]
     fn base64_matches_node_buffer() {
-        assert_eq!(base64_encode(b""), "");
-        assert_eq!(base64_encode(b"f"), "Zg==");
-        assert_eq!(base64_encode(b"fo"), "Zm8=");
-        assert_eq!(base64_encode(b"foo"), "Zm9v");
-        assert_eq!(base64_encode(b"hello world\n"), "aGVsbG8gd29ybGQK");
+        assert_eq!(mainframe_types::base64_data::encode(b""), "");
+        assert_eq!(mainframe_types::base64_data::encode(b"f"), "Zg==");
+        assert_eq!(mainframe_types::base64_data::encode(b"fo"), "Zm8=");
+        assert_eq!(mainframe_types::base64_data::encode(b"foo"), "Zm9v");
+        assert_eq!(
+            mainframe_types::base64_data::encode(b"hello world\n"),
+            "aGVsbG8gd29ybGQK"
+        );
     }
 
     #[test]

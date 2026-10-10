@@ -2,6 +2,7 @@
 //! session or restart a chat (D4) — `was_cancelled` guards `respond_to_permission`
 //! before it even looks for an active session.
 
+use mainframe_types::sync::LockExt;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -246,20 +247,14 @@ struct GateCapture {
 
 impl GateCapture {
     fn raised(&self) -> Vec<String> {
-        self.raised
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone()
+        self.raised.lock_recover().clone()
     }
 }
 
 impl crate::chat_surface::ChatSurface for GateCapture {
     fn on_chat_surface_event(&self, event: crate::chat_surface::ChatSurfaceEvent) {
         if let crate::chat_surface::ChatSurfaceEvent::GateRaised { request, .. } = event {
-            self.raised
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .push(request.request_id);
+            self.raised.lock_recover().push(request.request_id);
         }
     }
 }

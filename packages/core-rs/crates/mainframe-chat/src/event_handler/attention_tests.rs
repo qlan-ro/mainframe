@@ -1,6 +1,7 @@
 //! `SessionSinkImpl::on_attention_request` — the sink side of Claude's
 //! `PushNotification` tool call: gate, dedupe, then notify+push.
 
+use mainframe_types::sync::LockExt;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use super::*;
@@ -24,17 +25,11 @@ impl AttentionDeps {
     }
 
     fn events(&self) -> Vec<DaemonEvent> {
-        self.events
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone()
+        self.events.lock_recover().clone()
     }
 
     fn pushes(&self) -> Vec<PushOut> {
-        self.pushes
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone()
+        self.pushes.lock_recover().clone()
     }
 }
 
@@ -43,10 +38,7 @@ impl EventHandlerDeps for AttentionDeps {
         Some(self.cell.clone())
     }
     fn emit_event(&self, event: DaemonEvent) {
-        self.events
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .push(event);
+        self.events.lock_recover().push(event);
     }
     fn get_tool_categories(&self, _chat_id: &str) -> Option<ToolCategories> {
         None
@@ -96,10 +88,7 @@ impl EventHandlerDeps for AttentionDeps {
         self.notify_attention_request.load(Ordering::SeqCst)
     }
     fn send_push(&self, msg: PushOut) {
-        self.pushes
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .push(msg);
+        self.pushes.lock_recover().push(msg);
     }
 }
 

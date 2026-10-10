@@ -1,3 +1,4 @@
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 
 use serde_json::{Value, json};
@@ -49,7 +50,7 @@ pub(crate) fn handle_user_event(session: &ClaudeSession, event: &Value, sink: &d
     }
 
     let project_path = session.project_path.clone();
-    let mut guard = session.state.lock().unwrap_or_else(|e| e.into_inner());
+    let mut guard = session.state.lock_recover();
     let st: &mut ClaudeSessionState = &mut guard;
     if let Some(parent) = event
         .get("parent_tool_use_id")

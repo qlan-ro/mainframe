@@ -10,11 +10,12 @@
 //! session already wrote to. Before this, `on_exit` racing a fresh session's
 //! first `on_message_partial` could drop the wrong overlay.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use mainframe_runtime::time::now_iso8601;
 use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent};
+use mainframe_types::time::now_iso8601;
 
 #[derive(Debug, Clone)]
 pub struct PartialOverlay {
@@ -82,7 +83,7 @@ impl PartialOverlays {
         content: Vec<MessageContent>,
         presentation: Option<mainframe_types::transcript_presentation::TranscriptPresentation>,
     ) {
-        let mut overlays = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        let mut overlays = self.0.lock_recover();
         let key = (chat_id.to_string(), session_id.to_string());
         let started_at = match overlays.get(&key) {
             Some(existing) if existing.message_id == message_id => existing.started_at.clone(),
@@ -105,7 +106,7 @@ impl PartialOverlays {
         session_id: &str,
         update: &mainframe_types::transcript_presentation::PresentationUpdate,
     ) {
-        let mut overlays = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        let mut overlays = self.0.lock_recover();
         if let Some(overlay) = overlays.get_mut(&(chat_id.to_string(), session_id.to_string()))
             && update
                 .source_message_ids
@@ -128,8 +129,7 @@ impl PartialOverlays {
     /// present, so abort paths only re-emit when content actually vanishes.
     pub fn take(&self, chat_id: &str, session_id: &str) -> bool {
         self.0
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .remove(&(chat_id.to_string(), session_id.to_string()))
             .is_some()
     }
@@ -139,8 +139,7 @@ impl PartialOverlays {
     /// window this module closes, so the first match is exact in practice.
     pub(crate) fn message_for(&self, chat_id: &str) -> Option<ChatMessage> {
         self.0
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .iter()
             .find(|((cid, _), _)| cid == chat_id)
             .map(|(_, overlay)| overlay_message(chat_id, overlay))
@@ -149,9 +148,6 @@ impl PartialOverlays {
     /// Chat teardown (end/archive): drop every session's overlay for this
     /// chat — nothing else clears this per-chat bookkeeping.
     pub fn remove_chat(&self, chat_id: &str) {
-        self.0
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .retain(|(cid, _), _| cid != chat_id);
+        self.0.lock_recover().retain(|(cid, _), _| cid != chat_id);
     }
 }

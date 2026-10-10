@@ -14,10 +14,11 @@
 //! Delivery fans out through the `Arc<DashMap<ClientId, ClientHandle>>`
 //! registry and each connection's mpsc sink.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 
 use axum::extract::ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{ConnectInfo, Path, Query, State};
@@ -431,7 +432,7 @@ async fn handle_client_event(
 ) {
     match event {
         ClientEvent::Subscribe { chat_id } => {
-            lock(subscriptions).insert(chat_id.clone());
+            subscriptions.lock_recover().insert(chat_id.clone());
             // Sent even when empty: this snapshot is the client's only re-seed
             // path for offers, so a reconnect must also clear stale ones.
             let offers = ctx
@@ -449,7 +450,7 @@ async fn handle_client_event(
             send(out_tx, &DaemonEvent::SubscribeAck { chat_id });
         }
         ClientEvent::Unsubscribe { chat_id } => {
-            lock(subscriptions).remove(&chat_id);
+            subscriptions.lock_recover().remove(&chat_id);
         }
         ClientEvent::SubscribeFile {
             path,
@@ -583,7 +584,7 @@ fn fanout(clients: &WsClients, event: &DaemonEvent) {
         let deliver = is_global
             || match chat_id {
                 None => true,
-                Some(chat) => lock(&handle.subscriptions).contains(chat),
+                Some(chat) => handle.subscriptions.lock_recover().contains(chat),
             };
         if deliver {
             let _ = handle.tx.send(payload.clone());
@@ -630,10 +631,6 @@ fn send(out_tx: &mpsc::UnboundedSender<String>, event: &DaemonEvent) {
         }
         Err(err) => tracing::error!(%err, "failed to serialize outbound ws event"),
     }
-}
-
-fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 #[cfg(test)]

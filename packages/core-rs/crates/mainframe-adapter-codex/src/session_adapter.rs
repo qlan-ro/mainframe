@@ -10,25 +10,16 @@ impl AdapterSession for CodexSession {
         &self.project_path
     }
     fn is_spawned(&self) -> bool {
-        self.client
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .is_some()
+        self.client.lock_recover().is_some()
     }
 
     fn get_process_info(&self) -> Option<AdapterProcess> {
-        if self
-            .client
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .is_none()
-        {
+        if self.client.lock_recover().is_none() {
             return None;
         }
         let chat_id = self
             .state
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .thread_id
             .clone()
             .unwrap_or_default();
@@ -37,14 +28,9 @@ impl AdapterSession for CodexSession {
             adapter_id: "codex".to_string(),
             chat_id,
             pid: self.pid.load(Ordering::SeqCst),
-            status: *self.status.lock().unwrap_or_else(|e| e.into_inner()),
+            status: *self.status.lock_recover(),
             project_path: self.project_path.clone(),
-            model: self
-                .config
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .model
-                .clone(),
+            model: self.config.lock_recover().model.clone(),
         })
     }
 
@@ -94,12 +80,7 @@ impl AdapterSession for CodexSession {
         response: ControlResponse,
     ) -> BoxFuture<'_, Result<(), AdapterError>> {
         Box::pin(async move {
-            if let Some(approval) = self
-                .approval_handler
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .as_ref()
-            {
+            if let Some(approval) = self.approval_handler.lock_recover().as_ref() {
                 approval.resolve(&response);
             }
             Ok(())
@@ -116,34 +97,28 @@ impl AdapterSession for CodexSession {
                 Some(model) => model,
                 None => self.configured_cli_model().await?,
             };
-            self.config.lock().unwrap_or_else(|e| e.into_inner()).model = Some(model);
+            self.config.lock_recover().model = Some(model);
             Ok(())
         })
     }
 
     fn set_permission_mode(&self, mode: ExecutionMode) -> BoxFuture<'_, Result<(), AdapterError>> {
         Box::pin(async move {
-            self.config
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .permission_mode = mode;
+            self.config.lock_recover().permission_mode = mode;
             Ok(())
         })
     }
 
     fn set_plan_mode(&self, on: bool) -> BoxFuture<'_, Result<(), AdapterError>> {
         Box::pin(async move {
-            self.config
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .plan_mode = on;
+            self.config.lock_recover().plan_mode = on;
             Ok(())
         })
     }
 
     fn apply_tuning(&self, tuning: ResolvedTuning) -> BoxFuture<'_, Result<(), AdapterError>> {
         Box::pin(async move {
-            self.config.lock().unwrap_or_else(|e| e.into_inner()).tuning = Some(tuning);
+            self.config.lock_recover().tuning = Some(tuning);
             Ok(())
         })
     }

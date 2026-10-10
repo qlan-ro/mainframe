@@ -1,6 +1,7 @@
 //! `AgentPort` over the ChatManager seam: start a chat, watch the broadcast
 //! for its terminal `chat.updated`, read the final assistant text.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex as StdMutex};
 
@@ -86,11 +87,7 @@ impl DaemonAgentPort {
     }
 
     fn take_receiver(&self, chat_id: &str) -> broadcast::Receiver<DaemonEvent> {
-        let taken = self
-            .pending
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .remove(chat_id);
+        let taken = self.pending.lock_recover().remove(chat_id);
         taken.unwrap_or_else(|| self.broadcast.subscribe())
     }
 
@@ -172,15 +169,11 @@ impl AgentPort for DaemonAgentPort {
             // Subscribe BEFORE the send so the terminal event cannot race the
             // upcoming watch() call.
             self.pending
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
+                .lock_recover()
                 .insert(chat_id.clone(), self.broadcast.subscribe());
 
             if let Err(err) = self.chats.send_message(&chat_id, &request.prompt).await {
-                self.pending
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .remove(&chat_id);
+                self.pending.lock_recover().remove(&chat_id);
                 return Err(AgentPortError(err));
             }
             Ok(AgentHandle { chat_id })

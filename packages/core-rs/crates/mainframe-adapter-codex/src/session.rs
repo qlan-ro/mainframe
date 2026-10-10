@@ -1,3 +1,4 @@
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
@@ -130,25 +131,16 @@ impl CodexSession {
         }
     }
     pub fn set_scan_deps(&self, deps: CodexScanDeps) {
-        *self.scan_deps.lock().unwrap_or_else(|e| e.into_inner()) = Some(deps);
+        *self.scan_deps.lock_recover() = Some(deps);
     }
     pub fn set_transcript_present_override(&self, present: bool) {
-        *self
-            .transcript_present_override
-            .lock()
-            .unwrap_or_else(|e| e.into_inner()) = Some(present);
+        *self.transcript_present_override.lock_recover() = Some(present);
     }
     pub fn set_history_executable(&self, executable: &str) {
-        *self
-            .history_executable
-            .lock()
-            .unwrap_or_else(|e| e.into_inner()) = executable.to_string();
+        *self.history_executable.lock_recover() = executable.to_string();
     }
     pub fn set_on_exit(&self, cb: OnExitCallback) {
-        *self
-            .on_exit_callback
-            .lock()
-            .unwrap_or_else(|e| e.into_inner()) = Some(cb);
+        *self.on_exit_callback.lock_recover() = Some(cb);
     }
 }
 

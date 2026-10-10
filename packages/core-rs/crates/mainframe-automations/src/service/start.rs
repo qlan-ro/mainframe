@@ -5,6 +5,7 @@
 //! Idempotent by a one-shot latch — a second call is a typed error, never a
 //! double-armed sweep.
 
+use mainframe_types::sync::LockExt as _;
 use std::sync::atomic::Ordering;
 
 use crate::error::StoreError;
@@ -49,7 +50,7 @@ impl AutomationsEngine {
         // Arm the derived-state schedule sweep, the run due-sweep, and the
         // event-trigger loop. Their JoinHandles live in `tasks` so `stop()`
         // aborts them.
-        let mut tasks = self.tasks.lock().unwrap_or_else(|e| e.into_inner());
+        let mut tasks = self.tasks.lock_recover();
         tasks.push(self.sweeper.clone().spawn(self.clock.clone()));
         tasks.push(self.interpreter.clone().spawn_due_sweep());
         if let Some(source) = &self.event_source {

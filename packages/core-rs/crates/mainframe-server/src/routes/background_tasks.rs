@@ -14,10 +14,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use serde::Deserialize;
 
-use mainframe_adapter_api::AdapterSession;
-use mainframe_background_tasks::kill::{
-    KillArgs, KillResult, SessionLike, StopResult, kill_background_task,
-};
+use mainframe_background_tasks::kill::{KillArgs, KillResult, SessionLike, kill_background_task};
 use mainframe_background_tasks::spool_validator::{
     Platform, SpoolValidator, SpoolValidatorDeps, make_spool_validator,
 };
@@ -27,32 +24,6 @@ use crate::respond::{fail, ok, ok_empty};
 
 const MAX_READ_BYTES: u64 = 1024 * 1024;
 const DEFAULT_READ_BYTES: u64 = 8 * 1024;
-
-/// Bridges a live `Arc<dyn AdapterSession>` into the `SessionLike` the kill helper
-/// needs.
-struct AdapterSessionLike(Arc<dyn AdapterSession>);
-
-impl SessionLike for AdapterSessionLike {
-    fn stop_background_task<'a>(
-        &'a self,
-        task_id: &'a str,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = StopResult> + Send + 'a>> {
-        let session = self.0.clone();
-        let task_id = task_id.to_string();
-        Box::pin(async move {
-            match session.stop_background_task(task_id).await {
-                Ok(r) => StopResult {
-                    ok: r.ok,
-                    error: r.error,
-                },
-                Err(err) => StopResult {
-                    ok: false,
-                    error: Some(err.to_string()),
-                },
-            }
-        })
-    }
-}
 
 fn default_validator() -> impl SpoolValidator {
     make_spool_validator(SpoolValidatorDeps {
@@ -141,7 +112,7 @@ async fn kill(
         .chat_manager
         .as_ref()
         .and_then(|cm| cm.get_session_for_chat(&chat_id))
-        .map(AdapterSessionLike);
+        .map(crate::session_kill_bridge::SessionKillBridge);
     let result = kill_background_task(KillArgs {
         chat_id: &chat_id,
         task_id: &task_id,

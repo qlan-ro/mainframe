@@ -67,9 +67,7 @@ fn is_terminal(status: BackgroundTaskStatus) -> bool {
     )
 }
 
-fn now_ms() -> i64 {
-    chrono::Utc::now().timestamp_millis()
-}
+use mainframe_types::time::now_ms;
 
 const EVENT_CHANNEL_CAPACITY: usize = 1024;
 

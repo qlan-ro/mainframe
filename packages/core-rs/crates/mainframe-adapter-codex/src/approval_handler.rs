@@ -3,6 +3,7 @@
 //! on the way in, `answers.rs` on the way back out, `approval_options.rs` for
 //! the option list a gate offers.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -57,15 +58,11 @@ impl ApprovalHandler {
     }
 
     pub fn set_plan_context(&self, ctx: PlanContext) {
-        *self.plan_context.lock().unwrap_or_else(|e| e.into_inner()) = ctx;
+        *self.plan_context.lock_recover() = ctx;
     }
 
     pub fn resolve(&self, response: &ControlResponse) {
-        let entry = self
-            .pending
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .remove(&response.request_id);
+        let entry = self.pending.lock_recover().remove(&response.request_id);
         let Some(entry) = entry else {
             tracing::warn!(
                 module = "codex:approvals",
@@ -82,7 +79,7 @@ impl ApprovalHandler {
     }
 
     pub(crate) fn reject_all(&self) {
-        let mut pending = self.pending.lock().unwrap_or_else(|e| e.into_inner());
+        let mut pending = self.pending.lock_recover();
         for (_, entry) in pending.drain() {
             if entry.method == "item/tool/requestUserInput" {
                 (entry.respond)(entry.json_rpc_id, json!({ "answers": {} }));

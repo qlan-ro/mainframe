@@ -21,8 +21,8 @@ use mainframe_chat::chat_manager::{ForkChatError, ForkPoint};
 
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok};
-use crate::routes::identifier::is_identifier;
 use crate::routes::projects::parse_body;
+use mainframe_types::ids::is_safe_identifier;
 
 /// Longest `fromMessageId` accepted. Chat message ids are nanoids or vendor
 /// uuids, far below this; the cap only bounds what a client can send.
@@ -42,7 +42,7 @@ fn fork_point(body: &Bytes) -> Option<ForkPoint> {
     let parsed = parse_body::<ForkChatBody>(body)?;
     match parsed.from_message_id {
         None => Some(ForkPoint::Current),
-        Some(id) if is_identifier(&id) && id.len() <= MAX_MESSAGE_ID_LEN => {
+        Some(id) if is_safe_identifier(&id) && id.len() <= MAX_MESSAGE_ID_LEN => {
             Some(ForkPoint::BeforeMessage(id))
         }
         Some(_) => None,
