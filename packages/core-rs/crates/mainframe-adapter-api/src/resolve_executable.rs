@@ -85,12 +85,12 @@ pub async fn default_run(
     if let Some(path) = path {
         command.env("PATH", path);
     }
-    match tokio::time::timeout(dur, command.output()).await {
-        Ok(Ok(out)) => RunResult {
+    match mainframe_runtime::process::run_captured(command, Some(dur)).await {
+        Ok(out) => RunResult {
             ok: out.status.success(),
             stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
         },
-        Ok(Err(_)) | Err(_) => RunResult {
+        Err(_) => RunResult {
             ok: false,
             stdout: String::new(),
         },

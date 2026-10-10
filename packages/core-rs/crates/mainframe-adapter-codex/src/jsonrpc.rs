@@ -3,14 +3,13 @@
 //! timeout; notification + server-request handlers; close listeners.
 
 use mainframe_types::sync::LockExt as _;
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::time::Duration;
 
 use serde_json::{Map, Value};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Child;
 use tokio::sync::{Notify, mpsc, oneshot};
 
@@ -21,7 +20,6 @@ use crate::types::{
 
 const DEFAULT_REQUEST_TIMEOUT_MS: u64 = 30_000;
 const STDERR_TAIL_LINES: usize = 20;
-const STDERR_DRAIN_TIMEOUT: Duration = Duration::from_millis(500);
 
 #[derive(Debug, thiserror::Error)]
 #[error("{0}")]
@@ -37,81 +35,6 @@ pub struct JsonRpcHandlers {
     pub on_exit: Box<dyn Fn(Option<i32>) + Send + Sync>,
 }
 
-/// `findJsonObjectEnd` — index one past the end of the first complete top-level
-/// JSON object in `input`, or `None` if there isn't one. Copied char-for-char.
-fn find_json_object_end(input: &str) -> Option<usize> {
-    let mut depth = 0i32;
-    let mut in_string = false;
-    let mut escaped = false;
-
-    for (i, ch) in input.char_indices() {
-        if in_string {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == '"' {
-                in_string = false;
-            }
-            continue;
-        }
-
-        if ch == '"' {
-            in_string = true;
-        } else if ch == '{' {
-            depth += 1;
-        } else if ch == '}' {
-            depth -= 1;
-            if depth == 0 {
-                return Some(i + ch.len_utf8());
-            }
-        } else if depth == 0 && !ch.is_whitespace() {
-            return None;
-        }
-    }
-
-    None
-}
-
-/// Parse one stdout line into 1+ JSON objects (the app-server occasionally
-/// concatenates objects on a single line). Errors if a partial object is found.
-fn parse_jsonrpc_messages(line: &str) -> Result<Vec<Map<String, Value>>, JsonRpcError> {
-    let mut messages: Vec<Map<String, Value>> = Vec::new();
-    let mut rest = line.trim();
-
-    while !rest.is_empty() {
-        match serde_json::from_str::<Value>(rest) {
-            Ok(Value::Object(m)) => {
-                messages.push(m);
-                return Ok(messages);
-            }
-            Ok(_) => return Ok(messages),
-            Err(_) => {
-                let end = find_json_object_end(rest)
-                    .ok_or_else(|| JsonRpcError("No complete JSON object found".to_string()))?;
-                match serde_json::from_str::<Value>(&rest[..end]) {
-                    Ok(Value::Object(m)) => messages.push(m),
-                    _ => return Err(JsonRpcError("No complete JSON object found".to_string())),
-                }
-                rest = rest[end..].trim();
-                if !rest.starts_with('{') {
-                    return Ok(messages);
-                }
-            }
-        }
-    }
-
-    Ok(messages)
-}
-
-fn request_id_from_value(v: &Value) -> Option<RequestId> {
-    match v {
-        Value::Number(n) => n.as_i64().map(RequestId::Number),
-        Value::String(s) => Some(RequestId::String(s.clone())),
-        _ => None,
-    }
-}
-
 pub struct JsonRpcClient {
     next_id: AtomicI64,
     pending: Arc<Mutex<HashMap<RequestId, PendingTx>>>,
@@ -124,173 +47,6 @@ pub struct JsonRpcClient {
 }
 
 impl JsonRpcClient {
-    pub fn new(child: Child, handlers: JsonRpcHandlers) -> Self {
-        Self::with_timeout(child, handlers, DEFAULT_REQUEST_TIMEOUT_MS)
-    }
-
-    pub(crate) fn with_timeout(
-        mut child: Child,
-        handlers: JsonRpcHandlers,
-        request_timeout_ms: u64,
-    ) -> Self {
-        let pending: Arc<Mutex<HashMap<RequestId, PendingTx>>> =
-            Arc::new(Mutex::new(HashMap::new()));
-        let closed = Arc::new(AtomicBool::new(false));
-        let exited = Arc::new(AtomicBool::new(false));
-        let close_notify = Arc::new(Notify::new());
-        let kill_notify = Arc::new(Notify::new());
-        let recent_stderr: Arc<Mutex<VecDeque<String>>> = Arc::new(Mutex::new(VecDeque::new()));
-        let saw_panic = Arc::new(AtomicBool::new(false));
-        let handlers = Arc::new(handlers);
-
-        let stdin = child.stdin.take();
-        let stdout = child.stdout.take();
-        let stderr = child.stderr.take();
-
-        // Writer task — owns stdin; all writes are non-blocking channel sends.
-        let (write_tx, mut write_rx) = mpsc::unbounded_channel::<Vec<u8>>();
-        if let Some(mut stdin) = stdin {
-            tokio::spawn(async move {
-                while let Some(bytes) = write_rx.recv().await {
-                    if stdin.write_all(&bytes).await.is_err() {
-                        break;
-                    }
-                    let _ = stdin.flush().await;
-                }
-            });
-        }
-
-        // Stdout reader task — parse + dispatch.
-        if let Some(stdout) = stdout {
-            let pending = pending.clone();
-            let handlers = handlers.clone();
-            tokio::spawn(async move {
-                let mut lines = BufReader::new(stdout).lines();
-                while let Ok(Some(line)) = lines.next_line().await {
-                    if line.trim().is_empty() {
-                        continue;
-                    }
-                    tracing::trace!(module = "codex:jsonrpc", line, "jsonrpc recv");
-                    match parse_jsonrpc_messages(&line) {
-                        Ok(msgs) => {
-                            for msg in msgs {
-                                dispatch(&msg, &pending, &handlers);
-                            }
-                        }
-                        Err(_) => {
-                            let head: String = line.chars().take(200).collect();
-                            tracing::warn!(
-                                module = "codex:jsonrpc",
-                                line = head,
-                                "jsonrpc: malformed JSON line"
-                            );
-                        }
-                    }
-                }
-            });
-        }
-
-        // Stderr reader task. codex is a Rust binary that writes tracing logs to stderr as
-        // normal operation — an unauthenticated remote MCP server alone emits ERROR lines on
-        // every startup while the run proceeds fine. stderr is a log stream, never an error
-        // channel: a real failure arrives as a JSON-RPC error or a non-zero exit (reported by
-        // the exit watcher, which replays this tail as the reason).
-        let stderr_reader = stderr.map(|stderr| {
-            let recent_stderr = recent_stderr.clone();
-            let saw_panic = saw_panic.clone();
-            tokio::spawn(async move {
-                let mut lines = BufReader::new(stderr).lines();
-                while let Ok(Some(line)) = lines.next_line().await {
-                    let message = line.trim();
-                    if message.is_empty() {
-                        continue;
-                    }
-
-                    if is_panic_line(message) {
-                        saw_panic.store(true, Ordering::SeqCst);
-                    }
-
-                    let mut tail = recent_stderr.lock_recover();
-                    tail.push_back(message.to_string());
-                    while tail.len() > STDERR_TAIL_LINES {
-                        tail.pop_front();
-                    }
-                    drop(tail);
-
-                    if is_tracing_line(message) {
-                        tracing::debug!(module = "codex:jsonrpc", stderr = message, "codex stderr");
-                    } else {
-                        tracing::warn!(module = "codex:jsonrpc", stderr = message, "codex stderr");
-                    }
-                }
-            })
-        });
-
-        // Exit watcher — resolve on process exit (or an explicit kill request);
-        // reject pending + fire close.
-        {
-            let pending = pending.clone();
-            let close_notify = close_notify.clone();
-            let kill_notify = kill_notify.clone();
-            let exited = exited.clone();
-            let closed = closed.clone();
-            let recent_stderr = recent_stderr.clone();
-            let saw_panic = saw_panic.clone();
-            let handlers = handlers.clone();
-            tokio::spawn(async move {
-                let code = tokio::select! {
-                    status = child.wait() => status.ok().and_then(|s| s.code()),
-                    _ = kill_notify.notified() => {
-                        let _ = child.start_kill();
-                        child.wait().await.ok().and_then(|s| s.code())
-                    }
-                };
-                exited.store(true, Ordering::SeqCst);
-                reject_all_pending(
-                    &pending,
-                    JsonRpcError(format!("Process exited with code {code:?}")),
-                );
-
-                // `child.wait()` only means the PID is gone — the stderr pipe can still hold
-                // the very lines that say why (a panic backtrace). Let the reader drain to EOF
-                // before snapshotting the tail, bounded so a wedged pipe can't hang the exit.
-                if let Some(reader) = stderr_reader {
-                    let _ = tokio::time::timeout(STDERR_DRAIN_TIMEOUT, reader).await;
-                }
-
-                let panicked = saw_panic.load(Ordering::SeqCst);
-                let clean = code == Some(0) && !panicked;
-                if !closed.load(Ordering::SeqCst) && !clean {
-                    // A signal death (including an aborting panic) reports no code at all.
-                    let reason = match (code, panicked) {
-                        (Some(c), _) => format!("exited with code {c}"),
-                        (None, true) => "panicked".to_string(),
-                        (None, false) => "was killed by a signal".to_string(),
-                    };
-                    let tail: Vec<String> = recent_stderr.lock_recover().iter().cloned().collect();
-                    (handlers.on_error)(if tail.is_empty() {
-                        format!("codex {reason}")
-                    } else {
-                        format!("codex {reason}:\n{}", tail.join("\n"))
-                    });
-                }
-                close_notify.notify_waiters();
-                (handlers.on_exit)(code);
-            });
-        }
-
-        Self {
-            next_id: AtomicI64::new(1),
-            pending,
-            closed,
-            exited,
-            close_notify,
-            kill_notify,
-            write_tx,
-            request_timeout_ms,
-        }
-    }
-
     pub async fn request(
         &self,
         method: &str,
@@ -340,19 +96,18 @@ impl JsonRpcClient {
             return;
         }
         reject_all_pending(&self.pending, JsonRpcError("Client closed".to_string()));
-        // Signal the exit watcher (which owns the child) to terminate it.
-        // start_kill() sends SIGKILL, not SIGTERM (tokio's `Child` exposes no other
-        // signal). The child dies with the client either way.
-        self.kill_notify.notify_waiters();
+        self.kill_notify.notify_one();
     }
 
     /// Future that resolves when the process closes (Rust-native alternative to
     /// `on_close` used by the session's kill race).
     pub async fn closed(&self) {
-        if self.exited.load(Ordering::SeqCst) {
-            return;
+        let notified = self.close_notify.notified();
+        tokio::pin!(notified);
+        notified.as_mut().enable();
+        if !self.exited.load(Ordering::SeqCst) {
+            notified.await;
         }
-        self.close_notify.notified().await;
     }
 
     fn write(&self, msg: &Value) {
@@ -363,65 +118,6 @@ impl JsonRpcClient {
     }
 }
 
-fn dispatch(
-    msg: &Map<String, Value>,
-    pending: &Arc<Mutex<HashMap<RequestId, PendingTx>>>,
-    handlers: &Arc<JsonRpcHandlers>,
-) {
-    if is_json_rpc_response(msg) {
-        if let Some(id) = msg.get("id").and_then(request_id_from_value)
-            && let Some(tx) = pending.lock_recover().remove(&id)
-        {
-            let _ = tx.send(Ok(msg.get("result").cloned().unwrap_or(Value::Null)));
-        }
-        return;
-    }
-
-    if is_json_rpc_error(msg) {
-        if let Some(id) = msg.get("id").and_then(request_id_from_value)
-            && let Some(tx) = pending.lock_recover().remove(&id)
-        {
-            let message = msg
-                .get("error")
-                .and_then(|e| e.get("message"))
-                .and_then(|m| m.as_str())
-                .unwrap_or("")
-                .to_string();
-            let _ = tx.send(Err(JsonRpcError(message)));
-        }
-        return;
-    }
-
-    if is_json_rpc_server_request(msg) {
-        if let (Some(method), Some(id)) = (
-            msg.get("method").and_then(|m| m.as_str()),
-            msg.get("id").and_then(request_id_from_value),
-        ) {
-            (handlers.on_request)(
-                method.to_string(),
-                msg.get("params").cloned().unwrap_or(Value::Null),
-                id,
-            );
-        }
-        return;
-    }
-
-    if is_json_rpc_notification(msg) {
-        if let Some(method) = msg.get("method").and_then(|m| m.as_str()) {
-            (handlers.on_notification)(
-                method.to_string(),
-                msg.get("params").cloned().unwrap_or(Value::Null),
-            );
-        }
-        return;
-    }
-
-    tracing::warn!(
-        module = "codex:jsonrpc",
-        "jsonrpc: unrecognized message shape"
-    );
-}
-
 fn reject_all_pending(pending: &Arc<Mutex<HashMap<RequestId, PendingTx>>>, err: JsonRpcError) {
     let drained: Vec<PendingTx> = pending.lock_recover().drain().map(|(_, tx)| tx).collect();
     for tx in drained {
@@ -430,101 +126,6 @@ fn reject_all_pending(pending: &Arc<Mutex<HashMap<RequestId, PendingTx>>>, err: 
 }
 
 /// `2026-07-13T13:10:39.248771Z` — a `^\d{4}-\d{2}-\d{2}T[\d:.]+Z` prefix.
-fn is_rfc3339_prefix(ts: &str) -> bool {
-    let b = ts.as_bytes();
-    // yyyy-mm-ddT + at least one time char + Z
-    b.len() > 12
-        && b.ends_with(b"Z")
-        && b[..4].iter().all(u8::is_ascii_digit)
-        && b[4] == b'-'
-        && b[5..7].iter().all(u8::is_ascii_digit)
-        && b[7] == b'-'
-        && b[8..10].iter().all(u8::is_ascii_digit)
-        && b[10] == b'T'
-        && b[11..b.len() - 1]
-            .iter()
-            .all(|c| c.is_ascii_digit() || *c == b':' || *c == b'.')
-}
-
-/// `<rfc3339> <LEVEL> <target>: <message>` — the codex binary's tracing format.
-/// Hand-rolled (no regex crate); requires something to follow the level.
-fn is_tracing_line(message: &str) -> bool {
-    let mut parts = message.split_whitespace();
-    let Some(ts) = parts.next() else {
-        return false;
-    };
-    if !is_rfc3339_prefix(ts) {
-        return false;
-    }
-    if !matches!(
-        parts.next(),
-        Some("TRACE" | "DEBUG" | "INFO" | "WARN" | "ERROR")
-    ) {
-        return false;
-    }
-    parts.next().is_some()
-}
-
-/// The app-server discards panicked task handles and can still exit 0, so a panic is only
-/// detectable on stderr. Latched during the run and reported at exit, never mid-run.
-fn is_panic_line(message: &str) -> bool {
-    message.starts_with("thread '") && message.contains("panicked")
-}
-
-#[cfg(test)]
-mod stderr_tests {
-    use super::{is_panic_line, is_tracing_line};
-
-    #[test]
-    fn latches_a_rust_panic_line() {
-        assert!(is_panic_line(
-            "thread 'tokio-runtime-worker' panicked at src/foo.rs:1:1"
-        ));
-        // The #237 line is an ordinary tracing ERROR, not a panic — it must NOT latch.
-        assert!(!is_panic_line(
-            "2026-07-13T13:10:39.248771Z ERROR rmcp::transport::worker: worker quit with fatal: \
-             Transport channel closed, when AuthRequired(AuthRequiredError { .. })"
-        ));
-        assert!(!is_panic_line("all good here"));
-    }
-
-    #[test]
-    fn rejects_timestamp_shaped_garbage() {
-        assert!(!is_tracing_line("2TgarbageZ ERROR foo: bar"));
-        assert!(!is_tracing_line("2026-07-13T13:10:39.248771Z ERROR"));
-    }
-
-    // The #237 repro: an unauthenticated remote MCP server makes codex log this on every
-    // startup while the run itself proceeds fine.
-    #[test]
-    fn classifies_the_rmcp_auth_required_error_as_a_tracing_line() {
-        assert!(is_tracing_line(
-            "2026-07-13T13:10:39.248771Z ERROR rmcp::transport::worker: worker quit with fatal: \
-             Transport channel closed, when AuthRequired(AuthRequiredError { .. })"
-        ));
-    }
-
-    #[test]
-    fn classifies_every_tracing_level() {
-        for level in ["TRACE", "DEBUG", "INFO", "WARN", "ERROR"] {
-            assert!(is_tracing_line(&format!(
-                "2026-07-13T13:10:39.248771Z {level} codex_core::config: loaded"
-            )));
-        }
-    }
-
-    #[test]
-    fn rejects_lines_that_are_not_tracing_output() {
-        assert!(!is_tracing_line(
-            "thread 'main' panicked at src/main.rs:1:1"
-        ));
-        assert!(!is_tracing_line("error: unexpected argument '--nope'"));
-        assert!(!is_tracing_line(""));
-        assert!(!is_tracing_line("2026-07-13T13:10:39.248771Z"));
-        assert!(!is_tracing_line("ERROR rmcp: no leading timestamp"));
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -566,3 +167,20 @@ mod tests {
         assert_eq!(find_json_object_end(r#"{"a":1"#), None);
     }
 }
+
+mod dispatch;
+mod parsing;
+mod process;
+mod stderr;
+use dispatch::dispatch;
+use parsing::{parse_jsonrpc_messages, request_id_from_value};
+use stderr::{is_panic_line, is_tracing_line};
+
+impl Drop for JsonRpcClient {
+    fn drop(&mut self) {
+        self.close();
+    }
+}
+
+#[cfg(test)]
+use parsing::find_json_object_end;

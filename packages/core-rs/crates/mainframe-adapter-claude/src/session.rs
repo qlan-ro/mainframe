@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use nanoid::nanoid;
 use serde_json::{Value, json};
-use tokio::sync::{Notify, mpsc};
+use tokio::sync::Notify;
 
 use mainframe_adapter_api::{
     AdapterError, AdapterSession, BoxFuture, ContextFiles, ImageInput, SessionSink,

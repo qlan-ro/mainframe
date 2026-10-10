@@ -1,4 +1,5 @@
 use super::*;
+use tokio::sync::mpsc;
 
 pub(super) fn spawn_env(proxy: Option<&CliProxyEnv>) -> HashMap<String, Option<String>> {
     build_spawn_command("claude", &[], "/tmp", "/usr/bin", proxy)
