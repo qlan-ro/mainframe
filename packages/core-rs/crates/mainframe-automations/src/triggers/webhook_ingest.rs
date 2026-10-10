@@ -5,6 +5,7 @@
 //! 401, InvalidJson/MissingDeliveryId 400, PresetMismatch/StaleDelivery 204,
 //! Duplicate/Accepted 200, StartFailed 500 (sender retries — A7).
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -256,9 +257,7 @@ impl WebhookProcessor {
 
     /// Poisoned-map recovery matches advance.rs's lock_map rationale.
     fn lock_samples(&self) -> std::sync::MutexGuard<'_, HashMap<(String, String), Value>> {
-        self.samples
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+        self.samples.lock_recover()
     }
 }
 

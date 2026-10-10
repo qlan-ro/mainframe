@@ -1394,6 +1394,7 @@ name = "mainframe-adapter-api"
 version = "0.0.0"
 dependencies = [
  "dashmap",
+ "mainframe-runtime",
  "mainframe-types",
  "serde",
  "serde_json",
@@ -1475,6 +1476,7 @@ dependencies = [
  "hex",
  "hmac",
  "keyring",
+ "mainframe-runtime",
  "mainframe-types",
  "nanoid",
  "rand 0.8.6",
@@ -1605,6 +1607,7 @@ name = "mainframe-git"
 version = "0.0.0"
 dependencies = [
  "dashmap",
+ "mainframe-runtime",
  "mainframe-types",
  "serde",
  "tempfile",
@@ -1619,6 +1622,7 @@ version = "0.0.0"
 dependencies = [
  "dashmap",
  "dirs",
+ "mainframe-runtime",
  "mainframe-types",
  "reqwest",
  "serde",
@@ -1634,6 +1638,7 @@ name = "mainframe-lsp"
 version = "0.0.0"
 dependencies = [
  "dashmap",
+ "mainframe-runtime",
  "mainframe-types",
  "serde",
  "serde_json",
@@ -1649,6 +1654,7 @@ version = "0.0.0"
 dependencies = [
  "base64",
  "chrono",
+ "mainframe-runtime",
  "mainframe-types",
  "rand 0.8.6",
  "serde",
@@ -1691,11 +1697,13 @@ dependencies = [
  "hmac",
  "mainframe-types",
  "rand 0.8.6",
+ "reqwest",
  "serde",
  "serde_json",
  "sha2",
  "tempfile",
  "thiserror",
+ "tokio",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
@@ -1756,6 +1764,7 @@ version = "0.0.0"
 dependencies = [
  "dirs",
  "mainframe-db",
+ "mainframe-runtime",
  "mainframe-types",
  "nanoid",
  "notify",

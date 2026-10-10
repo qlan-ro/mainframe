@@ -5,6 +5,7 @@
 //! all, so a connection that never negotiated the feature sees no
 //! revision-cursor fields.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashSet;
 use std::sync::Mutex;
 
@@ -59,7 +60,7 @@ pub(super) fn resolve(
             cursor: None,
         };
     };
-    let mut log = log_mutex.lock().unwrap_or_else(|err| err.into_inner());
+    let mut log = log_mutex.lock_recover();
     // `seed_containers`, not `seed`: seeds the same flat item baseline `seed`
     // would, plus the container index the hub's later `record_delta` calls
     // need.

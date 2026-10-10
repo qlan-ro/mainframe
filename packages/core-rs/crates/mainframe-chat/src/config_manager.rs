@@ -1,3 +1,4 @@
+use mainframe_types::sync::LockExt as _;
 use std::sync::{Arc, Mutex};
 
 use mainframe_adapter_api::{AdapterError, AdapterSession, BoxFuture};
@@ -17,8 +18,7 @@ use crate::types::ActiveChat;
 const TRANSCRIPT_MOVE_FAILED: &str =
     "Moving the session's history into the worktree failed. The session stayed where it was.";
 
-#[path = "config_locks.rs"]
-mod config_locks;
+use mainframe_runtime::sync::KeyedMutex;
 
 /// Errors surfaced by config changes. The message strings cross the wire:
 /// routes return them as the error text.
@@ -146,14 +146,14 @@ struct RespawnChanges {
 
 pub struct ChatConfigManager<D: ConfigManagerDeps> {
     deps: D,
-    changes: config_locks::ConfigLocks,
+    changes: KeyedMutex,
 }
 
 impl<D: ConfigManagerDeps> ChatConfigManager<D> {
     pub fn new(deps: D) -> Self {
         Self {
             deps,
-            changes: config_locks::ConfigLocks::default(),
+            changes: KeyedMutex::default(),
         }
     }
 
@@ -170,16 +170,12 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
 
     /// Kill the spawned adapter session, if any, and detach it from the active chat.
     async fn detach_session(&self, cell: &Arc<Mutex<ActiveChat>>) -> Result<(), ConfigError> {
-        let session = cell
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .session
-            .clone();
+        let session = cell.lock_recover().session.clone();
         if let Some(session) = session
             && session.is_spawned()
         {
             session.kill().await?;
-            cell.lock().unwrap_or_else(|e| e.into_inner()).session = None;
+            cell.lock_recover().session = None;
         }
         Ok(())
     }
@@ -202,7 +198,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
             match session.set_model(model.clone()).await {
                 Ok(()) => {
                     updates.model = Some(model.clone());
-                    cell.lock().unwrap_or_else(|e| e.into_inner()).chat.model = Some(model);
+                    cell.lock_recover().chat.model = Some(model);
                 }
                 Err(err) => {
                     warn!(?err, chat_id, "setModel rejected; not persisting model");
@@ -214,10 +210,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
             match session.set_permission_mode(mode).await {
                 Ok(()) => {
                     updates.permission_mode = Some(mode);
-                    cell.lock()
-                        .unwrap_or_else(|e| e.into_inner())
-                        .chat
-                        .permission_mode = Some(mode);
+                    cell.lock_recover().chat.permission_mode = Some(mode);
                 }
                 Err(err) => {
                     warn!(
@@ -231,10 +224,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
             match session.set_plan_mode(plan).await {
                 Ok(()) => {
                     updates.plan_mode = Some(plan);
-                    cell.lock()
-                        .unwrap_or_else(|e| e.into_inner())
-                        .chat
-                        .plan_mode = Some(plan);
+                    cell.lock_recover().chat.plan_mode = Some(plan);
                 }
                 Err(err) => warn!(
                     ?err,
@@ -252,7 +242,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
         if updates.model.is_some() {
             self.deps.apply_tuning(chat_id).await;
         }
-        let chat = cell.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
+        let chat = cell.lock_recover().chat.clone();
         self.deps
             .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
         model_error.map_or(Ok(()), Err)
@@ -272,22 +262,18 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
             inflight.await;
         }
 
-        let session = cell
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .session
-            .clone();
+        let session = cell.lock_recover().session.clone();
         let was_spawned = session.as_ref().is_some_and(|s| s.is_spawned());
         if was_spawned {
             if let Some(session) = &session {
                 session.kill().await?;
             }
-            cell.lock().unwrap_or_else(|e| e.into_inner()).session = None;
+            cell.lock_recover().session = None;
         }
 
         let mut updates = ChatFieldUpdate::default();
         {
-            let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+            let mut guard = cell.lock_recover();
             if let Some(adapter_id) = changes.adapter_id {
                 updates.adapter_id = Some(adapter_id.clone());
                 guard.chat.adapter_id = adapter_id;
@@ -307,7 +293,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
         }
 
         self.deps.chats_update(chat_id, &updates);
-        let chat = cell.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
+        let chat = cell.lock_recover().chat.clone();
         self.deps
             .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
         if was_spawned {
@@ -328,7 +314,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
         session_file_path: Option<String>,
     ) {
         {
-            let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+            let mut guard = cell.lock_recover();
             guard.chat.worktree_path = worktree_path.clone();
             guard.chat.branch_name = branch_name.clone();
             if session_file_path.is_some() {
@@ -344,7 +330,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
                 ..Default::default()
             },
         );
-        let chat = cell.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
+        let chat = cell.lock_recover().chat.clone();
         self.deps
             .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
         self.deps
@@ -416,7 +402,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
         let cell = self.require_active_chat(chat_id)?;
 
         let (cur_adapter, cur_model, cur_mode, cur_plan, has_claude_session, session) = {
-            let guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+            let guard = cell.lock_recover();
             (
                 guard.chat.adapter_id.clone(),
                 guard.chat.model.clone(),
@@ -514,7 +500,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
     ) -> Result<(), ConfigError> {
         let cell = self.require_active_chat(chat_id)?;
         let (has_worktree, project_id, claude_session_id, adapter) = {
-            let guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+            let guard = cell.lock_recover();
             (
                 guard.chat.worktree_path.is_some(),
                 guard.chat.project_id.clone(),
@@ -615,7 +601,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
     ) -> Result<(), ConfigError> {
         let cell = self.require_active_chat(chat_id)?;
         let (current_worktree, project_id, claude_session_id, adapter) = {
-            let guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+            let guard = cell.lock_recover();
             (
                 guard.chat.worktree_path.clone(),
                 guard.chat.project_id.clone(),
@@ -669,7 +655,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
             return Ok(());
         };
         let (worktree_path, has_claude_session, project_id, branch_name) = {
-            let guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+            let guard = cell.lock_recover();
             (
                 guard.chat.worktree_path.clone(),
                 guard.chat.claude_session_id.is_some(),

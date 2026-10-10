@@ -61,7 +61,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
     }
     fn notify_result_complete(&self, cost: f64) {
         let last_text = {
-            let msgs = self.messages.lock().unwrap_or_else(|e| e.into_inner());
+            let msgs = self.messages.lock_recover();
             get_last_assistant_text(msgs.get(&self.chat_id))
         };
         let body = if last_text.is_empty() {

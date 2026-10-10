@@ -83,11 +83,11 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         if !self.deps.notify_attention_request() {
             return;
         }
-        let admitted = self
-            .attention_dedupe
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .admit(&self.chat_id, &attention.dedupe_key, Instant::now());
+        let admitted = self.attention_dedupe.lock_recover().admit(
+            &self.chat_id,
+            &attention.dedupe_key,
+            Instant::now(),
+        );
         if !admitted {
             return;
         }

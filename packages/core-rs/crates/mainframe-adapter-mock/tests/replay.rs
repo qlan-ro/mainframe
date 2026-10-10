@@ -1,5 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+use mainframe_types::sync::LockExt as _;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -19,14 +20,11 @@ struct RecordingSink {
 
 impl RecordingSink {
     fn push(&self, call: impl Into<String>) {
-        self.calls
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .push(call.into());
+        self.calls.lock_recover().push(call.into());
     }
 
     fn calls(&self) -> Vec<String> {
-        self.calls.lock().unwrap_or_else(|e| e.into_inner()).clone()
+        self.calls.lock_recover().clone()
     }
 }
 

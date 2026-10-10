@@ -6,10 +6,11 @@
 //! on boot. Status is always re-derived at read time so expiry reflects the real
 //! clock.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 
 use mainframe_types::adapter::{ProviderQuota, ProviderQuotaStatus};
 use mainframe_types::events::DaemonEvent;
@@ -114,10 +115,6 @@ pub struct QuotaManager {
     now: SharedClock,
 }
 
-fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(PoisonError::into_inner)
-}
-
 impl QuotaManager {
     #[must_use]
     pub fn new(deps: QuotaManagerDeps) -> Self {
@@ -139,14 +136,18 @@ impl QuotaManager {
     /// `/usage` is a full snapshot (`Pull`/replace); Codex reads the app-server
     /// sparsely, so its pull merges like a push (#268 F5).
     pub fn register_puller(&self, adapter_id: &str, mode: IngestMode, puller: QuotaPuller) {
-        lock(&self.pullers).insert(adapter_id.to_string(), (mode, puller));
+        self.pullers
+            .lock_recover()
+            .insert(adapter_id.to_string(), (mode, puller));
     }
 
     /// Register an adapter's account-identity resolver (#268 F2). Consulted through
     /// the TTL cache when a push arrives without a concrete identity, and at boot to
     /// select the right persisted blob for a swapped account.
     pub fn register_identity_resolver(&self, adapter_id: &str, resolver: IdentityResolver) {
-        lock(&self.identity_resolvers).insert(adapter_id.to_string(), resolver);
+        self.identity_resolvers
+            .lock_recover()
+            .insert(adapter_id.to_string(), resolver);
     }
 
     /// Rehydrate persisted blobs. The newest-observed per adapter is the default
@@ -156,7 +157,7 @@ impl QuotaManager {
         let stored = self.settings.get_by_category(QUOTA_CATEGORY);
         let mut adapters: HashSet<String> = HashSet::new();
         {
-            let mut st = lock(&self.state);
+            let mut st = self.state.lock_recover();
             for (key, value) in stored {
                 let Some(blob) = safe_parse_quota(&value) else {
                     tracing::warn!(key = %key, "quota: discarding unparseable persisted blob");
@@ -193,7 +194,7 @@ impl QuotaManager {
             return;
         };
         let key = compute_quota_key(adapter_id, Some(&identity));
-        let mut st = lock(&self.state);
+        let mut st = self.state.lock_recover();
         if st.blobs.contains_key(&key) {
             st.current_key.insert(adapter_id.to_string(), key);
             st.last_known_identity
@@ -205,7 +206,7 @@ impl QuotaManager {
     /// instant.
     #[must_use]
     pub fn get(&self, adapter_id: &str) -> Option<ProviderQuota> {
-        let st = lock(&self.state);
+        let st = self.state.lock_recover();
         let blob = get_current_blob(&st, adapter_id)?;
         let mut out = blob.clone();
         out.status = derive_provider_status(blob, (self.now)());
@@ -223,7 +224,7 @@ impl QuotaManager {
     ) -> ProviderQuota {
         let now = (self.now)();
         let (key, next) = {
-            let mut st = lock(&self.state);
+            let mut st = self.state.lock_recover();
             let identity = match mode {
                 IngestMode::Pull => {
                     self.resolve_identity(&st, adapter_id, quota.account_identity.as_deref())
@@ -251,7 +252,7 @@ impl QuotaManager {
     /// Puller-driven refresh. On failure keep the last-known blob (backoff); no
     /// puller ⇒ last-known.
     pub async fn refresh(&self, adapter_id: &str) -> Option<ProviderQuota> {
-        let entry = lock(&self.pullers).get(adapter_id).cloned();
+        let entry = self.pullers.lock_recover().get(adapter_id).cloned();
         let Some((mode, puller)) = entry else {
             return self.get(adapter_id);
         };
@@ -268,7 +269,7 @@ impl QuotaManager {
     /// re-persist + emit.
     fn reevaluate(&self, adapter_id: &str) -> Option<ProviderQuota> {
         let (key, next) = {
-            let mut st = lock(&self.state);
+            let mut st = self.state.lock_recover();
             let key = st.current_key.get(adapter_id)?.clone();
             let prior = st.blobs.get(&key)?.clone();
             let next = handle_pull_failure(Some(&prior), (self.now)());
@@ -330,7 +331,8 @@ impl QuotaManager {
     /// The cached identity for an adapter if it hasn't passed its TTL.
     fn fresh_cached_identity(&self, adapter_id: &str) -> Option<String> {
         let now = (self.now)();
-        lock(&self.identity_cache)
+        self.identity_cache
+            .lock_recover()
             .get(adapter_id)
             .filter(|cached| cached.expires_at > now)
             .map(|cached| cached.identity.clone())
@@ -342,7 +344,12 @@ impl QuotaManager {
         if tokio::runtime::Handle::try_current().is_err() {
             return;
         }
-        let Some(resolver) = lock(&self.identity_resolvers).get(adapter_id).cloned() else {
+        let Some(resolver) = self
+            .identity_resolvers
+            .lock_recover()
+            .get(adapter_id)
+            .cloned()
+        else {
             return;
         };
         let cache = Arc::clone(&self.identity_cache);
@@ -350,7 +357,7 @@ impl QuotaManager {
         let adapter_id = adapter_id.to_string();
         tokio::spawn(async move {
             if let Some(identity) = resolver().await {
-                lock(&cache).insert(
+                cache.lock_recover().insert(
                     adapter_id,
                     CachedIdentity {
                         identity,
@@ -364,9 +371,13 @@ impl QuotaManager {
     /// Await the resolver and refill the TTL cache (boot path). `None` on a
     /// transient/absent resolution leaves the cache untouched.
     async fn refresh_cached_identity(&self, adapter_id: &str) -> Option<String> {
-        let resolver = lock(&self.identity_resolvers).get(adapter_id).cloned()?;
+        let resolver = self
+            .identity_resolvers
+            .lock_recover()
+            .get(adapter_id)
+            .cloned()?;
         let identity = resolver().await?;
-        lock(&self.identity_cache).insert(
+        self.identity_cache.lock_recover().insert(
             adapter_id.to_string(),
             CachedIdentity {
                 identity: identity.clone(),

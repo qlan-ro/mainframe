@@ -1,5 +1,6 @@
+use mainframe_types::sync::LockExt as _;
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -83,7 +84,7 @@ impl PushService {
     }
 
     fn lock(&self) -> MutexGuard<'_, Inner> {
-        self.inner.lock().unwrap_or_else(PoisonError::into_inner)
+        self.inner.lock_recover()
     }
 
     pub fn register_device(&self, device_id: &str, push_token: &str) {
@@ -142,7 +143,7 @@ impl PushService {
             let inner = Arc::clone(&self.inner);
             let handle = rt.spawn(async move {
                 tokio::time::sleep(Duration::from_millis(STALENESS_MS)).await;
-                let mut guard = inner.lock().unwrap_or_else(PoisonError::into_inner);
+                let mut guard = inner.lock_recover();
                 guard.desktop_active = false;
                 tracing::info!(module = "push", "desktop staleness timeout — resuming push");
             });

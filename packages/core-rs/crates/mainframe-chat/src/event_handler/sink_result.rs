@@ -58,7 +58,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
             .unwrap_or(0);
 
         {
-            let guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+            let guard = cell.lock_recover();
             (
                 guard.chat.total_cost + cost,
                 guard.chat.total_tokens_input + tokens_input,
@@ -101,7 +101,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
             },
         );
         {
-            let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+            let mut guard = cell.lock_recover();
             guard.chat.total_cost = totals.0;
             guard.chat.total_tokens_input = totals.1;
             guard.chat.total_tokens_output = totals.2;
@@ -115,13 +115,9 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
     fn result_reason(&self, data: &SessionResult) -> (ChatUpdatedReason, bool, bool) {
         let was_interrupted = self
             .permissions
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .clear_interrupted(&self.chat_id);
-        self.permissions
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clear(&self.chat_id);
+        self.permissions.lock_recover().clear(&self.chat_id);
 
         let is_error = data.subtype.as_deref() == Some("error_during_execution")
             && data.is_error != Some(false);
@@ -144,7 +140,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         was_interrupted: bool,
         is_error: bool,
     ) {
-        let chat = cell.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
+        let chat = cell.lock_recover().chat.clone();
         debug!(
             chat_id = self.chat_id,
             ?reason,
@@ -166,11 +162,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         });
     }
     fn emit_turn_duration(&self, cell: &Arc<Mutex<ActiveChat>>) {
-        let turn_started_at = cell
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .turn_started_at
-            .take();
+        let turn_started_at = cell.lock_recover().turn_started_at.take();
         if let Some(started) = turn_started_at {
             let turn_duration_ms = now_ms() - started;
             let mut md: HashMap<String, serde_json::Value> = HashMap::new();

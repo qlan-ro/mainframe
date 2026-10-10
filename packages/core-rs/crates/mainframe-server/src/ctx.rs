@@ -1,6 +1,7 @@
 //! `AppCtx` — the Arc-shared application context every route module and the WS
 //! layer read.
 
+use mainframe_types::sync::RwLockExt as _;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
@@ -177,15 +178,12 @@ pub struct AppCtx {
 impl AppCtx {
     /// Read the current `/health` tunnel URL.
     pub fn tunnel_url(&self) -> Option<String> {
-        self.tunnel_url
-            .read()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone()
+        self.tunnel_url.read_recover().clone()
     }
 
     /// The mutator the tunnel routes call after start/stop.
     pub fn set_tunnel_url(&self, url: Option<String>) {
-        *self.tunnel_url.write().unwrap_or_else(|e| e.into_inner()) = url;
+        *self.tunnel_url.write_recover() = url;
     }
 
     /// Worktree-aware effective path: the chat's worktree when the chatId points

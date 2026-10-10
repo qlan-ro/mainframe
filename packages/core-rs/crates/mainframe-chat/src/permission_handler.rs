@@ -2,6 +2,7 @@
 //! (guards + dispatch) and `branches.rs` (what each outcome does); this file
 //! owns the handler's state and the pending-gate lookups.
 
+use mainframe_types::sync::LockExt as _;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use mainframe_types::adapter::{ControlRequest, ControlResponse};
@@ -59,15 +60,11 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
     }
 
     fn has_pending(&self, chat_id: &str) -> bool {
-        self.permissions
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .has_pending(chat_id)
+        self.permissions.lock_recover().has_pending(chat_id)
     }
 
     fn session_spawned(cell: &Arc<Mutex<ActiveChat>>) -> bool {
-        cell.lock()
-            .unwrap_or_else(|e| e.into_inner())
+        cell.lock_recover()
             .session
             .as_ref()
             .is_some_and(|s| s.is_spawned())
@@ -86,8 +83,7 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
     /// repeat that work (a cold chat's whole JSONL, twice per resume).
     pub(crate) fn pending_permission_as_known(&self, chat_id: &str) -> Option<ControlRequest> {
         self.permissions
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .get_pending(chat_id)
             .cloned()
     }

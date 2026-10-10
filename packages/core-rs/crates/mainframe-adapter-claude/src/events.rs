@@ -1,3 +1,4 @@
+use mainframe_types::sync::LockExt as _;
 use serde_json::Value;
 
 use mainframe_adapter_api::{AdapterError, SessionSink};
@@ -15,7 +16,7 @@ use crate::user_event::handle_user_event;
 
 pub fn handle_stdout(session: &ClaudeSession, chunk: &[u8], sink: &dyn SessionSink) {
     let lines: Vec<String> = {
-        let mut st = session.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut st = session.state.lock_recover();
         st.buffer.push_str(&String::from_utf8_lossy(chunk));
         let mut parts: Vec<String> = st.buffer.split('\n').map(str::to_string).collect();
         st.buffer = parts.pop().unwrap_or_default();

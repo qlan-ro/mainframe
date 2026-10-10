@@ -8,6 +8,7 @@
 use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent, MessageContentNode};
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::orchestration::{DelegatedTask, TaskDelivery, TaskStatus, TaskWorkState};
+use mainframe_types::sync::LockExt as _;
 
 use crate::errors::{ErrorCode, ToolError, cap_chars};
 use crate::outbox::OutboxKind;
@@ -100,9 +101,7 @@ impl OrchestrationService {
     fn lock_children(
         &self,
     ) -> std::sync::MutexGuard<'_, std::collections::HashMap<String, String>> {
-        self.active_children
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+        self.active_children.lock_recover()
     }
 
     async fn has_open_subtasks(&self, chat_id: &str) -> bool {
@@ -250,8 +249,7 @@ impl OrchestrationService {
         let owed = self.tasks.owed().await;
         for task in &owed {
             self.boot_held
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
+                .lock_recover()
                 .insert(task.parent_chat_id.clone());
             self.queue_delivery(task);
         }
@@ -263,10 +261,7 @@ impl OrchestrationService {
     }
 
     pub(crate) fn is_boot_held(&self, chat_id: &str) -> bool {
-        self.boot_held
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .contains(chat_id)
+        self.boot_held.lock_recover().contains(chat_id)
     }
 }
 

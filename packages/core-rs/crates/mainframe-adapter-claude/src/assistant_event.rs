@@ -1,3 +1,4 @@
+use mainframe_types::sync::LockExt as _;
 use serde_json::Value;
 
 use mainframe_adapter_api::SessionSink;
@@ -83,7 +84,7 @@ pub(crate) fn handle_assistant_event(
         scan_attention_requests(content, sink);
     }
 
-    let mut guard = session.state.lock().unwrap_or_else(|e| e.into_inner());
+    let mut guard = session.state.lock_recover();
     let st: &mut ClaudeSessionState = &mut guard;
 
     if let Some(u) = usage {

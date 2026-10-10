@@ -1,6 +1,7 @@
 //! `PermissionHandlerDeps` adapter (plus the `PlanHost` impl it wraps) and its
 //! sub-manager construction.
 use super::*;
+use mainframe_types::sync::LockExt as _;
 
 /// Implements `PlanHost` for the plan-mode action context — the seam back into
 /// `ChatManager`'s privately-typed event/lifecycle pieces. `send_message` needs a
@@ -87,7 +88,7 @@ impl PermissionHandlerDeps for PhDeps {
             let chat = self
                 .active_chats
                 .get(chat_id)
-                .map(|c| c.lock().unwrap_or_else(|e| e.into_inner()).chat.clone())
+                .map(|c| c.lock_recover().chat.clone())
                 .or_else(|| self.deps.chats_get(chat_id));
             let Some(chat) = chat else {
                 return Vec::new();

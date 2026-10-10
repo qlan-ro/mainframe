@@ -8,6 +8,7 @@
 //! Queued message refs are not cleared here. Killing the session, which every
 //! caller does first, runs the sink's exit handler, and that handler clears them.
 
+use mainframe_types::sync::LockExt as _;
 use std::sync::{Arc, Mutex};
 
 use crate::event_handler::{EventHandler, EventHandlerDeps};
@@ -52,7 +53,7 @@ impl<E: EventHandlerDeps + 'static> ChatTeardown<E> {
     pub fn clear(&self, chat_id: &str, mode: TeardownMode) {
         self.active_chats.remove(chat_id);
         {
-            let mut messages = self.messages.lock().unwrap_or_else(|e| e.into_inner());
+            let mut messages = self.messages.lock_recover();
             match mode {
                 TeardownMode::End => messages.unpin(chat_id),
                 TeardownMode::Discard | TeardownMode::Archive | TeardownMode::Offload => {
@@ -61,7 +62,7 @@ impl<E: EventHandlerDeps + 'static> ChatTeardown<E> {
             }
         }
         {
-            let mut permissions = self.permissions.lock().unwrap_or_else(|e| e.into_inner());
+            let mut permissions = self.permissions.lock_recover();
             match mode {
                 TeardownMode::Discard | TeardownMode::Offload => permissions.forget(chat_id),
                 TeardownMode::Archive => permissions.clear(chat_id),

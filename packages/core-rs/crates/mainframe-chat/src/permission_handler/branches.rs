@@ -3,6 +3,7 @@
 //! escalation, and the normal forward-and-shift path. Split out of
 //! `permission_handler.rs` — a pure move.
 
+use mainframe_types::sync::LockExt as _;
 use std::sync::{Arc, Mutex};
 
 use mainframe_types::adapter::{ControlBehavior, ControlResponse};
@@ -23,10 +24,7 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
         response: ControlResponse,
         active: Option<Arc<Mutex<ActiveChat>>>,
     ) -> Result<(), PermissionError> {
-        self.permissions
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clear(chat_id);
+        self.permissions.lock_recover().clear(chat_id);
 
         if response.behavior == ControlBehavior::Allow
             && is_exit_plan_mode(&response)
@@ -42,7 +40,7 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
             && Self::session_spawned(&started)
         {
             let chat = {
-                let mut guard = started.lock().unwrap_or_else(|e| e.into_inner());
+                let mut guard = started.lock_recover();
                 guard.chat.process_state = Some(Some(ProcessState::Working));
                 guard.chat.clone()
             };
@@ -55,11 +53,7 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
             );
             self.deps
                 .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
-            let session = started
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .session
-                .clone();
+            let session = started.lock_recover().session.clone();
             if let Some(session) = session {
                 session.respond_to_permission(response).await?;
             }
@@ -85,11 +79,7 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
         active: Arc<Mutex<ActiveChat>>,
         response: ControlResponse,
     ) -> Result<(), PermissionError> {
-        let session = active
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .session
-            .clone();
+        let session = active.lock_recover().session.clone();
         let Some(session) = session else {
             return Err(PermissionError::Message(format!(
                 "No session for chat {chat_id}"
@@ -107,8 +97,7 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
 
         let next_request = self
             .permissions
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .shift(chat_id, &response.request_id);
         if let Some(next_request) = next_request {
             let notify = self
@@ -129,11 +118,7 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
             }
         }
 
-        let chat = active
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .chat
-            .clone();
+        let chat = active.lock_recover().chat.clone();
         self.deps
             .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
 
@@ -146,17 +131,14 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
     }
 
     pub(super) fn transient_user_text(&self, chat_id: &str, text: &str) -> ChatMessage {
-        self.messages
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .create_transient_message(
-                chat_id,
-                ChatMessageType::User,
-                vec![MessageContent::Leaf(LeafContent::Text {
-                    text: text.to_string(),
-                    parent_tool_use_id: None,
-                })],
-                None,
-            )
+        self.messages.lock_recover().create_transient_message(
+            chat_id,
+            ChatMessageType::User,
+            vec![MessageContent::Leaf(LeafContent::Text {
+                text: text.to_string(),
+                parent_tool_use_id: None,
+            })],
+            None,
+        )
     }
 }

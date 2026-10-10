@@ -5,6 +5,7 @@
 //! (such as `trigger_state` / `agent_waits` from an older engine) are
 //! ignored.
 
+use mainframe_types::sync::LockExt as _;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -103,7 +104,7 @@ impl AutomationDb {
         tokio::task::spawn_blocking(move || {
             // A poisoned mutex only means another worker panicked mid-query;
             // the connection itself is still usable, so recover the guard.
-            let mut guard = conn.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            let mut guard = conn.lock_recover();
             f(&mut guard)
         })
         .await

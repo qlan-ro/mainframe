@@ -10,10 +10,7 @@ impl ClaudeSession {
         let (options, executable, resume_target, include_partial) =
             self.probe_spawn_options(options).await?;
         let (args, base_mode) = build_args(&options, &resume_target, include_partial);
-        *self
-            .base_permission_mode
-            .lock()
-            .unwrap_or_else(|e| e.into_inner()) = base_mode;
+        *self.base_permission_mode.lock_recover() = base_mode;
 
         let real = tokio::fs::canonicalize(&self.project_path)
             .await
@@ -83,7 +80,7 @@ impl ClaudeSession {
             .clone()
             .unwrap_or_else(|| "claude".to_string());
 
-        *self.executable.lock().unwrap_or_else(|e| e.into_inner()) = executable.clone();
+        *self.executable.lock_recover() = executable.clone();
         let include_partial = crate::partial_stream::supports_partial_messages(
             &executable,
             self.resolved_path.as_str(),

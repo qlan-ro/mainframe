@@ -2,6 +2,7 @@
 //! serves — the static fallback list, the older-model merge and
 //! `enrich_with_context_window` — lives in [`crate::models`].
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -180,8 +181,8 @@ impl Adapter for ClaudeAdapter {
         let dynamic = self.dynamic_models.clone();
         let proxy = self.proxy_models.clone();
         Box::pin(async move {
-            let native = dynamic.lock().unwrap_or_else(|e| e.into_inner()).clone();
-            let proxy = proxy.lock().unwrap_or_else(|e| e.into_inner()).clone();
+            let native = dynamic.lock_recover().clone();
+            let proxy = proxy.lock_recover().clone();
             Ok(merged_catalog(native, proxy))
         })
     }
@@ -202,14 +203,12 @@ impl Adapter for ClaudeAdapter {
             if let Some(result) = crate::probe_models::probe_models(&exe, path.as_str()).await {
                 let enriched =
                     enrich_with_context_window(result.models, result.resolved_model.as_deref());
-                *dynamic.lock().unwrap_or_else(|e| e.into_inner()) =
-                    Some(merge_older_models(enriched));
+                *dynamic.lock_recover() = Some(merge_older_models(enriched));
             }
-            *proxy.lock().unwrap_or_else(|e| e.into_inner()) =
-                crate::cliproxy::probe_catalog().await;
+            *proxy.lock_recover() = crate::cliproxy::probe_catalog().await;
 
-            let native = dynamic.lock().unwrap_or_else(|e| e.into_inner()).clone();
-            let proxy = proxy.lock().unwrap_or_else(|e| e.into_inner()).clone();
+            let native = dynamic.lock_recover().clone();
+            let proxy = proxy.lock_recover().clone();
             if native.is_none() && proxy.is_empty() {
                 return Ok(None);
             }
@@ -248,26 +247,16 @@ impl Adapter for ClaudeAdapter {
         let id = session.id.clone();
         let sessions = self.sessions.clone();
         session.set_on_exit(Box::new(move || {
-            sessions
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .remove(&id);
+            sessions.lock_recover().remove(&id);
         }));
         self.sessions
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .insert(session.id.clone(), session.clone());
         session
     }
 
     fn kill_all(&self) {
-        let all: Vec<Arc<ClaudeSession>> = self
-            .sessions
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .values()
-            .cloned()
-            .collect();
+        let all: Vec<Arc<ClaudeSession>> = self.sessions.lock_recover().values().cloned().collect();
         for session in all {
             tokio::spawn(async move {
                 if let Err(err) = session.kill().await {
@@ -275,10 +264,7 @@ impl Adapter for ClaudeAdapter {
                 }
             });
         }
-        self.sessions
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clear();
+        self.sessions.lock_recover().clear();
     }
 
     fn generate_title(

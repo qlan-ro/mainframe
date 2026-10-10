@@ -1,3 +1,4 @@
+use mainframe_types::sync::LockExt as _;
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
@@ -39,7 +40,7 @@ pub(crate) struct ReplayCache {
 
 impl ReplayCache {
     pub fn lookup(&self, session_id: &str) -> Option<Vec<RecordedEvent>> {
-        let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let state = self.state.lock_recover();
         state
             .by_session_id
             .get(session_id)
@@ -48,7 +49,7 @@ impl ReplayCache {
     }
 
     fn store(&self, events: &[RecordedEvent]) {
-        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut state = self.state.lock_recover();
         state.last_live_events = Some(events.to_vec());
         if let Some(session_id) = recorded_session_id(events) {
             state.by_session_id.insert(session_id, events.to_vec());
@@ -158,7 +159,7 @@ impl ReplaySession {
         let text = text.replace(PROJECT_PATH_PLACEHOLDER, &self.project_path);
         let events = crate::parse_fixture(&text)?;
         cache.store(&events);
-        self.state.lock().unwrap_or_else(|e| e.into_inner()).replay = ReplayState::new(events);
+        self.state.lock_recover().replay = ReplayState::new(events);
         *source = ReplaySource::Ready;
         Ok(())
     }
@@ -187,7 +188,7 @@ impl ReplaySession {
     }
 
     fn take_interaction(&self, expected: &str) -> (Vec<RecordedEvent>, i64, Option<String>) {
-        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut state = self.state.lock_recover();
         pump::take_interaction(&mut state, expected)
     }
 
@@ -203,11 +204,7 @@ impl ReplaySession {
             state: self.state.clone(),
             sink,
             bridge: self.task_bridge.clone(),
-            orchestration: self
-                .orchestration
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .clone(),
+            orchestration: self.orchestration.lock_recover().clone(),
         }
         .spawn(outputs, base);
     }
@@ -216,10 +213,7 @@ impl ReplaySession {
     /// pump dispatches it — the window in which a prompt is queued, not replayed.
     fn arm_turn(&self, batch: &[RecordedEvent]) {
         if batch.iter().any(pump::is_result) {
-            self.state
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .turn_in_flight = true;
+            self.state.lock_recover().turn_in_flight = true;
         }
     }
 
@@ -227,7 +221,7 @@ impl ReplaySession {
     /// replayed. The daemon only hands over a uuid for a send it has already
     /// marked queued, so a uuid-less send always replays.
     pub(crate) fn queue_prompt(&self, uuid: String) -> bool {
-        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut state = self.state.lock_recover();
         if !state.turn_in_flight {
             return false;
         }
@@ -239,21 +233,21 @@ impl ReplaySession {
     /// Forget the turn and anything parked behind it: a killed session replays
     /// nothing further, so a later spawn must not ack a uuid from the dead one.
     pub(crate) fn forget_queue(&self) {
-        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut state = self.state.lock_recover();
         state.turn_in_flight = false;
         state.queued.clear();
     }
 
     /// Drop a queued prompt; `false` when it already started or never existed.
     pub(crate) fn drop_queued_prompt(&self, uuid: &str) -> bool {
-        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut state = self.state.lock_recover();
         let before = state.queued.len();
         state.queued.retain(|queued| queued != uuid);
         before != state.queued.len()
     }
 
     pub(crate) fn sink(&self) -> Option<Arc<dyn SessionSink>> {
-        self.sink.lock().unwrap_or_else(|e| e.into_inner()).clone()
+        self.sink.lock_recover().clone()
     }
 }
 

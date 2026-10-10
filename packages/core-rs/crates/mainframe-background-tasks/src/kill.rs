@@ -2,6 +2,7 @@
 //! each. The signal delivery shells out to kill(1). Both the tree-kill and
 //! `ps -o comm=` touchpoints are behind global seams so tests can mock them.
 
+use mainframe_types::sync::LockExt as _;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
@@ -91,9 +92,7 @@ fn kill_seam() -> &'static Mutex<KillSeam> {
 }
 
 fn lock_kill_seam() -> MutexGuard<'static, KillSeam> {
-    kill_seam()
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+    kill_seam().lock_recover()
 }
 
 /// Test-only seam — swap the tree-kill implementation.
@@ -478,7 +477,7 @@ mod tests {
     fn set_lsof_queue(responses: Vec<Canned>) {
         let q = Arc::new(Mutex::new(VecDeque::from(responses)));
         let exec: ExecFn = Arc::new(move |_c, _a| {
-            let item = q.lock().unwrap_or_else(|p| p.into_inner()).pop_front();
+            let item = q.lock_recover().pop_front();
             Box::pin(async move {
                 match item {
                     Some(Canned::Writers(pids)) => Ok(ExecOk {
@@ -508,16 +507,14 @@ mod tests {
         let log = Arc::new(Mutex::new(Vec::new()));
         let log2 = log.clone();
         set_tree_kill_for_tests(Arc::new(move |pid, signal| {
-            log2.lock()
-                .unwrap_or_else(|p| p.into_inner())
-                .push((pid, signal));
+            log2.lock_recover().push((pid, signal));
             Box::pin(async { Ok(()) })
         }));
         log
     }
 
     fn tk_calls(log: &Arc<Mutex<Vec<(u32, Signal)>>>) -> Vec<(u32, Signal)> {
-        log.lock().unwrap_or_else(|p| p.into_inner()).clone()
+        log.lock_recover().clone()
     }
 
     struct MockSession {
@@ -529,7 +526,7 @@ mod tests {
             &'a self,
             _task_id: &'a str,
         ) -> Pin<Box<dyn Future<Output = StopResult> + Send + 'a>> {
-            *self.called.lock().unwrap_or_else(|p| p.into_inner()) = true;
+            *self.called.lock_recover() = true;
             let r = self.result.clone();
             Box::pin(async move { r })
         }
@@ -871,7 +868,7 @@ mod tests {
         let lsof_calls = Arc::new(Mutex::new(0usize));
         let lsof_calls2 = lsof_calls.clone();
         set_exec_for_tests(Arc::new(move |_c, _a| {
-            *lsof_calls2.lock().unwrap_or_else(|p| p.into_inner()) += 1;
+            *lsof_calls2.lock_recover() += 1;
             Box::pin(async {
                 Ok(ExecOk {
                     stdout: String::new(),
@@ -889,7 +886,7 @@ mod tests {
             spool_root: Some(fx.spool_root.clone()),
         })
         .await;
-        assert_eq!(*lsof_calls.lock().unwrap_or_else(|p| p.into_inner()), 0);
+        assert_eq!(*lsof_calls.lock_recover(), 0);
         assert!(out.swept.is_empty());
     }
 

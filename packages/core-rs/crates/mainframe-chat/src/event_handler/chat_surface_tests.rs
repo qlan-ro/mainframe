@@ -19,19 +19,13 @@ impl RecordingSurface {
         Arc::new(Self::default())
     }
     fn events(&self) -> Vec<ChatSurfaceEvent> {
-        self.events
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone()
+        self.events.lock_recover().clone()
     }
 }
 
 impl ChatSurface for RecordingSurface {
     fn on_chat_surface_event(&self, event: ChatSurfaceEvent) {
-        self.events
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .push(event);
+        self.events.lock_recover().push(event);
     }
 }
 

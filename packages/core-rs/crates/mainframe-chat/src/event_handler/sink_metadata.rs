@@ -10,10 +10,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
             None,
             vendor_id.map(str::to_string),
         );
-        self.messages
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .append(&self.chat_id, message);
+        self.messages.lock_recover().append(&self.chat_id, message);
         self.notify_surface(ChatSurfaceEvent::Compaction {
             chat_id: self.chat_id.clone(),
             phase: CompactionPhase::Done,
@@ -44,7 +41,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
             );
             if let Some(cell) = self.deps.get_active_chat(&self.chat_id) {
                 let chat = {
-                    let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+                    let mut guard = cell.lock_recover();
                     guard.chat.last_context_total_tokens = Some(usage.total_tokens as u64);
                     guard.chat.last_context_max_tokens = Some(usage.max_tokens as u64);
                     guard.chat.clone()
@@ -80,7 +77,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
     pub(super) fn handle_todo_update(&self, todos: Vec<TodoItem>) {
         self.deps.update_todos(&self.chat_id, &todos);
         if let Some(cell) = self.deps.get_active_chat(&self.chat_id) {
-            cell.lock().unwrap_or_else(|e| e.into_inner()).chat.todos = Some(todos.clone());
+            cell.lock_recover().chat.todos = Some(todos.clone());
         }
         self.deps.emit_event(DaemonEvent::TodosUpdated {
             chat_id: self.chat_id.clone(),
@@ -105,7 +102,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
             return;
         };
         let (project_id, adapter_id, worktree_path, scratch_path, session_process_id) = {
-            let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+            let mut guard = cell.lock_recover();
             guard.chat.claude_session_id = Some(session_id.to_string());
             (
                 guard.chat.project_id.clone(),
@@ -140,10 +137,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
                     ..Default::default()
                 },
             );
-            cell.lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .chat
-                .session_file_path = Some(session_file_path);
+            cell.lock_recover().chat.session_file_path = Some(session_file_path);
         }
         self.deps.emit_event(DaemonEvent::ProcessReady {
             process_id: session_process_id.unwrap_or_default(),

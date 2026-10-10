@@ -1,3 +1,4 @@
+use mainframe_types::sync::LockExt as _;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
@@ -213,7 +214,7 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
     ) -> (Vec<DisplayMessage>, Option<StreamingLeafKind>) {
         let categories = self.deps.get_tool_categories(chat_id);
         let overlay = self.partial_overlays.message_for(chat_id);
-        let mut msgs = self.messages.lock().unwrap_or_else(|e| e.into_inner());
+        let mut msgs = self.messages.lock_recover();
         let materialized =
             msgs.display_snapshot(chat_id, raw, overlay.as_ref(), categories.as_ref(), || {
                 self.deps.display_projector()

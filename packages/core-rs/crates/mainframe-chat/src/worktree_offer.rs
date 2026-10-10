@@ -16,6 +16,7 @@
 //! This module owns the sync offer state machine; `rescan` owns the async half
 //! that fills it.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -101,9 +102,7 @@ impl WorktreeOfferRegistry {
     }
 
     fn lock(&self) -> MutexGuard<'_, HashMap<String, ChatOffers>> {
-        self.state
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+        self.state.lock_recover()
     }
 
     pub fn snapshot(&self, chat_id: &str) -> Vec<WorktreeSwitchOffer> {

@@ -8,6 +8,7 @@
 //! `fanout.rs` owns per-event delivery and `handlers.rs` the `ChatSurface` sink
 //! itself.
 
+use mainframe_types::sync::LockExt as _;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -146,7 +147,7 @@ impl FacadeHub {
         drop(sessions);
         let log =
             self.revision_log_for_resume(connection.is_revision_cursors_opted_in(), chat_id)?;
-        let boundary = log.lock().unwrap_or_else(|err| err.into_inner()).boundary();
+        let boundary = log.lock_recover().boundary();
         Some((log, boundary))
     }
 
@@ -254,7 +255,7 @@ impl FacadeHub {
     }
 
     fn locked_registry(&self) -> std::sync::MutexGuard<'_, GateRegistry> {
-        self.gates.lock().unwrap_or_else(|e| e.into_inner())
+        self.gates.lock_recover()
     }
 }
 

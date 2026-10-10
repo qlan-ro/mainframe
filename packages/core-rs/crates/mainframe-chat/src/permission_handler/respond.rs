@@ -4,6 +4,7 @@
 //! `branches.rs`.
 
 use mainframe_types::adapter::{ControlBehavior, ControlResponse};
+use mainframe_types::sync::LockExt as _;
 use tracing::{info, warn};
 
 use super::{ChatPermissionHandler, PermissionError, PermissionHandlerDeps, is_exit_plan_mode};
@@ -16,8 +17,7 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
     ) -> Result<(), PermissionError> {
         if self
             .permissions
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .was_cancelled(chat_id, &response.request_id)
         {
             info!(
@@ -34,8 +34,7 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
         if let Some(cell) = &active {
             let matches_pending = self
                 .permissions
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
+                .lock_recover()
                 .matches_pending(chat_id, &response.request_id);
             if Self::session_spawned(cell) && self.has_pending(chat_id) && !matches_pending {
                 warn!(
@@ -74,10 +73,7 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
 
         if let Some(text) = &response.message {
             let message = self.transient_user_text(chat_id, text);
-            self.messages
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .append(chat_id, message);
+            self.messages.lock_recover().append(chat_id, message);
             self.deps.emit_display(chat_id);
         }
 

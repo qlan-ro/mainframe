@@ -1,3 +1,4 @@
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
@@ -93,7 +94,7 @@ pub(crate) fn handle_stream_event(session: &ClaudeSession, event: &Value, sink: 
         return;
     };
 
-    let mut guard = session.state.lock().unwrap_or_else(|e| e.into_inner());
+    let mut guard = session.state.lock_recover();
     let id = if inner.get("type").and_then(Value::as_str) == Some("message_start") {
         inner
             .get("message")
@@ -154,8 +155,7 @@ pub(crate) async fn supports_partial_messages(executable: &str, resolved_path: &
     static CACHE: OnceLock<Mutex<HashMap<String, Arc<OnceCell<bool>>>>> = OnceLock::new();
     let cache = CACHE.get_or_init(Default::default);
     let cell = cache
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
+        .lock_recover()
         .entry(executable.to_string())
         .or_insert_with(|| Arc::new(OnceCell::new()))
         .clone();

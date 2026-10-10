@@ -1,5 +1,6 @@
 //! The message send path + CLI-owned queue delegations off the `ChatManager` facade.
 use super::*;
+use mainframe_types::sync::LockExt as _;
 
 pub(super) type LiveSession = (Arc<Mutex<ActiveChat>>, Arc<dyn AdapterSession>);
 
@@ -73,9 +74,7 @@ impl ChatManager {
     /// whether it dispatches immediately or lands behind a running turn
     /// (`send_plain_text`/`dispatch_command` fire the matching `TurnStarted`).
     fn mark_turn_accepted(&self, post: &Arc<Mutex<ActiveChat>>, chat_id: &str) {
-        post.lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .turn_started_at = Some(now_ms());
+        post.lock_recover().turn_started_at = Some(now_ms());
         self.event_handler.notify_chat_surface(
             crate::chat_surface::ChatSurfaceEvent::TurnAccepted {
                 chat_id: chat_id.to_string(),
@@ -89,7 +88,7 @@ impl ChatManager {
     /// snapshot then shows nothing else.
     async fn emit_worktree_missing_error(&self, chat_id: &str, chat: &Chat) {
         self.get_messages(chat_id).await;
-        let error_msg = self.messages.lock().unwrap_or_else(|e| e.into_inner())
+        let error_msg = self.messages.lock_recover()
             .create_transient_message(
                 chat_id,
                 ChatMessageType::Error,
@@ -102,18 +101,14 @@ impl ChatManager {
                 })],
                 None,
             );
-        self.messages
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .append(chat_id, error_msg);
+        self.messages.lock_recover().append(chat_id, error_msg);
         self.event_handler.emit_display(chat_id);
     }
 
     fn session_is_spawned(&self, chat_id: &str) -> bool {
         self.get_active(chat_id)
             .map(|c| {
-                c.lock()
-                    .unwrap_or_else(|e| e.into_inner())
+                c.lock_recover()
                     .session
                     .as_ref()
                     .is_some_and(|s| s.is_spawned())
@@ -142,7 +137,7 @@ impl ChatManager {
             .get_active(chat_id)
             .ok_or_else(|| SendError(format!("Chat {chat_id} not running")))?;
         let session = {
-            let guard = post.lock().unwrap_or_else(|e| e.into_inner());
+            let guard = post.lock_recover();
             match guard.session.clone() {
                 Some(s) if s.is_spawned() => s,
                 _ => return Err(SendError(format!("Chat {chat_id} not running"))),
@@ -153,7 +148,7 @@ impl ChatManager {
 
     pub(super) fn set_working(&self, cell: &Arc<Mutex<ActiveChat>>, chat_id: &str, now: &str) {
         {
-            let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+            let mut guard = cell.lock_recover();
             guard.chat.process_state = Some(Some(ProcessState::Working));
             guard.chat.updated_at = now.to_string();
         }
@@ -191,14 +186,10 @@ impl ChatManager {
             return Ok(());
         }
 
-        self.queued_refs
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .retain(|q| q.uuid != r.uuid);
+        self.queued_refs.lock_recover().retain(|q| q.uuid != r.uuid);
         self.notify_queue_changed(chat_id);
         self.messages
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .remove_by_id(chat_id, &r.message_id);
         self.event_handler.emit_display(chat_id);
 
@@ -229,13 +220,9 @@ impl ChatManager {
             return Ok(());
         }
 
-        self.queued_refs
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .retain(|q| q.uuid != r.uuid);
+        self.queued_refs.lock_recover().retain(|q| q.uuid != r.uuid);
         self.messages
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .remove_by_id(chat_id, &r.message_id);
         self.notify_queue_changed(chat_id);
         self.event_handler.emit_display(chat_id);
@@ -248,8 +235,7 @@ impl ChatManager {
     /// fill the queued-state extension metadata.
     pub fn queued_message_count(&self, chat_id: &str) -> usize {
         self.queued_refs
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .iter()
             .filter(|r| r.chat_id == chat_id)
             .count()
@@ -257,8 +243,7 @@ impl ChatManager {
 
     fn find_ref(&self, chat_id: &str, message_id: &str) -> Option<QueuedMessageRef> {
         self.queued_refs
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .iter()
             .find(|r| r.chat_id == chat_id && r.message_id == message_id)
             .cloned()

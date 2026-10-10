@@ -10,8 +10,9 @@
 //! `clean_env` reads a snapshot map, so the MAINFRAME_ORIG_PATH clean-env
 //! contract is unit-testable without mutating global state.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::sync::{Arc, LazyLock, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, LazyLock, Mutex};
 use std::time::{Duration, Instant};
 
 use dashmap::DashMap;
@@ -365,7 +366,7 @@ impl LaunchManager {
         if let Some((status, mut exit_rx)) = inner
             .processes
             .get(&name)
-            .map(|managed| (*lock(&managed.status), managed.exit_rx.clone()))
+            .map(|managed| (*managed.status.lock_recover(), managed.exit_rx.clone()))
         {
             match status {
                 // A stop() in flight has already published `stopped` (the UI is
@@ -535,7 +536,7 @@ impl LaunchManager {
         }
 
         {
-            let mut guard = status.lock().unwrap_or_else(PoisonError::into_inner);
+            let mut guard = status.lock_recover();
             if *guard == LaunchProcessStatus::Starting {
                 *guard = LaunchProcessStatus::Running;
                 inner.state.set_status(&name, LaunchProcessStatus::Running);
@@ -585,7 +586,7 @@ impl LaunchManager {
             (managed.status.clone(), managed.pid, managed.exit_rx.clone())
         };
 
-        *status.lock().unwrap_or_else(PoisonError::into_inner) = LaunchProcessStatus::Stopped;
+        *status.lock_recover() = LaunchProcessStatus::Stopped;
         inner.state.set_status(name, LaunchProcessStatus::Stopped);
         inner.emit_status(name, LaunchProcessStatus::Stopped);
 
@@ -650,10 +651,6 @@ impl LaunchManager {
     }
 }
 
-fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
-    m.lock().unwrap_or_else(PoisonError::into_inner)
-}
-
 async fn pump_output<R: tokio::io::AsyncRead + Unpin>(
     mut reader: R,
     inner: Arc<Inner>,
@@ -670,7 +667,7 @@ async fn pump_output<R: tokio::io::AsyncRead + Unpin>(
         let data = String::from_utf8_lossy(&buf[..n]).into_owned();
         inner.state.buffer_output(&name, stream, &data);
         if let Some(tail) = &stderr_tail {
-            let mut tail = lock(tail);
+            let mut tail = tail.lock_recover();
             for line in data.split('\n') {
                 if !line.trim().is_empty() {
                     tail.push_back(line.to_string());
@@ -698,7 +695,7 @@ async fn wait_for_exit_task(
     inner.forget_spawn(pid);
 
     {
-        let tail = lock(&stderr_tail);
+        let tail = stderr_tail.lock_recover();
         if code != Some(0) && !tail.is_empty() {
             tracing::warn!(
                 target: "launch",
@@ -714,7 +711,7 @@ async fn wait_for_exit_task(
     }
 
     {
-        let mut guard = lock(&status);
+        let mut guard = status.lock_recover();
         if *guard != LaunchProcessStatus::Stopped {
             *guard = if code == Some(0) {
                 LaunchProcessStatus::Stopped
@@ -745,7 +742,7 @@ async fn wait_for_port(
     let start = Instant::now();
     loop {
         {
-            let current = *lock(status);
+            let current = *status.lock_recover();
             if current == LaunchProcessStatus::Stopped || current == LaunchProcessStatus::Failed {
                 return false;
             }

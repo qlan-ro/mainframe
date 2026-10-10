@@ -15,14 +15,11 @@ impl CodexSession {
 
         let child = self.spawn_process(&options)?;
         let approval = Arc::new(ApprovalHandler::new(sink.clone()));
-        *self
-            .approval_handler
-            .lock()
-            .unwrap_or_else(|e| e.into_inner()) = Some(approval.clone());
+        *self.approval_handler.lock_recover() = Some(approval.clone());
 
         let handlers = self.build_handlers(approval);
         let client = Arc::new(JsonRpcClient::new(child, handlers));
-        *self.client.lock().unwrap_or_else(|e| e.into_inner()) = Some(client.clone());
+        *self.client.lock_recover() = Some(client.clone());
         self.initialize_client(&client, &*sink).await?;
 
         tracing::info!(
@@ -68,9 +65,9 @@ impl CodexSession {
             orchestration_mcp: None,
         });
         let sink = sink.unwrap_or_else(null_sink);
-        *self.sink.lock().unwrap_or_else(|e| e.into_inner()) = sink.clone();
+        *self.sink.lock_recover() = sink.clone();
         {
-            let mut cfg = self.config.lock().unwrap_or_else(|e| e.into_inner());
+            let mut cfg = self.config.lock_recover();
             cfg.model = model::explicit_model(options.model.as_deref());
             cfg.permission_mode = options.permission_mode.unwrap_or(ExecutionMode::Default);
             cfg.plan_mode = options.plan_mode.unwrap_or(false);
@@ -95,8 +92,7 @@ impl CodexSession {
         {
             Ok(Ok(_)) => {
                 client.notify("initialized", None);
-                *self.status.lock().unwrap_or_else(|e| e.into_inner()) =
-                    AdapterProcessStatus::Ready;
+                *self.status.lock_recover() = AdapterProcessStatus::Ready;
             }
             Ok(Err(e)) => return Err(AdapterError::Message(e.0)),
             Err(_) => {
@@ -116,10 +112,7 @@ impl CodexSession {
             .executable_path
             .clone()
             .unwrap_or_else(|| "codex".to_string());
-        *self
-            .history_executable
-            .lock()
-            .unwrap_or_else(|e| e.into_inner()) = executable.clone();
+        *self.history_executable.lock_recover() = executable.clone();
         let mut cmd = build_app_server_command(
             &executable,
             Some(Path::new(&self.project_path)),
@@ -134,7 +127,7 @@ impl CodexSession {
             .map_err(|e| AdapterError::Message(e.to_string()))?;
         self.pid
             .store(child.id().map(|p| p as i64).unwrap_or(0), Ordering::SeqCst);
-        *self.status.lock().unwrap_or_else(|e| e.into_inner()) = AdapterProcessStatus::Starting;
+        *self.status.lock_recover() = AdapterProcessStatus::Starting;
 
         Ok(child)
     }

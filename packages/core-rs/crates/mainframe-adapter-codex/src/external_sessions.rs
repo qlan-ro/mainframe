@@ -5,6 +5,7 @@
 //! rather than trusting an index. A session belongs to a project when the `cwd`
 //! recorded in its session_meta is the project root or nested under it.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::{HashMap, HashSet};
 use std::path::{MAIN_SEPARATOR, Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
@@ -69,14 +70,8 @@ fn prompt_cache() -> &'static Mutex<HashMap<String, PromptCacheEntry>> {
 }
 
 pub fn clear_codex_external_session_cache() {
-    meta_cache()
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .clear();
-    prompt_cache()
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .clear();
+    meta_cache().lock_recover().clear();
+    prompt_cache().lock_recover().clear();
 }
 
 pub(crate) fn codex_sessions_root() -> PathBuf {
@@ -213,7 +208,7 @@ async fn read_head(file_path: &Path, bytes: u64) -> std::io::Result<String> {
 
 async fn load_meta(candidate: &Candidate) -> Option<RolloutMeta> {
     if let Some(hit) = {
-        let cache = meta_cache().lock().unwrap_or_else(|e| e.into_inner());
+        let cache = meta_cache().lock_recover();
         cache.get(&candidate.session_id).and_then(|c| {
             (c.mtime_bits == candidate.mtime_ms.to_bits() && c.size == candidate.size)
                 .then(|| c.meta.clone())
@@ -235,23 +230,20 @@ async fn load_meta(candidate: &Candidate) -> Option<RolloutMeta> {
         }
     };
     let meta = extract_meta(&parse_lines(&head), &head);
-    meta_cache()
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .insert(
-            candidate.session_id.clone(),
-            MetaCacheEntry {
-                mtime_bits: candidate.mtime_ms.to_bits(),
-                size: candidate.size,
-                meta: meta.clone(),
-            },
-        );
+    meta_cache().lock_recover().insert(
+        candidate.session_id.clone(),
+        MetaCacheEntry {
+            mtime_bits: candidate.mtime_ms.to_bits(),
+            size: candidate.size,
+            meta: meta.clone(),
+        },
+    );
     Some(meta)
 }
 
 async fn load_first_prompt(candidate: &Candidate) -> Option<String> {
     if let Some(hit) = {
-        let cache = prompt_cache().lock().unwrap_or_else(|e| e.into_inner());
+        let cache = prompt_cache().lock_recover();
         cache.get(&candidate.session_id).and_then(|c| {
             (c.mtime_bits == candidate.mtime_ms.to_bits() && c.size == candidate.size)
                 .then(|| c.first_prompt.clone())
@@ -272,17 +264,14 @@ async fn load_first_prompt(candidate: &Candidate) -> Option<String> {
             None
         }
     };
-    prompt_cache()
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .insert(
-            candidate.session_id.clone(),
-            PromptCacheEntry {
-                mtime_bits: candidate.mtime_ms.to_bits(),
-                size: candidate.size,
-                first_prompt: first_prompt.clone(),
-            },
-        );
+    prompt_cache().lock_recover().insert(
+        candidate.session_id.clone(),
+        PromptCacheEntry {
+            mtime_bits: candidate.mtime_ms.to_bits(),
+            size: candidate.size,
+            first_prompt: first_prompt.clone(),
+        },
+    );
     first_prompt
 }
 

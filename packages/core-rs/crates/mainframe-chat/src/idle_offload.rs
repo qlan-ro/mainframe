@@ -7,6 +7,7 @@
 //! fresh (the existing cold-load path) and the next `send_message` respawns
 //! via `--resume`.
 
+use mainframe_types::sync::LockExt as _;
 use std::sync::{Arc, Mutex};
 
 use mainframe_adapter_api::{AdapterSession, BoxFuture};
@@ -76,9 +77,9 @@ impl<L: LifecycleManagerDeps + 'static, E: EventHandlerDeps + 'static> ChatOfflo
         // Step 1: claim the offload slot, or skip — a concurrent load/start/
         // send/interrupt/history-read (or a second scan pass, AC5) already
         // owns this chat.
-        if !self.lifecycle.try_claim_offload(chat_id) {
+        let Some(claim) = self.lifecycle.try_claim_offload(chat_id) else {
             return;
-        }
+        };
 
         // Step 2: re-check everything now that the slot is claimed (a race
         // between candidate selection and this claim must resolve in favor of
@@ -86,7 +87,6 @@ impl<L: LifecycleManagerDeps + 'static, E: EventHandlerDeps + 'static> ChatOfflo
         // session-less, never-spawned, or already-exited handle is a valid,
         // eligible offload — only the OUTER `None` means "skip".
         let Some(session_handle) = self.recheck(chat_id) else {
-            self.lifecycle.release_offload(chat_id);
             return;
         };
 
@@ -107,7 +107,7 @@ impl<L: LifecycleManagerDeps + 'static, E: EventHandlerDeps + 'static> ChatOfflo
         self.teardown.clear(chat_id, TeardownMode::Offload);
 
         // Step 5: release the slot.
-        self.lifecycle.release_offload(chat_id);
+        drop(claim);
 
         // Step 6: broadcast.
         info!(chat_id, "idle offload: released chat");
@@ -127,7 +127,7 @@ impl<L: LifecycleManagerDeps + 'static, E: EventHandlerDeps + 'static> ChatOfflo
     fn recheck(&self, chat_id: &str) -> Option<Option<Arc<dyn AdapterSession>>> {
         let cell = self.active_chats.get(chat_id)?.value().clone();
         let (session, last_used_at, process_state) = {
-            let guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+            let guard = cell.lock_recover();
             (
                 guard.session.clone(),
                 guard.last_used_at,
@@ -147,18 +147,12 @@ impl<L: LifecycleManagerDeps + 'static, E: EventHandlerDeps + 'static> ChatOfflo
         if now_ms() - last <= self.threshold_ms {
             return None;
         }
-        if self
-            .permissions
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .has_pending(chat_id)
-        {
+        if self.permissions.lock_recover().has_pending(chat_id) {
             return None;
         }
         let has_queued = self
             .queued_refs
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .iter()
             .any(|r| r.chat_id == chat_id);
         if has_queued {

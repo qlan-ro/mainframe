@@ -1,5 +1,6 @@
 //! Scans for idle chats and triggers whole-chat offload (`idle_offload.rs`).
 
+use mainframe_types::sync::LockExt as _;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -147,7 +148,7 @@ pub fn select_idle_candidates(
         .iter()
         .filter_map(|entry| {
             let (session, last_used_at) = {
-                let guard = entry.value().lock().unwrap_or_else(|e| e.into_inner());
+                let guard = entry.value().lock_recover();
                 (guard.session.clone(), guard.last_used_at)
             };
             let last = idle_since(session.as_ref(), last_used_at)?;

@@ -2,7 +2,7 @@
 //! idle-timeout reaper, and the graceful shutdown handshake (shutdown request ->
 //! exit notification -> SIGTERM/SIGKILL fallback).
 
-use std::collections::HashMap;
+use mainframe_types::sync::LockExt as _;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -67,8 +67,7 @@ struct ManagerState {
     handles: DashMap<String, Arc<LspServerHandle>>,
     resolver: Arc<dyn CommandResolver>,
     registry: Arc<LspRegistry>,
-    /// Single-flight spawn guards (`Notify` instead of `futures::Shared`).
-    guards: Mutex<HashMap<String, Arc<Notify>>>,
+    guards: mainframe_runtime::sync::SingleFlight,
     spawn_gate: Mutex<()>,
     shutting_down: watch::Sender<bool>,
     idle_timeout: Duration,
@@ -76,12 +75,6 @@ struct ManagerState {
     shutdown_exit_timeout: Duration,
     sigterm_grace: Duration,
     signal: SignalFn,
-}
-
-impl ManagerState {
-    fn lock_guards(&self) -> std::sync::MutexGuard<'_, HashMap<String, Arc<Notify>>> {
-        self.guards.lock().unwrap_or_else(|e| e.into_inner())
-    }
 }
 
 /// Split a `"projectId:language"` key. The language never contains a `:`, so the
@@ -115,7 +108,7 @@ impl LspManager {
                 handles: DashMap::new(),
                 resolver,
                 registry,
-                guards: Mutex::new(HashMap::new()),
+                guards: mainframe_runtime::sync::SingleFlight::default(),
                 spawn_gate: Mutex::new(()),
                 shutting_down: watch::channel(false).0,
                 idle_timeout: IDLE_TIMEOUT,

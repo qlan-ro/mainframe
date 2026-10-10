@@ -19,9 +19,9 @@ use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use dashmap::{DashMap, DashSet};
+use mainframe_runtime::sync::SingleFlight;
 use mainframe_types::adapter::{AdapterInfo, AdapterModel, CatalogSource};
 use mainframe_types::events::DaemonEvent;
-use tokio::sync::Notify;
 
 pub mod adapter;
 pub mod plan_mode_actions;
@@ -127,13 +127,8 @@ pub struct AdapterRegistry {
     snapshots: Arc<DashMap<String, AdapterInfo>>,
     deps: OnceLock<Arc<dyn RefreshDeps>>,
     refresh_allowed: AtomicBool,
-    /// Per-adapter single-flight. Modelled with `Notify` rather than
-    /// `futures::future::Shared` because `futures` is a deferred workspace dep;
-    /// a concurrent caller awaits the in-flight run's `Notify` instead of
-    /// re-running. (A late waiter that subscribes after `notify_waiters()` fires
-    /// re-runs rather than blocks — benign, and untriggered by the sequential
-    /// tests; revisit if `futures::Shared` lands.)
-    in_flight: Arc<DashMap<String, Arc<Notify>>>,
+    /// Concurrent refreshes share a cancellation-safe completion claim.
+    in_flight: SingleFlight,
     succeeded: Arc<DashSet<String>>,
 }
 
@@ -235,27 +230,13 @@ impl AdapterRegistry {
         if !self.refresh_allowed.load(Ordering::SeqCst) || self.succeeded.contains(adapter_id) {
             return Ok(());
         }
-        // Single-flight: atomically claim the slot, or await an in-flight run.
-        let notify = {
-            use dashmap::mapref::entry::Entry;
-            match self.in_flight.entry(adapter_id.to_string()) {
-                Entry::Occupied(e) => {
-                    let existing = e.get().clone();
-                    drop(e); // release the shard guard before awaiting
-                    existing.notified().await;
-                    return Ok(());
-                }
-                Entry::Vacant(e) => {
-                    let n = Arc::new(Notify::new());
-                    e.insert(n.clone());
-                    n
-                }
+        match self.in_flight.claim(adapter_id) {
+            Ok(_claim) => self.run_refresh(adapter_id).await,
+            Err(waiter) => {
+                waiter.wait().await;
+                Ok(())
             }
-        };
-        let result = self.run_refresh(adapter_id).await;
-        self.in_flight.remove(adapter_id); // mirrors `.finally(() => inFlight.delete)`
-        notify.notify_waiters();
-        result
+        }
     }
 
     async fn run_refresh(&self, adapter_id: &str) -> Result<(), AdapterError> {

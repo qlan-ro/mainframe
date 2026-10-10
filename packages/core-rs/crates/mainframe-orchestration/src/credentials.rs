@@ -3,6 +3,7 @@
 //! Everything here is in memory: the CLIs die with the daemon, so no
 //! credential can outlive it.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -187,7 +188,7 @@ impl CredentialRegistry {
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
-        self.inner.lock().unwrap_or_else(|e| e.into_inner())
+        self.inner.lock_recover()
     }
 }
 

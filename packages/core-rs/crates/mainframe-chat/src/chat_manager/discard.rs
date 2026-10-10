@@ -2,6 +2,7 @@
 //! it shares with `config_api.rs::remove_project`.
 use super::*;
 use crate::chat_teardown::TeardownMode;
+use mainframe_types::sync::LockExt as _;
 
 impl ChatManager {
     /// The per-chat teardown `remove_project` runs for every chat in a removed
@@ -11,9 +12,7 @@ impl ChatManager {
     /// remove it from the tracker, and notify the chat-surface `ChatEnded`.
     pub(super) async fn teardown_live_chat(&self, chat: &Chat) {
         let cell = self.get_active(&chat.id);
-        let session = cell
-            .as_ref()
-            .and_then(|c| c.lock().unwrap_or_else(|e| e.into_inner()).session.clone());
+        let session = cell.as_ref().and_then(|c| c.lock_recover().session.clone());
         // A side chat's worktree_path mirrors its parent's (rule 2's seed), so
         // sweeping it here would SIGTERM the parent's own background work
         // (`## Established facts`, kill_tasks_for_chat). Pass no sweep path.

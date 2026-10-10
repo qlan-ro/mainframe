@@ -1,3 +1,4 @@
+use mainframe_types::sync::LockExt as _;
 use std::future::Future;
 use std::pin::Pin;
 use std::process::Stdio;
@@ -68,9 +69,7 @@ fn seam() -> &'static Mutex<Seam> {
 }
 
 fn lock_seam() -> MutexGuard<'static, Seam> {
-    seam()
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+    seam().lock_recover()
 }
 
 /// Test-only seam (also resets the ENOENT warn-once latch).

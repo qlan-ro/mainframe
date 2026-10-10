@@ -5,6 +5,7 @@
 //! effective cwd (ensuring a non-project chat's scratch directory along the
 //! way) and the no-persistence decision, then applying that decision's flag
 //! write + active-cell mirror.
+use mainframe_types::sync::LockExt as _;
 use std::sync::{Arc, Mutex};
 
 use mainframe_types::chat::Chat;
@@ -72,9 +73,6 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
                 ..Default::default()
             },
         );
-        cell.lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .chat
-            .vendor_session_ephemeral = no_persistence;
+        cell.lock_recover().chat.vendor_session_ephemeral = no_persistence;
     }
 }

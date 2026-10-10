@@ -4,6 +4,7 @@
 //! detection adapter-neutral: `build_sink` wraps once and every adapter
 //! inherits it.
 
+use mainframe_types::sync::LockExt as _;
 use std::sync::{Arc, Mutex};
 
 use mainframe_types::adapter::{
@@ -34,7 +35,7 @@ impl PrDetectionSink {
     }
 
     fn observe_tool_uses(&self, content: &[MessageContent]) {
-        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut state = self.state.lock_recover();
         for block in content {
             if let MessageContent::Node(MessageContentNode::ToolUse {
                 id, name, input, ..
@@ -46,7 +47,7 @@ impl PrDetectionSink {
     }
 
     fn observe_tool_results(&self, content: &[MessageContent]) -> Vec<DetectedPr> {
-        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut state = self.state.lock_recover();
         let mut hits = Vec::new();
         for block in content {
             if let MessageContent::Node(MessageContentNode::ToolResult {

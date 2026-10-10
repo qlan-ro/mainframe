@@ -1,4 +1,5 @@
 use mainframe_adapter_api::AdapterError;
+use mainframe_types::sync::LockExt as _;
 use serde_json::json;
 
 use super::CodexSession;
@@ -12,11 +13,7 @@ pub(super) fn explicit_model(model: Option<&str>) -> Option<String> {
 
 impl CodexSession {
     pub(super) async fn configured_cli_model(&self) -> Result<String, AdapterError> {
-        let executable = self
-            .history_executable
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone();
+        let executable = self.history_executable.lock_recover().clone();
         crate::effective_model::probe(&executable, self.resolved_path.as_str(), &self.project_path)
             .await
             .ok_or_else(|| {
@@ -29,32 +26,18 @@ impl CodexSession {
         model: Option<String>,
     ) -> Result<Option<String>, AdapterError> {
         let needs_resume = (self.resume_thread_id.is_some() || self.fork_source.is_some())
-            && self
-                .state
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .thread_id
-                .is_none();
+            && self.state.lock_recover().thread_id.is_none();
         if model.is_none() && needs_resume {
             let model = self.configured_cli_model().await?;
-            self.config.lock().unwrap_or_else(|e| e.into_inner()).model = Some(model.clone());
+            self.config.lock_recover().model = Some(model.clone());
             return Ok(Some(model));
         }
         Ok(model)
     }
 
     pub(super) async fn read_effective_model(&self) -> Option<String> {
-        let client = self
-            .client
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone()?;
-        let thread = self
-            .state
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .thread_id
-            .clone()?;
+        let client = self.client.lock_recover().clone()?;
+        let thread = self.state.lock_recover().thread_id.clone()?;
         match client
             .request(
                 "thread/read",

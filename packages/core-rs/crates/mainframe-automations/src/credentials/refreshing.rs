@@ -12,11 +12,10 @@
 //! behind the same lock and re-checks expiry after acquiring it, so a
 //! stampede produces exactly one live refresh call.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
+use mainframe_runtime::sync::KeyedMutex;
 use serde::Deserialize;
-use tokio::sync::Mutex;
 
 use crate::USER_AGENT;
 use crate::github_device::{GITHUB_APP_CLIENT_ID, TOKEN_URL};
@@ -34,7 +33,7 @@ pub struct RefreshingCredentialStore {
     client: reqwest::Client,
     token_url: String,
     client_id: &'static str,
-    label_locks: Mutex<HashMap<String, Arc<Mutex<()>>>>,
+    label_locks: KeyedMutex,
 }
 
 impl RefreshingCredentialStore {
@@ -58,7 +57,7 @@ impl RefreshingCredentialStore {
             client,
             token_url,
             client_id,
-            label_locks: Mutex::new(HashMap::new()),
+            label_locks: KeyedMutex::default(),
         }
     }
 
@@ -72,8 +71,7 @@ impl RefreshingCredentialStore {
             return Ok(Some(creds));
         }
 
-        let lock = self.label_lock(label).await;
-        let _guard = lock.lock().await;
+        let _guard = self.label_locks.acquire(label).await;
 
         // Re-read under the lock: a concurrent waiter may already have
         // refreshed and persisted while this call queued behind it.
@@ -94,14 +92,6 @@ impl RefreshingCredentialStore {
             return false;
         };
         expires_at - self.clock.now().timestamp_millis() <= REFRESH_SKEW_MS
-    }
-
-    async fn label_lock(&self, label: &str) -> Arc<Mutex<()>> {
-        let mut locks = self.label_locks.lock().await;
-        locks
-            .entry(label.to_string())
-            .or_insert_with(|| Arc::new(Mutex::new(())))
-            .clone()
     }
 
     async fn refresh(

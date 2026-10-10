@@ -1,4 +1,5 @@
 use super::*;
+use mainframe_types::sync::LockExt as _;
 
 impl TunnelManager {
     pub fn new(broadcast: Option<BroadcastFn>) -> Self {
@@ -44,6 +45,6 @@ impl TunnelManager {
     }
 
     pub(super) fn lock_live(&self) -> MutexGuard<'_, HashMap<u64, TunnelProcess>> {
-        self.live.lock().unwrap_or_else(PoisonError::into_inner)
+        self.live.lock_recover()
     }
 }

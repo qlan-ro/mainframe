@@ -4,6 +4,7 @@
 //! app-server reject a steer that raced the turn's end instead of starting a
 //! new turn with it.
 
+use mainframe_types::sync::LockExt as _;
 use serde_json::{Value, json};
 
 use super::*;
@@ -22,13 +23,9 @@ pub(crate) fn steer_params(
 
 impl CodexSession {
     pub(super) async fn steer_inner(&self, message: String) -> Result<(), AdapterError> {
-        let client = self
-            .client
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone();
+        let client = self.client.lock_recover().clone();
         let (thread_id, turn_id) = {
-            let st = self.state.lock().unwrap_or_else(|e| e.into_inner());
+            let st = self.state.lock_recover();
             (st.thread_id.clone(), st.current_turn_id.clone())
         };
         let (Some(client), Some(thread_id), Some(turn_id)) = (client, thread_id, turn_id) else {

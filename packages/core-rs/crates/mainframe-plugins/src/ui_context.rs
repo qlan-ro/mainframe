@@ -2,6 +2,7 @@
 //! `DaemonEvent` through the injected sink; the context tracks its own live
 //! panel ids so `remove_panel(None)` can tear them all down.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashSet;
 use std::sync::Mutex;
 
@@ -38,8 +39,7 @@ impl PluginUi for UiContextImpl {
     fn add_panel(&self, zone: UiZone, label: &str, icon: Option<&str>) -> String {
         let panel_id = nanoid::nanoid!();
         self.active_panel_ids
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .insert(panel_id.clone());
         (self.emit)(DaemonEvent::PluginPanelRegistered {
             plugin_id: self.plugin_id.clone(),
@@ -54,10 +54,7 @@ impl PluginUi for UiContextImpl {
     fn remove_panel(&self, id: Option<&str>) {
         match id {
             Some(id) => {
-                self.active_panel_ids
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .remove(id);
+                self.active_panel_ids.lock_recover().remove(id);
                 (self.emit)(DaemonEvent::PluginPanelUnregistered {
                     plugin_id: self.plugin_id.clone(),
                     panel_id: Some(id.to_string()),
@@ -67,8 +64,7 @@ impl PluginUi for UiContextImpl {
                 // Remove all panels owned by this plugin.
                 let ids: Vec<String> = self
                     .active_panel_ids
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
+                    .lock_recover()
                     .iter()
                     .cloned()
                     .collect();
@@ -78,10 +74,7 @@ impl PluginUi for UiContextImpl {
                         panel_id: Some(panel_id),
                     });
                 }
-                self.active_panel_ids
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .clear();
+                self.active_panel_ids.lock_recover().clear();
             }
         }
     }

@@ -1,6 +1,7 @@
 //! `OrchestrationService`: the credential registry, the outbox, the limits,
 //! and the shared checks every tool runs before touching a chat.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
@@ -41,7 +42,7 @@ pub struct OrchestrationService {
     /// calls in the same tree cannot both pass the idempotency and limit
     /// checks before either inserts (`tools/delegate_task.rs::run`). Trees
     /// rooted at different chats never contend.
-    pub(crate) tree_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
+    pub(crate) tree_locks: mainframe_runtime::sync::KeyedMutex,
     /// Parents whose owed deliveries survived a restart; held until the
     /// parent's CLI spawns again, so a restart never wakes every parent.
     pub(crate) boot_held: Mutex<HashSet<String>>,
@@ -72,7 +73,7 @@ impl OrchestrationService {
             flush_lock: tokio::sync::Mutex::new(()),
             task_lock: tokio::sync::Mutex::new(()),
             active_children: Mutex::new(HashMap::new()),
-            tree_locks: Mutex::new(HashMap::new()),
+            tree_locks: mainframe_runtime::sync::KeyedMutex::default(),
             boot_held: Mutex::new(HashSet::new()),
             version: version.to_string(),
             // The daemon binds 127.0.0.1 only, so loopback is always right.
@@ -93,10 +94,7 @@ impl OrchestrationService {
     /// The credential for one spawn of `chat_id` (revoking any earlier one).
     #[must_use]
     pub fn issue_launch(&self, chat_id: &str, session_id: &str) -> OrchestrationMcpLaunch {
-        self.boot_held
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .remove(chat_id);
+        self.boot_held.lock_recover().remove(chat_id);
         OrchestrationMcpLaunch {
             url: self.endpoint_url.clone(),
             token: self.credentials.issue(chat_id, session_id),
@@ -123,7 +121,7 @@ impl OrchestrationService {
     }
 
     fn lock_stopping(&self) -> std::sync::MutexGuard<'_, HashSet<String>> {
-        self.stopping.lock().unwrap_or_else(|e| e.into_inner())
+        self.stopping.lock_recover()
     }
 
     /// Registers a call so `notifications/cancelled` can abandon it.
@@ -154,7 +152,7 @@ impl OrchestrationService {
     fn lock_inflight(
         &self,
     ) -> std::sync::MutexGuard<'_, HashMap<(String, String), CancellationToken>> {
-        self.inflight.lock().unwrap_or_else(|e| e.into_inner())
+        self.inflight.lock_recover()
     }
 
     // ── checks shared by the tools ────────────────────────────────────────
@@ -243,12 +241,7 @@ impl OrchestrationService {
     /// contend; this map only grows, but by at most one entry per root chat
     /// that has ever delegated, which is bounded by how many chats exist.
     pub(crate) fn tree_lock(&self, root_id: &str) -> Arc<tokio::sync::Mutex<()>> {
-        self.tree_locks
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .entry(root_id.to_string())
-            .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
-            .clone()
+        self.tree_locks.get(root_id)
     }
 
     /// Length of the `created_by` chain above `chat`, capped one past

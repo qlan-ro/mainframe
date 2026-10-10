@@ -1,3 +1,4 @@
+use mainframe_types::sync::LockExt as _;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -206,36 +207,22 @@ impl<D: ExternalSessionDeps + 'static> ExternalSessionService<D> {
             }
         });
         self.scan_intervals
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .insert(project_id.to_string(), handle);
     }
 
     /// Stop auto-scanning for a project.
     pub fn stop_auto_scan(&self, project_id: &str) {
-        let handle = self
-            .scan_intervals
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .remove(project_id);
+        let handle = self.scan_intervals.lock_recover().remove(project_id);
         if let Some(handle) = handle {
             handle.abort();
-            self.last_counts
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .remove(project_id);
+            self.last_counts.lock_recover().remove(project_id);
         }
     }
 
     /// Stop all auto-scans (for shutdown).
     pub fn stop_all(&self) {
-        let ids: Vec<String> = self
-            .scan_intervals
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .keys()
-            .cloned()
-            .collect();
+        let ids: Vec<String> = self.scan_intervals.lock_recover().keys().cloned().collect();
         for id in ids {
             self.stop_auto_scan(&id);
         }
@@ -411,15 +398,10 @@ async fn emit_count<D: ExternalSessionDeps>(
 ) {
     let page = scan_page_impl(deps, project_id, 0, 0).await; // count-only (no enrichment)
     let total = page.total;
-    let last = last_counts
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .get(project_id)
-        .copied();
+    let last = last_counts.lock_recover().get(project_id).copied();
     if last != Some(total) {
         last_counts
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .insert(project_id.to_string(), total);
         deps.emit_event(DaemonEvent::SessionsExternalCount {
             project_id: project_id.to_string(),
@@ -506,10 +488,7 @@ mod tests {
         }
         fn chats_update(&self, _chat_id: &str, updates: &ExternalChatUpdate) {
             if let Some(title) = &updates.title {
-                self.title_updates
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .push(title.clone());
+                self.title_updates.lock_recover().push(title.clone());
             }
         }
         fn chats_list(&self, _project_id: &str) -> Vec<Chat> {
@@ -523,10 +502,7 @@ mod tests {
             }
         }
         fn emit_event(&self, event: DaemonEvent) {
-            self.events
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .push(event);
+            self.events.lock_recover().push(event);
         }
         fn generate_title<'a>(
             &'a self,
@@ -542,10 +518,7 @@ mod tests {
             }
             let id = chat.id.clone();
             Some(Box::pin(async move {
-                self.reconcile_calls
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .push(id);
+                self.reconcile_calls.lock_recover().push(id);
                 false
             }))
         }
@@ -593,10 +566,7 @@ mod tests {
 
         service.sweep_transcript_presence("p1").await;
 
-        let calls = deps
-            .reconcile_calls
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let calls = deps.reconcile_calls.lock_recover();
         assert_eq!(calls.as_slice(), ["with-session"]);
     }
 
@@ -610,12 +580,7 @@ mod tests {
         });
         let service = ExternalSessionService::new(deps.clone());
         service.sweep_transcript_presence("p1").await;
-        assert!(
-            deps.reconcile_calls
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .is_empty()
-        );
+        assert!(deps.reconcile_calls.lock_recover().is_empty());
     }
 
     // ── generate_import_title observability ─────────────────────────────────
@@ -634,17 +599,11 @@ mod tests {
             crate::test_support::LogCapture::events_with_reason(events),
             vec![(tracing::Level::DEBUG, expected_reason.to_string())]
         );
-        assert!(
-            deps.title_updates
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .is_empty()
-        );
+        assert!(deps.title_updates.lock_recover().is_empty());
         assert!(
             !deps
                 .events
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
+                .lock_recover()
                 .iter()
                 .any(|e| matches!(e, DaemonEvent::ChatUpdated { .. }))
         );

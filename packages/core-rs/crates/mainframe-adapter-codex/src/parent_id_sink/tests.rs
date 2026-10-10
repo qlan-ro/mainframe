@@ -1,6 +1,7 @@
 //! `ParentIdSink` must forward every `SessionSink` callback, including new ones
 //! added after it was written (#284) — a silent drop here is a trap.
 
+use mainframe_types::sync::LockExt as _;
 use std::sync::{Arc, Mutex};
 
 use mainframe_adapter_api::SessionSink;
@@ -25,10 +26,7 @@ impl SessionSink for RecordingSink {
     fn on_tool_result(&self, _content: Vec<MessageContent>, _vendor_id: Option<String>) {}
     fn on_permission(&self, _request: mainframe_adapter_api::ControlRequest) {}
     fn on_permission_cancelled(&self, request_id: &str) {
-        self.cancelled
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .push(request_id.to_string());
+        self.cancelled.lock_recover().push(request_id.to_string());
     }
     fn on_result(&self, _data: mainframe_types::adapter::SessionResult) {}
     fn on_exit(&self, _code: Option<i32>) {}
@@ -53,8 +51,5 @@ fn parent_id_sink_forwards_a_permission_cancellation() {
 
     wrapper.on_permission_cancelled("req_1");
 
-    assert_eq!(
-        *inner.cancelled.lock().unwrap_or_else(|e| e.into_inner()),
-        vec!["req_1".to_string()]
-    );
+    assert_eq!(*inner.cancelled.lock_recover(), vec!["req_1".to_string()]);
 }

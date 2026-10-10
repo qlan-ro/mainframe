@@ -6,6 +6,7 @@
 //! moved to `teardown_tests.rs` — it
 //! shares this file's fixtures via `use super::*`.
 
+use mainframe_types::sync::LockExt as _;
 mod teardown_tests;
 
 use super::*;
@@ -47,10 +48,7 @@ impl EventHandlerDeps for OverlayDeps {
         ))))
     }
     fn emit_event(&self, event: DaemonEvent) {
-        self.events
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .push(event);
+        self.events.lock_recover().push(event);
     }
     fn get_tool_categories(&self, _chat_id: &str) -> Option<ToolCategories> {
         None
@@ -180,8 +178,7 @@ struct RevisionSurface {
 impl RevisionSurface {
     fn revisions(&self) -> Vec<Vec<DisplayMessage>> {
         self.revisions
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .iter()
             .map(|(messages, _)| messages.clone())
             .collect()
@@ -189,8 +186,7 @@ impl RevisionSurface {
 
     fn streaming(&self) -> Vec<Option<StreamingLeafKind>> {
         self.revisions
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .iter()
             .map(|(_, streaming)| *streaming)
             .collect()
@@ -206,10 +202,7 @@ impl ChatSurface for RevisionSurface {
             // Materialize at receipt: the snapshot handle is
             // only valid during this synchronous call.
             let messages = delta.snapshot.materialize();
-            self.revisions
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .push((messages, streaming));
+            self.revisions.lock_recover().push((messages, streaming));
         }
     }
 }
@@ -223,19 +216,13 @@ struct OrderSurface {
 
 impl OrderSurface {
     fn events(&self) -> Vec<ChatSurfaceEvent> {
-        self.events
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone()
+        self.events.lock_recover().clone()
     }
 }
 
 impl ChatSurface for OrderSurface {
     fn on_chat_surface_event(&self, event: ChatSurfaceEvent) {
-        self.events
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .push(event);
+        self.events.lock_recover().push(event);
     }
 }
 

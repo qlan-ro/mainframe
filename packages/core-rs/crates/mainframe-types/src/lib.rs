@@ -42,3 +42,5 @@ pub mod worktree_offer;
 pub mod tool_call_timing;
 
 pub mod transcript_presentation;
+
+pub mod sync;
