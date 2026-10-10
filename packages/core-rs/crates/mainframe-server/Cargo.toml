@@ -46,6 +46,7 @@ grep-regex = { workspace = true }
 grep-matcher = { workspace = true }
 
 [dev-dependencies]
+mainframe-automations = { workspace = true, features = ["testkit"] }
 tempfile = { workspace = true }
 hmac = { workspace = true }
 sha2 = { workspace = true }

@@ -5,10 +5,9 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use chrono::{DateTime, FixedOffset};
-
 use crate::domain::{ChipPart, TokenRef};
 use crate::ports::Clock;
+use crate::testkit::FakeClock;
 
 use super::scope::Scope;
 use super::value::TokenValue;
@@ -19,19 +18,9 @@ fn render(parts: &[ChipPart], scope: &Scope<'_>) -> String {
     super::substitute::render(parts, scope, &NameMap::new())
 }
 
-struct FakeClock(DateTime<FixedOffset>);
-
-impl Clock for FakeClock {
-    fn now(&self) -> DateTime<FixedOffset> {
-        self.0
-    }
-}
-
 fn fixed_clock() -> Arc<dyn Clock> {
     // Local time 21:30 at UTC+2 on 2026-07-12 → 19:30 UTC.
-    Arc::new(FakeClock(
-        DateTime::parse_from_rfc3339("2026-07-12T21:30:00+02:00").unwrap(),
-    ))
+    Arc::new(FakeClock::at("2026-07-12T21:30:00+02:00").unwrap())
 }
 
 fn root() -> Scope<'static> {

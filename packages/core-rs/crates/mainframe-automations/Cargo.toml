@@ -4,6 +4,11 @@ edition.workspace = true
 version.workspace = true
 publish.workspace = true
 
+[features]
+# Exposes `testkit` (shared port fakes) to integration tests and other crates.
+# Never enable it outside dev-dependencies.
+testkit = []
+
 [lints]
 workspace = true
 
@@ -27,6 +32,7 @@ mainframe-types = { workspace = true }
 mainframe-github = { workspace = true }
 
 [dev-dependencies]
+mainframe-automations = { workspace = true, features = ["testkit"] }
 hmac = { workspace = true }
 sha2 = { workspace = true }
 chrono-tz = { workspace = true }
