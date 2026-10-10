@@ -1,7 +1,7 @@
 //! `SessionSinkImpl::on_attention_request` — the sink side of Claude's
 //! `PushNotification` tool call: gate, dedupe, then notify+push.
 
-use mainframe_types::sync::LockExt as _;
+use mainframe_types::sync::LockExt;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use super::*;
