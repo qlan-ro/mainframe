@@ -5,7 +5,7 @@
 use serde::{Deserialize, Deserializer};
 use serde_json::Value;
 
-use super::types::{TodoPriority, TodoStatus, TodoType};
+use super::types::{KnownValue, TodoPriority, TodoStatus, TodoType};
 
 fn null_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 where
@@ -50,10 +50,15 @@ pub(crate) struct CreateTodo {
 
 impl CreateTodo {
     /// `TodoSchema.safeParse` — `None` (→ 400) on any failure, including an
-    /// empty `projectId` or `title`.
+    /// empty `projectId` or `title` and an enum value outside the known set.
     pub fn parse(value: Value) -> Option<Self> {
         let input: Self = serde_json::from_value(value).ok()?;
-        (!input.title.is_empty() && !input.project_id.is_empty()).then_some(input)
+        let valid = !input.title.is_empty()
+            && !input.project_id.is_empty()
+            && input.status.is_known()
+            && input.type_field.is_known()
+            && input.priority.is_known();
+        valid.then_some(input)
     }
 }
 
@@ -74,18 +79,31 @@ pub(crate) struct PatchTodo {
 
 impl PatchTodo {
     /// A non-object body patches nothing (only `updated_at` moves); an empty
-    /// `title` is the one value rejected outright.
+    /// `title` or an enum value outside the known set is rejected.
     pub fn parse(value: &Value) -> Option<Self> {
         let input: Self = if value.is_object() {
             serde_json::from_value(value.clone()).ok()?
         } else {
             Self::default()
         };
-        (!input.title.as_ref().is_some_and(String::is_empty)).then_some(input)
+        let valid = !input.title.as_ref().is_some_and(String::is_empty)
+            && input.status.as_ref().is_none_or(KnownValue::is_known)
+            && input.type_field.as_ref().is_none_or(KnownValue::is_known)
+            && input.priority.as_ref().is_none_or(KnownValue::is_known);
+        valid.then_some(input)
     }
 }
 
 #[derive(Deserialize)]
 pub(crate) struct MoveTodo {
     pub status: TodoStatus,
+}
+
+impl MoveTodo {
+    /// `None` (→ 400 "Invalid status") unless `status` is a known value.
+    pub fn parse(value: Value) -> Option<Self> {
+        serde_json::from_value::<Self>(value)
+            .ok()
+            .filter(|input| input.status.is_known())
+    }
 }

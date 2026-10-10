@@ -129,13 +129,13 @@ fn assignments(patch: &PatchTodo, now: &str) -> Result<Assignments, PluginError>
     if let Some(body) = &patch.body {
         set("body = ?", text(body));
     }
-    if let Some(status) = patch.status {
+    if let Some(status) = &patch.status {
         set("status = ?", text(status.as_str()));
     }
-    if let Some(kind) = patch.type_field {
+    if let Some(kind) = &patch.type_field {
         set("type = ?", text(kind.as_str()));
     }
-    if let Some(priority) = patch.priority {
+    if let Some(priority) = &patch.priority {
         set("priority = ?", text(priority.as_str()));
     }
     if let Some(labels) = &patch.labels {
@@ -159,16 +159,16 @@ fn assignments(patch: &PatchTodo, now: &str) -> Result<Assignments, PluginError>
 pub(super) async fn set_status(
     ctx: &PluginContext,
     id: &str,
-    status: TodoStatus,
+    status: &TodoStatus,
     now: &str,
 ) -> Result<(), PluginError> {
-    let (id, now) = (id.to_string(), now.to_string());
+    let (id, now, status) = (id.to_string(), now.to_string(), status.as_str().to_string());
     ctx.db
         .actor()?
         .call(move |db| {
             db.execute(
                 "UPDATE todos SET status = ?, updated_at = ? WHERE id = ?",
-                params![status.as_str(), now, id],
+                params![status, now, id],
             )?;
             Ok(())
         })

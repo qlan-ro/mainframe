@@ -1,4 +1,15 @@
+//! Each plugin gets its own rusqlite connection to its `data.db`, with the
+//! same handle discipline as the daemon database: the connection is confined
+//! to one dedicated OS thread (the shared `mainframe_db::actor::SqliteActor`)
+//! and every query is serialized onto it, scoped to a single plugin's
+//! `data.db`.
+//!
+//! The generic row shape (`serde_json::Map`) is one plain JSON object per
+//! row. Builtin plugins can also reach the typed actor through
+//! `PluginDatabase::actor`.
+
 use std::path::Path;
+use std::time::Duration;
 
 use mainframe_adapter_api::BoxFuture;
 use mainframe_db::{
@@ -18,6 +29,11 @@ use crate::context::PluginDatabase;
 pub type Row = Map<String, Value>;
 pub type PluginSqlite = SqliteActor<Connection, PluginError>;
 
+/// How long a statement waits on a lock held by another connection (outside
+/// writers such as the `todos` skill open `data.db` directly) before failing
+/// with `SQLITE_BUSY`. Matches the automations store.
+const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
+
 #[derive(Clone)]
 pub struct PluginDatabaseContext {
     actor: PluginSqlite,
@@ -33,17 +49,25 @@ impl From<ActorError> for PluginError {
 }
 
 impl PluginDatabaseContext {
+    /// Opens (creating the parent dirs of) the plugin's `data.db` on a
+    /// dedicated worker thread, applying `journal_mode = WAL`,
+    /// `foreign_keys = ON` and a 5 s busy timeout. Open failures surface
+    /// synchronously.
     pub fn open(db_path: &Path) -> Result<Self, PluginError> {
         if let Some(parent) = db_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
         let path = db_path.to_path_buf();
         let actor = SqliteActor::spawn_named("mainframe-plugin-db", move || {
-            Ok::<_, PluginError>(open_sqlite(&path, OpenOptions::default())?)
+            let options = OpenOptions {
+                busy_timeout: Some(BUSY_TIMEOUT),
+            };
+            Ok::<_, PluginError>(open_sqlite(&path, options)?)
         })?;
         Ok(Self { actor })
     }
 
+    /// Runs `f` on the DB thread and awaits its result.
     async fn call<F, R>(&self, f: F) -> Result<R, PluginError>
     where
         F: FnOnce(&Connection) -> Result<R, PluginError> + Send + 'static,
@@ -58,7 +82,13 @@ impl PluginDatabase for PluginDatabaseContext {
         Ok(&self.actor)
     }
 
-    /// `runMigration(sql)` — `db.exec(sql)`.
+    /// `runMigration(sql)` — `db.exec(sql)` inside one transaction, so a
+    /// failing statement leaves none of the batch applied.
+    ///
+    /// Plugin migration SQL must therefore not contain `BEGIN`/`COMMIT`
+    /// (SQLite does not nest transactions, so the batch fails) or
+    /// `PRAGMA journal_mode` (it cannot change inside a transaction); the
+    /// connection is already opened in WAL mode.
     fn run_migration(&self, sql: String) -> BoxFuture<'_, Result<(), PluginError>> {
         Box::pin(self.call(move |conn| {
             mainframe_db::migrate::run_batch(conn, &sql)?;

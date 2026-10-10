@@ -74,6 +74,13 @@ pub struct CreateChatResult {
 
 /// `PluginDatabaseContext` — per-plugin SQLite (`storage`).
 pub trait PluginDatabase: Send + Sync {
+    /// The raw `SqliteActor` behind this plugin's `data.db`, for builtin
+    /// plugins compiled into the daemon (the typed `todos` repository and its
+    /// migrations) only; everything else goes through the JSON methods below.
+    /// A plugin whose manifest does not declare `storage` gets the capability
+    /// guard instead, which rejects this call with
+    /// `CapabilityRequired("storage")` before any database file is opened
+    /// (pinned by `todos::tests_sessions::activate_without_storage_is_rejected_by_the_guard`).
     fn actor(&self) -> Result<&crate::db_context::PluginSqlite, PluginError>;
     fn run_migration(&self, sql: String) -> BoxFuture<'_, Result<(), PluginError>>;
     fn execute(&self, sql: String, params: Vec<SqlValue>)

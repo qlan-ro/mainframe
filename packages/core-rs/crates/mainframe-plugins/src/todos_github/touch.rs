@@ -72,8 +72,8 @@ pub(crate) async fn stamp_patch(
     {
         stamp(ctx, todo_id, "body", at).await?;
     }
-    if let Some(next) = patch.status
-        && crosses_done_boundary(existing.status, next)
+    if let Some(next) = &patch.status
+        && crosses_done_boundary(&existing.status, next)
     {
         stamp(ctx, todo_id, "state", at).await?;
     }
@@ -86,8 +86,8 @@ pub(crate) async fn stamp_patch(
 pub(crate) async fn stamp_move(
     ctx: &PluginContext,
     todo_id: &str,
-    prev_status: TodoStatus,
-    next_status: TodoStatus,
+    prev_status: &TodoStatus,
+    next_status: &TodoStatus,
     at: &str,
 ) -> Result<(), PluginError> {
     if crosses_done_boundary(prev_status, next_status) {
@@ -96,8 +96,8 @@ pub(crate) async fn stamp_move(
     Ok(())
 }
 
-fn crosses_done_boundary(prev: TodoStatus, next: TodoStatus) -> bool {
-    (prev == TodoStatus::Done) != (next == TodoStatus::Done)
+fn crosses_done_boundary(prev: &TodoStatus, next: &TodoStatus) -> bool {
+    (*prev == TodoStatus::Done) != (*next == TodoStatus::Done)
 }
 
 /// The delete-todo cascade's touch half (AC24) — the pair row itself is

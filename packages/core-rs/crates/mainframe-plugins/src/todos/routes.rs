@@ -79,8 +79,8 @@ pub(crate) async fn patch_todo(
         Ok(None) => return not_found(),
         Err(err) => return server_error(err),
     };
-    if let Some(status) = patch.status
-        && status != existing.status
+    if let Some(status) = &patch.status
+        && *status != existing.status
     {
         ctx.ui.notify(NotifyOptions {
             title: format!("#{} {}", updated.number, updated.title),
@@ -96,7 +96,7 @@ pub(crate) async fn move_todo(
     Path(id): Path<String>,
     Json(body): Json<Value>,
 ) -> Response {
-    let Ok(MoveTodo { status }) = serde_json::from_value::<MoveTodo>(body) else {
+    let Some(MoveTodo { status }) = MoveTodo::parse(body) else {
         return bad_request("Invalid status");
     };
     let previous = match repo::fetch(&ctx, &id).await {
@@ -105,10 +105,10 @@ pub(crate) async fn move_todo(
         Err(err) => return server_error(err),
     };
     let now = now_iso8601();
-    if let Err(err) = repo::set_status(&ctx, &id, status, &now).await {
+    if let Err(err) = repo::set_status(&ctx, &id, &status, &now).await {
         return server_error(err);
     }
-    if let Err(err) = touch::stamp_move(&ctx, &id, previous, status, &now).await {
+    if let Err(err) = touch::stamp_move(&ctx, &id, &previous, &status, &now).await {
         return server_error(err);
     }
     let todo = match repo::fetch(&ctx, &id).await {

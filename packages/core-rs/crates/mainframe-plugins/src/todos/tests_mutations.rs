@@ -180,3 +180,54 @@ async fn get_tolerates_malformed_json_columns() {
         .unwrap();
     assert_eq!(good["labels"], json!(["ok"]));
 }
+
+#[tokio::test]
+async fn unknown_stored_enums_round_trip_through_list_and_save_unchanged() {
+    let h = setup().await;
+    let id = id_of(&create_todo(&h, json!({ "projectId": "p1", "title": "T" })).await);
+    // An outside writer (the `todos` skill, a lane script) stores values this
+    // build does not know.
+    h.ctx
+        .db
+        .execute(
+            "UPDATE todos SET status = 'blocked', type = 'chore', priority = 'p0' WHERE id = ?"
+                .into(),
+            vec![text(id.clone())],
+        )
+        .await
+        .unwrap();
+
+    let (status, body) = list_todos(&h, "p1").await;
+    assert_eq!(status, StatusCode::OK);
+    let listed = &body["todos"][0];
+    assert_eq!(listed["status"], json!("blocked"));
+    assert_eq!(listed["type"], json!("chore"));
+    assert_eq!(listed["priority"], json!("p0"));
+
+    // Saving another field from the UI must not rewrite the unknown values.
+    let (status, body) = patch(&h, &id, json!({ "title": "Renamed" })).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["todo"]["status"], json!("blocked"));
+    let stored = h
+        .ctx
+        .db
+        .query_one(
+            "SELECT status, type, priority FROM todos WHERE id = ?".into(),
+            vec![text(id.clone())],
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        Value::Object(stored),
+        json!({ "status": "blocked", "type": "chore", "priority": "p0" })
+    );
+
+    // Request bodies still accept only the known values.
+    let (status, out) = patch(&h, &id, json!({ "status": "blocked" })).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(out, json!({ "error": "Invalid input" }));
+    let (status, out) = move_to(&h, &id, json!({ "status": "blocked" })).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(out, json!({ "error": "Invalid status" }));
+}
