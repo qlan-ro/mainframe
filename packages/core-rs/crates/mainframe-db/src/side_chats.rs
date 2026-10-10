@@ -15,7 +15,9 @@ impl ChatsRepository {
     /// The select-then-insert here, combined with the partial unique index
     /// (migration 30) and the DB worker running one closure at a time, makes
     /// two concurrent opens on the same parent converge on a single row (see
-    /// the plan's `## Established facts`).
+    /// the plan's `## Established facts`). The insert, the segment seed and
+    /// the read-back share one transaction, like `create`, so a failure in any
+    /// of them leaves no half-made side chat behind.
     pub fn find_or_create_side_chat(&self, parent: &Chat) -> Result<(Chat, bool), DbError> {
         if let Some(existing) = self.find_side_chat(&parent.id)? {
             return Ok((existing, false));
@@ -29,7 +31,8 @@ impl ChatsRepository {
             .map(enum_to_db_string)
             .transpose()?;
 
-        self.db.execute(
+        let tx = self.db.unchecked_transaction()?;
+        tx.execute(
             "INSERT INTO chats (
                 id, adapter_id, project_id, model, permission_mode, plan_mode,
                 worktree_path, branch_name, scratch_path,
@@ -53,7 +56,9 @@ impl ChatsRepository {
         )?;
         crate::chat_segments::ensure_seeded(&self.db, &id)?;
 
-        Ok((self.get_inserted(&id)?, true))
+        let chat = self.get_inserted(&id)?;
+        tx.commit()?;
+        Ok((chat, true))
     }
 
     fn find_side_chat(&self, parent_id: &str) -> Result<Option<Chat>, DbError> {

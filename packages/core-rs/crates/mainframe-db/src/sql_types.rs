@@ -42,30 +42,37 @@ impl<T: DeserializeOwned> SqlEnum<T> {
         serde_json::from_value(serde_json::Value::String(value))
     }
 
+    /// Parses a stored enum string, logging the raw value and returning
+    /// `fallback` when it is not a known variant. NULL and `''` read as
+    /// `fallback` silently.
     pub fn or_default(value: Option<String>, fallback: T) -> T {
-        match value.filter(|value| !value.is_empty()).map(Self::parse) {
-            Some(Ok(value)) => value,
-            Some(Err(error)) => {
-                tracing::warn!(%error, "invalid persisted enum; using default");
+        let Some(raw) = value.filter(|value| !value.is_empty()) else {
+            return fallback;
+        };
+        match Self::parse(raw.clone()) {
+            Ok(value) => value,
+            Err(error) => {
+                tracing::warn!(raw, %error, "invalid persisted enum; using default");
                 fallback
             }
-            None => fallback,
         }
     }
 }
 
 impl<T: DeserializeOwned> JsonCol<T> {
+    /// Parses a stored JSON column, logging the raw value and returning
+    /// `fallback` when it is malformed. NULL and `''` read as `fallback`
+    /// silently.
     pub fn or_default(value: Option<String>, fallback: T) -> T {
-        match value
-            .filter(|value| !value.is_empty())
-            .map(|value| serde_json::from_str(&value))
-        {
-            Some(Ok(value)) => value,
-            Some(Err(error)) => {
-                tracing::warn!(%error, "invalid persisted JSON; using default");
+        let Some(raw) = value.filter(|value| !value.is_empty()) else {
+            return fallback;
+        };
+        match serde_json::from_str(&raw) {
+            Ok(value) => value,
+            Err(error) => {
+                tracing::warn!(raw, %error, "invalid persisted JSON; using default");
                 fallback
             }
-            None => fallback,
         }
     }
 }

@@ -120,10 +120,24 @@ impl TagsRepository {
 
 impl FromRow for Tag {
     type Error = DbError;
+
+    /// A stored colour outside the palette is logged and read as the name's
+    /// hashed palette colour (what `upsert` would have assigned), the same
+    /// warn-and-default policy as the chat and todo rows, so one bad row does
+    /// not fail every tag listing.
     fn from_row(row: &rusqlite::Row<'_>) -> Result<Self, DbError> {
+        let name: String = row.get("name")?;
+        let raw: String = row.get("color")?;
+        let color = SqlEnum::<TagColor>::parse(raw.clone()).unwrap_or_else(|error| {
+            tracing::warn!(
+                tag = %name, raw, %error,
+                "tags: invalid stored colour; using the name's palette colour"
+            );
+            hash_tag_color(&name)
+        });
         Ok(Self {
-            name: row.get("name")?,
-            color: SqlEnum::parse(row.get("color")?)?,
+            name,
+            color,
             created_at: row.get("created_at")?,
         })
     }

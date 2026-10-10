@@ -197,3 +197,29 @@ fn remove_throws_when_tag_missing() {
     let err = setup().remove("nope").unwrap_err();
     assert!(err.to_string().to_lowercase().contains("not found"));
 }
+
+#[test]
+fn an_unknown_stored_colour_reads_as_the_names_palette_colour() {
+    let conn = Connection::open_in_memory().unwrap();
+    initialize_schema(&conn).unwrap();
+    conn.execute(
+        "INSERT INTO tags (name, color, created_at) VALUES ('bug', 'mauve', ?), ('docs', 'teal', ?)",
+        rusqlite::params![NOW, NOW],
+    )
+    .unwrap();
+    let repo = TagsRepository::new(Rc::new(conn));
+    let colours: Vec<(String, TagColor)> = repo
+        .list()
+        .unwrap()
+        .into_iter()
+        .map(|tag| (tag.name, tag.color))
+        .collect();
+    assert_eq!(
+        colours,
+        vec![
+            ("bug".to_string(), TagColor::Violet),
+            ("docs".to_string(), TagColor::Teal),
+        ]
+    );
+    assert_eq!(repo.get("bug").unwrap().unwrap().color, TagColor::Violet);
+}

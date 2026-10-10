@@ -99,3 +99,29 @@ fn failed_fork_readback_rolls_back_fork_and_preserves_parent() {
         assert_eq!(count, 1, "{table}");
     }
 }
+
+#[test]
+fn failed_side_chat_readback_rolls_back_side_chat_and_seed_rows() {
+    let db = DatabaseManager::open(std::path::Path::new(":memory:")).unwrap();
+    let project = db.projects.create("/side-atomic", None).unwrap();
+    let parent = db
+        .chats
+        .create(&NewChat {
+            project_id: project.id.clone(),
+            adapter_id: "claude".into(),
+            ..Default::default()
+        })
+        .unwrap();
+    db.connection().execute_batch("CREATE TRIGGER corrupt_side AFTER INSERT ON chat_segments BEGIN UPDATE chats SET total_cost='invalid' WHERE id=NEW.chat_id; END;").unwrap();
+    assert!(db.chats.find_or_create_side_chat(&parent).is_err());
+    assert_eq!(db.chats.get(&parent.id).unwrap().unwrap(), parent);
+    for table in ["chats", "chat_segments", "chat_native_sessions"] {
+        let count: i64 = db
+            .connection()
+            .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(count, 1, "{table}");
+    }
+}
