@@ -35,7 +35,7 @@ use crate::process::{
 /// Fire-and-forget DaemonEvent sink.
 pub type BroadcastFn = Arc<dyn Fn(DaemonEvent) + Send + Sync>;
 
-/// Delivers a `kill(1)` signal flag (`-TERM`, `-KILL`) to a pid and reports
+/// Delivers a signal (`-TERM`, `-KILL`) to an owned pid and reports
 /// whether it was delivered. A seam so tests can record the escalation.
 pub(crate) type SignalFn = Arc<dyn Fn(u32, &'static str) -> BoxFuture<'static, bool> + Send + Sync>;
 
@@ -160,7 +160,7 @@ pub struct TunnelManager {
     registry: Arc<dyn ChildRegistryPort>,
     /// Boot-resolved login-shell `PATH`, applied to the spawned `cloudflared` so
     /// packaged builds find it outside the bare launchd `PATH`. `None` = inherit the daemon `PATH`.
-    resolved_path: Option<String>,
+    resolved_path: Option<mainframe_runtime::ResolvedPath>,
     signal: SignalFn,
 }
 
@@ -176,8 +176,8 @@ fn extract_hostname(url: &str) -> String {
 fn spawn_output_drain(
     mut out_lines: Option<Lines<BufReader<ChildStdout>>>,
     mut err_lines: Option<Lines<BufReader<ChildStderr>>>,
-) {
-    tokio::spawn(async move {
+) -> mainframe_runtime::process::PumpTasks {
+    let task = tokio::spawn(async move {
         while out_lines.is_some() || err_lines.is_some() {
             tokio::select! {
                 _ = next_line_stdout(&mut out_lines) => {}
@@ -185,6 +185,7 @@ fn spawn_output_drain(
             }
         }
     });
+    mainframe_runtime::process::PumpTasks::new(vec![task])
 }
 
 async fn next_line_stdout(lines: &mut Option<Lines<BufReader<ChildStdout>>>) -> Option<String> {

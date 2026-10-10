@@ -4,7 +4,7 @@ use mainframe_adapter_api::AdapterError;
 use serde_json::{Value, json};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
-    process::{Child, Command},
+    process::{ChildStdin, ChildStdout, Command},
 };
 
 pub(crate) fn applied_model(response: &Value) -> Option<String> {
@@ -51,16 +51,20 @@ pub(crate) async fn probe(executable: &str, path: &str, cwd: &str) -> Option<Str
         .kill_on_drop(true)
         .spawn()
         .ok()?;
-    let result = tokio::time::timeout(Duration::from_secs(10), query(&mut child))
+    let stdin = child.stdin.take();
+    let stdout = child.stdout.take();
+    let process = mainframe_runtime::process::ManagedProcess::spawn(child, Vec::new());
+    let result = tokio::time::timeout(Duration::from_secs(10), query(stdin, stdout))
         .await
         .ok()
         .flatten();
-    let _ = child.kill().await;
+    process.signal(mainframe_runtime::process::Signal::Kill);
+    process.exit().wait().await;
     result
 }
 
-async fn query(child: &mut Child) -> Option<String> {
-    let mut stdin = child.stdin.take()?;
+async fn query(stdin: Option<ChildStdin>, stdout: Option<ChildStdout>) -> Option<String> {
+    let mut stdin = stdin?;
     let request = json!({"type": "control_request", "request_id": "effective-model",
         "request": {"subtype": "get_settings"}});
     stdin
@@ -68,7 +72,7 @@ async fn query(child: &mut Child) -> Option<String> {
         .await
         .ok()?;
     stdin.flush().await.ok()?;
-    let mut lines = BufReader::new(child.stdout.take()?).lines();
+    let mut lines = BufReader::new(stdout?).lines();
     while let Ok(Some(line)) = lines.next_line().await {
         let Ok(event) = serde_json::from_str::<Value>(&line) else {
             continue;

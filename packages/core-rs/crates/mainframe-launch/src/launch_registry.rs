@@ -21,7 +21,7 @@ pub struct LaunchRegistry {
     /// forwarded to each `LaunchManager` so launch children resolve the user's
     /// toolchain (`MAINFRAME_ORIG_PATH` still overrides it in `clean_env`).
     /// `None` inherits the daemon `PATH`.
-    resolved_path: Option<String>,
+    resolved_path: Option<mainframe_runtime::ResolvedPath>,
 }
 
 impl LaunchRegistry {
@@ -47,7 +47,7 @@ impl LaunchRegistry {
     /// Inject the boot-resolved login-shell `PATH` forwarded to launch children.
     #[must_use]
     pub fn with_resolved_path(mut self, path: impl Into<String>) -> Self {
-        self.resolved_path = Some(path.into());
+        self.resolved_path = Some(mainframe_runtime::ResolvedPath::from_value(path.into()));
         self
     }
 

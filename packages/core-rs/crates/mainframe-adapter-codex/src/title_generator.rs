@@ -23,24 +23,29 @@ pub(crate) async fn generate_codex_title(
     // its cwd, which would bill a whole project preamble against a 5-word title.
     let cwd = std::env::temp_dir();
 
-    let run = Command::new(binary)
+    let mut command = Command::new(binary);
+    command
         .args(title_args(&prompt, &cwd.to_string_lossy()))
         .env("PATH", path)
         .env("NO_COLOR", "1")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
-        .kill_on_drop(true)
-        .output();
+        .kill_on_drop(true);
 
-    let output = match tokio::time::timeout(Duration::from_millis(TITLE_TIMEOUT_MS), run).await {
-        Ok(res) => res?,
-        Err(_) => {
-            return Err(AdapterError::Message(
-                "codex title generation timed out".into(),
-            ));
+    let output = mainframe_runtime::process::run_captured(
+        command,
+        Some(Duration::from_millis(TITLE_TIMEOUT_MS)),
+    )
+    .await
+    .map_err(|error| match error {
+        mainframe_runtime::process::ExecError::Timeout => {
+            AdapterError::Message("codex title generation timed out".into())
         }
-    };
+        mainframe_runtime::process::ExecError::Spawn(error)
+        | mainframe_runtime::process::ExecError::Io(error) => AdapterError::from(error),
+        error => AdapterError::Message(error.to_string()),
+    })?;
 
     // A `codex` too old for these flags exits non-zero with `unexpected argument`
     // rather than running the prompt, so a failed exit must not be parsed as a title.

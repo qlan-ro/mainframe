@@ -1,22 +1,20 @@
 use super::*;
 
-// Tokio only exposes SIGKILL; use kill(1) for the graceful SIGTERM step.
 pub(super) fn kill_signal() -> SignalFn {
     Arc::new(|pid, flag| Box::pin(send_kill(pid, flag)))
 }
 
 async fn send_kill(pid: u32, flag: &'static str) -> bool {
-    match Command::new("kill")
-        .arg(flag)
-        .arg(pid.to_string())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .await
-    {
-        Ok(status) => status.success(),
-        Err(err) => {
-            tracing::warn!(pid, flag, ?err, "failed to run kill");
+    use mainframe_runtime::process::{Signal, Target, signal};
+    let kind = match flag {
+        "-TERM" => Signal::Term,
+        "-KILL" => Signal::Kill,
+        _ => return false,
+    };
+    match signal(Target::Pid(pid), kind) {
+        Ok(delivered) => delivered,
+        Err(error) => {
+            tracing::warn!(pid, flag, %error, "failed to signal child");
             false
         }
     }

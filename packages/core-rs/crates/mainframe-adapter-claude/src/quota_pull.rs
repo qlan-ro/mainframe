@@ -57,7 +57,8 @@ const STDERR_SNIPPET_LEN: usize = 500;
 /// the title-generator (stdin closed, no session persistence). Zero model tokens,
 /// ~1s. The CLI uses its own auth — no credential handling here.
 pub async fn spawn_claude_usage(binary: &str, path: &str) -> Result<String, AdapterError> {
-    let run = Command::new(binary)
+    let mut command = Command::new(binary);
+    command
         .args([
             "-p",
             "/usage",
@@ -72,13 +73,22 @@ pub async fn spawn_claude_usage(binary: &str, path: &str) -> Result<String, Adap
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .kill_on_drop(true)
-        .output();
+        .kill_on_drop(true);
 
-    let output = match tokio::time::timeout(Duration::from_millis(USAGE_TIMEOUT_MS), run).await {
-        Ok(res) => res.map_err(AdapterError::from)?,
-        Err(_) => return Err(AdapterError::Message("claude /usage pull timed out".into())),
-    };
+    let output = mainframe_runtime::process::run_captured(
+        command,
+        Some(Duration::from_millis(USAGE_TIMEOUT_MS)),
+    )
+    .await
+    .map_err(|error| match error {
+        mainframe_runtime::process::ExecError::Timeout => {
+            AdapterError::Message("claude /usage pull timed out".into())
+        }
+        mainframe_runtime::process::ExecError::Spawn(error)
+        | mainframe_runtime::process::ExecError::Io(error) => AdapterError::from(error),
+        error => AdapterError::Message(error.to_string()),
+    })?;
+
     usage_output_to_result(
         output.status.success(),
         output.status.code(),

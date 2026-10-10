@@ -35,12 +35,19 @@ impl ClaudeSession {
         );
         let mut child = cmd.spawn()?;
 
-        let handle = self.bind_child(&child);
+        let pid = child.id().unwrap_or(0);
         self.start_stdin(child.stdin.take());
         self.apply_spawn_tuning(&options);
-        self.start_output(child.stdout.take(), active_sink.clone(), handle_stdout);
-        self.start_output(child.stderr.take(), active_sink.clone(), handle_stderr);
-        self.wait_for_exit(child, handle, active_sink);
+        let pumps = [
+            self.start_output(child.stdout.take(), active_sink.clone(), handle_stdout),
+            self.start_output(child.stderr.take(), active_sink.clone(), handle_stderr),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        let process = mainframe_runtime::process::ManagedProcess::spawn(child, pumps);
+        let handle = self.bind_child(pid, &process);
+        self.wait_for_exit(process.exit(), handle, active_sink);
         self.get_process_info()
             .ok_or_else(|| AdapterError::Message("spawn produced no process info".to_string()))
     }
@@ -134,17 +141,11 @@ pub(super) fn build_spawn_command(
     resolved_path: &str,
     proxy: Option<&CliProxyEnv>,
 ) -> tokio::process::Command {
-    let mut cmd = tokio::process::Command::new(executable);
+    let path = mainframe_runtime::ResolvedPath::from_value(resolved_path);
+    let mut cmd = mainframe_runtime::process::cli_command(executable, &path);
     cmd.args(args)
         .current_dir(project_path)
-        .env("PATH", resolved_path)
-        .env("FORCE_COLOR", "0")
-        .env("NO_COLOR", "1")
-        .env_remove("CLAUDECODE")
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .kill_on_drop(true);
+        .env_remove("CLAUDECODE");
     if let Some(proxy) = proxy {
         cmd.env("ANTHROPIC_BASE_URL", &proxy.base_url)
             .env("ANTHROPIC_AUTH_TOKEN", &proxy.auth_token)

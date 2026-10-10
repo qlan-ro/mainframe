@@ -57,7 +57,7 @@ pub struct LspRegistry {
     /// Boot-resolved login-shell `PATH`, applied to the `command -v` probe and the
     /// external-server spawn so packaged builds find CLIs outside the bare launchd
     /// `PATH`. `None` = inherit.
-    resolved_path: Option<String>,
+    resolved_path: Option<mainframe_runtime::ResolvedPath>,
 }
 
 impl LspRegistry {
@@ -80,7 +80,7 @@ impl LspRegistry {
     /// spawns.
     #[must_use]
     pub fn with_resolved_path(mut self, path: impl Into<String>) -> Self {
-        self.resolved_path = Some(path.into());
+        self.resolved_path = Some(mainframe_runtime::ResolvedPath::from_value(path.into()));
         self
     }
 
@@ -193,18 +193,16 @@ async fn venv_bin(project_path: &str, virtual_env: Option<&str>, cmd: &str) -> O
         .then(|| candidate.to_string_lossy().into_owned())
 }
 
-/// `command -v <cmd>` against `resolved_path` (falls back to the inherited
-/// process `PATH` when unset). Shell is needed for the `command -v` builtin, but
-/// `cmd` is passed as a positional arg ($1) — never interpolated into the
-/// script — so it can't be parsed as shell syntax.
 async fn command_on_path(cmd: &str, resolved_path: Option<&str>) -> bool {
-    let mut probe = tokio::process::Command::new("/bin/sh");
-    probe.kill_on_drop(true);
-    probe.args(["-c", "command -v \"$1\"", "sh", cmd]);
-    if let Some(path) = resolved_path {
-        probe.env("PATH", path);
-    }
-    matches!(probe.output().await, Ok(out) if out.status.success())
+    let path = mainframe_runtime::ResolvedPath::from_value(
+        resolved_path
+            .map(str::to_owned)
+            .unwrap_or_else(|| std::env::var("PATH").unwrap_or_default()),
+    );
+    let cmd = cmd.to_string();
+    tokio::task::spawn_blocking(move || path.find(&cmd).is_some())
+        .await
+        .unwrap_or(false)
 }
 
 impl Default for LspRegistry {

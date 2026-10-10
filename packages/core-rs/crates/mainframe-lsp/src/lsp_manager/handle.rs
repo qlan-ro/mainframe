@@ -122,7 +122,7 @@ impl LspServerHandle {
             project_path: project_path.to_string(),
             pid: child.id().unwrap_or(0),
             signal_tx,
-            stdin_tx: spawn_stdin_writer(child.stdin.take()),
+            stdin_tx: mainframe_runtime::process::spawn_stdin_writer(child.stdin.take()),
             stdout: Mutex::new(child.stdout.take()),
             stderr: Mutex::new(child.stderr.take()),
             exited: Arc::new(AtomicBool::new(false)),
@@ -130,19 +130,4 @@ impl LspServerHandle {
             inner: Mutex::new(HandleInner::default()),
         }
     }
-}
-
-fn spawn_stdin_writer(stdin: Option<tokio::process::ChildStdin>) -> mpsc::UnboundedSender<Vec<u8>> {
-    let (tx, mut rx) = mpsc::unbounded_channel::<Vec<u8>>();
-    if let Some(mut stdin) = stdin {
-        tokio::spawn(async move {
-            use tokio::io::AsyncWriteExt;
-            while let Some(bytes) = rx.recv().await {
-                if stdin.write_all(&bytes).await.is_err() || stdin.flush().await.is_err() {
-                    break;
-                }
-            }
-        });
-    }
-    tx
 }

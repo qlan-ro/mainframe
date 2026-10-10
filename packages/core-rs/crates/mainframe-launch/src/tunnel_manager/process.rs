@@ -56,14 +56,24 @@ impl TunnelProcess {
             }
             return;
         }
-        self.signal("-TERM");
-        if timeout(grace, self.exited()).await.is_ok() {
-            return;
-        }
-        tracing::warn!(target: "tunnel", pid = ?self.pid, "tunnel survived SIGTERM, sending SIGKILL");
-        self.signal("-KILL");
-        if timeout(grace, self.exited()).await.is_err() {
-            tracing::warn!(target: "tunnel", pid = ?self.pid, "tunnel survived SIGKILL");
+        use mainframe_runtime::process::{Signal, Terminated, terminate_with};
+        let result = terminate_with(
+            |kind| {
+                self.signal(if kind == Signal::Term {
+                    "-TERM"
+                } else {
+                    "-KILL"
+                });
+                Ok(())
+            },
+            grace,
+            async {
+                self.exited().await;
+            },
+        )
+        .await;
+        if !matches!(result, Ok(Terminated::Exited | Terminated::Killed)) {
+            tracing::warn!(target: "tunnel", pid = ?self.pid, "tunnel survived shutdown");
             self.stopping.store(false, Ordering::SeqCst);
         }
     }
@@ -113,23 +123,21 @@ pub(super) async fn deliver(
     }
 }
 
-/// The production [`SignalFn`]: shell out to `kill` (house style — no `libc`/`nix`).
 pub(crate) fn kill_signal() -> SignalFn {
     Arc::new(|pid, flag| Box::pin(send_kill(pid, flag)))
 }
 
 async fn send_kill(pid: u32, flag: &'static str) -> bool {
-    match Command::new("kill")
-        .arg(flag)
-        .arg(pid.to_string())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .await
-    {
-        Ok(status) => status.success(),
-        Err(err) => {
-            tracing::warn!(target: "tunnel", pid, flag, ?err, "failed to run kill");
+    use mainframe_runtime::process::{Signal, Target, signal};
+    let kind = match flag {
+        "-TERM" => Signal::Term,
+        "-KILL" => Signal::Kill,
+        _ => return false,
+    };
+    match signal(Target::Pid(pid), kind) {
+        Ok(delivered) => delivered,
+        Err(error) => {
+            tracing::warn!(pid, flag, %error, "failed to signal child");
             false
         }
     }

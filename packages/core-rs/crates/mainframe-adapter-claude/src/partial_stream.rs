@@ -178,16 +178,11 @@ async fn probe_and_log(executable: &str, resolved_path: &str) -> bool {
 }
 
 async fn probe_version(executable: &str, resolved_path: &str) -> Option<String> {
-    let output = tokio::time::timeout(
-        Duration::from_secs(5),
-        tokio::process::Command::new(executable)
-            .arg("--version")
-            .env("PATH", resolved_path)
-            .output(),
-    )
-    .await
-    .ok()?
-    .ok()?;
+    let mut command = tokio::process::Command::new(executable);
+    command.arg("--version").env("PATH", resolved_path);
+    let output = mainframe_runtime::process::run_captured(command, Some(Duration::from_secs(5)))
+        .await
+        .ok()?;
     if !output.status.success() {
         return None;
     }
