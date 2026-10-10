@@ -87,7 +87,7 @@ pub(crate) fn write_chatty_cloudflared(dir: &Path) -> String {
 }
 
 /// Only sleeps — never prints a URL, so the tunnel stays mid-start (in
-/// `pending`, not promoted into `tunnels`).
+/// `live`, not promoted into `tunnels`).
 pub(crate) fn write_silent_cloudflared(dir: &Path) -> String {
     write_script(dir, "silent-cloudflared.sh", "sleep 100\n")
 }

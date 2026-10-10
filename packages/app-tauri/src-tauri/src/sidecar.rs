@@ -1,8 +1,7 @@
 /// Rust daemon sidecar supervision.
 ///
 /// Mirrors `packages/app-electron/src/main/index.ts:startDaemon()`.
-/// Spawns the daemon as a child process with `detached: false` semantics
-/// (the child dies when this process dies — Rust's default).
+/// Retains the daemon child handle for explicit shutdown on app exit.
 /// The login-shell env is merged over the process env before spawn, then
 /// app-owned daemon settings are reapplied.
 use std::collections::HashMap;
