@@ -199,6 +199,7 @@ async fn venv_bin(project_path: &str, virtual_env: Option<&str>, cmd: &str) -> O
 /// script — so it can't be parsed as shell syntax.
 async fn command_on_path(cmd: &str, resolved_path: Option<&str>) -> bool {
     let mut probe = tokio::process::Command::new("/bin/sh");
+    probe.kill_on_drop(true);
     probe.args(["-c", "command -v \"$1\"", "sh", cmd]);
     if let Some(path) = resolved_path {
         probe.env("PATH", path);
