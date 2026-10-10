@@ -100,12 +100,6 @@ fn seed(tracker: &BackgroundTaskTracker, chat: &str, id: &str, output_path: &str
     );
 }
 
-// --- killBackgroundTask ---
-
-// --- killTasksForChat (CLI + OS, no sweep) ---
-
-// --- killTasksForChat (worktree sweep) — real temp spool fs ---
-
 /// The temp dirs (kept alive) + the spool-root / worktree paths for a sweep.
 struct SweepFixture {
     _spool: tempfile::TempDir,
@@ -139,6 +133,7 @@ fn build_sweep_fixture(make_symlink: bool) -> SweepFixture {
     }
 }
 
-mod cases_0;
-
-mod cases_1;
+mod kill_chat;
+mod kill_task;
+mod tree_signal;
+mod worktree_sweep;
