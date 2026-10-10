@@ -4,12 +4,13 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use crate::chat_test_support::StubAdapter;
+use crate::ctx::AppCtx;
 use reqwest::StatusCode;
 use serde_json::{Value, json};
 
-use super::MCP_BODY_LIMIT_BYTES;
-use crate::chat_test_support::StubAdapter;
-use crate::ctx::AppCtx;
+#[path = "mcp_limit_tests.rs"]
+mod limit_tests;
 
 struct Server {
     base: String,
@@ -220,10 +221,6 @@ async fn browser_tunnel_and_malformed_requests_are_refused() {
         old.json(&ping).send().await.unwrap().status(),
         StatusCode::BAD_REQUEST
     );
-
-    let huge = "x".repeat(MCP_BODY_LIMIT_BYTES + 1);
-    let res = server.post(Some(&token)).body(huge).send().await.unwrap();
-    assert_eq!(res.status(), StatusCode::PAYLOAD_TOO_LARGE);
 }
 
 #[tokio::test]

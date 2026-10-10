@@ -9,6 +9,8 @@ use crate::todos_github::store;
 use crate::todos_github::touch;
 use crate::todos_github::touch::read_touch;
 
+const OLD_STAMP: &str = "2020-01-01T00:00:00.000Z";
+
 async fn setup() -> todos::tests::Harness {
     let h = todos::tests::setup().await;
     run_github_migrations(&h.ctx).await.unwrap();
@@ -80,6 +82,7 @@ async fn patch_changing_title_stamps_only_title() {
     let h = setup().await;
     let todo = create(&h).await;
     let id = todo["id"].as_str().unwrap().to_string();
+    touch::stamp_create(&h.ctx, &id, OLD_STAMP).await.unwrap();
     let before = read_touch(&h.ctx, &id).await.unwrap();
 
     assert_eq!(
@@ -89,6 +92,7 @@ async fn patch_changing_title_stamps_only_title() {
 
     let after = read_touch(&h.ctx, &id).await.unwrap();
     assert_ne!(after["title"], before["title"], "title's stamp advances");
+    assert_eq!(before["title"], OLD_STAMP);
     assert_eq!(after["body"], before["body"], "body is untouched");
     assert_eq!(after["state"], before["state"], "state is untouched");
 }
@@ -152,7 +156,16 @@ async fn workflow_label_patch_advances_updated_at_but_stamps_nothing() {
     let todo = create(&h).await;
     let id = todo["id"].as_str().unwrap().to_string();
     let touch_before = read_touch(&h.ctx, &id).await.unwrap();
+    h.ctx
+        .db
+        .execute(
+            "UPDATE todos SET updated_at = ? WHERE id = ?".into(),
+            vec![text(OLD_STAMP.to_string()), text(id.clone())],
+        )
+        .await
+        .unwrap();
     let updated_before = updated_at(&h, &id).await;
+    assert_eq!(updated_before, OLD_STAMP);
 
     assert_eq!(
         patch(&h, &id, json!({ "labels": ["route:full"] })).await,
@@ -189,12 +202,6 @@ async fn move_between_open_and_in_progress_stamps_nothing() {
 
 #[tokio::test]
 async fn move_to_done_and_back_stamps_state() {
-    // Pin a known-old stamp before each move and assert it advanced, rather
-    // than diffing two wall-clock reads: `now_iso8601()` is millisecond
-    // precision, so two `move_status` calls back-to-back can land in the
-    // same millisecond and make the stamps byte-identical.
-    const OLD_STAMP: &str = "2020-01-01T00:00:00.000Z";
-
     let h = setup().await;
     let todo = create(&h).await;
     let id = todo["id"].as_str().unwrap().to_string();
