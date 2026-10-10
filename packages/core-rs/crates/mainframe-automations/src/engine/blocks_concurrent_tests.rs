@@ -10,9 +10,8 @@ use std::time::Duration;
 use serde_json::json;
 
 use crate::domain::Step;
-use crate::store::{RunRecord, RunStatus, StepStatus};
+use crate::store::{RunRecord, RunStatus, StepKind, StepStatus};
 
-use super::markers::{BRANCH_OUTCOME_KIND, REPEAT_WATERMARK_KIND, is_engine_marker};
 use super::test_support::{
     FakePorts, Harness, ask_agent_step, completed, concurrent_repeat_step, cond_is, definition,
     empty_outputs, harness, if_step, manual_with_payload, notify_step, repeat_step, text,
@@ -285,14 +284,14 @@ async fn branch_outcome_markers_are_engine_state_excluded_from_the_timeline_pred
         .checkpoint
         .steps
         .values()
-        .filter(|e| e.kind == BRANCH_OUTCOME_KIND)
+        .filter(|e| e.kind == StepKind::BranchOutcome)
         .count();
     assert_eq!(branch_markers, 2, "one branch marker per branch");
     let watermark_markers = finished
         .checkpoint
         .steps
         .values()
-        .filter(|e| e.kind == REPEAT_WATERMARK_KIND)
+        .filter(|e| e.kind == StepKind::RepeatWatermark)
         .count();
     assert_eq!(
         watermark_markers, 1,
@@ -301,14 +300,10 @@ async fn branch_outcome_markers_are_engine_state_excluded_from_the_timeline_pred
     // The route the server's `project_timeline` filters on: every marker
     // kind is excluded, and no user-facing leaf entry is ever mistaken for
     // one.
-    assert!(is_engine_marker(BRANCH_OUTCOME_KIND));
-    assert!(is_engine_marker(REPEAT_WATERMARK_KIND));
-    assert!(!is_engine_marker(
-        &finished.checkpoint.steps["agent#0"].kind
-    ));
-    assert!(!is_engine_marker(
-        &finished.checkpoint.steps["agent#1"].kind
-    ));
+    assert!(StepKind::BranchOutcome.is_engine_marker());
+    assert!(StepKind::RepeatWatermark.is_engine_marker());
+    assert!(!finished.checkpoint.steps["agent#0"].kind.is_engine_marker());
+    assert!(!finished.checkpoint.steps["agent#1"].kind.is_engine_marker());
 }
 
 #[tokio::test]

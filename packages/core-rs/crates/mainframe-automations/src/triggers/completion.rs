@@ -4,7 +4,9 @@
 
 use std::sync::{Arc, OnceLock};
 
-use crate::engine::{BoxFuture, RunFinalizedHook};
+use mainframe_types::BoxFuture;
+
+use crate::engine::RunFinalizedHook;
 use crate::ports::{AutomationEvent, CompletedStatus, CuratedEvent, EventSink};
 use crate::store::{AutomationStore, RunRecord, RunStatus};
 use crate::tokens::TokenValue;

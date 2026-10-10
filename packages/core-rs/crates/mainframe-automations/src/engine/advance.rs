@@ -11,7 +11,6 @@ use crate::ports::{AutomationEvent, Clock, EventSink, to_run_summary};
 use crate::store::{RunRecord, RunStore, RunTriggerContext, StepStatus, TerminalStatus};
 use crate::tokens::build_name_index;
 
-use super::checkpoint::fail_step_entry;
 use super::run_locks::{RunLocks, cancel_requested};
 use super::walk::{WalkCtx, walk_steps};
 use super::{BoxFuture, RunAdvancer, RunFinalizedHook, VerbPorts, WalkResult};
@@ -203,7 +202,7 @@ impl Interpreter {
             self.deps
                 .store
                 .patch_checkpoint(&run.id, move |cp| {
-                    fail_step_entry(cp, &step_ref, RESTART_MID_ACTION_ERROR);
+                    cp.fail_step_entry(&step_ref, RESTART_MID_ACTION_ERROR);
                 })
                 .await?;
             if !step.is_some_and(Step::keep_going) {
@@ -253,7 +252,7 @@ impl Interpreter {
             .is_none_or(|run| run.status.is_terminal()))
     }
 
-    fn emit(&self, run: &RunRecord) {
+    pub(super) fn emit(&self, run: &RunRecord) {
         self.deps.events.emit(AutomationEvent::RunUpdated {
             run: to_run_summary(run),
         });
@@ -272,14 +271,12 @@ impl RunAdvancer for Interpreter {
         Box::pin(self.advance(run_id))
     }
 
-    fn fail_run<'a>(
+    fn settle_out_of_band<'a>(
         &'a self,
         run_id: &'a str,
-        error: &'a str,
+        step_ref: &'a str,
+        outcome: super::OutOfBandOutcome,
     ) -> BoxFuture<'a, Result<(), StoreError>> {
-        Box::pin(async move {
-            self.finalize_and_emit(run_id, TerminalStatus::Failed, Some(error.to_string()))
-                .await
-        })
+        Box::pin(self.settle_out_of_band(run_id, step_ref, outcome))
     }
 }

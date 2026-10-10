@@ -9,10 +9,10 @@ use std::sync::{Arc, Mutex};
 use mainframe_automations::credentials::{
     CredentialError, CredentialKind, CredentialStore, Credentials,
 };
-use mainframe_automations::engine::BoxFuture;
 use mainframe_plugins::{
     CreateIssue, GitHubIssues, GitHubPortError, IssuePatch, IssueState, RepoRef,
 };
+use mainframe_types::BoxFuture;
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 

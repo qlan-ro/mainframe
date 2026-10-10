@@ -1,9 +1,8 @@
-//! Shared fakes + builders for the engine tests (in-crate until the testkit
-//! feature phase exposes them to mainframe-server tests).
+//! Shared builders for the engine tests; the port fakes themselves live in
+//! `crate::testkit`.
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
-use chrono::{DateTime, FixedOffset};
 use serde_json::{Map, Value};
 use tempfile::TempDir;
 
@@ -13,71 +12,16 @@ use crate::domain::{
     IfBlock, LoopBlock, LoopMode, NotifyStep, ParallelBlock, RepeatBlock, RetryBlock,
     RunActionStep, SetVariableStep, Step, TokenRef, WaitStep,
 };
-use crate::ports::{AutomationEvent, Clock, EventSink, RunSummary};
 use crate::store::{AutomationDb, AutomationStore, InteractionStore, RunStore, RunTriggerContext};
+
+pub(crate) use crate::testkit::{CollectingSink, FakeClock};
 
 use super::advance::{Interpreter, InterpreterDeps};
 use super::{BoxFuture, StepOutcome, VerbContext, VerbPorts};
 
-pub(crate) struct FakeClock;
-
-impl Clock for FakeClock {
-    fn now(&self) -> DateTime<FixedOffset> {
-        DateTime::parse_from_rfc3339("2026-07-12T10:00:00+02:00").unwrap()
-    }
-}
-
-#[derive(Default)]
-pub(crate) struct CollectingSink {
-    pub events: Mutex<Vec<AutomationEvent>>,
-}
-
-impl EventSink for CollectingSink {
-    fn emit(&self, event: AutomationEvent) {
-        self.events.lock().unwrap().push(event);
-    }
-}
-
-impl CollectingSink {
-    pub fn run_updates(&self) -> Vec<RunSummary> {
-        self.events
-            .lock()
-            .unwrap()
-            .iter()
-            .filter_map(|e| match e {
-                AutomationEvent::RunUpdated { run } => Some(run.clone()),
-                _ => None,
-            })
-            .collect()
-    }
-
-    pub(crate) fn interaction_created(&self) -> Vec<crate::ports::InteractionSummary> {
-        self.events
-            .lock()
-            .unwrap()
-            .iter()
-            .filter_map(|e| match e {
-                AutomationEvent::InteractionCreated { interaction } => Some(interaction.clone()),
-                _ => None,
-            })
-            .collect()
-    }
-
-    /// `(interactionId, runId)` pairs from `automation.interaction.resolved`.
-    pub(crate) fn interaction_resolved(&self) -> Vec<(String, String)> {
-        self.events
-            .lock()
-            .unwrap()
-            .iter()
-            .filter_map(|e| match e {
-                AutomationEvent::InteractionResolved {
-                    interaction_id,
-                    run_id,
-                } => Some((interaction_id.clone(), run_id.clone())),
-                _ => None,
-            })
-            .collect()
-    }
+/// The engine tests' frozen instant: 2026-07-12 10:00 at UTC+2.
+pub(crate) fn fake_clock() -> Arc<FakeClock> {
+    Arc::new(FakeClock::at("2026-07-12T10:00:00+02:00").unwrap())
 }
 
 type Handler<S> = Box<dyn Fn(&S, &VerbContext<'_>) -> StepOutcome + Send + Sync>;
@@ -188,7 +132,7 @@ impl Harness {
             store: self.store.clone(),
             ports: Arc::new(ports),
             events: self.sink.clone(),
-            clock: Arc::new(FakeClock),
+            clock: fake_clock(),
             is_idempotent: None,
             agent_waits: None,
             on_finalized: None,

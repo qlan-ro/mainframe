@@ -9,12 +9,11 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex as StdMutex, MutexGuard, OnceLock};
 
 use crate::domain::AskAgentStep;
-use crate::ports::{AgentPort, AgentRequest, EventSink, WorktreeRequest};
-use crate::store::{RunRecord, RunStore, StepStatus, epoch_ms_now};
+use crate::ports::{AgentPort, AgentRequest, WorktreeRequest};
+use crate::store::{RunRecord, RunStore, StepKind, StepStatus, epoch_ms_now};
 use crate::tokens::render;
 
 use super::advance::AgentWaitRegistry;
-use super::checkpoint::{recompute_wake_at, set_step};
 use super::expects::build_output_contract;
 use super::{RunAdvancer, StepOutcome, VerbContext};
 
@@ -27,17 +26,15 @@ pub(crate) struct WaitKey {
 pub struct AgentVerb {
     pub(crate) port: Arc<dyn AgentPort>,
     pub(crate) store: RunStore,
-    pub(crate) events: Arc<dyn EventSink>,
     pub(crate) waits: StdMutex<HashMap<String, WaitKey>>,
     pub(crate) advancer: OnceLock<Arc<dyn RunAdvancer>>,
 }
 
 impl AgentVerb {
-    pub fn new(port: Arc<dyn AgentPort>, store: RunStore, events: Arc<dyn EventSink>) -> Arc<Self> {
+    pub fn new(port: Arc<dyn AgentPort>, store: RunStore) -> Arc<Self> {
         Arc::new(Self {
             port,
             store,
-            events,
             waits: StdMutex::new(HashMap::new()),
             advancer: OnceLock::new(),
         })
@@ -84,11 +81,10 @@ impl AgentVerb {
         let parked = self
             .store
             .patch_checkpoint(ctx.run_id, move |cp| {
-                set_step(
-                    cp,
+                cp.set_step(
                     &step_ref,
                     &step_id,
-                    "ask_agent",
+                    StepKind::AskAgent,
                     StepStatus::Waiting,
                     None,
                     None,
@@ -100,7 +96,7 @@ impl AgentVerb {
                 // A sibling branch may still be waiting on an earlier
                 // deadline — recompute the run-level min instead of
                 // overwriting it with this entry's own.
-                recompute_wake_at(cp);
+                cp.recompute_wake_at();
             })
             .await;
         if let Err(err) = parked {
@@ -123,7 +119,7 @@ impl AgentVerb {
             return;
         }
         for (step_ref, entry) in &run.checkpoint.steps {
-            if entry.status != StepStatus::Waiting || entry.kind != "ask_agent" {
+            if entry.status != StepStatus::Waiting || entry.kind != StepKind::AskAgent {
                 continue;
             }
             let Some(chat_id) = &entry.chat_id else {

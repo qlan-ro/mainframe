@@ -2,8 +2,9 @@
 //! The engine renders/parses; the port starts sessions and reports their
 //! terminal outcome. Production impl lives in mainframe-server.
 
+use mainframe_types::BoxFuture;
+
 use crate::domain::ExpectedOutput;
-use crate::engine::BoxFuture;
 
 #[derive(Debug, Clone, thiserror::Error)]
 #[error("{0}")]

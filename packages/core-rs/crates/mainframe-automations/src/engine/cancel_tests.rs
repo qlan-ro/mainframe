@@ -298,13 +298,13 @@ async fn cancelled_run_plus_agent_port_completion_never_resurrects() {
 
     // The chat itself is told to stop (spawned, so poll briefly).
     for _ in 0..200 {
-        if !rig.port.cancel_calls.lock().unwrap().is_empty() {
+        if !rig.port.cancels.lock().unwrap().is_empty() {
             break;
         }
         tokio::time::sleep(std::time::Duration::from_millis(2)).await;
     }
     assert_eq!(
-        *rig.port.cancel_calls.lock().unwrap(),
+        *rig.port.cancels.lock().unwrap(),
         vec!["chat-1".to_string()]
     );
 
