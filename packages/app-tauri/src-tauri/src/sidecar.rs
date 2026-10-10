@@ -41,13 +41,13 @@ impl DaemonHandle {
         // take() empties the slot so the exit watcher knows this death was
         // intentional; wait() reaps the child (no <defunct> zombie).
         if let Some(mut child) = guard.take() {
-            if let Err(err) = child.kill() {
-                tracing::warn!(%err, "daemon sidecar kill failed");
+            match child.kill() {
+                Ok(()) => tracing::info!("daemon sidecar killed"),
+                Err(err) => tracing::warn!(%err, "daemon sidecar kill failed"),
             }
             if let Err(err) = child.wait() {
                 tracing::warn!(%err, "daemon sidecar wait failed");
             }
-            tracing::info!("daemon sidecar killed");
         }
     }
 
