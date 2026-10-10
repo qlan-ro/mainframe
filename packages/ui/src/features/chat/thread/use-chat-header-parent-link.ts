@@ -13,6 +13,7 @@ import { useCallback } from 'react';
 import { useAui, useAuiState } from '@assistant-ui/react';
 import { activeSessionCustom } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { useParentChat } from '@/features/sessions/use-parent-chat';
+import { findByChatId } from '@/features/chat/orchestration/use-session-items';
 import {
   lineageRelation,
   parentLineageInteractive,
@@ -34,7 +35,7 @@ export function useChatHeaderParentLink(): ChatHeaderParentLink | null {
   const threadItems = useAuiState((s) => s.threads.threadItems);
   const parentChatId = custom?.parentChatId ?? null;
 
-  const localParent = parentChatId == null ? undefined : threadItems.find((t) => t.remoteId === parentChatId);
+  const localParent = parentChatId == null ? undefined : findByChatId(threadItems, parentChatId);
   const external = useParentChat(localParent == null ? parentChatId : null);
 
   const activateParent = useCallback(() => {

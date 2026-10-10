@@ -120,8 +120,8 @@ pub fn rpc_error(id: Value, code: i32, message: &str) -> Value {
 /// to a Claude or Codex session's own system prompt (spec
 /// `docs/specs/2026-10-06-mcp-orchestration-server.md`).
 pub const INSTRUCTIONS: &str = "Mainframe chat orchestration. Ids are Mainframe chat ids, not \
-provider session ids. Use delegate_task to delegate, hand off, run work in parallel, get a \
-review, or use another provider or model; use chat_launch only for a separate top-level chat. \
+provider session ids. Use delegate_task to delegate, hand off, spawn an agent, run work in parallel, \
+get a review, or use another provider or model, not a plugin or built-in subagent; use chat_launch only for a separate top-level chat. \
 Call capabilities first for providers, models and allowed permission modes. Prefer async: end \
 your turn and the result arrives here as a message; use wait modes only when you need the \
 answer first. chat_wait and task waits return within about 45 s (chat_wait reports \

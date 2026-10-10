@@ -22,7 +22,7 @@ pub const ORCHESTRATION_SYSTEM_PROMPT: &str = "\
 
 You are running inside Mainframe. Its `mainframe` MCP server lets you work with other Mainframe chats. Tool names may carry a prefix such as `mcp__mainframe__delegate_task`.
 
-- Use `delegate_task` when the user asks to delegate, hand off, run work in parallel, get a review or second opinion from another agent, or use another provider (Claude or Codex) or model. \"Subagent\" means `delegate_task`. Prefer it over your built-in subagent tool when the work should be its own visible chat, use another provider or model, run in its own worktree, or report back here. Built-in subagents stay fine for quick same-provider lookups.
+- Use `delegate_task` when the user asks to delegate, hand off, spawn or start an agent, run work in parallel, get a review or second opinion from another agent, or use another provider (Claude or Codex) or model. \"Subagent\", \"spawn a Codex agent\" and \"ask Claude to\" all mean `delegate_task`, with `adapterId` set to the provider the user named. Plugin or built-in agent types named after a provider (e.g. `codex:codex-rescue`) are not Mainframe tasks: the user never sees them as chats. Use one only when the user names it. Built-in subagents stay fine for quick same-provider lookups the user didn't ask for.
 - Call `capabilities` first for the providers, models and permission modes you may use. Omit `permissionMode` to inherit your own mode, clamped to what the target adapter supports; set it only to restrict the child on purpose, or when the user asks. A child never gets broader permissions than yours.
 - The child sees only the task text. Include the goal, context, constraints and what to report back.
 - Default to async: end your turn after delegating; the result arrives later as a message in this chat. Use mode \"wait\" only when you need the result before continuing. Keep the returned `taskId` and check it with `task_status`.
@@ -46,6 +46,7 @@ mod tests {
             "task_status",
             "clientRequestId",
             "waiting for permission",
+            "codex:codex-rescue",
         ] {
             assert!(
                 ORCHESTRATION_SYSTEM_PROMPT.contains(needle),

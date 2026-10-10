@@ -13,7 +13,32 @@ export function useSessionItems(): SessionItem[] {
   return useMemo(() => threadItemsToSessionItems(threadItems), [threadItems]);
 }
 
-/** A chat by its daemon id: a thread created this app-run keeps a local item id and carries the chat id as `remoteId`. */
+/**
+ * A thread by its daemon chat id. A thread created this app-run keeps a local
+ * `__LOCALID_*` item carrying the chat id as `remoteId`, and the next list
+ * reload adds the canonical item (`id` = chat id) beside it. Only the
+ * canonical item picks up later list data such as the daemon's auto-title,
+ * so it wins; the local item is the fallback until that reload lands.
+ */
+export function findByChatId<T extends { id: string; remoteId?: string | undefined }>(
+  items: readonly T[],
+  chatId: string,
+): T | undefined {
+  return items.find((it) => it.id === chatId) ?? items.find((it) => it.remoteId === chatId);
+}
+
 export function findSession(items: readonly SessionItem[], chatId: string): SessionItem | undefined {
-  return items.find((it) => (it.remoteId ?? it.id) === chatId);
+  return findByChatId(items, chatId);
+}
+
+/**
+ * A chat's title by its daemon id, or undefined when the chat isn't loaded or
+ * has no title yet. Selects the string alone, so a caller re-renders only when
+ * that title changes, not on every session-list update.
+ */
+export function useChatTitle(chatId: string): string | undefined {
+  return useAuiState((s) => {
+    const title = findByChatId(s.threads.threadItems, chatId)?.title?.trim();
+    return title || undefined;
+  });
 }
