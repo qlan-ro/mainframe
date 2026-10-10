@@ -16,7 +16,7 @@ use std::{
 use tokio::sync::{Mutex as AsyncMutex, OwnedMutexGuard};
 
 #[derive(Default)]
-pub(super) struct HandoffLocks(Mutex<HashMap<String, Weak<AsyncMutex<()>>>>);
+pub(crate) struct HandoffLocks(Mutex<HashMap<String, Weak<AsyncMutex<()>>>>);
 
 impl HandoffLocks {
     pub(super) async fn acquire(&self, chat_id: &str) -> OwnedMutexGuard<()> {
@@ -33,6 +33,13 @@ impl HandoffLocks {
             }
         };
         lock.lock_owned().await
+    }
+
+    pub(crate) fn forget(&self, chat_id: &str) {
+        self.0
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .remove(chat_id);
     }
 }
 

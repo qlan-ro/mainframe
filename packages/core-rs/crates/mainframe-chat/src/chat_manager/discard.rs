@@ -1,13 +1,14 @@
 //! Temporary-chat discard (#346 rule 5) and the per-chat live-state teardown
 //! it shares with `config_api.rs::remove_project`.
 use super::*;
+use crate::chat_teardown::TeardownMode;
 
 impl ChatManager {
     /// The per-chat teardown `remove_project` runs for every chat in a removed
     /// project, extracted so `discard_chat` reuses the exact same steps: kill
     /// tasks, kill the session, drop the active entry, drop the message cache,
-    /// forget permissions (which drops a pending gate), remove it from the
-    /// tracker, clear display state, and notify the chat-surface `ChatEnded`.
+    /// forget per-chat state (including pending gates and worktree offers),
+    /// remove it from the tracker, and notify the chat-surface `ChatEnded`.
     pub(super) async fn teardown_live_chat(&self, chat: &Chat) {
         let cell = self.get_active(&chat.id);
         let session = cell
@@ -34,17 +35,8 @@ impl ChatManager {
             );
         }
         self.lifecycle.orchestration().revoke(&chat.id);
-        self.active_chats.remove(&chat.id);
-        self.messages
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .release(&chat.id);
-        self.permissions
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .forget(&chat.id);
+        self.teardown.clear(&chat.id, TeardownMode::Discard);
         self.deps.tracker_remove_chat(&chat.id);
-        self.event_handler.clear_display_state(&chat.id);
         self.event_handler
             .notify_chat_surface(crate::chat_surface::ChatSurfaceEvent::ChatEnded {
                 chat_id: chat.id.clone(),

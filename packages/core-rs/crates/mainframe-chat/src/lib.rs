@@ -20,6 +20,7 @@ pub mod attention_request;
 pub mod chat_cwd;
 pub mod chat_manager;
 pub mod chat_surface;
+mod chat_teardown;
 pub mod config_manager;
 pub mod config_respawn_guard;
 pub mod config_transcripts;
