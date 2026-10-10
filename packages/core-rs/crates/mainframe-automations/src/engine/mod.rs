@@ -3,8 +3,8 @@
 //! commit, repeat. Verbs are injected via `VerbPorts` so the walk stays
 //! testable with fakes.
 
-pub mod advance;
-pub mod agent;
+pub(crate) mod advance;
+pub(crate) mod agent;
 mod agent_settle;
 pub(crate) mod blocks;
 pub(crate) mod blocks_concurrent;
@@ -14,15 +14,16 @@ pub(crate) mod checkpoint;
 mod deadline;
 pub(crate) mod expects;
 pub(crate) mod markers;
-pub mod notify_verb;
+pub(crate) mod notify_verb;
 mod out_of_band;
-pub mod run_action_verb;
+#[cfg(test)]
+mod out_of_band_settle_tests;
+pub(crate) mod run_action_verb;
 mod run_locks;
 pub(crate) mod walk;
 
-pub use advance::{AgentWaitRegistry, Interpreter, InterpreterDeps};
+pub use advance::{Interpreter, InterpreterDeps};
 pub use agent::AgentVerb;
-pub use markers::{RETRY_ATTEMPT_KIND, is_engine_marker};
 pub use notify_verb::NotifyVerb;
 pub use run_action_verb::RunActionVerb;
 
@@ -32,9 +33,7 @@ use crate::domain::{AskAgentStep, AskMeStep, NotifyStep, RunActionStep};
 use crate::error::StoreError;
 use crate::tokens::{NameMap, Scope};
 
-/// Local dyn-future alias (the repo's `mainframe-adapter-api::BoxFuture`
-/// pattern — this crate must not depend on adapter-api).
-pub use mainframe_types::BoxFuture;
+pub(crate) use mainframe_types::BoxFuture;
 
 /// One verb execution's result.
 #[derive(Debug, Clone, PartialEq)]
@@ -82,14 +81,22 @@ pub trait RunFinalizedHook: Send + Sync {
 /// Late-bound advance handle: the settle/respond paths re-enter the
 /// interpreter after an external completion, but the interpreter owns the
 /// VerbPorts that contain those verbs — a trait breaks the construction
-/// cycle. `fail_run` finalizes `failed` + emits (the no-keepGoing policy).
-pub trait RunAdvancer: Send + Sync {
+/// cycle. `settle_out_of_band` writes a parked step's outcome and applies the
+/// keepGoing policy (see `out_of_band.rs`).
+pub(crate) trait RunAdvancer: Send + Sync {
     fn advance_run<'a>(&'a self, run_id: &'a str) -> BoxFuture<'a, Result<(), StoreError>>;
-    fn fail_run<'a>(
+    fn settle_out_of_band<'a>(
         &'a self,
         run_id: &'a str,
-        error: &'a str,
+        step_ref: &'a str,
+        outcome: OutOfBandOutcome,
     ) -> BoxFuture<'a, Result<(), StoreError>>;
+}
+
+/// How a parked step ended when something other than the walk settled it.
+pub(crate) enum OutOfBandOutcome {
+    Succeeded(Map<String, Value>),
+    Failed(String),
 }
 
 /// The four Do-verbs, injected. Dyn-safe via `BoxFuture` (native

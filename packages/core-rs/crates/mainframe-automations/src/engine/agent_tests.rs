@@ -241,7 +241,7 @@ async fn resume_after_restart_watches_waiting_agent_entries() {
 
     // "Restart": a second verb + interpreter over the same store, new port.
     let port2 = Arc::new(FakeAgentPort::default());
-    let verb2 = AgentVerb::new(port2.clone(), rig.h.store.clone(), rig.h.sink.clone());
+    let verb2 = AgentVerb::new(port2.clone(), rig.h.store.clone());
     let mut deps = rig.h.deps(FakePorts::default());
     deps.agent_waits = Some(verb2.clone());
     let engine2 = Arc::new(Interpreter::new(deps));
