@@ -60,14 +60,14 @@ pub(super) fn dummy_child() -> ChildHandle {
         exited: Arc::new(std::sync::atomic::AtomicBool::new(false)),
     }
 }
-pub(super) fn spawned_with_stdin(s: &ClaudeSession) -> mpsc::UnboundedReceiver<Vec<u8>> {
+pub(super) fn spawned_with_stdin(s: &ClaudeSession) -> mpsc::Receiver<Vec<u8>> {
     s.set_child_for_test(dummy_child());
-    let (tx, rx) = mpsc::unbounded_channel();
+    let (tx, rx) = StdinTx::channel(64);
     s.set_stdin_for_test(Some(tx));
     rx
 }
 
-pub(super) fn read_json(rx: &mut mpsc::UnboundedReceiver<Vec<u8>>) -> Value {
+pub(super) fn read_json(rx: &mut mpsc::Receiver<Vec<u8>>) -> Value {
     let bytes = rx.try_recv().expect("a write was captured");
     serde_json::from_slice(&bytes).unwrap()
 }

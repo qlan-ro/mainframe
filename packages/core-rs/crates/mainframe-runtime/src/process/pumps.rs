@@ -1,12 +1,63 @@
 use tokio::{
     io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWriteExt, BufReader},
     process::ChildStdin,
-    sync::mpsc::{self, UnboundedSender},
+    sync::mpsc,
     task::JoinHandle,
 };
 
-pub fn spawn_stdin_writer(stdin: Option<ChildStdin>) -> UnboundedSender<Vec<u8>> {
-    let (sender, mut receiver) = mpsc::unbounded_channel::<Vec<u8>>();
+/// Queued stdin writes a child may fall behind on before the daemon stops
+/// buffering. Generous for line-oriented protocols (one entry per message);
+/// bounded so a stalled child cannot grow the queue without limit.
+pub const STDIN_QUEUE_CAPACITY: usize = 1024;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum StdinWriteError {
+    #[error("child stdin closed")]
+    Closed,
+    #[error("child stdin queue full")]
+    Full,
+}
+
+/// Handle to a child's single stdin writer task. Writes are queued in order;
+/// the queue holds [`STDIN_QUEUE_CAPACITY`] entries.
+#[derive(Clone, Debug)]
+pub struct StdinWriter(mpsc::Sender<Vec<u8>>);
+
+impl StdinWriter {
+    /// A writer whose queue drains into `receiver` instead of a child; the
+    /// production writer task and tests both consume this end.
+    pub fn channel(capacity: usize) -> (Self, mpsc::Receiver<Vec<u8>>) {
+        let (sender, receiver) = mpsc::channel(capacity);
+        (Self(sender), receiver)
+    }
+
+    /// Queue `bytes` without waiting: for synchronous callers. Fails with
+    /// [`StdinWriteError::Full`] rather than blocking or buffering past the
+    /// capacity.
+    pub fn try_write(&self, bytes: Vec<u8>) -> Result<(), StdinWriteError> {
+        self.0.try_send(bytes).map_err(|error| match error {
+            mpsc::error::TrySendError::Full(_) => StdinWriteError::Full,
+            mpsc::error::TrySendError::Closed(_) => StdinWriteError::Closed,
+        })
+    }
+
+    /// Queue `bytes`, waiting for room when the queue is full.
+    pub async fn write(&self, bytes: Vec<u8>) -> Result<(), StdinWriteError> {
+        self.0
+            .send(bytes)
+            .await
+            .map_err(|_| StdinWriteError::Closed)
+    }
+
+    pub fn is_closed(&self) -> bool {
+        self.0.is_closed()
+    }
+}
+
+/// The writer task stops at the first failed write or flush, closing the
+/// queue so later writes report [`StdinWriteError::Closed`].
+pub fn spawn_stdin_writer(stdin: Option<ChildStdin>) -> StdinWriter {
+    let (writer, mut receiver) = StdinWriter::channel(STDIN_QUEUE_CAPACITY);
     if let Some(mut stdin) = stdin {
         tokio::spawn(async move {
             while let Some(bytes) = receiver.recv().await {
@@ -21,7 +72,7 @@ pub fn spawn_stdin_writer(stdin: Option<ChildStdin>) -> UnboundedSender<Vec<u8>>
             }
         });
     }
-    sender
+    writer
 }
 
 pub fn spawn_line_pump<R, F>(reader: R, mut on_line: F) -> JoinHandle<()>
@@ -65,9 +116,13 @@ where
     })
 }
 
+/// How long an output pump may keep reading after its child exited before it
+/// is abandoned: a grandchild that inherited the pipe must not hold the exit.
+pub const PUMP_DRAIN_GRACE: std::time::Duration = std::time::Duration::from_millis(500);
+
 pub async fn finish_pumps(pumps: Vec<JoinHandle<()>>) {
     for mut pump in pumps {
-        if tokio::time::timeout(std::time::Duration::from_millis(500), &mut pump)
+        if tokio::time::timeout(PUMP_DRAIN_GRACE, &mut pump)
             .await
             .is_err()
         {

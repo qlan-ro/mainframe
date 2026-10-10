@@ -27,7 +27,7 @@ fn control_response_unknown_request_id_does_not_panic() {
 async fn control_response_resolves_a_real_pending_stop_task_awaiter() {
     let s = session();
     let sink = RecordingSink::default();
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let (tx, mut rx) = crate::session_control::StdinTx::channel(8);
     let control = s.control.clone();
     let pending = tokio::spawn(async move {
         control

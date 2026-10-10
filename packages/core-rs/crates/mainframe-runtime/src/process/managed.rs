@@ -6,6 +6,9 @@ use tokio::{
     task::JoinHandle,
 };
 
+/// Resolves once the child has been reaped AND its output pumps have finished
+/// (each bounded by [`super::PUMP_DRAIN_GRACE`]), so an exit handler never
+/// runs ahead of the child's last stdout/stderr chunk.
 #[derive(Clone)]
 pub struct ExitLatch(watch::Receiver<Option<Option<i32>>>);
 
@@ -90,8 +93,8 @@ async fn watch_child(
             None
         }
     };
-    exit.send_replace(Some(code));
     super::finish_pumps(pumps).await;
+    exit.send_replace(Some(code));
 }
 
 pub struct TailBuffer {

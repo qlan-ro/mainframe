@@ -111,13 +111,14 @@ impl Drop for BridgeHandle {
 /// - `incoming`: client -> daemon JSON text messages.
 /// - `outgoing`: daemon -> client sink; a closed receiver means the WS is gone
 ///   (a failed send stops the bridge).
-/// - `stdin_tx`: framed bytes to the child's single stdin writer task (both this
-///   bridge and graceful shutdown feed it).
+/// - `stdin`: framed bytes to the child's single stdin writer task (both this
+///   bridge and graceful shutdown feed it); a full queue applies backpressure
+///   to the WebSocket reader instead of buffering.
 /// - `stdout`/`stderr`: the child's pipes.
 pub fn bridge_ws_to_process<O, E>(
     mut incoming: mpsc::UnboundedReceiver<String>,
     outgoing: mpsc::UnboundedSender<String>,
-    stdin_tx: mpsc::UnboundedSender<Vec<u8>>,
+    stdin: mainframe_runtime::process::StdinWriter,
     stdout: O,
     stderr: E,
 ) -> BridgeHandle
@@ -128,8 +129,8 @@ where
     // client -> child stdin (framed)
     let stdin_task = tokio::spawn(async move {
         while let Some(json) = incoming.recv().await {
-            if stdin_tx.send(encode_json_rpc(&json).into_bytes()).is_err() {
-                tracing::error!("Failed to write to LSP stdin");
+            if let Err(error) = stdin.write(encode_json_rpc(&json).into_bytes()).await {
+                tracing::error!(%error, "Failed to write to LSP stdin");
                 break;
             }
         }

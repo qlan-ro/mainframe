@@ -40,7 +40,7 @@ pub struct LspServerHandle {
     pub(super) pid: u32,
     /// Signals for the monitor task, the child's only reaper (see `deliver`).
     pub(super) signal_tx: mpsc::UnboundedSender<Signal>,
-    pub(super) stdin_tx: mpsc::UnboundedSender<Vec<u8>>,
+    pub(super) stdin_tx: mainframe_runtime::process::StdinWriter,
     pub(super) stdout: Mutex<Option<ChildStdout>>,
     pub(super) stderr: Mutex<Option<ChildStderr>>,
     pub(super) exited: Arc<AtomicBool>,
@@ -90,7 +90,7 @@ impl LspServerHandle {
     }
 
     /// Framed writer for this child's stdin (shared by the bridge and shutdown).
-    pub fn stdin_tx(&self) -> mpsc::UnboundedSender<Vec<u8>> {
+    pub fn stdin_tx(&self) -> mainframe_runtime::process::StdinWriter {
         self.stdin_tx.clone()
     }
 

@@ -29,7 +29,7 @@ impl ClaudeSession {
     }
     pub(super) fn write_cli_permission_mode(&self, cli_mode: &str) {
         let stdin = self.stdin_clone();
-        self.control.send(
+        self.send_control(
             stdin.as_ref(),
             &json!({ "subtype": "set_permission_mode", "mode": cli_mode }),
         );

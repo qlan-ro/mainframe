@@ -31,6 +31,10 @@ async fn each_stream_has_its_own_limit() {
     ));
 }
 
+/// Deadline for runs that must time out: wide enough that a slow `sh` start
+/// never lands after it (the pid file is written before the deadline fires).
+const TIMEOUT_MARGIN: Duration = Duration::from_secs(3);
+
 #[tokio::test]
 async fn timeout_kills_and_reaps_child() {
     let dir = tempfile::tempdir().unwrap();
@@ -38,7 +42,7 @@ async fn timeout_kills_and_reaps_child() {
     let mut command = script("echo $$ > \"$PID_FILE\"; exec sleep 60");
     command.env("PID_FILE", &pid_file);
     assert!(matches!(
-        run_captured(command, Some(Duration::from_millis(300))).await,
+        run_captured(command, Some(TIMEOUT_MARGIN)).await,
         Err(ExecError::Timeout)
     ));
     let pid = tokio::fs::read_to_string(pid_file)
@@ -91,4 +95,40 @@ fn invalid_ids_cannot_signal_the_current_group() {
             std::io::ErrorKind::InvalidInput
         );
     }
+}
+
+#[tokio::test]
+async fn stdin_queue_rejects_writes_past_capacity_without_buffering() {
+    let (writer, mut queue) = StdinWriter::channel(1);
+    assert_eq!(writer.try_write(b"one".to_vec()), Ok(()));
+    assert_eq!(
+        writer.try_write(b"two".to_vec()),
+        Err(StdinWriteError::Full)
+    );
+    assert_eq!(queue.recv().await.as_deref(), Some(&b"one"[..]));
+    assert_eq!(writer.try_write(b"three".to_vec()), Ok(()));
+    assert_eq!(queue.recv().await.as_deref(), Some(&b"three"[..]));
+}
+
+#[tokio::test]
+async fn async_stdin_write_waits_for_room_and_reports_a_closed_queue() {
+    let (writer, mut queue) = StdinWriter::channel(1);
+    writer.write(b"one".to_vec()).await.unwrap();
+    let blocked = tokio::spawn({
+        let writer = writer.clone();
+        async move { writer.write(b"two".to_vec()).await }
+    });
+    assert_eq!(queue.recv().await.as_deref(), Some(&b"one"[..]));
+    assert_eq!(blocked.await.unwrap(), Ok(()));
+    assert_eq!(queue.recv().await.as_deref(), Some(&b"two"[..]));
+    drop(queue);
+    assert!(writer.is_closed());
+    assert_eq!(
+        writer.write(b"three".to_vec()).await,
+        Err(StdinWriteError::Closed)
+    );
+    assert_eq!(
+        writer.try_write(b"four".to_vec()),
+        Err(StdinWriteError::Closed)
+    );
 }

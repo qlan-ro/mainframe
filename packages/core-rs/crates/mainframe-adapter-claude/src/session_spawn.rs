@@ -116,7 +116,7 @@ impl ClaudeSession {
         if let Some(tuning) = &options.tuning {
             let settings = tuning_to_flag_settings(tuning);
             if !settings.is_empty() {
-                self.control.send(
+                self.send_control(
                     self.stdin_clone().as_ref(),
                     &json!({ "subtype": "apply_flag_settings", "settings": settings }),
                 );
