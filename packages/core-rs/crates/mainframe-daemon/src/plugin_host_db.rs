@@ -4,9 +4,7 @@
 
 use mainframe_plugins::PluginHostDb;
 use mainframe_server::db::Db;
-use mainframe_types::chat::{Chat, ChatStatus};
-use mainframe_types::time::now_iso8601;
-use serde_json::json;
+use mainframe_types::chat::Chat;
 
 pub struct DaemonPluginHostDb {
     db: Db,
@@ -48,13 +46,14 @@ impl PluginHostDb for DaemonPluginHostDb {
             permission_mode: permission_mode.map(str::to_string),
             ..Default::default()
         };
-        match self.db.call_blocking(move |d| d.chats.create(&new_chat)) {
+        let input = new_chat.clone();
+        match self.db.call_blocking(move |d| d.chats.create(&input)) {
             Ok(chat) => chat,
             Err(err) => {
                 // The trait is infallible; a DB failure has no error channel, so log + return an
                 // unpersisted stub rather than crash the plugin request.
                 tracing::error!(%err, project_id, adapter_id, "plugin chats.create failed");
-                fallback_chat(project_id, adapter_id, permission_mode)
+                Chat::unpersisted(&new_chat)
             }
         }
     }
@@ -66,86 +65,4 @@ impl PluginHostDb for DaemonPluginHostDb {
             .ok()
             .flatten()
     }
-}
-
-/// Minimal unpersisted `Chat` stub for the near-impossible create failure.
-fn fallback_chat(project_id: &str, adapter_id: &str, permission_mode: Option<&str>) -> Chat {
-    let now = now_iso8601();
-    let stub_id = fallback_id();
-    let mut value = json!({
-        "id": stub_id,
-        "adapterId": adapter_id,
-        "projectId": project_id,
-        "status": "active",
-        "createdAt": now,
-        "updatedAt": now,
-        "totalCost": 0.0,
-        "totalTokensInput": 0,
-        "totalTokensOutput": 0,
-        "lastContextTokensInput": 0,
-    });
-    if let Some(mode) = permission_mode.filter(|s| !s.is_empty()) {
-        value["permissionMode"] = json!(mode);
-    }
-    serde_json::from_value(value).unwrap_or_else(|_| Chat {
-        id: fallback_id(),
-        adapter_id: adapter_id.to_string(),
-        project_id: project_id.to_string(),
-        title: None,
-        claude_session_id: None,
-        session_file_path: None,
-        model: None,
-        permission_mode: None,
-        plan_mode: Some(false),
-        status: ChatStatus::Active,
-        created_at: now.clone(),
-        updated_at: now,
-        total_cost: 0.0,
-        total_tokens_input: 0,
-        total_tokens_output: 0,
-        last_context_tokens_input: 0,
-        last_context_total_tokens: None,
-        last_context_max_tokens: None,
-        transcript_missing: None,
-        background_activity: None,
-        context_files: None,
-        mentions: None,
-        modified_files: None,
-        worktree_path: None,
-        branch_name: None,
-        process_state: None,
-        display_status: None,
-        is_running: None,
-        worktree_missing: None,
-        directory_missing: None,
-        missing_directory_path: None,
-        todos: None,
-        pinned: None,
-        effort: None,
-        fast: None,
-        ultracode: None,
-        adaptive_thinking: None,
-        detected_prs: None,
-        tags: None,
-        automation_run_id: None,
-        temporary: false,
-        no_project: false,
-        context_lost_at: None,
-        vendor_session_ephemeral: false,
-        scratch_path: None,
-        parent_chat_id: None,
-        side_chat_id: None,
-        side_chat_waiting: None,
-        orchestration: Default::default(),
-    })
-}
-
-/// A best-effort unique id for the defensive create-failure stub (never hit in
-/// normal operation, so a monotonic-clock value is sufficient).
-fn fallback_id() -> String {
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
-    format!("fallback-{nanos}")
 }

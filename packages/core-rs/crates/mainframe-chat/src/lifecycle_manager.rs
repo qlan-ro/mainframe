@@ -48,16 +48,7 @@ use mainframe_types::time::now_ms;
 
 /// Partial `db.chats.update` patch for the lifecycle paths. Worktree fields are
 /// tri-state (`Some(None)` clears).
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct LifecycleChatUpdate {
-    pub worktree_path: Option<Option<String>>,
-    pub branch_name: Option<Option<String>>,
-    pub plan_mode: Option<bool>,
-    pub title: Option<String>,
-    pub status: Option<ChatStatus>,
-    /// The no-persistence flag write, persisted before every spawn.
-    pub vendor_session_ephemeral: Option<bool>,
-}
+pub use mainframe_types::chat_patch::ChatPatch as LifecycleChatUpdate;
 
 /// Errors surfaced by lifecycle ops (strings cross the wire; copied verbatim).
 #[derive(Debug, thiserror::Error)]

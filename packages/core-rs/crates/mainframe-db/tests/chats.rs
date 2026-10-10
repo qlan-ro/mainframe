@@ -275,7 +275,10 @@ fn chat_effort_round_trips_ultra() {
         .update(
             &chat.id,
             &ChatUpdate {
-                effort: Some(Some(EffortLevel::Ultra)),
+                tuning: mainframe_types::chat::SessionTuning {
+                    effort: Some(Some(EffortLevel::Ultra)),
+                    ..Default::default()
+                },
                 ..Default::default()
             },
         )
@@ -303,7 +306,10 @@ fn chat_effort_round_trips_for_pre_existing_levels() {
             .update(
                 &chat.id,
                 &ChatUpdate {
-                    effort: Some(Some(level)),
+                    tuning: mainframe_types::chat::SessionTuning {
+                        effort: Some(Some(level)),
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
             )

@@ -36,16 +36,7 @@ pub enum ConfigError {
 /// A partial `Chat` patch for `chats_update`. Worktree fields are
 /// `Option<Option<String>>` so a clear (set to none) is distinct from "leave
 /// unchanged".
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct ChatFieldUpdate {
-    pub adapter_id: Option<String>,
-    pub model: Option<String>,
-    pub permission_mode: Option<ExecutionMode>,
-    pub plan_mode: Option<bool>,
-    pub worktree_path: Option<Option<String>>,
-    pub branch_name: Option<Option<String>>,
-    pub session_file_path: Option<String>,
-}
+pub use mainframe_types::chat_patch::ChatPatch as ChatFieldUpdate;
 
 /// Injected dependency surface for [`ChatConfigManager`].
 ///

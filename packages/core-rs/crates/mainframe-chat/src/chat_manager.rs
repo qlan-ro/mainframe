@@ -26,8 +26,7 @@ use mainframe_services::commands::{find_mainframe_command, wrap_mainframe_comman
 use mainframe_services::workspace::is_worktree_present;
 use mainframe_services::workspace::worktree::is_directory_present;
 use mainframe_types::adapter::{
-    ControlResponse, DetectedPr, EffortLevel, ExternalSessionPage, ForkSource, ProviderQuota,
-    SessionOptions,
+    ControlResponse, DetectedPr, ExternalSessionPage, ForkSource, ProviderQuota, SessionOptions,
 };
 use mainframe_types::background_task::{
     BackgroundTask, derive_background_activity, to_activity_task,

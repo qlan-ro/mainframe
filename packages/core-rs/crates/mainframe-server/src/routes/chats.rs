@@ -347,18 +347,6 @@ fn tuning_update(
     Ok(update)
 }
 
-/// Build the `ChatFieldsPartial` the facade cache-sync needs from a db tuning patch.
-/// The tri-state columns line up 1:1 (`pinned` is not a tuning field here).
-fn tuning_partial(update: &mainframe_db::chats::ChatUpdate) -> ChatFieldsPartial {
-    ChatFieldsPartial {
-        effort: update.effort,
-        fast: update.fast,
-        ultracode: update.ultracode,
-        adaptive_thinking: update.adaptive_thinking,
-        pinned: None,
-    }
-}
-
 /// Persist the RAW tuning partial (tri-state), fetch the chat, then run the facade
 /// follow-ups — `sync_chat_fields` (mirror the cache), fire-and-forget
 /// `apply_tuning` (live re-apply, no-op without a session), `emit_chat_updated`
@@ -368,7 +356,7 @@ async fn apply_and_return(
     id: String,
     update: mainframe_db::chats::ChatUpdate,
 ) -> Response {
-    let partial = tuning_partial(&update);
+    let partial = update.clone();
     let cid = id.clone();
     if let Err(err) = ctx.db.call(move |db| db.chats.update(&cid, &update)).await {
         return crate::async_err::internal_error("update tuning", &err);
@@ -428,7 +416,10 @@ async fn set_effort(
         );
     };
     let update = mainframe_db::chats::ChatUpdate {
-        effort: Some(effort),
+        tuning: mainframe_types::chat::SessionTuning {
+            effort: Some(effort),
+            ..Default::default()
+        },
         ..Default::default()
     };
     apply_and_return(&ctx, id, update).await

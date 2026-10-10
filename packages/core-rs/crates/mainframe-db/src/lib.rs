@@ -1,8 +1,7 @@
 //! The `DatabaseManager` handle, migration runner, schema, and the
 //! repositories.
 //!
-//! The API is synchronous (rusqlite, a single shared connection). Async
-//! wrapping (`spawn_blocking`, the `Db` handle) lives in `mainframe-server::db`.
+//! Repositories are synchronous; `actor::SqliteActor` serializes async access.
 #![forbid(unsafe_code)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
@@ -11,6 +10,11 @@ use std::rc::Rc;
 
 use rusqlite::Connection;
 
+pub mod actor;
+pub mod sql_types;
+mod sqlite;
+pub use sqlite::{OpenOptions, open_sqlite};
+mod chat_assignments;
 pub mod chat_handoffs;
 mod chat_native_sessions;
 pub mod chat_segments;
@@ -21,6 +25,7 @@ pub mod chat_tags;
 pub mod chats;
 pub mod delegated_tasks;
 pub mod devices;
+pub mod migrate;
 pub mod migrations;
 mod orchestration;
 pub mod projects;
@@ -99,8 +104,7 @@ impl DatabaseManager {
     /// Opens the DB at `db_path` (creating it if absent), applies the WAL +
     /// foreign-keys pragmas, and runs the migration chain.
     pub fn open(db_path: &Path) -> Result<Self, DbError> {
-        let conn = Connection::open(db_path)?;
-        conn.execute_batch("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;")?;
+        let conn = open_sqlite(db_path, OpenOptions::default())?;
 
         schema::initialize_schema(&conn)?;
 

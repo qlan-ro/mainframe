@@ -745,10 +745,12 @@ impl ChatManagerDeps for StoreDeps {
             transcript_missing: None,
             todos: None,
             pinned: None,
-            effort: Some(insert.effort),
-            fast: Some(insert.fast),
-            ultracode: Some(insert.ultracode),
-            adaptive_thinking: Some(insert.adaptive_thinking),
+            tuning: mainframe_types::chat::SessionTuning {
+                effort: Some(insert.effort),
+                fast: Some(insert.fast),
+                ultracode: Some(insert.ultracode),
+                adaptive_thinking: Some(insert.adaptive_thinking),
+            },
             detected_prs: None,
             tags: None,
             automation_run_id: None,
@@ -848,10 +850,12 @@ impl ChatManagerDeps for StoreDeps {
             transcript_missing: None,
             todos: None,
             pinned: None,
-            effort: None,
-            fast: None,
-            ultracode: None,
-            adaptive_thinking: None,
+            tuning: mainframe_types::chat::SessionTuning {
+                effort: None,
+                fast: None,
+                ultracode: None,
+                adaptive_thinking: None,
+            },
             detected_prs: None,
             tags: None,
             automation_run_id: None,
@@ -2112,8 +2116,11 @@ async fn sync_chat_fields_mirrors_tuning_onto_the_cached_active_chat() {
     mgr.sync_chat_fields(
         "c1",
         ChatFieldsPartial {
-            effort: Some(Some(EffortLevel::High)),
-            fast: Some(Some(true)),
+            tuning: mainframe_types::chat::SessionTuning {
+                effort: Some(Some(EffortLevel::High)),
+                fast: Some(Some(true)),
+                ..Default::default()
+            },
             pinned: Some(true),
             ..Default::default()
         },

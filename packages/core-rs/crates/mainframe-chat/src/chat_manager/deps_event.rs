@@ -38,7 +38,7 @@ impl EventHandlerDeps for EhDeps {
         self.deps.strip_command_tags(text)
     }
     fn chats_update(&self, chat_id: &str, patch: &EventChatUpdate) {
-        self.deps.chats_update(chat_id, &ChatUpdate::from(patch));
+        self.deps.chats_update(chat_id, patch);
     }
     fn projects_get_path(&self, project_id: &str) -> Option<String> {
         self.deps.projects_get_path(project_id)

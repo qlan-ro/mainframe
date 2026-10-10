@@ -62,8 +62,7 @@ use mainframe_types::adapter::{
 };
 use mainframe_types::background_task::BackgroundTask;
 use mainframe_types::chat::{
-    Chat, ChatMessage, ChatMessageType, ChatStatus, MessageContent, NewChat, Project,
-    ResolvedTuning, TodoItem,
+    Chat, ChatMessage, ChatMessageType, MessageContent, NewChat, Project, ResolvedTuning, TodoItem,
 };
 use mainframe_types::content::LeafContent;
 use mainframe_types::context::{
@@ -71,73 +70,11 @@ use mainframe_types::context::{
 };
 use mainframe_types::display::{DisplayMessage, ToolCategories};
 use mainframe_types::events::DaemonEvent;
-use mainframe_types::time::now_iso8601;
 use tokio::sync::broadcast;
 
 use crate::chat_seams::{LaunchStopper, ScopeTunnelStopper};
 use crate::ctx::GitFactory;
 use crate::db::Db;
-
-/// Translate the `ChatManager`'s superset `ChatUpdate` into the DB repository's
-/// `ChatUpdate`. Field names and tri-state semantics line up 1:1; the DB-only
-/// columns the chat layer never patches (mentions, created_at, pinned, tuning)
-/// stay `None`.
-fn to_db_update(patch: &ChatUpdate) -> mainframe_db::chats::ChatUpdate {
-    mainframe_db::chats::ChatUpdate {
-        adapter_id: patch.adapter_id.clone(),
-        model: patch.model.clone(),
-        claude_session_id: patch.claude_session_id.clone(),
-        session_file_path: patch.session_file_path.clone(),
-        status: patch.status,
-        total_cost: patch.total_cost,
-        total_tokens_input: patch.total_tokens_input,
-        total_tokens_output: patch.total_tokens_output,
-        last_context_tokens_input: patch.last_context_tokens_input,
-        last_context_total_tokens: patch.last_context_total_tokens,
-        last_context_max_tokens: patch.last_context_max_tokens,
-        title: patch.title.clone(),
-        permission_mode: patch.permission_mode,
-        worktree_path: patch.worktree_path.clone(),
-        branch_name: patch.branch_name.clone(),
-        process_state: patch.process_state,
-        updated_at: patch.updated_at.clone(),
-        plan_mode: patch.plan_mode,
-        transcript_missing: patch.transcript_missing,
-        vendor_session_ephemeral: patch.vendor_session_ephemeral,
-        ..Default::default()
-    }
-}
-
-#[cfg(test)]
-mod to_db_update_tests {
-    use super::*;
-
-    #[test]
-    fn carries_the_persisted_context_usage_fields_through() {
-        let patch = ChatUpdate {
-            last_context_total_tokens: Some(12_345),
-            last_context_max_tokens: Some(200_000),
-            ..Default::default()
-        };
-
-        let db_patch = to_db_update(&patch);
-
-        assert_eq!(db_patch.last_context_total_tokens, Some(12_345));
-        assert_eq!(db_patch.last_context_max_tokens, Some(200_000));
-    }
-}
-
-/// Translate the external-session-import patch into the DB repository's
-/// `ChatUpdate`. The import only ever touches these four fields.
-fn to_external_chat_update(patch: &ExternalChatUpdate) -> mainframe_db::chats::ChatUpdate {
-    mainframe_db::chats::ChatUpdate {
-        claude_session_id: patch.claude_session_id.clone(),
-        title: patch.title.clone(),
-        created_at: patch.created_at.clone(),
-        updated_at: patch.updated_at.clone(),
-        ..Default::default()
-    }
-}
 
 /// `mainframe_chat::fork::PendingForkState` → the DB repository's `PendingFork`.
 /// Field-for-field; the two exist separately only because
@@ -416,7 +353,7 @@ impl ChatManagerDeps for DaemonChatDeps {
 
     fn chats_update(&self, chat_id: &str, patch: &ChatUpdate) {
         let id = chat_id.to_string();
-        let db_patch = to_db_update(patch);
+        let db_patch = patch.clone();
         if let Err(err) = self
             .db
             .call_blocking(move |d| d.chats.update(&id, &db_patch))
@@ -1087,7 +1024,7 @@ impl ExternalSessionDeps for DaemonChatDeps {
 
     fn chats_update(&self, chat_id: &str, updates: &ExternalChatUpdate) {
         let id = chat_id.to_string();
-        let db_patch = to_external_chat_update(updates);
+        let db_patch = updates.clone();
         if let Err(err) = self
             .db
             .call_blocking(move |d| d.chats.update(&id, &db_patch))
@@ -1376,62 +1313,7 @@ impl AttachmentLister for AttachmentListerHandle {
 /// Unpersisted `Chat` stub for the (near-impossible) `db.chats.create` failure.
 /// Also the automations-deps tests' Chat fixture (pub(crate) for that reason).
 pub(crate) fn fallback_chat(new_chat: &NewChat) -> Chat {
-    let now = now_iso8601();
-    Chat {
-        id: nanoid::nanoid!(),
-        adapter_id: new_chat.adapter_id.clone(),
-        no_project: new_chat.project_id == mainframe_types::chat::NO_PROJECT_ID,
-        project_id: new_chat.project_id.clone(),
-        title: None,
-        claude_session_id: None,
-        session_file_path: None,
-        model: None,
-        permission_mode: new_chat
-            .permission_mode
-            .as_deref()
-            .filter(|s| !s.is_empty())
-            .and_then(|s| serde_json::from_value(serde_json::Value::String(s.to_string())).ok()),
-        plan_mode: Some(false),
-        status: ChatStatus::Active,
-        created_at: now.clone(),
-        updated_at: now,
-        total_cost: 0.0,
-        total_tokens_input: 0,
-        total_tokens_output: 0,
-        last_context_tokens_input: 0,
-        last_context_total_tokens: None,
-        last_context_max_tokens: None,
-        transcript_missing: None,
-        background_activity: None,
-        context_files: None,
-        mentions: None,
-        modified_files: None,
-        worktree_path: None,
-        branch_name: None,
-        process_state: None,
-        display_status: None,
-        is_running: None,
-        worktree_missing: None,
-        directory_missing: None,
-        missing_directory_path: None,
-        todos: None,
-        pinned: None,
-        effort: None,
-        fast: None,
-        ultracode: None,
-        adaptive_thinking: None,
-        detected_prs: None,
-        tags: None,
-        automation_run_id: new_chat.automation_run_id.clone(),
-        temporary: new_chat.temporary,
-        context_lost_at: None,
-        vendor_session_ephemeral: false,
-        scratch_path: None,
-        parent_chat_id: None,
-        side_chat_id: None,
-        side_chat_waiting: None,
-        orchestration: Default::default(),
-    }
+    Chat::unpersisted(new_chat)
 }
 
 #[cfg(test)]

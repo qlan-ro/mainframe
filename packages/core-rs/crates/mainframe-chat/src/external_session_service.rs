@@ -18,13 +18,7 @@ use crate::title_generator::{derive_title_from_message, resolve_title_binary};
 const SCAN_INTERVAL_MS: u64 = 5 * 60 * 1000;
 
 /// A partial `Chat` patch used by the import + title paths (`Partial<Chat>`).
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct ExternalChatUpdate {
-    pub claude_session_id: Option<String>,
-    pub title: Option<String>,
-    pub created_at: Option<String>,
-    pub updated_at: Option<String>,
-}
+pub use mainframe_types::chat_patch::ChatPatch as ExternalChatUpdate;
 
 /// Injected surface — the `db.*` / `adapters.*` reads the service makes.
 ///

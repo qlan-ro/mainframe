@@ -12,22 +12,7 @@ pub struct PushOut {
 
 /// Partial `db.chats.update` patch the sink writes. `process_state` is tri-state
 /// (`None` absent, `Some(None)` explicit null, `Some(Some(x))` value).
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct EventChatUpdate {
-    pub claude_session_id: Option<String>,
-    pub session_file_path: Option<String>,
-    pub plan_mode: Option<bool>,
-    pub total_cost: Option<f64>,
-    pub total_tokens_input: Option<i64>,
-    pub total_tokens_output: Option<i64>,
-    pub last_context_tokens_input: Option<i64>,
-    /// The CLI's own context totals (`onContextUsage`) — persisted so the meter
-    /// survives reloads (#197).
-    pub last_context_total_tokens: Option<u64>,
-    pub last_context_max_tokens: Option<u64>,
-    pub process_state: Option<Option<ProcessState>>,
-    pub updated_at: Option<String>,
-}
+pub use mainframe_types::chat_patch::ChatPatch as EventChatUpdate;
 
 /// Injected dependencies for the event handler. Claude-specific pieces
 /// (`stripMainframeCommandTags`, the

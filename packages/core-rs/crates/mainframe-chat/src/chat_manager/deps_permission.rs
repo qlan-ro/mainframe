@@ -78,7 +78,7 @@ impl PermissionHandlerDeps for PhDeps {
         self.event_handler.emit_display(chat_id);
     }
     fn chats_update(&self, chat_id: &str, patch: &EventChatUpdate) {
-        self.deps.chats_update(chat_id, &ChatUpdate::from(patch));
+        self.deps.chats_update(chat_id, patch);
     }
     fn get_messages<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, Vec<ChatMessage>> {
         // getPendingPermission calls getMessages to restore permission state from
