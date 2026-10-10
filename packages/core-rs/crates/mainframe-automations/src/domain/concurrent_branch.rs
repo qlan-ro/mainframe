@@ -3,10 +3,11 @@
 //! never walks through `engine::blocks_concurrent`'s own driver, so it has
 //! no other way to learn which branch marker it must fail itself.
 
-use super::step::{ParallelBlock, RepeatBlock, Step, find_step_by_id};
+use super::step::{ScopeRule, Step, find_step_by_id};
 
-/// `(block_id, branch_ref_suffix)` of the innermost concurrent (`concurrency
-/// > 1`) Repeat enclosing `step_id`, if any. `ref_suffix` is the `#<i>` chain
+/// `(block_id, branch_ref_suffix)` of the innermost concurrent block (a
+/// `parallel`, or a `repeat` with `concurrency > 1`) enclosing `step_id`, if
+/// any. `ref_suffix` is the `#<i>` chain
 /// a checkpoint ref carries once `step_id`'s own id prefix is stripped off
 /// (`walk.rs` builds every ref as `step.id() + frame.ref_suffix`).
 ///
@@ -22,86 +23,36 @@ pub(crate) fn enclosing_concurrent_branch(
         return None; // directly present at this level — nothing consumed a segment for it
     }
     for step in steps {
-        let found = match step {
-            Step::If(block) => enclosing_concurrent_branch(&block.then, step_id, ref_suffix)
-                .or_else(|| enclosing_concurrent_branch(&block.otherwise, step_id, ref_suffix)),
-            Step::Repeat(block) if find_step_by_id(&block.steps, step_id).is_some() => {
-                descend_repeat(block, step_id, ref_suffix)
+        for body in step.child_bodies() {
+            if find_step_by_id(body, step_id).is_none() {
+                continue;
             }
-            Step::Loop(block) if find_step_by_id(&block.steps, step_id).is_some() => {
-                descend_pass_through(&block.steps, step_id, ref_suffix)
+            let rule = step.scope_rule();
+            // `if` adds no frame, so it consumes no segment.
+            if rule == ScopeRule::If {
+                return enclosing_concurrent_branch(body, step_id, ref_suffix);
             }
-            Step::Retry(block) if find_step_by_id(&block.steps, step_id).is_some() => {
-                descend_pass_through(&block.steps, step_id, ref_suffix)
+            // Every other block consumes one segment. A deeper match carries
+            // only its own levels' segments, so this level's is prepended as
+            // the recursion unwinds, or the marker key would lose every
+            // ancestor iteration once nesting runs more than one level deep.
+            let (segment, rest) = split_first_segment(ref_suffix)?;
+            if let Some((id, inner_suffix)) = enclosing_concurrent_branch(body, step_id, rest) {
+                return Some((id, format!("{segment}{inner_suffix}")));
             }
-            Step::Parallel(block)
-                if block
-                    .branches
-                    .iter()
-                    .any(|branch| find_step_by_id(branch, step_id).is_some()) =>
-            {
-                descend_parallel(block, step_id, ref_suffix)
+            // Absent a deeper match, a concurrent block answers itself. A
+            // `parallel` branch is always concurrent; `loop`, `retry` and a
+            // sequential `repeat` never write a branch marker.
+            if matches!(
+                rule,
+                ScopeRule::Parallel | ScopeRule::Repeat { concurrent: true }
+            ) {
+                return Some((step.id().to_string(), segment.to_string()));
             }
-            _ => None,
-        };
-        if found.is_some() {
-            return found;
+            return None;
         }
     }
     None
-}
-
-/// A `parallel` branch is ALWAYS concurrent (no `concurrency > 1` gate like
-/// `descend_repeat`'s — a branch here has no sequential counterpart), so it
-/// always answers itself once no deeper concurrent block claims the leaf
-/// first. Same ancestor-segment prepending as `descend_repeat`.
-fn descend_parallel(
-    block: &ParallelBlock,
-    step_id: &str,
-    ref_suffix: &str,
-) -> Option<(String, String)> {
-    let (segment, rest) = split_first_segment(ref_suffix)?;
-    let branch = block
-        .branches
-        .iter()
-        .find(|branch| find_step_by_id(branch, step_id).is_some())?;
-    if let Some((id, inner_suffix)) = enclosing_concurrent_branch(branch, step_id, rest) {
-        return Some((id, format!("{segment}{inner_suffix}")));
-    }
-    Some((block.id.clone(), segment.to_string()))
-}
-
-/// A Repeat consumes one segment and, absent a deeper concurrent match,
-/// may itself be the answer. Either way, a match found deeper in the tree
-/// only carries ITS OWN level's segment — this level's segment has to be
-/// prepended as the recursion unwinds, or the marker key loses every
-/// ancestor iteration once nesting runs more than one level deep.
-fn descend_repeat(
-    block: &RepeatBlock,
-    step_id: &str,
-    ref_suffix: &str,
-) -> Option<(String, String)> {
-    let (segment, rest) = split_first_segment(ref_suffix)?;
-    if let Some((id, inner_suffix)) = enclosing_concurrent_branch(&block.steps, step_id, rest) {
-        return Some((id, format!("{segment}{inner_suffix}")));
-    }
-    block
-        .concurrency
-        .is_some_and(|n| n > 1)
-        .then(|| (block.id.clone(), segment.to_string()))
-}
-
-/// Loop/Retry consume one segment too, but never answer themselves — only a
-/// Repeat writes a branch marker. Same ancestor-segment prepending as
-/// `descend_repeat` applies here.
-fn descend_pass_through(
-    steps: &[Step],
-    step_id: &str,
-    ref_suffix: &str,
-) -> Option<(String, String)> {
-    let (segment, rest) = split_first_segment(ref_suffix)?;
-    enclosing_concurrent_branch(steps, step_id, rest)
-        .map(|(id, inner_suffix)| (id, format!("{segment}{inner_suffix}")))
 }
 
 /// Peels one `#<i>` chain segment off the front — `"#0#2"` -> `("#0", "#2")`.

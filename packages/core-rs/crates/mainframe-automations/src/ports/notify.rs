@@ -3,9 +3,8 @@
 //! and pushes to mobile. Always best-effort — a notification failure never
 //! fails a step.
 
+use mainframe_types::BoxFuture;
 use serde::Serialize;
-
-use crate::engine::BoxFuture;
 
 pub use mainframe_types::automation::AutomationNotificationLinks as NotificationLinks;
 

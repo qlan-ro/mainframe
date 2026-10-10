@@ -12,7 +12,8 @@ use crate::domain::OutputAs;
 use crate::tokens::TokenValue;
 
 use super::manifest::{
-    ActionAuth, ActionField, ActionGroup, ActionManifest, ActionOutput, ActionOutputType,
+    ActionAuth, ActionField, ActionGroup, ActionManifest, ActionMeta, ActionOutput,
+    ActionOutputType, ActionParam,
 };
 use super::shell::{resolve_shell, spawn_script, tail_chars};
 use super::{Action, ActionCtx, ActionError, ActionOutputs, parse_input};
@@ -66,34 +67,29 @@ pub struct RunCommandAction;
 
 impl Action for RunCommandAction {
     fn manifest(&self) -> ActionManifest {
-        ActionManifest {
-            id: "run_command",
-            title: "Run command",
-            group: ActionGroup::Builtin,
-            auth: ActionAuth::None,
-            credential_label_hint: None,
-            params_schema: params_schema(),
-            fields: vec![
-                ActionField::code("script", "Script").placeholder("pnpm test"),
-                ActionField::select("runIn", "Run in", &["project root", "worktree", "custom"]),
-                ActionField::chip("customPath", "Path")
-                    .placeholder("~/code/my-project")
-                    .show_when("runIn", "custom"),
-            ],
-            has_output_as: true,
-            outputs: vec![
-                ActionOutput::new("output", ActionOutputType::Text),
-                ActionOutput::new("exitCode", ActionOutputType::Number),
-            ],
-            idempotent: false,
-        }
+        ActionManifest::new(
+            ActionMeta {
+                id: "run_command",
+                title: "Run command",
+                group: ActionGroup::Builtin,
+                auth: ActionAuth::None,
+                credential_label_hint: None,
+                outputs: vec![
+                    ActionOutput::new("output", ActionOutputType::Text),
+                    ActionOutput::new("exitCode", ActionOutputType::Number),
+                ],
+                idempotent: false,
+            },
+            param_specs(),
+            Value::Bool(false),
+        )
     }
 
     fn execute<'a>(
         &'a self,
         params: &'a Value,
         ctx: &'a ActionCtx,
-    ) -> crate::engine::BoxFuture<'a, Result<ActionOutputs, ActionError>> {
+    ) -> mainframe_types::BoxFuture<'a, Result<ActionOutputs, ActionError>> {
         Box::pin(async move {
             let input: RunCommandInput = parse_input("run_command", params)?;
             if input.script.is_empty() {
@@ -190,11 +186,11 @@ fn format_output(stdout: &str, output_as: Option<OutputAs>) -> TokenValue {
     }
 }
 
-fn params_schema() -> Value {
-    json!({
-        "type": "object",
-        "properties": {
-            "script": {
+fn param_specs() -> Vec<ActionParam> {
+    vec![
+        ActionParam::field(
+            ActionField::code("script", "Script").placeholder("pnpm test"),
+            json!({
                 "type": "array",
                 "minItems": 1,
                 "items": {
@@ -213,14 +209,25 @@ fn params_schema() -> Value {
                         }
                     ]
                 }
-            },
-            "runIn": {"type": "string", "enum": ["project root", "worktree", "custom"]},
-            "customPath": {"type": "string"},
-            "outputAs": {"type": "string", "enum": ["text", "lines"]}
-        },
-        "required": ["script", "runIn"],
-        "additionalProperties": false
-    })
+            }),
+        )
+        .required(),
+        ActionParam::field(
+            ActionField::select("runIn", "Run in", &["project root", "worktree", "custom"]),
+            json!({"type": "string", "enum": ["project root", "worktree", "custom"]}),
+        )
+        .required(),
+        ActionParam::field(
+            ActionField::chip("customPath", "Path")
+                .placeholder("~/code/my-project")
+                .show_when("runIn", "custom"),
+            json!({"type": "string"}),
+        ),
+        ActionParam::hidden(
+            "outputAs",
+            json!({"type": "string", "enum": ["text", "lines"]}),
+        ),
+    ]
 }
 
 #[cfg(test)]

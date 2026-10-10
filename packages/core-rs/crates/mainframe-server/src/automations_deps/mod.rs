@@ -11,11 +11,11 @@ mod chat_port;
 use std::path::Path;
 use std::sync::Arc;
 
-use mainframe_automations::engine::BoxFuture;
 use mainframe_automations::ports::{ProjectRegistry, SystemClock};
 use mainframe_automations::{AutomationsConfig, AutomationsEngine, AutomationsPorts};
 use mainframe_chat::chat_manager::ChatManager;
 use mainframe_services::push::PushService;
+use mainframe_types::BoxFuture;
 use mainframe_types::events::DaemonEvent;
 use tokio::sync::broadcast;
 

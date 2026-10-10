@@ -16,7 +16,7 @@ use crate::domain::{
     AutomationCreateInput, AutomationDefinition, AutomationEventName, AutomationScope,
     EventTrigger, Step, Trigger,
 };
-use crate::engine::test_support::{CollectingSink, FakeClock, FakePorts, run_action_step};
+use crate::engine::test_support::{CollectingSink, FakePorts, fake_clock, run_action_step};
 use crate::engine::{Interpreter, InterpreterDeps, StepOutcome};
 use crate::ports::{AutomationEvent, CompletedStatus, CuratedEvent, EventSource};
 use crate::store::{AutomationDb, AutomationStore, RunStore, RunTriggerContext, RunTriggerKind};
@@ -55,7 +55,7 @@ async fn harness(ports: FakePorts, agent_owned: Option<Arc<dyn AgentOwnedChats>>
         store: runs.clone(),
         ports: Arc::new(ports),
         events: sink.clone(),
-        clock: Arc::new(FakeClock),
+        clock: fake_clock(),
         is_idempotent: None,
         agent_waits: None,
         on_finalized: Some(emitter.clone()),

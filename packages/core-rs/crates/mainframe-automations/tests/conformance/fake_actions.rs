@@ -18,8 +18,8 @@ use mainframe_automations::actions::{
     Action, ActionAuth, ActionCtx, ActionError, ActionGroup, ActionManifest, ActionOutputs,
     ActionRegistry,
 };
-use mainframe_automations::engine::BoxFuture;
 use mainframe_automations::tokens::TokenValue;
+use mainframe_types::BoxFuture;
 
 /// A mid-effect barrier. Open by default (pass-through); once `hold()`, the
 /// next `execute` blocks at the gate until `release()` — long enough for a

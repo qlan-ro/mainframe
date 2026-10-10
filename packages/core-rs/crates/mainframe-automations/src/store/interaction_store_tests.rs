@@ -142,7 +142,7 @@ async fn resolving_an_interaction_recomputes_wake_at_instead_of_clobbering_a_sib
         step_entry("ask", StepStatus::Waiting),
     );
     let mut agent_entry = step_entry("agent", StepStatus::Waiting);
-    agent_entry.kind = "ask_agent".to_string();
+    agent_entry.kind = super::StepKind::AskAgent;
     agent_entry.wake_at = Some(sibling_wake_at);
     checkpoint = with_step(checkpoint, "agent", agent_entry);
     checkpoint.wake_at = Some(sibling_wake_at);

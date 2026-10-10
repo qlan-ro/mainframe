@@ -4,7 +4,7 @@
 use serde_json::{Map, Value};
 
 use crate::domain::{AutomationFormField, FormFieldType};
-use crate::engine::expects::js_string;
+use crate::tokens::value::js_string;
 
 /// Validates an ask_me response against the form's fields; a field whose
 /// `showWhen` condition does not hold is skipped. Error strings cross the

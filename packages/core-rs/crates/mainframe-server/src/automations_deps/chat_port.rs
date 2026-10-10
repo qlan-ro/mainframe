@@ -3,9 +3,9 @@
 
 use std::sync::Arc;
 
-use mainframe_automations::engine::BoxFuture;
 use mainframe_chat::chat_manager::ChatManager;
 use mainframe_orchestration::last_assistant_text;
+use mainframe_types::BoxFuture;
 use mainframe_types::chat::NewChat;
 
 pub trait AgentChatPort: Send + Sync {

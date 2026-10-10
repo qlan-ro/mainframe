@@ -28,8 +28,7 @@ pub struct ActionCatalogEntry {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub credential_label_hint: Option<String>,
     pub params_schema: Value,
-    /// The editor's field schema — a sibling of `params_schema`, not a
-    /// translation of it (see the `manifest.rs` module doc).
+    /// The editor's field schema, projected with `params_schema` from the manifest.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub fields: Vec<ActionField>,
     #[serde(default)]

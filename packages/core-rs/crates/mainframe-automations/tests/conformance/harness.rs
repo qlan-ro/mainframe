@@ -23,7 +23,9 @@ use mainframe_automations::triggers::{WebhookDecision, WebhookHeaders};
 use mainframe_automations::{AutomationsConfig, AutomationsEngine, AutomationsPorts};
 
 pub use crate::fake_actions::{ActionRecorder, FakeActions, build_actions};
-pub use crate::fakes::{CollectingSink, FakeAgentPort, FakeClock, FakeNotifier, FixedProjects};
+pub use mainframe_automations::testkit::{
+    CollectingSink, FakeAgentPort, FakeClock, FakeNotifier, FixedProjects,
+};
 
 /// A single engine over a tempdir, with handles to every fake for assertions.
 pub struct Rig {
@@ -73,7 +75,7 @@ pub async fn build_engine(
             notifier,
             events: sink,
             projects: Arc::new(FixedProjects(root)),
-            clock: Arc::new(FakeClock),
+            clock: Arc::new(FakeClock::default()),
             event_source: None,
             registry: Some(actions.registry.clone()),
         },

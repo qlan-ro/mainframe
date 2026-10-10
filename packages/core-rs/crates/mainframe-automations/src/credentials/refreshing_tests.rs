@@ -4,26 +4,21 @@
 
 use std::sync::Arc;
 
-use chrono::{DateTime, FixedOffset};
+use chrono::DateTime;
 use tempfile::tempdir;
 use wiremock::matchers::{body_string_contains, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use crate::credentials::{CredentialKind, CredentialStore, Credentials, FileCredentialStore};
-use crate::ports::Clock;
+use crate::testkit::FakeClock;
 
 use super::RefreshingCredentialStore;
 
 const NOW_MS: i64 = 1_700_000_000_000;
 
-struct FixedClock(i64);
-
-impl Clock for FixedClock {
-    fn now(&self) -> DateTime<FixedOffset> {
-        DateTime::from_timestamp_millis(self.0)
-            .expect("valid instant")
-            .fixed_offset()
-    }
+fn now_clock() -> Arc<FakeClock> {
+    let now = DateTime::from_timestamp_millis(NOW_MS).unwrap();
+    Arc::new(FakeClock(now.fixed_offset()))
 }
 
 async fn inner_store_with(label: &str, creds: Credentials) -> Arc<FileCredentialStore> {
@@ -72,7 +67,7 @@ async fn refreshes_a_credential_expiring_within_the_skew_window() {
     let inner = inner_store_with("github", expiring_soon("old-refresh")).await;
     let store = RefreshingCredentialStore::with_token_url(
         inner.clone(),
-        Arc::new(FixedClock(NOW_MS)),
+        now_clock(),
         format!("{}/token", server.uri()),
         "test-client",
     );
@@ -102,7 +97,7 @@ async fn concurrent_get_refreshes_exactly_once() {
     let inner = inner_store_with("github", expiring_soon("old-refresh")).await;
     let store = Arc::new(RefreshingCredentialStore::with_token_url(
         inner,
-        Arc::new(FixedClock(NOW_MS)),
+        now_clock(),
         format!("{}/token", server.uri()),
         "test-client",
     ));
@@ -138,7 +133,7 @@ async fn refresh_failure_produces_an_actionable_error_naming_the_credential() {
     let inner = inner_store_with("github", expiring_soon("old-refresh")).await;
     let store = RefreshingCredentialStore::with_token_url(
         inner,
-        Arc::new(FixedClock(NOW_MS)),
+        now_clock(),
         format!("{}/token", server.uri()),
         "test-client",
     );
@@ -158,7 +153,7 @@ async fn a_pat_with_no_expiry_never_attempts_refresh() {
     let inner = inner_store_with("github", pat_with_no_expiry()).await;
     let store = RefreshingCredentialStore::with_token_url(
         inner,
-        Arc::new(FixedClock(NOW_MS)),
+        now_clock(),
         format!("{}/token", server.uri()),
         "test-client",
     );
@@ -177,7 +172,7 @@ async fn a_credential_expiring_well_outside_the_skew_window_is_left_alone() {
     let inner = inner_store_with("github", creds).await;
     let store = RefreshingCredentialStore::with_token_url(
         inner,
-        Arc::new(FixedClock(NOW_MS)),
+        now_clock(),
         format!("{}/token", server.uri()),
         "test-client",
     );
@@ -194,7 +189,7 @@ async fn a_missing_label_returns_none_without_attempting_refresh() {
     let inner = Arc::new(FileCredentialStore::load(dir.path().join("creds.json")).await);
     let store = RefreshingCredentialStore::with_token_url(
         inner,
-        Arc::new(FixedClock(NOW_MS)),
+        now_clock(),
         format!("{}/token", server.uri()),
         "test-client",
     );

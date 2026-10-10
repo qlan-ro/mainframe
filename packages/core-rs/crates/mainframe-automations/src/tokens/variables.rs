@@ -12,8 +12,9 @@
 use std::collections::HashMap;
 
 use crate::domain::{
-    AutomationDefinition, Step, TOKEN_STEP_CURRENT, TokenRef,
-    scope::{TokenInfo, body_scope, builtin_tokens, step_produces, trigger_tokens},
+    AutomationDefinition, TOKEN_STEP_CURRENT, TokenRef,
+    scope::{TokenInfo, builtin_tokens, trigger_tokens},
+    scoped_walk::walk_scoped,
     token::TokenSourceKind,
 };
 
@@ -247,24 +248,14 @@ fn target_for(info: &TokenInfo) -> NameTarget {
 }
 
 /// The names every step in a definition can address, from the same scope walk
-/// validation uses (`domain::validate::walk`): every block body is visited
-/// through `Step::child_bodies` and starts from `body_scope`, so `if` leaks
-/// both branches to later siblings, `repeat` adds `Current item`, and
-/// `repeat`/`loop`/`retry`/`parallel` keep their bodies' outputs inside.
+/// validation uses (`domain::scoped_walk::walk_scoped`), so a name resolves
+/// at run time exactly where the editor said it would.
 pub(crate) fn build_name_index(definition: &AutomationDefinition) -> NameIndex {
     let mut scope = builtin_tokens();
     scope.extend(trigger_tokens(&definition.triggers));
     let mut index = NameIndex::new();
-    walk(&definition.steps, &mut scope, &mut index);
-    index
-}
-
-fn walk(steps: &[Step], scope: &mut Vec<TokenInfo>, index: &mut NameIndex) {
-    for step in steps {
+    walk_scoped(&definition.steps, &mut scope, (), &mut |step, scope, ()| {
         index.insert(step.id().to_string(), build_variable_namespace(scope));
-        for body in step.child_bodies() {
-            walk(body, &mut body_scope(step, scope), index);
-        }
-        scope.extend(step_produces(step));
-    }
+    });
+    index
 }

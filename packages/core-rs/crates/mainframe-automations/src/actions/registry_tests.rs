@@ -3,9 +3,8 @@
 
 use std::collections::BTreeMap;
 
+use mainframe_types::BoxFuture;
 use serde_json::json;
-
-use crate::engine::BoxFuture;
 
 use super::manifest::{ActionAuth, ActionGroup, ActionManifest, ActionOutput, ActionOutputType};
 use super::registry::ActionRegistry;
@@ -109,46 +108,57 @@ fn unknown_id_is_an_error() {
     assert_eq!(err.to_string(), "unknown action 'nope.nothing'");
 }
 
-/// Cross-check: every built-in's manifest outputs match the frozen contract
-/// §5 table already encoded in `domain::catalog` (names AND order).
+/// Contract §5: every launch action's named outputs, in order, as the
+/// validator sees them. The manifests are the single source, so this pins
+/// the frozen table against accidental manifest edits.
 #[test]
-fn builtin_catalog_matches_the_contract_output_table() {
-    let mut registry = ActionRegistry::new();
-    super::register_builtin_actions(&mut registry).unwrap();
+fn launch_catalog_matches_the_contract_output_table() {
+    use crate::domain::catalog::action_outputs;
+    use crate::domain::scope::TokenType::{List, Number, Text};
 
-    let catalog = registry.catalog();
+    let mut registry = ActionRegistry::new();
+    super::register_all_actions(&mut registry).unwrap();
+    let ids: Vec<&str> = registry.catalog().iter().map(|m| m.id).collect();
     assert_eq!(
-        catalog.iter().map(|m| m.id).collect::<Vec<_>>(),
-        vec![
+        ids,
+        [
             "run_command",
             "files.append",
             "files.write",
             "files.read",
             "http.request",
+            "github.create_pr",
+            "github.list_prs",
+            "notion.add_row",
+            "ado.create_item",
         ]
     );
-    for manifest in &catalog {
-        let expected = crate::domain::catalog::action_outputs(manifest.id);
-        let actual: Vec<(&str, &str)> = manifest
-            .outputs
-            .iter()
-            .map(|o| {
-                (
-                    o.name.as_str(),
-                    match o.output_type {
-                        ActionOutputType::Text => "text",
-                        ActionOutputType::Number => "number",
-                        ActionOutputType::List => "list",
-                        ActionOutputType::Record => "record",
-                    },
-                )
-            })
+
+    let expected = [
+        ("run_command", vec![("output", Text), ("exitCode", Number)]),
+        ("files.append", vec![]),
+        ("files.write", vec![]),
+        ("files.read", vec![("content", Text)]),
+        ("http.request", vec![("status", Number), ("body", Text)]),
+        (
+            "github.create_pr",
+            vec![("prUrl", Text), ("prNumber", Number)],
+        ),
+        ("github.list_prs", vec![("prs", List)]),
+        ("notion.add_row", vec![("pageUrl", Text)]),
+        (
+            "ado.create_item",
+            vec![("workItemId", Number), ("url", Text)],
+        ),
+        ("mcp:server:tool", vec![("result", Text)]),
+        ("nope.nothing", vec![]),
+    ];
+    for (id, outputs) in expected {
+        let outputs: Vec<_> = outputs
+            .into_iter()
+            .map(|(name, token_type)| (name.to_string(), token_type))
             .collect();
-        let expected: Vec<(&str, &str)> = expected
-            .iter()
-            .map(|(name, ty)| (*name, ty.describe()))
-            .collect();
-        assert_eq!(actual, expected, "outputs drifted for '{}'", manifest.id);
+        assert_eq!(action_outputs(id), outputs, "outputs drifted for '{id}'");
     }
 }
 

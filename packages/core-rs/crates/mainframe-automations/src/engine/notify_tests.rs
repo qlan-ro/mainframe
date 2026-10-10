@@ -2,37 +2,19 @@
 //! checkpoint's agent steps) reach the Notifier; notifier failure is
 //! best-effort (logs, step still succeeds).
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use crate::domain::{AskAgentStep, AskMeStep, NotifyStep, RunActionStep, Step};
-use crate::ports::{AgentOutcome, Notification, Notifier, NotifyError};
+use crate::ports::AgentOutcome;
 use crate::store::{AutomationStore, RunStatus, StepStatus};
 
 use super::agent::AgentVerb;
 use super::agent_test_support::{FakeAgentPort, wait_for_run};
 use super::notify_verb::NotifyVerb;
+use crate::testkit::FakeNotifier;
+
 use super::test_support::{FakePorts, definition, harness, manual, notify_step, text, token};
 use super::{BoxFuture, Interpreter, StepOutcome, VerbContext, VerbPorts};
-
-#[derive(Default)]
-struct FakeNotifier {
-    notifications: Mutex<Vec<Notification>>,
-    fail: bool,
-}
-
-impl Notifier for FakeNotifier {
-    fn notify(&self, notification: Notification) -> BoxFuture<'_, Result<(), NotifyError>> {
-        self.notifications.lock().unwrap().push(notification);
-        let fail = self.fail;
-        Box::pin(async move {
-            if fail {
-                Err(NotifyError("push channel down".to_string()))
-            } else {
-                Ok(())
-            }
-        })
-    }
-}
 
 /// ask_agent and notify are both REAL; ask_me/run_action fall back.
 struct WiredPorts {
@@ -88,10 +70,11 @@ struct Rig {
 async fn rig(notifier_fails: bool) -> Rig {
     let h = harness().await;
     let port: Arc<FakeAgentPort> = Arc::new(FakeAgentPort::default());
-    let agent = AgentVerb::new(port.clone(), h.store.clone(), h.sink.clone());
-    let notifier = Arc::new(FakeNotifier {
-        fail: notifier_fails,
-        ..FakeNotifier::default()
+    let agent = AgentVerb::new(port.clone(), h.store.clone());
+    let notifier = Arc::new(if notifier_fails {
+        FakeNotifier::failing()
+    } else {
+        FakeNotifier::default()
     });
     let notify = Arc::new(NotifyVerb::new(
         h.store.clone(),
@@ -143,7 +126,7 @@ async fn notify_delivers_rendered_body_with_run_and_chat_links() {
     })
     .await;
 
-    let notifications = r.notifier.notifications.lock().unwrap();
+    let notifications = r.notifier.sent.lock().unwrap();
     assert_eq!(notifications.len(), 1);
     let notification = &notifications[0];
     assert_eq!(notification.title, "A");
@@ -170,7 +153,7 @@ async fn a_failing_notifier_never_fails_the_step() {
     let entry = &finished.checkpoint.steps["done"];
     assert_eq!(entry.status, StepStatus::Succeeded);
     assert_eq!(entry.outputs.as_ref().unwrap().len(), 0);
-    assert_eq!(r.notifier.notifications.lock().unwrap().len(), 1);
+    assert_eq!(r.notifier.sent.lock().unwrap().len(), 1);
 }
 
 #[tokio::test]
@@ -182,7 +165,7 @@ async fn notify_for_a_missing_run_fails_with_a_clear_error() {
         AutomationStore::new(h.db.clone()),
         notifier.clone(),
     );
-    let scope = crate::tokens::Scope::root(Arc::new(super::test_support::FakeClock));
+    let scope = crate::tokens::Scope::root(super::test_support::fake_clock());
     let names = crate::tokens::NameMap::new();
     let ctx = VerbContext {
         run_id: "missing-run",
@@ -200,5 +183,5 @@ async fn notify_for_a_missing_run_fails_with_a_clear_error() {
             error: "automation run not found: missing-run".to_string()
         }
     );
-    assert!(notifier.notifications.lock().unwrap().is_empty());
+    assert!(notifier.sent.lock().unwrap().is_empty());
 }
