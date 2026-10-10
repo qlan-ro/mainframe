@@ -87,15 +87,12 @@ impl ChatManager {
             &self_ref,
         );
 
-        let handoff_locks = Arc::new(super::handoff_locks::HandoffLocks::default());
         let teardown = Arc::new(crate::chat_teardown::ChatTeardown {
             active_chats: active_chats.clone(),
             messages: messages.clone(),
             permissions: permissions.clone(),
-            queued_refs: queued_refs.clone(),
             worktree_offers: collab.worktree_offers.clone(),
             event_handler: collab.event_handler.clone(),
-            handoff_locks: handoff_locks.clone(),
         });
 
         let offloader: Arc<dyn crate::idle_scanner::IdleOffloader> =
@@ -130,7 +127,7 @@ impl ChatManager {
             self_ref,
             history_cache,
             enricher,
-            handoff_locks,
+            handoff_locks: super::handoff_locks::HandoffLocks::default(),
             teardown,
         }
     }

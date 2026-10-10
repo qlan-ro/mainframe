@@ -163,7 +163,11 @@ async fn ac1_offloads_a_chat_idle_past_the_threshold() {
         mgr.active_chats.get("c1").is_none(),
         "the chat leaves the live-chat registry"
     );
-    assert!(mgr.worktree_offers_for_chat("c1").is_empty());
+    assert_eq!(
+        mgr.worktree_offers_for_chat("c1").len(),
+        1,
+        "an offloaded chat keeps its worktree offers"
+    );
     assert_eq!(offloaded_events(&deps), vec!["c1".to_string()]);
 }
 

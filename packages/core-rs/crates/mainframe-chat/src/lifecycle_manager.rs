@@ -656,6 +656,8 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         }
     }
 
+    /// Stops the chat's work and marks it archived. The in-memory per-chat
+    /// state is dropped afterwards by the facade's `ChatTeardown`.
     pub async fn archive_chat(&self, chat_id: &str, delete_worktree: bool) {
         let cell = self.get_active(chat_id);
         let session = cell
@@ -724,15 +726,6 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             self.deps.remove_worktree(project_path, wt, branch).await;
         }
 
-        self.active_chats.remove(chat_id);
-        self.messages
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .release(chat_id);
-        self.permissions
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clear(chat_id);
         self.deps.attachment_delete_chat(chat_id).await;
         self.deps.chats_update(
             chat_id,
@@ -769,6 +762,8 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         cell.lock().unwrap_or_else(|e| e.into_inner()).session = None;
     }
 
+    /// Stops the chat's session and marks it ended. The in-memory per-chat
+    /// state is dropped afterwards by the facade's `ChatTeardown`.
     pub async fn end_chat(&self, chat_id: &str) {
         let Some(cell) = self.get_active(chat_id) else {
             return;
@@ -797,13 +792,6 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
                 ..Default::default()
             },
         );
-        self.active_chats.remove(chat_id);
-        // The cache entry stays (an ended chat can still be read), but it is
-        // no longer registry-held, so it becomes evictable like any cold read.
-        self.messages
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .unpin(chat_id);
         self.deps.emit_event(DaemonEvent::ChatEnded {
             chat_id: chat_id.to_string(),
         });

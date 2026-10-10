@@ -30,6 +30,7 @@ mod resume_overlay;
 mod resume_snapshot;
 mod segment_fake;
 mod side_chat;
+mod teardown;
 
 // ── fake ChatManagerDeps ─────────────────────────────────────────────────────
 
@@ -2054,69 +2055,6 @@ async fn discard_chat_stops_the_process_deletes_the_row_and_removes_the_scratch_
         deps.chats_get("c1").is_none(),
         "the row must be deleted (a subsequent GET 404s)"
     );
-}
-
-#[tokio::test]
-async fn discard_chat_forgets_a_pending_worktree_offer_and_queued_ref() {
-    let mut chat = test_chat("c1");
-    chat.temporary = true;
-    let deps = StoreDeps::with_chats(vec![chat.clone()]);
-    let mgr = ChatManager::new(deps);
-    seed_active(&mgr, "c1", chat, RecSession::new("c1", false, true));
-    mgr.worktree_offers.seed_pending_for_test("c1", "/tmp/wt");
-    mgr.worktree_offers
-        .seed_pending_for_test("c2", "/tmp/other");
-    mgr.queued_refs.lock().unwrap().push(QueuedMessageRef {
-        message_id: "m1".to_string(),
-        chat_id: "c1".to_string(),
-        uuid: "u1".to_string(),
-        content: "queued".to_string(),
-        attachment_ids: None,
-        timestamp: String::new(),
-    });
-    assert_eq!(mgr.worktree_offers_for_chat("c1").len(), 1);
-
-    mgr.discard_chat("c1").await.unwrap();
-
-    assert!(mgr.worktree_offers_for_chat("c1").is_empty());
-    assert_eq!(mgr.worktree_offers_for_chat("c2").len(), 1);
-    assert!(mgr.get_queued_for_chat("c1").is_empty());
-    assert!(mgr.get_active("c1").is_none());
-}
-
-#[tokio::test]
-async fn archive_and_end_keep_their_message_cache_contracts_and_forget_offers() {
-    for end in [false, true] {
-        let deps = StoreDeps::with_chats(vec![test_chat("c1")]);
-        let mgr = ChatManager::new(deps);
-        seed_active(
-            &mgr,
-            "c1",
-            test_chat("c1"),
-            RecSession::new("c1", false, true),
-        );
-        mgr.messages.lock().unwrap().set("c1", Vec::new());
-        mgr.worktree_offers.seed_pending_for_test("c1", "/tmp/wt");
-        mgr.queued_refs.lock().unwrap().push(QueuedMessageRef {
-            message_id: "m1".to_string(),
-            chat_id: "c1".to_string(),
-            uuid: "u1".to_string(),
-            content: "queued".to_string(),
-            attachment_ids: None,
-            timestamp: String::new(),
-        });
-
-        if end {
-            mgr.end_chat("c1").await;
-        } else {
-            mgr.archive_chat("c1", false).await;
-        }
-
-        assert!(mgr.get_active("c1").is_none());
-        assert!(mgr.worktree_offers_for_chat("c1").is_empty());
-        assert!(mgr.get_queued_for_chat("c1").is_empty());
-        assert_eq!(mgr.messages.lock().unwrap().get("c1").is_some(), end);
-    }
 }
 
 #[tokio::test]

@@ -104,8 +104,8 @@ impl<L: LifecycleManagerDeps + 'static, E: EventHandlerDeps + 'static> ChatOfflo
         self.lifecycle.orchestration().revoke(chat_id);
 
         // Step 4: drop the registry cell, the cache entry, and per-chat
-        // bookkeeping. Do NOT emit
-        // `ChatEnded` here (Design): that would tell the chat surface a
+        // bookkeeping (see `TeardownMode::Offload` for what survives). Do NOT
+        // emit `ChatEnded` here (Design): that would tell the chat surface a
         // possibly-on-screen chat's facade session ended.
         self.teardown.clear(chat_id, TeardownMode::Offload);
 
