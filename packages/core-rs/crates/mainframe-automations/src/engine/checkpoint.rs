@@ -2,13 +2,11 @@
 
 use std::sync::Arc;
 
-use serde_json::{Map, Value};
+use serde_json::Value;
 
 use crate::domain::TOKEN_STEP_TRIGGER;
 use crate::ports::Clock;
-use crate::store::{
-    AutomationCheckpoint, CheckpointStep, RunTriggerKind, StepStatus, epoch_ms_now,
-};
+use crate::store::{AutomationCheckpoint, RunTriggerKind};
 use crate::tokens::{Scope, TokenValue};
 
 /// Per-scope walk context: `ref_suffix` turns a plain step id into its
@@ -23,7 +21,7 @@ pub(crate) struct WalkFrame {
 impl WalkFrame {
     /// One Repeat iteration deeper: `#<i>` chains onto the suffix and the
     /// item joins the `current` stack.
-    pub fn iteration(&self, index: usize, item: TokenValue) -> WalkFrame {
+    pub(crate) fn iteration(&self, index: usize, item: TokenValue) -> WalkFrame {
         let mut current_items = self.current_items.clone();
         current_items.push(item);
         WalkFrame {
@@ -43,116 +41,12 @@ impl WalkFrame {
     /// but the `current` stack is left alone: a condition loop has no item, and
     /// pushing a placeholder would make `⟨current⟩` resolve inside it — either
     /// to nonsense, or shadowing the enclosing Repeat's real item.
-    pub fn pass(&self, index: usize) -> WalkFrame {
+    pub(crate) fn pass(&self, index: usize) -> WalkFrame {
         WalkFrame {
             ref_suffix: format!("{}#{index}", self.ref_suffix),
             current_items: self.current_items.clone(),
         }
     }
-}
-
-/// Writes one stepRef entry. `outputs` land only on `succeeded` (a failed
-/// re-run must not clobber earlier outputs); `startedAt` survives
-/// transitions; `chatId`/`interactionId` are preserved — the running→waiting
-/// rewrite must not drop what a verb stamped between commits. `wake_at` is
-/// the caller's to set explicitly (only `park_step`/the agent verb ever pass
-/// one) — every other transition clears it.
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn set_step(
-    checkpoint: &mut AutomationCheckpoint,
-    step_ref: &str,
-    step_id: &str,
-    kind: &str,
-    status: StepStatus,
-    outputs: Option<Map<String, Value>>,
-    error: Option<String>,
-    wake_at: Option<i64>,
-) {
-    let now = epoch_ms_now();
-    let existing = checkpoint.steps.get(step_ref);
-    let terminal = matches!(
-        status,
-        StepStatus::Succeeded | StepStatus::Failed | StepStatus::Skipped
-    );
-    let entry = CheckpointStep {
-        step_id: step_id.to_string(),
-        kind: kind.to_string(),
-        status,
-        outputs: if status == StepStatus::Succeeded {
-            outputs
-        } else {
-            existing.and_then(|e| e.outputs.clone())
-        },
-        error,
-        started_at: existing.and_then(|e| e.started_at).or(Some(now)),
-        finished_at: terminal.then_some(now),
-        chat_id: existing.and_then(|e| e.chat_id.clone()),
-        interaction_id: existing.and_then(|e| e.interaction_id.clone()),
-        wake_at,
-    };
-    checkpoint.steps.insert(step_ref.to_string(), entry);
-}
-
-/// The walk's wait commit: a verb may park AND settle its entry
-/// before the walk's own commit runs (a fast agent completion) — a terminal
-/// entry must not be re-parked, nor its wakeAt re-armed.
-///
-/// No fallback re-reads an existing `wake_at` here: `walk_frame` already
-/// returns `Parked` for any step whose entry is already `Waiting`, without
-/// ever reaching `run_leaf`/dispatch — so `park_step` only ever sees a step
-/// transitioning INTO `Waiting` for the first time, carrying dispatch's own
-/// freshly-computed `wake_at` (or `None`) as the caller's argument.
-pub(crate) fn park_step(
-    checkpoint: &mut AutomationCheckpoint,
-    step_ref: &str,
-    step_id: &str,
-    kind: &str,
-    wake_at: Option<i64>,
-) {
-    let settled = checkpoint.steps.get(step_ref).is_some_and(|entry| {
-        matches!(
-            entry.status,
-            StepStatus::Succeeded | StepStatus::Failed | StepStatus::Skipped
-        )
-    });
-    if settled {
-        return;
-    }
-    set_step(
-        checkpoint,
-        step_ref,
-        step_id,
-        kind,
-        StepStatus::Waiting,
-        None,
-        None,
-        wake_at,
-    );
-    recompute_wake_at(checkpoint);
-}
-
-/// Fails an EXISTING entry in place (the stale-`running` restart policy) —
-/// unlike `set_step`, a missing entry is left missing.
-pub(crate) fn fail_step_entry(checkpoint: &mut AutomationCheckpoint, step_ref: &str, error: &str) {
-    if let Some(entry) = checkpoint.steps.get_mut(step_ref) {
-        entry.status = StepStatus::Failed;
-        entry.error = Some(error.to_string());
-        entry.finished_at = Some(epoch_ms_now());
-        entry.wake_at = None;
-    }
-}
-
-/// The run-level `wake_at` is only the sweep's cheap pre-filter (skip a whole
-/// run without inspecting every entry) — recomputed as the minimum across
-/// every still-`waiting` entry so N concurrent parks each keep their own
-/// deadline instead of one clobbering the others.
-pub(crate) fn recompute_wake_at(checkpoint: &mut AutomationCheckpoint) {
-    checkpoint.wake_at = checkpoint
-        .steps
-        .values()
-        .filter(|entry| entry.status == StepStatus::Waiting)
-        .filter_map(|entry| entry.wake_at)
-        .min();
 }
 
 /// Builds the frame's flat token scope: trigger payload keys, every plain-ref
