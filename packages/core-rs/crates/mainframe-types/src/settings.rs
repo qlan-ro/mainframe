@@ -18,6 +18,17 @@ pub enum ExecutionMode {
     Yolo,
 }
 
+impl ExecutionMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Default => "default",
+            Self::AcceptEdits => "acceptEdits",
+            Self::Auto => "auto",
+            Self::Yolo => "yolo",
+        }
+    }
+}
+
 /// `PermissionMode = ExecutionMode | 'plan'` — flattened into one enum since the
 /// TS union has no discriminant beyond its own string value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -237,6 +248,19 @@ mod tests {
             serde_json::to_string(&ExecutionMode::Auto).unwrap(),
             "\"auto\""
         );
+    }
+
+    #[test]
+    fn execution_mode_strings_match_persisted_names() {
+        for (mode, expected) in [
+            (ExecutionMode::Default, "default"),
+            (ExecutionMode::AcceptEdits, "acceptEdits"),
+            (ExecutionMode::Auto, "auto"),
+            (ExecutionMode::Yolo, "yolo"),
+        ] {
+            assert_eq!(mode.as_str(), expected);
+            assert_eq!(serde_json::to_value(mode).unwrap(), expected);
+        }
     }
 
     #[test]
