@@ -134,7 +134,9 @@ where
     match serde_json::from_value::<T>(Value::String(raw.clone())) {
         Ok(value) => {
             if !value.is_known() {
-                tracing::warn!(
+                // Outside tools write such values on purpose; every list read
+                // would otherwise repeat a warning per todo.
+                tracing::debug!(
                     todo_id,
                     column,
                     raw,
