@@ -17,3 +17,15 @@ export function useSessionItems(): SessionItem[] {
 export function findSession(items: readonly SessionItem[], chatId: string): SessionItem | undefined {
   return items.find((it) => (it.remoteId ?? it.id) === chatId);
 }
+
+/**
+ * A chat's title by its daemon id, or undefined when the chat isn't loaded or
+ * has no title yet. Selects the string alone, so a caller re-renders only when
+ * that title changes, not on every session-list update.
+ */
+export function useChatTitle(chatId: string): string | undefined {
+  return useAuiState((s) => {
+    const title = s.threads.threadItems.find((it) => (it.remoteId ?? it.id) === chatId)?.title?.trim();
+    return title || undefined;
+  });
+}

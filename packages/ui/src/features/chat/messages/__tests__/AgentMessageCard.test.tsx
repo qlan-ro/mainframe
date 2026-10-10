@@ -1,13 +1,20 @@
 /**
- * AgentMessageCard — pure props component; react-markdown renders in jsdom
- * without mocking (see ReviewCommentCard.test.tsx).
+ * AgentMessageCard — react-markdown renders in jsdom without mocking (see
+ * ReviewCommentCard.test.tsx); only the chat-title lookup, which reads the aui
+ * thread list, is stubbed.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { AgentMessageCard } from '../AgentMessageCard';
 
+const TITLES: Record<string, string> = { parent_1: 'Fix the login flow', c1: 'Review PR 12853' };
+
+vi.mock('../../orchestration/use-session-items', () => ({
+  useChatTitle: (chatId: string) => TITLES[chatId],
+}));
+
 describe('AgentMessageCard', () => {
-  it('names the sending chat and renders the body', () => {
+  it('names the sending chat by its id while it has no known title, and renders the body', () => {
     render(
       <AgentMessageCard
         messageId="m1"
@@ -17,6 +24,30 @@ describe('AgentMessageCard', () => {
     const card = screen.getByTestId('chat-agent-message-card-m1');
     expect(card).toHaveTextContent('Started by chat chat_1');
     expect(screen.getByText('this').tagName).toBe('STRONG');
+  });
+
+  it('names the sending chat by its title when one is known', () => {
+    render(
+      <AgentMessageCard
+        messageId="m4"
+        parsed={{ type: 'agent-message', message: { fromChatId: 'parent_1', kind: 'task', body: 'Review it' } }}
+      />,
+    );
+    const card = screen.getByTestId('chat-agent-message-card-m4');
+    expect(card).toHaveTextContent('Task from Fix the login flow');
+    expect(card).not.toHaveTextContent('parent_1');
+  });
+
+  it('is full width rather than end-aligned like the user bubble', () => {
+    render(
+      <AgentMessageCard
+        messageId="m5"
+        parsed={{ type: 'task-results', results: [{ taskId: 't9', chatId: 'c1', status: 'completed', body: 'Ok' }] }}
+      />,
+    );
+    const card = screen.getByTestId('chat-agent-message-card-m5');
+    expect(card).toHaveClass('w-full');
+    expect(card).not.toHaveClass('self-end');
   });
 
   it('renders a dropped-send notice without attributing it to a sender', () => {
@@ -50,8 +81,11 @@ describe('AgentMessageCard', () => {
         }}
       />,
     );
-    expect(screen.getByTestId('chat-task-result-card-t1')).toHaveTextContent('Task result · completed · chat c1');
+    expect(screen.getByTestId('chat-task-result-card-t1')).toHaveTextContent(
+      'Task result · completed · Review PR 12853',
+    );
+    expect(screen.getByTestId('chat-task-result-card-t1')).not.toHaveTextContent('c1');
     expect(screen.getByTestId('chat-task-result-card-t1')).toHaveTextContent('Done');
-    expect(screen.getByTestId('chat-task-result-card-t2')).toHaveTextContent('waiting for children');
+    expect(screen.getByTestId('chat-task-result-card-t2')).toHaveTextContent('waiting for children · chat c2');
   });
 });

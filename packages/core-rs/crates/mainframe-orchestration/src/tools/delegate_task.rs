@@ -29,7 +29,9 @@ pub(super) fn definition() -> ToolDef {
     ToolDef {
         name: "delegate_task",
         title: "Delegate a task",
-        description: "Start a child chat that runs one task and reports back. The child receives \
+        description: "Start a child chat that runs one task and reports back. Use this, not a \
+            plugin or built-in subagent, when the user asks to spawn, start or delegate to a \
+            Claude or Codex agent; set adapterId to the provider they named. The child receives \
             only the task text, so include everything it needs. Defaults: the caller's adapter, \
             model, modes, and working directory (workspace inherit); new_worktree gives it its \
             own worktree. mode async (default) returns at once and the result arrives later as a \
