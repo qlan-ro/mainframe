@@ -1,5 +1,16 @@
 # @qlan-ro/mainframe-app-tauri
 
+## 2.2.9
+
+### Patch Changes
+
+- [#784](https://github.com/qlan-ro/mainframe/pull/784) [`4f0046b`](https://github.com/qlan-ro/mainframe/commit/4f0046b62124b8b859a3f06623d6eb76ca72dc3a) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Codex's Default permission mode no longer asks before every command. Reads and searches now run without a prompt inside a read-only sandbox, while edits, commands that write, and network access still ask first. Before, Default asked about almost every command and "Accept for session" rarely stuck, because it only remembers that exact command. Delegated tasks also inherit the parent chat's permission mode unless the agent deliberately picks a stricter one, so a task started from an Unattended chat no longer floods you with approval prompts.
+
+- [#786](https://github.com/qlan-ro/mainframe/pull/786) [`d3e4516`](https://github.com/qlan-ro/mainframe/commit/d3e4516eeebefcb98b82fbec3efd1375ee6b5743) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Asking an agent to "spawn a Codex agent" or "ask Claude to" do something now starts a Mainframe task you can see, instead of a Claude Code plugin's hidden subagent. Delegated task results and other messages from agents now show as full-width cards on the left, like assistant replies, not on the right like your own messages. Their headers show the chat's title instead of a raw chat id. A delegated task's "Delegated by" link no longer reads "Untitled session" for a parent chat started in the same app session.
+
+- Updated dependencies [[`4f0046b`](https://github.com/qlan-ro/mainframe/commit/4f0046b62124b8b859a3f06623d6eb76ca72dc3a), [`d3e4516`](https://github.com/qlan-ro/mainframe/commit/d3e4516eeebefcb98b82fbec3efd1375ee6b5743)]:
+  - @qlan-ro/mainframe-ui@2.8.1
+
 ## 2.2.8
 
 ### Patch Changes
