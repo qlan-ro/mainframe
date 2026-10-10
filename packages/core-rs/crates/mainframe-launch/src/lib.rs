@@ -22,7 +22,7 @@ pub use expand_variables::expand_variables;
 pub use launch_config::parse_launch_config;
 pub use launch_manager::{LaunchError, LaunchManager, LaunchTimings, clean_env};
 pub use launch_process_state::{LaunchOutputEntry, LaunchProcessState};
-pub use launch_registry::LaunchRegistry;
+pub use launch_registry::{LaunchRegistry, shutdown_launches_and_tunnels};
 pub use port_tunnel_registry::{
     PORT_TUNNEL_LABEL_PREFIX, PortTunnelEntryInfo, PortTunnelRegistry, PortTunnelScope,
     port_tunnel_label,

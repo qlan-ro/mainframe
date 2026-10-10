@@ -105,8 +105,8 @@ impl PortTunnelRegistry {
             StartAction::Existing(url) => Ok(url),
             StartAction::Wait(mut waiters) => await_outcome(&mut waiters).await,
             StartAction::Spawn(waiters) => {
-                let outcome =
-                    self.settle(port, &label, self.manager.start(port, &label, None).await);
+                let started = self.manager.start(port, &label, None).await;
+                let outcome = self.settle(port, &label, started).await;
                 let _ = waiters.send(Some(outcome.clone()));
                 outcome
             }
@@ -137,42 +137,44 @@ impl PortTunnelRegistry {
         StartAction::Spawn(waiters)
     }
 
-    fn settle(&self, port: u16, label: &str, result: StartOutcome) -> StartOutcome {
-        let mut inner = self.lock();
-        let url = match result {
-            Ok(url) => url,
-            Err(err) => {
-                inner.remove(&port);
-                return Err(err);
-            }
-        };
-        let Some(Entry::Starting {
-            scope,
-            cancel_requested,
-            ..
-        }) = inner.remove(&port)
-        else {
-            return Ok(url);
-        };
-        if cancel_requested {
-            drop(inner);
-            self.manager.stop(label);
-            return Err(CANCELLED.to_string());
-        }
-        inner.insert(
-            port,
-            Entry::Ready {
+    async fn settle(&self, port: u16, label: &str, result: StartOutcome) -> StartOutcome {
+        {
+            let mut inner = self.lock();
+            let url = match result {
+                Ok(url) => url,
+                Err(err) => {
+                    inner.remove(&port);
+                    return Err(err);
+                }
+            };
+            let Some(Entry::Starting {
                 scope,
-                url: url.clone(),
-            },
-        );
-        Ok(url)
+                cancel_requested,
+                ..
+            }) = inner.get(&port)
+            else {
+                return Ok(url);
+            };
+            if !cancel_requested {
+                let scope = scope.clone();
+                inner.insert(
+                    port,
+                    Entry::Ready {
+                        scope,
+                        url: url.clone(),
+                    },
+                );
+                return Ok(url);
+            }
+        }
+        self.manager.stop(label).await;
+        self.lock().remove(&port);
+        Err(CANCELLED.to_string())
     }
 
     /// Idempotent. Stopping a tunnel that is still starting is recorded as a
-    /// cancellation and applied the moment the start resolves — a mid-start
-    /// cloudflared is invisible to `TunnelManager::stop`.
-    pub fn stop(&self, port: u16) {
+    /// cancellation and applied when the shared start resolves.
+    pub async fn stop(&self, port: u16) {
         let removed = {
             let mut inner = self.lock();
             if let Some(Entry::Starting {
@@ -186,7 +188,7 @@ impl PortTunnelRegistry {
             }
         };
         if removed.is_some() {
-            self.manager.stop(&port_tunnel_label(port));
+            self.manager.stop(&port_tunnel_label(port)).await;
         }
     }
 

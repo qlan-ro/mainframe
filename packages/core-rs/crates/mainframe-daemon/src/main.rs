@@ -18,6 +18,7 @@ mod e2e_mock;
 mod github_issues_port;
 mod plugin_host_db;
 mod quota_store;
+mod shutdown;
 mod startup;
 
 #[cfg(test)]
@@ -54,7 +55,8 @@ use mainframe_claude_workflows::{bridge::spawn_workflow_run_bridge, store::Claud
 use mainframe_launch::{
     BroadcastFn, ChildRegistryPort, FileChildRegistry, LaunchRegistry, PortTunnelRegistry,
     ResolveCloudflaredDeps, TunnelManager, TunnelManagerOptions, TunnelStartOptions,
-    default_sweep_deps, resolve_cloudflared_path, sweep_stray_children,
+    default_sweep_deps, resolve_cloudflared_path, shutdown_launches_and_tunnels,
+    sweep_stray_children,
 };
 use mainframe_lsp::{LspManager, LspRegistry};
 use mainframe_plugins::manager::PluginManagerDeps;
@@ -251,7 +253,7 @@ async fn run_daemon() {
         std::panic::set_hook(Box::new(move |info| {
             tracing::error!(panic = %info, "Uncaught exception");
             panic_adapters.kill_all();
-            panic_tunnel.stop_all();
+            panic_tunnel.signal_all_on_panic();
             default_hook(info);
         }));
     }
@@ -538,34 +540,30 @@ async fn run_daemon() {
 
     info!("Daemon ready");
 
-    let service = app.into_make_service_with_connect_info::<SocketAddr>();
-    if let Err(err) = axum::serve(listener, service)
-        .with_graceful_shutdown(shutdown_signal())
-        .await
-    {
+    let server_result = shutdown::serve(listener, app, shutdown_signal(), async {
+        // Shut down child owners concurrently within the desktop shell's quit deadline.
+        info!("Shutting down...");
+        if let Some(automations) = &automations {
+            automations.stop();
+        }
+        // Credentials are in memory only and the CLIs die with the daemon; revoke
+        // first so no call made during the drain outlives it.
+        orchestration.credentials().revoke_all();
+        orchestration_events.abort();
+        chats.dispose();
+        plugin_manager.unload_all();
+        adapters.kill_all();
+        tokio::join!(
+            shutdown_launches_and_tunnels(&launch_registry, &tunnel_manager),
+            lsp_manager.shutdown_all(),
+        );
+        liveness.stop();
+    })
+    .await;
+    if let Err(err) = server_result {
         tracing::error!(%err, "daemon server exited with error");
         flush_and_exit(1);
     }
-
-    // Ordered shutdown: automations.stop() → credential revoke → chats.dispose →
-    // plugins.unload_all → adapters.kill_all → launch.stop_all → tunnel.stop_all →
-    // liveness.stop → lsp.shutdown_all → db close. The HTTP server is already
-    // stopped (axum::serve returned above).
-    info!("Shutting down...");
-    if let Some(automations) = &automations {
-        automations.stop();
-    }
-    // Credentials are in memory only and the CLIs die with the daemon; revoke
-    // first so no call made during the drain outlives it.
-    orchestration.credentials().revoke_all();
-    orchestration_events.abort();
-    chats.dispose();
-    plugin_manager.unload_all();
-    adapters.kill_all();
-    launch_registry.stop_all().await;
-    tunnel_manager.stop_all();
-    liveness.stop();
-    lsp_manager.shutdown_all().await;
     // `db` (the actor thread) closes when the last `Db` handle drops at exit.
 }
 

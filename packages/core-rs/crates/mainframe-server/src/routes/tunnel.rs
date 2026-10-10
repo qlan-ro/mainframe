@@ -111,7 +111,7 @@ async fn stop(State(ctx): State<Arc<AppCtx>>, body: Option<Json<Value>>) -> Resp
         Err(error) => return fail(StatusCode::BAD_REQUEST, error),
     };
 
-    manager.stop("daemon");
+    manager.stop("daemon").await;
     ctx.set_tunnel_url(None);
 
     // TODO: `clearConfig` should also clear the persisted token/url. `save_config`

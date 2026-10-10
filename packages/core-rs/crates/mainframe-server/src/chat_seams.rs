@@ -158,7 +158,7 @@ impl ScopeTunnelStopper for RegistryScopeTunnelStopper {
                     .belongs_to_scope(project_id, &chat_id, effective_path)
                     .await
                 {
-                    self.registry.stop(port);
+                    self.registry.stop(port).await;
                 }
             }
         }))

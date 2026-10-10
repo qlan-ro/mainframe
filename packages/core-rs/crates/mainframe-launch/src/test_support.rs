@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use mainframe_types::events::DaemonEvent;
 
-use crate::tunnel_manager::BroadcastFn;
+use crate::tunnel_manager::{BroadcastFn, SignalFn, kill_signal};
 
 /// A broadcast sink that keeps every event for later assertions.
 pub(crate) fn recorder() -> (BroadcastFn, Arc<Mutex<Vec<DaemonEvent>>>) {
@@ -17,6 +17,22 @@ pub(crate) fn recorder() -> (BroadcastFn, Arc<Mutex<Vec<DaemonEvent>>>) {
     let sink = events.clone();
     let f: BroadcastFn = Arc::new(move |ev| sink.lock().unwrap().push(ev));
     (f, events)
+}
+
+/// Recorded `(pid, kill flag)` pairs, in delivery order.
+pub(crate) type SignalLog = Arc<Mutex<Vec<(u32, &'static str)>>>;
+
+/// A [`SignalFn`] that records every signal, then really delivers it so the
+/// child under test behaves as it would in production.
+pub(crate) fn recording_signal() -> (SignalFn, SignalLog) {
+    let log: SignalLog = Arc::new(Mutex::new(Vec::new()));
+    let sink = log.clone();
+    let deliver = kill_signal();
+    let signal: SignalFn = Arc::new(move |pid, flag| {
+        sink.lock().unwrap().push((pid, flag));
+        deliver(pid, flag)
+    });
+    (signal, log)
 }
 
 /// Writes a `/bin/sh` stand-in and returns its path, proven executable.
@@ -71,9 +87,44 @@ pub(crate) fn write_chatty_cloudflared(dir: &Path) -> String {
 }
 
 /// Only sleeps — never prints a URL, so the tunnel stays mid-start (in
-/// `pending`, not promoted into `tunnels`).
+/// `live`, not promoted into `tunnels`).
 pub(crate) fn write_silent_cloudflared(dir: &Path) -> String {
     write_script(dir, "silent-cloudflared.sh", "sleep 100\n")
+}
+
+/// Ignores SIGTERM and never prints a URL: a mid-start tunnel only SIGKILL
+/// stops. Creates `trapped` once the trap is installed (see [`wait_until_trapped`]).
+pub(crate) fn write_term_ignoring_cloudflared(dir: &Path) -> String {
+    write_script(
+        dir,
+        "term-ignoring-cloudflared.sh",
+        &format!(
+            "trap '' TERM\ntouch {}\nexec sleep 100\n",
+            dir.join("trapped").to_string_lossy()
+        ),
+    )
+}
+
+/// Waits for a [`write_term_ignoring_cloudflared`] child to install its trap,
+/// so a SIGTERM sent afterwards cannot kill it by default disposition.
+pub(crate) async fn wait_until_trapped(dir: &Path) {
+    let marker = dir.join("trapped");
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while !marker.exists() {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("the stand-in should install its TERM trap");
+}
+
+/// Becomes ready like [`write_fake_cloudflared`], but ignores SIGTERM.
+pub(crate) fn write_ready_term_ignoring_cloudflared(dir: &Path) -> String {
+    write_script(
+        dir,
+        "ready-term-ignoring-cloudflared.sh",
+        "trap '' TERM\necho 'https://abc-def.trycloudflare.com'\necho 'Registered tunnel connection'\nexec sleep 100\n",
+    )
 }
 
 /// Like [`write_fake_cloudflared`], but appends one line to `spawns.log` and

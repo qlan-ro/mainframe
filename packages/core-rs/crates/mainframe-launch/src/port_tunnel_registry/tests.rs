@@ -79,7 +79,7 @@ async fn a_ready_entry_the_manager_lost_is_restarted() {
     let (manager, registry) = registry_with(write_counting_cloudflared(dir.path()));
 
     let first = registry.start(5173, scope("chat-a")).await.unwrap();
-    manager.stop(&port_tunnel_label(5173)); // behind the registry's back
+    manager.stop(&port_tunnel_label(5173)).await; // behind the registry's back
     let second = registry.start(5173, scope("chat-a")).await.unwrap();
 
     assert_eq!(first, "https://abc-def1.trycloudflare.com");
@@ -95,7 +95,7 @@ async fn list_prunes_a_ready_entry_the_manager_lost() {
     registry.start(5173, scope("chat-a")).await.unwrap();
     assert_eq!(registry.list().len(), 1);
 
-    manager.stop(&port_tunnel_label(5173));
+    manager.stop(&port_tunnel_label(5173)).await;
 
     assert_eq!(registry.list(), vec![]);
     assert_eq!(registry.entries_for_project("proj-1"), vec![]);
@@ -138,10 +138,10 @@ async fn stopping_an_unknown_or_already_stopped_port_is_a_no_op() {
     let dir = tempfile::tempdir().unwrap();
     let (_manager, registry) = registry_with(write_counting_cloudflared(dir.path()));
 
-    registry.stop(5173);
+    registry.stop(5173).await;
     registry.start(5173, scope("chat-a")).await.unwrap();
-    registry.stop(5173);
-    registry.stop(5173);
+    registry.stop(5173).await;
+    registry.stop(5173).await;
 
     assert_eq!(registry.list(), vec![]);
 }
@@ -153,7 +153,7 @@ async fn stopping_a_mid_start_tunnel_cancels_it_once_it_resolves() {
 
     let mut starting = pin!(registry.start(5173, scope("chat-a")));
     enter_mid_start(starting.as_mut()).await;
-    registry.stop(5173);
+    registry.stop(5173).await;
 
     assert_eq!(starting.await, Err("Tunnel start cancelled".to_string()));
     assert_eq!(manager.get_url(&port_tunnel_label(5173)), None);
@@ -211,4 +211,42 @@ async fn a_failed_start_leaves_no_entry_behind() {
 
     assert!(registry.start(5173, scope("chat-a")).await.is_err());
     assert_eq!(registry.list(), vec![]);
+}
+
+#[tokio::test]
+async fn starts_during_cancelled_child_teardown_share_the_cancelled_outcome() {
+    use crate::test_support::{recording_signal, write_ready_term_ignoring_cloudflared};
+    let dir = tempfile::tempdir().unwrap();
+    let mut manager = TunnelManager::with_config(
+        None,
+        TunnelConfig {
+            cloudflared_bin: write_ready_term_ignoring_cloudflared(dir.path()),
+            dns_poll: Duration::from_millis(10),
+            dns_timeout: Duration::from_millis(30),
+            stop_grace: Duration::from_millis(300),
+            ..TunnelConfig::default()
+        },
+    );
+    let (signal, signals) = recording_signal();
+    manager.set_signal(signal);
+    let manager = Arc::new(manager);
+    let registry = Arc::new(PortTunnelRegistry::new(manager.clone()));
+    let mut starting = pin!(registry.start(5173, scope("chat-a")));
+    enter_mid_start(starting.as_mut()).await;
+    registry.stop(5173).await;
+    let second = async {
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while signals.lock().unwrap().is_empty() {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .unwrap();
+        registry.start(5173, scope("chat-b")).await
+    };
+    let (first, second) = tokio::join!(starting, second);
+    assert_eq!(first, Err("Tunnel start cancelled".to_string()));
+    assert_eq!(second, Err("Tunnel start cancelled".to_string()));
+    assert_eq!(manager.live_count(), 0);
+    assert!(registry.list().is_empty());
 }
