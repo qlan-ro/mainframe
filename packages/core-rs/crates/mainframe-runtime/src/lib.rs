@@ -10,6 +10,7 @@ pub mod http;
 #[cfg(any(test, feature = "test-support"))]
 pub mod log_capture;
 pub mod logging;
+pub mod process;
 pub mod spawn_env;
 
 pub use spawn_env::ResolvedPath;

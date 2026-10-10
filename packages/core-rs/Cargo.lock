@@ -1498,6 +1498,7 @@ name = "mainframe-background-tasks"
 version = "0.0.0"
 dependencies = [
  "dashmap",
+ "mainframe-runtime",
  "mainframe-types",
  "rustix",
  "serde",
@@ -1710,6 +1711,7 @@ dependencies = [
  "mainframe-types",
  "rand 0.8.6",
  "reqwest",
+ "rustix",
  "serde",
  "serde_json",
  "sha2",
