@@ -25,7 +25,6 @@ mod github_issues_port_tests;
 use std::collections::HashMap;
 use std::future::Future;
 use std::net::SocketAddr;
-use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::{Arc, RwLock};
 
@@ -110,15 +109,20 @@ async fn main() {
 
 /// The daemon boot (`main()` in `index.ts`).
 async fn run_daemon() {
-    let config = match mainframe_runtime::config::get_config() {
-        Ok(config) => config,
+    let (config, paths) = match mainframe_runtime::config::get_data_dir().and_then(|config_dir| {
+        let config = mainframe_runtime::config::get_config()?;
+        let paths = mainframe_runtime::config::boot_paths(&config, &config_dir);
+        Ok((config, paths))
+    }) {
+        Ok(loaded) => loaded,
         Err(err) => {
+            // Logging is not up yet: it needs the configured data directory.
             eprintln!("failed to load config: {err}");
             std::process::exit(1);
         }
     };
-    let data_dir = PathBuf::from(&config.data_dir);
-    let _log_guard = mainframe_runtime::logging::init(&data_dir);
+    let data_dir = paths.data_dir.clone();
+    let _log_guard = mainframe_runtime::logging::init(&paths.log_dir);
 
     // Resolve the login-shell PATH once at boot and thread it into every child
     // spawn (adapters, title generation, LSP, launch, background-task probes).
@@ -137,13 +141,8 @@ async fn run_daemon() {
     let port = config.port;
     info!(data_dir = %data_dir.display(), "data directory");
 
-    let legacy_data_dir = match mainframe_runtime::config::get_data_dir() {
-        Ok(dir) => dir,
-        Err(err) => fatal("failed to resolve legacy data directory", &err),
-    };
-    let db = match Db::spawn({
-        let data_dir = data_dir.clone();
-        move || mainframe_db::DatabaseManager::new(&data_dir, &legacy_data_dir)
+    let db = match Db::spawn(move || {
+        mainframe_db::DatabaseManager::new(&paths.db_path, &paths.legacy_db_path)
     }) {
         Ok(db) => db,
         Err(err) => fatal("failed to open database", &err),

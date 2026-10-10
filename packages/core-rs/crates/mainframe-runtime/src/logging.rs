@@ -44,10 +44,6 @@ fn resolve_level() -> String {
     resolve_level_from(std::env::var("LOG_LEVEL").ok().as_deref())
 }
 
-fn log_dir(data_dir: &std::path::Path) -> PathBuf {
-    data_dir.join("logs")
-}
-
 /// The `purgeOldLogs()` decision, factored pure for testing: a `server.*` file
 /// whose mtime predates the cutoff is stale.
 fn is_stale_server_log(file_name: &str, modified: SystemTime, cutoff: SystemTime) -> bool {
@@ -80,13 +76,14 @@ fn is_test_env() -> bool {
         || std::env::var("VITEST").as_deref() == Ok("true")
 }
 
-/// Initializes the global `tracing` subscriber. Safe to call once at process boot.
+/// Initializes the global `tracing` subscriber, writing into `log_dir` (resolved
+/// by [`crate::config::boot_paths`]). Safe to call once at process boot.
 ///
 /// Returns the `WorkerGuard` for the file appender; the caller must keep it alive
 /// for the process lifetime or buffered log lines are lost on exit. Returns
 /// `None` under tests (silent, no subscriber) or if the file appender cannot be
 /// built (graceful stdout-only fallback).
-pub fn init(data_dir: &std::path::Path) -> Option<WorkerGuard> {
+pub fn init(log_dir: &std::path::Path) -> Option<WorkerGuard> {
     if is_test_env() {
         return None;
     }
@@ -99,7 +96,7 @@ pub fn init(data_dir: &std::path::Path) -> Option<WorkerGuard> {
     let is_prod = std::env::var("NODE_ENV").as_deref() == Ok("production");
     let force_stdout = std::env::var("LOG_TO_STDOUT").as_deref() == Ok("true");
 
-    let dir = log_dir(data_dir);
+    let dir = log_dir.to_path_buf();
     let _ = fs::create_dir_all(&dir); // ensureLogDir(); mkdir -p
     purge_old_logs(&dir);
 
@@ -189,13 +186,6 @@ mod tests {
     fn purge_ignores_missing_dir() {
         // Missing dir must not panic (mirrors the TS outer try/catch).
         purge_old_logs(&PathBuf::from("/nonexistent/mainframe/logs/xyz"));
-    }
-
-    #[test]
-    fn logs_use_configured_data_directory() {
-        let root = tempfile::tempdir().unwrap();
-        let configured = root.path().join("configured");
-        assert_eq!(log_dir(&configured), configured.join("logs"));
     }
 }
 

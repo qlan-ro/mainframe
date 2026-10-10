@@ -173,6 +173,32 @@ pub fn get_config() -> Result<MainframeConfig, ConfigError> {
     Ok(merge_config(read_file_config(&dir), env_overrides()))
 }
 
+/// The files one daemon boot reads and writes, resolved from the merged config.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BootPaths {
+    /// The merged `dataDir`: everything the daemon stores lives under it.
+    pub data_dir: PathBuf,
+    /// `<dataDir>/mainframe.db`.
+    pub db_path: PathBuf,
+    /// `<config dir>/mainframe.db`: where releases that ignored `dataDir` kept
+    /// the database, so it can be moved to `db_path`.
+    pub legacy_db_path: PathBuf,
+    /// `<dataDir>/logs`, home of the daily `server.<date>.log` files.
+    pub log_dir: PathBuf,
+}
+
+/// Resolves [`BootPaths`] from the merged config and the directory its
+/// `config.json` was read from ([`get_data_dir`]).
+pub fn boot_paths(config: &MainframeConfig, config_dir: &Path) -> BootPaths {
+    let data_dir = PathBuf::from(&config.data_dir);
+    BootPaths {
+        db_path: data_dir.join("mainframe.db"),
+        legacy_db_path: config_dir.join("mainframe.db"),
+        log_dir: data_dir.join("logs"),
+        data_dir,
+    }
+}
+
 /// Mirrors `saveConfig(config)`: merges the partial onto the current config and
 /// writes `config.json` pretty-printed with two-space indent.
 pub fn save_config(config: PartialMainframeConfig) -> Result<(), ConfigError> {
@@ -238,6 +264,42 @@ pub fn ensure_auth_secret() -> Result<String, ConfigError> {
 mod tests {
     use super::*;
     use tempfile::tempdir;
+
+    #[test]
+    fn boot_paths_put_database_and_logs_under_configured_data_dir() {
+        let config = MainframeConfig {
+            data_dir: "/srv/mainframe-data".into(),
+            ..default_config()
+        };
+        let paths = boot_paths(&config, Path::new("/home/dev/.mainframe"));
+        assert_eq!(
+            paths,
+            BootPaths {
+                data_dir: PathBuf::from("/srv/mainframe-data"),
+                db_path: PathBuf::from("/srv/mainframe-data/mainframe.db"),
+                legacy_db_path: PathBuf::from("/home/dev/.mainframe/mainframe.db"),
+                log_dir: PathBuf::from("/srv/mainframe-data/logs"),
+            }
+        );
+    }
+
+    #[test]
+    fn boot_paths_match_legacy_when_data_dir_is_the_config_dir() {
+        let config = MainframeConfig {
+            data_dir: "/home/dev/.mainframe".into(),
+            ..default_config()
+        };
+        let paths = boot_paths(&config, Path::new("/home/dev/.mainframe"));
+        assert_eq!(
+            paths.db_path,
+            PathBuf::from("/home/dev/.mainframe/mainframe.db")
+        );
+        assert_eq!(
+            paths.legacy_db_path,
+            PathBuf::from("/home/dev/.mainframe/mainframe.db")
+        );
+        assert_eq!(paths.log_dir, PathBuf::from("/home/dev/.mainframe/logs"));
+    }
 
     #[test]
     fn merge_applies_default_file_then_env() {

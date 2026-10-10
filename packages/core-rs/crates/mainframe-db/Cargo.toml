@@ -19,3 +19,4 @@ mainframe-runtime = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+mainframe-runtime = { workspace = true, features = ["test-support"] }
