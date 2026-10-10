@@ -20,6 +20,7 @@ use super::{Action, ActionCtx, ActionError, ActionOutputs, parse_input};
 
 mod github_list_prs;
 pub use github_list_prs::GithubListPrsAction;
+pub(crate) use github_list_prs::list_prs_manifest;
 
 /// A GitHub App must be INSTALLED on a repo/org, not just authorized — a
 /// user can finish device flow and still get a bare 404 from every repo
@@ -111,49 +112,55 @@ impl Default for GithubCreatePrAction {
     }
 }
 
+/// The manifest, readable without building the action (see
+/// `actions::known_manifest`).
+pub(crate) fn create_pr_manifest() -> ActionManifest {
+    ActionManifest::new(
+        ActionMeta {
+            id: "github.create_pr",
+            title: "GitHub: create pull request",
+            group: ActionGroup::Connector,
+            auth: ActionAuth::Token,
+            credential_label_hint: Some("github"),
+            outputs: vec![
+                ActionOutput::new("prUrl", ActionOutputType::Text),
+                ActionOutput::new("prNumber", ActionOutputType::Number),
+            ],
+            idempotent: false,
+        },
+        vec![
+            ActionParam::field(
+                ActionField::text("repo", "Repository").placeholder("org/repo"),
+                json!({"type": "string", "minLength": 1}),
+            )
+            .required(),
+            ActionParam::field(
+                ActionField::chip("title", "Title"),
+                json!({"type": "string", "minLength": 1}),
+            )
+            .required(),
+            ActionParam::field(
+                ActionField::chiparea("body", "Body"),
+                json!({"type": "string", "default": ""}),
+            ),
+            ActionParam::field(
+                ActionField::chip("head", "Branch").placeholder("feature/…"),
+                json!({"type": "string", "minLength": 1}),
+            )
+            .required(),
+            ActionParam::field(
+                ActionField::text("base", "Base branch").placeholder("main"),
+                json!({"type": "string", "minLength": 1}),
+            )
+            .required(),
+        ],
+        Value::Bool(false),
+    )
+}
+
 impl Action for GithubCreatePrAction {
     fn manifest(&self) -> ActionManifest {
-        ActionManifest::new(
-            ActionMeta {
-                id: "github.create_pr",
-                title: "GitHub: create pull request",
-                group: ActionGroup::Connector,
-                auth: ActionAuth::Token,
-                credential_label_hint: Some("github"),
-                outputs: vec![
-                    ActionOutput::new("prUrl", ActionOutputType::Text),
-                    ActionOutput::new("prNumber", ActionOutputType::Number),
-                ],
-                idempotent: false,
-            },
-            vec![
-                ActionParam::field(
-                    ActionField::text("repo", "Repository").placeholder("org/repo"),
-                    json!({"type": "string", "minLength": 1}),
-                )
-                .required(),
-                ActionParam::field(
-                    ActionField::chip("title", "Title"),
-                    json!({"type": "string", "minLength": 1}),
-                )
-                .required(),
-                ActionParam::field(
-                    ActionField::chiparea("body", "Body"),
-                    json!({"type": "string", "default": ""}),
-                ),
-                ActionParam::field(
-                    ActionField::chip("head", "Branch").placeholder("feature/…"),
-                    json!({"type": "string", "minLength": 1}),
-                )
-                .required(),
-                ActionParam::field(
-                    ActionField::text("base", "Base branch").placeholder("main"),
-                    json!({"type": "string", "minLength": 1}),
-                )
-                .required(),
-            ],
-            Value::Bool(false),
-        )
+        create_pr_manifest()
     }
 
     fn execute<'a>(

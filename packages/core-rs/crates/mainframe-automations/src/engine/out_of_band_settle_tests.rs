@@ -6,7 +6,7 @@
 use serde_json::{Map, json};
 
 use crate::domain::Step;
-use crate::store::{RunStatus, StepStatus};
+use crate::store::{RunStatus, StepKind, StepStatus};
 
 use super::OutOfBandOutcome;
 use super::agent_test_support::{AgentRig, agent_rig};
@@ -143,14 +143,93 @@ async fn an_agent_completion_after_the_deadline_is_dropped() {
     assert_eq!(rig.h.sink.run_updates().len(), updates);
 }
 
+/// A success and a failure for the same parked step, settled concurrently.
+/// The settle path does no pre-read: both reach the checkpoint transaction,
+/// and the in-transaction "still waiting" check alone admits the first and
+/// rejects the second. Which one the scheduler lets in first varies, so the
+/// test pins the exact final state for each winner and fails on any blend
+/// (both written, neither written, or a mix of their fields). Each ordering
+/// of the two settles in `join!` gets its own run. The sibling
+/// keeps the run `waiting` either way, so the terminal-run guard never
+/// stands in for the entry check.
+#[tokio::test]
+async fn concurrent_success_and_failure_settle_exactly_one_outcome() {
+    let rig = agent_rig(FakePorts::default()).await;
+    let success_first = parked_run(&rig, two_agent_fan(ask_agent_step("a", false))).await;
+    let failure_first = parked_run(&rig, two_agent_fan(ask_agent_step("a", false))).await;
+    let success_first_ref = ref_of(&rig, &success_first, "a").await;
+    let failure_first_ref = ref_of(&rig, &failure_first, "a").await;
+
+    let (s1, f1) = tokio::join!(
+        rig.engine
+            .settle_out_of_band(&success_first, &success_first_ref, done()),
+        rig.engine
+            .settle_out_of_band(&success_first, &success_first_ref, failed("boom")),
+    );
+    let (f2, s2) = tokio::join!(
+        rig.engine
+            .settle_out_of_band(&failure_first, &failure_first_ref, failed("boom")),
+        rig.engine
+            .settle_out_of_band(&failure_first, &failure_first_ref, done()),
+    );
+    for result in [s1, f1, f2, s2] {
+        result.unwrap();
+    }
+
+    for (run_id, a_ref) in [
+        (&success_first, &success_first_ref),
+        (&failure_first, &failure_first_ref),
+    ] {
+        let run = rig.h.store.get_run(run_id).await.unwrap().unwrap();
+        assert_eq!(run.status, RunStatus::Waiting);
+        let b_ref = ref_of(&rig, run_id, "b").await;
+        assert_eq!(run.checkpoint.steps[&b_ref].status, StepStatus::Waiting);
+        let a = &run.checkpoint.steps[a_ref];
+        // The failure, when it lands, also fails a's branch marker; a
+        // success that overwrote it afterwards would leave that marker behind.
+        let failed_branch_markers: Vec<Option<&str>> = run
+            .checkpoint
+            .steps
+            .values()
+            .filter(|entry| entry.kind == StepKind::BranchOutcome)
+            .filter(|entry| entry.status == StepStatus::Failed)
+            .map(|entry| entry.error.as_deref())
+            .collect();
+        match a.status {
+            StepStatus::Succeeded => {
+                assert_eq!(
+                    a.outputs,
+                    Some(Map::from_iter([("result".to_string(), json!("done"))]))
+                );
+                assert_eq!(a.error, None);
+                assert_eq!(failed_branch_markers, Vec::<Option<&str>>::new());
+            }
+            StepStatus::Failed => {
+                assert_eq!(a.error.as_deref(), Some("boom"));
+                assert_eq!(a.outputs, None);
+                assert_eq!(failed_branch_markers, vec![Some("boom")]);
+            }
+            other => panic!("neither settle landed on {a_ref}: {other:?}"),
+        }
+        assert_eq!(a.wake_at, None);
+    }
+}
+
 #[tokio::test]
 async fn a_transition_that_changes_nothing_reports_no_update() {
     let rig = agent_rig(FakePorts::default()).await;
     let run_id = parked_run(&rig, vec![ask_agent_step("agent", false)]).await;
 
-    let unchanged = patch_if_changed(&rig.h.store, &run_id, |_| false)
-        .await
-        .unwrap();
+    // The transition mutates its copy but reports no change: nothing of it
+    // may reach the row.
+    let unchanged = patch_if_changed(&rig.h.store, &run_id, |cp| {
+        cp.steps.clear();
+        false
+    })
+    .await
+    .unwrap();
+    let stored = rig.h.store.get_run(&run_id).await.unwrap().unwrap();
+    assert_eq!(stored.checkpoint.steps["agent"].status, StepStatus::Waiting);
     let changed = patch_if_changed(&rig.h.store, &run_id, |cp| {
         cp.succeed_waiting_step("agent", None)
     })

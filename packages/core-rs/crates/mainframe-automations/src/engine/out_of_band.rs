@@ -4,14 +4,12 @@
 //! success and failure writes, the branch marker and the `RunUpdated` emit
 //! cannot drift apart.
 //!
-//! A cancel or a competing settle can win between the read and the write.
-//! Every write re-checks the entry inside the checkpoint transaction and
-//! changes nothing unless it is still `waiting`; a run that cancel already
+//! A cancel or a competing settle can win between the caller's read and the
+//! write. The waiting check, the keepGoing policy and the enclosing branch
+//! are all read inside the checkpoint transaction, and the write changes
+//! nothing unless the entry is still `waiting`; a run that cancel already
 //! finalized surfaces as `StoreError::TerminalRun` (A8). Either way the loser
-//! neither emits nor advances.
-
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+//! neither writes, emits nor advances.
 
 use serde_json::{Map, Value};
 
@@ -23,6 +21,29 @@ use super::OutOfBandOutcome;
 use super::advance::Interpreter;
 use super::markers::fail_enclosing_branch;
 
+/// Which stage of an out-of-band settle failed, so callers can tell a lost
+/// write from a failed follow-up.
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum SettleError {
+    /// The checkpoint write itself failed.
+    #[error("settle write failed")]
+    Write(#[source] StoreError),
+    /// The outcome was written but re-advancing the run failed.
+    #[error("advance after settle failed")]
+    Advance(#[source] StoreError),
+    /// The failure was written but finalizing the run failed.
+    #[error("run finalize after settle failed")]
+    Finalize(#[source] StoreError),
+}
+
+impl SettleError {
+    pub(crate) fn into_store_error(self) -> StoreError {
+        match self {
+            Self::Write(err) | Self::Advance(err) | Self::Finalize(err) => err,
+        }
+    }
+}
+
 impl Interpreter {
     /// Settles the parked `step_ref` with `outcome`, streams the transition
     /// (A6) and moves the run on. A no-op when the run is gone or terminal,
@@ -32,18 +53,12 @@ impl Interpreter {
         run_id: &str,
         step_ref: &str,
         outcome: OutOfBandOutcome,
-    ) -> Result<(), StoreError> {
-        let Some(run) = self.deps.store.get_run(run_id).await? else {
-            return Ok(());
-        };
-        if run.status.is_terminal() || !is_waiting(&run.checkpoint, step_ref) {
-            return Ok(());
-        }
+    ) -> Result<(), SettleError> {
         match outcome {
             OutOfBandOutcome::Succeeded(outputs) => {
                 self.settle_success(run_id, step_ref, outputs).await
             }
-            OutOfBandOutcome::Failed(error) => self.settle_failure(&run, step_ref, error).await,
+            OutOfBandOutcome::Failed(error) => self.settle_failure(run_id, step_ref, error).await,
         }
     }
 
@@ -52,17 +67,18 @@ impl Interpreter {
         run_id: &str,
         step_ref: &str,
         outputs: Map<String, Value>,
-    ) -> Result<(), StoreError> {
+    ) -> Result<(), SettleError> {
         let step_ref = step_ref.to_string();
         let settled = patch_if_changed(&self.deps.store, run_id, move |cp| {
             cp.succeed_waiting_step(&step_ref, Some(outputs))
         })
-        .await?;
+        .await
+        .map_err(SettleError::Write)?;
         let Some(record) = settled else {
             return Ok(());
         };
         self.emit(&record);
-        self.advance(run_id).await
+        self.advance(run_id).await.map_err(SettleError::Advance)
     }
 
     /// Fails the step with the keepGoing policy the walk applies: without
@@ -82,16 +98,16 @@ impl Interpreter {
     /// forces an advance regardless of keepGoing.
     async fn settle_failure(
         &self,
-        run: &RunRecord,
+        run_id: &str,
         step_ref: &str,
         error: String,
-    ) -> Result<(), StoreError> {
-        let (keep_going, enclosing_branch) = failure_policy(run, step_ref);
+    ) -> Result<(), SettleError> {
         let (step_ref_owned, error_owned) = (step_ref.to_string(), error.clone());
-        let settled = patch_if_changed(&self.deps.store, &run.id, move |cp| {
+        let settled = patch_if_changed(&self.deps.store, run_id, move |cp| {
             if !is_waiting(cp, &step_ref_owned) {
                 return false;
             }
+            let (keep_going, enclosing_branch) = failure_policy(cp, &step_ref_owned);
             cp.fail_step_entry(&step_ref_owned, &error_owned);
             if !keep_going {
                 fail_enclosing_branch(cp, &enclosing_branch, &error_owned);
@@ -101,38 +117,37 @@ impl Interpreter {
             cp.recompute_wake_at();
             true
         })
-        .await?;
+        .await
+        .map_err(SettleError::Write)?;
         let Some(record) = settled else {
             return Ok(());
         };
         self.emit(&record);
+        // The definition is frozen in the checkpoint, so the policy read
+        // back from the written record is the one the write applied.
+        let (keep_going, _) = failure_policy(&record.checkpoint, step_ref);
         if keep_going || has_waiting_entry(&record.checkpoint) {
-            self.advance(&run.id).await
+            self.advance(run_id).await.map_err(SettleError::Advance)
         } else {
-            self.finalize_and_emit(&run.id, TerminalStatus::Failed, Some(error))
+            self.finalize_and_emit(run_id, TerminalStatus::Failed, Some(error))
                 .await
+                .map_err(SettleError::Finalize)
         }
     }
 }
 
 /// Applies `transition` inside the checkpoint transaction and returns the
-/// updated run only if the transition reports a change. `None` means the
-/// run was already terminal (cancel won, A8) or the entry had moved on.
+/// updated run only if the transition reports a change; a transition that
+/// returns false writes nothing. `None` also means the run is gone or was
+/// already terminal (cancel won, A8).
 pub(super) async fn patch_if_changed(
     store: &RunStore,
     run_id: &str,
     transition: impl FnOnce(&mut AutomationCheckpoint) -> bool + Send + 'static,
 ) -> Result<Option<RunRecord>, StoreError> {
-    let changed = Arc::new(AtomicBool::new(false));
-    let changed_in_write = Arc::clone(&changed);
-    let patched = store
-        .patch_checkpoint(run_id, move |cp| {
-            changed_in_write.store(transition(cp), Ordering::Relaxed);
-        })
-        .await;
-    match patched {
-        Ok(record) => Ok(changed.load(Ordering::Relaxed).then_some(record)),
-        Err(StoreError::TerminalRun { .. }) => Ok(None),
+    match store.patch_checkpoint_if(run_id, transition).await {
+        Ok(record) => Ok(record),
+        Err(StoreError::TerminalRun { .. } | StoreError::NotFound { .. }) => Ok(None),
         Err(err) => Err(err),
     }
 }
@@ -146,11 +161,14 @@ fn is_waiting(checkpoint: &AutomationCheckpoint, step_ref: &str) -> bool {
 
 /// The failing step's keepGoing plus, if it lives inside a concurrent
 /// branch, that branch's `(block_id, ref_suffix)`.
-fn failure_policy(run: &RunRecord, step_ref: &str) -> (bool, Option<(String, String)>) {
-    let Some(entry) = run.checkpoint.steps.get(step_ref) else {
+fn failure_policy(
+    checkpoint: &AutomationCheckpoint,
+    step_ref: &str,
+) -> (bool, Option<(String, String)>) {
+    let Some(entry) = checkpoint.steps.get(step_ref) else {
         return (false, None);
     };
-    let steps = &run.checkpoint.definition.steps;
+    let steps = &checkpoint.definition.steps;
     let keep_going = find_step_by_id(steps, &entry.step_id).is_some_and(Step::keep_going);
     let ref_suffix = step_ref
         .strip_prefix(entry.step_id.as_str())

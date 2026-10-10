@@ -61,27 +61,33 @@ impl Default for NotionAddRowAction {
     }
 }
 
+/// The manifest, readable without building the action (see
+/// `actions::known_manifest`).
+pub(crate) fn add_row_manifest() -> ActionManifest {
+    ActionManifest::new(
+        ActionMeta {
+            id: "notion.add_row",
+            title: "Notion: add database row",
+            group: ActionGroup::Connector,
+            auth: ActionAuth::Token,
+            credential_label_hint: Some("notion"),
+            outputs: vec![ActionOutput::new("pageUrl", ActionOutputType::Text)],
+            idempotent: false,
+        },
+        vec![
+            ActionParam::field(
+                ActionField::chip("databaseId", "Database"),
+                json!({"type": "string", "minLength": 1}),
+            )
+            .required(),
+        ],
+        json!({"type": "string"}),
+    )
+}
+
 impl Action for NotionAddRowAction {
     fn manifest(&self) -> ActionManifest {
-        ActionManifest::new(
-            ActionMeta {
-                id: "notion.add_row",
-                title: "Notion: add database row",
-                group: ActionGroup::Connector,
-                auth: ActionAuth::Token,
-                credential_label_hint: Some("notion"),
-                outputs: vec![ActionOutput::new("pageUrl", ActionOutputType::Text)],
-                idempotent: false,
-            },
-            vec![
-                ActionParam::field(
-                    ActionField::chip("databaseId", "Database"),
-                    json!({"type": "string", "minLength": 1}),
-                )
-                .required(),
-            ],
-            json!({"type": "string"}),
-        )
+        add_row_manifest()
     }
 
     fn execute<'a>(

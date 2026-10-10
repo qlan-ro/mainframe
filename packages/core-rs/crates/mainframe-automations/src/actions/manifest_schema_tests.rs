@@ -1,17 +1,20 @@
-//! The generated params schemas are wire output (`GET /api/automation-actions`)
-//! and the UI's catalog fixtures mirror them, so each one is pinned here to the
-//! exact JSON the actions authored by hand before `ActionManifest::new`
-//! generated it, together with the editor field order and `has_output_as`.
+//! The generated params schemas and editor fields are wire output
+//! (`GET /api/automation-actions`) and the UI's catalog fixtures mirror them,
+//! so each one is pinned here to the exact JSON the actions authored by hand
+//! before `ActionManifest::new` generated it, together with `has_output_as`.
+//! The `fields` literals transcribe those hand-written `ActionField` lists
+//! (control, label, placeholder, options, showWhen), not the generator's
+//! output, so a generator change that alters any of them fails here.
 
 use serde_json::{Value, json};
 
 use super::known_manifest;
 
-fn assert_manifest(id: &str, schema: Value, field_keys: &[&str], has_output_as: bool) {
+fn assert_manifest(id: &str, schema: Value, fields: Value, has_output_as: bool) {
     let manifest = known_manifest(id).unwrap_or_else(|| panic!("{id} is not a launch action"));
     assert_eq!(manifest.params_schema, schema, "{id}: params schema");
-    let keys: Vec<&str> = manifest.fields.iter().map(|f| f.key.as_str()).collect();
-    assert_eq!(keys, field_keys, "{id}: editor fields");
+    let wire_fields = serde_json::to_value(&manifest.fields).unwrap();
+    assert_eq!(wire_fields, fields, "{id}: editor fields");
     assert_eq!(manifest.has_output_as, has_output_as, "{id}: hasOutputAs");
 }
 
@@ -42,7 +45,22 @@ fn builtin_schemas_match_the_authored_wire_json() {
             "required": ["script", "runIn"],
             "additionalProperties": false
         }),
-        &["script", "runIn", "customPath"],
+        json!([
+            {"key": "script", "label": "Script", "control": "code", "placeholder": "pnpm test"},
+            {
+                "key": "runIn",
+                "label": "Run in",
+                "control": "select",
+                "options": ["project root", "worktree", "custom"]
+            },
+            {
+                "key": "customPath",
+                "label": "Path",
+                "control": "chip",
+                "placeholder": "~/code/my-project",
+                "showWhen": {"key": "runIn", "equals": "custom"}
+            }
+        ]),
         true,
     );
     let write_schema = json!({
@@ -51,13 +69,17 @@ fn builtin_schemas_match_the_authored_wire_json() {
         "required": ["path", "content"],
         "additionalProperties": false
     });
+    let write_fields = json!([
+        {"key": "path", "label": "File", "control": "chip", "placeholder": "~/notes/log.md"},
+        {"key": "content", "label": "Text", "control": "chiparea"}
+    ]);
     assert_manifest(
         "files.append",
         write_schema.clone(),
-        &["path", "content"],
+        write_fields.clone(),
         false,
     );
-    assert_manifest("files.write", write_schema, &["path", "content"], false);
+    assert_manifest("files.write", write_schema, write_fields, false);
     assert_manifest(
         "files.read",
         json!({
@@ -69,7 +91,9 @@ fn builtin_schemas_match_the_authored_wire_json() {
             "required": ["path"],
             "additionalProperties": false
         }),
-        &["path"],
+        json!([
+            {"key": "path", "label": "File", "control": "chip", "placeholder": "~/notes/log.md"}
+        ]),
         true,
     );
     assert_manifest(
@@ -86,7 +110,21 @@ fn builtin_schemas_match_the_authored_wire_json() {
             "required": ["url"],
             "additionalProperties": false
         }),
-        &["method", "url", "body"],
+        json!([
+            {
+                "key": "method",
+                "label": "Method",
+                "control": "select",
+                "options": ["GET", "POST", "PUT", "PATCH", "DELETE"]
+            },
+            {
+                "key": "url",
+                "label": "URL",
+                "control": "chip",
+                "placeholder": "https://api.example.com/…"
+            },
+            {"key": "body", "label": "Body", "control": "chiparea"}
+        ]),
         false,
     );
 }
@@ -107,7 +145,13 @@ fn connector_schemas_match_the_authored_wire_json() {
             "required": ["repo", "title", "head", "base"],
             "additionalProperties": false
         }),
-        &["repo", "title", "body", "head", "base"],
+        json!([
+            {"key": "repo", "label": "Repository", "control": "text", "placeholder": "org/repo"},
+            {"key": "title", "label": "Title", "control": "chip"},
+            {"key": "body", "label": "Body", "control": "chiparea"},
+            {"key": "head", "label": "Branch", "control": "chip", "placeholder": "feature/…"},
+            {"key": "base", "label": "Base branch", "control": "text", "placeholder": "main"}
+        ]),
         false,
     );
     assert_manifest(
@@ -117,7 +161,9 @@ fn connector_schemas_match_the_authored_wire_json() {
             "properties": {"author": {"type": "string", "default": "@me"}},
             "additionalProperties": false
         }),
-        &["author"],
+        json!([
+            {"key": "author", "label": "Author", "control": "text", "placeholder": "@me"}
+        ]),
         false,
     );
     assert_manifest(
@@ -128,7 +174,7 @@ fn connector_schemas_match_the_authored_wire_json() {
             "required": ["databaseId"],
             "additionalProperties": {"type": "string"}
         }),
-        &["databaseId"],
+        json!([{"key": "databaseId", "label": "Database", "control": "chip"}]),
         false,
     );
     assert_manifest(
@@ -145,7 +191,23 @@ fn connector_schemas_match_the_authored_wire_json() {
             "required": ["org", "project", "type", "title"],
             "additionalProperties": false
         }),
-        &["org", "project", "type", "title", "description"],
+        json!([
+            {"key": "org", "label": "Organization", "control": "text", "placeholder": "my-org"},
+            {
+                "key": "project",
+                "label": "Project",
+                "control": "text",
+                "placeholder": "my-project"
+            },
+            {
+                "key": "type",
+                "label": "Type",
+                "control": "select",
+                "options": ["Task", "Bug", "User Story"]
+            },
+            {"key": "title", "label": "Title", "control": "chip"},
+            {"key": "description", "label": "Description", "control": "chiparea"}
+        ]),
         false,
     );
 }

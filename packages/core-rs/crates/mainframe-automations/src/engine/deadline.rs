@@ -16,9 +16,9 @@ use std::time::Duration;
 use crate::error::StoreError;
 use crate::store::{AutomationCheckpoint, RunRecord, StepKind, StepStatus, epoch_ms_now};
 
-use super::OutOfBandOutcome;
 use super::advance::Interpreter;
 use super::out_of_band::patch_if_changed;
+use super::{OutOfBandOutcome, SettleError};
 
 const AGENT_DEADLINE_ERROR: &str = "agent step deadline exceeded";
 
@@ -75,7 +75,9 @@ impl Interpreter {
             match kind {
                 StepKind::AskAgent => {
                     let error = OutOfBandOutcome::Failed(AGENT_DEADLINE_ERROR.to_string());
-                    self.settle_out_of_band(&run.id, &step_ref, error).await?
+                    self.settle_out_of_band(&run.id, &step_ref, error)
+                        .await
+                        .map_err(SettleError::into_store_error)?
                 }
                 StepKind::Wait => self.resume_wait(&run.id, &step_ref).await?,
                 _ => {}
