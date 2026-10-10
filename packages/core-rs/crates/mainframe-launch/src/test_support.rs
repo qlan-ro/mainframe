@@ -76,6 +76,14 @@ pub(crate) fn write_silent_cloudflared(dir: &Path) -> String {
     write_script(dir, "silent-cloudflared.sh", "sleep 100\n")
 }
 
+pub(crate) fn write_term_ignoring_cloudflared(dir: &Path) -> String {
+    write_script(
+        dir,
+        "term-ignoring-cloudflared.sh",
+        "trap '' TERM\nexec sleep 100\n",
+    )
+}
+
 /// Like [`write_fake_cloudflared`], but appends one line to `spawns.log` and
 /// mints a distinct URL per invocation, so tests can count spawns and tell a
 /// reused tunnel from a respawned one.

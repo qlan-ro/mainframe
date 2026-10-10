@@ -29,6 +29,8 @@ use crate::process::{
 pub type BroadcastFn = Arc<dyn Fn(DaemonEvent) + Send + Sync>;
 
 const REGISTERED_MARKER: &str = "Registered tunnel connection";
+const STOP_GRACE: Duration = Duration::from_secs(2);
+const STOP_POLL: Duration = Duration::from_millis(25);
 const CLOUDFLARED_NOT_FOUND: &str = "cloudflared not found. Install it from https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/";
 
 /// Named/quick-tunnel start options.
@@ -509,23 +511,48 @@ impl TunnelManager {
         });
     }
 
-    pub fn stop_all(&self) {
+    fn tracked_pids(&self) -> Vec<u32> {
+        let mut pids: HashSet<u32> = self.tunnels.iter().filter_map(|e| e.pid).collect();
+        let pending = self
+            .pending
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        pids.extend(pending.iter().copied());
+        pids.into_iter().collect()
+    }
+
+    pub fn signal_all_on_panic(&self) {
+        for pid in self.tracked_pids() {
+            crate::process::sweep::default_kill(i64::from(pid), "SIGTERM", false);
+        }
+    }
+
+    pub async fn stop_all(&self) {
+        let pids = self.tracked_pids();
         let labels: Vec<String> = self.tunnels.iter().map(|e| e.key().clone()).collect();
         for label in labels {
-            self.stop(&label);
+            if self.tunnels.remove(&label).is_some() {
+                self.broadcast(DaemonEvent::TunnelStatus {
+                    state: TunnelState::Stopped,
+                    label,
+                    url: None,
+                    dns_verified: None,
+                    error: None,
+                });
+            }
         }
-        // Reap children still mid-start: they aren't in `tunnels` yet, so the loop
-        // above misses them. Their own exit path prunes `pending` afterwards.
-        let pending: Vec<u32> = {
+        // Mid-start children were included in the pid snapshot above.
+        {
             let mut set = self
                 .pending
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            set.drain().collect()
-        };
-        for pid in pending {
-            kill_pid(Some(pid), "-TERM");
-            self.forget_spawn(Some(pid));
+            set.clear();
+        }
+        for pid in pids {
+            if terminate_tunnel(pid).await {
+                self.registry.remove(i64::from(pid)).await;
+            }
         }
     }
 
@@ -635,6 +662,61 @@ fn kill_pid(pid: Option<u32>, flag: &'static str) {
     });
 }
 
+async fn signal_pid(pid: u32, flag: &'static str) -> std::io::Result<bool> {
+    Command::new("kill")
+        .arg(flag)
+        .arg(pid.to_string())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .await
+        .map(|status| status.success())
+}
+
+async fn pid_alive(pid: u32) -> bool {
+    match signal_pid(pid, "-0").await {
+        Ok(alive) => alive,
+        Err(err) => {
+            tracing::warn!(target: "tunnel", pid, ?err, "failed to check tunnel process");
+            true
+        }
+    }
+}
+
+async fn wait_for_exit(pid: u32, grace: Duration) -> bool {
+    let deadline = tokio::time::Instant::now() + grace;
+    loop {
+        if !pid_alive(pid).await {
+            return true;
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return false;
+        }
+        sleep(STOP_POLL).await;
+    }
+}
+
+async fn terminate_tunnel(pid: u32) -> bool {
+    match signal_pid(pid, "-TERM").await {
+        Ok(true) => {}
+        Ok(false) => tracing::warn!(target: "tunnel", pid, "SIGTERM was not delivered"),
+        Err(err) => tracing::warn!(target: "tunnel", pid, ?err, "failed to send SIGTERM"),
+    }
+    if !wait_for_exit(pid, STOP_GRACE).await {
+        tracing::warn!(target: "tunnel", pid, "tunnel survived SIGTERM, sending SIGKILL");
+        match signal_pid(pid, "-KILL").await {
+            Ok(true) => {}
+            Ok(false) => tracing::warn!(target: "tunnel", pid, "SIGKILL was not delivered"),
+            Err(err) => tracing::warn!(target: "tunnel", pid, ?err, "failed to send SIGKILL"),
+        }
+        if !wait_for_exit(pid, STOP_GRACE).await {
+            tracing::warn!(target: "tunnel", pid, "tunnel survived SIGKILL");
+            return false;
+        }
+    }
+    true
+}
+
 fn extract_hostname(url: &str) -> String {
     let after = url
         .strip_prefix("https://")
@@ -689,6 +771,7 @@ mod tests {
     use super::*;
     use crate::test_support::{
         recorder, write_chatty_cloudflared, write_fake_cloudflared, write_silent_cloudflared,
+        write_term_ignoring_cloudflared,
     };
     use std::sync::Mutex;
 
@@ -792,7 +875,7 @@ mod tests {
     #[tokio::test]
     async fn stop_all_is_a_no_op_when_no_tunnels_running() {
         let manager = TunnelManager::new(None);
-        manager.stop_all(); // must not panic
+        manager.stop_all().await; // must not panic
     }
 
     // --- broadcast callbacks ---
@@ -1164,9 +1247,42 @@ mod tests {
         }
         let pid = pid.expect("child should have recorded a pid while mid-start");
 
-        manager.stop_all();
-        sleep(Duration::from_millis(100)).await;
+        manager.stop_all().await;
         assert!(registry.removed().contains(&pid));
+        assert!(!pid_alive(pid as u32).await);
         task.abort();
+    }
+
+    #[tokio::test]
+    async fn stop_all_waits_for_sigkill_when_a_pending_child_ignores_sigterm() {
+        let dir = tempfile::tempdir().unwrap();
+        let bin = write_term_ignoring_cloudflared(dir.path());
+        let registry = RecordingRegistry::new();
+        let config = TunnelConfig {
+            cloudflared_bin: bin,
+            start_timeout: Duration::from_secs(10),
+            ..TunnelConfig::default()
+        };
+        let manager = Arc::new(manager_with(config, registry.clone()));
+        let start_manager = manager.clone();
+        let task =
+            tokio::spawn(async move { start_manager.start(4173, "preview:Dev", None).await });
+        let pid = tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                if let Some(entry) = registry.added().first() {
+                    break entry.pid as u32;
+                }
+                sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("cloudflared child should spawn");
+        sleep(Duration::from_millis(50)).await;
+
+        let started = Instant::now();
+        manager.stop_all().await;
+        assert!(started.elapsed() >= STOP_GRACE);
+        assert!(!pid_alive(pid).await);
+        assert!(task.await.unwrap().is_err());
     }
 }

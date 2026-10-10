@@ -1,6 +1,6 @@
 //! Per-`(projectId, language)` LSP child lifecycle: single-flight spawn, the
 //! idle-timeout reaper, and the graceful shutdown handshake (shutdown request ->
-//! exit notification -> SIGTERM fallback).
+//! exit notification -> SIGTERM/SIGKILL fallback).
 
 use std::collections::HashMap;
 use std::future::Future;
@@ -21,6 +21,7 @@ use crate::lsp_registry::{LspRegistry, ResolvedCommand};
 const IDLE_TIMEOUT: Duration = Duration::from_secs(10 * 60); // 10 minutes
 const SHUTDOWN_REQUEST_TIMEOUT: Duration = Duration::from_secs(3);
 const SHUTDOWN_EXIT_TIMEOUT: Duration = Duration::from_secs(2);
+const SIGTERM_GRACE: Duration = Duration::from_secs(2);
 
 /// Errors from spawning an LSP child.
 #[derive(Debug, thiserror::Error)]
@@ -163,12 +164,29 @@ fn key(project_id: &str, language: &str) -> String {
 // NOTE: shells out to `kill -TERM` (unix) — tokio's `Child::kill` sends SIGKILL,
 // which would skip the server's graceful SIGTERM shutdown. Windows has no `kill`;
 // platform-sensitive, flagged for the Windows packaging pass.
-async fn send_sigterm(pid: u32) {
-    let _ = Command::new("kill")
-        .arg("-TERM")
+async fn send_signal(pid: u32, signal: &'static str) {
+    match Command::new("kill")
+        .arg(signal)
         .arg(pid.to_string())
-        .output()
-        .await;
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .await
+    {
+        Ok(status) if status.success() => {}
+        Ok(status) => tracing::warn!(pid, signal, ?status, "LSP signal failed"),
+        Err(err) => tracing::warn!(pid, signal, ?err, "LSP signal failed"),
+    }
+}
+
+async fn wait_for_handle_exit(handle: &LspServerHandle, grace: Duration) -> bool {
+    if handle.exited.load(Ordering::SeqCst) {
+        return true;
+    }
+    let notified = handle.exit_notify.notified();
+    tokio::pin!(notified);
+    notified.as_mut().enable();
+    handle.exited.load(Ordering::SeqCst) || tokio::time::timeout(grace, notified).await.is_ok()
 }
 
 struct ManagerState {
@@ -180,6 +198,7 @@ struct ManagerState {
     idle_timeout: Duration,
     shutdown_request_timeout: Duration,
     shutdown_exit_timeout: Duration,
+    sigterm_grace: Duration,
 }
 
 impl ManagerState {
@@ -425,7 +444,13 @@ impl ManagerState {
         }
 
         if !handle.exited.load(Ordering::SeqCst) {
-            send_sigterm(handle.pid).await;
+            send_signal(handle.pid, "-TERM").await;
+            if !wait_for_handle_exit(&handle, self.sigterm_grace).await {
+                send_signal(handle.pid, "-KILL").await;
+                if !wait_for_handle_exit(&handle, self.sigterm_grace).await {
+                    tracing::warn!(pid = handle.pid, "LSP server survived SIGKILL");
+                }
+            }
         }
 
         {
@@ -484,6 +509,7 @@ impl LspManager {
                 idle_timeout: IDLE_TIMEOUT,
                 shutdown_request_timeout: SHUTDOWN_REQUEST_TIMEOUT,
                 shutdown_exit_timeout: SHUTDOWN_EXIT_TIMEOUT,
+                sigterm_grace: SIGTERM_GRACE,
             }),
         }
     }
@@ -551,6 +577,7 @@ impl LspManager {
         state.idle_timeout = idle;
         state.shutdown_request_timeout = request;
         state.shutdown_exit_timeout = exit;
+        state.sigterm_grace = exit;
     }
 }
 

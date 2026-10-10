@@ -9,6 +9,8 @@ use std::time::Duration;
 
 struct FakeResolver {
     calls: Arc<AtomicUsize>,
+    command: String,
+    args: Vec<String>,
 }
 
 impl CommandResolver for FakeResolver {
@@ -18,12 +20,9 @@ impl CommandResolver for FakeResolver {
         _project_path: &'a str,
     ) -> Pin<Box<dyn Future<Output = Option<ResolvedCommand>> + Send + 'a>> {
         self.calls.fetch_add(1, Ordering::SeqCst);
-        Box::pin(async {
-            Some(ResolvedCommand {
-                command: "cat".to_string(),
-                args: vec![],
-            })
-        })
+        let command = self.command.clone();
+        let args = self.args.clone();
+        Box::pin(async move { Some(ResolvedCommand { command, args }) })
     }
 }
 
@@ -31,6 +30,8 @@ fn manager() -> (LspManager, Arc<AtomicUsize>) {
     let calls = Arc::new(AtomicUsize::new(0));
     let resolver = Arc::new(FakeResolver {
         calls: calls.clone(),
+        command: "cat".to_string(),
+        args: vec![],
     });
     let mut m = LspManager::with_resolver(Arc::new(LspRegistry::new()), resolver);
     m.set_test_timeouts(
@@ -102,6 +103,30 @@ async fn shutdown_all_clears_all_handles() {
     m.shutdown_all().await;
     assert!(m.get_active_languages("proj1").is_empty());
     assert!(m.get_active_languages("proj2").is_empty());
+}
+
+#[tokio::test]
+async fn shutdown_escalates_to_sigkill_and_waits_for_exit() {
+    let resolver = Arc::new(FakeResolver {
+        calls: Arc::new(AtomicUsize::new(0)),
+        command: "/bin/sh".to_string(),
+        args: vec!["-c".to_string(), "trap '' TERM; exec sleep 100".to_string()],
+    });
+    let mut manager = LspManager::with_resolver(Arc::new(LspRegistry::new()), resolver);
+    manager.set_test_timeouts(
+        Duration::from_secs(60),
+        Duration::from_millis(25),
+        Duration::from_millis(50),
+    );
+    let handle = manager
+        .get_or_spawn("proj1", "typescript", "/tmp")
+        .await
+        .unwrap();
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    manager.shutdown("proj1", "typescript").await;
+    assert!(handle.exited.load(Ordering::SeqCst));
+    assert!(manager.get_handle("proj1", "typescript").is_none());
 }
 
 #[tokio::test]

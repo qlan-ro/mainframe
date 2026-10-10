@@ -251,7 +251,7 @@ async fn run_daemon() {
         std::panic::set_hook(Box::new(move |info| {
             tracing::error!(panic = %info, "Uncaught exception");
             panic_adapters.kill_all();
-            panic_tunnel.stop_all();
+            panic_tunnel.signal_all_on_panic();
             default_hook(info);
         }));
     }
@@ -563,7 +563,7 @@ async fn run_daemon() {
     plugin_manager.unload_all();
     adapters.kill_all();
     launch_registry.stop_all().await;
-    tunnel_manager.stop_all();
+    tunnel_manager.stop_all().await;
     liveness.stop();
     lsp_manager.shutdown_all().await;
     // `db` (the actor thread) closes when the last `Db` handle drops at exit.
