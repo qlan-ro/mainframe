@@ -1,3 +1,4 @@
+/// Migration 1's schema; see `special::v1`.
 pub(super) const BASE_SCHEMA_SQL: &str = r#"
   CREATE TABLE IF NOT EXISTS projects (
     id TEXT PRIMARY KEY,

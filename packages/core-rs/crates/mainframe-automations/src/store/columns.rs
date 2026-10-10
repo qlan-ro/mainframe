@@ -1,6 +1,14 @@
 //! Column readers shared by the store's `FromRow` impls: a JSON column that
 //! surfaces malformed data as `StoreError::Corrupt`, and a TEXT column holding
 //! a serde `snake_case` enum.
+//!
+//! Corruption policy: unlike the chat, todo and tag rows, which log and read a
+//! bad column as its default, these readers fail the row. An automation run's
+//! checkpoint is the durable state the engine resumes from; a defaulted step
+//! status or output would silently re-run or skip side-effecting steps after a
+//! restart. So a corrupt run is never reconstructed: boot reconcile
+//! (`RunStore::list_live_runs`) logs it, finalizes it `failed` in place and
+//! carries on with the other runs.
 
 use rusqlite::Row;
 use serde::de::DeserializeOwned;

@@ -6,6 +6,8 @@ use crate::{
 use mainframe_types::{chat::NO_PROJECT_ID, time::now_iso8601};
 use rusqlite::Connection;
 
+/// The initial schema. Kept as `CREATE TABLE IF NOT EXISTS` so a legacy DB
+/// (created before `user_version` tracking) re-runs it as a no-op.
 pub(super) fn v1(db: &Connection) -> Result<(), DbError> {
     db.execute_batch(BASE_SCHEMA_SQL)?;
     Ok(())
@@ -61,6 +63,7 @@ pub(super) fn v24(db: &Connection) -> Result<(), DbError> {
     Ok(())
 }
 
+/// Context-usage tracking columns and the transcript-missing flag on chats.
 pub(super) fn v25(db: &Connection) -> Result<(), DbError> {
     add_column_if_missing(
         db,
@@ -82,6 +85,10 @@ pub(super) fn v25(db: &Connection) -> Result<(), DbError> {
     )
 }
 
+/// Fork lineage: the nullable, generic parent reference plus its lookup
+/// index, and the daemon-internal pending-fork payload (never on the `Chat`
+/// wire type; read and written only through repository methods, like
+/// `dismissed_worktrees`).
 pub(super) fn v28(db: &Connection) -> Result<(), DbError> {
     add_column_if_missing(
         db,
@@ -100,6 +107,10 @@ pub(super) fn v28(db: &Connection) -> Result<(), DbError> {
     )
 }
 
+/// Temporary and non-project sessions: the temporary flag, the
+/// no-persistence bookkeeping pair, and the non-project scratch cwd. Also
+/// seeds the hidden scratch project row every non-project chat's
+/// `project_id` points at.
 pub(super) fn v29(db: &Connection) -> Result<(), DbError> {
     add_column_if_missing(
         db,
@@ -133,6 +144,9 @@ pub(super) fn v29(db: &Connection) -> Result<(), DbError> {
     Ok(())
 }
 
+/// Side chats: a parent chat has at most one side chat at a time. The partial
+/// unique index enforces the invariant atomically alongside the DB worker's
+/// one-closure-at-a-time serialization (`find_or_create_side_chat`).
 pub(super) fn v30(db: &Connection) -> Result<(), DbError> {
     Ok(db.execute_batch(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_chats_one_side_chat \

@@ -1,3 +1,12 @@
+//! A `Send + Sync` handle to state confined to one dedicated OS thread.
+//!
+//! rusqlite connections (and `DatabaseManager`, which holds an
+//! `Rc<Connection>`) are `!Send`, so they cannot live behind the `Arc`s that
+//! axum and tokio tasks share. `SqliteActor` constructs the state on its own
+//! worker thread, never moves it off that thread, and serializes every job
+//! onto it through an unbounded mpsc channel. The daemon database, every
+//! plugin's `data.db` and the automations store each run on one of these.
+
 use tokio::sync::{mpsc, oneshot};
 
 use crate::DbError;
@@ -21,6 +30,10 @@ impl From<ActorError> for DbError {
     }
 }
 
+/// Handle to the worker thread that owns `S`. Cloning shares the same worker;
+/// the thread exits (dropping `S` and closing the connection) once every
+/// handle is gone. Jobs run one at a time in submission order, so a closure
+/// sees no interleaving from other callers.
 pub struct SqliteActor<S, E = DbError> {
     tx: mpsc::UnboundedSender<Job<S>>,
     error: std::marker::PhantomData<fn() -> E>,
@@ -36,6 +49,10 @@ impl<S, E> Clone for SqliteActor<S, E> {
 }
 
 impl<S: 'static, E: From<ActorError> + Send + 'static> SqliteActor<S, E> {
+    /// Spawns the worker thread (named `mainframe-db`), running `open` on it to
+    /// construct the state, and returns a handle once the open succeeds. A
+    /// failure inside `open` (bad path, migration error) is surfaced
+    /// synchronously.
     pub fn spawn<F>(open: F) -> Result<Self, E>
     where
         F: FnOnce() -> Result<S, E> + Send + 'static,
@@ -44,6 +61,7 @@ impl<S: 'static, E: From<ActorError> + Send + 'static> SqliteActor<S, E> {
         Self::spawn_named("mainframe-db", open)
     }
 
+    /// [`SqliteActor::spawn`] with an explicit thread name.
     pub fn spawn_named<F>(name: &str, open: F) -> Result<Self, E>
     where
         F: FnOnce() -> Result<S, E> + Send + 'static,
@@ -64,6 +82,8 @@ impl<S: 'static, E: From<ActorError> + Send + 'static> SqliteActor<S, E> {
                 if ready_tx.send(Ok(())).is_err() {
                     return;
                 }
+                // Blocking recv is correct here: this is a plain OS thread, not
+                // a tokio worker, so blocking it never stalls the runtime.
                 while let Some(job) = rx.blocking_recv() {
                     job(&mut state);
                 }
@@ -78,6 +98,8 @@ impl<S: 'static, E: From<ActorError> + Send + 'static> SqliteActor<S, E> {
         })
     }
 
+    /// Runs `f` on the worker thread and awaits its result
+    /// (`|db| db.chats.list(&pid)`). A dropped worker maps to `E`.
     pub async fn call<F, R>(&self, f: F) -> Result<R, E>
     where
         F: FnOnce(&S) -> Result<R, E> + Send + 'static,
@@ -86,6 +108,8 @@ impl<S: 'static, E: From<ActorError> + Send + 'static> SqliteActor<S, E> {
         self.call_mut(move |state| f(state)).await
     }
 
+    /// [`SqliteActor::call`] with mutable access to the state, for
+    /// `Connection::transaction` and similar `&mut self` APIs.
     pub async fn call_mut<F, R>(&self, f: F) -> Result<R, E>
     where
         F: FnOnce(&mut S) -> Result<R, E> + Send + 'static,
@@ -100,6 +124,18 @@ impl<S: 'static, E: From<ActorError> + Send + 'static> SqliteActor<S, E> {
             .map_err(|_| ActorError::Worker("dropped the request"))?
     }
 
+    /// Synchronous sibling of [`SqliteActor::call`]: dispatches `f` onto the
+    /// worker thread and **blocks** the caller until the result comes back over
+    /// a `std::sync::mpsc` channel. This is the sync-DB bridge that lets the
+    /// `ChatManager`'s synchronous `ChatManagerDeps` accessors (`chats_get`,
+    /// `chats_update`, …) reach the single WAL connection without opening a
+    /// second one; the closure runs on the same thread that owns the state.
+    ///
+    /// Deadlock rule: the worker is a dedicated OS thread, never a tokio
+    /// worker, so blocking a tokio worker here cannot starve the actor. It
+    /// must **never** be called from inside a job already running on the
+    /// worker thread (the thread would wait on itself forever); every
+    /// `ChatManagerDeps` caller runs on a tokio task, so that holds today.
     pub fn call_blocking<F, R>(&self, f: F) -> Result<R, E>
     where
         F: FnOnce(&S) -> Result<R, E> + Send + 'static,

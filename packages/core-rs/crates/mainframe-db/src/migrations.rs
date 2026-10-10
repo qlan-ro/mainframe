@@ -16,6 +16,10 @@ macro_rules! column {
     };
 }
 
+// The chain reproduces the historical ad-hoc schema evolution exactly, in
+// order. The column guards stay inside each migration body so a legacy DB (all
+// columns present, `user_version` 0) upgrades to `LATEST_VERSION` without
+// re-breaking.
 const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 1,
@@ -157,12 +161,16 @@ const MIGRATIONS: &[Migration] = &[
         version: 25,
         up: special::v25,
     },
+    // Marks a chat as automation-created (ask_agent step) so the sessions
+    // sidebar can hide it from the default list.
     column!(
         26,
         "chats",
         "automation_run_id",
         "ALTER TABLE chats ADD COLUMN automation_run_id TEXT"
     ),
+    // Worktree switch offers a chat has turned down. Dismissal is permanent,
+    // so it has to outlive the in-memory offer registry and daemon restarts.
     column!(
         27,
         "chats",
@@ -181,10 +189,13 @@ const MIGRATIONS: &[Migration] = &[
         version: 30,
         up: special::v30,
     },
+    // Provider segments: one chat, many provider-native sessions.
     Migration {
         version: 31,
         up: v31_segments::up,
     },
+    // Agent orchestration (MCP server): agent provenance on chats and the
+    // delegated-task table.
     Migration {
         version: orchestration::VERSION,
         up: orchestration::up,
@@ -195,8 +206,13 @@ pub fn migrations() -> Vec<Migration> {
     MIGRATIONS.to_vec()
 }
 
+/// Highest migration version: the target a fresh DB stamps to.
 pub const LATEST_VERSION: i64 = 32;
 
+/// Applies every migration whose version is greater than the DB's current
+/// `PRAGMA user_version`, each in its own transaction that also stamps the
+/// version. Legacy DBs report version 0 and re-run the whole idempotent
+/// chain; fresh DBs build from scratch.
 pub fn run_migrations(db: &Connection, target: i64) -> Result<(), DbError> {
     run_versioned(db, &migrations(), target)
 }

@@ -17,6 +17,8 @@ pub fn has_column(db: &Connection, table: &str, column: &str) -> Result<bool, Db
     )?)
 }
 
+/// `ALTER TABLE … ADD COLUMN` guard: runs `ddl` only when `table` lacks
+/// `column`, so the step is idempotent over legacy databases.
 pub fn add_column_if_missing(
     db: &Connection,
     table: &str,
@@ -29,6 +31,9 @@ pub fn add_column_if_missing(
     Ok(())
 }
 
+/// Applies each migration with `current < version <= target` in order, each
+/// in its own transaction that also stamps `PRAGMA user_version`, so a failed
+/// step leaves the database at the previous version with none of its changes.
 pub fn run_versioned(
     db: &Connection,
     migrations: &[Migration],
@@ -46,6 +51,8 @@ pub fn run_versioned(
     Ok(())
 }
 
+/// Runs a multi-statement SQL batch inside one transaction. The batch must not
+/// contain `BEGIN`/`COMMIT` or a `PRAGMA journal_mode` change.
 pub fn run_batch(db: &Connection, sql: &str) -> rusqlite::Result<()> {
     let transaction = db.unchecked_transaction()?;
     transaction.execute_batch(sql)?;

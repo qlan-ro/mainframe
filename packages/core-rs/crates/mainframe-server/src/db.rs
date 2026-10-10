@@ -1,3 +1,15 @@
+//! The `Send + Sync` database handle backing `AppCtx.db`.
+//!
+//! `mainframe_db::DatabaseManager` owns an `Rc<rusqlite::Connection>` and is
+//! therefore `!Send`, so it cannot live behind the `Arc<AppCtx>` that axum
+//! shares across worker tasks. The single WAL-mode connection every repository
+//! borrows is confined to one dedicated thread by the shared
+//! `mainframe_db::actor::SqliteActor`, and every query is serialized onto it.
+//! See `SqliteActor::call_blocking` for the rule the synchronous
+//! `ChatManagerDeps` bridge must follow.
+
+/// Handle to the single-threaded `DatabaseManager`. `call` ships an
+/// `FnOnce(&DatabaseManager)` closure, so every repository is reachable.
 pub type Db = mainframe_db::actor::SqliteActor<mainframe_db::DatabaseManager>;
 
 #[cfg(test)]
