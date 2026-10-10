@@ -21,7 +21,7 @@ use crate::models::{claude_models, enrich_with_context_window, merge_older_model
 use crate::plan_mode_handler::ClaudePlanModeHandler;
 use crate::session::ClaudeSession;
 use crate::title_generator::generate_claude_title;
-use crate::transcript::{get_session_jsonl_path, locate_claude_transcript};
+use crate::transcript::{encode_project_path, get_session_jsonl_path, locate_claude_transcript};
 
 /// The manifest `name` (the TS adapter imports `manifest.json`; the Rust port has
 /// no manifest asset, so the string is inlined).
@@ -118,18 +118,9 @@ impl Default for ClaudeAdapter {
 
 impl Adapter for ClaudeAdapter {
     fn initial_transcript_path(&self, session_id: &str, cwd: &str) -> Option<String> {
-        let safe_session: String = session_id
-            .chars()
-            .map(|c| {
-                if c.is_ascii_alphanumeric() || c == '-' {
-                    c
-                } else {
-                    '-'
-                }
-            })
-            .collect();
-        Some(get_session_jsonl_path(&safe_session, cwd).jsonl_path)
+        Some(get_session_jsonl_path(&encode_project_path(session_id), cwd).jsonl_path)
     }
+
     fn id(&self) -> &str {
         "claude"
     }
@@ -377,6 +368,32 @@ mod tests {
         assert!(a.capabilities().plan_mode);
         assert!(a.capabilities().fork);
         assert!(a.has_probe_models());
+    }
+
+    #[test]
+    fn initial_transcript_path_is_the_claude_project_jsonl() {
+        let home = dirs::home_dir().unwrap();
+        assert_eq!(
+            ClaudeAdapter::default().initial_transcript_path("session-id", "/proj"),
+            Some(
+                home.join(".claude/projects/-proj/session-id.jsonl")
+                    .to_string_lossy()
+                    .into_owned()
+            )
+        );
+    }
+
+    #[test]
+    fn initial_transcript_path_sanitizes_the_session_id() {
+        let home = dirs::home_dir().unwrap();
+        assert_eq!(
+            ClaudeAdapter::default().initial_transcript_path("../../etc/passwd", "/proj"),
+            Some(
+                home.join(".claude/projects/-proj/------etc-passwd.jsonl")
+                    .to_string_lossy()
+                    .into_owned()
+            )
+        );
     }
 
     #[test]

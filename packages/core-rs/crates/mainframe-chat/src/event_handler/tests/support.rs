@@ -13,6 +13,11 @@ pub(super) struct FakeDeps {
     /// outside the retire-on-result coverage.
     pending_fork: Mutex<Option<PendingForkState>>,
     project_path: Mutex<Option<String>>,
+    /// What `initial_transcript_path` answers; the per-adapter policy lives in
+    /// the adapters and is tested through the server's adapter registry.
+    transcript_path: Mutex<Option<String>>,
+    /// Every `(adapter_id, session_id, cwd)` the sink asked about.
+    transcript_lookups: Mutex<Vec<(String, String, String)>>,
 }
 
 impl FakeDeps {
@@ -25,6 +30,8 @@ impl FakeDeps {
             quota: None,
             pending_fork: Mutex::new(None),
             project_path: Mutex::new(None),
+            transcript_path: Mutex::new(None),
+            transcript_lookups: Mutex::new(Vec::new()),
         })
     }
     fn with_quota(cell: Arc<Mutex<ActiveChat>>, quota: Arc<QuotaManager>) -> Arc<Self> {
@@ -36,6 +43,8 @@ impl FakeDeps {
             quota: Some(quota),
             pending_fork: Mutex::new(None),
             project_path: Mutex::new(None),
+            transcript_path: Mutex::new(None),
+            transcript_lookups: Mutex::new(Vec::new()),
         })
     }
     fn set_pending_fork(&self, pending: PendingForkState) {
@@ -80,7 +89,12 @@ impl EventHandlerDeps for FakeDeps {
         session_id: &str,
         cwd: &str,
     ) -> Option<String> {
-        (adapter_id == "claude").then(|| compute_session_file_path(cwd, session_id))
+        self.transcript_lookups.lock().unwrap().push((
+            adapter_id.to_string(),
+            session_id.to_string(),
+            cwd.to_string(),
+        ));
+        self.transcript_path.lock().unwrap().clone()
     }
     fn add_plan_file(&self, _chat_id: &str, _file_path: &str) -> bool {
         false

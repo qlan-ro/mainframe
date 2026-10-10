@@ -1667,6 +1667,34 @@ mod scan_loaded_history_tests {
         );
     }
 
+    #[test]
+    fn initial_transcript_path_routes_to_the_owning_adapter() {
+        let deps = test_deps();
+        deps.adapters.register(Arc::new(
+            mainframe_adapter_claude::adapter::ClaudeAdapter::default(),
+        ));
+        deps.adapters
+            .register(Arc::new(mainframe_adapter_codex::CodexAdapter::default()));
+        let claude_path = dirs::home_dir()
+            .unwrap()
+            .join(".claude/projects/-proj/session-1.jsonl")
+            .to_string_lossy()
+            .into_owned();
+
+        assert_eq!(
+            ChatManagerDeps::initial_transcript_path(&deps, "claude", "session-1", "/proj"),
+            Some(claude_path)
+        );
+        assert_eq!(
+            ChatManagerDeps::initial_transcript_path(&deps, "codex", "session-1", "/proj"),
+            None
+        );
+        assert_eq!(
+            ChatManagerDeps::initial_transcript_path(&deps, "unknown", "session-1", "/proj"),
+            None
+        );
+    }
+
     /// todo #376 follow-up: production must actually ship the incremental
     /// projector, not just build one in a test harness (the scaling gates
     /// in `mainframe-adapter-claude` and this crate both construct

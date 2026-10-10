@@ -445,6 +445,14 @@ mod tests {
     use crate::types::ReasoningEffortOption;
     use mainframe_types::adapter::EffortLevel;
 
+    #[test]
+    fn has_no_initial_transcript_path() {
+        assert_eq!(
+            CodexAdapter::default().initial_transcript_path("thread-1", "/proj"),
+            None
+        );
+    }
+
     // --- list-models.test.ts ---
     #[test]
     fn maps_efforts_default_fast_tier_personality_is_default() {
