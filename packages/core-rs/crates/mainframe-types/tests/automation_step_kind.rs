@@ -35,7 +35,10 @@ fn checkpoint_kinds_keep_existing_wire_strings() {
 #[test]
 fn unknown_legacy_kind_round_trips_without_data_loss() {
     let kind: AutomationStepKind = serde_json::from_str("\"custom_legacy_kind\"").unwrap();
-    assert_eq!(kind, AutomationStepKind::Other("custom_legacy_kind".into()));
+    assert_eq!(kind, AutomationStepKind::from("custom_legacy_kind"));
+    assert!(
+        matches!(&kind, AutomationStepKind::Other(unknown) if unknown.as_str() == "custom_legacy_kind")
+    );
     assert_eq!(
         serde_json::to_string(&kind).unwrap(),
         "\"custom_legacy_kind\""
@@ -49,5 +52,23 @@ fn only_engine_bookkeeping_kinds_are_markers() {
     assert!(AutomationStepKind::RepeatWatermark.is_engine_marker());
     assert!(!AutomationStepKind::AskAgent.is_engine_marker());
     assert!(!AutomationStepKind::Retry.is_engine_marker());
-    assert!(!AutomationStepKind::Other("branch".into()).is_engine_marker());
+    assert!(!AutomationStepKind::from("branch").is_engine_marker());
+}
+
+/// `From<&str>` is the only constructor for a wire string, so a known string
+/// always lands on its named variant, never on `Other`.
+#[test]
+fn known_wire_strings_never_become_other() {
+    assert_eq!(
+        AutomationStepKind::from("ask_agent"),
+        AutomationStepKind::AskAgent
+    );
+    assert_eq!(
+        AutomationStepKind::from("ask_agent".to_string()),
+        AutomationStepKind::AskAgent
+    );
+    assert_eq!(
+        AutomationStepKind::from("repeat_watermark"),
+        AutomationStepKind::RepeatWatermark
+    );
 }

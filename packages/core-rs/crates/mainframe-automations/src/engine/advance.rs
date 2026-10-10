@@ -276,7 +276,7 @@ impl RunAdvancer for Interpreter {
         run_id: &'a str,
         step_ref: &'a str,
         outcome: super::OutOfBandOutcome,
-    ) -> BoxFuture<'a, Result<(), StoreError>> {
+    ) -> BoxFuture<'a, Result<(), super::SettleError>> {
         Box::pin(self.settle_out_of_band(run_id, step_ref, outcome))
     }
 }

@@ -1,7 +1,7 @@
 //! Checkpoint entry transitions. Every verb, block driver and out-of-band
 //! settle path writes entries through these methods inside a
-//! `RunStore::patch_checkpoint` closure, so the preservation rules below hold
-//! for all of them.
+//! `RunStore::patch_checkpoint` (or `patch_checkpoint_if`) closure, so the
+//! preservation rules below hold for all of them.
 
 use serde_json::{Map, Value};
 

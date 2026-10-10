@@ -76,24 +76,30 @@ impl Default for HttpRequestAction {
     }
 }
 
+/// The manifest, readable without building the action (see
+/// `actions::known_manifest`).
+pub(crate) fn http_request_manifest() -> ActionManifest {
+    ActionManifest::new(
+        ActionMeta {
+            id: "http.request",
+            title: "HTTP request",
+            group: ActionGroup::Builtin,
+            auth: ActionAuth::Token,
+            credential_label_hint: None,
+            outputs: vec![
+                ActionOutput::new("status", ActionOutputType::Number),
+                ActionOutput::new("body", ActionOutputType::Text),
+            ],
+            idempotent: false,
+        },
+        param_specs(),
+        Value::Bool(false),
+    )
+}
+
 impl Action for HttpRequestAction {
     fn manifest(&self) -> ActionManifest {
-        ActionManifest::new(
-            ActionMeta {
-                id: "http.request",
-                title: "HTTP request",
-                group: ActionGroup::Builtin,
-                auth: ActionAuth::Token,
-                credential_label_hint: None,
-                outputs: vec![
-                    ActionOutput::new("status", ActionOutputType::Number),
-                    ActionOutput::new("body", ActionOutputType::Text),
-                ],
-                idempotent: false,
-            },
-            param_specs(),
-            Value::Bool(false),
-        )
+        http_request_manifest()
     }
 
     fn execute<'a>(

@@ -16,6 +16,7 @@ pub(crate) mod expects;
 pub(crate) mod markers;
 pub(crate) mod notify_verb;
 mod out_of_band;
+pub(crate) use out_of_band::SettleError;
 #[cfg(test)]
 mod out_of_band_settle_tests;
 pub(crate) mod run_action_verb;
@@ -90,7 +91,7 @@ pub(crate) trait RunAdvancer: Send + Sync {
         run_id: &'a str,
         step_ref: &'a str,
         outcome: OutOfBandOutcome,
-    ) -> BoxFuture<'a, Result<(), StoreError>>;
+    ) -> BoxFuture<'a, Result<(), SettleError>>;
 }
 
 /// How a parked step ended when something other than the walk settled it.

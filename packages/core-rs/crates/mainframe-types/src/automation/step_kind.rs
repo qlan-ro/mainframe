@@ -8,6 +8,12 @@ use serde::{Deserialize, Serialize};
 /// the engine's own bookkeeping markers. Stored as the plain wire string, so
 /// a kind written by a newer or older daemon survives a round trip through
 /// `Other` unchanged.
+///
+/// `From<&str>` (and `From<String>`, which serde uses) is the only way to
+/// build a kind from a wire string: it maps every known string to its named
+/// variant, and `Other` cannot be constructed outside this module, so
+/// `Other` never holds a known kind and two equal wire strings always compare
+/// equal.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(from = "String", into = "String")]
 pub enum AutomationStepKind {
@@ -29,7 +35,19 @@ pub enum AutomationStepKind {
     BranchOutcome,
     /// Engine marker: a concurrent repeat's progress watermark.
     RepeatWatermark,
-    Other(String),
+    /// A kind this daemon does not know, kept verbatim.
+    Other(UnknownStepKind),
+}
+
+/// The wire string of a kind this daemon does not know. Only
+/// `AutomationStepKind::from` builds one, after ruling out every known kind.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnknownStepKind(String);
+
+impl UnknownStepKind {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
 }
 
 impl AutomationStepKind {
@@ -50,7 +68,7 @@ impl AutomationStepKind {
             Self::RetryAttempt => "retry_attempt",
             Self::BranchOutcome => "branch_outcome",
             Self::RepeatWatermark => "repeat_watermark",
-            Self::Other(value) => value,
+            Self::Other(unknown) => unknown.as_str(),
         }
     }
 
@@ -88,7 +106,7 @@ impl From<&str> for AutomationStepKind {
             "retry_attempt" => Self::RetryAttempt,
             "branch_outcome" => Self::BranchOutcome,
             "repeat_watermark" => Self::RepeatWatermark,
-            other => Self::Other(other.to_string()),
+            other => Self::Other(UnknownStepKind(other.to_string())),
         }
     }
 }

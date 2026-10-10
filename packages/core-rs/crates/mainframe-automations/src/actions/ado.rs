@@ -72,49 +72,55 @@ impl Default for AdoCreateItemAction {
     }
 }
 
+/// The manifest, readable without building the action (see
+/// `actions::known_manifest`).
+pub(crate) fn create_item_manifest() -> ActionManifest {
+    ActionManifest::new(
+        ActionMeta {
+            id: "ado.create_item",
+            title: "Azure DevOps: create work item",
+            group: ActionGroup::Connector,
+            auth: ActionAuth::Token,
+            credential_label_hint: Some("ado"),
+            outputs: vec![
+                ActionOutput::new("workItemId", ActionOutputType::Number),
+                ActionOutput::new("url", ActionOutputType::Text),
+            ],
+            idempotent: false,
+        },
+        vec![
+            ActionParam::field(
+                ActionField::text("org", "Organization").placeholder("my-org"),
+                json!({"type": "string", "minLength": 1}),
+            )
+            .required(),
+            ActionParam::field(
+                ActionField::text("project", "Project").placeholder("my-project"),
+                json!({"type": "string", "minLength": 1}),
+            )
+            .required(),
+            ActionParam::field(
+                ActionField::select("type", "Type", &["Task", "Bug", "User Story"]),
+                json!({"type": "string", "minLength": 1}),
+            )
+            .required(),
+            ActionParam::field(
+                ActionField::chip("title", "Title"),
+                json!({"type": "string", "minLength": 1}),
+            )
+            .required(),
+            ActionParam::field(
+                ActionField::chiparea("description", "Description"),
+                json!({"type": "string", "default": ""}),
+            ),
+        ],
+        Value::Bool(false),
+    )
+}
+
 impl Action for AdoCreateItemAction {
     fn manifest(&self) -> ActionManifest {
-        ActionManifest::new(
-            ActionMeta {
-                id: "ado.create_item",
-                title: "Azure DevOps: create work item",
-                group: ActionGroup::Connector,
-                auth: ActionAuth::Token,
-                credential_label_hint: Some("ado"),
-                outputs: vec![
-                    ActionOutput::new("workItemId", ActionOutputType::Number),
-                    ActionOutput::new("url", ActionOutputType::Text),
-                ],
-                idempotent: false,
-            },
-            vec![
-                ActionParam::field(
-                    ActionField::text("org", "Organization").placeholder("my-org"),
-                    json!({"type": "string", "minLength": 1}),
-                )
-                .required(),
-                ActionParam::field(
-                    ActionField::text("project", "Project").placeholder("my-project"),
-                    json!({"type": "string", "minLength": 1}),
-                )
-                .required(),
-                ActionParam::field(
-                    ActionField::select("type", "Type", &["Task", "Bug", "User Story"]),
-                    json!({"type": "string", "minLength": 1}),
-                )
-                .required(),
-                ActionParam::field(
-                    ActionField::chip("title", "Title"),
-                    json!({"type": "string", "minLength": 1}),
-                )
-                .required(),
-                ActionParam::field(
-                    ActionField::chiparea("description", "Description"),
-                    json!({"type": "string", "default": ""}),
-                ),
-            ],
-            Value::Bool(false),
-        )
+        create_item_manifest()
     }
 
     fn execute<'a>(

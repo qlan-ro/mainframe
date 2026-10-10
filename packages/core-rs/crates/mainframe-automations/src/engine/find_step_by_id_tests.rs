@@ -32,7 +32,7 @@ fn expecting(step: Step) -> Step {
     }
 }
 
-/// `agent_settle.rs::load_waiting_step` looks up `expects` via
+/// `agent_settle.rs::load_waiting_expects` looks up `expects` via
 /// `find_step_by_id` — nested inside a `retry`, a miss silently drops the
 /// A2 output contract instead of failing loudly.
 #[tokio::test]

@@ -65,24 +65,30 @@ struct RunCommandInput {
 
 pub struct RunCommandAction;
 
+/// The manifest, readable without building the action (see
+/// `actions::known_manifest`).
+pub(crate) fn run_command_manifest() -> ActionManifest {
+    ActionManifest::new(
+        ActionMeta {
+            id: "run_command",
+            title: "Run command",
+            group: ActionGroup::Builtin,
+            auth: ActionAuth::None,
+            credential_label_hint: None,
+            outputs: vec![
+                ActionOutput::new("output", ActionOutputType::Text),
+                ActionOutput::new("exitCode", ActionOutputType::Number),
+            ],
+            idempotent: false,
+        },
+        param_specs(),
+        Value::Bool(false),
+    )
+}
+
 impl Action for RunCommandAction {
     fn manifest(&self) -> ActionManifest {
-        ActionManifest::new(
-            ActionMeta {
-                id: "run_command",
-                title: "Run command",
-                group: ActionGroup::Builtin,
-                auth: ActionAuth::None,
-                credential_label_hint: None,
-                outputs: vec![
-                    ActionOutput::new("output", ActionOutputType::Text),
-                    ActionOutput::new("exitCode", ActionOutputType::Number),
-                ],
-                idempotent: false,
-            },
-            param_specs(),
-            Value::Bool(false),
-        )
+        run_command_manifest()
     }
 
     fn execute<'a>(

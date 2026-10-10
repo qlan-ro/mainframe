@@ -146,19 +146,32 @@ pub(crate) fn register_all_actions(registry: &mut ActionRegistry) -> Result<(), 
         .try_for_each(|action| registry.register(action))
 }
 
+/// Every launch action's manifest constructor, in catalog order. These are
+/// plain functions over static metadata: reading one builds no action, so no
+/// connector HTTP client exists until the registry registers the actions.
+/// Each action's `Action::manifest` returns the same function's value, and
+/// `registry_tests` pins this table to `register_all_actions`.
+const LAUNCH_MANIFESTS: [fn() -> ActionManifest; 9] = [
+    run_command::run_command_manifest,
+    files::append_manifest,
+    files::overwrite_manifest,
+    files::read_manifest,
+    http_action::http_request_manifest,
+    github::create_pr_manifest,
+    github::list_prs_manifest,
+    notion::add_row_manifest,
+    ado::create_item_manifest,
+];
+
 /// The manifest of a launch action by id, for code that needs an action's
-/// declared shape without a registry at hand (the validator's output table,
-/// the `outputAs` lookup). Unknown and `mcp:*` ids return `None`.
+/// declared shape without a registry at hand (the validator's output table in
+/// `domain::catalog`, the `outputAs` lookup). Reads `LAUNCH_MANIFESTS`, so
+/// validation never constructs an action. Unknown and `mcp:*` ids return
+/// `None`.
 pub(crate) fn known_manifest(action_id: &str) -> Option<&'static ActionManifest> {
     static MANIFESTS: OnceLock<Vec<ActionManifest>> = OnceLock::new();
     MANIFESTS
-        .get_or_init(|| {
-            builtin_actions()
-                .into_iter()
-                .chain(curated_actions())
-                .map(|action| action.manifest())
-                .collect()
-        })
+        .get_or_init(|| LAUNCH_MANIFESTS.iter().map(|manifest| manifest()).collect())
         .iter()
         .find(|manifest| manifest.id == action_id)
 }

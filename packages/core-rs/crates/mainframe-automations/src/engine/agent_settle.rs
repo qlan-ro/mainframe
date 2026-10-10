@@ -9,9 +9,9 @@ use crate::domain::{ExpectedOutput, Step, find_step_by_id};
 use crate::ports::{AgentOutcome, AgentPortError};
 use crate::store::StepStatus;
 
-use super::OutOfBandOutcome;
 use super::agent::{AgentVerb, WaitKey};
 use super::expects::{build_correction_message, parse_expected};
+use super::{OutOfBandOutcome, SettleError};
 
 enum Verdict {
     Succeed(Map<String, Value>),
@@ -115,11 +115,27 @@ impl AgentVerb {
             tracing::error!(run_id = key.run_id, "agent settle: no advancer bound");
             return;
         };
-        if let Err(err) = advancer
+        let succeeded = matches!(outcome, OutOfBandOutcome::Succeeded(_));
+        let Err(err) = advancer
             .settle_out_of_band(&key.run_id, &key.step_ref, outcome)
             .await
-        {
-            tracing::error!(run_id = key.run_id, error = %err, "agent settle: write failed");
+        else {
+            return;
+        };
+        let run_id = key.run_id.as_str();
+        match err {
+            SettleError::Write(err) if succeeded => {
+                tracing::error!(run_id, error = %err, "agent settle: succeed write failed");
+            }
+            SettleError::Write(err) => {
+                tracing::error!(run_id, error = %err, "agent settle: fail write failed");
+            }
+            SettleError::Advance(err) => {
+                tracing::error!(run_id, error = %err, "agent settle: advance failed");
+            }
+            SettleError::Finalize(err) => {
+                tracing::error!(run_id, error = %err, "agent settle: run finalize failed");
+            }
         }
     }
 }

@@ -1,6 +1,7 @@
 //! Token scope model backing validation: which named outputs each step
-//! produces (contract §5's frozen table), plus builtin/trigger tokens and
-//! the comparator/type compatibility table (the TypeScript copy is
+//! produces (run_action outputs come from the launch action manifests via
+//! `catalog`), plus builtin/trigger tokens and the comparator/type
+//! compatibility table (the TypeScript copy is
 //! packages/types/src/automation-domain/{tokens,comparators}.ts).
 
 use super::catalog::{action_outputs, capitalize, output_label};
