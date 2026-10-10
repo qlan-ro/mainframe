@@ -7,7 +7,7 @@
 use mainframe_types::sync::LockExt as _;
 use serde_json::{Value, json};
 
-use super::*;
+use super::{AdapterError, CodexSession};
 
 /// The `turn/steer` params for one text message.
 pub(crate) fn steer_params(

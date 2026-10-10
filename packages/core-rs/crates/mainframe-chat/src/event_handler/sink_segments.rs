@@ -5,7 +5,7 @@
 use mainframe_types::segment::{HandoffStatus, SegmentLayout, SegmentResultDelta};
 use mainframe_types::sync::LockExt as _;
 
-use super::*;
+use super::{ChatMessageType, EventHandlerDeps, SessionResult, SessionSinkImpl};
 use crate::segments::divider::{divider_for, divider_id, is_divider, refresh_divider};
 
 impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
