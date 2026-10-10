@@ -53,10 +53,7 @@ impl ChatsRepository {
         )?;
         crate::chat_segments::ensure_seeded(&self.db, &id)?;
 
-        let chat = self
-            .get(&id)?
-            .ok_or_else(|| DbError::Message("side chat insert did not round-trip".to_string()))?;
-        Ok((chat, true))
+        Ok((self.get_inserted(&id)?, true))
     }
 
     fn find_side_chat(&self, parent_id: &str) -> Result<Option<Chat>, DbError> {

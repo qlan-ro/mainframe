@@ -90,7 +90,7 @@ fn create_fork_round_trips_every_inherited_field_and_parent_chat_id() {
     assert_eq!(fork.total_cost, 0.0);
     assert_eq!(fork.total_tokens_input, 0);
     assert_eq!(fork.total_tokens_output, 0);
-    assert_eq!(fork.pinned, None);
+    assert_eq!(fork.pinned, Some(false));
     assert_eq!(fork.tags, None);
     assert_eq!(fork.automation_run_id, None);
 

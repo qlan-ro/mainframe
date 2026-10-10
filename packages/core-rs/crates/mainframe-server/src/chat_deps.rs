@@ -1395,9 +1395,8 @@ impl AttachmentLister for AttachmentListerHandle {
     }
 }
 
-/// Unpersisted `Chat` stub for the (near-impossible) `db.chats.create` failure —
-/// mirrors the shape `ChatsRepository::create` returns on success. Also the
-/// automations-deps tests' Chat fixture (pub(crate) for that reason).
+/// Unpersisted `Chat` stub for the (near-impossible) `db.chats.create` failure.
+/// Also the automations-deps tests' Chat fixture (pub(crate) for that reason).
 pub(crate) fn fallback_chat(new_chat: &NewChat) -> Chat {
     let now = now_iso8601();
     Chat {
