@@ -175,4 +175,6 @@ mod start;
 mod state;
 pub use env::clean_env;
 use env::compose_launch_env;
-use process::{pump_output, signal_group, wait_for_exit_task, wait_for_port, wait_until_exited};
+use process::{
+    ExitWatch, pump_output, signal_group, wait_for_exit_task, wait_for_port, wait_until_exited,
+};

@@ -21,21 +21,40 @@ pub(super) fn pump_output<R: tokio::io::AsyncRead + Unpin + Send + 'static>(
     })
 }
 
-#[allow(clippy::too_many_arguments)]
+/// Everything the exit watcher needs to retire one launch process.
+pub(super) struct ExitWatch {
+    pub(super) inner: Arc<Inner>,
+    pub(super) name: String,
+    pub(super) pid: Option<u32>,
+    pub(super) status: Arc<Mutex<LaunchProcessStatus>>,
+    pub(super) stderr_tail: Arc<Mutex<TailBuffer>>,
+    pub(super) exit_tx: watch::Sender<bool>,
+}
+
+/// Reap the child, then retire it in two steps: the process entry is removed
+/// and the exit published as soon as the pid is reaped, so a concurrent
+/// `stop()` never signals a reaped (possibly reused) pid while the output
+/// pumps finish; the final status is emitted only after the pumps delivered
+/// their last chunk.
 pub(super) async fn wait_for_exit_task(
     mut child: tokio::process::Child,
-    inner: Arc<Inner>,
-    name: String,
-    pid: Option<u32>,
-    status: Arc<Mutex<LaunchProcessStatus>>,
-    stderr_tail: Arc<Mutex<TailBuffer>>,
-    exit_tx: watch::Sender<bool>,
+    watch: ExitWatch,
     pumps: Vec<tokio::task::JoinHandle<()>>,
 ) {
+    let ExitWatch {
+        inner,
+        name,
+        pid,
+        status,
+        stderr_tail,
+        exit_tx,
+    } = watch;
     let code = child.wait().await.ok().and_then(|s| s.code());
-    mainframe_runtime::process::finish_pumps(pumps).await;
-
+    inner.processes.remove(&name);
     inner.forget_spawn(pid);
+    let _ = exit_tx.send(true); /* expected: no stop() is waiting */
+
+    mainframe_runtime::process::finish_pumps(pumps).await;
 
     log_exit(&name, pid, code, &stderr_tail);
 
@@ -52,9 +71,6 @@ pub(super) async fn wait_for_exit_task(
         }
     }
 
-    inner.processes.remove(&name);
-
-    let _ = exit_tx.send(true);
     if let Some(tm) = &inner.tunnel_manager {
         tm.stop(&format!("preview:{name}")).await;
     }
