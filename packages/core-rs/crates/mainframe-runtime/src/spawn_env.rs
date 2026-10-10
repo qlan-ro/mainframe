@@ -19,6 +19,21 @@ use std::sync::Arc;
 pub struct ResolvedPath(Arc<str>);
 
 impl ResolvedPath {
+    pub fn apply(&self, command: &mut tokio::process::Command) {
+        command.env("PATH", self.as_str());
+    }
+
+    pub fn find(&self, name: &str) -> Option<std::path::PathBuf> {
+        use std::os::unix::fs::PermissionsExt;
+        std::env::split_paths(self.as_str())
+            .map(|dir| dir.join(name))
+            .find(|path| {
+                path.metadata().is_ok_and(|metadata| {
+                    metadata.is_file() && metadata.permissions().mode() & 0o111 != 0
+                })
+            })
+    }
+
     /// Resolve the interactive-shell `PATH`: probe the
     /// login shell for its `PATH`, falling back to the current `PATH` plus the
     /// common user/toolchain bin dirs when the shell probe fails or is empty.
