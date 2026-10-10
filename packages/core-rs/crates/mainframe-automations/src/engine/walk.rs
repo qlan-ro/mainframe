@@ -123,11 +123,19 @@ async fn run_leaf(
 
     let scope = build_scope(&current, frame, ctx.clock.clone());
     let no_names = NameMap::new();
+    let names = ctx.names.get(step.id()).unwrap_or_else(|| {
+        tracing::warn!(
+            run_id = ctx.run_id,
+            step_id = step.id(),
+            "step missing from the name index; rendering with no bound names"
+        );
+        &no_names
+    });
     let verb_ctx = VerbContext {
         run_id: ctx.run_id,
         step_ref,
         scope: &scope,
-        names: ctx.names.get(step.id()).unwrap_or(&no_names),
+        names,
     };
     let outcome = dispatch(step, ctx.ports, verb_ctx).await;
 

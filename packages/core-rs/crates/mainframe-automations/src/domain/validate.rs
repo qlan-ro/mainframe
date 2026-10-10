@@ -13,8 +13,7 @@ use super::comparators::{comparator_wire_name, comparators_for};
 use super::condition::ConditionRow;
 use super::form::FormFieldType;
 use super::scope::{
-    TokenInfo, TokenType, builtin_tokens, current_item_info, step_produces, step_refs,
-    trigger_tokens,
+    TokenInfo, TokenType, body_scope, builtin_tokens, step_produces, step_refs, trigger_tokens,
 };
 use super::step::Step;
 use super::token::{TOKEN_STEP_BUILTIN, TOKEN_STEP_CURRENT, TokenRef};
@@ -232,128 +231,108 @@ fn walk(steps: &[Step], scope: &mut Vec<TokenInfo>, ctx: &mut Ctx, enclosing_con
                 format!("This step uses ${name}, but no earlier step defines it."),
             );
         }
-        match step {
-            Step::AskMe(s) => {
-                check_form_fields(step.id(), s, ctx);
-                scope.extend(step_produces(step));
-            }
-            Step::RunAction(s) => {
-                if s.action_id.is_empty() {
-                    ctx.push(step.id(), "Choose an action for this step.".to_string());
-                }
-                scope.extend(step_produces(step));
-            }
-            Step::Wait(s) => {
-                if s.seconds == 0 {
-                    ctx.push(step.id(), "Set how long this step should wait.".to_string());
-                } else if s.seconds > MAX_WAIT_SECONDS {
-                    ctx.push(
-                        step.id(),
-                        "A wait can be at most 7 days — check the unit.".to_string(),
-                    );
-                }
-            }
-            Step::SetVariable(s) => {
-                let claimed = variable_names_clashing_with(ctx.definition, step.id());
-                if let Some(message) = set_variable_name_issue(&s.name, &claimed) {
-                    ctx.push(step.id(), message);
-                }
-                scope.extend(step_produces(step));
-            }
-            Step::If(s) => {
-                check_condition_comparators(step.id(), &s.conditions, scope, ctx);
-                let mut then_scope = scope.clone();
-                walk(&s.then, &mut then_scope, ctx, enclosing_concurrency);
-                let mut otherwise_scope = scope.clone();
-                walk(
-                    &s.otherwise,
-                    &mut otherwise_scope,
-                    ctx,
-                    enclosing_concurrency,
-                );
-                // Both branches' outputs leak to later siblings once the
-                // block closes.
-                scope.extend(step_produces(step));
-            }
-            Step::Repeat(s) => {
-                if let Some(found) = lookup(scope, &s.items)
-                    && found.token_type != TokenType::List
-                {
-                    ctx.push(
-                        step.id(),
-                        format!(
-                            "\"{}\" isn't a list — pick a value that produces a list to repeat over.",
-                            found.label
-                        ),
-                    );
-                }
-                let factor =
-                    repeat_concurrency_factor(step.id(), s.concurrency, enclosing_concurrency, ctx);
-                let inner_concurrency = enclosing_concurrency.saturating_mul(factor);
-                let mut inner_scope = scope.clone();
-                inner_scope.push(current_item_info());
-                walk(&s.steps, &mut inner_scope, ctx, inner_concurrency);
-                // Isolated: nothing produced inside leaks after the block.
-            }
-            Step::Retry(s) => {
-                if s.max_attempts == 0 {
-                    ctx.push(
-                        step.id(),
-                        "Set how many times this should be tried.".to_string(),
-                    );
-                } else if s.max_attempts as usize > MAX_REPEAT_ITEMS {
-                    ctx.push(
-                        step.id(),
-                        format!("A retry can run at most {MAX_REPEAT_ITEMS} attempts."),
-                    );
-                }
-                let mut inner_scope = scope.clone();
-                walk(&s.steps, &mut inner_scope, ctx, enclosing_concurrency);
-                // Isolated like Repeat: a failed attempt's outputs must not
-                // outlive the block, or a later step could read a value the
-                // successful attempt never produced.
-            }
-            Step::Loop(s) => {
-                if s.conditions.is_empty() {
-                    ctx.push(
-                        step.id(),
-                        "Add a condition — a loop with none would never stop.".to_string(),
-                    );
-                }
-                if s.max_iterations == 0 {
-                    ctx.push(
-                        step.id(),
-                        "Set how many passes this loop may run.".to_string(),
-                    );
-                } else if s.max_iterations as usize > MAX_REPEAT_ITEMS {
-                    ctx.push(
-                        step.id(),
-                        format!("A loop can run at most {MAX_REPEAT_ITEMS} passes."),
-                    );
-                }
-                check_condition_comparators(step.id(), &s.conditions, scope, ctx);
-                let mut inner_scope = scope.clone();
-                walk(&s.steps, &mut inner_scope, ctx, enclosing_concurrency);
-                // Isolated like Repeat: a pass's outputs don't outlive the block.
-            }
-            Step::Parallel(s) => {
-                let factor = parallel_branch_factor(
-                    step.id(),
-                    s.branches.len() as u32,
-                    enclosing_concurrency,
-                    ctx,
-                );
-                let inner_concurrency = enclosing_concurrency.saturating_mul(factor);
-                for branch in &s.branches {
-                    let mut branch_scope = scope.clone();
-                    walk(branch, &mut branch_scope, ctx, inner_concurrency);
-                }
-                // Isolated: no branch sees a sibling's outputs, and nothing
-                // produced inside leaks after the block, matching Repeat.
-            }
-            _ => scope.extend(step_produces(step)),
+        let body_concurrency = check_step(step, scope, ctx, enclosing_concurrency);
+        // Each body walks a copy of the scope (`body_scope`), so nothing
+        // produced inside a repeat, loop, retry or parallel outlives it: a
+        // failed retry attempt or an earlier loop pass must not hand a later
+        // step a value the run never settled on, and no parallel branch sees a
+        // sibling's outputs. `if` alone re-emits both branches' outputs to
+        // later siblings, through `step_produces`.
+        for body in step.child_bodies() {
+            walk(body, &mut body_scope(step, scope), ctx, body_concurrency);
         }
+        scope.extend(step_produces(step));
     }
+}
+
+/// The step's own checks, independent of its body. Returns the concurrency
+/// its nested bodies run under.
+fn check_step(step: &Step, scope: &[TokenInfo], ctx: &mut Ctx, enclosing_concurrency: u32) -> u32 {
+    match step {
+        Step::AskMe(s) => check_form_fields(step.id(), s, ctx),
+        Step::RunAction(s) => {
+            if s.action_id.is_empty() {
+                ctx.push(step.id(), "Choose an action for this step.".to_string());
+            }
+        }
+        Step::Wait(s) => {
+            if s.seconds == 0 {
+                ctx.push(step.id(), "Set how long this step should wait.".to_string());
+            } else if s.seconds > MAX_WAIT_SECONDS {
+                ctx.push(
+                    step.id(),
+                    "A wait can be at most 7 days — check the unit.".to_string(),
+                );
+            }
+        }
+        Step::SetVariable(s) => {
+            let claimed = variable_names_clashing_with(ctx.definition, step.id());
+            if let Some(message) = set_variable_name_issue(&s.name, &claimed) {
+                ctx.push(step.id(), message);
+            }
+        }
+        Step::If(s) => check_condition_comparators(step.id(), &s.conditions, scope, ctx),
+        Step::Repeat(s) => {
+            if let Some(found) = lookup(scope, &s.items)
+                && found.token_type != TokenType::List
+            {
+                ctx.push(
+                    step.id(),
+                    format!(
+                        "\"{}\" isn't a list — pick a value that produces a list to repeat over.",
+                        found.label
+                    ),
+                );
+            }
+            let factor =
+                repeat_concurrency_factor(step.id(), s.concurrency, enclosing_concurrency, ctx);
+            return enclosing_concurrency.saturating_mul(factor);
+        }
+        Step::Retry(s) => {
+            if s.max_attempts == 0 {
+                ctx.push(
+                    step.id(),
+                    "Set how many times this should be tried.".to_string(),
+                );
+            } else if s.max_attempts as usize > MAX_REPEAT_ITEMS {
+                ctx.push(
+                    step.id(),
+                    format!("A retry can run at most {MAX_REPEAT_ITEMS} attempts."),
+                );
+            }
+        }
+        Step::Loop(s) => {
+            if s.conditions.is_empty() {
+                ctx.push(
+                    step.id(),
+                    "Add a condition — a loop with none would never stop.".to_string(),
+                );
+            }
+            if s.max_iterations == 0 {
+                ctx.push(
+                    step.id(),
+                    "Set how many passes this loop may run.".to_string(),
+                );
+            } else if s.max_iterations as usize > MAX_REPEAT_ITEMS {
+                ctx.push(
+                    step.id(),
+                    format!("A loop can run at most {MAX_REPEAT_ITEMS} passes."),
+                );
+            }
+            check_condition_comparators(step.id(), &s.conditions, scope, ctx);
+        }
+        Step::Parallel(s) => {
+            let factor = parallel_branch_factor(
+                step.id(),
+                s.branches.len() as u32,
+                enclosing_concurrency,
+                ctx,
+            );
+            return enclosing_concurrency.saturating_mul(factor);
+        }
+        Step::AskAgent(_) | Step::Notify(_) | Step::Break(_) => {}
+    }
+    enclosing_concurrency
 }
 
 fn check_form_fields(step_id: &str, step: &super::step_verbs::AskMeStep, ctx: &mut Ctx) {

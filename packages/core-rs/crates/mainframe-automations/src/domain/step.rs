@@ -82,6 +82,27 @@ impl Step {
             Step::Parallel(s) => s.keep_going,
         }
     }
+
+    /// Every step list nested directly under this step, in authoring order:
+    /// `if`'s then and otherwise, the body of `repeat`/`loop`/`retry`, and each
+    /// `parallel` branch. Leaves have none. Scope walks recurse through this so
+    /// none of them can miss a block kind.
+    pub fn child_bodies(&self) -> Vec<&[Step]> {
+        match self {
+            Step::If(s) => vec![&s.then, &s.otherwise],
+            Step::Repeat(s) => vec![&s.steps],
+            Step::Loop(s) => vec![&s.steps],
+            Step::Retry(s) => vec![&s.steps],
+            Step::Parallel(s) => s.branches.iter().map(Vec::as_slice).collect(),
+            Step::AskAgent(_)
+            | Step::AskMe(_)
+            | Step::RunAction(_)
+            | Step::Notify(_)
+            | Step::SetVariable(_)
+            | Step::Wait(_)
+            | Step::Break(_) => Vec::new(),
+        }
+    }
 }
 
 /// Re-runs its body from the top when it fails.
