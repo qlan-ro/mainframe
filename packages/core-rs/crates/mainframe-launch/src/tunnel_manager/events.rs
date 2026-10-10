@@ -42,11 +42,17 @@ impl TunnelManager {
     /// the tunnel and broadcast `stopped` when the established child dies on its
     /// own. A tunnel removed by `stop`, or since respawned under the same label,
     /// is left alone.
-    pub(super) fn spawn_exit_watcher(&self, label: String, process: TunnelProcess) {
+    pub(super) fn spawn_exit_watcher(
+        &self,
+        label: String,
+        process: TunnelProcess,
+        pumps: mainframe_runtime::process::PumpTasks,
+    ) {
         let tunnels = self.tunnels.clone();
         let broadcast = self.broadcast.clone();
         tokio::spawn(async move {
             let exit = process.exited().await;
+            pumps.finish().await;
             tracing::info!(target: "tunnel", label = %label, code = ?exit.code, "tunnel process exited");
             if tunnels
                 .remove_if(&label, |_, tunnel| tunnel.process.id == process.id)

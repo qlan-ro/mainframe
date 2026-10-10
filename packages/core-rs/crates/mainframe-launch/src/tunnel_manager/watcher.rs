@@ -34,7 +34,7 @@ impl TunnelManager {
             let status = loop {
                 tokio::select! {
                     status = child.wait() => break status,
-                    Some(flag) = signal_rx.recv() => deliver(&mut child, pid, flag, &signal).await,
+                    Some(kind) = signal_rx.recv() => deliver(&mut child, pid, kind, &signal).await,
                 }
             };
             let code = match status {

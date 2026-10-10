@@ -98,7 +98,7 @@ impl TunnelManager {
             Err(TryLockError::WouldBlock) => return,
         };
         for pid in live.values().filter_map(|process| process.pid) {
-            crate::process::sweep::default_kill(i64::from(pid), "SIGTERM", false);
+            crate::process::sweep::default_kill(i64::from(pid), Signal::Term, false);
         }
     }
 }

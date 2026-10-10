@@ -121,12 +121,10 @@ pub(super) fn request(
     })
 }
 
-pub(super) async fn assert_pid_gone(pid: i64) {
-    let status = tokio::process::Command::new("kill")
-        .args(["-0", &pid.to_string()])
-        .stderr(std::process::Stdio::null())
-        .status()
-        .await
-        .unwrap();
-    assert!(!status.success(), "tunnel child survived shutdown");
+pub(super) fn assert_pid_gone(pid: i64) {
+    let pid = u32::try_from(pid).expect("registry pids are positive");
+    assert!(
+        !mainframe_runtime::process::is_alive(pid),
+        "tunnel child survived shutdown"
+    );
 }
