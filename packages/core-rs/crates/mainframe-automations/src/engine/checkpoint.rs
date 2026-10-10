@@ -143,18 +143,6 @@ pub(crate) fn fail_step_entry(checkpoint: &mut AutomationCheckpoint, step_ref: &
     }
 }
 
-/// True while some entry is still `waiting` — an out-of-band failure (agent
-/// settle, deadline) consults this AFTER writing its own failure, so a run
-/// with an outstanding `Waiting` entry never finalizes here: that entry (a
-/// concurrent sibling, most often) is left to settle on its own and the
-/// driver owns the eventual verdict instead.
-pub(crate) fn has_waiting_entry(checkpoint: &AutomationCheckpoint) -> bool {
-    checkpoint
-        .steps
-        .values()
-        .any(|entry| entry.status == StepStatus::Waiting)
-}
-
 /// The run-level `wake_at` is only the sweep's cheap pre-filter (skip a whole
 /// run without inspecting every entry) — recomputed as the minimum across
 /// every still-`waiting` entry so N concurrent parks each keep their own

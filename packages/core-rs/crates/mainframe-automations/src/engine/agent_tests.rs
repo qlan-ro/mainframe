@@ -314,6 +314,56 @@ async fn deadline_sweep_fails_an_overdue_agent_step() {
 }
 
 #[tokio::test]
+async fn deadline_failure_streams_the_step_transition_before_finalizing() {
+    // The agent settle path emits RunUpdated as soon as it writes a step
+    // failure; the deadline sweep must stream the same transition, not just
+    // the terminal record that follows it.
+    let rig = agent_rig(FakePorts::default()).await;
+    let step = match ask_agent_step("agent-1", false) {
+        Step::AskAgent(mut s) => {
+            s.timeout_minutes = Some(1);
+            Step::AskAgent(s)
+        }
+        _ => unreachable!(),
+    };
+    let run = rig
+        .engine
+        .start_run(&rig.h.automation_id, definition(vec![step]), manual(), None)
+        .await
+        .unwrap();
+    rig.engine.advance(&run.id).await.unwrap();
+    let wake_at = rig
+        .h
+        .store
+        .get_run(&run.id)
+        .await
+        .unwrap()
+        .unwrap()
+        .checkpoint
+        .wake_at
+        .unwrap();
+    let before = rig.h.sink.run_updates().len();
+
+    rig.engine.sweep_due(wake_at + 1).await.unwrap();
+
+    let swept: Vec<(String, RunStatus, Option<String>)> = rig.h.sink.run_updates()[before..]
+        .iter()
+        .map(|update| (update.id.clone(), update.status, update.error.clone()))
+        .collect();
+    assert_eq!(
+        swept,
+        vec![
+            (run.id.clone(), RunStatus::Running, None),
+            (
+                run.id.clone(),
+                RunStatus::Failed,
+                Some("agent step deadline exceeded".to_string())
+            ),
+        ]
+    );
+}
+
+#[tokio::test]
 async fn a_late_watch_error_after_success_is_dropped() {
     // The settle path must ignore an outcome for a chat whose wait is gone
     // (e.g. an errored duplicate delivery after the step already settled).
