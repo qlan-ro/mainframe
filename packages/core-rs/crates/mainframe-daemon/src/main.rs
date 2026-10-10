@@ -18,6 +18,7 @@ mod e2e_mock;
 mod github_issues_port;
 mod plugin_host_db;
 mod quota_store;
+mod startup;
 
 #[cfg(test)]
 mod github_issues_port_tests;
@@ -25,7 +26,6 @@ mod github_issues_port_tests;
 use std::collections::HashMap;
 use std::future::Future;
 use std::net::SocketAddr;
-use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::{Arc, RwLock};
 
@@ -110,7 +110,20 @@ async fn main() {
 
 /// The daemon boot (`main()` in `index.ts`).
 async fn run_daemon() {
-    let _log_guard = mainframe_runtime::logging::init();
+    let (config, paths) = match mainframe_runtime::config::get_data_dir().and_then(|config_dir| {
+        let config = mainframe_runtime::config::get_config()?;
+        let paths = mainframe_runtime::config::boot_paths(&config, &config_dir);
+        Ok((config, paths))
+    }) {
+        Ok(loaded) => loaded,
+        Err(err) => {
+            // Logging is not up yet: it needs the configured data directory.
+            eprintln!("failed to load config: {err}");
+            std::process::exit(1);
+        }
+    };
+    let data_dir = paths.data_dir.clone();
+    let _log_guard = mainframe_runtime::logging::init(&paths.log_dir);
 
     // Resolve the login-shell PATH once at boot and thread it into every child
     // spawn (adapters, title generation, LSP, launch, background-task probes).
@@ -119,10 +132,6 @@ async fn run_daemon() {
     let resolved_path = mainframe_runtime::ResolvedPath::resolve();
     mainframe_background_tasks::spawn_env::set_resolved_path(resolved_path.as_str());
 
-    let config = match mainframe_runtime::config::get_config() {
-        Ok(config) => config,
-        Err(err) => fatal("failed to load config", &err),
-    };
     // ensureAuthSecret(): generates + persists a secret if none exists. The TS
     // daemon then sets process.env.AUTH_TOKEN_SECRET; env mutation is `unsafe`
     // under edition 2024, so the secret is threaded through AppCtx instead.
@@ -130,11 +139,18 @@ async fn run_daemon() {
         Ok(secret) => Some(secret),
         Err(err) => fatal("failed to resolve auth secret", &err),
     };
-    let data_dir = PathBuf::from(&config.data_dir);
     let port = config.port;
     info!(data_dir = %data_dir.display(), "data directory");
 
-    let db = match Db::spawn(mainframe_db::DatabaseManager::new) {
+    let (listener, db) = match startup::bind_before_database(port, move || {
+        Db::spawn(move || mainframe_db::DatabaseManager::new(&paths.db_path, &paths.legacy_db_path))
+    })
+    .await
+    {
+        Ok(opened) => opened,
+        Err(err) => fatal("failed to bind daemon listener", &err),
+    };
+    let db = match db {
         Ok(db) => db,
         Err(err) => fatal("failed to open database", &err),
     };
@@ -431,15 +447,7 @@ async fn run_daemon() {
 
     let app = build_app(Arc::clone(&ctx));
 
-    // Loopback only — matches `httpServer.listen(port, '127.0.0.1')` in index.ts.
-    // Binding all interfaces would expose the daemon on every NIC/LAN, and with
-    // `AUTH_TOKEN_SECRET` unset the auth gate is a no-op. Only loopback and the
-    // local cloudflared tunnel may reach the daemon.
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
-    let listener = match tokio::net::TcpListener::bind(addr).await {
-        Ok(listener) => listener,
-        Err(err) => fatal("failed to bind daemon listener", &err),
-    };
     info!(%addr, version = DAEMON_VERSION, "mainframe-daemon listening");
 
     // Reap tunnel AND launch children a previous daemon crash/kill orphaned,

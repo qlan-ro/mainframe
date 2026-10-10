@@ -7,7 +7,7 @@
 #![forbid(unsafe_code)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::rc::Rc;
 
 use rusqlite::Connection;
@@ -25,6 +25,7 @@ pub mod devices;
 pub mod migrations;
 mod orchestration;
 pub mod projects;
+mod relocation;
 pub mod schema;
 pub mod settings;
 mod side_chats;
@@ -68,26 +69,6 @@ pub(crate) fn enum_to_db_string<T: serde::Serialize>(value: &T) -> Result<String
     }
 }
 
-/// Mirrors `config.ts`'s `getDataDir()`. Not yet available from
-/// `mainframe_runtime::config` (only the `DAEMON_PORT` override is ported there),
-/// so it is replicated here for `DatabaseManager::new()`.
-fn get_data_dir() -> Result<PathBuf, DbError> {
-    // TODO(port): delegate to mainframe_runtime::config::get_data_dir once that
-    // ports the dataDir path (only DAEMON_PORT is ported there today).
-    // `??` in the TS is nullish-only: an unset var falls back, an empty string
-    // does not. `env::var` returns `Err` only when unset, so this matches.
-    let dir = match std::env::var("MAINFRAME_DATA_DIR") {
-        Ok(value) => PathBuf::from(value),
-        Err(_) => dirs::home_dir()
-            .ok_or_else(|| DbError::Message("could not resolve home directory".into()))?
-            .join(".mainframe"),
-    };
-    if !dir.exists() {
-        std::fs::create_dir_all(&dir)?;
-    }
-    Ok(dir)
-}
-
 /// Owns the single SQLite connection and exposes the repositories, mirroring the
 /// TS `DatabaseManager`. The connection is shared with each repository via
 /// `Rc<Connection>` (single-threaded, synchronous — one shared handle, exactly
@@ -106,10 +87,14 @@ pub struct DatabaseManager {
 }
 
 impl DatabaseManager {
-    /// Opens `~/.mainframe/mainframe.db` (or `$MAINFRAME_DATA_DIR/mainframe.db`),
-    /// enabling WAL + foreign keys, then runs migrations.
-    pub fn new() -> Result<Self, DbError> {
-        let db_path = get_data_dir()?.join("mainframe.db");
+    /// Opens the daemon database at `db_path` (`<dataDir>/mainframe.db`). A
+    /// database found only at `legacy_db_path` is moved there first; if that
+    /// move fails, the legacy database is opened for this boot instead.
+    pub fn new(db_path: &Path, legacy_db_path: &Path) -> Result<Self, DbError> {
+        let db_path = relocation::resolve_database_path(db_path, legacy_db_path);
+        if let Some(dir) = db_path.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
         Self::open(&db_path)
     }
 
@@ -163,10 +148,45 @@ impl DatabaseManager {
 // PORT STATUS: src/db/index.ts (49 lines)
 // confidence: medium
 // notes: `DatabaseManager` mirrors the TS class (pub repo fields, WAL +
-// foreign_keys pragmas, initializeSchema). getDataDir() is replicated locally
-// pending mainframe_runtime::config porting the dataDir path (see the inline
-// deferral marker at get_data_dir). Repositories share one Rc<Connection> (single-threaded,
+// foreign_keys pragmas, initializeSchema). Repositories share one Rc<Connection> (single-threaded,
 // synchronous) — Phase B replaces this with the async Db handle / spawn_blocking.
 // close() consumes self (Rust drops the connection when the last Rc is released).
 // DbError + enum_to_db_string are crate-wide helpers with no TS counterpart.
-// todos: 1
+// todos: 0
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn creates_the_database_under_a_new_data_directory() {
+        let root = tempdir().unwrap();
+        let db_path = root.path().join("configured").join("mainframe.db");
+        let legacy_db = root.path().join("legacy").join("mainframe.db");
+
+        DatabaseManager::new(&db_path, &legacy_db).unwrap().close();
+
+        assert!(db_path.exists());
+        assert!(!root.path().join("legacy").exists());
+    }
+
+    #[test]
+    fn opens_a_moved_legacy_database_with_its_data() {
+        let root = tempdir().unwrap();
+        let db_path = root.path().join("configured").join("mainframe.db");
+        let legacy_db = root.path().join("mainframe.db");
+        let conn = Connection::open(&legacy_db).unwrap();
+        conn.execute_batch("CREATE TABLE migration_proof (value TEXT); INSERT INTO migration_proof VALUES ('kept');").unwrap();
+        drop(conn);
+
+        let db = DatabaseManager::new(&db_path, &legacy_db).unwrap();
+        let value: String = db
+            .connection()
+            .query_row("SELECT value FROM migration_proof", [], |row| row.get(0))
+            .unwrap();
+
+        assert_eq!(value, "kept");
+        assert!(!legacy_db.exists());
+    }
+}

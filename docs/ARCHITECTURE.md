@@ -267,9 +267,15 @@ module, not generated from each other.
 ## Storage
 
 SQLite via `rusqlite` (not `better-sqlite3` — that was the Node daemon's
-driver and is gone), at `$MAINFRAME_DATA_DIR/mainframe.db`
-(`MAINFRAME_DATA_DIR` defaults to `~/.mainframe`). WAL mode and foreign keys
-are enabled on open (`mainframe-db`). The core schema starts with six tables:
+driver and is gone), at `<dataDir>/mainframe.db`. `dataDir` is the merged
+config value: a non-empty `$MAINFRAME_DATA_DIR` wins, then a non-blank `dataDir`
+from `config.json`, then `~/.mainframe`. `config.json` itself is always read from
+`$MAINFRAME_DATA_DIR` or `~/.mainframe`. Daemon logs (`server.*`) and the
+Tauri shell's logs (`app-tauri.*`) go to `<dataDir>/logs`. A database found
+only in the config directory (where releases before this rule kept it) is
+moved to `dataDir` on boot after a WAL checkpoint; if the move fails, the
+daemon opens it in place for that boot and retries on the next one. WAL mode
+and foreign keys are enabled on open (`mainframe-db`). The core schema starts with six tables:
 `projects`, `chats`, `settings`, `devices`, `tags`, `chat_tags` — all owned by
 `mainframe-db`'s repositories. Other subsystems (automations, plugins) reuse
 the same connection through the shared `Db` actor handle rather than opening

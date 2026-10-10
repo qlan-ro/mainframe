@@ -124,7 +124,9 @@ fn merge_config(file: PartialMainframeConfig, env: PartialMainframeConfig) -> Ma
         if let Some(port) = partial.port {
             config.port = port;
         }
-        if let Some(data_dir) = partial.data_dir {
+        // A blank `dataDir` would become a relative path; treat it as unset,
+        // like an empty `$MAINFRAME_DATA_DIR`.
+        if let Some(data_dir) = partial.data_dir.filter(|dir| !dir.trim().is_empty()) {
             config.data_dir = data_dir;
         }
         if let Some(tunnel) = partial.tunnel {
@@ -171,6 +173,32 @@ pub fn get_data_dir() -> Result<PathBuf, ConfigError> {
 pub fn get_config() -> Result<MainframeConfig, ConfigError> {
     let dir = get_data_dir()?;
     Ok(merge_config(read_file_config(&dir), env_overrides()))
+}
+
+/// The files one daemon boot reads and writes, resolved from the merged config.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BootPaths {
+    /// The merged `dataDir`: everything the daemon stores lives under it.
+    pub data_dir: PathBuf,
+    /// `<dataDir>/mainframe.db`.
+    pub db_path: PathBuf,
+    /// `<config dir>/mainframe.db`: where releases that ignored `dataDir` kept
+    /// the database, so it can be moved to `db_path`.
+    pub legacy_db_path: PathBuf,
+    /// `<dataDir>/logs`, home of the daily `server.<date>.log` files.
+    pub log_dir: PathBuf,
+}
+
+/// Resolves [`BootPaths`] from the merged config and the directory its
+/// `config.json` was read from ([`get_data_dir`]).
+pub fn boot_paths(config: &MainframeConfig, config_dir: &Path) -> BootPaths {
+    let data_dir = PathBuf::from(&config.data_dir);
+    BootPaths {
+        db_path: data_dir.join("mainframe.db"),
+        legacy_db_path: config_dir.join("mainframe.db"),
+        log_dir: data_dir.join("logs"),
+        data_dir,
+    }
 }
 
 /// Mirrors `saveConfig(config)`: merges the partial onto the current config and
@@ -240,6 +268,42 @@ mod tests {
     use tempfile::tempdir;
 
     #[test]
+    fn boot_paths_put_database_and_logs_under_configured_data_dir() {
+        let config = MainframeConfig {
+            data_dir: "/srv/mainframe-data".into(),
+            ..default_config()
+        };
+        let paths = boot_paths(&config, Path::new("/home/dev/.mainframe"));
+        assert_eq!(
+            paths,
+            BootPaths {
+                data_dir: PathBuf::from("/srv/mainframe-data"),
+                db_path: PathBuf::from("/srv/mainframe-data/mainframe.db"),
+                legacy_db_path: PathBuf::from("/home/dev/.mainframe/mainframe.db"),
+                log_dir: PathBuf::from("/srv/mainframe-data/logs"),
+            }
+        );
+    }
+
+    #[test]
+    fn boot_paths_match_legacy_when_data_dir_is_the_config_dir() {
+        let config = MainframeConfig {
+            data_dir: "/home/dev/.mainframe".into(),
+            ..default_config()
+        };
+        let paths = boot_paths(&config, Path::new("/home/dev/.mainframe"));
+        assert_eq!(
+            paths.db_path,
+            PathBuf::from("/home/dev/.mainframe/mainframe.db")
+        );
+        assert_eq!(
+            paths.legacy_db_path,
+            PathBuf::from("/home/dev/.mainframe/mainframe.db")
+        );
+        assert_eq!(paths.log_dir, PathBuf::from("/home/dev/.mainframe/logs"));
+    }
+
+    #[test]
     fn merge_applies_default_file_then_env() {
         let file = PartialMainframeConfig {
             port: Some(40000),
@@ -255,6 +319,40 @@ mod tests {
         assert_eq!(merged.port, 41000);
         assert_eq!(merged.auth_secret.as_deref(), Some("from-file"));
         assert!(merged.data_dir.ends_with(".mainframe"));
+    }
+
+    #[test]
+    fn merge_treats_blank_data_dir_as_unset() {
+        for blank in ["", "   ", "\t\n"] {
+            let file = PartialMainframeConfig {
+                data_dir: Some(blank.into()),
+                ..Default::default()
+            };
+            let merged = merge_config(file, PartialMainframeConfig::default());
+            assert_eq!(PathBuf::from(&merged.data_dir), default_data_dir());
+        }
+
+        // A blank file value does not mask the default, and a set env value still wins.
+        let file = PartialMainframeConfig {
+            data_dir: Some("  ".into()),
+            ..Default::default()
+        };
+        let env = PartialMainframeConfig {
+            data_dir: Some("/srv/from-env".into()),
+            ..Default::default()
+        };
+        assert_eq!(merge_config(file, env).data_dir, "/srv/from-env");
+
+        // A blank env value leaves the file's `dataDir` in place.
+        let file = PartialMainframeConfig {
+            data_dir: Some("/srv/from-file".into()),
+            ..Default::default()
+        };
+        let env = PartialMainframeConfig {
+            data_dir: Some(" ".into()),
+            ..Default::default()
+        };
+        assert_eq!(merge_config(file, env).data_dir, "/srv/from-file");
     }
 
     #[test]

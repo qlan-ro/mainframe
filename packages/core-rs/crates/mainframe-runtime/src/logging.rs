@@ -1,7 +1,7 @@
 //! Ported from `src/logger.ts`.
 //!
 //! The `tracing` equivalent of the pino setup: a daily-rotated file
-//! `$MAINFRAME_DATA_DIR/logs/server.<YYYY-MM-DD>.log`, a 7-day purge on boot,
+//! `<configured dataDir>/logs/server.<YYYY-MM-DD>.log`, a 7-day purge on boot,
 //! `LOG_LEVEL`/`LOG_TO_STDOUT` env handling, stdout added off-production, and
 //! silence under tests. The pino *serialization format* is not a wire contract
 //! (logs are never consumed by clients), so the tracing text/field format is
@@ -44,21 +44,6 @@ fn resolve_level() -> String {
     resolve_level_from(std::env::var("LOG_LEVEL").ok().as_deref())
 }
 
-/// Mirrors `logDir()` in `src/logger.ts`: `$MAINFRAME_DATA_DIR/logs`, defaulting
-/// to `~/.mainframe/logs`.
-fn log_dir() -> PathBuf {
-    let base = std::env::var("MAINFRAME_DATA_DIR")
-        .ok()
-        .filter(|d| !d.is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            dirs::home_dir()
-                .unwrap_or_else(|| PathBuf::from("."))
-                .join(".mainframe")
-        });
-    base.join("logs")
-}
-
 /// The `purgeOldLogs()` decision, factored pure for testing: a `server.*` file
 /// whose mtime predates the cutoff is stale.
 fn is_stale_server_log(file_name: &str, modified: SystemTime, cutoff: SystemTime) -> bool {
@@ -91,13 +76,14 @@ fn is_test_env() -> bool {
         || std::env::var("VITEST").as_deref() == Ok("true")
 }
 
-/// Initializes the global `tracing` subscriber. Safe to call once at process boot.
+/// Initializes the global `tracing` subscriber, writing into `log_dir` (resolved
+/// by [`crate::config::boot_paths`]). Safe to call once at process boot.
 ///
 /// Returns the `WorkerGuard` for the file appender; the caller must keep it alive
 /// for the process lifetime or buffered log lines are lost on exit. Returns
 /// `None` under tests (silent, no subscriber) or if the file appender cannot be
 /// built (graceful stdout-only fallback).
-pub fn init() -> Option<WorkerGuard> {
+pub fn init(log_dir: &std::path::Path) -> Option<WorkerGuard> {
     if is_test_env() {
         return None;
     }
@@ -110,8 +96,15 @@ pub fn init() -> Option<WorkerGuard> {
     let is_prod = std::env::var("NODE_ENV").as_deref() == Ok("production");
     let force_stdout = std::env::var("LOG_TO_STDOUT").as_deref() == Ok("true");
 
-    let dir = log_dir();
-    let _ = fs::create_dir_all(&dir); // ensureLogDir(); mkdir -p
+    let dir = log_dir.to_path_buf();
+    if let Err(err) = fs::create_dir_all(&dir) {
+        // The subscriber is not installed yet, so `tracing` would drop this.
+        // Logging falls back to stdout-only below when the appender can't be built.
+        eprintln!(
+            "mainframe: could not create log directory {}: {err}",
+            dir.display()
+        );
+    }
     purge_old_logs(&dir);
 
     let filter = EnvFilter::try_new(&level).unwrap_or_else(|_| EnvFilter::new("info"));

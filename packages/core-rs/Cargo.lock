@@ -1580,7 +1580,6 @@ dependencies = [
 name = "mainframe-db"
 version = "0.0.0"
 dependencies = [
- "dirs",
  "mainframe-runtime",
  "mainframe-types",
  "nanoid",
