@@ -1,19 +1,20 @@
 //! Domain model for Automations v2 — serde shapes are the ratified wire
 //! contract (§1).
 
-pub mod automation;
+pub(crate) mod automation;
 pub(crate) mod catalog;
 pub(crate) mod comparators;
-pub mod concurrent_branch;
-pub mod condition;
-pub mod form;
+pub(crate) mod concurrent_branch;
+pub(crate) mod condition;
+pub(crate) mod form;
 pub(crate) mod scope;
-pub mod step;
+pub(crate) mod scoped_walk;
+pub(crate) mod step;
 mod step_verbs;
-pub mod template;
-pub mod token;
-pub mod trigger;
-pub mod validate;
+pub(crate) mod template;
+pub(crate) mod token;
+pub(crate) mod trigger;
+pub(crate) mod validate;
 pub(crate) mod validate_breaks;
 pub(crate) mod validate_concurrency;
 pub(crate) mod validate_variables;
@@ -22,10 +23,10 @@ pub use automation::{AutomationCreateInput, AutomationDefinition, AutomationScop
 pub(crate) use concurrent_branch::enclosing_concurrent_branch;
 pub use condition::{Comparator, ConditionMatch, ConditionRow, ConditionValue, ScalarValue};
 pub use form::{AutomationFormField, FormFieldType, ShowWhen};
-pub(crate) use step::find_step_by_id;
 pub use step::{
     BreakStep, IfBlock, LoopBlock, LoopMode, ParallelBlock, RepeatBlock, RetryBlock, Step,
 };
+pub(crate) use step::{MAX_REPEAT_ITEMS, find_step_by_id};
 pub use step_verbs::{
     AskAgentStep, AskMeStep, ExpectedOutput, ExpectedOutputType, NotifyStep, OutputAs,
     RunActionStep, SetVariableStep, WaitStep, WorktreeSpec,

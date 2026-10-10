@@ -3,11 +3,11 @@
 
 use std::sync::Arc;
 
-use mainframe_automations::engine::BoxFuture;
 use mainframe_automations::ports::{
     AutomationEvent, CuratedEvent, EventSink, EventSource, Notification, Notifier, NotifyError,
 };
 use mainframe_services::push::{PushMessage, PushPriority, PushService};
+use mainframe_types::BoxFuture;
 use mainframe_types::events::{ChatUpdatedReason, DaemonEvent};
 use tokio::sync::broadcast;
 

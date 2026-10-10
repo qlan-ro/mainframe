@@ -2,11 +2,11 @@
 //! typed value (comparators and Repeat need a real list/number, not a string);
 //! `substitute::render` stringifies for prompt/param text.
 
-pub mod compare;
-pub mod scope;
-pub mod substitute;
-pub mod value;
-pub mod variables;
+pub(crate) mod compare;
+pub(crate) mod scope;
+pub(crate) mod substitute;
+pub(crate) mod value;
+pub(crate) mod variables;
 
 pub use compare::evaluate;
 pub use scope::Scope;

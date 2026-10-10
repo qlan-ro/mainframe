@@ -2,12 +2,12 @@
 //! schedule sweep (derived state — no trigger_state table), and the event
 //! router + webhook verification.
 
-pub mod completion;
-pub mod fire;
-pub mod router;
-pub mod sweep;
-pub mod webhook;
-pub mod webhook_ingest;
+pub(crate) mod completion;
+pub(crate) mod fire;
+pub(crate) mod router;
+pub(crate) mod sweep;
+pub(crate) mod webhook;
+pub(crate) mod webhook_ingest;
 
 pub use completion::CompletionEmitter;
 pub use fire::TriggerFirer;

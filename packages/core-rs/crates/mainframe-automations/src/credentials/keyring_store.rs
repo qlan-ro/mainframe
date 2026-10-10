@@ -10,9 +10,8 @@
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
+use mainframe_types::BoxFuture;
 use tokio::sync::RwLock;
-
-use crate::engine::BoxFuture;
 
 use super::{CredentialError, CredentialStore, Credentials};
 

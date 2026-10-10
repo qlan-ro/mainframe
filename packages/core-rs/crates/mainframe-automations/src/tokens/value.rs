@@ -74,6 +74,20 @@ impl TokenValue {
     }
 }
 
+/// JS `String(value)` for the scalar shapes a choice can arrive as.
+pub(crate) fn js_string(value: &Value) -> String {
+    match value {
+        Value::String(s) => s.clone(),
+        Value::Number(n) => n
+            .as_f64()
+            .map(js_number_string)
+            .unwrap_or_else(|| n.to_string()),
+        Value::Bool(b) => b.to_string(),
+        Value::Null => "null".to_string(),
+        other => other.to_string(),
+    }
+}
+
 /// Renders like JS `String(number)` for the values automations produce: integral
 /// floats print without a decimal point (`String(5)` → `"5"`, never `"5.0"`).
 pub(crate) fn js_number_string(n: f64) -> String {
