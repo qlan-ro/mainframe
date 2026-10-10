@@ -10,6 +10,7 @@ impl TunnelManager {
             tunnels: Arc::new(DashMap::new()),
             live: Arc::new(StdMutex::new(HashMap::new())),
             next_id: AtomicU64::new(0),
+            spawn_gate: tokio::sync::Mutex::new(false),
             verified_at: Arc::new(DashMap::new()),
             broadcast: broadcast.unwrap_or_else(|| Arc::new(|_event| {})),
             config,

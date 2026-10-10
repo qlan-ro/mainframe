@@ -35,6 +35,11 @@ impl TunnelManager {
         // Stop any existing tunnel for this label to prevent leaks.
         self.stop(label).await;
 
+        let gate = self.spawn_gate.lock().await;
+        if *gate {
+            return Err("Daemon is shutting down".to_string());
+        }
+
         let options = options.unwrap_or_default();
         let is_named = options.token.is_some();
 
@@ -91,6 +96,7 @@ impl TunnelManager {
         // Tracked in `live` (and its reap pid recorded) BEFORE the start window,
         // so a shutdown or crash during it can reap the child (see stop_all).
         let process = self.watch_child(child, label);
+        drop(gate);
         let mut guard = StartGuard {
             tunnels: &self.tunnels,
             label,

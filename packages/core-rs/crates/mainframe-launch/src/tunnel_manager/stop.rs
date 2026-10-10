@@ -1,6 +1,10 @@
 use super::*;
 
 impl TunnelManager {
+    pub async fn close_starts(&self) {
+        *self.spawn_gate.lock().await = true;
+    }
+
     /// Terminate `process` (SIGTERM, then SIGKILL after `stop_grace`) and, for a
     /// listed tunnel, broadcast `stopped` once it has exited. A task, so the
     /// escalation completes even if the caller is cancelled.

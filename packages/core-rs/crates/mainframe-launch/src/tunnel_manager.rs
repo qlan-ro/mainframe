@@ -150,6 +150,7 @@ pub struct TunnelManager {
     /// removes its entry once it has reaped the child.
     live: Arc<StdMutex<HashMap<u64, TunnelProcess>>>,
     next_id: AtomicU64,
+    spawn_gate: tokio::sync::Mutex<bool>,
     verified_at: Arc<DashMap<String, VerifyResult>>,
     broadcast: BroadcastFn,
     config: TunnelConfig,

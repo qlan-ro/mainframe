@@ -183,3 +183,6 @@ async fn assert_pid_gone(pid: u32) {
 mod behavior;
 #[path = "shutdown_tests.rs"]
 mod shutdown;
+
+#[path = "shutdown_gate_tests.rs"]
+mod shutdown_gate_tests;

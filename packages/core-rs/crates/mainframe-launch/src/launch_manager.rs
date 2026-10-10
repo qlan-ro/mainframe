@@ -76,6 +76,8 @@ impl Default for LaunchTimings {
 
 #[derive(Debug, thiserror::Error)]
 pub enum LaunchError {
+    #[error("Daemon is shutting down")]
+    ShuttingDown,
     #[error("failed to spawn launch process '{name}': {source}")]
     Spawn {
         name: String,
@@ -275,6 +277,7 @@ impl Inner {
 
 pub struct LaunchManager {
     inner: Arc<Inner>,
+    spawn_gate: Arc<tokio::sync::Mutex<bool>>,
 }
 
 impl LaunchManager {
@@ -334,6 +337,7 @@ impl LaunchManager {
         timings: LaunchTimings,
     ) -> Self {
         Self {
+            spawn_gate: Arc::new(tokio::sync::Mutex::new(false)),
             inner: Arc::new(Inner {
                 project_id: project_id.into(),
                 project_path: project_path.into(),
@@ -347,6 +351,11 @@ impl LaunchManager {
                 resolved_path,
             }),
         }
+    }
+
+    pub(crate) fn with_spawn_gate(mut self, gate: Arc<tokio::sync::Mutex<bool>>) -> Self {
+        self.spawn_gate = gate;
+        self
     }
 
     pub async fn start(&self, config: &LaunchConfiguration) -> Result<(), LaunchError> {
@@ -378,6 +387,15 @@ impl LaunchManager {
                     return Ok(());
                 }
             }
+        }
+
+        let gate = self.spawn_gate.lock().await;
+        if *gate {
+            return Err(LaunchError::ShuttingDown);
+        }
+        if inner.processes.contains_key(&name) {
+            tracing::warn!(target: "launch", name, "concurrent start already registered a process");
+            return Ok(());
         }
 
         inner.state.reset(&name);
@@ -423,6 +441,7 @@ impl LaunchManager {
         let mut child = match command.spawn() {
             Ok(child) => child,
             Err(err) => {
+                drop(gate);
                 tracing::warn!(
                     target: "launch",
                     name = %name,
@@ -490,6 +509,8 @@ impl LaunchManager {
             stderr_tail,
             exit_tx,
         ));
+
+        drop(gate);
 
         // Record only after spawn is confirmed (pid valid) but BEFORE the long
         // port-readiness wait below — that wait is the window in which a daemon
@@ -600,8 +621,18 @@ impl LaunchManager {
             .iter()
             .map(|e| e.key().clone())
             .collect();
+        let mut tasks = tokio::task::JoinSet::new();
         for name in names {
-            self.stop(&name).await;
+            let manager = Self {
+                inner: self.inner.clone(),
+                spawn_gate: self.spawn_gate.clone(),
+            };
+            tasks.spawn(async move { manager.stop(&name).await });
+        }
+        while let Some(result) = tasks.join_next().await {
+            if let Err(err) = result {
+                tracing::warn!(?err, "launch stop task failed");
+            }
         }
     }
 

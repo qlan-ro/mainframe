@@ -11,6 +11,7 @@ use crate::tunnel_manager::{BroadcastFn, TunnelManager};
 
 pub struct LaunchRegistry {
     managers: DashMap<String, Arc<LaunchManager>>,
+    spawn_gate: Arc<tokio::sync::Mutex<bool>>,
     on_event: BroadcastFn,
     pub tunnel_manager: Option<Arc<TunnelManager>>,
     /// Pidfile registry passed down to each `LaunchManager` so a crashed daemon's
@@ -27,6 +28,7 @@ impl LaunchRegistry {
     pub fn new(on_event: BroadcastFn, tunnel_manager: Option<Arc<TunnelManager>>) -> Self {
         Self {
             managers: DashMap::new(),
+            spawn_gate: Arc::new(tokio::sync::Mutex::new(false)),
             on_event,
             tunnel_manager,
             child_registry: None,
@@ -64,23 +66,37 @@ impl LaunchRegistry {
         self.managers
             .entry(key)
             .or_insert_with(|| {
-                Arc::new(LaunchManager::new(
-                    project_id.to_string(),
-                    project_path.to_string(),
-                    self.on_event.clone(),
-                    self.tunnel_manager.clone(),
-                    self.resolved_path.clone(),
-                    self.child_registry.clone(),
-                ))
+                Arc::new(
+                    LaunchManager::new(
+                        project_id.to_string(),
+                        project_path.to_string(),
+                        self.on_event.clone(),
+                        self.tunnel_manager.clone(),
+                        self.resolved_path.clone(),
+                        self.child_registry.clone(),
+                    )
+                    .with_spawn_gate(self.spawn_gate.clone()),
+                )
             })
             .clone()
+    }
+
+    pub async fn close_starts(&self) {
+        *self.spawn_gate.lock().await = true;
     }
 
     pub async fn stop_all(&self) {
         let managers: Vec<Arc<LaunchManager>> =
             self.managers.iter().map(|e| e.value().clone()).collect();
-        // Promise.allSettled — every manager's stop runs regardless of the others.
-        futures_join_all(managers.iter().map(|m| m.stop_all())).await;
+        let mut tasks = tokio::task::JoinSet::new();
+        for manager in managers {
+            tasks.spawn(async move { manager.stop_all().await });
+        }
+        while let Some(result) = tasks.join_next().await {
+            if let Err(err) = result {
+                tracing::warn!(?err, "launch shutdown task failed");
+            }
+        }
         self.managers.clear();
     }
 }
@@ -90,16 +106,8 @@ impl LaunchRegistry {
 /// sweep runs alongside the launch stops so a slow launch process cannot hold
 /// it up; a preview tunnel is stopped by whichever side reaches it first.
 pub async fn shutdown_launches_and_tunnels(launches: &LaunchRegistry, tunnels: &TunnelManager) {
+    tokio::join!(launches.close_starts(), tunnels.close_starts());
     tokio::join!(launches.stop_all(), tunnels.stop_all());
-}
-
-/// Minimal `join_all` (no `futures` crate in the allowlist): await each in turn.
-/// A `LaunchManager::stop_all` cannot fail (returns `()`), so sequential awaiting
-/// loses nothing over a settled-all join.
-async fn futures_join_all<F: std::future::Future<Output = ()>>(futures: impl Iterator<Item = F>) {
-    for future in futures {
-        future.await;
-    }
 }
 
 #[cfg(test)]
@@ -239,3 +247,6 @@ mod tests {
         assert_eq!(tunnels.get_url("preview:web"), None);
     }
 }
+#[cfg(test)]
+#[path = "launch_registry_shutdown_tests.rs"]
+mod shutdown_tests;

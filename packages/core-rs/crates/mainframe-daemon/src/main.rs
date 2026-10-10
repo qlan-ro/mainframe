@@ -18,6 +18,7 @@ mod e2e_mock;
 mod github_issues_port;
 mod plugin_host_db;
 mod quota_store;
+mod shutdown;
 mod startup;
 
 #[cfg(test)]
@@ -539,32 +540,30 @@ async fn run_daemon() {
 
     info!("Daemon ready");
 
-    let service = app.into_make_service_with_connect_info::<SocketAddr>();
-    if let Err(err) = axum::serve(listener, service)
-        .with_graceful_shutdown(shutdown_signal())
-        .await
-    {
+    let server_result = shutdown::serve(listener, app, shutdown_signal(), async {
+        // Shut down child owners concurrently within the desktop shell's quit deadline.
+        info!("Shutting down...");
+        if let Some(automations) = &automations {
+            automations.stop();
+        }
+        // Credentials are in memory only and the CLIs die with the daemon; revoke
+        // first so no call made during the drain outlives it.
+        orchestration.credentials().revoke_all();
+        orchestration_events.abort();
+        chats.dispose();
+        plugin_manager.unload_all();
+        adapters.kill_all();
+        tokio::join!(
+            shutdown_launches_and_tunnels(&launch_registry, &tunnel_manager),
+            lsp_manager.shutdown_all(),
+        );
+        liveness.stop();
+    })
+    .await;
+    if let Err(err) = server_result {
         tracing::error!(%err, "daemon server exited with error");
         flush_and_exit(1);
     }
-
-    // Shut down child owners concurrently within the desktop shell's quit deadline.
-    info!("Shutting down...");
-    if let Some(automations) = &automations {
-        automations.stop();
-    }
-    // Credentials are in memory only and the CLIs die with the daemon; revoke
-    // first so no call made during the drain outlives it.
-    orchestration.credentials().revoke_all();
-    orchestration_events.abort();
-    chats.dispose();
-    plugin_manager.unload_all();
-    adapters.kill_all();
-    tokio::join!(
-        shutdown_launches_and_tunnels(&launch_registry, &tunnel_manager),
-        lsp_manager.shutdown_all(),
-    );
-    liveness.stop();
     // `db` (the actor thread) closes when the last `Db` handle drops at exit.
 }
 
