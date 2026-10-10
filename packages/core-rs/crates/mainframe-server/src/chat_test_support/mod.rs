@@ -19,6 +19,7 @@ use mainframe_types::adapter::{
 use mainframe_types::chat::{ChatMessage, ResolvedTuning};
 use mainframe_types::context::SkillFileEntry;
 use mainframe_types::settings::ExecutionMode;
+use mainframe_types::transcript::TranscriptLocation;
 
 mod app_ctx;
 
@@ -32,6 +33,7 @@ static NEXT_SESSION_ID: AtomicUsize = AtomicUsize::new(1);
 pub(crate) struct StubAdapter {
     id: String,
     no_persistence: bool,
+    pub(crate) transcript_location: Option<TranscriptLocation>,
     /// How many `StubSession::kill` calls this adapter's sessions have seen
     /// (shared across every session it hands out) — lets a caller prove a
     /// project/chat teardown actually stopped a live process.
@@ -43,6 +45,7 @@ impl StubAdapter {
         Arc::new(Self {
             id: id.to_string(),
             no_persistence,
+            transcript_location: None,
             kills: Arc::new(AtomicUsize::new(0)),
         })
     }
@@ -54,6 +57,15 @@ impl Adapter for StubAdapter {
     }
     fn name(&self) -> &str {
         &self.id
+    }
+    fn locate_transcript(
+        &self,
+        _session_id: String,
+        _project_path: String,
+        _session_file_path: Option<String>,
+    ) -> BoxFuture<'_, Result<Option<TranscriptLocation>, AdapterError>> {
+        let location = self.transcript_location.clone();
+        Box::pin(async move { Ok(location) })
     }
     fn capabilities(&self) -> AdapterCapabilities {
         AdapterCapabilities {

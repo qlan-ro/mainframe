@@ -23,10 +23,10 @@ use serde::Deserialize;
 
 use mainframe_adapter_claude::messages::session_files::extract_session_file_paths;
 use mainframe_chat::chat_manager::ChatFieldsPartial;
-use mainframe_chat::event_handler::compute_session_file_path;
 use mainframe_db::chats::ChatListFilters;
 use mainframe_types::adapter::EffortLevel;
 use mainframe_types::chat::Chat;
+use mainframe_types::transcript::TranscriptLocation;
 
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok};
@@ -483,40 +483,10 @@ async fn tool_result(
         Err(err) => return crate::async_err::internal_error("get chat", &err),
     };
 
-    let mut file_path = chat.session_file_path.clone();
-    if file_path.is_none()
-        && let Some(session_id) = chat.claude_session_id.clone()
-    {
-        let project_id = chat.project_id.clone();
-        let project_path = match ctx.db.call(move |db| db.projects.get(&project_id)).await {
-            Ok(project) => project.map(|p| p.path),
-            Err(err) => return crate::async_err::internal_error("get project", &err),
-        };
-        let cwd = chat.worktree_path.clone().or(project_path);
-        if let Some(cwd) = cwd {
-            let computed = compute_session_file_path(&cwd, &session_id);
-            let (cid, fp) = (chat.id.clone(), computed.clone());
-            if let Err(err) = ctx
-                .db
-                .call(move |db| {
-                    db.chats.update(
-                        &cid,
-                        &mainframe_db::chats::ChatUpdate {
-                            session_file_path: Some(fp),
-                            ..Default::default()
-                        },
-                    )
-                })
-                .await
-            {
-                return crate::async_err::internal_error("persist session file path", &err);
-            }
-            file_path = Some(computed);
-        }
-    }
-
-    let Some(file_path) = file_path else {
-        return fail(StatusCode::NOT_FOUND, "No session file for chat");
+    let file_path = match resolve_tool_result_path(&ctx, &chat).await {
+        Ok(Some(path)) => path,
+        Err(response) => return response,
+        Ok(None) => return fail(StatusCode::NOT_FOUND, "No session file for chat"),
     };
     // A Codex chat's session file is a rollout, where the tool call's display
     // id is the rollout `call_id`; everything else is a Claude JSONL.
@@ -537,6 +507,55 @@ async fn tool_result(
         Some(content) => ok(serde_json::json!({ "content": content })),
         None => fail(StatusCode::NOT_FOUND, "Tool result not available"),
     }
+}
+
+async fn resolve_tool_result_path(ctx: &AppCtx, chat: &Chat) -> Result<Option<String>, Response> {
+    if let Some(path) = &chat.session_file_path {
+        return Ok(Some(path.clone()));
+    }
+    let Some(session_id) = &chat.claude_session_id else {
+        return Ok(None);
+    };
+    let project_id = chat.project_id.clone();
+    let project_path = ctx
+        .db
+        .call(move |db| db.projects.get(&project_id))
+        .await
+        .map_err(|err| crate::async_err::internal_error("get project", &err))?
+        .map(|project| project.path);
+    let Some(cwd) = chat.worktree_path.clone().or(project_path) else {
+        return Ok(None);
+    };
+    let Some(adapter) = ctx.adapter_registry.get(&chat.adapter_id) else {
+        return Ok(None);
+    };
+    let location = match adapter
+        .locate_transcript(session_id.clone(), cwd, None)
+        .await
+    {
+        Ok(location) => location,
+        Err(err) => {
+            tracing::warn!(chat_id = %chat.id, %err, "tool result transcript lookup failed");
+            None
+        }
+    };
+    let Some(TranscriptLocation::Present(path)) = location else {
+        return Ok(None);
+    };
+    let (cid, fp) = (chat.id.clone(), path.clone());
+    ctx.db
+        .call(move |db| {
+            db.chats.update(
+                &cid,
+                &mainframe_db::chats::ChatUpdate {
+                    session_file_path: Some(fp),
+                    ..Default::default()
+                },
+            )
+        })
+        .await
+        .map_err(|err| crate::async_err::internal_error("persist session file path", &err))?;
+    Ok(Some(path))
 }
 
 pub fn router() -> Router<Arc<AppCtx>> {
@@ -563,6 +582,7 @@ pub fn router() -> Router<Arc<AppCtx>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::chat_test_support::StubAdapter;
     use axum::body::to_bytes;
     use mainframe_db::chats::ChatUpdate;
     use mainframe_types::chat::ChatStatus;
@@ -823,6 +843,101 @@ mod tests {
         assert_eq!(body["error"], "Chat not found");
     }
 
+    async fn seed_tool_result_chat(ctx: &Arc<AppCtx>, adapter_id: &str) -> String {
+        let adapter_id = adapter_id.to_string();
+        ctx.db
+            .call(move |db| {
+                let project = db.projects.create("/tmp/tool-result-project", None)?;
+                let chat = db.chats.create(&mainframe_types::chat::NewChat {
+                    project_id: project.id,
+                    adapter_id,
+                    ..Default::default()
+                })?;
+                db.chats.update(
+                    &chat.id,
+                    &ChatUpdate {
+                        claude_session_id: Some("session-1".into()),
+                        ..Default::default()
+                    },
+                )?;
+                Ok(chat.id)
+            })
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn codex_tool_result_without_path_uses_adapter_rollout_and_persists_it() {
+        let ctx = AppCtx::test_ctx();
+        let dir = tempfile::tempdir().unwrap();
+        let rollout = dir.path().join("rollout.jsonl");
+        std::fs::write(&rollout, r#"{"type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"call_1","output":"codex result"}}"#).unwrap();
+        let mut adapter = StubAdapter::new("codex", false);
+        Arc::get_mut(&mut adapter).unwrap().transcript_location = Some(
+            TranscriptLocation::Present(rollout.to_string_lossy().into_owned()),
+        );
+        ctx.adapter_registry.register(adapter);
+        let id = seed_tool_result_chat(&ctx, "codex").await;
+
+        let (status, body) =
+            read(tool_result(State(ctx.clone()), Path((id.clone(), "call_1".into()))).await).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["data"]["content"], "codex result");
+        let stored = ctx
+            .db
+            .call(move |db| db.chats.get(&id))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(stored.session_file_path.as_deref(), rollout.to_str());
+    }
+
+    #[tokio::test]
+    async fn codex_tool_result_without_transcript_keeps_path_absent() {
+        let ctx = AppCtx::test_ctx();
+        ctx.adapter_registry
+            .register(StubAdapter::new("codex", false));
+        let id = seed_tool_result_chat(&ctx, "codex").await;
+
+        let (status, body) =
+            read(tool_result(State(ctx.clone()), Path((id.clone(), "call_1".into()))).await).await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert_eq!(body["error"], "No session file for chat");
+        let stored = ctx
+            .db
+            .call(move |db| db.chats.get(&id))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(stored.session_file_path, None);
+    }
+
+    #[tokio::test]
+    async fn claude_tool_result_without_path_uses_adapter_jsonl() {
+        let ctx = AppCtx::test_ctx();
+        let dir = tempfile::tempdir().unwrap();
+        let jsonl = dir.path().join("session.jsonl");
+        std::fs::write(&jsonl, r#"{"message":{"content":[{"type":"tool_result","tool_use_id":"tool_1","content":"claude result"}]}}"#).unwrap();
+        let mut adapter = StubAdapter::new("claude", false);
+        Arc::get_mut(&mut adapter).unwrap().transcript_location = Some(
+            TranscriptLocation::Present(jsonl.to_string_lossy().into_owned()),
+        );
+        ctx.adapter_registry.register(adapter);
+        let id = seed_tool_result_chat(&ctx, "claude").await;
+
+        let (status, body) =
+            read(tool_result(State(ctx.clone()), Path((id.clone(), "tool_1".into()))).await).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["data"]["content"], "claude result");
+        let stored = ctx
+            .db
+            .call(move |db| db.chats.get(&id))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(stored.session_file_path.as_deref(), jsonl.to_str());
+    }
+
     // ── includeTemporary (todo #346, AC 26) ───────────────────────────────────
 
     async fn seed_one_temporary_chat(ctx: &Arc<AppCtx>) -> (String, String, String) {
@@ -1004,7 +1119,7 @@ mod tests {
 // db path (Phase-3 harness). archive / getDisplayMessages (messages) /
 // getMessagesFromDisk (session-files) / getPendingPermission / unarchive are now real
 // facade calls. pinned/tuning/effort PATCH + tool-result port over ctx.db.chats
-// (+ compute_session_file_path / read_tool_result_from_jsonl / extract_session_file_paths
+// (+ read_tool_result_from_jsonl / extract_session_file_paths
 // helpers); the tuning/pinned PATCHes run the TS `applyChatTuning` follow-ups
 // (syncChatFields + fire-and-forget applyTuning + emitChatUpdated) when the manager is
 // wired. title uses the facade rename when wired, else a db title write.
