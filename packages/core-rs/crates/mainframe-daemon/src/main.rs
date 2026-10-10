@@ -110,7 +110,15 @@ async fn main() {
 
 /// The daemon boot (`main()` in `index.ts`).
 async fn run_daemon() {
-    let _log_guard = mainframe_runtime::logging::init();
+    let config = match mainframe_runtime::config::get_config() {
+        Ok(config) => config,
+        Err(err) => {
+            eprintln!("failed to load config: {err}");
+            std::process::exit(1);
+        }
+    };
+    let data_dir = PathBuf::from(&config.data_dir);
+    let _log_guard = mainframe_runtime::logging::init(&data_dir);
 
     // Resolve the login-shell PATH once at boot and thread it into every child
     // spawn (adapters, title generation, LSP, launch, background-task probes).
@@ -119,10 +127,6 @@ async fn run_daemon() {
     let resolved_path = mainframe_runtime::ResolvedPath::resolve();
     mainframe_background_tasks::spawn_env::set_resolved_path(resolved_path.as_str());
 
-    let config = match mainframe_runtime::config::get_config() {
-        Ok(config) => config,
-        Err(err) => fatal("failed to load config", &err),
-    };
     // ensureAuthSecret(): generates + persists a secret if none exists. The TS
     // daemon then sets process.env.AUTH_TOKEN_SECRET; env mutation is `unsafe`
     // under edition 2024, so the secret is threaded through AppCtx instead.
@@ -130,11 +134,17 @@ async fn run_daemon() {
         Ok(secret) => Some(secret),
         Err(err) => fatal("failed to resolve auth secret", &err),
     };
-    let data_dir = PathBuf::from(&config.data_dir);
     let port = config.port;
     info!(data_dir = %data_dir.display(), "data directory");
 
-    let db = match Db::spawn(mainframe_db::DatabaseManager::new) {
+    let legacy_data_dir = match mainframe_runtime::config::get_data_dir() {
+        Ok(dir) => dir,
+        Err(err) => fatal("failed to resolve legacy data directory", &err),
+    };
+    let db = match Db::spawn({
+        let data_dir = data_dir.clone();
+        move || mainframe_db::DatabaseManager::new(&data_dir, &legacy_data_dir)
+    }) {
         Ok(db) => db,
         Err(err) => fatal("failed to open database", &err),
     };

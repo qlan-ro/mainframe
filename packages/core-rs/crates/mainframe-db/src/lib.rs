@@ -7,7 +7,7 @@
 #![forbid(unsafe_code)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::rc::Rc;
 
 use rusqlite::Connection;
@@ -68,24 +68,33 @@ pub(crate) fn enum_to_db_string<T: serde::Serialize>(value: &T) -> Result<String
     }
 }
 
-/// Mirrors `config.ts`'s `getDataDir()`. Not yet available from
-/// `mainframe_runtime::config` (only the `DAEMON_PORT` override is ported there),
-/// so it is replicated here for `DatabaseManager::new()`.
-fn get_data_dir() -> Result<PathBuf, DbError> {
-    // TODO(port): delegate to mainframe_runtime::config::get_data_dir once that
-    // ports the dataDir path (only DAEMON_PORT is ported there today).
-    // `??` in the TS is nullish-only: an unset var falls back, an empty string
-    // does not. `env::var` returns `Err` only when unset, so this matches.
-    let dir = match std::env::var("MAINFRAME_DATA_DIR") {
-        Ok(value) => PathBuf::from(value),
-        Err(_) => dirs::home_dir()
-            .ok_or_else(|| DbError::Message("could not resolve home directory".into()))?
-            .join(".mainframe"),
-    };
-    if !dir.exists() {
-        std::fs::create_dir_all(&dir)?;
+fn migrate_legacy_database(data_dir: &Path, legacy_data_dir: &Path) -> Result<(), DbError> {
+    let target = data_dir.join("mainframe.db");
+    let legacy = legacy_data_dir.join("mainframe.db");
+    if data_dir == legacy_data_dir || target.exists() || !legacy.exists() {
+        return Ok(());
     }
-    Ok(dir)
+
+    std::fs::create_dir_all(data_dir)?;
+    let files = ["mainframe.db-wal", "mainframe.db-shm", "mainframe.db"];
+    for name in files {
+        let source = legacy_data_dir.join(name);
+        let destination = data_dir.join(name);
+        if source.exists() && destination.exists() {
+            return Err(DbError::Message(format!(
+                "cannot migrate database: {} already exists",
+                destination.display()
+            )));
+        }
+    }
+    tracing::info!(from = %legacy_data_dir.display(), to = %data_dir.display(), "migrating database to configured data directory");
+    for name in files {
+        let source = legacy_data_dir.join(name);
+        if source.exists() {
+            std::fs::rename(&source, data_dir.join(name))?;
+        }
+    }
+    Ok(())
 }
 
 /// Owns the single SQLite connection and exposes the repositories, mirroring the
@@ -106,10 +115,12 @@ pub struct DatabaseManager {
 }
 
 impl DatabaseManager {
-    /// Opens `~/.mainframe/mainframe.db` (or `$MAINFRAME_DATA_DIR/mainframe.db`),
-    /// enabling WAL + foreign keys, then runs migrations.
-    pub fn new() -> Result<Self, DbError> {
-        let db_path = get_data_dir()?.join("mainframe.db");
+    /// Opens the database under the merged config directory, moving a legacy
+    /// database there when the configured directory has no database yet.
+    pub fn new(data_dir: &Path, legacy_data_dir: &Path) -> Result<Self, DbError> {
+        migrate_legacy_database(data_dir, legacy_data_dir)?;
+        std::fs::create_dir_all(data_dir)?;
+        let db_path = data_dir.join("mainframe.db");
         Self::open(&db_path)
     }
 
@@ -163,10 +174,87 @@ impl DatabaseManager {
 // PORT STATUS: src/db/index.ts (49 lines)
 // confidence: medium
 // notes: `DatabaseManager` mirrors the TS class (pub repo fields, WAL +
-// foreign_keys pragmas, initializeSchema). getDataDir() is replicated locally
-// pending mainframe_runtime::config porting the dataDir path (see the inline
-// deferral marker at get_data_dir). Repositories share one Rc<Connection> (single-threaded,
+// foreign_keys pragmas, initializeSchema). Repositories share one Rc<Connection> (single-threaded,
 // synchronous) — Phase B replaces this with the async Db handle / spawn_blocking.
 // close() consumes self (Rust drops the connection when the last Rc is released).
 // DbError + enum_to_db_string are crate-wide helpers with no TS counterpart.
-// todos: 1
+// todos: 0
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn opens_database_in_configured_directory() {
+        let root = tempdir().unwrap();
+        let data_dir = root.path().join("configured");
+        let legacy = root.path().join("legacy");
+        DatabaseManager::new(&data_dir, &legacy).unwrap().close();
+        assert!(data_dir.join("mainframe.db").exists());
+        assert!(!legacy.join("mainframe.db").exists());
+    }
+
+    #[test]
+    fn moves_legacy_database_and_sidecars_before_opening() {
+        let root = tempdir().unwrap();
+        let data_dir = root.path().join("configured");
+        let legacy = root.path().join("legacy");
+        std::fs::create_dir_all(&legacy).unwrap();
+        std::fs::write(legacy.join("mainframe.db"), b"legacy db").unwrap();
+        std::fs::write(legacy.join("mainframe.db-wal"), b"wal").unwrap();
+        std::fs::write(legacy.join("mainframe.db-shm"), b"shm").unwrap();
+
+        migrate_legacy_database(&data_dir, &legacy).unwrap();
+
+        assert_eq!(
+            std::fs::read(data_dir.join("mainframe.db")).unwrap(),
+            b"legacy db"
+        );
+        assert_eq!(
+            std::fs::read(data_dir.join("mainframe.db-wal")).unwrap(),
+            b"wal"
+        );
+        assert_eq!(
+            std::fs::read(data_dir.join("mainframe.db-shm")).unwrap(),
+            b"shm"
+        );
+        assert!(!legacy.join("mainframe.db").exists());
+    }
+
+    #[test]
+    fn opens_migrated_database_with_existing_data() {
+        let root = tempdir().unwrap();
+        let data_dir = root.path().join("configured");
+        let legacy = root.path().join("legacy");
+        std::fs::create_dir_all(&legacy).unwrap();
+        let conn = Connection::open(legacy.join("mainframe.db")).unwrap();
+        conn.execute_batch("CREATE TABLE migration_proof (value TEXT); INSERT INTO migration_proof VALUES ('kept');").unwrap();
+        drop(conn);
+
+        let db = DatabaseManager::new(&data_dir, &legacy).unwrap();
+        let value: String = db
+            .connection()
+            .query_row("SELECT value FROM migration_proof", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(value, "kept");
+        assert!(!legacy.join("mainframe.db").exists());
+    }
+
+    #[test]
+    fn keeps_existing_configured_database() {
+        let root = tempdir().unwrap();
+        let data_dir = root.path().join("configured");
+        let legacy = root.path().join("legacy");
+        std::fs::create_dir_all(&legacy).unwrap();
+        DatabaseManager::new(&data_dir, &legacy).unwrap().close();
+        std::fs::write(legacy.join("mainframe.db"), b"legacy db").unwrap();
+
+        DatabaseManager::new(&data_dir, &legacy).unwrap().close();
+
+        assert_eq!(
+            std::fs::read(legacy.join("mainframe.db")).unwrap(),
+            b"legacy db"
+        );
+    }
+}
