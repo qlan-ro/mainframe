@@ -73,10 +73,33 @@ async fn real_tree_kill(
         Signal::Sigterm => mainframe_runtime::process::Signal::Term,
         Signal::Sigkill => mainframe_runtime::process::Signal::Kill,
     };
-    for pid in all {
-        signal(Target::Pid(pid), kind).map_err(|error| error.to_string())?;
+    signal_each(&all, |pid| signal(Target::Pid(pid), kind).map(|_| ()))
+}
+
+/// Signal every pid in `pids` (parent first), continuing past failures so one
+/// EPERM never leaves the rest of the tree unsignalled; a pid already gone
+/// (ESRCH) is not a failure. Only after every pid was tried does it report
+/// the ones that failed, so the caller's "not killed" path is reached only
+/// when something really was left running.
+pub(super) fn signal_each(
+    pids: &[u32],
+    mut send: impl FnMut(u32) -> std::io::Result<()>,
+) -> Result<(), String> {
+    let failures: Vec<String> = pids
+        .iter()
+        .filter_map(|&pid| match send(pid) {
+            Ok(()) => None,
+            Err(error) => {
+                tracing::warn!(target: "background-tasks:kill", pid, %error, "tree kill signal failed");
+                Some(format!("pid {pid}: {error}"))
+            }
+        })
+        .collect();
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(failures.join("; "))
     }
-    Ok(())
 }
 
 pub(super) async fn sigterm_then_kill(

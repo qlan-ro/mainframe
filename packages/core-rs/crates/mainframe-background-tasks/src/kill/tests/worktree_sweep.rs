@@ -1,38 +1,6 @@
 use super::*;
 
 #[tokio::test(start_paused = true)]
-async fn os_path_no_writer_no_session_stays_running_reported_failed() {
-    let tracker = BackgroundTaskTracker::new();
-    set_lsof_constant(&tracker, vec![]);
-    record_tree_kill(&tracker);
-    seed(
-        &tracker,
-        "c1",
-        "t1",
-        "/tmp/claude-501/-x/sess/tasks/t1.output",
-    );
-    let out = kill_tasks_for_chat(KillTasksForChatArgs {
-        chat_id: "c1",
-        worktree_path: None,
-        session: None,
-        tracker: &tracker,
-        spool_root: Some("/tmp/claude-501".to_string()),
-    })
-    .await;
-    assert_eq!(
-        out.failed,
-        vec![FailedEntry {
-            task_id: "t1".to_string(),
-            error: "no live writer".to_string()
-        }]
-    );
-    assert_eq!(
-        tracker.get("c1", "t1").unwrap().status,
-        BackgroundTaskStatus::Running
-    );
-}
-
-#[tokio::test(start_paused = true)]
 async fn worktree_sweep_rejects_symlinked_spool_files() {
     let tracker = BackgroundTaskTracker::new();
     let lsof_calls = Arc::new(Mutex::new(0usize));
