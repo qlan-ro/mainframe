@@ -36,3 +36,67 @@ fn sanitizes_a_malicious_session_id_so_it_cannot_traverse() {
     assert!(!p.contains(".."));
     assert!(p.ends_with(".jsonl"));
 }
+
+fn lookup(adapter_id: &str, session_id: &str) -> (String, String, String) {
+    (
+        adapter_id.to_string(),
+        session_id.to_string(),
+        "/proj".to_string(),
+    )
+}
+
+#[test]
+fn init_without_an_adapter_transcript_path_persists_only_the_session_id() {
+    let active = cell(ProcessState::Working, None);
+    active.lock().unwrap().chat.adapter_id = "codex".to_string();
+    let deps = FakeDeps::new(active.clone(), Vec::new());
+    *deps.project_path.lock().unwrap() = Some("/proj".to_string());
+    let handler = EventHandler::new(
+        Arc::new(Mutex::new(MessageCache::new())),
+        Arc::new(Mutex::new(PermissionManager::new())),
+        deps.clone(),
+    );
+
+    handler.build_sink("c1", None).on_init("codex-session");
+
+    assert_eq!(
+        *deps.transcript_lookups.lock().unwrap(),
+        vec![lookup("codex", "codex-session")]
+    );
+    let guard = active.lock().unwrap();
+    assert_eq!(guard.chat.claude_session_id.as_deref(), Some("codex-session"));
+    assert_eq!(guard.chat.session_file_path, None);
+    let updates = deps.updates.lock().unwrap();
+    assert_eq!(updates.len(), 1);
+    assert_eq!(updates[0].session_file_path, None);
+}
+
+#[test]
+fn init_persists_the_adapter_transcript_path() {
+    let active = cell(ProcessState::Working, None);
+    let deps = FakeDeps::new(active.clone(), Vec::new());
+    *deps.project_path.lock().unwrap() = Some("/proj".to_string());
+    *deps.transcript_path.lock().unwrap() = Some("/transcripts/claude-session.jsonl".to_string());
+    let handler = EventHandler::new(
+        Arc::new(Mutex::new(MessageCache::new())),
+        Arc::new(Mutex::new(PermissionManager::new())),
+        deps.clone(),
+    );
+
+    handler.build_sink("c1", None).on_init("claude-session");
+
+    assert_eq!(
+        *deps.transcript_lookups.lock().unwrap(),
+        vec![lookup("claude", "claude-session")]
+    );
+    assert_eq!(
+        active.lock().unwrap().chat.session_file_path.as_deref(),
+        Some("/transcripts/claude-session.jsonl")
+    );
+    let updates = deps.updates.lock().unwrap();
+    assert_eq!(updates.len(), 2);
+    assert_eq!(
+        updates[1].session_file_path.as_deref(),
+        Some("/transcripts/claude-session.jsonl")
+    );
+}

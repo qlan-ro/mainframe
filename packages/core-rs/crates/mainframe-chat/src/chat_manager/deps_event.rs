@@ -42,6 +42,15 @@ impl EventHandlerDeps for EhDeps {
     fn projects_get_path(&self, project_id: &str) -> Option<String> {
         self.deps.projects_get_path(project_id)
     }
+    fn initial_transcript_path(
+        &self,
+        adapter_id: &str,
+        session_id: &str,
+        cwd: &str,
+    ) -> Option<String> {
+        self.deps
+            .initial_transcript_path(adapter_id, session_id, cwd)
+    }
     fn add_plan_file(&self, chat_id: &str, file_path: &str) -> bool {
         self.deps.add_plan_file(chat_id, file_path)
     }

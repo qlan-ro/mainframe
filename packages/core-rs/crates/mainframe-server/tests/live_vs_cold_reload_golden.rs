@@ -114,6 +114,9 @@ impl EventHandlerDeps for NoopDeps {
     fn projects_get_path(&self, _project_id: &str) -> Option<String> {
         None
     }
+    fn initial_transcript_path(&self, _: &str, _: &str, _: &str) -> Option<String> {
+        None
+    }
     fn add_plan_file(&self, _chat_id: &str, _file_path: &str) -> bool {
         false
     }

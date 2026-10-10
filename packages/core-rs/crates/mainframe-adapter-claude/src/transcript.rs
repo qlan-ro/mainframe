@@ -17,7 +17,8 @@ pub struct SessionJsonlPath {
 }
 
 /// CLI parity: replace every char NOT in `[a-zA-Z0-9-]` with '-' (keeps dashes).
-fn encode_project_path(project_path: &str) -> String {
+/// Also sanitizes session ids before they become a file name.
+pub(crate) fn encode_project_path(project_path: &str) -> String {
     project_path
         .chars()
         .map(|c| {

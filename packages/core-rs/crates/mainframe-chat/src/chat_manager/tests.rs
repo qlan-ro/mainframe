@@ -429,6 +429,9 @@ impl ChatManagerDeps for StoreDeps {
     fn projects_get_path(&self, _project_id: &str) -> Option<String> {
         Some("/tmp/test".to_string())
     }
+    fn initial_transcript_path(&self, _: &str, _: &str, _: &str) -> Option<String> {
+        None
+    }
     fn projects_remove(&self, project_id: &str) -> Result<(), String> {
         self.project_removed
             .lock()

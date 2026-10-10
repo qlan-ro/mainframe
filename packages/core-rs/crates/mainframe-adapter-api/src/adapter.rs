@@ -171,6 +171,11 @@ pub trait Adapter: Send + Sync {
     fn create_session(&self, options: SessionOptions) -> Arc<dyn AdapterSession>;
     fn kill_all(&self);
 
+    /// Initial transcript path when this adapter has a predictable file layout.
+    fn initial_transcript_path(&self, _session_id: &str, _cwd: &str) -> Option<String> {
+        None
+    }
+
     /// `getToolCategories?` — default `None`.
     fn get_tool_categories(&self) -> Option<ToolCategories> {
         None

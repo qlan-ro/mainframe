@@ -12,6 +12,12 @@ pub(super) struct FakeDeps {
     /// `db.chats.pendingFork` for "c1" (todo #343); `None` for every test
     /// outside the retire-on-result coverage.
     pending_fork: Mutex<Option<PendingForkState>>,
+    project_path: Mutex<Option<String>>,
+    /// What `initial_transcript_path` answers; the per-adapter policy lives in
+    /// the adapters and is tested through the server's adapter registry.
+    transcript_path: Mutex<Option<String>>,
+    /// Every `(adapter_id, session_id, cwd)` the sink asked about.
+    transcript_lookups: Mutex<Vec<(String, String, String)>>,
 }
 
 impl FakeDeps {
@@ -23,6 +29,9 @@ impl FakeDeps {
             updates: Mutex::new(Vec::new()),
             quota: None,
             pending_fork: Mutex::new(None),
+            project_path: Mutex::new(None),
+            transcript_path: Mutex::new(None),
+            transcript_lookups: Mutex::new(Vec::new()),
         })
     }
     fn with_quota(cell: Arc<Mutex<ActiveChat>>, quota: Arc<QuotaManager>) -> Arc<Self> {
@@ -33,6 +42,9 @@ impl FakeDeps {
             updates: Mutex::new(Vec::new()),
             quota: Some(quota),
             pending_fork: Mutex::new(None),
+            project_path: Mutex::new(None),
+            transcript_path: Mutex::new(None),
+            transcript_lookups: Mutex::new(Vec::new()),
         })
     }
     fn set_pending_fork(&self, pending: PendingForkState) {
@@ -69,7 +81,20 @@ impl EventHandlerDeps for FakeDeps {
         self.updates.lock().unwrap().push(patch.clone());
     }
     fn projects_get_path(&self, _project_id: &str) -> Option<String> {
-        None
+        self.project_path.lock().unwrap().clone()
+    }
+    fn initial_transcript_path(
+        &self,
+        adapter_id: &str,
+        session_id: &str,
+        cwd: &str,
+    ) -> Option<String> {
+        self.transcript_lookups.lock().unwrap().push((
+            adapter_id.to_string(),
+            session_id.to_string(),
+            cwd.to_string(),
+        ));
+        self.transcript_path.lock().unwrap().clone()
     }
     fn add_plan_file(&self, _chat_id: &str, _file_path: &str) -> bool {
         false

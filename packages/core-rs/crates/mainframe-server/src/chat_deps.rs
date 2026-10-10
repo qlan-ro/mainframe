@@ -501,6 +501,16 @@ impl ChatManagerDeps for DaemonChatDeps {
             .flatten()
             .map(|p| p.path)
     }
+    fn initial_transcript_path(
+        &self,
+        adapter_id: &str,
+        session_id: &str,
+        cwd: &str,
+    ) -> Option<String> {
+        self.adapters
+            .get(adapter_id)?
+            .initial_transcript_path(session_id, cwd)
+    }
 
     fn projects_remove(&self, project_id: &str) -> Result<(), String> {
         let pid = project_id.to_string();
@@ -1653,6 +1663,34 @@ mod scan_loaded_history_tests {
         assert_eq!(
             LogCapture::events_with_reason(&events),
             vec![(tracing::Level::WARN, "unknown_adapter".to_string())]
+        );
+    }
+
+    #[test]
+    fn initial_transcript_path_routes_to_the_owning_adapter() {
+        let deps = test_deps();
+        deps.adapters.register(Arc::new(
+            mainframe_adapter_claude::adapter::ClaudeAdapter::default(),
+        ));
+        deps.adapters
+            .register(Arc::new(mainframe_adapter_codex::CodexAdapter::default()));
+        let claude_path = dirs::home_dir()
+            .unwrap()
+            .join(".claude/projects/-proj/session-1.jsonl")
+            .to_string_lossy()
+            .into_owned();
+
+        assert_eq!(
+            ChatManagerDeps::initial_transcript_path(&deps, "claude", "session-1", "/proj"),
+            Some(claude_path)
+        );
+        assert_eq!(
+            ChatManagerDeps::initial_transcript_path(&deps, "codex", "session-1", "/proj"),
+            None
+        );
+        assert_eq!(
+            ChatManagerDeps::initial_transcript_path(&deps, "unknown", "session-1", "/proj"),
+            None
         );
     }
 

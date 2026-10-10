@@ -54,6 +54,13 @@ pub trait EventHandlerDeps: Send + Sync {
     // db surface --------------------------------------------------------------
     fn chats_update(&self, chat_id: &str, patch: &EventChatUpdate);
     fn projects_get_path(&self, project_id: &str) -> Option<String>;
+    /// See `ChatManagerDeps::initial_transcript_path`.
+    fn initial_transcript_path(
+        &self,
+        adapter_id: &str,
+        session_id: &str,
+        cwd: &str,
+    ) -> Option<String>;
     fn add_plan_file(&self, chat_id: &str, file_path: &str) -> bool;
     fn add_skill_file(&self, chat_id: &str, entry: &SkillFileEntry) -> bool;
     fn update_todos(&self, chat_id: &str, todos: &[TodoItem]);
