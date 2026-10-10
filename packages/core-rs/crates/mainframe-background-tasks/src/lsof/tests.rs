@@ -18,8 +18,6 @@ fn fail_exec(err: LsofExecError) -> ExecFn {
     })
 }
 
-mod cases_0;
-
 #[tokio::test]
 async fn injected_processes_do_not_leak_between_trackers() {
     let first = crate::process::ProcessDeps::default();
@@ -30,3 +28,5 @@ async fn injected_processes_do_not_leak_between_trackers() {
     assert_eq!(a, vec![11]);
     assert_eq!(b, vec![22]);
 }
+
+mod exec_and_parse;
