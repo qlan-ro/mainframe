@@ -8,7 +8,7 @@ use crate::tokens::variables::{NameMap, extract_variable_refs, variable_name_for
 
 use super::automation::AutomationDefinition;
 use super::scope::{output_name_ordinal, step_produces};
-use super::step::Step;
+use super::step::{ScopeRule, Step};
 use super::template::{ChipPart, ChipText};
 
 /// Every free-text field a step carries — where both `{token}` parts and
@@ -85,15 +85,17 @@ fn region_names(steps: &[Step], except: &str, into: &mut HashSet<String>) {
         if step.id() == except {
             continue;
         }
-        match step {
-            Step::If(s) => {
-                region_names(&s.then, except, into);
-                region_names(&s.otherwise, except, into);
+        match step.scope_rule() {
+            ScopeRule::If => {
+                for body in step.child_bodies() {
+                    region_names(body, except, into);
+                }
             }
-            // A loop body is its own naming region, exactly like a repeat's;
-            // each parallel branch is its own region too.
-            Step::Repeat(_) | Step::Loop(_) | Step::Retry(_) | Step::Parallel(_) => {}
-            _ => names_claimed_by(step, into),
+            ScopeRule::Leaf => names_claimed_by(step, into),
+            // Every repeat, loop and retry body is its own naming region, and
+            // so is each parallel branch.
+            ScopeRule::Repeat { .. } | ScopeRule::Loop | ScopeRule::Retry | ScopeRule::Parallel => {
+            }
         }
     }
 }
@@ -101,44 +103,26 @@ fn region_names(steps: &[Step], except: &str, into: &mut HashSet<String>) {
 fn contains_step(steps: &[Step], step_id: &str) -> bool {
     steps.iter().any(|step| {
         step.id() == step_id
-            || match step {
-                Step::If(s) => {
-                    contains_step(&s.then, step_id) || contains_step(&s.otherwise, step_id)
-                }
-                Step::Repeat(s) => contains_step(&s.steps, step_id),
-                Step::Loop(s) => contains_step(&s.steps, step_id),
-                Step::Retry(s) => contains_step(&s.steps, step_id),
-                Step::Parallel(s) => s
-                    .branches
-                    .iter()
-                    .any(|branch| contains_step(branch, step_id)),
-                _ => false,
-            }
+            || step
+                .child_bodies()
+                .into_iter()
+                .any(|body| contains_step(body, step_id))
     })
 }
 
-/// The repeat body containing `step_id`, or `None` when the step sits in this
-/// region itself.
+/// The repeat, loop, retry or parallel-branch body containing `step_id`, or
+/// `None` when the step sits in this region itself.
 fn enclosing_repeat_body<'a>(steps: &'a [Step], step_id: &str) -> Option<&'a [Step]> {
     for step in steps {
-        match step {
-            Step::Repeat(s) if contains_step(&s.steps, step_id) => return Some(&s.steps),
-            Step::Loop(s) if contains_step(&s.steps, step_id) => return Some(&s.steps),
-            Step::Retry(s) if contains_step(&s.steps, step_id) => return Some(&s.steps),
-            Step::Parallel(s) => {
-                if let Some(branch) = s.branches.iter().find(|b| contains_step(b, step_id)) {
-                    return Some(branch);
+        for body in step.child_bodies() {
+            // `if` is not a region of its own; every other block body is.
+            if step.scope_rule() == ScopeRule::If {
+                if let Some(nested) = enclosing_repeat_body(body, step_id) {
+                    return Some(nested);
                 }
+            } else if contains_step(body, step_id) {
+                return Some(body);
             }
-            Step::If(s) => {
-                if let Some(body) = enclosing_repeat_body(&s.then, step_id) {
-                    return Some(body);
-                }
-                if let Some(body) = enclosing_repeat_body(&s.otherwise, step_id) {
-                    return Some(body);
-                }
-            }
-            _ => {}
         }
     }
     None
