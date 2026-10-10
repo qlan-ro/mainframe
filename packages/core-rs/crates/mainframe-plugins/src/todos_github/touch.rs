@@ -6,11 +6,11 @@
 
 use std::collections::HashMap;
 
-use serde_json::Value;
-
 use crate::PluginError;
 use crate::context::PluginContext;
-use crate::db_context::{Row, text};
+use crate::db_context::text;
+use crate::todos::input::PatchTodo;
+use crate::todos::types::{Todo, TodoStatus};
 
 const TRACKED_FIELDS: [&str; 3] = ["title", "body", "state"];
 
@@ -47,30 +47,35 @@ pub(crate) async fn stamp_create(
     Ok(())
 }
 
-/// Compares the pre-update row against the incoming patch body. `title`/`body`
+/// Compares the pre-update row against the incoming patch. `title`/`body`
 /// stamp only on an actual value change (rewriting the held value stamps
 /// nothing); `status` stamps `state` only when the write crosses the `done`
 /// boundary. Every other field patch_todo accepts is untracked by design.
 pub(crate) async fn stamp_patch(
     ctx: &PluginContext,
     todo_id: &str,
-    existing: &Row,
-    body: &Value,
+    existing: &Todo,
+    patch: &PatchTodo,
     at: &str,
 ) -> Result<(), PluginError> {
-    for field in ["title", "body"] {
-        if let Some(new) = body.get(field).and_then(Value::as_str) {
-            let old = existing.get(field).and_then(Value::as_str).unwrap_or("");
-            if new != old {
-                stamp(ctx, todo_id, field, at).await?;
-            }
-        }
+    if patch
+        .title
+        .as_deref()
+        .is_some_and(|title| title != existing.title)
+    {
+        stamp(ctx, todo_id, "title", at).await?;
     }
-    if let Some(next) = body.get("status").and_then(Value::as_str) {
-        let prev = existing.get("status").and_then(Value::as_str).unwrap_or("");
-        if crosses_done_boundary(prev, next) {
-            stamp(ctx, todo_id, "state", at).await?;
-        }
+    if patch
+        .body
+        .as_deref()
+        .is_some_and(|body| body != existing.body)
+    {
+        stamp(ctx, todo_id, "body", at).await?;
+    }
+    if let Some(next) = patch.status
+        && crosses_done_boundary(existing.status, next)
+    {
+        stamp(ctx, todo_id, "state", at).await?;
     }
     Ok(())
 }
@@ -81,8 +86,8 @@ pub(crate) async fn stamp_patch(
 pub(crate) async fn stamp_move(
     ctx: &PluginContext,
     todo_id: &str,
-    prev_status: &str,
-    next_status: &str,
+    prev_status: TodoStatus,
+    next_status: TodoStatus,
     at: &str,
 ) -> Result<(), PluginError> {
     if crosses_done_boundary(prev_status, next_status) {
@@ -91,8 +96,8 @@ pub(crate) async fn stamp_move(
     Ok(())
 }
 
-fn crosses_done_boundary(prev: &str, next: &str) -> bool {
-    (prev == "done") != (next == "done")
+fn crosses_done_boundary(prev: TodoStatus, next: TodoStatus) -> bool {
+    (prev == TodoStatus::Done) != (next == TodoStatus::Done)
 }
 
 /// The delete-todo cascade's touch half (AC24) — the pair row itself is

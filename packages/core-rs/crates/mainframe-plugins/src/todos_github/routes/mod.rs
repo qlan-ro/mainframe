@@ -37,7 +37,7 @@ pub fn router() -> Router<Arc<PluginContext>> {
         .route("/report", get(sync::get_report))
 }
 
-// ─── Response helpers (mirrors todos.rs's, private to this crate's HTTP layer) ─
+// ─── Response helpers (mirrors todos/respond.rs, private to this crate's HTTP layer) ─
 
 pub(super) fn json_response(status: StatusCode, body: Value) -> Response {
     (status, axum::Json(body)).into_response()

@@ -4,7 +4,6 @@ use serde_json::{Value, json};
 
 use crate::db_context::text;
 use crate::todos;
-use crate::todos_github::schema::run_github_migrations;
 use crate::todos_github::store;
 use crate::todos_github::touch;
 use crate::todos_github::touch::read_touch;
@@ -12,9 +11,7 @@ use crate::todos_github::touch::read_touch;
 const OLD_STAMP: &str = "2020-01-01T00:00:00.000Z";
 
 async fn setup() -> todos::tests::Harness {
-    let h = todos::tests::setup().await;
-    run_github_migrations(&h.ctx).await.unwrap();
-    h
+    todos::tests::setup().await
 }
 
 async fn create(h: &todos::tests::Harness) -> Value {
