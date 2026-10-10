@@ -18,6 +18,7 @@ mod e2e_mock;
 mod github_issues_port;
 mod plugin_host_db;
 mod quota_store;
+mod startup;
 
 #[cfg(test)]
 mod github_issues_port_tests;
@@ -141,9 +142,15 @@ async fn run_daemon() {
     let port = config.port;
     info!(data_dir = %data_dir.display(), "data directory");
 
-    let db = match Db::spawn(move || {
-        mainframe_db::DatabaseManager::new(&paths.db_path, &paths.legacy_db_path)
-    }) {
+    let (listener, db) = match startup::bind_before_database(port, move || {
+        Db::spawn(move || mainframe_db::DatabaseManager::new(&paths.db_path, &paths.legacy_db_path))
+    })
+    .await
+    {
+        Ok(opened) => opened,
+        Err(err) => fatal("failed to bind daemon listener", &err),
+    };
+    let db = match db {
         Ok(db) => db,
         Err(err) => fatal("failed to open database", &err),
     };
@@ -440,15 +447,7 @@ async fn run_daemon() {
 
     let app = build_app(Arc::clone(&ctx));
 
-    // Loopback only — matches `httpServer.listen(port, '127.0.0.1')` in index.ts.
-    // Binding all interfaces would expose the daemon on every NIC/LAN, and with
-    // `AUTH_TOKEN_SECRET` unset the auth gate is a no-op. Only loopback and the
-    // local cloudflared tunnel may reach the daemon.
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
-    let listener = match tokio::net::TcpListener::bind(addr).await {
-        Ok(listener) => listener,
-        Err(err) => fatal("failed to bind daemon listener", &err),
-    };
     info!(%addr, version = DAEMON_VERSION, "mainframe-daemon listening");
 
     // Reap tunnel AND launch children a previous daemon crash/kill orphaned,
