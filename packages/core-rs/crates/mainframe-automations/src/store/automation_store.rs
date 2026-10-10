@@ -2,13 +2,15 @@
 //! scopes) is the service layer's job — this store persists and reads the
 //! already-validated definition it is handed.
 
+use mainframe_db::sql_types::{FromRow, SqlBool, query_all, query_opt};
 use nanoid::nanoid;
 use rusqlite::{Connection, Row, params};
 
-use crate::domain::{AutomationCreateInput, AutomationDefinition, AutomationScope};
+use crate::domain::{AutomationCreateInput, AutomationScope};
 use crate::error::StoreError;
 
-use super::{AutomationDb, AutomationRecord, epoch_ms_now, parse_db_enum};
+use super::columns::{enum_column, json_column};
+use super::{AutomationDb, AutomationRecord, epoch_ms_now};
 
 #[derive(Clone)]
 pub struct AutomationStore {
@@ -53,21 +55,18 @@ impl AutomationStore {
 
     pub async fn list(&self) -> Result<Vec<AutomationRecord>, StoreError> {
         self.db
-            .call(|conn| {
-                let mut stmt = conn.prepare("SELECT * FROM automations ORDER BY created_at")?;
-                let rows = stmt.query_map([], row_to_parts)?;
-                rows.map(|r| parts_to_record(r?)).collect()
-            })
+            .call(|conn| query_all(conn, "SELECT * FROM automations ORDER BY created_at", []))
             .await
     }
 
     pub(crate) async fn list_enabled(&self) -> Result<Vec<AutomationRecord>, StoreError> {
         self.db
             .call(|conn| {
-                let mut stmt = conn
-                    .prepare("SELECT * FROM automations WHERE enabled = 1 ORDER BY created_at")?;
-                let rows = stmt.query_map([], row_to_parts)?;
-                rows.map(|r| parts_to_record(r?)).collect()
+                query_all(
+                    conn,
+                    "SELECT * FROM automations WHERE enabled = 1 ORDER BY created_at",
+                    [],
+                )
             })
             .await
     }
@@ -133,62 +132,27 @@ impl AutomationStore {
     }
 }
 
-/// Raw column values, pulled out of the `Row` before the fallible JSON parse
-/// (rusqlite's `query_map` closure can only fail with `rusqlite::Error`).
-struct RowParts {
-    id: String,
-    name: String,
-    description: Option<String>,
-    scope: String,
-    project_id: Option<String>,
-    enabled: i64,
-    definition: String,
-    created_at: i64,
-    updated_at: i64,
-}
+impl FromRow for AutomationRecord {
+    type Error = StoreError;
 
-fn row_to_parts(row: &Row<'_>) -> rusqlite::Result<RowParts> {
-    Ok(RowParts {
-        id: row.get("id")?,
-        name: row.get("name")?,
-        description: row.get("description")?,
-        scope: row.get("scope")?,
-        project_id: row.get("project_id")?,
-        enabled: row.get("enabled")?,
-        definition: row.get("definition")?,
-        created_at: row.get("created_at")?,
-        updated_at: row.get("updated_at")?,
-    })
-}
-
-fn parts_to_record(parts: RowParts) -> Result<AutomationRecord, StoreError> {
-    let definition: AutomationDefinition =
-        serde_json::from_str(&parts.definition).map_err(|source| StoreError::Corrupt {
-            what: "automation definition",
-            id: parts.id.clone(),
-            source,
-        })?;
-    let scope: AutomationScope = parse_db_enum(&parts.scope, "automation scope", &parts.id)?;
-    Ok(AutomationRecord {
-        id: parts.id,
-        name: parts.name,
-        description: parts.description,
-        scope,
-        project_id: parts.project_id,
-        enabled: parts.enabled != 0,
-        definition,
-        created_at: parts.created_at,
-        updated_at: parts.updated_at,
-    })
+    fn from_row(row: &Row<'_>) -> Result<Self, StoreError> {
+        let id: String = row.get("id")?;
+        Ok(Self {
+            name: row.get("name")?,
+            description: row.get("description")?,
+            scope: enum_column(row, "scope", "automation scope", &id)?,
+            project_id: row.get("project_id")?,
+            enabled: row.get::<_, SqlBool>("enabled")?.0,
+            definition: json_column(row, "definition", "automation definition", &id)?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+            id,
+        })
+    }
 }
 
 fn get_by_id(conn: &Connection, id: &str) -> Result<Option<AutomationRecord>, StoreError> {
-    let mut stmt = conn.prepare("SELECT * FROM automations WHERE id = ?1")?;
-    let mut rows = stmt.query_map(params![id], row_to_parts)?;
-    match rows.next() {
-        Some(parts) => Ok(Some(parts_to_record(parts?)?)),
-        None => Ok(None),
-    }
+    query_opt(conn, "SELECT * FROM automations WHERE id = ?1", [id])
 }
 
 fn require(conn: &Connection, id: &str) -> Result<AutomationRecord, StoreError> {

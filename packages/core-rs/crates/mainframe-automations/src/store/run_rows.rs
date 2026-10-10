@@ -1,58 +1,33 @@
 //! Row mapping and in-transaction helpers shared by `RunStore` and
 //! `InteractionStore::resolve_interaction` (both write the runs table).
 
-use rusqlite::{Connection, OptionalExtension, Row, Transaction, params};
+use mainframe_db::sql_types::{FromRow, query_opt};
+use rusqlite::{Connection, Row, Transaction, params};
 
 use crate::domain::AutomationDefinition;
 use crate::error::{MAX_STEP_OUTPUT_BYTES, StoreError};
 
-use super::{
-    AutomationCheckpoint, RunRecord, RunStatus, RunTriggerContext, RunTriggerKind, epoch_ms_now,
-    parse_db_enum,
-};
+use super::columns::{enum_column, json_column};
+use super::{AutomationCheckpoint, RunRecord, RunTriggerContext, RunTriggerKind, epoch_ms_now};
 
-pub(crate) struct RowParts {
-    pub id: String,
-    pub automation_id: String,
-    pub status: String,
-    pub checkpoint: String,
-    pub started_at: i64,
-    pub finished_at: Option<i64>,
-}
+impl FromRow for RunRecord {
+    type Error = StoreError;
 
-pub(crate) fn row_to_parts(row: &Row<'_>) -> rusqlite::Result<RowParts> {
-    Ok(RowParts {
-        id: row.get("id")?,
-        automation_id: row.get("automation_id")?,
-        status: row.get("status")?,
-        checkpoint: row.get("checkpoint")?,
-        started_at: row.get("started_at")?,
-        finished_at: row.get("finished_at")?,
-    })
-}
-
-pub(crate) fn parts_to_record(parts: RowParts) -> Result<RunRecord, StoreError> {
-    let checkpoint: AutomationCheckpoint =
-        serde_json::from_str(&parts.checkpoint).map_err(|source| StoreError::Corrupt {
-            what: "run checkpoint",
-            id: parts.id.clone(),
-            source,
-        })?;
-    let status: RunStatus = parse_db_enum(&parts.status, "run status", &parts.id)?;
-    Ok(RunRecord {
-        id: parts.id,
-        automation_id: parts.automation_id,
-        status,
-        checkpoint,
-        started_at: parts.started_at,
-        finished_at: parts.finished_at,
-    })
+    fn from_row(row: &Row<'_>) -> Result<Self, StoreError> {
+        let id: String = row.get("id")?;
+        Ok(Self {
+            automation_id: row.get("automation_id")?,
+            status: enum_column(row, "status", "run status", &id)?,
+            checkpoint: json_column(row, "checkpoint", "run checkpoint", &id)?,
+            started_at: row.get("started_at")?,
+            finished_at: row.get("finished_at")?,
+            id,
+        })
+    }
 }
 
 pub(crate) fn get_by_id(conn: &Connection, id: &str) -> Result<Option<RunRecord>, StoreError> {
-    let mut stmt = conn.prepare("SELECT * FROM automation_runs WHERE id = ?1")?;
-    let parts = stmt.query_row(params![id], row_to_parts).optional()?;
-    parts.map(parts_to_record).transpose()
+    query_opt(conn, "SELECT * FROM automation_runs WHERE id = ?1", [id])
 }
 
 pub(crate) fn require(conn: &Connection, id: &str) -> Result<RunRecord, StoreError> {
@@ -62,30 +37,19 @@ pub(crate) fn require(conn: &Connection, id: &str) -> Result<RunRecord, StoreErr
     })
 }
 
-/// A8 guard — returns the raw row so callers reuse the read.
+/// A8 guard — returns the run so callers reuse the read.
 pub(crate) fn assert_not_terminal(
     tx: &Transaction<'_>,
     run_id: &str,
-) -> Result<RowParts, StoreError> {
-    let parts = tx
-        .query_row(
-            "SELECT * FROM automation_runs WHERE id = ?1",
-            params![run_id],
-            row_to_parts,
-        )
-        .optional()?
-        .ok_or_else(|| StoreError::NotFound {
-            kind: "automation run",
-            id: run_id.to_string(),
-        })?;
-    let status: RunStatus = parse_db_enum(&parts.status, "run status", run_id)?;
-    if status.is_terminal() {
+) -> Result<RunRecord, StoreError> {
+    let run = require(tx, run_id)?;
+    if run.status.is_terminal() {
         return Err(StoreError::TerminalRun {
             run_id: run_id.to_string(),
-            status,
+            status: run.status,
         });
     }
-    Ok(parts)
+    Ok(run)
 }
 
 pub(crate) fn assert_step_outputs_within_cap(

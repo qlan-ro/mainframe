@@ -76,6 +76,17 @@ impl From<ActorError> for StoreError {
     }
 }
 
+impl From<mainframe_db::DbError> for StoreError {
+    fn from(error: mainframe_db::DbError) -> Self {
+        match error {
+            mainframe_db::DbError::Sqlite(error) => Self::Sqlite(error),
+            mainframe_db::DbError::Json(error) => Self::Json(error),
+            mainframe_db::DbError::Io(error) => Self::Io(error),
+            mainframe_db::DbError::Message(message) => Self::Task(message),
+        }
+    }
+}
+
 impl AutomationDb {
     pub async fn open(path: impl AsRef<Path>) -> Result<Self, StoreError> {
         let path: PathBuf = path.as_ref().to_path_buf();
@@ -110,11 +121,7 @@ impl AutomationDb {
                     },
                 }],
                 1,
-            )
-            .map_err(|error| match error {
-                mainframe_db::DbError::Sqlite(error) => StoreError::Sqlite(error),
-                other => StoreError::Task(other.to_string()),
-            })?;
+            )?;
             Ok(conn)
         })?;
         Ok(Self { actor })

@@ -215,6 +215,8 @@ pub(crate) fn epoch_ms_now() -> i64 {
     mainframe_types::time::now_ms()
 }
 
+mod columns;
+
 #[cfg(test)]
 mod automation_store_tests;
 

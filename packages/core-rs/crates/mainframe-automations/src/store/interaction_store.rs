@@ -3,17 +3,19 @@
 //! checkpoint commit atomically — a crash cannot strand an `answered`
 //! interaction against a still-`waiting` step.
 
+use mainframe_db::sql_types::{FromRow, query_all, query_opt};
 use nanoid::nanoid;
-use rusqlite::{Connection, OptionalExtension, Row, params};
+use rusqlite::{Connection, Row, params};
 use serde_json::Value;
 
 use crate::domain::AutomationFormField;
 use crate::error::StoreError;
 
+use super::columns::enum_column;
 use super::run_rows::{assert_step_outputs_within_cap, require as require_run};
 use super::{
-    AutomationCheckpoint, AutomationDb, InteractionRecord, InteractionStatus, StepStatus,
-    derive_run_status, epoch_ms_now, parse_db_enum,
+    AutomationCheckpoint, AutomationDb, InteractionRecord, StepStatus, derive_run_status,
+    epoch_ms_now,
 };
 
 #[derive(Clone)]
@@ -68,13 +70,11 @@ impl InteractionStore {
         let (run_id, step_ref) = (run_id.to_string(), step_ref.to_string());
         self.db
             .call(move |conn| {
-                let mut stmt = conn.prepare(
+                query_opt(
+                    conn,
                     "SELECT * FROM automation_interactions WHERE run_id = ?1 AND step_ref = ?2 AND status = 'pending'",
-                )?;
-                let parts = stmt
-                    .query_row(params![run_id, step_ref], row_to_parts)
-                    .optional()?;
-                parts.map(parts_to_record).transpose()
+                    params![run_id, step_ref],
+                )
             })
             .await
     }
@@ -82,11 +82,11 @@ impl InteractionStore {
     pub(crate) async fn list_pending(&self) -> Result<Vec<InteractionRecord>, StoreError> {
         self.db
             .call(|conn| {
-                let mut stmt = conn.prepare(
+                query_all(
+                    conn,
                     "SELECT * FROM automation_interactions WHERE status = 'pending' ORDER BY created_at",
-                )?;
-                let rows = stmt.query_map([], row_to_parts)?;
-                rows.map(|r| parts_to_record(r?)).collect()
+                    [],
+                )
             })
             .await
     }
@@ -106,17 +106,7 @@ impl InteractionStore {
                 let now = epoch_ms_now();
                 let tx = conn.transaction()?;
 
-                let interaction = tx
-                    .query_row(
-                        "SELECT * FROM automation_interactions WHERE id = ?1",
-                        params![id],
-                        row_to_parts,
-                    )
-                    .optional()?
-                    .ok_or_else(|| StoreError::NotFound {
-                        kind: "automation interaction",
-                        id: id.clone(),
-                    })?;
+                let interaction = require(&tx, &id)?;
                 let claimed = tx.execute(
                     "UPDATE automation_interactions SET status = 'answered', resolved_at = ?2 WHERE id = ?1 AND status = 'pending'",
                     params![id, now],
@@ -198,42 +188,22 @@ fn apply_answers(
     Ok(())
 }
 
-struct RowParts {
-    id: String,
-    run_id: String,
-    step_ref: String,
-    title: String,
-    fields: String,
-    status: String,
-    created_at: i64,
-    resolved_at: Option<i64>,
-}
+impl FromRow for InteractionRecord {
+    type Error = StoreError;
 
-fn row_to_parts(row: &Row<'_>) -> rusqlite::Result<RowParts> {
-    Ok(RowParts {
-        id: row.get("id")?,
-        run_id: row.get("run_id")?,
-        step_ref: row.get("step_ref")?,
-        title: row.get("title")?,
-        fields: row.get("fields")?,
-        status: row.get("status")?,
-        created_at: row.get("created_at")?,
-        resolved_at: row.get("resolved_at")?,
-    })
-}
-
-fn parts_to_record(parts: RowParts) -> Result<InteractionRecord, StoreError> {
-    let status: InteractionStatus = parse_db_enum(&parts.status, "interaction status", &parts.id)?;
-    Ok(InteractionRecord {
-        fields: parse_fields(&parts.fields, &parts.id),
-        id: parts.id,
-        run_id: parts.run_id,
-        step_ref: parts.step_ref,
-        title: parts.title,
-        status,
-        created_at: parts.created_at,
-        resolved_at: parts.resolved_at,
-    })
+    fn from_row(row: &Row<'_>) -> Result<Self, StoreError> {
+        let id: String = row.get("id")?;
+        Ok(Self {
+            run_id: row.get("run_id")?,
+            step_ref: row.get("step_ref")?,
+            title: row.get("title")?,
+            fields: parse_fields(&row.get::<_, String>("fields")?, &id),
+            status: enum_column(row, "status", "interaction status", &id)?,
+            created_at: row.get("created_at")?,
+            resolved_at: row.get("resolved_at")?,
+            id,
+        })
+    }
 }
 
 /// Defensive JSON-array parse (repo convention: never bare-parse a JSON
@@ -255,9 +225,11 @@ fn parse_fields(raw: &str, interaction_id: &str) -> Vec<AutomationFormField> {
 }
 
 fn get_by_id(conn: &Connection, id: &str) -> Result<Option<InteractionRecord>, StoreError> {
-    let mut stmt = conn.prepare("SELECT * FROM automation_interactions WHERE id = ?1")?;
-    let parts = stmt.query_row(params![id], row_to_parts).optional()?;
-    parts.map(parts_to_record).transpose()
+    query_opt(
+        conn,
+        "SELECT * FROM automation_interactions WHERE id = ?1",
+        [id],
+    )
 }
 
 fn require(conn: &Connection, id: &str) -> Result<InteractionRecord, StoreError> {

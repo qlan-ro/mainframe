@@ -7,9 +7,11 @@ use rusqlite::params;
 use crate::domain::AutomationDefinition;
 use crate::error::StoreError;
 
+use mainframe_db::sql_types::query_all;
+
 use super::run_rows::{
-    RowParts, assert_not_terminal, assert_step_outputs_within_cap, finalize_corrupt_run, get_by_id,
-    is_unique_violation, parts_to_record, require, row_to_parts,
+    assert_not_terminal, assert_step_outputs_within_cap, finalize_corrupt_run, get_by_id,
+    is_unique_violation, require,
 };
 use super::{
     AutomationCheckpoint, AutomationDb, RunRecord, RunTriggerContext, TerminalStatus,
@@ -79,11 +81,11 @@ impl RunStore {
         self.db
             .call(move |conn| {
                 // rowid tie-breaks started_at (ms ties on fast successive creates).
-                let mut stmt = conn.prepare(
+                query_all(
+                    conn,
                     "SELECT * FROM automation_runs WHERE automation_id = ?1 ORDER BY started_at DESC, rowid DESC LIMIT ?2",
-                )?;
-                let rows = stmt.query_map(params![automation_id, limit], row_to_parts)?;
-                rows.map(|r| parts_to_record(r?)).collect()
+                    params![automation_id, limit],
+                )
             })
             .await
     }
@@ -95,18 +97,17 @@ impl RunStore {
         self.db
             .call(|conn| {
                 let mut stmt = conn.prepare(
-                    "SELECT * FROM automation_runs WHERE status IN ('running','waiting')",
+                    "SELECT id FROM automation_runs WHERE status IN ('running','waiting')",
                 )?;
-                let parts: Vec<RowParts> = stmt
-                    .query_map([], row_to_parts)?
+                let ids: Vec<String> = stmt
+                    .query_map([], |row| row.get(0))?
                     .collect::<Result<_, _>>()?;
                 drop(stmt);
-                let mut runs = Vec::with_capacity(parts.len());
-                for part in parts {
-                    let run_id = part.id.clone();
-                    match parts_to_record(part) {
-                        Ok(run) => runs.push(run),
-                        Err(err) => {
+                let mut runs = Vec::with_capacity(ids.len());
+                for run_id in ids {
+                    match get_by_id(conn, &run_id) {
+                        Ok(run) => runs.extend(run),
+                        Err(err @ StoreError::Corrupt { .. }) => {
                             tracing::error!(
                                 run_id,
                                 error = %err,
@@ -114,6 +115,7 @@ impl RunStore {
                             );
                             finalize_corrupt_run(conn, &run_id)?;
                         }
+                        Err(err) => return Err(err),
                     }
                 }
                 Ok(runs)
@@ -160,13 +162,7 @@ impl RunStore {
         self.db
             .call(move |conn| {
                 let tx = conn.transaction()?;
-                let parts = assert_not_terminal(&tx, &run_id)?;
-                let mut checkpoint: AutomationCheckpoint = serde_json::from_str(&parts.checkpoint)
-                    .map_err(|source| StoreError::Corrupt {
-                        what: "run checkpoint",
-                        id: run_id.clone(),
-                        source,
-                    })?;
+                let mut checkpoint = assert_not_terminal(&tx, &run_id)?.checkpoint;
                 mutate(&mut checkpoint);
                 assert_step_outputs_within_cap(&checkpoint)?;
                 let status = derive_run_status(&checkpoint);
@@ -195,13 +191,7 @@ impl RunStore {
             .call(move |conn| {
                 let now = epoch_ms_now();
                 let tx = conn.transaction()?;
-                let parts = assert_not_terminal(&tx, &run_id)?;
-                let mut checkpoint: AutomationCheckpoint = serde_json::from_str(&parts.checkpoint)
-                    .map_err(|source| StoreError::Corrupt {
-                        what: "run checkpoint",
-                        id: run_id.clone(),
-                        source,
-                    })?;
+                let mut checkpoint = assert_not_terminal(&tx, &run_id)?.checkpoint;
                 checkpoint.wake_at = None;
                 if error.is_some() {
                     checkpoint.error = error;
