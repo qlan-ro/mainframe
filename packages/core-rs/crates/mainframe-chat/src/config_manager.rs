@@ -14,6 +14,11 @@ use crate::config_respawn_guard::{model_changed, respawn_refusal};
 use crate::config_transcripts::{ActiveSession, OwnedNativeSession, relocate_claude_transcripts};
 use crate::types::ActiveChat;
 
+/// User-facing message when a chat's transcripts could not be moved into its
+/// worktree; the chat keeps running on its previous binding.
+const TRANSCRIPT_MOVE_FAILED: &str =
+    "Moving the session's history into the worktree failed. The session stayed where it was.";
+
 #[path = "config_locks.rs"]
 mod config_locks;
 
@@ -387,9 +392,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
                     "failed to move session files; restarting the chat on its current binding"
                 );
                 self.deps.start_chat(chat_id).await;
-                return Err(ConfigError::Message(
-                    "Moving the session's history into the worktree failed. The session stayed where it was.".to_string(),
-                ));
+                return Err(ConfigError::Message(TRANSCRIPT_MOVE_FAILED.to_string()));
             }
         };
 
@@ -586,7 +589,15 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
             &info.worktree_path,
         )
         .await
-        .map_err(ConfigError::Message)?;
+        .map_err(|err| {
+            tracing::error!(
+                chat_id,
+                worktree_path = %info.worktree_path,
+                error = %err,
+                "failed to move session files into the new worktree"
+            );
+            ConfigError::Message(TRANSCRIPT_MOVE_FAILED.to_string())
+        })?;
         self.apply_worktree_update(
             &cell,
             chat_id,
@@ -1240,6 +1251,7 @@ mod tests {
             &["init", "-q"][..],
             &["config", "user.email", "t@t.dev"],
             &["config", "user.name", "Tester"],
+            &["config", "commit.gpgsign", "false"],
             &["commit", "-q", "--allow-empty", "-m", "init"],
         ] {
             let status = std::process::Command::new("git")
