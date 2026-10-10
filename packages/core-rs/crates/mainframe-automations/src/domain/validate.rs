@@ -13,11 +13,11 @@ use super::comparators::{comparator_wire_name, comparators_for};
 use super::condition::ConditionRow;
 use super::form::FormFieldType;
 use super::scope::{
-    TokenInfo, TokenType, body_scope, builtin_tokens, step_produces, step_refs, trigger_tokens,
+    TokenInfo, TokenType, builtin_tokens, step_produces, step_refs, trigger_tokens,
 };
-use super::step::Step;
+use super::scoped_walk::walk_scoped;
+use super::step::{MAX_REPEAT_ITEMS, Step};
 use super::token::{TOKEN_STEP_BUILTIN, TOKEN_STEP_CURRENT, TokenRef};
-use crate::engine::blocks::MAX_REPEAT_ITEMS;
 /// A parked run costs nothing, so the cap is not a resource bound — it is a
 /// typo guard. Anything longer than a week is a seconds/milliseconds mix-up
 /// far more often than an intent; a genuinely long delay belongs on a
@@ -151,7 +151,12 @@ pub fn validate(definition: &AutomationDefinition) -> Vec<ValidationError> {
     };
     let mut scope = builtin_tokens();
     scope.extend(trigger_tokens(&definition.triggers));
-    walk(&definition.steps, &mut scope, &mut ctx, 1);
+    walk_scoped(
+        &definition.steps,
+        &mut scope,
+        1,
+        &mut |step, scope, concurrency| check_scoped_step(step, scope, &mut ctx, concurrency),
+    );
     super::validate_breaks::check_breaks(&definition.steps, &mut ctx);
     ctx.errors
 }
@@ -159,20 +164,8 @@ pub fn validate(definition: &AutomationDefinition) -> Vec<ValidationError> {
 fn for_each_step<'a>(steps: &'a [Step], visit: &mut dyn FnMut(&'a Step)) {
     for step in steps {
         visit(step);
-        match step {
-            Step::If(s) => {
-                for_each_step(&s.then, visit);
-                for_each_step(&s.otherwise, visit);
-            }
-            Step::Repeat(s) => for_each_step(&s.steps, visit),
-            Step::Loop(s) => for_each_step(&s.steps, visit),
-            Step::Retry(s) => for_each_step(&s.steps, visit),
-            Step::Parallel(s) => {
-                for branch in &s.branches {
-                    for_each_step(branch, visit);
-                }
-            }
-            _ => {}
+        for body in step.child_bodies() {
+            for_each_step(body, visit);
         }
     }
 }
@@ -210,38 +203,33 @@ fn check_condition_comparators(
     }
 }
 
-/// `enclosing_concurrency` is the product of every enclosing concurrent
-/// Repeat's own factor — the nested-fan-out cap needs it, since a Repeat two
-/// levels deep multiplies with BOTH ancestors, not just its immediate parent.
-fn walk(steps: &[Step], scope: &mut Vec<TokenInfo>, ctx: &mut Ctx, enclosing_concurrency: u32) {
-    for step in steps {
-        let names = build_variable_namespace(scope);
-        for token_ref in step_refs(step) {
-            check_ref(step, token_ref, scope, ctx);
-        }
-        // A warning, not an error: the interpreter leaves an unresolved `$name`
-        // literal (tokens::substitute), so a prompt saying `cd $HOME && pnpm
-        // build` runs exactly as written. Blocking the save on it made a
-        // legitimate shell command unsaveable.
-        for name in unresolved_variable_names(step, &names) {
-            ctx.push_at(
-                ValidationLevel::Warning,
-                step.id(),
-                format!("This step uses ${name}, but no earlier step defines it."),
-            );
-        }
-        let body_concurrency = check_step(step, scope, ctx, enclosing_concurrency);
-        // Each body walks a copy of the scope (`body_scope`), so nothing
-        // produced inside a repeat, loop, retry or parallel outlives it: a
-        // failed retry attempt or an earlier loop pass must not hand a later
-        // step a value the run never settled on, and no parallel branch sees a
-        // sibling's outputs. `if` alone re-emits both branches' outputs to
-        // later siblings, through `step_produces`.
-        for body in step.child_bodies() {
-            walk(body, &mut body_scope(step, scope), ctx, body_concurrency);
-        }
-        scope.extend(step_produces(step));
+/// Checks one step against the scope it sees and returns the concurrency
+/// factor its bodies inherit. `enclosing_concurrency` is the product of every
+/// enclosing concurrent Repeat's own factor — the nested-fan-out cap needs it,
+/// since a Repeat two levels deep multiplies with BOTH ancestors, not just its
+/// immediate parent.
+fn check_scoped_step(
+    step: &Step,
+    scope: &[TokenInfo],
+    ctx: &mut Ctx<'_>,
+    enclosing_concurrency: u32,
+) -> u32 {
+    let names = build_variable_namespace(scope);
+    for token_ref in step_refs(step) {
+        check_ref(step, token_ref, scope, ctx);
     }
+    // A warning, not an error: the interpreter leaves an unresolved `$name`
+    // literal (tokens::substitute), so a prompt saying `cd $HOME && pnpm
+    // build` runs exactly as written. Blocking the save on it made a
+    // legitimate shell command unsaveable.
+    for name in unresolved_variable_names(step, &names) {
+        ctx.push_at(
+            ValidationLevel::Warning,
+            step.id(),
+            format!("This step uses ${name}, but no earlier step defines it."),
+        );
+    }
+    check_step(step, scope, ctx, enclosing_concurrency)
 }
 
 /// The step's own checks, independent of its body. Returns the concurrency
