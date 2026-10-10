@@ -14,6 +14,11 @@ use crate::config_respawn_guard::{model_changed, respawn_refusal};
 use crate::config_transcripts::{ActiveSession, OwnedNativeSession, relocate_claude_transcripts};
 use crate::types::ActiveChat;
 
+/// User-facing message when a chat's transcripts could not be moved into its
+/// worktree; the chat keeps running on its previous binding.
+const TRANSCRIPT_MOVE_FAILED: &str =
+    "Moving the session's history into the worktree failed. The session stayed where it was.";
+
 #[path = "config_locks.rs"]
 mod config_locks;
 
@@ -120,6 +125,18 @@ struct LiveChanges {
     model: Option<String>,
     permission_mode: Option<ExecutionMode>,
     plan_mode: Option<bool>,
+}
+
+/// A live chat's move onto a worktree, for `rebind_live_session`.
+struct LiveRebind<'a> {
+    project_id: &'a str,
+    /// The directory the chat's transcripts are keyed by now.
+    old_dir: &'a str,
+    /// The worktree the chat is bound to now, whose launch processes stop.
+    old_worktree: Option<&'a str>,
+    active: ActiveSession<'a>,
+    worktree_path: String,
+    branch_name: Option<String>,
 }
 
 struct RespawnChanges {
@@ -337,6 +354,59 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
             .on_binding_changed(chat_id, worktree_path.as_deref());
     }
 
+    /// Moves a chat with a running session onto `rebind.worktree_path`: stop the
+    /// CLI, relocate its Claude transcripts, persist the binding, start it again.
+    /// A failed move restarts the chat on its current binding and returns an
+    /// error, so the session is never left stopped.
+    async fn rebind_live_session(
+        &self,
+        cell: &Arc<Mutex<ActiveChat>>,
+        chat_id: &str,
+        rebind: LiveRebind<'_>,
+    ) -> Result<(), ConfigError> {
+        self.deps.stop_chat(chat_id).await;
+
+        // Same blast radius as `disable_worktree`: the whole (project, path)
+        // launch manager, not just this chat's processes.
+        if let Some(old) = rebind.old_worktree
+            && let Some(fut) = self.deps.stop_launch_processes(rebind.project_id, old)
+        {
+            fut.await;
+        }
+
+        let moved_transcript = match relocate_claude_transcripts(
+            &self.deps,
+            chat_id,
+            rebind.active,
+            rebind.old_dir,
+            &rebind.worktree_path,
+        )
+        .await
+        {
+            Ok(path) => path,
+            Err(err) => {
+                tracing::error!(
+                    chat_id,
+                    worktree_path = %rebind.worktree_path,
+                    error = %err,
+                    "failed to move session files; restarting the chat on its current binding"
+                );
+                self.deps.start_chat(chat_id).await;
+                return Err(ConfigError::Message(TRANSCRIPT_MOVE_FAILED.to_string()));
+            }
+        };
+
+        self.apply_worktree_update(
+            cell,
+            chat_id,
+            Some(rebind.worktree_path),
+            rebind.branch_name,
+            moved_transcript,
+        );
+        self.deps.start_chat(chat_id).await;
+        Ok(())
+    }
+
     pub async fn update_chat_config(
         &self,
         chat_id: &str,
@@ -465,11 +535,8 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
             .ok_or_else(|| ConfigError::Message("Project not found".to_string()))?;
 
         if let Some(session_id) = claude_session_id {
-            // Mid-session path: stop, create worktree, move session files (claude only), restart.
-            // Codex resumes by threadId + cwd and stores rollouts under ~/.codex/sessions/<date>/
-            // (not project-keyed), so there is nothing to relocate.
-            self.deps.stop_chat(chat_id).await;
-
+            // Mid-session path. The worktree is created while the chat still runs,
+            // so a failed `git worktree add` leaves it untouched.
             let info = create_worktree(
                 &project.path,
                 &self.worktree_dir(),
@@ -478,30 +545,23 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
             )
             .await
             .map_err(|e| ConfigError::Message(e.to_string()))?;
-
-            let active = ActiveSession {
-                adapter_id: &adapter,
-                session_id: Some(&session_id),
-            };
-            let moved_transcript = relocate_claude_transcripts(
-                &self.deps,
-                chat_id,
-                active,
-                &project.path,
-                &info.worktree_path,
-            )
-            .await
-            .map_err(ConfigError::Message)?;
-
-            self.apply_worktree_update(
-                &cell,
-                chat_id,
-                Some(info.worktree_path),
-                Some(info.branch_name),
-                moved_transcript,
-            );
-            self.deps.start_chat(chat_id).await;
-            return Ok(());
+            return self
+                .rebind_live_session(
+                    &cell,
+                    chat_id,
+                    LiveRebind {
+                        project_id: &project_id,
+                        old_dir: &project.path,
+                        old_worktree: None,
+                        active: ActiveSession {
+                            adapter_id: &adapter,
+                            session_id: Some(&session_id),
+                        },
+                        worktree_path: info.worktree_path,
+                        branch_name: Some(info.branch_name),
+                    },
+                )
+                .await;
         }
 
         // Pre-session path: kill any untracked process and create worktree
@@ -529,7 +589,15 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
             &info.worktree_path,
         )
         .await
-        .map_err(ConfigError::Message)?;
+        .map_err(|err| {
+            tracing::error!(
+                chat_id,
+                worktree_path = %info.worktree_path,
+                error = %err,
+                "failed to move session files into the new worktree"
+            );
+            ConfigError::Message(TRANSCRIPT_MOVE_FAILED.to_string())
+        })?;
         self.apply_worktree_update(
             &cell,
             chat_id,
@@ -564,62 +632,27 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
         let branch_name = branch_name.map(str::to_string);
 
         if let Some(session_id) = claude_session_id {
-            // Mid-session path: stop, move session files to attached worktree, restart
             let project = self
                 .deps
                 .projects_get(&project_id)
                 .ok_or_else(|| ConfigError::Message("Project not found".to_string()))?;
-
-            self.deps.stop_chat(chat_id).await;
-
-            // Same blast radius as `disable_worktree`: the whole (project, path)
-            // launch manager, not just this chat's processes.
-            if let Some(old) = current_worktree.as_deref()
-                && let Some(fut) = self.deps.stop_launch_processes(&project_id, old)
-            {
-                fut.await;
-            }
-
-            let active = ActiveSession {
-                adapter_id: &adapter,
-                session_id: Some(&session_id),
-            };
-            let old_dir = effective_dir(current_worktree.as_deref(), &project.path);
-            let moved_transcript = match relocate_claude_transcripts(
-                &self.deps,
-                chat_id,
-                active,
-                old_dir,
-                worktree_path,
-            )
-            .await
-            {
-                Ok(path) => path,
-                Err(err) => {
-                    // The chat is already stopped at this point — leaving it that way
-                    // would strand the session with no running CLI and no new binding.
-                    tracing::error!(
-                        chat_id,
-                        worktree_path,
-                        error = %err,
-                        "failed to move session files; restarting the chat on its current binding"
-                    );
-                    self.deps.start_chat(chat_id).await;
-                    return Err(ConfigError::Message(
-                        "Moving the session's history into the worktree failed. The session stayed where it was.".to_string(),
-                    ));
-                }
-            };
-
-            self.apply_worktree_update(
-                &cell,
-                chat_id,
-                Some(worktree_path.to_string()),
-                branch_name,
-                moved_transcript,
-            );
-            self.deps.start_chat(chat_id).await;
-            return Ok(());
+            return self
+                .rebind_live_session(
+                    &cell,
+                    chat_id,
+                    LiveRebind {
+                        project_id: &project_id,
+                        old_dir: effective_dir(current_worktree.as_deref(), &project.path),
+                        old_worktree: current_worktree.as_deref(),
+                        active: ActiveSession {
+                            adapter_id: &adapter,
+                            session_id: Some(&session_id),
+                        },
+                        worktree_path: worktree_path.to_string(),
+                        branch_name,
+                    },
+                )
+                .await;
         }
 
         // Pre-session path
@@ -1208,6 +1241,108 @@ mod tests {
 
         let binding_changed = manager.deps.binding_changed.lock().unwrap();
         assert_eq!(binding_changed.as_slice(), &[Some("/new/wt".to_string())]);
+    }
+
+    /// A git repo with one commit, so `enable_worktree` can create a real worktree.
+    fn git_project() -> (tempfile::TempDir, Project) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().to_str().unwrap().to_string();
+        for args in [
+            &["init", "-q"][..],
+            &["config", "user.email", "t@t.dev"],
+            &["config", "user.name", "Tester"],
+            &["config", "commit.gpgsign", "false"],
+            &["commit", "-q", "--allow-empty", "-m", "init"],
+        ] {
+            let status = std::process::Command::new("git")
+                .args(args)
+                .current_dir(&path)
+                .status()
+                .unwrap();
+            assert!(status.success(), "git {args:?} failed");
+        }
+        let project = Project {
+            path,
+            ..test_project()
+        };
+        (dir, project)
+    }
+
+    fn claude_live_chat() -> Chat {
+        let mut chat = test_chat("c1");
+        chat.claude_session_id = Some("sess1".to_string());
+        chat
+    }
+
+    #[tokio::test]
+    async fn enabling_a_worktree_restarts_the_chat_when_moving_session_files_fails() {
+        let (_repo, project) = git_project();
+        let cell = cell_with_chat(claude_live_chat(), Arc::new(FakeSession::spawned()));
+        let deps = FakeDeps::failing_move(cell.clone(), project, "boom");
+        let manager = ChatConfigManager::new(deps);
+
+        let err = manager
+            .enable_worktree("c1", "HEAD", "feat/x")
+            .await
+            .unwrap_err();
+
+        assert_eq!(
+            err.to_string(),
+            "Moving the session's history into the worktree failed. The session stayed where it was."
+        );
+        assert_eq!(manager.deps.stop_chat_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            manager.deps.start_chat_calls.load(Ordering::SeqCst),
+            1,
+            "the stopped chat must be running again, not stranded"
+        );
+        assert!(manager.deps.updates.lock().unwrap().is_empty());
+        assert!(manager.deps.binding_changed.lock().unwrap().is_empty());
+        let chat = cell.lock().unwrap().chat.clone();
+        assert_eq!(chat.worktree_path, None);
+        assert_eq!(chat.branch_name, None);
+    }
+
+    #[tokio::test]
+    async fn enabling_a_worktree_on_a_live_chat_binds_it_and_restarts_it() {
+        let (repo, project) = git_project();
+        let cell = cell_with_chat(claude_live_chat(), Arc::new(FakeSession::spawned()));
+        let deps = FakeDeps::with_project(cell.clone(), project);
+        let manager = ChatConfigManager::new(deps);
+
+        manager
+            .enable_worktree("c1", "HEAD", "feat/x")
+            .await
+            .unwrap();
+
+        let worktree = repo
+            .path()
+            .join(".worktrees/feat-x")
+            .to_string_lossy()
+            .to_string();
+        let updates = manager.deps.updates.lock().unwrap().clone();
+        let [update] = updates.as_slice() else {
+            panic!("expected exactly one persisted update, got {updates:?}");
+        };
+        assert_eq!(update.worktree_path, Some(Some(worktree.clone())));
+        assert_eq!(update.branch_name, Some(Some("feat/x".to_string())));
+        let transcript = update.session_file_path.clone().unwrap();
+        let projects_dir = dirs::home_dir().unwrap().join(".claude/projects");
+        assert!(
+            transcript.starts_with(&*projects_dir.to_string_lossy())
+                && transcript.ends_with("--worktrees-feat-x/sess1.jsonl"),
+            "the stored transcript must point into the worktree's project dir, got {transcript}"
+        );
+        assert_eq!(manager.deps.stop_chat_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(manager.deps.start_chat_calls.load(Ordering::SeqCst), 1);
+        assert!(
+            manager.deps.stop_launch_calls.lock().unwrap().is_empty(),
+            "an unbound chat has no worktree launch processes to stop"
+        );
+        assert_eq!(
+            manager.deps.binding_changed.lock().unwrap().as_slice(),
+            &[Some(worktree)]
+        );
     }
 }
 
