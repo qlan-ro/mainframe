@@ -16,10 +16,10 @@ use mainframe_types::chat::QueuedMessageRef;
 use mainframe_types::events::DaemonEvent;
 use tracing::{info, warn};
 
-use crate::event_handler::{EventHandler, EventHandlerDeps};
+use crate::chat_teardown::{ChatTeardown, TeardownMode};
+use crate::event_handler::EventHandlerDeps;
 use crate::idle_scanner::{ActiveChatRegistry, IDLE_THRESHOLD_MS, IdleOffloader, idle_since};
 use crate::lifecycle_manager::{ChatLifecycleManager, LifecycleManagerDeps};
-use crate::message_cache::MessageCache;
 use crate::permission_manager::PermissionManager;
 
 /// The offload sequence for one `ChatManager` (Design steps 1-6), built once
@@ -28,30 +28,27 @@ use crate::permission_manager::PermissionManager;
 /// object so `IdleSessionScanner`'s periodic task needs no `Weak<ChatManager>`.
 pub struct ChatOffload<L: LifecycleManagerDeps + 'static, E: EventHandlerDeps + 'static> {
     active_chats: ActiveChatRegistry,
-    messages: Arc<Mutex<MessageCache>>,
     permissions: Arc<Mutex<PermissionManager>>,
     queued_refs: Arc<Mutex<Vec<QueuedMessageRef>>>,
     lifecycle: Arc<ChatLifecycleManager<L>>,
-    event_handler: Arc<EventHandler<E>>,
+    teardown: Arc<ChatTeardown<E>>,
     threshold_ms: i64,
 }
 
 impl<L: LifecycleManagerDeps + 'static, E: EventHandlerDeps + 'static> ChatOffload<L, E> {
-    pub fn new(
+    pub(crate) fn new(
         active_chats: ActiveChatRegistry,
-        messages: Arc<Mutex<MessageCache>>,
         permissions: Arc<Mutex<PermissionManager>>,
         queued_refs: Arc<Mutex<Vec<QueuedMessageRef>>>,
         lifecycle: Arc<ChatLifecycleManager<L>>,
-        event_handler: Arc<EventHandler<E>>,
+        teardown: Arc<ChatTeardown<E>>,
     ) -> Self {
         Self::with_threshold(
             active_chats,
-            messages,
             permissions,
             queued_refs,
             lifecycle,
-            event_handler,
+            teardown,
             IDLE_THRESHOLD_MS,
         )
     }
@@ -59,22 +56,20 @@ impl<L: LifecycleManagerDeps + 'static, E: EventHandlerDeps + 'static> ChatOfflo
     /// Test seam: a chat idle relative to the real wall clock past a tiny
     /// threshold behaves exactly like a chat idle 2+ hours past the real one,
     /// so tests inject a small threshold rather than a fake clock.
-    pub fn with_threshold(
+    pub(crate) fn with_threshold(
         active_chats: ActiveChatRegistry,
-        messages: Arc<Mutex<MessageCache>>,
         permissions: Arc<Mutex<PermissionManager>>,
         queued_refs: Arc<Mutex<Vec<QueuedMessageRef>>>,
         lifecycle: Arc<ChatLifecycleManager<L>>,
-        event_handler: Arc<EventHandler<E>>,
+        teardown: Arc<ChatTeardown<E>>,
         threshold_ms: i64,
     ) -> Self {
         Self {
             active_chats,
-            messages,
             permissions,
             queued_refs,
             lifecycle,
-            event_handler,
+            teardown,
             threshold_ms,
         }
     }
@@ -109,19 +104,10 @@ impl<L: LifecycleManagerDeps + 'static, E: EventHandlerDeps + 'static> ChatOfflo
         self.lifecycle.orchestration().revoke(chat_id);
 
         // Step 4: drop the registry cell, the cache entry, and per-chat
-        // bookkeeping (partial-overlay + permission state). Do NOT emit
-        // `ChatEnded` here (Design): that would tell the chat surface a
+        // bookkeeping (see `TeardownMode::Offload` for what survives). Do NOT
+        // emit `ChatEnded` here (Design): that would tell the chat surface a
         // possibly-on-screen chat's facade session ended.
-        self.active_chats.remove(chat_id);
-        self.messages
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .release(chat_id);
-        self.event_handler.clear_display_state(chat_id);
-        self.permissions
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .forget(chat_id);
+        self.teardown.clear(chat_id, TeardownMode::Offload);
 
         // Step 5: release the slot.
         self.lifecycle.release_offload(chat_id);

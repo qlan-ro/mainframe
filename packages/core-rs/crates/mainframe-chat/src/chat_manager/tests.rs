@@ -30,6 +30,7 @@ mod resume_overlay;
 mod resume_snapshot;
 mod segment_fake;
 mod side_chat;
+mod teardown;
 
 // ── fake ChatManagerDeps ─────────────────────────────────────────────────────
 

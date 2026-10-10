@@ -1,5 +1,6 @@
 //! Lifecycle and permission delegations off the `ChatManager` facade.
 use super::*;
+use crate::chat_teardown::TeardownMode;
 
 impl ChatManager {
     pub async fn create_chat(&self, new_chat: NewChat) -> Chat {
@@ -86,9 +87,8 @@ impl ChatManager {
             tracing::warn!(chat_id, side_chat_id, %err, "failed to discard side chat before archiving its parent");
         }
         self.lifecycle.archive_chat(chat_id, delete_worktree).await;
+        self.teardown.clear(chat_id, TeardownMode::Archive);
         self.deps.tracker_remove_chat(chat_id);
-        self.event_handler.clear_display_state(chat_id);
-        self.worktree_offers.forget(chat_id);
         self.event_handler
             .notify_chat_surface(crate::chat_surface::ChatSurfaceEvent::ChatEnded {
                 chat_id: chat_id.to_string(),
@@ -97,9 +97,8 @@ impl ChatManager {
 
     pub async fn end_chat(&self, chat_id: &str) {
         self.lifecycle.end_chat(chat_id).await;
+        self.teardown.clear(chat_id, TeardownMode::End);
         self.deps.tracker_remove_chat(chat_id);
-        self.event_handler.clear_display_state(chat_id);
-        self.worktree_offers.forget(chat_id);
         self.event_handler
             .notify_chat_surface(crate::chat_surface::ChatSurfaceEvent::ChatEnded {
                 chat_id: chat_id.to_string(),

@@ -162,6 +162,7 @@ pub struct ChatManager {
     /// (`handoff_send.rs`), so two sends racing for the same chat cannot
     /// both build and record a handoff.
     handoff_locks: handoff_locks::HandoffLocks,
+    teardown: Arc<crate::chat_teardown::ChatTeardown<EhDeps>>,
 }
 
 #[cfg(test)]

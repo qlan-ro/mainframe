@@ -116,6 +116,21 @@ impl WorktreeOfferRegistry {
         offers
     }
 
+    #[cfg(test)]
+    pub(crate) fn seed_pending_for_test(&self, chat_id: &str, worktree_path: &str) {
+        let offer = WorktreeSwitchOffer {
+            chat_id: chat_id.to_string(),
+            worktree_path: worktree_path.to_string(),
+            branch_name: None,
+            detected_at: 1,
+        };
+        self.lock()
+            .entry(chat_id.to_string())
+            .or_default()
+            .pending
+            .insert(worktree_path.to_string(), offer);
+    }
+
     /// Permanent: the path lands in the chat's dismissed column, so it survives
     /// a restart and never becomes an offer again.
     pub fn dismiss(&self, chat_id: &str, worktree_path: &str) -> Result<(), OfferError> {
@@ -194,7 +209,7 @@ impl WorktreeOfferRegistry {
         }
     }
 
-    /// Drops the chat's state on delete or dispose so the map stays bounded.
+    /// Drops the chat's state on teardown so the map stays bounded.
     pub fn forget(&self, chat_id: &str) {
         self.lock().remove(chat_id);
     }

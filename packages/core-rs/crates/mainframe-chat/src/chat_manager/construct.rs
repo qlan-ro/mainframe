@@ -87,14 +87,21 @@ impl ChatManager {
             &self_ref,
         );
 
+        let teardown = Arc::new(crate::chat_teardown::ChatTeardown {
+            active_chats: active_chats.clone(),
+            messages: messages.clone(),
+            permissions: permissions.clone(),
+            worktree_offers: collab.worktree_offers.clone(),
+            event_handler: collab.event_handler.clone(),
+        });
+
         let offloader: Arc<dyn crate::idle_scanner::IdleOffloader> =
             Arc::new(crate::idle_offload::ChatOffload::new(
                 active_chats.clone(),
-                messages.clone(),
                 permissions.clone(),
                 queued_refs.clone(),
                 collab.lifecycle.clone(),
-                collab.event_handler.clone(),
+                teardown.clone(),
             ));
         let mut idle_scanner =
             crate::idle_scanner::IdleSessionScanner::new(active_chats.clone(), offloader);
@@ -121,6 +128,7 @@ impl ChatManager {
             history_cache,
             enricher,
             handoff_locks: super::handoff_locks::HandoffLocks::default(),
+            teardown,
         }
     }
 
@@ -196,11 +204,10 @@ impl ChatManager {
         let offloader: Arc<dyn crate::idle_scanner::IdleOffloader> =
             Arc::new(crate::idle_offload::ChatOffload::new(
                 self.active_chats.clone(),
-                self.messages.clone(),
                 self.permissions.clone(),
                 self.queued_refs.clone(),
                 self.lifecycle.clone(),
-                self.event_handler.clone(),
+                self.teardown.clone(),
             ));
         crate::idle_scanner::IdleSessionScanner::new(self.active_chats.clone(), offloader)
             .scan()

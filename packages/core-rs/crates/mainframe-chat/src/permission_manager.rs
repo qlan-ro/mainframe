@@ -112,8 +112,10 @@ impl PermissionManager {
             .is_some_and(|ring| ring.iter().any(|id| id == request_id))
     }
 
-    /// Permanent per-chat teardown only (e.g. project removal): clears the pending
-    /// queue AND drops its cancelled-id tombstones. An interrupt or archive must
+    /// Clears the pending queue AND drops its cancelled-id tombstones. Used when
+    /// the chat is deleted (discard, project removal) and by idle offload, which
+    /// runs only after hours idle with no prompt pending, so no answer to a
+    /// cancelled prompt can still be in flight. An interrupt or archive must
     /// keep using `clear`, not this — see D4.
     pub fn forget(&mut self, chat_id: &str) {
         self.clear(chat_id);
