@@ -79,7 +79,7 @@ pub fn recommend(fp: &ProjectFingerprint) -> Vec<AutomationRecommendation> {
 }
 
 /// The testable seam: the same evaluation against an explicit rule set.
-pub fn recommend_with(
+pub(crate) fn recommend_with(
     rules: &[&'static Rule],
     fp: &ProjectFingerprint,
 ) -> Vec<AutomationRecommendation> {

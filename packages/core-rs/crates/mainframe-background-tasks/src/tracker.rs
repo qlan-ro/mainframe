@@ -289,7 +289,7 @@ impl BackgroundTaskTracker {
     }
 
     /// Cross-chat iterator over running tasks.
-    pub fn list_all_running(&self) -> Vec<(String, BackgroundTask)> {
+    pub(crate) fn list_all_running(&self) -> Vec<(String, BackgroundTask)> {
         let mut out = Vec::new();
         for chat in self.by_chat.iter() {
             for task in chat.value().values() {
@@ -306,12 +306,13 @@ impl BackgroundTaskTracker {
         self.pid_by_chat.remove(chat_id);
     }
 
-    pub fn set_pid(&self, chat_id: &str, task_id: &str, pid: u32) {
+    pub(crate) fn set_pid(&self, chat_id: &str, task_id: &str, pid: u32) {
         let mut m = self.pid_by_chat.entry(chat_id.to_string()).or_default();
         m.insert(task_id.to_string(), pid);
     }
 
-    pub fn get_pid(&self, chat_id: &str, task_id: &str) -> Option<u32> {
+    #[cfg(test)]
+    pub(crate) fn get_pid(&self, chat_id: &str, task_id: &str) -> Option<u32> {
         self.pid_by_chat.get(chat_id)?.get(task_id).copied()
     }
 }

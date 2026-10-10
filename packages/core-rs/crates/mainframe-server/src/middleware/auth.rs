@@ -84,7 +84,7 @@ fn unauthorized(path: &str, reason: &str) -> Response {
 /// `createAuthMiddleware(secret, db.devices)` as an axum `from_fn_with_state`
 /// layer over the HTTP routes (never the WS upgrade — that authenticates via the
 /// token query param in `websocket.rs`).
-pub async fn auth_middleware(
+pub(crate) async fn auth_middleware(
     State(ctx): State<Arc<AppCtx>>,
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
     mut req: Request,

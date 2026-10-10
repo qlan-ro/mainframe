@@ -81,7 +81,7 @@ impl FacadeConnection {
     /// it — so two frames spawned back to back could acquire in either order.
     /// Polling once here, on the socket loop, makes arrival order the
     /// acquisition order.
-    pub fn enqueue_prompt_lock(&self, session_id: &str) -> SessionLockWait {
+    pub(crate) fn enqueue_prompt_lock(&self, session_id: &str) -> SessionLockWait {
         // `unconstrained`: tokio's `Acquire::poll` checks the coop budget
         // before the semaphore, so a spent budget would report Pending with
         // no waiter registered — queued in name, last in line in fact.
@@ -98,7 +98,7 @@ impl FacadeConnection {
     /// Acquire this session's prompt-serialization lock, creating it on
     /// first use. Held by the caller for the lifetime of one spawned prompt
     /// dispatch.
-    pub fn session_prompt_lock(&self, session_id: &str) -> Arc<tokio::sync::Mutex<()>> {
+    pub(crate) fn session_prompt_lock(&self, session_id: &str) -> Arc<tokio::sync::Mutex<()>> {
         self.prompt_locks
             .lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -110,14 +110,14 @@ impl FacadeConnection {
     /// Count one failed resume for `chat_id` and report how many in a row
     /// that makes — the failure path pushes its recovery notification on the
     /// first only.
-    pub fn record_resume_failure(&self, chat_id: &str) -> u32 {
+    pub(crate) fn record_resume_failure(&self, chat_id: &str) -> u32 {
         let mut failures = self.locked_resume_failures();
         let count = failures.entry(chat_id.to_string()).or_insert(0);
         *count += 1;
         *count
     }
 
-    pub fn clear_resume_failures(&self, chat_id: &str) {
+    pub(crate) fn clear_resume_failures(&self, chat_id: &str) {
         self.locked_resume_failures().remove(chat_id);
     }
 
@@ -127,15 +127,15 @@ impl FacadeConnection {
             .unwrap_or_else(|e| e.into_inner())
     }
 
-    pub fn is_negotiated(&self) -> bool {
+    pub(crate) fn is_negotiated(&self) -> bool {
         self.negotiated.load(Ordering::Relaxed)
     }
 
-    pub fn mark_negotiated(&self) {
+    pub(crate) fn mark_negotiated(&self) {
         self.negotiated.store(true, Ordering::Relaxed);
     }
 
-    pub fn is_revision_cursors_opted_in(&self) -> bool {
+    pub(crate) fn is_revision_cursors_opted_in(&self) -> bool {
         self.revision_cursors_opted_in.load(Ordering::Relaxed)
     }
 
@@ -144,20 +144,20 @@ impl FacadeConnection {
             .store(true, Ordering::Relaxed);
     }
 
-    pub fn is_replay_result_previews_opted_in(&self) -> bool {
+    pub(crate) fn is_replay_result_previews_opted_in(&self) -> bool {
         self.replay_result_previews_opted_in.load(Ordering::Relaxed)
     }
 
-    pub fn mark_replay_result_previews_opted_in(&self) {
+    pub(crate) fn mark_replay_result_previews_opted_in(&self) {
         self.replay_result_previews_opted_in
             .store(true, Ordering::Relaxed);
     }
 
-    pub fn is_compressed_replay_opted_in(&self) -> bool {
+    pub(crate) fn is_compressed_replay_opted_in(&self) -> bool {
         self.compressed_replay_opted_in.load(Ordering::Relaxed)
     }
 
-    pub fn mark_compressed_replay_opted_in(&self) {
+    pub(crate) fn mark_compressed_replay_opted_in(&self) {
         self.compressed_replay_opted_in
             .store(true, Ordering::Relaxed);
     }
@@ -192,7 +192,7 @@ impl FacadeConnection {
     /// answer path already removed it, and a client retry must find the same
     /// rpc_id answerable again (T3). No frame is sent; the client already
     /// has the request.
-    pub fn restore_gate(&self, rpc_id: &str, pending: PendingGate) {
+    pub(crate) fn restore_gate(&self, rpc_id: &str, pending: PendingGate) {
         self.locked_gates().insert(rpc_id.to_string(), pending);
     }
 
@@ -248,7 +248,7 @@ impl FacadeConnection {
 
     /// A pre-serialized frame, sent unthrottled — a spawned `session/prompt`
     /// reply, which belongs to no session's update FIFO.
-    pub fn send_raw(&self, payload: String) {
+    pub(crate) fn send_raw(&self, payload: String) {
         self.send_frame(payload);
     }
 
@@ -259,7 +259,7 @@ impl FacadeConnection {
     /// out before it ever reaches a non-opted connection's throttle FIFO
     /// (`fanout.rs::run_op`); this check is the second, defensive gate, so
     /// nothing short of that filtering ever reaches the wire for one.
-    pub fn send_throttled(&self, chat_id: &str, frame: ThrottledFrame) {
+    pub(crate) fn send_throttled(&self, chat_id: &str, frame: ThrottledFrame) {
         match frame {
             ThrottledFrame::Update(update) => self.send_update(chat_id, update),
             ThrottledFrame::Raw(payload) => self.send_frame(payload),
@@ -275,7 +275,7 @@ impl FacadeConnection {
     /// correlation, without sending anything — the send is a separate step
     /// (`send_raw`/`send_throttled`) so the live raise path can throttle it
     /// while registration itself stays unconditional and immediate.
-    pub fn register_gate(&self, chat_id: &str, request: &ControlRequest) {
+    pub(crate) fn register_gate(&self, chat_id: &str, request: &ControlRequest) {
         self.locked_gates().insert(
             rpc_id_string(&request.request_id),
             PendingGate {

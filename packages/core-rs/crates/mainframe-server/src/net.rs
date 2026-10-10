@@ -10,7 +10,7 @@
 pub const LOCALHOST_IPS: [&str; 3] = ["127.0.0.1", "::1", "::ffff:127.0.0.1"];
 
 /// True when `ip` is one of the trusted loopback addresses.
-pub fn is_localhost(ip: &str) -> bool {
+pub(crate) fn is_localhost(ip: &str) -> bool {
     LOCALHOST_IPS.contains(&ip)
 }
 
@@ -21,7 +21,7 @@ pub fn is_localhost(ip: &str) -> bool {
 /// skipping trusted (loopback) hops, and stops at the first non-loopback
 /// address. A forged leftmost `127.0.0.1` therefore cannot spoof a loopback
 /// client through the cloudflared tunnel — the real appended hop wins.
-pub fn trust_proxy_client_ip(raw_peer_ip: &str, forwarded_for: Option<&str>) -> String {
+pub(crate) fn trust_proxy_client_ip(raw_peer_ip: &str, forwarded_for: Option<&str>) -> String {
     // If the direct peer is untrusted, `x-forwarded-for` is not honored at all.
     if !is_localhost(raw_peer_ip) {
         return raw_peer_ip.to_string();

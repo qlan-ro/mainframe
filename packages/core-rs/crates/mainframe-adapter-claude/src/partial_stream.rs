@@ -51,7 +51,7 @@ impl PartialMessageState {
         self.block = None;
         self.last_emit_ms = None;
     }
-    pub fn clear_block(&mut self) {
+    pub(crate) fn clear_block(&mut self) {
         self.block = None;
     }
 }
@@ -80,7 +80,7 @@ fn leaf_for(kind: PartialBlockKind, text: String) -> MessageContent {
     }
 }
 
-pub fn handle_stream_event(session: &ClaudeSession, event: &Value, sink: &dyn SessionSink) {
+pub(crate) fn handle_stream_event(session: &ClaudeSession, event: &Value, sink: &dyn SessionSink) {
     if event
         .get("parent_tool_use_id")
         .and_then(Value::as_str)
@@ -150,7 +150,7 @@ fn accumulate_delta(
     let block = partial.block.as_ref()?;
     Some((message_id, block.kind, block.text.clone()))
 }
-pub async fn supports_partial_messages(executable: &str, resolved_path: &str) -> bool {
+pub(crate) async fn supports_partial_messages(executable: &str, resolved_path: &str) -> bool {
     static CACHE: OnceLock<Mutex<HashMap<String, Arc<OnceCell<bool>>>>> = OnceLock::new();
     let cache = CACHE.get_or_init(Default::default);
     let cell = cache

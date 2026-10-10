@@ -51,7 +51,7 @@ pub struct EventTriggerMatch {
     pub dedup_source: String,
 }
 
-pub fn event_bindings(automations: &[AutomationRecord]) -> Vec<EventTriggerBinding> {
+pub(crate) fn event_bindings(automations: &[AutomationRecord]) -> Vec<EventTriggerBinding> {
     let mut bindings = Vec::new();
     for automation in automations {
         for trigger in &automation.definition.triggers {
@@ -71,7 +71,7 @@ pub fn event_bindings(automations: &[AutomationRecord]) -> Vec<EventTriggerBindi
 /// Matches bindings against one event (Node matchEventTriggers). The
 /// `automation.finished`/`automation.failed` selectors both filter the ONE
 /// `automation.completed` event by status.
-pub fn match_event_triggers(
+pub(crate) fn match_event_triggers(
     bindings: &[EventTriggerBinding],
     event: &CuratedEvent,
     is_agent_owned: &dyn Fn(&str) -> bool,

@@ -5,8 +5,6 @@
 //! port allowlist (see task-progress.rs), so each pattern is matched by hand
 //! below with the same semantics.
 
-use mainframe_types::skill::Skill;
-
 // ── hand-rolled tag helpers ─────────────────────────────────────────────────
 
 /// `<open>[^<]*<close>` — remove every non-overlapping occurrence (regex `g`).
@@ -52,7 +50,7 @@ pub struct ParsedCommand {
     pub user_text: String,
 }
 
-pub fn parse_command_message(text: &str) -> Option<ParsedCommand> {
+pub(crate) fn parse_command_message(text: &str) -> Option<ParsedCommand> {
     // COMMAND_NAME_RE = /<command-name>\/?([^<]*)<\/command-name>/
     let command_name = capture_tag(text, "<command-name>", "</command-name>", true)?;
 
@@ -80,91 +78,7 @@ pub fn parse_command_message(text: &str) -> Option<ParsedCommand> {
     })
 }
 
-fn invocation_ends_with_colon(inv: &Option<String>, name: &str) -> bool {
-    match inv {
-        Some(i) => i.ends_with(&format!(":{name}")),
-        None => false,
-    }
-}
-
-pub fn resolve_skill_name(name: &str, skills: &[Skill]) -> String {
-    if let Some(exact) = skills
-        .iter()
-        .find(|s| s.invocation_name.as_deref() == Some(name) || s.name == name)
-    {
-        // `exact.invocationName || exact.name` — empty string is falsy in JS.
-        return match &exact.invocation_name {
-            Some(inv) if !inv.is_empty() => inv.clone(),
-            _ => exact.name.clone(),
-        };
-    }
-    if let Some(suffix) = skills
-        .iter()
-        .find(|s| invocation_ends_with_colon(&s.invocation_name, name))
-    {
-        // `suffix.invocationName!` — the predicate guarantees Some.
-        if let Some(inv) = &suffix.invocation_name {
-            return inv.clone();
-        }
-    }
-    name.to_string()
-}
-
-pub struct RawCommand {
-    pub command_name: String,
-    pub user_text: String,
-    pub is_command: Option<bool>,
-}
-
-/// The TS param is `Array<{ name: string }>`; only `.name` is read, so the port
-/// takes the command names directly.
-pub fn parse_raw_command(
-    text: &str,
-    skills: &[Skill],
-    commands: Option<&[String]>,
-) -> Option<RawCommand> {
-    if !text.starts_with('/') {
-        return None;
-    }
-    // /^\/(\S+)/ — the non-whitespace run after the leading slash.
-    let raw_name: String = text[1..]
-        .chars()
-        .take_while(|c| !c.is_whitespace())
-        .collect();
-    if raw_name.is_empty() {
-        return None;
-    }
-    let match0_len = 1 + raw_name.len();
-
-    if let Some(cmds) = commands
-        && cmds.iter().any(|c| c == &raw_name)
-    {
-        let user_text = text[match0_len..].trim().to_string();
-        return Some(RawCommand {
-            command_name: raw_name,
-            user_text,
-            is_command: Some(true),
-        });
-    }
-
-    let is_known = skills.iter().any(|s| {
-        s.invocation_name.as_deref() == Some(raw_name.as_str())
-            || s.name == raw_name
-            || invocation_ends_with_colon(&s.invocation_name, &raw_name)
-    });
-    if !is_known {
-        return None;
-    }
-    let resolved = resolve_skill_name(&raw_name, skills);
-    let user_text = text[match0_len..].trim().to_string();
-    Some(RawCommand {
-        command_name: resolved,
-        user_text,
-        is_command: None,
-    })
-}
-
-pub fn decode_xml_attr(value: &str) -> String {
+pub(crate) fn decode_xml_attr(value: &str) -> String {
     value
         .replace("&quot;", "\"")
         .replace("&lt;", "<")
@@ -192,7 +106,7 @@ fn extract_attr_name(attrs: &str) -> Option<String> {
     Some(rest[..end].to_string())
 }
 
-pub fn parse_attached_file_path_tags(text: &str) -> AttachedFilePaths {
+pub(crate) fn parse_attached_file_path_tags(text: &str) -> AttachedFilePaths {
     // ATTACHED_FILE_PATH_RE = /<attached_file_path\s+([^>]+?)\/?>/g
     let mut files: Vec<AttachedFile> = Vec::new();
     let mut out = String::new();
@@ -316,7 +230,8 @@ fn match_image_note(c: &[char], start: usize) -> Option<usize> {
     Some(i)
 }
 
-pub fn format_turn_duration(duration_ms: f64) -> String {
+#[cfg(test)]
+pub(crate) fn format_turn_duration(duration_ms: f64) -> String {
     if !duration_ms.is_finite() || duration_ms < 0.0 {
         return String::new();
     }
@@ -331,6 +246,7 @@ pub fn format_turn_duration(duration_ms: f64) -> String {
 }
 
 /// `Math.round(x)` for non-negative x (`floor(x + 0.5)`).
+#[cfg(test)]
 fn js_round(x: f64) -> i64 {
     (x + 0.5).floor() as i64
 }

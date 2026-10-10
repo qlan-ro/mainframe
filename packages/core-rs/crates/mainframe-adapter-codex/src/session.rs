@@ -150,12 +150,6 @@ impl CodexSession {
             .lock()
             .unwrap_or_else(|e| e.into_inner()) = Some(cb);
     }
-    pub fn set_codex_provider_tuning(&self, tuning: CodexProviderTuning) {
-        self.config
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .codex_provider_tuning = tuning;
-    }
 }
 
 pub(crate) fn de<T: DeserializeOwned>(v: Value) -> Result<T, AdapterError> {

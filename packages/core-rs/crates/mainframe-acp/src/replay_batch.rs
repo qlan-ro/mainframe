@@ -48,7 +48,7 @@ pub fn replay_batch_notifications(
 }
 
 /// The payload for one batch: base64 of the zlib-deflated JSON array.
-pub fn encode_batch(updates: &[SessionUpdate]) -> Result<String, String> {
+pub(crate) fn encode_batch(updates: &[SessionUpdate]) -> Result<String, String> {
     let json = serde_json::to_vec(updates).map_err(|err| err.to_string())?;
     let mut encoder = ZlibEncoder::new(Vec::new(), Compression::fast());
     encoder.write_all(&json).map_err(|err| err.to_string())?;

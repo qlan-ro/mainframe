@@ -23,7 +23,7 @@ pub struct AgentDescription {
 /// and summarizes it; otherwise falls back to the heading heuristic applied to
 /// the parsed body (never the raw file — a fenced-but-descriptionless agent
 /// would otherwise caption `---`).
-pub fn derive_agent_description(raw: &str) -> AgentDescription {
+pub(crate) fn derive_agent_description(raw: &str) -> AgentDescription {
     let fm = parse_frontmatter(raw);
     let full = fm
         .attributes

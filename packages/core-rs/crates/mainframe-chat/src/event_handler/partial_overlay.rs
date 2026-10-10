@@ -74,7 +74,7 @@ impl PartialOverlays {
         self.insert_with_presentation(chat_id, session_id, message_id, content, None);
     }
 
-    pub fn insert_with_presentation(
+    pub(crate) fn insert_with_presentation(
         &self,
         chat_id: &str,
         session_id: &str,
@@ -99,7 +99,7 @@ impl PartialOverlays {
         );
     }
 
-    pub fn update_presentation(
+    pub(crate) fn update_presentation(
         &self,
         chat_id: &str,
         session_id: &str,
@@ -137,7 +137,7 @@ impl PartialOverlays {
     /// The chat's current overlay, for display computation. At most one
     /// session's overlay is live per chat outside the narrow supersession
     /// window this module closes, so the first match is exact in practice.
-    pub fn message_for(&self, chat_id: &str) -> Option<ChatMessage> {
+    pub(crate) fn message_for(&self, chat_id: &str) -> Option<ChatMessage> {
         self.0
             .lock()
             .unwrap_or_else(|e| e.into_inner())

@@ -234,48 +234,10 @@ pub fn ensure_auth_secret() -> Result<String, ConfigError> {
     Ok(secret)
 }
 
-/// Mirrors the `DAEMON_PORT` branch of `envOverrides()`: only a finite, positive
-/// value overrides the default.
-///
-/// Pure by construction (takes the raw env value as an argument) so it's testable
-/// without `std::env::set_var`, which edition 2024 makes `unsafe`.
-pub fn resolve_port_from(raw: Option<&str>) -> u16 {
-    match raw {
-        Some(raw) => env_port_override(raw).unwrap_or(DEFAULT_PORT),
-        None => DEFAULT_PORT,
-    }
-}
-
-/// Reads `DAEMON_PORT` from the process environment and resolves it via
-/// [`resolve_port_from`].
-pub fn resolve_port() -> u16 {
-    resolve_port_from(std::env::var("DAEMON_PORT").ok().as_deref())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use tempfile::tempdir;
-
-    #[test]
-    fn resolve_port_defaults_when_unset() {
-        assert_eq!(resolve_port_from(None), DEFAULT_PORT);
-    }
-
-    #[test]
-    fn resolve_port_honors_valid_override() {
-        assert_eq!(resolve_port_from(Some("31500")), 31500);
-    }
-
-    #[test]
-    fn resolve_port_falls_back_on_invalid_value() {
-        assert_eq!(resolve_port_from(Some("not-a-port")), DEFAULT_PORT);
-    }
-
-    #[test]
-    fn resolve_port_falls_back_on_zero() {
-        assert_eq!(resolve_port_from(Some("0")), DEFAULT_PORT);
-    }
 
     #[test]
     fn merge_applies_default_file_then_env() {

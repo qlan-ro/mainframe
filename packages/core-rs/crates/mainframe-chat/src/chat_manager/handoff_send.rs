@@ -259,7 +259,7 @@ fn handoff_record(
         chat_id: identity.chat_id.clone(),
         target_segment_id: active.id.clone(),
         strategy: planned.coverage.strategy,
-        covered_from_ordinal: planned.coverage.from_ordinal(),
+        covered_from_ordinal: planned.coverage.first_ordinal(),
         covered_to_ordinal: planned.coverage.to_ordinal(),
         item_count: built.item_count,
         omitted_count: built.omitted_count,

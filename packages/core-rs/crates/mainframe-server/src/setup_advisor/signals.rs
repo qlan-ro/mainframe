@@ -55,7 +55,7 @@ const CHIPS: &[(Field, &str, &str)] = &[
 const DIR_CHIPS: &[(&str, &str)] = &[("tests", "Tests directory"), ("api", "API directory")];
 
 /// Renders `fp`'s detections as display chips, deduplicated, in a fixed order.
-pub fn build_signals(fp: &ProjectFingerprint) -> Vec<String> {
+pub(crate) fn build_signals(fp: &ProjectFingerprint) -> Vec<String> {
     let mut chips = Vec::new();
     for &(field, key, label) in CHIPS {
         if has(values(fp, field), key) {

@@ -6,7 +6,7 @@
 use mainframe_plugins::PluginHostDb;
 use mainframe_runtime::time::now_iso8601;
 use mainframe_server::db::Db;
-use mainframe_types::chat::{Chat, ChatStatus, Project};
+use mainframe_types::chat::{Chat, ChatStatus};
 use serde_json::json;
 
 pub struct DaemonPluginHostDb {
@@ -65,30 +65,6 @@ impl PluginHostDb for DaemonPluginHostDb {
         let (cat, key) = (category.to_string(), key.to_string());
         self.db
             .call_blocking(move |d| Ok(d.settings.get(&cat, &key).ok().flatten()))
-            .ok()
-            .flatten()
-    }
-
-    fn settings_set(&self, category: &str, key: &str, value: &str) {
-        let (cat, k, val) = (category.to_string(), key.to_string(), value.to_string());
-        if let Err(err) = self
-            .db
-            .call_blocking(move |d| d.settings.set(&cat, &k, &val))
-        {
-            tracing::warn!(%err, category, key, "plugin settings.set failed");
-        }
-    }
-
-    fn projects_list(&self) -> Vec<Project> {
-        self.db
-            .call_blocking(|d| d.projects.list())
-            .unwrap_or_default()
-    }
-
-    fn projects_get(&self, id: &str) -> Option<Project> {
-        let id = id.to_string();
-        self.db
-            .call_blocking(move |d| d.projects.get(&id))
             .ok()
             .flatten()
     }

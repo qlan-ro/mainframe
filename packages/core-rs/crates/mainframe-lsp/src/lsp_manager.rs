@@ -67,7 +67,7 @@ impl ClientRef {
     }
 
     /// Parity with `client.readyState === WebSocket.OPEN`.
-    pub fn is_open(&self) -> bool {
+    pub(crate) fn is_open(&self) -> bool {
         self.open.load(Ordering::SeqCst)
     }
 
@@ -106,7 +106,7 @@ impl LspServerHandle {
     }
 
     /// Whether a client is currently attached (parity with `handle.client` truthiness).
-    pub fn has_client(&self) -> bool {
+    pub(crate) fn has_client(&self) -> bool {
         self.lock_inner().client.is_some()
     }
 
@@ -129,7 +129,7 @@ impl LspServerHandle {
     }
 
     /// Cache the `initialize` result so reconnecting clients skip re-initialization.
-    pub fn set_initialize_result(&self, result: serde_json::Value) {
+    pub(crate) fn set_initialize_result(&self, result: serde_json::Value) {
         self.lock_inner().initialize_result = Some(result);
     }
 
@@ -476,7 +476,10 @@ impl LspManager {
 
     /// Construct with a distinct command resolver (test seam for the TS
     /// `vi.spyOn(registry, 'resolveCommand')`).
-    pub fn with_resolver(registry: Arc<LspRegistry>, resolver: Arc<dyn CommandResolver>) -> Self {
+    pub(crate) fn with_resolver(
+        registry: Arc<LspRegistry>,
+        resolver: Arc<dyn CommandResolver>,
+    ) -> Self {
         Self {
             state: Arc::new(ManagerState {
                 handles: DashMap::new(),
@@ -495,7 +498,7 @@ impl LspManager {
         &self.state.registry
     }
 
-    pub async fn get_or_spawn(
+    pub(crate) async fn get_or_spawn(
         &self,
         project_id: &str,
         language: &str,
@@ -532,7 +535,11 @@ impl LspManager {
             .collect()
     }
 
-    pub fn get_handle(&self, project_id: &str, language: &str) -> Option<Arc<LspServerHandle>> {
+    pub(crate) fn get_handle(
+        &self,
+        project_id: &str,
+        language: &str,
+    ) -> Option<Arc<LspServerHandle>> {
         self.state
             .handles
             .get(&key(project_id, language))

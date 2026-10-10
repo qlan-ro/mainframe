@@ -1,5 +1,5 @@
 use super::*;
-pub async fn extract_plan_file_paths(
+pub(crate) async fn extract_plan_file_paths(
     session_id: &str,
     project_path: &str,
     session_file_path: Option<&str>,
@@ -9,7 +9,10 @@ pub async fn extract_plan_file_paths(
     let project_dir = get_session_jsonl_path(session_id, project_path).project_dir;
     plan_file_paths_from(&discovered, &project_dir).await
 }
-pub async fn extract_plan_file_paths_in_dir(session_id: &str, project_dir: &str) -> Vec<String> {
+pub(crate) async fn extract_plan_file_paths_in_dir(
+    session_id: &str,
+    project_dir: &str,
+) -> Vec<String> {
     let discovered = discover_session_jsonl_files_in_dir(session_id, project_dir).await;
     plan_file_paths_from(&discovered, project_dir).await
 }
@@ -46,7 +49,7 @@ async fn plan_file_paths_from(discovered: &DiscoveredFiles, project_dir: &str) -
     }
     plan_files
 }
-pub async fn extract_skill_file_paths(
+pub(crate) async fn extract_skill_file_paths(
     session_id: &str,
     project_path: &str,
     session_file_path: Option<&str>,
@@ -55,7 +58,7 @@ pub async fn extract_skill_file_paths(
         discover_session_jsonl_files(session_id, project_path, session_file_path).await;
     skill_file_paths_from(&discovered, project_path).await
 }
-pub async fn extract_skill_file_paths_in_dir(
+pub(crate) async fn extract_skill_file_paths_in_dir(
     session_id: &str,
     project_dir: &str,
     project_path: &str,

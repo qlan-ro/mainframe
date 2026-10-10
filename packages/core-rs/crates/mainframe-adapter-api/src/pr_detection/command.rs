@@ -43,7 +43,7 @@ pub struct ToolUseMeta<'a> {
 }
 
 /// Tools whose tool_result we trust to surface PR URLs that belong to this chat.
-pub fn should_scan_tool_result_for_pr(meta: Option<&ToolUseMeta>) -> bool {
+pub(crate) fn should_scan_tool_result_for_pr(meta: Option<&ToolUseMeta>) -> bool {
     let Some(meta) = meta else {
         return false;
     };

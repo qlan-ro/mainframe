@@ -13,7 +13,8 @@ pub use compare::evaluate;
 pub use scope::Scope;
 pub use substitute::render;
 pub use value::TokenValue;
-pub use variables::{NameIndex, NameMap, NameTarget, build_name_index};
+pub(crate) use variables::build_name_index;
+pub use variables::{NameIndex, NameMap, NameTarget};
 
 #[cfg(test)]
 mod compare_tests;

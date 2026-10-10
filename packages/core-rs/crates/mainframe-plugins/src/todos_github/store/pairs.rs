@@ -29,7 +29,7 @@ pub struct Pair {
 
 /// Rejects a duplicate `(project_id, owner, repo, issue_number)` via the
 /// schema's `UNIQUE` index (AC4) — one issue pairs to at most one todo.
-pub async fn insert_pair(ctx: &PluginContext, pair: &Pair) -> Result<(), PluginError> {
+pub(crate) async fn insert_pair(ctx: &PluginContext, pair: &Pair) -> Result<(), PluginError> {
     ctx.db
         .execute(
             "INSERT INTO github_pairs
@@ -57,7 +57,7 @@ pub async fn insert_pair(ctx: &PluginContext, pair: &Pair) -> Result<(), PluginE
         .await
 }
 
-pub async fn read_pair_by_todo(
+pub(crate) async fn read_pair_by_todo(
     ctx: &PluginContext,
     todo_id: &str,
 ) -> Result<Option<Pair>, PluginError> {
@@ -71,7 +71,7 @@ pub async fn read_pair_by_todo(
     Ok(row.map(row_to_pair))
 }
 
-pub async fn read_pair_by_issue(
+pub(crate) async fn read_pair_by_issue(
     ctx: &PluginContext,
     project_id: &str,
     owner: &str,
@@ -97,7 +97,7 @@ pub async fn read_pair_by_issue(
 /// Every pair still eligible for reconciliation, oldest first. A
 /// `remotely-unlinked` pair is excluded so a following run never re-fetches a
 /// pairing already known to be broken (AC25).
-pub async fn pairs_for_project(
+pub(crate) async fn pairs_for_project(
     ctx: &PluginContext,
     project_id: &str,
 ) -> Result<Vec<Pair>, PluginError> {
@@ -114,7 +114,7 @@ pub async fn pairs_for_project(
 }
 
 /// Overwrites the 3-way-diff baseline after a run reconciles this pair.
-pub async fn write_baseline(
+pub(crate) async fn write_baseline(
     ctx: &PluginContext,
     todo_id: &str,
     title: &str,
@@ -140,7 +140,7 @@ pub async fn write_baseline(
         .await
 }
 
-pub async fn set_pair_state(
+pub(crate) async fn set_pair_state(
     ctx: &PluginContext,
     todo_id: &str,
     state: &str,
@@ -160,7 +160,7 @@ pub async fn set_pair_state(
 
 /// The delete-todo cascade's store half (AC24) — the dispatch that calls this
 /// on todo deletion lives in `todos::delete_todo` (task 11).
-pub async fn delete_pair(ctx: &PluginContext, todo_id: &str) -> Result<(), PluginError> {
+pub(crate) async fn delete_pair(ctx: &PluginContext, todo_id: &str) -> Result<(), PluginError> {
     ctx.db
         .execute(
             "DELETE FROM github_pairs WHERE todo_id = ?".into(),

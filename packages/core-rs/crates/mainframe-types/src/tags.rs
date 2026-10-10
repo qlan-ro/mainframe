@@ -30,12 +30,7 @@ pub const TAG_PALETTE: [TagColor; 10] = [
     TagColor::Orange,
 ];
 
-/// Used for synthetic chips in the filter bar — outside the user palette so it
-/// signals "system" visually.
-pub const SYNTHETIC_TAG_COLOR: &str = "gray";
 pub const RESERVED_TAG_PREFIX: &str = "has-";
-
-pub const SYNTHETIC_TAGS: [&str; 2] = ["has-pr", "has-worktree"];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -57,13 +52,6 @@ mod tests {
     #[test]
     fn reserved_tag_prefix_is_has() {
         assert_eq!(RESERVED_TAG_PREFIX, "has-");
-    }
-
-    #[test]
-    fn synthetic_tags_contains_has_pr_and_has_worktree_only() {
-        let mut sorted = SYNTHETIC_TAGS;
-        sorted.sort_unstable();
-        assert_eq!(sorted, ["has-pr", "has-worktree"]);
     }
 
     #[test]

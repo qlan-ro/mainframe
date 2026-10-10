@@ -6,7 +6,7 @@ use crate::segments::switch_rules::{SwitchError, is_default_model};
 
 /// Whether moving from `current` to `requested` changes the model. `None` and
 /// `"default"` name the same model.
-pub fn model_changed(current: Option<&str>, requested: Option<&str>) -> bool {
+pub(crate) fn model_changed(current: Option<&str>, requested: Option<&str>) -> bool {
     match requested {
         Some(m) => current != Some(m) && !(is_default_model(Some(m)) && is_default_model(current)),
         None => false,
@@ -14,7 +14,7 @@ pub fn model_changed(current: Option<&str>, requested: Option<&str>) -> bool {
 }
 
 /// The refusal when a respawn would end live background tasks.
-pub fn respawn_refusal(
+pub(crate) fn respawn_refusal(
     session_spawned: bool,
     live_tasks: usize,
     adapter_name: &str,

@@ -71,7 +71,7 @@ pub struct ForkCreateInput {
 /// `Untitled (fork)` for an untitled parent. The spec deliberately never
 /// stacks the marker — it becomes unreadable after a few levels, and the
 /// lineage UI already shows fork depth.
-pub fn fork_title(parent_title: Option<&str>) -> String {
+pub(crate) fn fork_title(parent_title: Option<&str>) -> String {
     const MARKER: &str = " (fork)";
     match parent_title.map(str::trim).filter(|t| !t.is_empty()) {
         None => format!("Untitled{MARKER}"),

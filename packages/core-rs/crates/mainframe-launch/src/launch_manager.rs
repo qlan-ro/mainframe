@@ -302,7 +302,8 @@ impl LaunchManager {
 
     /// Like `new`, but with an injectable `read_process_command` (the sweep
     /// identity reader). Mirrors the TS ctor's last positional param.
-    pub fn with_read_command(
+    #[cfg(test)]
+    pub(crate) fn with_read_command(
         project_id: impl Into<String>,
         project_path: impl Into<String>,
         on_event: BroadcastFn,
@@ -324,7 +325,7 @@ impl LaunchManager {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn with_timings(
+    pub(crate) fn with_timings(
         project_id: impl Into<String>,
         project_path: impl Into<String>,
         on_event: BroadcastFn,

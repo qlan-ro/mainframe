@@ -17,7 +17,6 @@ use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_db::DatabaseManager;
 use mainframe_launch::{BroadcastFn, LaunchRegistry, TunnelManager};
 use mainframe_lsp::{LspManager, LspRegistry};
-use mainframe_plugins::event_bus::PublicDaemonBus;
 use mainframe_plugins::manager::PluginManagerDeps;
 use mainframe_plugins::{EmitSink, PluginContext, PluginError, PluginHostDb, PluginManager};
 use mainframe_server::ctx::{AppCtx, GitFactory, Services};
@@ -26,7 +25,7 @@ use mainframe_server::{build_app, spawn_broadcast_pump};
 use mainframe_services::attachment::AttachmentStore;
 use mainframe_services::files::FileWatcherService;
 use mainframe_services::push::PushService;
-use mainframe_types::chat::{Chat, Project};
+use mainframe_types::chat::Chat;
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::plugin::PluginManifest;
 
@@ -45,13 +44,6 @@ impl PluginHostDb for NullHostDb {
         unreachable!("chats_create is not exercised by the listing route")
     }
     fn settings_get(&self, _category: &str, _key: &str) -> Option<String> {
-        None
-    }
-    fn settings_set(&self, _category: &str, _key: &str, _value: &str) {}
-    fn projects_list(&self) -> Vec<Project> {
-        Vec::new()
-    }
-    fn projects_get(&self, _id: &str) -> Option<Project> {
         None
     }
 }
@@ -102,9 +94,7 @@ async fn boot_serves_launch_plugins_and_lsp_happy_paths() {
     let host_db: Arc<dyn PluginHostDb> = Arc::new(NullHostDb);
     let plugin_manager = Arc::new(PluginManager::new(PluginManagerDeps {
         host_db,
-        daemon_bus: Arc::new(PublicDaemonBus::new()),
         emit,
-        adapters: None,
         github: None,
     }));
     plugin_manager

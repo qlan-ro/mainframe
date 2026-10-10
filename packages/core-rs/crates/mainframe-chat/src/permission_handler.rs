@@ -85,7 +85,7 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
     /// callers that just loaded the history themselves — `get_messages`
     /// restores a pending permission from it, so a second load would only
     /// repeat that work (a cold chat's whole JSONL, twice per resume).
-    pub fn pending_permission_as_known(&self, chat_id: &str) -> Option<ControlRequest> {
+    pub(crate) fn pending_permission_as_known(&self, chat_id: &str) -> Option<ControlRequest> {
         self.permissions
             .lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -95,13 +95,6 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
 
     pub fn has_pending_permission(&self, chat_id: &str) -> bool {
         self.has_pending(chat_id)
-    }
-
-    pub fn clear_pending_permission(&self, chat_id: &str) {
-        self.permissions
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clear(chat_id);
     }
 }
 

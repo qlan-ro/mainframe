@@ -118,7 +118,7 @@ async fn find_in_project_dirs(root: &Path, session_id: &str) -> Option<String> {
 /// Whether the CLI transcript for `sessionId` still exists on disk — re-expressed
 /// as a single `locate_claude_transcript` probe so presence and location never
 /// drift out of sync.
-pub async fn is_claude_transcript_present(
+pub(crate) async fn is_claude_transcript_present(
     session_id: &str,
     project_path: &str,
     session_file_path: Option<&str>,

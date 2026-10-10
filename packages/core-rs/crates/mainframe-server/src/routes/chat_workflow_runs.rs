@@ -44,7 +44,7 @@ async fn resolve_session(ctx: &AppCtx, chat_id: &str) -> Option<(String, String)
 /// records for `chat_id`'s current session, per the store contract's
 /// `merge_runs` precedence. Returns the in-memory runs unchanged when the chat
 /// has no Claude session or resolvable cwd (logged at `debug`).
-pub async fn workflow_runs_for_chat(ctx: &AppCtx, chat_id: &str) -> Vec<ClaudeWorkflowRun> {
+pub(crate) async fn workflow_runs_for_chat(ctx: &AppCtx, chat_id: &str) -> Vec<ClaudeWorkflowRun> {
     let memory = ctx.claude_workflows.runs_for_chat(chat_id);
     let Some((session_id, cwd)) = resolve_session(ctx, chat_id).await else {
         tracing::debug!(

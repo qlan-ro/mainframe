@@ -28,7 +28,7 @@ mod spawn_prep;
 
 /// True when no chat OTHER than `exclude_chat_id` is still active (non-archived)
 /// and resolves to the same launch scope (`worktreePath ?? projectPath`).
-pub fn is_last_active_chat_for_scope(
+pub(crate) fn is_last_active_chat_for_scope(
     chats: &[Chat],
     project_path: &str,
     effective_path: &str,
@@ -275,7 +275,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
     /// Shares the chat manager's slot, so one attach reaches both spawns and
     /// the reads that show the agent outbox.
     #[must_use]
-    pub fn with_orchestration(mut self, slot: OrchestrationSlot) -> Self {
+    pub(crate) fn with_orchestration(mut self, slot: OrchestrationSlot) -> Self {
         self.orchestration = slot;
         self
     }
@@ -489,7 +489,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
     }
 
     /// Await any in-flight load (chat_manager's `getMessages` inflight check).
-    pub async fn await_loading(&self, chat_id: &str) {
+    pub(crate) async fn await_loading(&self, chat_id: &str) {
         let n = self
             .guards
             .lock()
@@ -503,7 +503,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
     }
 
     /// Await any in-flight spawn (config_manager's `startingChats` check).
-    pub async fn await_starting(&self, chat_id: &str) -> bool {
+    pub(crate) async fn await_starting(&self, chat_id: &str) -> bool {
         let n = self
             .guards
             .lock()
@@ -643,7 +643,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
     }
 
     /// Wait for any in-flight interrupt to finish (process exit).
-    pub async fn wait_for_interrupt(&self, chat_id: &str) {
+    pub(crate) async fn wait_for_interrupt(&self, chat_id: &str) {
         let n = self
             .guards
             .lock()
@@ -748,7 +748,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
     }
 
     /// Stop a running session without ending the chat.
-    pub async fn stop_chat(&self, chat_id: &str) {
+    pub(crate) async fn stop_chat(&self, chat_id: &str) {
         let Some(cell) = self.get_active(chat_id) else {
             return;
         };
@@ -852,7 +852,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         Ok(new_chat.id)
     }
 
-    pub async fn do_generate_title(&self, chat_id: &str, content: &str) {
+    pub(crate) async fn do_generate_title(&self, chat_id: &str, content: &str) {
         // The title task is spawned, so it can outlive the chat it was
         // spawned for (#287): a bare unlogged return here was indistinguishable
         // from every other silent title-generation outcome.

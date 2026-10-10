@@ -23,22 +23,22 @@ pub enum RequestId {
 }
 
 /// `'id' in msg && 'result' in msg`.
-pub fn is_json_rpc_response(msg: &Map<String, Value>) -> bool {
+pub(crate) fn is_json_rpc_response(msg: &Map<String, Value>) -> bool {
     msg.contains_key("id") && msg.contains_key("result")
 }
 
 /// `'id' in msg && 'error' in msg`.
-pub fn is_json_rpc_error(msg: &Map<String, Value>) -> bool {
+pub(crate) fn is_json_rpc_error(msg: &Map<String, Value>) -> bool {
     msg.contains_key("id") && msg.contains_key("error")
 }
 
 /// `'method' in msg && !('id' in msg)`.
-pub fn is_json_rpc_notification(msg: &Map<String, Value>) -> bool {
+pub(crate) fn is_json_rpc_notification(msg: &Map<String, Value>) -> bool {
     msg.contains_key("method") && !msg.contains_key("id")
 }
 
 /// `'method' in msg && 'id' in msg`.
-pub fn is_json_rpc_server_request(msg: &Map<String, Value>) -> bool {
+pub(crate) fn is_json_rpc_server_request(msg: &Map<String, Value>) -> bool {
     msg.contains_key("method") && msg.contains_key("id")
 }
 

@@ -888,7 +888,6 @@ pub async fn activate(ctx: Arc<PluginContext>) -> Result<Router<()>, PluginError
 pub(crate) mod tests {
     use super::*;
     use crate::context::{PluginContextDeps, PluginHostDb, build_plugin_context};
-    use crate::event_bus::PublicDaemonBus;
     use axum::body::to_bytes;
     use mainframe_types::chat::Chat;
     use mainframe_types::events::DaemonEvent;
@@ -950,13 +949,6 @@ pub(crate) mod tests {
                 .get(&(category.to_string(), key.to_string()))
                 .cloned()
         }
-        fn settings_set(&self, _category: &str, _key: &str, _value: &str) {}
-        fn projects_list(&self) -> Vec<mainframe_types::chat::Project> {
-            Vec::new()
-        }
-        fn projects_get(&self, _id: &str) -> Option<mainframe_types::chat::Project> {
-            None
-        }
     }
 
     pub(crate) struct Harness {
@@ -1002,9 +994,7 @@ pub(crate) mod tests {
             manifest,
             plugin_dir: dir.path().to_path_buf(),
             host_db: Arc::clone(&host) as Arc<dyn PluginHostDb>,
-            daemon_bus: Arc::new(PublicDaemonBus::new()),
             emit,
-            adapters: None,
             github: None,
         })
         .unwrap();

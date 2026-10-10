@@ -16,7 +16,7 @@ pub trait Validate {
 }
 
 /// Deserializes and validates tool arguments. A missing `arguments` is `{}`.
-pub fn parse_args<T: DeserializeOwned + Validate>(args: Value) -> Result<T, ToolError> {
+pub(crate) fn parse_args<T: DeserializeOwned + Validate>(args: Value) -> Result<T, ToolError> {
     let args = if args.is_null() { json!({}) } else { args };
     let parsed: T = serde_json::from_value(args).map_err(|e| ToolError::invalid(e.to_string()))?;
     parsed.validate()?;
@@ -38,11 +38,11 @@ pub fn check_id(field: &str, value: &str) -> Result<(), ToolError> {
     }
 }
 
-pub fn check_opt_id(field: &str, value: Option<&str>) -> Result<(), ToolError> {
+pub(crate) fn check_opt_id(field: &str, value: Option<&str>) -> Result<(), ToolError> {
     value.map_or(Ok(()), |v| check_id(field, v))
 }
 
-pub fn check_len(field: &str, value: &str, min: usize, max: usize) -> Result<(), ToolError> {
+pub(crate) fn check_len(field: &str, value: &str, min: usize, max: usize) -> Result<(), ToolError> {
     let len = value.chars().count();
     if len < min || len > max {
         return Err(ToolError::invalid(format!(
@@ -52,15 +52,15 @@ pub fn check_len(field: &str, value: &str, min: usize, max: usize) -> Result<(),
     Ok(())
 }
 
-pub fn check_opt_len(field: &str, value: Option<&str>, max: usize) -> Result<(), ToolError> {
+pub(crate) fn check_opt_len(field: &str, value: Option<&str>, max: usize) -> Result<(), ToolError> {
     value.map_or(Ok(()), |v| check_len(field, v, 0, max))
 }
 
-pub fn check_text(field: &str, value: &str) -> Result<(), ToolError> {
+pub(crate) fn check_text(field: &str, value: &str) -> Result<(), ToolError> {
     check_len(field, value, 1, TEXT_MAX)
 }
 
-pub fn check_range(field: &str, value: u64, min: u64, max: u64) -> Result<(), ToolError> {
+pub(crate) fn check_range(field: &str, value: u64, min: u64, max: u64) -> Result<(), ToolError> {
     if value < min || value > max {
         return Err(ToolError::invalid(format!(
             "{field} must be between {min} and {max}"
@@ -69,7 +69,7 @@ pub fn check_range(field: &str, value: u64, min: u64, max: u64) -> Result<(), To
     Ok(())
 }
 
-pub fn check_timeout(field: &str, value: Option<u64>) -> Result<(), ToolError> {
+pub(crate) fn check_timeout(field: &str, value: Option<u64>) -> Result<(), ToolError> {
     value.map_or(Ok(()), |v| check_range(field, v, MIN_WAIT_MS, MAX_WAIT_MS))
 }
 
@@ -107,22 +107,22 @@ impl Validate for WorkspaceInput {
 // ── schema fragments ───────────────────────────────────────────────────────
 
 #[must_use]
-pub fn id_schema(description: &str) -> Value {
+pub(crate) fn id_schema(description: &str) -> Value {
     json!({ "type": "string", "pattern": "^[a-zA-Z0-9_-]{1,64}$", "description": description })
 }
 
 #[must_use]
-pub fn string_schema(max: usize, description: &str) -> Value {
+pub(crate) fn string_schema(max: usize, description: &str) -> Value {
     json!({ "type": "string", "maxLength": max, "description": description })
 }
 
 #[must_use]
-pub fn text_schema(description: &str) -> Value {
+pub(crate) fn text_schema(description: &str) -> Value {
     json!({ "type": "string", "minLength": 1, "maxLength": TEXT_MAX, "description": description })
 }
 
 #[must_use]
-pub fn permission_mode_schema() -> Value {
+pub(crate) fn permission_mode_schema() -> Value {
     json!({
         "enum": ["default", "acceptEdits", "auto", "yolo"],
         "description": "Permission mode for the child; never exceeds the caller's effective \
@@ -133,7 +133,7 @@ pub fn permission_mode_schema() -> Value {
 }
 
 #[must_use]
-pub fn timeout_schema(description: &str) -> Value {
+pub(crate) fn timeout_schema(description: &str) -> Value {
     json!({
         "type": "integer", "minimum": MIN_WAIT_MS, "maximum": MAX_WAIT_MS,
         "description": description
@@ -141,7 +141,7 @@ pub fn timeout_schema(description: &str) -> Value {
 }
 
 #[must_use]
-pub fn workspace_schema(modes: &[&str], description: &str) -> Value {
+pub(crate) fn workspace_schema(modes: &[&str], description: &str) -> Value {
     json!({
         "type": "object",
         "description": description,
@@ -158,7 +158,7 @@ pub fn workspace_schema(modes: &[&str], description: &str) -> Value {
 
 /// A closed object schema; `required` lists the mandatory properties.
 #[must_use]
-pub fn object_schema(properties: Value, required: &[&str]) -> Value {
+pub(crate) fn object_schema(properties: Value, required: &[&str]) -> Value {
     json!({
         "type": "object",
         "properties": properties,
@@ -175,14 +175,14 @@ pub(crate) mod golden {
 
     use serde_json::Value;
 
-    pub fn schema_properties(schema: &Value) -> BTreeSet<String> {
+    pub(crate) fn schema_properties(schema: &Value) -> BTreeSet<String> {
         schema["properties"]
             .as_object()
             .map(|m| m.keys().cloned().collect())
             .unwrap_or_default()
     }
 
-    pub fn fixture_keys(fixture: &Value) -> BTreeSet<String> {
+    pub(crate) fn fixture_keys(fixture: &Value) -> BTreeSet<String> {
         fixture
             .as_object()
             .map(|m| m.keys().cloned().collect())

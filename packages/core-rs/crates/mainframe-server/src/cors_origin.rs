@@ -15,7 +15,7 @@
 
 /// `^(https?://(localhost|127\.0\.0\.1)(:\d+)?|tauri://localhost|https?://tauri\.localhost)$`
 /// — the `ALLOWED_ORIGIN` regex, hand-matched (no `regex` crate in the allowlist).
-pub fn is_allowed_origin(origin: Option<&str>) -> bool {
+pub(crate) fn is_allowed_origin(origin: Option<&str>) -> bool {
     match origin {
         Some(origin) => matches_allowed(origin),
         None => false,

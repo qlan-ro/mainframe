@@ -12,7 +12,7 @@
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-pub fn is_absent<T>(value: &Option<Option<T>>) -> bool {
+pub(crate) fn is_absent<T>(value: &Option<Option<T>>) -> bool {
     value.is_none()
 }
 

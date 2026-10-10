@@ -18,7 +18,7 @@ const PROVIDER_NAMES: &[(&str, &str)] = &[
 
 /// The bold line: provider, then model — `OpenAI - GPT 5.6 Sol`. The provider leads because
 /// one proxy fronts several vendors, and the id alone doesn't say whose account a pick spends.
-pub fn display_label(id: &str, owned_by: Option<&str>) -> String {
+pub(crate) fn display_label(id: &str, owned_by: Option<&str>) -> String {
     match provider_name(owned_by) {
         Some(provider) => format!("{provider} - {}", model_name(id)),
         None => model_name(id),
@@ -28,7 +28,7 @@ pub fn display_label(id: &str, owned_by: Option<&str>) -> String {
 /// The caption, in the native catalog's shape (`Sonnet 5 · Efficient for routine tasks`):
 /// the model, then the two things the id and the owner say for certain — the cut of the model
 /// the vendor named it after, and which account answers for it.
-pub fn display_description(id: &str, owned_by: Option<&str>) -> String {
+pub(crate) fn display_description(id: &str, owned_by: Option<&str>) -> String {
     let tail = match provider_name(owned_by) {
         Some(provider) => format!("on your {provider} account"),
         None => "through your local CLIProxyAPI".to_string(),

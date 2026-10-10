@@ -30,7 +30,7 @@ impl HiddenBoundary {
     /// A hidden tool call with `parent` was just dropped — mark (or replace)
     /// the pending boundary. Several hidden calls in a row collapse to one
     /// boundary, keyed by the latest call's parent.
-    pub fn mark_hidden_drop(&mut self, parent: Option<String>) {
+    pub(crate) fn mark_hidden_drop(&mut self, parent: Option<String>) {
         self.pending = Some(parent);
     }
 
@@ -53,7 +53,7 @@ impl HiddenBoundary {
 /// blank line between them — i.e. exactly two `\n` once existing trailing
 /// newlines on `tail` and leading newlines on `incoming` are counted in.
 /// Saturates at 0, so an existing `"\n\n"` boundary is never doubled.
-pub fn paragraph_break(tail: &str, incoming: &str) -> usize {
+pub(crate) fn paragraph_break(tail: &str, incoming: &str) -> usize {
     let trailing = tail.chars().rev().take_while(|&c| c == '\n').count();
     let leading = incoming.chars().take_while(|&c| c == '\n').count();
     2usize.saturating_sub(trailing + leading)

@@ -40,7 +40,7 @@ pub fn lookup_agent_metadata(thread_ids: &[String]) -> HashMap<String, AgentMeta
 
 /// As `lookup_agent_metadata`, but reads `deps.db_path` when given (tests
 /// inject a seeded sqlite file instead of the real `~/.codex/state_5.sqlite`).
-pub fn lookup_agent_metadata_with(
+pub(crate) fn lookup_agent_metadata_with(
     thread_ids: &[String],
     deps: Option<&ThreadRegistryDeps>,
 ) -> HashMap<String, AgentMetadata> {
@@ -106,13 +106,13 @@ fn read_metadata(
 }
 
 /// The agent's role (e.g. "explorer") — best for the card subtitle.
-pub fn describe_agent(meta: Option<&AgentMetadata>) -> Option<String> {
+pub(crate) fn describe_agent(meta: Option<&AgentMetadata>) -> Option<String> {
     let meta = meta?;
     meta.role.clone().or_else(|| meta.nickname.clone())
 }
 
 /// The agent's nickname (e.g. "Maxwell") — used as the card title (subagent_type).
-pub fn agent_title(meta: Option<&AgentMetadata>) -> Option<String> {
+pub(crate) fn agent_title(meta: Option<&AgentMetadata>) -> Option<String> {
     let meta = meta?;
     meta.nickname.clone().or_else(|| meta.role.clone())
 }

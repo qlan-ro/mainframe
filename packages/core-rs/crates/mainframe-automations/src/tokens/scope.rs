@@ -39,13 +39,14 @@ impl Scope<'_> {
     /// Sets `current` on THIS scope level — the interpreter builds one flat
     /// scope per walk frame (Node `buildTokenContext`) and stamps the
     /// innermost Repeat item on it.
-    pub fn set_current(&mut self, item: TokenValue) {
+    pub(crate) fn set_current(&mut self, item: TokenValue) {
         self.current_item = Some(item);
     }
 
     /// A Repeat iteration: sees everything above, owns `current`, and drops
     /// its own bindings when the iteration ends.
-    pub fn child_iteration(&self, item: TokenValue) -> Scope<'_> {
+    #[cfg(test)]
+    pub(crate) fn child_iteration(&self, item: TokenValue) -> Scope<'_> {
         Scope {
             parent: Some(self),
             clock: None,

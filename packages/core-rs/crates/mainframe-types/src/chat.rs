@@ -41,9 +41,6 @@ pub struct TodoItem {
     pub active_form: String,
 }
 
-/// Back-compat alias for existing imports.
-pub type ChatEffort = EffortLevel;
-
 /// Id of the hidden scratch project row that owns every non-project chat's
 /// `project_id`. Excluded from every `ProjectsRepository` read; removal is
 /// refused at every layer that would otherwise cascade-delete non-project

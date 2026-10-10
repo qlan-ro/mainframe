@@ -8,7 +8,7 @@ use mainframe_types::adapter::{ControlDestination, ControlUpdate};
 /// A mode change never becomes the project default implicitly (#283): making a
 /// permission mode persistent is a deliberate act in settings, not a side effect
 /// of answering one prompt. Every other update keeps its declared destination.
-pub fn keep_mode_changes_session_scoped(updates: Vec<ControlUpdate>) -> Vec<ControlUpdate> {
+pub(crate) fn keep_mode_changes_session_scoped(updates: Vec<ControlUpdate>) -> Vec<ControlUpdate> {
     updates
         .into_iter()
         .map(|u| match u {

@@ -67,7 +67,7 @@ pub struct SweepResult {
 /// bare name, a sibling binary sharing the path as a prefix (cloudflared-updater),
 /// or the path appearing only as an argument (a log file) must NOT match, or the
 /// sweep could kill an unrelated user process.
-pub fn process_matches_binary(command: &str, bin_path: &str) -> bool {
+pub(crate) fn process_matches_binary(command: &str, bin_path: &str) -> bool {
     if !Path::new(bin_path).is_absolute() {
         return false;
     }
@@ -79,7 +79,7 @@ pub fn process_matches_binary(command: &str, bin_path: &str) -> bool {
 /// binary. We require the FULL recorded argv to match the live command line
 /// exactly (a fragment must not match) AND the recorded cwd to match the live
 /// cwd. Either mismatch means the pid was reused.
-pub fn process_matches_launch(
+pub(crate) fn process_matches_launch(
     command: Option<&str>,
     cwd: Option<&str>,
     entry: &ManagedChildEntry,
@@ -129,7 +129,7 @@ async fn orphan_still_matches(entry: &ManagedChildEntry, deps: &SweepDeps) -> bo
 }
 
 /// Read a pid's full command line via `ps -o command=`.
-pub async fn default_process_command(pid: i64) -> Option<String> {
+pub(crate) async fn default_process_command(pid: i64) -> Option<String> {
     let fut = Command::new("ps")
         .args(["-p", &pid.to_string(), "-o", "command="])
         .output();
@@ -144,7 +144,7 @@ pub async fn default_process_command(pid: i64) -> Option<String> {
 
 /// Read a pid's working directory. macOS and Linux both expose it via `lsof`
 /// (`-d cwd`, field `n`), avoiding the `/proc` vs BSD split. None on any failure.
-pub async fn default_process_cwd(pid: i64) -> Option<String> {
+pub(crate) async fn default_process_cwd(pid: i64) -> Option<String> {
     let fut = Command::new("lsof")
         .args(["-a", "-d", "cwd", "-p", &pid.to_string(), "-Fn"])
         .output();
@@ -180,7 +180,7 @@ fn signal_flag(signal: &str) -> String {
 /// `false` here, where the TS returns `true`. The record is then retained and
 /// pruned on the next boot sweep (the pid reads as gone), so the only cost is a
 /// one-run delay in an already-rare race.
-pub fn default_kill(pid: i64, signal: &str, group: bool) -> bool {
+pub(crate) fn default_kill(pid: i64, signal: &str, group: bool) -> bool {
     let target = kill_target(pid, group);
     // `--` is required: Linux `kill` parses a bare negative group target as a
     // signal spec and exits 0 without delivering anything.

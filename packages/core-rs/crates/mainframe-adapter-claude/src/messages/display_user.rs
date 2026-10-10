@@ -6,7 +6,7 @@ use mainframe_types::display::DisplayContent;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 
-pub fn convert_user_content(
+pub(crate) fn convert_user_content(
     content: &[MessageContent],
 ) -> (Vec<DisplayContent>, HashMap<String, Value>) {
     let mut metadata: HashMap<String, Value> = HashMap::new();

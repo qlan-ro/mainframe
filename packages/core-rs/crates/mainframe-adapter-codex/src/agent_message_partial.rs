@@ -83,7 +83,7 @@ impl AgentMessagePartialState {
     /// item AND `thread_id` matches (or the completion carries none), drops
     /// the in-flight text so a stray late delta cannot resurrect it under a
     /// mismatched thread.
-    pub fn mark_item_completed(&mut self, item_id: &str, thread_id: Option<&str>) {
+    pub(crate) fn mark_item_completed(&mut self, item_id: &str, thread_id: Option<&str>) {
         self.completed_this_turn.insert(item_id.to_string());
         let is_in_flight = self
             .in_flight

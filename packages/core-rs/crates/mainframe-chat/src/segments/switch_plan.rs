@@ -27,7 +27,7 @@ pub struct SwitchPlanInput<'a> {
 }
 
 /// The active segment never ran: no provider id, no turns, no handoff.
-pub fn is_pending_empty(layout: &SegmentLayout, segment: &SegmentRecord) -> bool {
+pub(crate) fn is_pending_empty(layout: &SegmentLayout, segment: &SegmentRecord) -> bool {
     let native_has_id = layout
         .native(&segment.native_session_ref)
         .is_some_and(|n| n.native_session_id.is_some());
@@ -39,7 +39,7 @@ pub fn is_pending_empty(layout: &SegmentLayout, segment: &SegmentRecord) -> bool
 
 /// The most recently used owned native session of `adapter` that can still
 /// be resumed, ignoring `exclude` (a pending row being deleted).
-pub fn best_candidate<'a>(
+pub(crate) fn best_candidate<'a>(
     layout: &'a SegmentLayout,
     adapter: &str,
     exclude: Option<&str>,

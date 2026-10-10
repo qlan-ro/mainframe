@@ -51,7 +51,7 @@ impl Notifier for DaemonNotifier {
 /// runs) and `routes::notifications` (standalone, run-less notifications) so
 /// the two calls aren't duplicated. Best-effort — `PushService::send_push`
 /// has no `Result`, so a push failure never reaches the caller.
-pub async fn broadcast_and_push(
+pub(crate) async fn broadcast_and_push(
     broadcast: &broadcast::Sender<DaemonEvent>,
     push: &PushService,
     event: DaemonEvent,
@@ -79,7 +79,7 @@ impl EventSink for DaemonEventSink {
     }
 }
 
-pub fn map_automation_event(event: AutomationEvent) -> DaemonEvent {
+pub(crate) fn map_automation_event(event: AutomationEvent) -> DaemonEvent {
     match event {
         AutomationEvent::RunUpdated { run } => DaemonEvent::AutomationRunUpdated { run },
         AutomationEvent::InteractionCreated { interaction } => {

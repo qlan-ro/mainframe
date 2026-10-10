@@ -32,7 +32,7 @@ impl ChatState {
 /// First match wins: archived, ended, a pending gate, any work in flight
 /// (a live turn, CLI-queued prompts, or Mainframe-held outbox entries), idle.
 #[must_use]
-pub fn derive_state(chat: &ChatView, outbox_pending: bool) -> ChatState {
+pub(crate) fn derive_state(chat: &ChatView, outbox_pending: bool) -> ChatState {
     match chat.status {
         ChatStatus::Archived => ChatState::Archived,
         ChatStatus::Ended => ChatState::Ended,
@@ -72,7 +72,7 @@ pub const AGENT_MESSAGE_CLOSE: &str = "</mainframe-agent-message>";
 pub const TASK_RESULT_OPEN: &str = "<mainframe-task-result ";
 
 #[must_use]
-pub fn wrap_agent_message(from_chat_id: &str, kind: AgentMessageKind, body: &str) -> String {
+pub(crate) fn wrap_agent_message(from_chat_id: &str, kind: AgentMessageKind, body: &str) -> String {
     format!(
         "{AGENT_MESSAGE_OPEN}from=\"{from_chat_id}\" kind=\"{}\">\n{body}\n{AGENT_MESSAGE_CLOSE}",
         kind.as_str()
@@ -81,7 +81,7 @@ pub fn wrap_agent_message(from_chat_id: &str, kind: AgentMessageKind, body: &str
 
 /// True for a user message an agent (not the human) sent.
 #[must_use]
-pub fn is_agent_message(text: &str) -> bool {
+pub(crate) fn is_agent_message(text: &str) -> bool {
     let trimmed = text.trim_start();
     trimmed.starts_with(AGENT_MESSAGE_OPEN) || trimmed.starts_with(TASK_RESULT_OPEN)
 }

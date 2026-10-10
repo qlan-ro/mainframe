@@ -55,7 +55,7 @@ pub const REASON_MAX: usize = 500;
 /// rank, not its real-world privilege: use [`effective_mode_rank`] for the
 /// ceiling, which is adapter-aware.
 #[must_use]
-pub fn mode_rank(mode: ExecutionMode) -> u8 {
+pub(crate) fn mode_rank(mode: ExecutionMode) -> u8 {
     match mode {
         ExecutionMode::Default => 0,
         ExecutionMode::AcceptEdits => 1,
@@ -77,7 +77,7 @@ pub fn mode_rank(mode: ExecutionMode) -> u8 {
 /// privilege as Claude's `acceptEdits`, rank 1. Only Codex `yolo` (`never`
 /// approval, `danger-full-access`) is more privileged, rank 3.
 #[must_use]
-pub fn effective_mode_rank(adapter_id: &str, mode: ExecutionMode) -> u8 {
+pub(crate) fn effective_mode_rank(adapter_id: &str, mode: ExecutionMode) -> u8 {
     if adapter_id == "codex" {
         match mode {
             ExecutionMode::Default => 0,
@@ -95,7 +95,7 @@ pub fn effective_mode_rank(adapter_id: &str, mode: ExecutionMode) -> u8 {
 /// approval/sandbox pair in plain language; Claude's restate its CLI's own
 /// documented mode behavior (`docs/research/adapters/claude/PERMISSIONS.md`).
 #[must_use]
-pub fn mode_meaning(adapter_id: &str, mode: ExecutionMode) -> &'static str {
+pub(crate) fn mode_meaning(adapter_id: &str, mode: ExecutionMode) -> &'static str {
     if adapter_id == "codex" {
         match mode {
             ExecutionMode::Default => {
@@ -128,7 +128,7 @@ pub fn mode_meaning(adapter_id: &str, mode: ExecutionMode) -> &'static str {
 /// happens to equal `default`/`acceptEdits`'s — a rank match is not the
 /// same as the label being valid on that adapter.
 #[must_use]
-pub fn mode_label_supported(mode: ExecutionMode, adapter_auto_mode: bool) -> bool {
+pub(crate) fn mode_label_supported(mode: ExecutionMode, adapter_auto_mode: bool) -> bool {
     mode != ExecutionMode::Auto || adapter_auto_mode
 }
 
@@ -148,7 +148,7 @@ pub struct Privileges {
 /// a Claude caller's rank and a Codex target's rank are both read through
 /// [`effective_mode_rank`] before comparing, so the same label on different
 /// providers does not compare as equal unless it really is.
-pub fn check_ceiling(caller: &Privileges, target: &Privileges) -> Result<(), ToolError> {
+pub(crate) fn check_ceiling(caller: &Privileges, target: &Privileges) -> Result<(), ToolError> {
     let caller_rank = effective_mode_rank(&caller.adapter_id, caller.mode);
     let target_rank = effective_mode_rank(&target.adapter_id, target.mode);
     if target_rank > caller_rank {
@@ -203,7 +203,7 @@ impl CreationLimiter {
     }
 
     /// Records one creation, or refuses it when the window is full.
-    pub fn try_acquire(&self, chat_id: &str) -> Result<(), ToolError> {
+    pub(crate) fn try_acquire(&self, chat_id: &str) -> Result<(), ToolError> {
         let now = self.clock.now();
         let mut events = self.events.lock().unwrap_or_else(|e| e.into_inner());
         let window = events.entry(chat_id.to_string()).or_default();

@@ -9,8 +9,6 @@
 use std::collections::HashSet;
 use std::path::{Component, Path, PathBuf};
 
-use mainframe_git::{GitExecCode, exec_git};
-
 /// Directories skipped by the project walk and excluded from ripgrep `--files`
 /// globs. Mirrors the TS `IGNORED_DIRS` set (order preserved for the glob build).
 pub const IGNORED_DIRS: &[&str] = &[
@@ -65,16 +63,17 @@ pub const BINARY_EXTENSIONS: &[&str] = &[
     ".sqlite", ".sqlite3", ".db",
 ];
 
+#[cfg(test)]
 const WALK_LIMIT: usize = 10_000;
 
 /// True when `name` is one of the ignored directory names.
-pub fn is_ignored_dir(name: &str) -> bool {
+pub(crate) fn is_ignored_dir(name: &str) -> bool {
     IGNORED_DIRS.contains(&name)
 }
 
 /// Mirrors `hasBinaryExtension`: checks the double-extension (`.min.js`) first
 /// (slice from the first dot), then Node's `path.extname` (from the last dot).
-pub fn has_binary_extension(file_path: &str) -> bool {
+pub(crate) fn has_binary_extension(file_path: &str) -> bool {
     let base = Path::new(file_path)
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
@@ -151,38 +150,6 @@ pub fn path_resolve(base: &str, requested: &str) -> String {
         buf.push(c.as_os_str());
     }
     buf.to_string_lossy().into_owned()
-}
-
-/// Mirrors `listProjectFiles`: with `include_ignored`, walk everything (build
-/// artifacts included); otherwise ask git for tracked + untracked-not-ignored
-/// files, falling back to the ignored-dir-skipping walk when git fails.
-pub async fn list_project_files(project_path: &str, include_ignored: bool) -> Vec<String> {
-    if include_ignored {
-        return walk_project_files(project_path, false, WALK_LIMIT).await;
-    }
-
-    let args = [
-        "ls-files".to_string(),
-        "--cached".to_string(),
-        "--others".to_string(),
-        "--exclude-standard".to_string(),
-    ];
-    match exec_git(&args, project_path, None).await {
-        Ok(output) => output
-            .split('\n')
-            .map(str::trim)
-            .filter(|line| !line.is_empty())
-            .map(str::to_string)
-            .collect(),
-        Err(err) => {
-            // Exit 128 = "not a git repo"; anything else is unexpected — log it,
-            // then fall back to the walk either way.
-            if err.code != Some(GitExecCode::Number(128)) {
-                tracing::warn!(error = %err, project_path, "git ls-files failed unexpectedly, falling back to walk");
-            }
-            walk_project_files(project_path, true, WALK_LIMIT).await
-        }
-    }
 }
 
 /// Recursive project walk stopping at `limit` files. Each entry is realpath'd and

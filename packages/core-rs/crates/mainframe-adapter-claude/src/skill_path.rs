@@ -42,7 +42,10 @@ fn is_dir_entry(entry: &std::fs::DirEntry) -> bool {
 }
 
 /// Like `resolveSkillPath` but returns `None` when no SKILL.md is found on disk.
-pub fn resolve_existing_skill_path(project_path: Option<&str>, skill_name: &str) -> Option<String> {
+pub(crate) fn resolve_existing_skill_path(
+    project_path: Option<&str>,
+    skill_name: &str,
+) -> Option<String> {
     if !is_valid_skill_name(skill_name) {
         return None;
     }
@@ -160,7 +163,7 @@ pub fn resolve_existing_skill_path(project_path: Option<&str>, skill_name: &str)
 
 /// Read SKILL.md content synchronously, stripping a leading YAML frontmatter
 /// block. Returns `None` if unreadable.
-pub fn read_skill_content(skill_path: &str) -> Option<String> {
+pub(crate) fn read_skill_content(skill_path: &str) -> Option<String> {
     let raw = std::fs::read_to_string(skill_path).ok()?;
     Some(strip_leading_frontmatter(&raw))
 }
@@ -205,7 +208,7 @@ fn strip_leading_frontmatter(raw: &str) -> String {
 
 /// Resolve a skill name to its SKILL.md, probing project → user → plugin, with a
 /// per-session cache so this is one probe per unique skill.
-pub fn resolve_skill_path(
+pub(crate) fn resolve_skill_path(
     project_path: Option<&str>,
     skill_name: &str,
     cache: Option<&mut HashMap<String, String>>,

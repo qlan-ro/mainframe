@@ -33,7 +33,7 @@ pub struct RipgrepOptions {
 /// `max_results` total hits (50 per file). Gitignore/hidden-file rules apply
 /// unless `include_ignored`. Runs off the async runtime via `spawn_blocking`
 /// since `ignore`/`grep-searcher` are synchronous.
-pub async fn search_with_ripgrep(
+pub(crate) async fn search_with_ripgrep(
     scope_path: &str,
     query: &str,
     opts: &RipgrepOptions,
@@ -141,7 +141,10 @@ pub struct ListFilesOptions {
 /// skips `.gitignore` (surfacing gitignored config files like `.env`) but
 /// still excludes the project's ignored directories; `include_ignored`
 /// disables every ignore rule outright.
-pub async fn list_files_with_ripgrep(dir_path: &str, opts: &ListFilesOptions) -> Vec<String> {
+pub(crate) async fn list_files_with_ripgrep(
+    dir_path: &str,
+    opts: &ListFilesOptions,
+) -> Vec<String> {
     let dir_path = dir_path.to_string();
     let opts = opts.clone();
     tokio::task::spawn_blocking(move || list_files_blocking(&dir_path, &opts))

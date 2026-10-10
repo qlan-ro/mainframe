@@ -7,7 +7,7 @@
 use mainframe_types::tags::{TAG_PALETTE, TagColor};
 
 /// Stable djb2 hash → palette index. Same name always maps to same color.
-pub fn hash_tag_color(name: &str) -> TagColor {
+pub(crate) fn hash_tag_color(name: &str) -> TagColor {
     let mut h: i32 = 5381;
     // charCodeAt() iterates UTF-16 code units; encode_utf16() reproduces that
     // exactly. The `| 0` truncation in JS matches i32 wrapping arithmetic.

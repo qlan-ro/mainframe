@@ -66,7 +66,7 @@ fn port_err(err: GitHubPortError) -> PairingError {
     PairingError::Port(err)
 }
 
-pub async fn list_remote_issues(
+pub(crate) async fn list_remote_issues(
     ctx: &PluginContext,
     project_id: &str,
 ) -> Result<Vec<RemoteIssue>, PairingError> {
@@ -105,7 +105,7 @@ pub async fn list_remote_issues(
 
 /// Skips (rather than fails) an issue already paired or one the port
 /// couldn't fetch, so one bad number never blocks the rest of the batch.
-pub async fn import_issues(
+pub(crate) async fn import_issues(
     ctx: &PluginContext,
     project_id: &str,
     issue_numbers: &[i64],
@@ -145,7 +145,7 @@ pub async fn import_issues(
 /// Refuses an already-paired task before making any GitHub call. A `done`
 /// task publishes as an open issue, then closes it as completed — the create
 /// DTO has no state field, so this always costs two calls when closing.
-pub async fn publish_task(
+pub(crate) async fn publish_task(
     ctx: &PluginContext,
     project_id: &str,
     todo_id: &str,

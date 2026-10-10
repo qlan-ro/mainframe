@@ -57,7 +57,6 @@ use mainframe_launch::{
     default_sweep_deps, resolve_cloudflared_path, sweep_stray_children,
 };
 use mainframe_lsp::{LspManager, LspRegistry};
-use mainframe_plugins::event_bus::PublicDaemonBus;
 use mainframe_plugins::manager::PluginManagerDeps;
 use mainframe_plugins::{EmitSink, GitHubIssues, PluginHostDb, PluginManager};
 use mainframe_server::ctx::{AppCtx, DefaultRunner, GitFactory, Services};
@@ -361,8 +360,7 @@ async fn run_daemon() {
 
     // PluginManager (index.ts: new PluginManager + loadBuiltin claude/codex/todos).
     // Adapters are registered directly on the AdapterRegistry above, so the plugin
-    // deps take `adapters: None`; the builtin manifests populate GET /api/plugins.
-    let daemon_bus = Arc::new(PublicDaemonBus::new());
+    // The builtin manifests populate GET /api/plugins.
     let plugin_emit_bcast = broadcast.clone();
     let plugin_emit: EmitSink = Arc::new(move |event| {
         let _ = plugin_emit_bcast.send(event);
@@ -385,9 +383,7 @@ async fn run_daemon() {
     });
     let plugin_manager = Arc::new(PluginManager::new(PluginManagerDeps {
         host_db: plugin_host_db,
-        daemon_bus,
         emit: plugin_emit,
-        adapters: None,
         github,
     }));
     if let Err(err) = builtin_plugins::load_builtin_plugins(&plugin_manager, &data_dir).await {

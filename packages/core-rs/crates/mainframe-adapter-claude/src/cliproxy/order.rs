@@ -57,7 +57,7 @@ pub fn tier(id: &str) -> Tier {
 
 /// The catalog, strongest first. Borrows rather than clones — the caller is building
 /// [`AdapterModel`](mainframe_types::adapter::AdapterModel)s from these anyway.
-pub fn by_capability(catalog: &[ProxyModel]) -> Vec<&ProxyModel> {
+pub(crate) fn by_capability(catalog: &[ProxyModel]) -> Vec<&ProxyModel> {
     let mut ordered: Vec<&ProxyModel> = catalog.iter().collect();
     ordered.sort_by_key(|model| sort_key(model));
     ordered

@@ -40,7 +40,7 @@ fn classify(image: &ImageInput) -> Result<&str, UndeliverableReason> {
         .ok_or(UndeliverableReason::MissingFile)
 }
 
-pub fn build_turn_input(message: &str, images: &[ImageInput]) -> TurnInput {
+pub(crate) fn build_turn_input(message: &str, images: &[ImageInput]) -> TurnInput {
     let mut input = Vec::with_capacity(images.len() + 1);
     let mut undeliverable = Vec::new();
     for image in images {
@@ -68,7 +68,7 @@ fn reason_label(reason: UndeliverableReason) -> &'static str {
     }
 }
 
-pub fn undeliverable_notice(reasons: &[UndeliverableReason]) -> Option<String> {
+pub(crate) fn undeliverable_notice(reasons: &[UndeliverableReason]) -> Option<String> {
     if reasons.is_empty() {
         return None;
     }

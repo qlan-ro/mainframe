@@ -13,7 +13,7 @@ use super::step::{ParallelBlock, RepeatBlock, Step, find_step_by_id};
 /// Only the innermost match is returned: an outer concurrent Repeat's own
 /// branch marker still gets written the ordinary way, the next time
 /// `advance()` re-walks through it and finds this inner failure.
-pub fn enclosing_concurrent_branch(
+pub(crate) fn enclosing_concurrent_branch(
     steps: &[Step],
     step_id: &str,
     ref_suffix: &str,

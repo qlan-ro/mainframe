@@ -1,5 +1,5 @@
 use super::*;
-pub async fn discover_session_jsonl_files(
+pub(crate) async fn discover_session_jsonl_files(
     session_id: &str,
     project_path: &str,
     session_file_path: Option<&str>,
@@ -19,7 +19,7 @@ pub async fn discover_session_jsonl_files(
         .unwrap_or(derived_project_dir);
     discover_alongside(session_id, jsonl_path, &project_dir).await
 }
-pub async fn discover_session_jsonl_files_in_dir(
+pub(crate) async fn discover_session_jsonl_files_in_dir(
     session_id: &str,
     project_dir: &str,
 ) -> DiscoveredFiles {

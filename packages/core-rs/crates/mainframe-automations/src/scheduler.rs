@@ -35,7 +35,7 @@ pub enum ScheduleError {
 }
 
 /// SchedulePattern → 5-field cron string (Node triggers/schedule.ts).
-pub fn compile_schedule(pattern: &SchedulePattern) -> Result<String, ScheduleError> {
+pub(crate) fn compile_schedule(pattern: &SchedulePattern) -> Result<String, ScheduleError> {
     match pattern {
         SchedulePattern::Daily(daily) => daily_cron(&daily.at, "*"),
         SchedulePattern::Weekdays(weekdays) => daily_cron(&weekdays.at, "1-5"),
@@ -99,7 +99,8 @@ fn parse_at(at: &str) -> Result<(u32, u32), ScheduleError> {
 /// once a `once` schedule has passed. Croner resolves DST edges: a fixed
 /// time falling in a spring-forward gap snaps to the first valid instant
 /// after it; a fall-back ambiguity fires at the earliest of the pair.
-pub fn next_occurrence<Tz: TimeZone>(
+#[cfg(test)]
+pub(crate) fn next_occurrence<Tz: TimeZone>(
     pattern: &SchedulePattern,
     after: &DateTime<Tz>,
 ) -> Result<Option<DateTime<Tz>>, ScheduleError> {
@@ -115,7 +116,7 @@ pub fn next_occurrence<Tz: TimeZone>(
 /// primitive (locked decision: no trigger_state table; each sweep recomputes
 /// the current slot and lets the dedup index reject re-fires). `None` when
 /// no occurrence exists within croner's backward search horizon (~1 year).
-pub fn latest_occurrence_at_or_before<Tz: TimeZone>(
+pub(crate) fn latest_occurrence_at_or_before<Tz: TimeZone>(
     pattern: &SchedulePattern,
     now: &DateTime<Tz>,
 ) -> Result<Option<DateTime<Tz>>, ScheduleError> {
@@ -134,7 +135,7 @@ pub fn latest_occurrence_at_or_before<Tz: TimeZone>(
 /// Naive local `YYYY-MM-DDTHH:mm:ss` (Node scheduler.ts toLocalIso) — feeds
 /// `trigger.scheduledFor` and the dedup key `<triggerId>|<scheduledFor>`,
 /// which must be byte-identical across engines sharing an automations.db.
-pub fn scheduled_for_string<Tz: TimeZone>(occurrence: &DateTime<Tz>) -> String {
+pub(crate) fn scheduled_for_string<Tz: TimeZone>(occurrence: &DateTime<Tz>) -> String {
     occurrence
         .naive_local()
         .format("%Y-%m-%dT%H:%M:%S")

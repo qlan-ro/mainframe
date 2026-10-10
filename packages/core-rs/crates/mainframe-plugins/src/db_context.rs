@@ -194,7 +194,7 @@ pub fn int(n: i64) -> SqlValue {
 }
 
 /// Bind helper: nullable text (`value ?? null`).
-pub fn nullable_text(s: Option<String>) -> SqlValue {
+pub(crate) fn nullable_text(s: Option<String>) -> SqlValue {
     match s {
         Some(s) => SqlValue::Text(s),
         None => SqlValue::Null,

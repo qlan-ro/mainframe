@@ -27,7 +27,7 @@ fn unknown(observed_at: i64) -> ProviderQuota {
 }
 
 /// Parse `claude -p "/usage"` prose into a `ProviderQuota`. Mirrors `parseClaudeUsage`.
-pub fn parse_claude_usage(text: &str, now: i64) -> ProviderQuota {
+pub(crate) fn parse_claude_usage(text: &str, now: i64) -> ProviderQuota {
     let mut session: Option<QuotaWindow> = None;
     let mut weekly: Option<QuotaWindow> = None;
     let mut model_windows: Vec<QuotaWindow> = Vec::new();

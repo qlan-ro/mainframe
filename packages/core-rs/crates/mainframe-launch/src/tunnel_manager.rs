@@ -233,7 +233,7 @@ impl TunnelManager {
     /// Extract a `https://<label>.trycloudflare.com` URL from a log line, or
     /// `None`. Mirrors `/https:\/\/[a-z0-9-]+\.trycloudflare\.com/` — the label
     /// class is `[a-z0-9-]` (no `.`), so it stops at the first dot.
-    pub fn parse_url(line: &str) -> Option<String> {
+    pub(crate) fn parse_url(line: &str) -> Option<String> {
         let mut search_from = 0;
         while let Some(rel) = line[search_from..].find("https://") {
             let start = search_from + rel;

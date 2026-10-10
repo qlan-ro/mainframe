@@ -25,7 +25,7 @@ pub struct HealthResponse {
 }
 
 /// `GET /health`. Mirrors `app.get('/health', ...)` in `src/server/http.ts`.
-pub async fn get_health(State(ctx): State<Arc<AppCtx>>) -> Json<HealthResponse> {
+pub(crate) async fn get_health(State(ctx): State<Arc<AppCtx>>) -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "ok",
         version: ctx.version.clone(),

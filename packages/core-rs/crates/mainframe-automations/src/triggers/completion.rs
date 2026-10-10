@@ -29,7 +29,7 @@ impl CompletionEmitter {
         })
     }
 
-    pub fn bind_router(&self, router: Arc<TriggerRouter>) {
+    pub(crate) fn bind_router(&self, router: Arc<TriggerRouter>) {
         if self.router.set(router).is_err() {
             tracing::warn!("completion emitter router already bound; ignoring rebind");
         }
@@ -90,7 +90,7 @@ impl RunFinalizedHook for CompletionEmitter {
 /// follow-up. The tie only reaches the chained-automation ⟨its result⟩ when the
 /// terminal step shares a millisecond with a sibling; sequential runs are
 /// monotonic and unaffected.
-pub fn summarize_run_result(run: &RunRecord) -> String {
+pub(crate) fn summarize_run_result(run: &RunRecord) -> String {
     if run.status == RunStatus::Failed {
         return run
             .checkpoint

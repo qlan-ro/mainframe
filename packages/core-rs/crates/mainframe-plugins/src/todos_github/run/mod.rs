@@ -36,7 +36,10 @@ impl From<PluginError> for RunError {
 /// running is refused rather than queued or blocked.
 static RUNNING: LazyLock<DashMap<String, ()>> = LazyLock::new(DashMap::new);
 
-pub async fn run_sync(ctx: &PluginContext, project_id: &str) -> Result<store::Run, RunError> {
+pub(crate) async fn run_sync(
+    ctx: &PluginContext,
+    project_id: &str,
+) -> Result<store::Run, RunError> {
     if RUNNING.insert(project_id.to_string(), ()).is_some() {
         return Err(RunError::AlreadyRunning);
     }

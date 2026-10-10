@@ -132,7 +132,7 @@ impl AutomationCheckpoint {
 
     /// Deduped chatIds off every ask_agent entry seen so far — notification
     /// links (contract Decision 4: "chatIds from checkpoint agent steps").
-    pub fn agent_chat_ids(&self) -> Vec<String> {
+    pub(crate) fn agent_chat_ids(&self) -> Vec<String> {
         let mut chat_ids = Vec::new();
         for entry in self.steps.values() {
             if entry.kind == "ask_agent"
@@ -148,7 +148,7 @@ impl AutomationCheckpoint {
 
 /// A5 — a run whose checkpoint has ANY step `waiting` reports `waiting`
 /// regardless of `wakeAt` (ask_me waits carry a null wakeAt by design).
-pub fn derive_run_status(checkpoint: &AutomationCheckpoint) -> RunStatus {
+pub(crate) fn derive_run_status(checkpoint: &AutomationCheckpoint) -> RunStatus {
     if checkpoint.wake_at.is_some() {
         return RunStatus::Waiting;
     }

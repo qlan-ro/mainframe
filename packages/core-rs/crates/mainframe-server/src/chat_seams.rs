@@ -57,11 +57,6 @@ impl LaunchStopper for NoopLaunchStopper {
     }
 }
 
-/// Convenience constructor for the boot path.
-pub fn default_launch_stopper() -> Arc<dyn LaunchStopper> {
-    Arc::new(NoopLaunchStopper)
-}
-
 /// The production `LaunchStopper`, backed by the real `LaunchRegistry` (Task 5.5).
 /// Mirrors `chats.setStopLaunchProcesses(async (projectId, projectPath) => {
 /// const m = launchRegistry.get(projectId, projectPath); if (m) await m.stopAll();
@@ -115,10 +110,6 @@ impl ScopeTunnelStopper for NoopScopeTunnelStopper {
     ) -> Option<BoxFuture<'a, ()>> {
         None
     }
-}
-
-pub fn default_scope_tunnel_stopper() -> Arc<dyn ScopeTunnelStopper> {
-    Arc::new(NoopScopeTunnelStopper)
 }
 
 /// The production impl. The registry keys tunnels by the chat that started them,

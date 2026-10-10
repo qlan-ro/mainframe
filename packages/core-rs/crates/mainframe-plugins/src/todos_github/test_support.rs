@@ -6,11 +6,10 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use axum::extract::State;
-use mainframe_types::chat::{Chat, Project};
+use mainframe_types::chat::Chat;
 use mainframe_types::plugin::{PluginCapability, PluginManifest};
 
 use crate::context::{PluginContextDeps, PluginHostDb, build_plugin_context};
-use crate::event_bus::PublicDaemonBus;
 use crate::github_port::GitHubIssues;
 use crate::{PluginContext, todos};
 
@@ -42,18 +41,6 @@ impl PluginHostDb for FakeHostDb {
             .get(&(category.to_string(), key.to_string()))
             .cloned()
     }
-    fn settings_set(&self, category: &str, key: &str, value: &str) {
-        self.settings
-            .lock()
-            .unwrap()
-            .insert((category.to_string(), key.to_string()), value.to_string());
-    }
-    fn projects_list(&self) -> Vec<Project> {
-        Vec::new()
-    }
-    fn projects_get(&self, _id: &str) -> Option<Project> {
-        None
-    }
 }
 
 pub(crate) struct Harness {
@@ -83,9 +70,7 @@ pub(crate) async fn setup(github: Arc<dyn GitHubIssues>) -> Harness {
         manifest,
         plugin_dir: dir.path().to_path_buf(),
         host_db: host,
-        daemon_bus: Arc::new(PublicDaemonBus::new()),
         emit: Arc::new(|_| {}),
-        adapters: None,
         github: Some(github),
     })
     .unwrap();

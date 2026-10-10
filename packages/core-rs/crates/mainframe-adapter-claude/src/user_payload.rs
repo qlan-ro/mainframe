@@ -37,7 +37,7 @@ pub fn build_user_payload(
 
 /// The text payload with `priority: "next"`, which the CLI drains at the
 /// next tool boundary of the running turn.
-pub fn build_steer_payload(chat_id: &str, message: &str, uuid: Option<&str>) -> Value {
+pub(crate) fn build_steer_payload(chat_id: &str, message: &str, uuid: Option<&str>) -> Value {
     let mut payload = build_user_payload(chat_id, message, &[], uuid);
     payload["priority"] = Value::String("next".to_string());
     payload

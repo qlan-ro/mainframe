@@ -143,7 +143,7 @@ impl WorktreeOfferRegistry {
 
     /// Claims the one switch slot. The offer stays pending: a rebind that fails
     /// must leave the user something to retry.
-    pub fn claim_accept(
+    pub(crate) fn claim_accept(
         &self,
         chat_id: &str,
         worktree_path: &str,
@@ -162,7 +162,7 @@ impl WorktreeOfferRegistry {
         Ok(offer)
     }
 
-    pub fn release_accept(&self, chat_id: &str) {
+    pub(crate) fn release_accept(&self, chat_id: &str) {
         let mut state = self.lock();
         if let Some(chat) = state.get_mut(chat_id) {
             chat.switching = None;
@@ -175,7 +175,7 @@ impl WorktreeOfferRegistry {
 
     /// The single source of `resolved{accepted}` — a rebind counts as an accept
     /// however it was initiated, and a rebind nobody offered stays silent.
-    pub fn on_binding_changed(&self, chat_id: &str, worktree_path: Option<&str>) {
+    pub(crate) fn on_binding_changed(&self, chat_id: &str, worktree_path: Option<&str>) {
         if let Some(worktree_path) = worktree_path {
             self.resolve(chat_id, worktree_path, WorktreeOfferOutcome::Accepted);
         }

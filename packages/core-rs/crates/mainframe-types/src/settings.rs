@@ -106,41 +106,6 @@ pub struct ProviderConfig {
     pub cliproxy_small_fast_model: Option<String>,
 }
 
-/// Patch shape for updating provider settings. The enum-valued fields additionally
-/// accept `''` — the clear sentinel the server deletes on (→ the chat inherits the
-/// model default). Those fields are typed `Option<String>` here so the empty-string
-/// sentinel passes through the wire unchanged (serde enums cannot carry `''`).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct ProviderConfigUpdate {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub default_model: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub default_mode: Option<ExecutionMode>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub default_plan_mode: Option<BoolString>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub executable_path: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub system_prompt: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub resolved_executable: Option<ResolvedExecutable>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub default_effort: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub default_fast: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub default_ultracode: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub default_adaptive_thinking: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub personality: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reasoning_summary: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cliproxy_small_fast_model: Option<String>,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NotificationChatConfig {
@@ -297,15 +262,6 @@ mod tests {
         let cfg: ProviderConfig = serde_json::from_str(json).unwrap();
         assert_eq!(cfg.default_effort, Some(crate::adapter::EffortLevel::High));
         assert_eq!(serde_json::to_string(&cfg).unwrap(), json);
-    }
-
-    #[test]
-    fn provider_config_update_allows_empty_sentinel() {
-        let json = r#"{"defaultEffort":"","personality":""}"#;
-        let upd: ProviderConfigUpdate = serde_json::from_str(json).unwrap();
-        assert_eq!(upd.default_effort.as_deref(), Some(""));
-        assert_eq!(upd.personality.as_deref(), Some(""));
-        assert_eq!(serde_json::to_string(&upd).unwrap(), json);
     }
 
     #[test]

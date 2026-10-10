@@ -111,14 +111,16 @@ impl PushService {
         self.lock().devices.remove(device_id);
     }
 
-    pub fn set_device_connected(&self, device_id: &str, connected: bool) {
+    #[cfg(test)]
+    pub(crate) fn set_device_connected(&self, device_id: &str, connected: bool) {
         let mut inner = self.lock();
         if let Some(device) = inner.devices.get_mut(device_id) {
             device.connected = connected;
         }
     }
 
-    pub fn is_device_connected(&self, device_id: &str) -> bool {
+    #[cfg(test)]
+    pub(crate) fn is_device_connected(&self, device_id: &str) -> bool {
         self.lock()
             .devices
             .get(device_id)

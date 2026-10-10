@@ -36,7 +36,7 @@ impl WalkFrame {
     /// Just the suffix `iteration` would produce, without cloning `item`
     /// into a full frame — the concurrent scheduler checks far more indices
     /// than it ever admits, and a `TokenValue` clone per check added up.
-    pub fn iteration_suffix(&self, index: usize) -> String {
+    pub(crate) fn iteration_suffix(&self, index: usize) -> String {
         format!("{}#{index}", self.ref_suffix)
     }
 

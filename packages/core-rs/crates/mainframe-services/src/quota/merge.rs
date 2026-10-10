@@ -17,7 +17,7 @@ pub struct ProviderQuotaUpdate {
 
 /// Sparse rolling merge: an omitted field keeps whatever the prior blob held.
 #[must_use]
-pub fn merge_provider_quota(
+pub(crate) fn merge_provider_quota(
     prior: Option<&ProviderQuota>,
     update: ProviderQuotaUpdate,
     now: i64,

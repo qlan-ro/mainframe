@@ -13,7 +13,10 @@ use mainframe_types::context::{ContextFile, ContextFileSource};
 
 const CONTEXT_FILE_NAMES: [&str; 2] = ["CLAUDE.md", "AGENTS.md"];
 
-pub fn collect_claude_context_files(project_path: &str, home_dir: Option<&Path>) -> ContextFiles {
+pub(crate) fn collect_claude_context_files(
+    project_path: &str,
+    home_dir: Option<&Path>,
+) -> ContextFiles {
     let home: PathBuf = match home_dir {
         Some(h) => h.to_path_buf(),
         None => dirs::home_dir().unwrap_or_default(),

@@ -226,7 +226,7 @@ fn collapse_whitespace(s: &str) -> String {
 }
 
 /// First block, across all user messages, that isn't injected context.
-pub fn first_user_prompt(lines: &[RolloutLine]) -> Option<String> {
+pub(crate) fn first_user_prompt(lines: &[RolloutLine]) -> Option<String> {
     for line in lines {
         for text in user_text_blocks(line) {
             if text.is_empty() || is_preamble(&text) {
@@ -241,7 +241,7 @@ pub fn first_user_prompt(lines: &[RolloutLine]) -> Option<String> {
     None
 }
 
-pub fn extract_meta(lines: &[RolloutLine], head: &str) -> RolloutMeta {
+pub(crate) fn extract_meta(lines: &[RolloutLine], head: &str) -> RolloutMeta {
     let meta = lines
         .iter()
         .find(|l| l.kind.as_deref() == Some("session_meta"))

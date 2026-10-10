@@ -14,7 +14,6 @@ serde_json = { workspace = true }
 tracing = { workspace = true }
 chrono = { workspace = true }
 dashmap = { workspace = true }
-thiserror = { workspace = true }
 mainframe-types = { workspace = true }
 
 [dev-dependencies]

@@ -87,7 +87,8 @@ impl<D: ExternalSessionDeps + 'static> ExternalSessionService<D> {
     /// Reconcile transcript presence for every non-archived chat of the project
     /// that has a CLI session id, so the sidebar degraded marker appears without
     /// the chat being opened. Runs on the same cadence as the auto-scan.
-    pub async fn sweep_transcript_presence(&self, project_id: &str) {
+    #[cfg(test)]
+    pub(crate) async fn sweep_transcript_presence(&self, project_id: &str) {
         sweep_transcript_presence_impl(self.deps.as_ref(), project_id).await;
     }
 

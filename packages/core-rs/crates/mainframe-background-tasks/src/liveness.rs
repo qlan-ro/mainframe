@@ -33,7 +33,7 @@ impl LivenessSchedulerHandle {
 }
 
 /// Read the current miss count for `(chatId, taskId)`. Exported for tests.
-pub fn get_miss_count(miss_map: &MissMap, chat_id: &str, task_id: &str) -> i64 {
+pub(crate) fn get_miss_count(miss_map: &MissMap, chat_id: &str, task_id: &str) -> i64 {
     miss_map
         .get(chat_id)
         .and_then(|inner| inner.get(task_id))
@@ -63,7 +63,7 @@ pub(crate) fn is_wake(delta: i64, interval_ms: u64) -> bool {
 }
 
 /// One-shot sweep. Exported for direct testing.
-pub async fn run_liveness_sweep(
+pub(crate) async fn run_liveness_sweep(
     tracker: &BackgroundTaskTracker,
     miss_map: &mut MissMap,
     now: i64,

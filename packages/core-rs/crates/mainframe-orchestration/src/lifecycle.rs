@@ -25,7 +25,7 @@ impl OrchestrationService {
     /// sender's own `try_flush` once `chat_id`'s flush is done — after
     /// `flush_locked`'s guard has dropped, so it never deadlocks on
     /// `flush_lock` (not reentrant).
-    pub async fn try_flush(&self, chat_id: &str) {
+    pub(crate) async fn try_flush(&self, chat_id: &str) {
         if !self.outbox.has_for(chat_id) || self.is_boot_held(chat_id) {
             return;
         }

@@ -10,46 +10,6 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use tokio::sync::mpsc;
 
-// --- parse_lsp_upgrade_path -------------------------------------------------
-
-#[test]
-fn parses_valid_lsp_path() {
-    let r = parse_lsp_upgrade_path("/lsp/abc-123/typescript").unwrap();
-    assert_eq!(r.project_id, "abc-123");
-    assert_eq!(r.language, "typescript");
-    assert_eq!(r.chat_id, None);
-}
-
-#[test]
-fn parses_path_with_query_params_but_no_chat_id() {
-    let r = parse_lsp_upgrade_path("/lsp/abc-123/python?token=xyz").unwrap();
-    assert_eq!(r.project_id, "abc-123");
-    assert_eq!(r.language, "python");
-    assert_eq!(r.chat_id, None);
-}
-
-#[test]
-fn parses_chat_id_from_query_string() {
-    let r = parse_lsp_upgrade_path("/lsp/abc-123/typescript?chatId=chat-99").unwrap();
-    assert_eq!(r.chat_id.as_deref(), Some("chat-99"));
-}
-
-#[test]
-fn parses_chat_id_alongside_other_query_params() {
-    let r = parse_lsp_upgrade_path("/lsp/proj-1/python?token=abc&chatId=chat-42").unwrap();
-    assert_eq!(r.project_id, "proj-1");
-    assert_eq!(r.language, "python");
-    assert_eq!(r.chat_id.as_deref(), Some("chat-42"));
-}
-
-#[test]
-fn returns_none_for_non_lsp_paths() {
-    assert!(parse_lsp_upgrade_path("/").is_none());
-    assert!(parse_lsp_upgrade_path("/api/chats").is_none());
-    assert!(parse_lsp_upgrade_path("/lsp").is_none());
-    assert!(parse_lsp_upgrade_path("/lsp/abc").is_none());
-}
-
 // --- fixtures / fakes -------------------------------------------------------
 
 fn make_project(id: &str, path: &str) -> Project {

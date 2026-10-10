@@ -27,7 +27,7 @@ fn api_compression_predicate() -> ApiCompressionPredicate {
 }
 
 /// gzip + brotli, chosen by the client's `Accept-Encoding` preference.
-pub fn compression_layer() -> CompressionLayer<ApiCompressionPredicate> {
+pub(crate) fn compression_layer() -> CompressionLayer<ApiCompressionPredicate> {
     CompressionLayer::new()
         .gzip(true)
         .br(true)

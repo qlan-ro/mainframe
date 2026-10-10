@@ -59,7 +59,7 @@ impl<L: LifecycleManagerDeps + 'static, E: EventHandlerDeps + 'static> ChatOfflo
     /// Test seam: a chat idle relative to the real wall clock past a tiny
     /// threshold behaves exactly like a chat idle 2+ hours past the real one,
     /// so tests inject a small threshold rather than a fake clock.
-    pub fn with_threshold(
+    pub(crate) fn with_threshold(
         active_chats: ActiveChatRegistry,
         messages: Arc<Mutex<MessageCache>>,
         permissions: Arc<Mutex<PermissionManager>>,

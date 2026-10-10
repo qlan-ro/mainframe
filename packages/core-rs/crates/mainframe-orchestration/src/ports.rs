@@ -52,7 +52,7 @@ pub struct ChatView {
 
 impl ChatView {
     #[must_use]
-    pub fn privileges(&self) -> Privileges {
+    pub(crate) fn privileges(&self) -> Privileges {
         Privileges {
             adapter_id: self.adapter_id.clone(),
             mode: self.permission_mode,
@@ -63,7 +63,7 @@ impl ChatView {
     /// Side chats, temporary chats, and automation chats are the user's own
     /// scratch space; agents may not list, send to, or drive them.
     #[must_use]
-    pub fn is_agent_addressable(&self) -> bool {
+    pub(crate) fn is_agent_addressable(&self) -> bool {
         !self.temporary && !self.automation
     }
 }

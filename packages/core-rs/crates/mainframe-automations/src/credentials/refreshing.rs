@@ -42,7 +42,7 @@ impl RefreshingCredentialStore {
         Self::with_token_url(inner, clock, TOKEN_URL.to_string(), GITHUB_APP_CLIENT_ID)
     }
 
-    pub fn with_token_url(
+    pub(crate) fn with_token_url(
         inner: Arc<dyn CredentialStore>,
         clock: Arc<dyn Clock>,
         token_url: String,

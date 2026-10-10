@@ -44,7 +44,7 @@ impl SubjectScope {
     }
 }
 
-pub fn backfill_task_subjects(messages: &[DisplayMessage]) -> Vec<DisplayMessage> {
+pub(crate) fn backfill_task_subjects(messages: &[DisplayMessage]) -> Vec<DisplayMessage> {
     let mut scope = SubjectScope::new();
     backfill_from(messages, &mut scope)
 }

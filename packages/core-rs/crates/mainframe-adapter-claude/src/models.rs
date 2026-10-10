@@ -198,7 +198,7 @@ fn build(spec: &ModelSpec, is_older: bool) -> AdapterModel {
 
 /// Static fallback catalog (`getFallbackModels`), used until a probe lands and
 /// whenever one fails.
-pub fn claude_models() -> Vec<AdapterModel> {
+pub(crate) fn claude_models() -> Vec<AdapterModel> {
     CURRENT_MODELS
         .iter()
         .map(|spec| build(spec, false))
@@ -206,7 +206,7 @@ pub fn claude_models() -> Vec<AdapterModel> {
         .collect()
 }
 
-pub fn older_models() -> Vec<AdapterModel> {
+pub(crate) fn older_models() -> Vec<AdapterModel> {
     OLDER_MODELS.iter().map(|spec| build(spec, true)).collect()
 }
 
@@ -214,7 +214,7 @@ pub fn older_models() -> Vec<AdapterModel> {
 /// older models the API still serves. Append every entry of [`older_models`] the
 /// probe didn't surface — matched on the id *and* on the concrete id an alias
 /// resolves to, so a probed `sonnet` doesn't list `claude-sonnet-5` twice.
-pub fn merge_older_models(probed: Vec<AdapterModel>) -> Vec<AdapterModel> {
+pub(crate) fn merge_older_models(probed: Vec<AdapterModel>) -> Vec<AdapterModel> {
     let mut covered: HashSet<String> = HashSet::new();
     for model in &probed {
         covered.insert(base_id(&model.id));

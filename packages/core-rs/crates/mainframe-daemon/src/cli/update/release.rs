@@ -25,7 +25,7 @@ pub struct GhRelease {
 
 /// `standaloneArtifactName()` — maps the running platform to the release
 /// artifact filename it should install.
-pub fn standalone_artifact_name(platform: &str, arch: &str) -> Result<String, String> {
+pub(crate) fn standalone_artifact_name(platform: &str, arch: &str) -> Result<String, String> {
     let os = match platform {
         "darwin" => Some("darwin"),
         "linux" => Some("linux"),
@@ -47,7 +47,7 @@ pub fn standalone_artifact_name(platform: &str, arch: &str) -> Result<String, St
 /// `pickRelease()` — picks the release to install from a GitHub `/releases`
 /// list (newest first), honoring an explicit `version` or the newest
 /// stable/pre-release per `include_prerelease`.
-pub fn pick_release(
+pub(crate) fn pick_release(
     releases: &[GhRelease],
     version: Option<&str>,
     include_prerelease: bool,
@@ -79,7 +79,7 @@ pub fn pick_release(
 }
 
 /// `assetUrl()` — resolves the download URL of `artifact` within a release.
-pub fn asset_url(release: &GhRelease, artifact: &str) -> Result<String, String> {
+pub(crate) fn asset_url(release: &GhRelease, artifact: &str) -> Result<String, String> {
     release
         .assets
         .iter()
@@ -118,7 +118,7 @@ fn parse_semver(version: &str) -> SemVer {
 }
 
 /// `compareSemver()` — negative if `a` < `b`, 0 if equal, positive if `a` > `b`.
-pub fn compare_semver(a: &str, b: &str) -> i64 {
+pub(crate) fn compare_semver(a: &str, b: &str) -> i64 {
     let va = parse_semver(a);
     let vb = parse_semver(b);
     if va.major != vb.major {
@@ -165,7 +165,7 @@ fn compare_prerelease(pa: &[String], pb: &[String]) -> i64 {
 
 /// `assertNotDowngrade()` — refuses to install a release that isn't newer
 /// than `current_version`, unless `force` is set.
-pub fn assert_not_downgrade(
+pub(crate) fn assert_not_downgrade(
     release: &GhRelease,
     current_version: &str,
     force: bool,

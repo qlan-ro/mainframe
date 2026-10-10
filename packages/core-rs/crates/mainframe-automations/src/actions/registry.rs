@@ -5,11 +5,13 @@
 //! order.
 
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::Value;
+#[cfg(test)]
+use serde_json::json;
 
-use super::manifest::{
-    ActionAuth, ActionField, ActionGroup, ActionManifest, ActionOutput, ActionOutputType,
-};
+#[cfg(test)]
+use super::manifest::ActionOutputType;
+use super::manifest::{ActionAuth, ActionField, ActionGroup, ActionManifest, ActionOutput};
 use super::{Action, ActionAvailability, ActionError};
 
 /// Wire projection of a manifest (types `ActionCatalogEntry`, the
@@ -80,7 +82,8 @@ impl ActionCatalogEntry {
     /// The reserved shape a live MCP tool would occupy post-launch (R5):
     /// `mcp:<server>:<tool>`, output `{result: text}` (contract §5). No field
     /// schema — MCP tool schemas aren't known until discovery ships.
-    pub fn mcp_seam(server: &str, tool: &str) -> Self {
+    #[cfg(test)]
+    pub(crate) fn mcp_seam(server: &str, tool: &str) -> Self {
         Self {
             id: format!("mcp:{server}:{tool}"),
             title: format!("{server}: {tool}"),
@@ -142,7 +145,7 @@ impl ActionRegistry {
     /// `GET /api/automation-actions` body (T7.3/T9.3). Async because an
     /// action's availability can depend on the machine — the GitHub actions
     /// ask the CLI whether it is installed and signed in.
-    pub async fn wire_catalog(&self) -> Vec<ActionCatalogEntry> {
+    pub(crate) async fn wire_catalog(&self) -> Vec<ActionCatalogEntry> {
         let mut entries = Vec::with_capacity(self.actions.len());
         for action in &self.actions {
             let availability = action.availability().await;

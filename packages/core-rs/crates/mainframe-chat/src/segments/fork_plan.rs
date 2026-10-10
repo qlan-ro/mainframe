@@ -68,7 +68,7 @@ pub fn fork_plan(parent: &SegmentLayout, point: &ForkPoint, can_pin: bool) -> Op
 }
 
 /// The divider marker a message carries, if it is a divider.
-pub fn marker_of(message: &ChatMessage) -> Option<&ProviderSwitchMarker> {
+pub(crate) fn marker_of(message: &ChatMessage) -> Option<&ProviderSwitchMarker> {
     message.content.iter().find_map(|block| match block {
         MessageContent::Node(MessageContentNode::ProviderSwitch { marker }) => Some(marker),
         _ => None,

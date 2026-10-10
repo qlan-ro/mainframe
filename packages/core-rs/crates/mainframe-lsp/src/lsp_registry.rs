@@ -60,7 +60,6 @@ pub struct LspRegistry {
     /// Preserves declaration order for `get_all_language_ids` (parity with the
     /// TS insertion-ordered `Map`).
     order: Vec<String>,
-    extension_map: HashMap<String, String>,
     /// Boot-resolved login-shell `PATH`, applied to the `command -v` probe and the
     /// external-server spawn so packaged builds find CLIs outside the bare launchd
     /// `PATH` (mirrors the TS `enrichPath` env mutation). `None` = inherit.
@@ -71,18 +70,13 @@ impl LspRegistry {
     pub fn new() -> Self {
         let mut configs = HashMap::new();
         let mut order = Vec::new();
-        let mut extension_map = HashMap::new();
         for config in default_configs() {
-            for ext in &config.languages {
-                extension_map.insert(ext.clone(), config.id.clone());
-            }
             order.push(config.id.clone());
             configs.insert(config.id.clone(), config);
         }
         Self {
             configs,
             order,
-            extension_map,
             resolved_path: None,
         }
     }
@@ -104,10 +98,6 @@ impl LspRegistry {
 
     pub fn get_config(&self, language_id: &str) -> Option<&LspServerConfig> {
         self.configs.get(language_id)
-    }
-
-    pub fn get_language_for_extension(&self, ext: &str) -> Option<String> {
-        self.extension_map.get(ext).cloned()
     }
 
     pub fn get_all_language_ids(&self) -> Vec<String> {

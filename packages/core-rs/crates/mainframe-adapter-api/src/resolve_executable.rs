@@ -8,8 +8,10 @@
 //! an injectable `ResolveMemo` value (CONCURRENCY.tsv row 136 — no module global).
 
 use std::collections::HashMap;
-use std::sync::{LazyLock, Mutex, PoisonError};
-use std::time::{Duration, Instant};
+use std::sync::LazyLock;
+#[cfg(test)]
+use std::sync::Mutex;
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
@@ -197,77 +199,6 @@ pub async fn resolve_adapter_executable(
     }
 }
 
-const RESOLVE_MEMO_TTL_MS: u64 = 5_000;
-
-/// Short-TTL memo around `resolve_adapter_executable`. Injected value (not a
-/// module global): the settings GET endpoint is polled and resolution spawns
-/// child processes, so a 5s in-process cache keeps a burst of polls from
-/// re-spawning. `resolve_adapter_executable` itself stays unmemoized for tests.
-#[derive(Default)]
-pub struct ResolveMemo {
-    inner: Mutex<HashMap<String, (Instant, ResolvedExecutable)>>,
-}
-
-impl ResolveMemo {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub async fn resolve_adapter_executable_cached(
-        &self,
-        adapter_id: &str,
-        deps: &ResolverDeps<'_>,
-    ) -> ResolvedExecutable {
-        {
-            let guard = self.inner.lock().unwrap_or_else(PoisonError::into_inner);
-            if let Some((at, value)) = guard.get(adapter_id)
-                && at.elapsed() < Duration::from_millis(RESOLVE_MEMO_TTL_MS)
-            {
-                return value.clone();
-            }
-        }
-        let value = resolve_adapter_executable(adapter_id, deps).await;
-        self.inner
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .insert(adapter_id.to_string(), (Instant::now(), value.clone()));
-        value
-    }
-
-    pub fn clear(&self) {
-        self.inner
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .clear();
-    }
-}
-
-pub async fn backfill_adapter_executables(adapter_ids: &[String], deps: &ResolverDeps<'_>) {
-    // The TS body is wrapped in try/catch that logs "executable backfill failed";
-    // the Rust deps are infallible-by-type (run captures failures as RunResult,
-    // settings get/set return no error), so there is no error path to catch.
-    for id in adapter_ids {
-        if deps
-            .settings
-            .get("provider", &format!("{id}.executablePath"))
-            .is_some()
-        {
-            continue;
-        }
-        let r = resolve_adapter_executable(id, deps).await;
-        if r.source == ExecutableSource::Detected {
-            deps.settings
-                .set("provider", &format!("{id}.executablePath"), &r.path);
-            tracing::info!(
-                module = "resolve-executable",
-                adapter_id = id.as_str(),
-                path = r.path.as_str(),
-                "backfilled adapter executable path"
-            );
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -317,9 +248,6 @@ mod tests {
                 f,
                 calls: Mutex::new(Vec::new()),
             }
-        }
-        fn count(&self) -> usize {
-            self.calls.lock().unwrap().len()
         }
         fn called_with(&self, cmd: &str, args: &[&str]) -> bool {
             let want: Vec<String> = args.iter().map(|a| a.to_string()).collect();
@@ -456,121 +384,6 @@ mod tests {
                 version: None,
             }
         );
-    }
-
-    #[tokio::test]
-    async fn backfill_writes_detected_absolute_path_only_when_config_is_empty() {
-        let runner = FnRunner::new(|cmd: &str, args: &[String]| {
-            if cmd == "which" {
-                ok("/opt/homebrew/bin/claude\n")
-            } else if has_version(args) {
-                ok("claude 1.0.0")
-            } else {
-                fail()
-            }
-        });
-        let s = MapSettings::new();
-        let ids = vec!["claude".to_string()];
-        {
-            let deps = ResolverDeps {
-                settings: &s,
-                run: &runner,
-                platform: Some("darwin".into()),
-            };
-            backfill_adapter_executables(&ids, &deps).await;
-        }
-        assert_eq!(
-            s.get("provider", "claude.executablePath"),
-            Some("/opt/homebrew/bin/claude".into())
-        );
-
-        let runner2 = FnRunner::new(|_cmd: &str, _args: &[String]| ok("/somewhere/else/claude\n"));
-        let deps2 = ResolverDeps {
-            settings: &s,
-            run: &runner2,
-            platform: Some("darwin".into()),
-        };
-        backfill_adapter_executables(&ids, &deps2).await;
-        assert_eq!(
-            s.get("provider", "claude.executablePath"),
-            Some("/opt/homebrew/bin/claude".into())
-        );
-    }
-
-    #[tokio::test]
-    async fn does_not_backfill_when_detection_fails() {
-        let runner = FnRunner::new(|_cmd: &str, _args: &[String]| fail());
-        let s = MapSettings::new();
-        let deps = ResolverDeps {
-            settings: &s,
-            run: &runner,
-            platform: Some("linux".into()),
-        };
-        backfill_adapter_executables(&["codex".to_string()], &deps).await;
-        assert_eq!(s.get("provider", "codex.executablePath"), None);
-    }
-
-    #[tokio::test]
-    async fn memoizes_within_the_ttl_and_re_resolves_after_clear() {
-        let runner = FnRunner::new(|cmd: &str, args: &[String]| {
-            if cmd == "which" {
-                ok("/opt/homebrew/bin/claude\n")
-            } else if has_version(args) {
-                ok("claude 1.0.0")
-            } else {
-                fail()
-            }
-        });
-        let s = MapSettings::new();
-        let memo = ResolveMemo::new();
-        let deps = ResolverDeps {
-            settings: &s,
-            run: &runner,
-            platform: Some("darwin".into()),
-        };
-
-        let first = memo
-            .resolve_adapter_executable_cached("claude", &deps)
-            .await;
-        let calls_after_first = runner.count();
-        assert!(calls_after_first > 0);
-
-        let second = memo
-            .resolve_adapter_executable_cached("claude", &deps)
-            .await;
-        assert_eq!(second, first);
-        assert_eq!(runner.count(), calls_after_first);
-
-        memo.clear();
-        memo.resolve_adapter_executable_cached("claude", &deps)
-            .await;
-        assert!(runner.count() > calls_after_first);
-    }
-
-    #[tokio::test]
-    async fn keys_the_memo_by_adapter_id() {
-        let runner = FnRunner::new(|cmd: &str, args: &[String]| {
-            if cmd == "which" {
-                ok(&format!("/bin/{}\n", args[0]))
-            } else if has_version(args) {
-                ok("1.0.0")
-            } else {
-                fail()
-            }
-        });
-        let s = MapSettings::new();
-        let memo = ResolveMemo::new();
-        let deps = ResolverDeps {
-            settings: &s,
-            run: &runner,
-            platform: Some("darwin".into()),
-        };
-        let claude = memo
-            .resolve_adapter_executable_cached("claude", &deps)
-            .await;
-        let codex = memo.resolve_adapter_executable_cached("codex", &deps).await;
-        assert_eq!(claude.path, "/bin/claude");
-        assert_eq!(codex.path, "/bin/codex");
     }
 
     #[test]

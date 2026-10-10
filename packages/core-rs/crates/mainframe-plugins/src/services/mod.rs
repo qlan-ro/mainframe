@@ -2,10 +2,8 @@
 //! service surfaces exposed to plugins, backed by the host database.
 
 pub mod chat_service;
-pub mod project_service;
 
-pub use chat_service::build_chat_service;
-pub use project_service::build_project_service;
+pub(crate) use chat_service::build_chat_service;
 
 // PORT STATUS: src/plugins/services/ (module barrel)
 // confidence: high

@@ -15,13 +15,13 @@ pub struct GuardGitHub {
 }
 
 impl GuardGitHub {
-    pub fn capability_missing() -> Self {
+    pub(crate) fn capability_missing() -> Self {
         Self {
             reason: PluginError::CapabilityRequired("http:outbound".to_string()).to_string(),
         }
     }
 
-    pub fn engine_unavailable() -> Self {
+    pub(crate) fn engine_unavailable() -> Self {
         Self {
             reason: "GitHub sync is unavailable: the automations engine did not start, \
                      so no credential store is available."

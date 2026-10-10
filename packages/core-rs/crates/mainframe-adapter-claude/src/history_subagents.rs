@@ -24,7 +24,7 @@ fn object_to_map(v: Option<&Value>) -> HashMap<String, Value> {
 
 /// Flatten a subagent assistant message's content (tool_use / text / thinking)
 /// onto the accumulated child-block list keyed by parentId.
-pub fn append_assistant_blocks(
+pub(crate) fn append_assistant_blocks(
     parent_id: &str,
     content: &[Value],
     agent_tools: &mut HashMap<String, Vec<MessageContent>>,
@@ -75,7 +75,7 @@ pub fn append_assistant_blocks(
     }
 }
 
-pub fn collect_agent_progress_tools(
+pub(crate) fn collect_agent_progress_tools(
     entry: &Value,
     agent_tools: &mut HashMap<String, Vec<MessageContent>>,
 ) {
@@ -103,7 +103,10 @@ pub fn collect_agent_progress_tools(
 }
 
 /// Extract tool_result blocks from subagent JSONL user entries.
-pub fn collect_subagent_tool_results(entry: &Value, results: &mut HashMap<String, MessageContent>) {
+pub(crate) fn collect_subagent_tool_results(
+    entry: &Value,
+    results: &mut HashMap<String, MessageContent>,
+) {
     if entry.get("type").and_then(Value::as_str) != Some("user") {
         return;
     }
@@ -125,7 +128,7 @@ pub fn collect_subagent_tool_results(entry: &Value, results: &mut HashMap<String
 
 /// Capture the agentId → parent tool_use_id mapping from a parent-JSONL user
 /// entry whose tool_result corresponds to a Task/Agent dispatch.
-pub fn capture_agent_id_mapping(entry: &Value, map: &mut HashMap<String, String>) {
+pub(crate) fn capture_agent_id_mapping(entry: &Value, map: &mut HashMap<String, String>) {
     if entry.get("type").and_then(Value::as_str) != Some("user") {
         return;
     }
@@ -155,7 +158,7 @@ pub fn capture_agent_id_mapping(entry: &Value, map: &mut HashMap<String, String>
 }
 
 /// Collect assistant text/thinking/tool_use blocks from subagent JSONL assistant entries.
-pub fn collect_subagent_assistant_blocks(
+pub(crate) fn collect_subagent_assistant_blocks(
     entry: &Value,
     agent_tools: &mut HashMap<String, Vec<MessageContent>>,
     agent_id_map: Option<&HashMap<String, String>>,
@@ -193,7 +196,7 @@ pub fn collect_subagent_assistant_blocks(
 }
 
 /// Inject subagent tool_result blocks after their matching tool_use in assistant messages.
-pub fn attach_subagent_tool_results(
+pub(crate) fn attach_subagent_tool_results(
     messages: &mut [ChatMessage],
     results: &HashMap<String, MessageContent>,
 ) {

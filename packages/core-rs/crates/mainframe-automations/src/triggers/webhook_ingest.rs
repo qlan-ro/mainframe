@@ -96,7 +96,8 @@ impl WebhookProcessor {
         }
     }
 
-    pub fn latest_sample(&self, automation_id: &str, trigger_id: &str) -> Option<Value> {
+    #[cfg(test)]
+    pub(crate) fn latest_sample(&self, automation_id: &str, trigger_id: &str) -> Option<Value> {
         self.lock_samples()
             .get(&(automation_id.to_string(), trigger_id.to_string()))
             .cloned()

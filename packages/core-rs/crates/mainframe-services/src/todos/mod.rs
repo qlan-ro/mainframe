@@ -2,7 +2,7 @@
 
 pub mod normalize;
 
-pub use normalize::{TaskV2Event, TodoSource, normalize_todos};
+pub use normalize::{TodoSource, normalize_todos};
 
 // PORT STATUS: src/todos/ (module barrel; only normalize.ts is under it here)
 // confidence: high

@@ -58,7 +58,7 @@ pub(super) fn handle_control_cancel_request_event(event: &Value, sink: &dyn Sess
     }
     sink.on_permission_cancelled(request_id);
 }
-pub fn handle_control_response_event(
+pub(crate) fn handle_control_response_event(
     session: &ClaudeSession,
     event: &Value,
     _sink: &dyn SessionSink,

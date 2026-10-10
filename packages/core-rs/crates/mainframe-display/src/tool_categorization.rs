@@ -13,7 +13,7 @@ pub fn is_hidden_tool(name: &str, categories: &ToolCategories) -> bool {
     categories.hidden.contains(name)
 }
 
-pub fn is_hidden_tool_part(
+pub(crate) fn is_hidden_tool_part(
     name: &str,
     category: Option<&str>,
     categories: &ToolCategories,

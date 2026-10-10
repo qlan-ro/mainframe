@@ -31,7 +31,7 @@ pub struct ExternalSessionListOpts {
 
 /// Stat-only candidate pass: UUID-named jsonl across matching dirs, deduped +
 /// sorted mtime desc.
-pub async fn scan_lite_candidates(
+pub(crate) async fn scan_lite_candidates(
     project_path: &str,
     exclude_set: &HashSet<String>,
 ) -> Vec<Candidate> {

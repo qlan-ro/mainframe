@@ -187,13 +187,6 @@ impl AutomationsEngine {
         Ok(self.interactions.list_pending().await?)
     }
 
-    pub async fn get_interaction(
-        &self,
-        id: &str,
-    ) -> Result<Option<InteractionRecord>, EngineError> {
-        Ok(self.interactions.get(id).await?)
-    }
-
     pub async fn respond(
         &self,
         interaction_id: &str,
@@ -278,11 +271,6 @@ impl AutomationsEngine {
     /// read. `None` for a hook nobody has registered.
     pub async fn webhook_state(&self, hook_id: &str) -> Result<Option<WebhookState>, EngineError> {
         registration::read(self, hook_id).await
-    }
-
-    /// R3 — the latest matching webhook payload (in-memory sample).
-    pub fn latest_webhook_sample(&self, automation_id: &str, trigger_id: &str) -> Option<Value> {
-        self.webhooks.latest_sample(automation_id, trigger_id)
     }
 }
 

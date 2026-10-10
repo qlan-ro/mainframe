@@ -2,7 +2,7 @@
 
 use super::attachment_store::StoredAttachment;
 
-pub fn escape_xml_attr(value: &str) -> String {
+pub(crate) fn escape_xml_attr(value: &str) -> String {
     value
         .replace('&', "&amp;")
         .replace('"', "&quot;")

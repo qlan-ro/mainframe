@@ -28,7 +28,7 @@ impl TriggerFirer {
     /// when the automation is gone, disabled (Decision 11: disabling disarms
     /// triggers; manual runs stay allowed elsewhere), or the dedup key lost
     /// the `uq_runs_dedup` insert race (Decision 13).
-    pub async fn fire_run(
+    pub(crate) async fn fire_run(
         &self,
         automation_id: &str,
         trigger: RunTriggerContext,

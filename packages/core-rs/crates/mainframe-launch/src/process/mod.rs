@@ -7,10 +7,10 @@ pub use child_registry::{
     BoxFuture, ChildRegistryPort, FileChildRegistry, ManagedChildEntry, ManagedChildKind,
     NoopChildRegistry, now_ms,
 };
+pub(crate) use sweep::default_process_command;
 pub use sweep::{
-    KillFn, ProcessQueryFn, SweepDeps, SweepPlatform, SweepResult, default_kill,
-    default_process_command, default_process_cwd, default_sweep_deps, process_matches_binary,
-    process_matches_launch, sweep_stray_children,
+    KillFn, ProcessQueryFn, SweepDeps, SweepPlatform, SweepResult, default_sweep_deps,
+    sweep_stray_children,
 };
 
 // PORT STATUS: src/process/index.ts (re-exports)

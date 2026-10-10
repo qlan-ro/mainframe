@@ -30,7 +30,6 @@ const STDERR_DRAIN_TIMEOUT: Duration = Duration::from_millis(500);
 pub struct JsonRpcError(pub String);
 
 type PendingTx = oneshot::Sender<Result<Value, JsonRpcError>>;
-type CloseListener = Box<dyn Fn() + Send + Sync>;
 
 /// The four callbacks the client fans events out to (mirrors `JsonRpcHandlers`).
 pub struct JsonRpcHandlers {
@@ -120,7 +119,6 @@ pub struct JsonRpcClient {
     pending: Arc<Mutex<HashMap<RequestId, PendingTx>>>,
     closed: Arc<AtomicBool>,
     exited: Arc<AtomicBool>,
-    close_listeners: Arc<Mutex<Vec<CloseListener>>>,
     close_notify: Arc<Notify>,
     kill_notify: Arc<Notify>,
     write_tx: mpsc::UnboundedSender<Vec<u8>>,
@@ -132,7 +130,7 @@ impl JsonRpcClient {
         Self::with_timeout(child, handlers, DEFAULT_REQUEST_TIMEOUT_MS)
     }
 
-    pub fn with_timeout(
+    pub(crate) fn with_timeout(
         mut child: Child,
         handlers: JsonRpcHandlers,
         request_timeout_ms: u64,
@@ -141,7 +139,6 @@ impl JsonRpcClient {
             Arc::new(Mutex::new(HashMap::new()));
         let closed = Arc::new(AtomicBool::new(false));
         let exited = Arc::new(AtomicBool::new(false));
-        let close_listeners: Arc<Mutex<Vec<CloseListener>>> = Arc::new(Mutex::new(Vec::new()));
         let close_notify = Arc::new(Notify::new());
         let kill_notify = Arc::new(Notify::new());
         let recent_stderr: Arc<Mutex<VecDeque<String>>> = Arc::new(Mutex::new(VecDeque::new()));
@@ -235,7 +232,6 @@ impl JsonRpcClient {
         // reject pending + fire close.
         {
             let pending = pending.clone();
-            let close_listeners = close_listeners.clone();
             let close_notify = close_notify.clone();
             let kill_notify = kill_notify.clone();
             let exited = exited.clone();
@@ -285,13 +281,6 @@ impl JsonRpcClient {
                         format!("codex {reason}:\n{}", tail.join("\n"))
                     });
                 }
-                for listener in close_listeners
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .drain(..)
-                {
-                    listener();
-                }
                 close_notify.notify_waiters();
                 (handlers.on_exit)(code);
             });
@@ -302,7 +291,6 @@ impl JsonRpcClient {
             pending,
             closed,
             exited,
-            close_listeners,
             close_notify,
             kill_notify,
             write_tx,
@@ -370,16 +358,6 @@ impl JsonRpcClient {
         // signal crate in the allowlist). The child dies with the client either way
         // (detached:false parity).
         self.kill_notify.notify_waiters();
-    }
-
-    /// Register a close listener (mirrors `onClose`). The returned unsubscribe is a
-    /// no-op: listeners are drained exactly once when the process exits, so a stored
-    /// listener never fires twice (the session's only use is a one-shot wake).
-    pub fn on_close(&self, listener: CloseListener) {
-        self.close_listeners
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .push(listener);
     }
 
     /// Future that resolves when the process closes (Rust-native alternative to

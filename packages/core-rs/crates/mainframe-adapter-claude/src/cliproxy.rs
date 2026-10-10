@@ -81,7 +81,7 @@ impl std::fmt::Debug for CliProxyEnv {
 
 /// Split a stored model id into its endpoint and the bare id the CLI's `--model` wants.
 /// Native ids pass through untouched.
-pub fn split_endpoint(model: &str) -> (Option<&str>, &str) {
+pub(crate) fn split_endpoint(model: &str) -> (Option<&str>, &str) {
     match mainframe_types::adapter::model_endpoint(model) {
         Some(ENDPOINT_ID) => (Some(ENDPOINT_ID), &model[ENDPOINT_ID.len() + 1..]),
         _ => (None, model),
@@ -99,7 +99,7 @@ fn is_image_model(id: &str) -> bool {
 
 /// The proxy's chat catalog, or `None` on any transport or non-200 result — which is
 /// also how "installed but not running" reads.
-pub async fn fetch_models(config: &CliProxyConfig) -> Option<Vec<ProxyModel>> {
+pub(crate) async fn fetch_models(config: &CliProxyConfig) -> Option<Vec<ProxyModel>> {
     let client = reqwest::Client::builder()
         .timeout(FETCH_TIMEOUT)
         .build()
@@ -137,7 +137,7 @@ pub async fn fetch_models(config: &CliProxyConfig) -> Option<Vec<ProxyModel>> {
 /// Anthropic-specific stays `None`: the proxy publishes no context window, and the CLI's
 /// effort/fast/thinking flags are Claude capabilities that the models behind the proxy do
 /// not honour — so the tuning controls hide themselves rather than sending flags into the void.
-pub fn to_adapter_models(catalog: &[ProxyModel]) -> Vec<AdapterModel> {
+pub(crate) fn to_adapter_models(catalog: &[ProxyModel]) -> Vec<AdapterModel> {
     order::by_capability(catalog)
         .into_iter()
         .map(|model| {
@@ -164,7 +164,7 @@ pub fn to_adapter_models(catalog: &[ProxyModel]) -> Vec<AdapterModel> {
 
 /// The proxy section of the model picker, or empty when no proxy is installed or
 /// running. Never errors — a missing proxy is the common case, not a fault.
-pub async fn probe_catalog() -> Vec<AdapterModel> {
+pub(crate) async fn probe_catalog() -> Vec<AdapterModel> {
     let Some(config) = discover(None).await else {
         return Vec::new();
     };
@@ -177,7 +177,7 @@ pub async fn probe_catalog() -> Vec<AdapterModel> {
 
 /// The setting if set, else the best preference the proxy actually serves, else the
 /// selected model itself — the CLI needs *some* small/fast model it can reach.
-pub fn pick_small_fast_model(
+pub(crate) fn pick_small_fast_model(
     catalog: &[ProxyModel],
     override_model: Option<&str>,
     selected: &str,
@@ -195,7 +195,7 @@ pub fn pick_small_fast_model(
 /// Resolve the spawn env for a chat pinned to a proxy model. Unlike the rest of this
 /// module this one is loud: the user explicitly chose a proxy model, so silence would
 /// strand them on a session that never answers.
-pub async fn resolve_env(
+pub(crate) async fn resolve_env(
     config_path_override: Option<&str>,
     small_fast_override: Option<&str>,
     selected_model: &str,

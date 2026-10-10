@@ -8,7 +8,7 @@ pub const UNKNOWN_ACCOUNT_IDENTITY: &str = "identity:unknown";
 /// Compound key (#259): a same-provider account swap naturally lands on a fresh,
 /// empty key.
 #[must_use]
-pub fn compute_quota_key(adapter_id: &str, account_identity: Option<&str>) -> String {
+pub(crate) fn compute_quota_key(adapter_id: &str, account_identity: Option<&str>) -> String {
     format!(
         "{adapter_id}:{}",
         account_identity.unwrap_or(UNKNOWN_ACCOUNT_IDENTITY)
@@ -19,7 +19,7 @@ pub fn compute_quota_key(adapter_id: &str, account_identity: Option<&str>) -> St
 /// caller's last-known identity so a healthy gauge doesn't flicker to unknown on
 /// a momentary file lock.
 #[must_use]
-pub fn resolve_account_identity(
+pub(crate) fn resolve_account_identity(
     fresh_identity: Option<&str>,
     last_known_identity: Option<&str>,
 ) -> Option<String> {

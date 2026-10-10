@@ -15,7 +15,7 @@ pub enum ChipPart {
 pub type ChipText = Vec<ChipPart>;
 
 /// Every `TokenRef` used by a chip text, in order.
-pub fn chip_tokens(parts: &[ChipPart]) -> Vec<&TokenRef> {
+pub(crate) fn chip_tokens(parts: &[ChipPart]) -> Vec<&TokenRef> {
     parts
         .iter()
         .filter_map(|p| match p {

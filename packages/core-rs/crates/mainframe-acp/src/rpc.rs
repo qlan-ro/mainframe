@@ -56,7 +56,7 @@ pub fn parse_frame(text: &str) -> Result<InboundFrame, JsonRpcErrorObject> {
     }
 }
 
-pub fn parse_error() -> JsonRpcErrorObject {
+pub(crate) fn parse_error() -> JsonRpcErrorObject {
     JsonRpcErrorObject {
         code: error_codes::PARSE_ERROR,
         message: "parse error".into(),
@@ -72,7 +72,7 @@ pub fn invalid_request() -> JsonRpcErrorObject {
     }
 }
 
-pub fn method_not_found(method: &str) -> JsonRpcErrorObject {
+pub(crate) fn method_not_found(method: &str) -> JsonRpcErrorObject {
     JsonRpcErrorObject {
         code: error_codes::METHOD_NOT_FOUND,
         message: format!("method not found: {method}"),
@@ -80,7 +80,7 @@ pub fn method_not_found(method: &str) -> JsonRpcErrorObject {
     }
 }
 
-pub fn invalid_params(reason: &str) -> JsonRpcErrorObject {
+pub(crate) fn invalid_params(reason: &str) -> JsonRpcErrorObject {
     JsonRpcErrorObject {
         code: error_codes::INVALID_PARAMS,
         message: format!("invalid params: {reason}"),
