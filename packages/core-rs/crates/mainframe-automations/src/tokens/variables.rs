@@ -13,7 +13,7 @@ use std::collections::HashMap;
 
 use crate::domain::{
     AutomationDefinition, Step, TOKEN_STEP_CURRENT, TokenRef,
-    scope::{TokenInfo, builtin_tokens, current_item_info, step_produces, trigger_tokens},
+    scope::{TokenInfo, body_scope, builtin_tokens, step_produces, trigger_tokens},
     token::TokenSourceKind,
 };
 
@@ -247,8 +247,10 @@ fn target_for(info: &TokenInfo) -> NameTarget {
 }
 
 /// The names every step in a definition can address, from the same scope walk
-/// validation uses (`domain::validate::walk`): `if` leaks both branches to
-/// later siblings, `repeat` isolates its body and adds `Current item`.
+/// validation uses (`domain::validate::walk`): every block body is visited
+/// through `Step::child_bodies` and starts from `body_scope`, so `if` leaks
+/// both branches to later siblings, `repeat` adds `Current item`, and
+/// `repeat`/`loop`/`retry`/`parallel` keep their bodies' outputs inside.
 pub fn build_name_index(definition: &AutomationDefinition) -> NameIndex {
     let mut scope = builtin_tokens();
     scope.extend(trigger_tokens(&definition.triggers));
@@ -260,19 +262,10 @@ pub fn build_name_index(definition: &AutomationDefinition) -> NameIndex {
 fn walk(steps: &[Step], scope: &mut Vec<TokenInfo>, index: &mut NameIndex) {
     for step in steps {
         index.insert(step.id().to_string(), build_variable_namespace(scope));
-        match step {
-            Step::If(block) => {
-                walk(&block.then, &mut scope.clone(), index);
-                walk(&block.otherwise, &mut scope.clone(), index);
-                scope.extend(step_produces(step));
-            }
-            Step::Repeat(block) => {
-                let mut inner = scope.clone();
-                inner.push(current_item_info());
-                walk(&block.steps, &mut inner, index);
-            }
-            _ => scope.extend(step_produces(step)),
+        for body in step.child_bodies() {
+            walk(body, &mut body_scope(step, scope), index);
         }
+        scope.extend(step_produces(step));
     }
 }
 

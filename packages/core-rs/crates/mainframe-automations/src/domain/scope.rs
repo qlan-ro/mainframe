@@ -90,6 +90,18 @@ pub(crate) fn current_item_info() -> TokenInfo {
     }
 }
 
+/// The scope a block's nested body starts from: a copy of the enclosing
+/// scope, plus `Current item` inside a `repeat`. Every body is isolated, so
+/// what it produces stays in the copy; only `if` hands its branches' outputs
+/// back out, through `step_produces`.
+pub(crate) fn body_scope(block: &Step, enclosing: &[TokenInfo]) -> Vec<TokenInfo> {
+    let mut scope = enclosing.to_vec();
+    if matches!(block, Step::Repeat(_)) {
+        scope.push(current_item_info());
+    }
+    scope
+}
+
 pub(crate) fn builtin_tokens() -> Vec<TokenInfo> {
     vec![
         info("builtin", "today", TokenType::Date, "Today", "Built-in"),
