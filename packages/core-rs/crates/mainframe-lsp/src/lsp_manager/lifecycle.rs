@@ -98,16 +98,28 @@ impl ManagerState {
     }
 
     async fn escalate(&self, handle: &LspServerHandle) {
-        handle.signal("-TERM");
-        if !wait_for_handle_exit(handle, self.sigterm_grace).await {
-            tracing::warn!(
-                pid = handle.pid,
-                "LSP server survived SIGTERM, sending SIGKILL"
-            );
-            handle.signal("-KILL");
-            if !wait_for_handle_exit(handle, self.sigterm_grace).await {
-                tracing::warn!(pid = handle.pid, "LSP server survived SIGKILL");
-            }
+        use mainframe_runtime::process::{Terminated, terminate_with};
+        let result = terminate_with(
+            |kind| {
+                handle.signal(kind);
+                Ok(())
+            },
+            self.sigterm_grace,
+            async {
+                loop {
+                    let notified = handle.exit_notify.notified();
+                    tokio::pin!(notified);
+                    notified.as_mut().enable();
+                    if handle.exited.load(Ordering::SeqCst) {
+                        break;
+                    }
+                    notified.await;
+                }
+            },
+        )
+        .await;
+        if !matches!(result, Ok(Terminated::Exited | Terminated::Killed)) {
+            tracing::warn!(pid = handle.pid, "LSP server survived shutdown");
         }
     }
 
