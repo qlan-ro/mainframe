@@ -1,5 +1,10 @@
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+use tokio::sync::Mutex;
+
+mod ordering;
 
 /// Both arguments must already be canonical paths.
 pub fn is_within_base(real_base: &Path, real_target: &Path) -> bool {
@@ -43,23 +48,40 @@ impl AtomicWriteError {
 /// Writes a unique sibling, syncs its contents and metadata, then renames it.
 /// The directory is not fsynced: replacement is atomic, not crash-durable.
 /// `owner_only` sets Unix mode 0600 before any bytes are written.
+/// Submitted writes stay serialized through publication after caller cancellation.
 pub async fn write_atomic(
     path: &Path,
     contents: &[u8],
     owner_only: bool,
 ) -> Result<(), AtomicWriteError> {
+    let ordering = ordering::for_path(path).await?;
+    write_ordered(path, contents, owner_only, ordering, || {}).await
+}
+
+async fn write_ordered(
+    path: &Path,
+    contents: &[u8],
+    owner_only: bool,
+    ordering: Arc<Mutex<()>>,
+    before_rename: impl FnOnce() + Send + 'static,
+) -> Result<(), AtomicWriteError> {
+    let guard = ordering.lock_owned().await;
     let path = path.to_path_buf();
     let contents = contents.to_vec();
     let error_path = path.clone();
-    tokio::task::spawn_blocking(move || write_atomic_blocking(&path, &contents, owner_only))
-        .await
-        .map_err(|error| AtomicWriteError::write(&error_path, io::Error::other(error)))?
+    tokio::task::spawn_blocking(move || {
+        let _guard = guard;
+        write_atomic_blocking(&path, &contents, owner_only, before_rename)
+    })
+    .await
+    .map_err(|error| AtomicWriteError::write(&error_path, io::Error::other(error)))?
 }
 
 fn write_atomic_blocking(
     path: &Path,
     contents: &[u8],
     owner_only: bool,
+    before_rename: impl FnOnce(),
 ) -> Result<(), AtomicWriteError> {
     let (temporary, mut file) = create_sibling(path, owner_only)?;
     #[cfg(unix)]
@@ -73,6 +95,7 @@ fn write_atomic_blocking(
     file.sync_all()
         .map_err(|error| AtomicWriteError::write(&temporary.0, error))?;
     drop(file);
+    before_rename();
     std::fs::rename(&temporary.0, path).map_err(|source| AtomicWriteError {
         path: path.to_path_buf(),
         stage: AtomicWriteStage::Rename,
@@ -121,5 +144,7 @@ impl Drop for Temporary {
     }
 }
 
+#[cfg(test)]
+mod cancellation_tests;
 #[cfg(test)]
 mod tests;

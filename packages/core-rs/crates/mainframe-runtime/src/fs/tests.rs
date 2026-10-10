@@ -65,6 +65,9 @@ async fn failed_rename_cleans_temporary_file() {
     assert_eq!(error.stage, AtomicWriteStage::Rename);
     assert_eq!(error.path, path);
     assert_eq!(std::fs::read_dir(tmp.path()).unwrap().count(), 1);
+    std::fs::remove_dir(&path).unwrap();
+    write_atomic(&path, b"recovered", false).await.unwrap();
+    assert_eq!(std::fs::read(&path).unwrap(), b"recovered");
 }
 
 #[cfg(unix)]
