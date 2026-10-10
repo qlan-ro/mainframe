@@ -1,18 +1,17 @@
-//! Agent settle path: a finished chat writes the step outcome into the
-//! checkpoint and re-advances. All writes ride the A8-guarded RunStore, so a
-//! cancel that raced always wins.
+//! Agent settle path: a finished chat is judged against the step's output
+//! contract, then settled through `Interpreter::settle_out_of_band`, which
+//! writes the outcome and re-advances. All writes ride the A8-guarded
+//! RunStore, so a cancel that raced always wins.
 
 use serde_json::{Map, Value};
 
-use crate::domain::{ExpectedOutput, Step, enclosing_concurrent_branch, find_step_by_id};
-use crate::error::StoreError;
-use crate::ports::{AgentOutcome, AgentPortError, AutomationEvent, to_run_summary};
-use crate::store::{StepStatus, epoch_ms_now};
+use crate::domain::{ExpectedOutput, Step, find_step_by_id};
+use crate::ports::{AgentOutcome, AgentPortError};
+use crate::store::StepStatus;
 
+use super::OutOfBandOutcome;
 use super::agent::{AgentVerb, WaitKey};
-use super::checkpoint::recompute_wake_at;
 use super::expects::{build_correction_message, parse_expected};
-use super::out_of_band::{AfterFailure, FailingStep, fail_step_out_of_band};
 
 enum Verdict {
     Succeed(Map<String, Value>),
@@ -20,15 +19,6 @@ enum Verdict {
     /// A2 mismatch with retry budget left: send ONE corrective message into
     /// the same session and judge its outcome.
     Retry(String),
-}
-
-struct WaitingContext {
-    keep_going: bool,
-    expects: Vec<ExpectedOutput>,
-    /// `(block_id, branch_ref_suffix)` of the nearest enclosing concurrent
-    /// Repeat, if any — MUST-FIX 3: a failure that settles here bypasses the
-    /// branch driver, so it has to write that branch's own marker itself.
-    enclosing_branch: Option<(String, String)>,
 }
 
 impl AgentVerb {
@@ -42,32 +32,29 @@ impl AgentVerb {
         let Some(key) = self.wait_key(chat_id) else {
             return;
         };
-        let Some(context) = self.load_waiting_step(chat_id, &key).await else {
+        let Some(expects) = self.load_waiting_expects(chat_id, &key).await else {
             return;
         };
 
         let mut outcome = outcome;
         let mut can_retry = true;
         loop {
-            match judge(&outcome, &context.expects, chat_id, can_retry) {
+            match judge(&outcome, &expects, chat_id, can_retry) {
                 Verdict::Succeed(outputs) => {
                     self.remove_wait(chat_id);
-                    return self.succeed_waiting_step(&key, outputs).await;
+                    return self
+                        .settle_step(&key, OutOfBandOutcome::Succeeded(outputs))
+                        .await;
                 }
                 Verdict::Fail(error) => {
                     self.remove_wait(chat_id);
                     return self
-                        .fail_waiting_step(
-                            &key,
-                            context.keep_going,
-                            context.enclosing_branch.clone(),
-                            &error,
-                        )
+                        .settle_step(&key, OutOfBandOutcome::Failed(error))
                         .await;
                 }
                 Verdict::Retry(reason) => {
                     can_retry = false;
-                    let correction = build_correction_message(&reason, &context.expects);
+                    let correction = build_correction_message(&reason, &expects);
                     outcome = self.port.retry(chat_id, &correction).await;
                     // Cancel may have cleared the wait while we awaited.
                     if self.wait_key(chat_id).is_none() {
@@ -78,10 +65,14 @@ impl AgentVerb {
         }
     }
 
-    /// The run must be live and the entry still `waiting`, else the wait is stale —
-    /// clear it and drop the outcome. Returns the step's failure policy + A2
-    /// contract.
-    async fn load_waiting_step(&self, chat_id: &str, key: &WaitKey) -> Option<WaitingContext> {
+    /// The run must be live and the entry still `waiting`, else the wait is
+    /// stale: clear it and drop the outcome. Returns the step's A2 output
+    /// contract; the failure policy is resolved when the outcome is written.
+    async fn load_waiting_expects(
+        &self,
+        chat_id: &str,
+        key: &WaitKey,
+    ) -> Option<Vec<ExpectedOutput>> {
         let run = match self.store.get_run(&key.run_id).await {
             Ok(run) => run,
             Err(err) => {
@@ -113,100 +104,22 @@ impl AgentVerb {
             return None;
         };
         let step = find_step_by_id(&run.checkpoint.definition.steps, &entry.step_id);
-        let ref_suffix = key
-            .step_ref
-            .strip_prefix(entry.step_id.as_str())
-            .unwrap_or_default();
-        Some(WaitingContext {
-            keep_going: step.is_some_and(Step::keep_going),
-            expects: match step {
-                Some(Step::AskAgent(ask)) => ask.expects.clone().unwrap_or_default(),
-                _ => Vec::new(),
-            },
-            enclosing_branch: enclosing_concurrent_branch(
-                &run.checkpoint.definition.steps,
-                &entry.step_id,
-                ref_suffix,
-            ),
+        Some(match step {
+            Some(Step::AskAgent(ask)) => ask.expects.clone().unwrap_or_default(),
+            _ => Vec::new(),
         })
     }
 
-    async fn succeed_waiting_step(&self, key: &WaitKey, outputs: Map<String, Value>) {
-        let step_ref = key.step_ref.clone();
-        let patched = self
-            .store
-            .patch_checkpoint(&key.run_id, move |cp| {
-                if let Some(entry) = cp.steps.get_mut(&step_ref) {
-                    entry.status = StepStatus::Succeeded;
-                    entry.outputs = Some(outputs);
-                    entry.error = None;
-                    entry.finished_at = Some(epoch_ms_now());
-                    entry.wake_at = None;
-                }
-                // A sibling branch may still be waiting — recompute rather
-                // than clobbering its deadline with None.
-                recompute_wake_at(cp);
-            })
-            .await;
-        match patched {
-            Ok(record) => {
-                // A6 — the settled transition streams to the run view.
-                self.events.emit(AutomationEvent::RunUpdated {
-                    run: to_run_summary(&record),
-                });
-                self.advance(&key.run_id).await;
-            }
-            Err(StoreError::TerminalRun { .. }) => { /* cancel won (A8) */ }
-            Err(err) => {
-                tracing::error!(run_id = key.run_id, error = %err, "agent settle: succeed write failed");
-            }
-        }
-    }
-
-    /// Fails the waiting step. The write, branch marker and `RunUpdated` emit
-    /// are shared with the deadline sweep through
-    /// `out_of_band::fail_step_out_of_band`, which documents the concurrent
-    /// branch and still-waiting-sibling rules.
-    async fn fail_waiting_step(
-        &self,
-        key: &WaitKey,
-        keep_going: bool,
-        enclosing_branch: Option<(String, String)>,
-        error: &str,
-    ) {
-        let failing = FailingStep {
-            run_id: &key.run_id,
-            step_ref: &key.step_ref,
-            keep_going,
-            enclosing_branch,
-        };
-        match fail_step_out_of_band(&self.store, self.events.as_ref(), failing, error).await {
-            Ok(None) => {}
-            Ok(Some(AfterFailure::Advance)) => self.advance(&key.run_id).await,
-            Ok(Some(AfterFailure::FailRun)) => self.fail_run(&key.run_id, error).await,
-            Err(err) => {
-                tracing::error!(run_id = key.run_id, error = %err, "agent settle: fail write failed");
-            }
-        }
-    }
-
-    async fn advance(&self, run_id: &str) {
+    async fn settle_step(&self, key: &WaitKey, outcome: OutOfBandOutcome) {
         let Some(advancer) = self.advancer.get() else {
-            tracing::error!(run_id, "agent settle: no advancer bound");
+            tracing::error!(run_id = key.run_id, "agent settle: no advancer bound");
             return;
         };
-        if let Err(err) = advancer.advance_run(run_id).await {
-            tracing::error!(run_id, error = %err, "agent settle: advance failed");
-        }
-    }
-
-    async fn fail_run(&self, run_id: &str, error: &str) {
-        let Some(advancer) = self.advancer.get() else {
-            tracing::error!(run_id, "agent settle: no advancer bound");
-            return;
-        };
-        if let Err(err) = advancer.fail_run(run_id, error).await {
-            tracing::error!(run_id, error = %err, "agent settle: run finalize failed");
+        if let Err(err) = advancer
+            .settle_out_of_band(&key.run_id, &key.step_ref, outcome)
+            .await
+        {
+            tracing::error!(run_id = key.run_id, error = %err, "agent settle: write failed");
         }
     }
 }

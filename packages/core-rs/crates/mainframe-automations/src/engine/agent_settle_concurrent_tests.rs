@@ -1,5 +1,5 @@
 //! MUST-FIX 3 — an agent failure that arrives out-of-band (settle, not
-//! `start()`) inside a concurrent branch. Before this fix, `fail_waiting_step`
+//! `start()`) inside a concurrent branch. Before this fix, the agent settle path
 //! never told the branch driver at all: with `keepGoing: false` it finalized
 //! the run immediately while a sibling chat kept running unattended, and the
 //! failed leaf's own branch marker was never written, so a later replay would

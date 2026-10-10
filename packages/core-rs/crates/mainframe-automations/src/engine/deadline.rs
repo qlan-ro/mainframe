@@ -1,11 +1,10 @@
-//! Due-sweep + out-of-band step failure. One `wakeAt` carries two meanings,
-//! discriminated by the parked step's kind:
+//! Due-sweep. One `wakeAt` carries two meanings, discriminated by the parked
+//! step's kind:
 //!
-//! - `ask_agent` — a deadline. The step fails with the deadline error and
-//!   `keepGoing` decides whether the run continues. The chat itself is NOT
-//!   told to stop (only the automation stops waiting); its
-//!   eventual completion finds a non-waiting entry and is dropped by the
-//!   settle guard.
+//! - `ask_agent` — a deadline. The step fails out-of-band with the deadline
+//!   error and `keepGoing` decides whether the run continues. The chat itself
+//!   is NOT told to stop (only the automation stops waiting); its eventual
+//!   completion finds a non-waiting entry and is dropped by the settle guard.
 //! - `wait` — a resume. The step succeeds and the run advances.
 //!
 //! Any other parked kind (`ask_me`, which parks with `wakeAt: null`) is never
@@ -14,13 +13,12 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::domain::{Step, enclosing_concurrent_branch, find_step_by_id};
 use crate::error::StoreError;
-use crate::store::{AutomationCheckpoint, RunRecord, StepStatus, TerminalStatus, epoch_ms_now};
+use crate::store::{AutomationCheckpoint, RunRecord, StepKind, StepStatus, epoch_ms_now};
 
+use super::OutOfBandOutcome;
 use super::advance::Interpreter;
-use super::checkpoint::recompute_wake_at;
-use super::out_of_band::{AfterFailure, FailingStep, fail_step_out_of_band};
+use super::out_of_band::patch_if_changed;
 
 const AGENT_DEADLINE_ERROR: &str = "agent step deadline exceeded";
 
@@ -66,40 +64,6 @@ impl Interpreter {
         })
     }
 
-    /// Fails one step outside the walk, applying the same keepGoing policy
-    /// the engine uses everywhere: without it the run finalizes here, since
-    /// a later advance() skips `failed` entries without consulting keepGoing.
-    /// The write, branch marker and `RunUpdated` emit are shared with the
-    /// agent settle path through `out_of_band::fail_step_out_of_band`.
-    pub(crate) async fn fail_step(
-        &self,
-        run_id: &str,
-        step_ref: &str,
-        error: &str,
-    ) -> Result<(), StoreError> {
-        let Some(run) = self.deps.store.get_run(run_id).await? else {
-            return Ok(());
-        };
-        let (step, enclosing_branch) = lookup_failing_step(&run, step_ref);
-        let failing = FailingStep {
-            run_id,
-            step_ref,
-            keep_going: step.is_some_and(Step::keep_going),
-            enclosing_branch,
-        };
-        let next =
-            fail_step_out_of_band(&self.deps.store, self.deps.events.as_ref(), failing, error)
-                .await?;
-        match next {
-            None => Ok(()),
-            Some(AfterFailure::Advance) => self.advance(run_id).await,
-            Some(AfterFailure::FailRun) => {
-                self.finalize_and_emit(run_id, TerminalStatus::Failed, Some(error.to_string()))
-                    .await
-            }
-        }
-    }
-
     /// Every waiting entry whose OWN deadline is due (N branches can be
     /// parked at once, each with an independent deadline).
     async fn resolve_due_step(
@@ -108,12 +72,12 @@ impl Interpreter {
         now: i64,
     ) -> Result<(), StoreError> {
         for (step_ref, kind) in due_waiting_entries(&run.checkpoint, now) {
-            match kind.as_str() {
-                "ask_agent" => {
-                    self.fail_step(&run.id, &step_ref, AGENT_DEADLINE_ERROR)
-                        .await?
+            match kind {
+                StepKind::AskAgent => {
+                    let error = OutOfBandOutcome::Failed(AGENT_DEADLINE_ERROR.to_string());
+                    self.settle_out_of_band(&run.id, &step_ref, error).await?
                 }
-                "wait" => self.resume_wait(&run.id, &step_ref).await?,
+                StepKind::Wait => self.resume_wait(&run.id, &step_ref).await?,
                 _ => {}
             }
         }
@@ -125,26 +89,13 @@ impl Interpreter {
     /// a wait produces no tokens.
     async fn resume_wait(self: &Arc<Self>, run_id: &str, step_ref: &str) -> Result<(), StoreError> {
         let step_ref_owned = step_ref.to_string();
-        let now = epoch_ms_now();
-        let patched = self
-            .deps
-            .store
-            .patch_checkpoint(run_id, move |cp| {
-                if let Some(entry) = cp.steps.get_mut(&step_ref_owned) {
-                    entry.status = StepStatus::Succeeded;
-                    entry.finished_at = Some(now);
-                    entry.wake_at = None;
-                }
-                // A sibling branch may still be waiting — recompute rather
-                // than clobbering its deadline with None.
-                recompute_wake_at(cp);
-            })
-            .await;
-        match patched {
-            Ok(_) => {}
-            // Cancel raced the wake — the run is already terminal.
-            Err(StoreError::TerminalRun { .. }) => return Ok(()),
-            Err(err) => return Err(err),
+        let settled = patch_if_changed(&self.deps.store, run_id, move |cp| {
+            cp.succeed_waiting_step(&step_ref_owned, None)
+        })
+        .await?;
+        // Cancel raced the wake, or the entry already settled.
+        if settled.is_none() {
+            return Ok(());
         }
 
         // No emit here: A6 is already satisfied downstream. `advance` emits the
@@ -167,28 +118,9 @@ impl Interpreter {
     }
 }
 
-/// The failing step itself (for its `keepGoing`) plus, if it lives inside a
-/// concurrent branch, that branch's own `(block_id, ref_suffix)` — shared
-/// lookup for `fail_step`.
-fn lookup_failing_step<'a>(
-    run: &'a RunRecord,
-    step_ref: &str,
-) -> (Option<&'a Step>, Option<(String, String)>) {
-    let Some(entry) = run.checkpoint.steps.get(step_ref) else {
-        return (None, None);
-    };
-    let step = find_step_by_id(&run.checkpoint.definition.steps, &entry.step_id);
-    let ref_suffix = step_ref
-        .strip_prefix(entry.step_id.as_str())
-        .unwrap_or_default();
-    let enclosing_branch =
-        enclosing_concurrent_branch(&run.checkpoint.definition.steps, &entry.step_id, ref_suffix);
-    (step, enclosing_branch)
-}
-
 /// Every currently-waiting entry whose own deadline has passed.
-fn due_waiting_entries(checkpoint: &AutomationCheckpoint, now: i64) -> Vec<(String, String)> {
-    let mut due: Vec<(String, String)> = checkpoint
+fn due_waiting_entries(checkpoint: &AutomationCheckpoint, now: i64) -> Vec<(String, StepKind)> {
+    let mut due: Vec<(String, StepKind)> = checkpoint
         .steps
         .iter()
         .filter(|(_, entry)| entry.status == StepStatus::Waiting)
