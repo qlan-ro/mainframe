@@ -11,6 +11,7 @@ use mainframe_services::settings::normalize_saved_default_model;
 use mainframe_types::adapter::{SessionOptions, SessionSpawnOptions};
 use mainframe_types::chat::{Chat, ChatMessage, ChatStatus, NewChat, ProcessState, ResolvedTuning};
 use mainframe_types::events::DaemonEvent;
+use mainframe_types::settings::ExecutionMode;
 use tokio::sync::Notify;
 use tracing::{debug, info, warn};
 
@@ -408,10 +409,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         };
 
         if chat.process_state == Some(Some(ProcessState::Working)) {
-            let is_yolo = chat
-                .permission_mode
-                .map(|m| format!("{m:?}").to_lowercase())
-                == Some("yolo".to_string());
+            let is_yolo = chat.permission_mode == Some(ExecutionMode::Yolo);
             // TS: `if yolo → start; else if !hasPending → start`. Both branches call
             // startChat, so the identical arms collapse to one guard (hasPending is
             // still short-circuited when yolo, matching the original evaluation).
@@ -833,9 +831,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
                     project_id: source_chat.project_id.clone(),
                     adapter_id: source_chat.adapter_id.clone(),
                     model: source_chat.model.clone(),
-                    permission_mode: source_chat
-                        .permission_mode
-                        .map(|m| format!("{m:?}").to_lowercase()),
+                    permission_mode: source_chat.permission_mode.map(|m| m.as_str().to_string()),
                     // A fork always creates a durable, project-scoped chat (an
                     // existing caller passing temporary=false, rule 2).
                     temporary: false,
@@ -1343,6 +1339,7 @@ mod tests {
     // ── archiveChat (kills-tasks + releases-scope) ───────────────────────────
     pub(super) struct FakeDeps {
         chat: Chat,
+        created_chat: Mutex<Option<NewChat>>,
         siblings: Vec<Chat>,
         order: Mutex<Vec<String>>,
         pub(super) events: Mutex<Vec<DaemonEvent>>,
@@ -1406,6 +1403,7 @@ mod tests {
         ) -> Arc<Self> {
             Arc::new(Self {
                 chat,
+                created_chat: Mutex::new(None),
                 siblings,
                 order: Mutex::new(Vec::new()),
                 events: Mutex::new(Vec::new()),
@@ -1467,7 +1465,8 @@ mod tests {
         fn chats_get(&self, _id: &str) -> Option<Chat> {
             Some(self.chat.clone())
         }
-        fn chats_create(&self, _new_chat: &NewChat) -> Chat {
+        fn chats_create(&self, new_chat: &NewChat) -> Chat {
+            *self.created_chat.lock().unwrap() = Some(new_chat.clone());
             self.chat.clone()
         }
         fn chats_update(&self, _chat_id: &str, patch: &LifecycleChatUpdate) {
@@ -1614,6 +1613,26 @@ mod tests {
             Arc::new(Mutex::new(MessageCache::new())),
             Arc::new(Mutex::new(PermissionManager::new())),
         )
+    }
+
+    #[tokio::test]
+    async fn fork_to_worktree_keeps_accept_edits_permission_mode() {
+        let mut source = chat_over("source", None, ChatStatus::Active);
+        source.permission_mode = Some(ExecutionMode::AcceptEdits);
+        let deps = FakeDeps::new(source, Vec::new());
+        let mgr = manager(deps.clone());
+
+        mgr.fork_to_worktree("source", "main", "feature")
+            .await
+            .unwrap();
+
+        let created = deps.created_chat.lock().unwrap();
+        let permission = created.as_ref().unwrap().permission_mode.as_deref();
+        assert_eq!(permission, Some("acceptEdits"));
+        let parsed: ExecutionMode =
+            serde_json::from_value(serde_json::Value::String(permission.unwrap().to_string()))
+                .unwrap();
+        assert_eq!(parsed, ExecutionMode::AcceptEdits);
     }
 
     #[tokio::test]
