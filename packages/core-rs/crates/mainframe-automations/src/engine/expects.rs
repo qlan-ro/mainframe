@@ -6,6 +6,7 @@
 use serde_json::{Map, Value};
 
 use crate::domain::{ExpectedOutput, ExpectedOutputType};
+use crate::tokens::value::js_string;
 
 pub(crate) fn build_output_contract(expects: &[ExpectedOutput]) -> String {
     format!(
@@ -97,20 +98,6 @@ fn coerce_field(raw: &Value, field: &ExpectedOutput) -> Result<Value, String> {
             }
             Ok(Value::String(choice))
         }
-    }
-}
-
-/// JS `String(value)` for the scalar shapes a choice can arrive as.
-pub(crate) fn js_string(value: &Value) -> String {
-    match value {
-        Value::String(s) => s.clone(),
-        Value::Number(n) => n
-            .as_f64()
-            .map(crate::tokens::value::js_number_string)
-            .unwrap_or_else(|| n.to_string()),
-        Value::Bool(b) => b.to_string(),
-        Value::Null => "null".to_string(),
-        other => other.to_string(),
     }
 }
 
