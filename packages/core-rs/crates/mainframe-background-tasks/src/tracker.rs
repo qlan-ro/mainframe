@@ -73,6 +73,7 @@ const EVENT_CHANNEL_CAPACITY: usize = 1024;
 
 #[derive(Debug)]
 pub struct BackgroundTaskTracker {
+    pub(crate) process: crate::process::ProcessDeps,
     emitter: broadcast::Sender<TaskEvent>,
     by_chat: Arc<DashMap<String, HashMap<String, BackgroundTask>>>,
     /// Tracker-private: chatId → taskId → pid. Advisory only — every kill re-runs
@@ -87,9 +88,15 @@ impl Default for BackgroundTaskTracker {
 }
 
 impl BackgroundTaskTracker {
+    pub fn with_resolved_path(mut self, path: mainframe_runtime::ResolvedPath) -> Self {
+        self.process = crate::process::ProcessDeps::new(path);
+        self
+    }
+
     pub fn new() -> Self {
         let (emitter, _rx) = broadcast::channel(EVENT_CHANNEL_CAPACITY);
         BackgroundTaskTracker {
+            process: crate::process::ProcessDeps::default(),
             emitter,
             by_chat: Arc::new(DashMap::new()),
             pid_by_chat: Arc::new(DashMap::new()),
