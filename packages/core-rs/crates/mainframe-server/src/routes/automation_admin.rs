@@ -21,13 +21,6 @@ use crate::respond::{fail, ok, ok_empty};
 use crate::routes::automations::{engine, engine_error, unavailable};
 use crate::routes::projects::parse_body;
 
-fn valid_label(label: &str) -> bool {
-    !label.is_empty()
-        && label
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
-}
-
 fn invalid_label(label: &str) -> Response {
     fail(
         StatusCode::BAD_REQUEST,
@@ -95,7 +88,7 @@ async fn get_credential(State(ctx): State<Arc<AppCtx>>, Path(label): Path<String
     let Some(engine) = engine(&ctx) else {
         return unavailable();
     };
-    if !valid_label(&label) {
+    if !mainframe_types::ids::is_safe_identifier(&label) {
         return invalid_label(&label);
     }
     match engine.credential_kind(&label).await {
@@ -117,7 +110,7 @@ async fn put_credential(
     let Some(engine) = engine(&ctx) else {
         return unavailable();
     };
-    if !valid_label(&label) {
+    if !mainframe_types::ids::is_safe_identifier(&label) {
         return invalid_label(&label);
     }
     let Some(parsed): Option<CredentialBody> = parse_body(&body) else {
@@ -139,7 +132,7 @@ async fn delete_credential(State(ctx): State<Arc<AppCtx>>, Path(label): Path<Str
     let Some(engine) = engine(&ctx) else {
         return unavailable();
     };
-    if !valid_label(&label) {
+    if !mainframe_types::ids::is_safe_identifier(&label) {
         return invalid_label(&label);
     }
     match engine.delete_credential(&label).await {

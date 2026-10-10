@@ -24,6 +24,7 @@ mainframe-orchestration = { workspace = true }
 mainframe-acp = { workspace = true }
 mainframe-display = { workspace = true }
 mainframe-types = { workspace = true }
+mainframe-github = { workspace = true }
 mainframe-runtime = { workspace = true }
 mainframe-db = { workspace = true }
 mainframe-git = { workspace = true }

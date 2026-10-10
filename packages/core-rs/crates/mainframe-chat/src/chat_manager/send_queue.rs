@@ -5,6 +5,7 @@
 //! the 300-line cap.
 
 use super::*;
+use mainframe_types::sync::LockExt as _;
 
 impl ChatManager {
     /// Returns the transient metadata for this send, the uuid to force on the
@@ -31,12 +32,7 @@ impl ChatManager {
     ) -> (HashMap<String, serde_json::Value>, String, bool) {
         let adapter_acks_replay = session.supports_replay_ack();
         let is_queued = adapter_acks_replay
-            && post
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .chat
-                .process_state
-                == Some(Some(ProcessState::Working));
+            && post.lock_recover().chat.process_state == Some(Some(ProcessState::Working));
         let mut transient_metadata: HashMap<String, serde_json::Value> = HashMap::new();
         if !attachment_previews.is_empty() {
             transient_metadata.insert(
@@ -68,10 +64,7 @@ impl ChatManager {
             attachment_ids: attachment_ids.filter(|a| !a.is_empty()).map(|a| a.to_vec()),
             timestamp: message.timestamp.clone(),
         };
-        self.queued_refs
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .push(r);
+        self.queued_refs.lock_recover().push(r);
         self.notify_queue_changed(chat_id);
         info!(
             chat_id,
@@ -86,10 +79,7 @@ impl ChatManager {
     /// the call itself then failed — the CLI never got it, so it must not
     /// look queued either.
     pub(super) fn remove_queued_ref(&self, chat_id: &str, uuid: &str) {
-        self.queued_refs
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .retain(|q| q.uuid != uuid);
+        self.queued_refs.lock_recover().retain(|q| q.uuid != uuid);
         self.notify_queue_changed(chat_id);
     }
 }

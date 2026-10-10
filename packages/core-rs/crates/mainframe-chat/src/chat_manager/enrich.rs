@@ -3,6 +3,7 @@
 //! `chat.created` emit go through the same [`Enricher`].
 use super::*;
 use crate::orchestration_hooks::OrchestrationSlot;
+use mainframe_types::sync::LockExt as _;
 
 #[derive(Clone)]
 pub(super) struct Enricher {
@@ -33,10 +34,7 @@ impl Enricher {
     }
 
     fn has_pending(&self, chat_id: &str) -> bool {
-        self.permissions
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .has_pending(chat_id)
+        self.permissions.lock_recover().has_pending(chat_id)
     }
 
     /// Sets every derived field: display status, background activity, the

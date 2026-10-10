@@ -5,6 +5,7 @@
 //! trait interfaces that `packages/types/src/plugin.ts` deferred to the plugins
 //! crate (they carry method signatures / futures, not serde data).
 
+use mainframe_types::sync::LockExt as _;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -163,16 +164,13 @@ pub struct PluginContext {
 impl PluginContext {
     /// `onUnload(fn)` — register a teardown callback.
     pub(crate) fn on_unload(&self, cb: impl FnOnce() + Send + 'static) {
-        self.on_unload
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .push(Box::new(cb));
+        self.on_unload.lock_recover().push(Box::new(cb));
     }
 
     /// Drain and return the registered teardown callbacks (the manager runs them
     /// during `unloadAll`).
     pub(crate) fn take_unload_callbacks(&self) -> Vec<UnloadFn> {
-        std::mem::take(&mut *self.on_unload.lock().unwrap_or_else(|e| e.into_inner()))
+        std::mem::take(&mut *self.on_unload.lock_recover())
     }
 }
 

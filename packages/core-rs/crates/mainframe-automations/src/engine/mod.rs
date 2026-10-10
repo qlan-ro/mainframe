@@ -26,9 +26,6 @@ pub use markers::{RETRY_ATTEMPT_KIND, is_engine_marker};
 pub use notify_verb::NotifyVerb;
 pub use run_action_verb::RunActionVerb;
 
-use std::future::Future;
-use std::pin::Pin;
-
 use serde_json::{Map, Value};
 
 use crate::domain::{AskAgentStep, AskMeStep, NotifyStep, RunActionStep};
@@ -37,7 +34,7 @@ use crate::tokens::{NameMap, Scope};
 
 /// Local dyn-future alias (the repo's `mainframe-adapter-api::BoxFuture`
 /// pattern — this crate must not depend on adapter-api).
-pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+pub use mainframe_types::BoxFuture;
 
 /// One verb execution's result.
 #[derive(Debug, Clone, PartialEq)]

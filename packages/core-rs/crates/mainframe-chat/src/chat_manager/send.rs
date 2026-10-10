@@ -4,6 +4,7 @@
 //! `send_queue.rs`.
 
 use super::*;
+use mainframe_types::sync::LockExt as _;
 
 /// Everything the plain-text tail needs from attachment processing, with the
 /// typed text already folded in.
@@ -23,13 +24,7 @@ impl ChatManager {
     /// stored provisional title) still wins, and so does disabled generation
     /// (`do_generate_title`'s own no-op).
     fn assign_initial_title(&self, cell: &Arc<Mutex<ActiveChat>>, chat_id: &str, content: &str) {
-        let current_title = cell
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .chat
-            .title
-            .clone()
-            .unwrap_or_default();
+        let current_title = cell.lock_recover().chat.title.clone().unwrap_or_default();
         let title_empty = current_title.is_empty();
         let is_untouched_fork_title = self
             .deps
@@ -46,7 +41,7 @@ impl ChatManager {
         if title_empty {
             let title = derive_title_from_message(&visible_content);
             {
-                let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+                let mut guard = cell.lock_recover();
                 guard.chat.title = Some(title.clone());
             }
             self.deps.chats_update(
@@ -56,7 +51,7 @@ impl ChatManager {
                     ..Default::default()
                 },
             );
-            let chat = cell.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
+            let chat = cell.lock_recover().chat.clone();
             self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
         }
         // Title generation runs WITHOUT awaiting: it shells out to the CLI, so
@@ -89,8 +84,7 @@ impl ChatManager {
     ) -> ChatMessage {
         let message = self
             .messages
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .create_transient_message_with_vendor_id(
                 chat_id,
                 ChatMessageType::User,
@@ -103,8 +97,7 @@ impl ChatManager {
                 vendor_id,
             );
         self.messages
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .append(chat_id, message.clone());
         self.event_handler.emit_display(chat_id);
         if attachment_ids.map(|a| !a.is_empty()).unwrap_or(false) {
@@ -168,12 +161,8 @@ impl ChatManager {
         // A command dispatched while another turn is already running is not a
         // turn start — a turn is already in progress. Only a command sent to a
         // free chat opens one.
-        let was_working = post
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .chat
-            .process_state
-            == Some(Some(ProcessState::Working));
+        let was_working =
+            post.lock_recover().chat.process_state == Some(Some(ProcessState::Working));
         self.store_user_message(
             chat_id,
             vec![MessageContent::Leaf(LeafContent::Text {
@@ -202,7 +191,7 @@ impl ChatManager {
         }
         let now = now_iso8601();
         self.set_working(post, chat_id, &now);
-        let chat = post.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
+        let chat = post.lock_recover().chat.clone();
         self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
         // Commands are never queued behind a running turn, so acceptance
         // (send_entry.rs) and start are the same moment — UNLESS a turn was
@@ -274,8 +263,7 @@ impl ChatManager {
                         self.remove_queued_ref(chat_id, &message_uuid);
                     }
                     self.messages
-                        .lock()
-                        .unwrap_or_else(|e| e.into_inner())
+                        .lock_recover()
                         .remove_by_id(chat_id, &message.id);
                     self.event_handler.emit_display(chat_id);
                     return Err(err.into());
@@ -318,7 +306,7 @@ impl ChatManager {
 
         let now = now_iso8601();
         self.set_working(post, chat_id, &now);
-        let chat = post.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
+        let chat = post.lock_recover().chat.clone();
         self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
 
         let uuid = Some(message_uuid.clone());

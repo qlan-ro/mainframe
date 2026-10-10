@@ -7,12 +7,28 @@
 //! the wire shape (JS `Date.toISOString()`) has millisecond precision and a literal `Z`
 //! (`...30.123Z`). Use these helpers, never `to_rfc3339()`, for wire output.
 
-use chrono::{DateTime, SecondsFormat, Utc};
+use chrono::{DateTime, FixedOffset, Local, SecondsFormat, Utc};
 
 /// Formats `dt` exactly as JS `Date.prototype.toISOString()` does: millisecond
 /// precision, `Z` suffix (e.g. `2026-07-08T10:15:30.000Z`).
 pub fn to_iso8601(dt: DateTime<Utc>) -> String {
     dt.to_rfc3339_opts(SecondsFormat::Millis, true)
+}
+
+pub fn now_ms() -> i64 {
+    Utc::now().timestamp_millis()
+}
+
+pub trait Clock: Send + Sync {
+    fn now(&self) -> DateTime<FixedOffset>;
+}
+
+pub struct SystemClock;
+
+impl Clock for SystemClock {
+    fn now(&self) -> DateTime<FixedOffset> {
+        Local::now().fixed_offset()
+    }
 }
 
 /// The current UTC instant as an ISO-8601 millis/`Z` string, matching
@@ -42,6 +58,15 @@ mod tests {
             .with_nanosecond(123_456_000)
             .unwrap();
         assert_eq!(to_iso8601(dt), "2026-07-08T10:15:30.123Z");
+    }
+
+    #[test]
+    fn system_clock_carries_local_offset() {
+        let now = SystemClock.now();
+        assert_eq!(
+            now.offset().local_minus_utc(),
+            Local::now().offset().local_minus_utc()
+        );
     }
 
     #[test]

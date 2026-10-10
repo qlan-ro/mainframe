@@ -12,6 +12,7 @@
 //! `tool_use` naming a subagent tool starts a task, and the matching `tool_result`
 //! ends it. Work that a recording never resolves stays running, which is exactly
 //! what a fixture wants when the point is to show live work.
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -131,8 +132,7 @@ impl TaskBridge {
         };
         let task_id = format!("mock-{tool_use_id}");
         self.started
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .insert(tool_use_id.to_string(), task_id.clone());
         self.tracker.start(
             chat_id,
@@ -175,11 +175,7 @@ impl TaskBridge {
     }
 
     fn end(&self, chat_id: &str, tool_use_id: &str, content: &str, is_error: bool) {
-        let task_id = self
-            .started
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .remove(tool_use_id);
+        let task_id = self.started.lock_recover().remove(tool_use_id);
         let Some(task_id) = task_id else {
             return; // a result for foreground work, or for a task we never started
         };

@@ -7,7 +7,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
             uuid, "onQueuedProcessed: moving queued message to end + clearing flag"
         );
         let found_id = {
-            let msgs = self.messages.lock().unwrap_or_else(|e| e.into_inner());
+            let msgs = self.messages.lock_recover();
             msgs.get(&self.chat_id).and_then(|v| {
                 v.iter()
                     .find(|m| {
@@ -22,8 +22,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         };
         if let Some(id) = &found_id {
             self.messages
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
+                .lock_recover()
                 .strip_queued_and_move_to_end(&self.chat_id, id);
         }
         if found_id.is_some() {
@@ -59,8 +58,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
                 cached_queued_uuids.insert(u.clone());
                 if !ref_uuids.contains(&u) {
                     self.messages
-                        .lock()
-                        .unwrap_or_else(|e| e.into_inner())
+                        .lock_recover()
                         .strip_queued_and_move_to_end(&self.chat_id, &id);
                     display_changed = true;
                     warn!(
@@ -97,7 +95,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
     }
     fn queued_snapshot(&self) -> Vec<(String, Option<String>, bool)> {
         {
-            let msgs = self.messages.lock().unwrap_or_else(|e| e.into_inner());
+            let msgs = self.messages.lock_recover();
             msgs.get(&self.chat_id)
                 .map(|v| {
                     v.iter()

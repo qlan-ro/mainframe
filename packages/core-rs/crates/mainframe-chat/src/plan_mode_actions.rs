@@ -3,6 +3,7 @@
 //! active-chat/message/permission state via the narrow `PlanHost` seam, so this
 //! module never names `EhDeps`/`LcDeps` and `chat_manager.rs` stays wiring-only.
 
+use mainframe_types::sync::LockExt as _;
 use std::sync::{Arc, Mutex};
 
 use dashmap::DashMap;
@@ -99,8 +100,7 @@ impl ChatPlanActionCtx {
     }
 
     fn session(&self) -> Option<Arc<dyn mainframe_adapter_api::AdapterSession>> {
-        self.active()
-            .and_then(|a| a.lock().unwrap_or_else(|e| e.into_inner()).session.clone())
+        self.active().and_then(|a| a.lock_recover().session.clone())
     }
 }
 
@@ -111,7 +111,7 @@ impl PlanActionContext for ChatPlanActionCtx {
 
     fn update_chat(&self, patch: PlanChatUpdate) {
         if let Some(active) = self.active() {
-            let mut guard = active.lock().unwrap_or_else(|e| e.into_inner());
+            let mut guard = active.lock_recover();
             if let Some(plan_mode) = patch.plan_mode {
                 guard.chat.plan_mode = Some(plan_mode);
             }
@@ -136,9 +136,7 @@ impl PlanActionContext for ChatPlanActionCtx {
     }
 
     fn emit_chat_updated(&self) {
-        let chat = self
-            .active()
-            .map(|a| a.lock().unwrap_or_else(|e| e.into_inner()).chat.clone());
+        let chat = self.active().map(|a| a.lock_recover().chat.clone());
         if let Some(chat) = chat {
             self.host
                 .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
@@ -191,19 +189,18 @@ impl PlanActionContext for ChatPlanActionCtx {
 
     fn clear_active_session(&self) {
         if let Some(active) = self.active() {
-            active.lock().unwrap_or_else(|e| e.into_inner()).session = None;
+            active.lock_recover().session = None;
         }
     }
 
     fn permissions_shift(&self) {
         self.permissions
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .shift(&self.chat_id, &self.request_id);
     }
 
     fn recover_latest_plan_file(&self) -> Option<String> {
-        let messages = self.messages.lock().unwrap_or_else(|e| e.into_inner());
+        let messages = self.messages.lock_recover();
         extract_latest_plan_file_from_messages(messages.get(&self.chat_id)?)
     }
 
@@ -212,10 +209,7 @@ impl PlanActionContext for ChatPlanActionCtx {
     }
 
     fn clear_messages(&self) {
-        self.messages
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .set(&self.chat_id, Vec::new());
+        self.messages.lock_recover().set(&self.chat_id, Vec::new());
     }
 
     fn clear_display_state(&self) {

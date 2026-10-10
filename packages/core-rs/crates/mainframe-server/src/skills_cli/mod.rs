@@ -29,7 +29,7 @@ pub use run::ProcessRunner;
 /// `impl Future` (a trait method), so it's boxed like the three other
 /// crate-level precedents (`mainframe-adapter-api`, `mainframe-automations`,
 /// `mainframe-launch`).
-pub type BoxFuture<'a, T> = std::pin::Pin<Box<dyn std::future::Future<Output = T> + Send + 'a>>;
+pub use mainframe_types::BoxFuture;
 
 /// One CLI invocation: program, argv (never a shell string), and cwd.
 #[derive(Debug, Clone)]

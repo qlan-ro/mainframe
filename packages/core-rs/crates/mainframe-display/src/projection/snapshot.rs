@@ -7,6 +7,7 @@
 //! call it while `emit_display_for` still holds the cache lock (lock order:
 //! cache lock, then this mutex — never the reverse).
 
+use mainframe_types::sync::LockExt as _;
 use std::sync::{Arc, Mutex};
 
 use mainframe_types::display::DisplayMessage;
@@ -40,9 +41,7 @@ impl DisplaySnapshot {
         // denied by workspace lint): no panic ever runs while this mutex is
         // held, so poisoning should not occur, but a stale snapshot beats a
         // crash in the display path.
-        self.0
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+        self.0.lock_recover()
     }
 }
 

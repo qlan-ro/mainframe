@@ -4,9 +4,10 @@
 //! debounce emits one trailing `file:changed` event per burst. Reference counts
 //! keep each watcher alive until its final subscriber leaves.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
 use mainframe_types::events::DaemonEvent;
@@ -46,7 +47,7 @@ impl FileWatcherService {
     }
 
     fn lock(&self) -> MutexGuard<'_, HashMap<String, WatchEntry>> {
-        self.watchers.lock().unwrap_or_else(PoisonError::into_inner)
+        self.watchers.lock_recover()
     }
 
     #[cfg(test)]
@@ -186,7 +187,7 @@ impl FileWatcherService {
 }
 
 fn schedule_emit(map: &Arc<WatcherMap>, path: &str, broadcast: &BroadcastFn, rt: Option<&Handle>) {
-    let mut guard = map.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut guard = map.lock_recover();
     let Some(entry) = guard.get_mut(path) else {
         return;
     };
@@ -208,7 +209,7 @@ fn schedule_emit(map: &Arc<WatcherMap>, path: &str, broadcast: &BroadcastFn, rt:
             let handle = rt.spawn(async move {
                 tokio::time::sleep(Duration::from_millis(DEBOUNCE_MS)).await;
                 if let Some(map) = weak.upgrade() {
-                    let mut guard = map.lock().unwrap_or_else(PoisonError::into_inner);
+                    let mut guard = map.lock_recover();
                     if let Some(entry) = guard.get_mut(&path_owned) {
                         entry.debounce = None;
                     }
@@ -228,7 +229,7 @@ fn schedule_emit(map: &Arc<WatcherMap>, path: &str, broadcast: &BroadcastFn, rt:
 }
 
 fn cleanup(map: &WatcherMap, path: &str) {
-    let mut guard = map.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut guard = map.lock_recover();
     let Some(mut entry) = guard.remove(path) else {
         return;
     };

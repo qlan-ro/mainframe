@@ -7,6 +7,7 @@
 //! eviction task can delete its own entry without reaching the whole session
 //! state.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -142,7 +143,7 @@ impl ClaudeTaskEvents {
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
-        self.inner.lock().unwrap_or_else(|e| e.into_inner())
+        self.inner.lock_recover()
     }
 
     /// Called from events.rs for every tool_use event.
@@ -179,7 +180,7 @@ impl ClaudeTaskEvents {
         // runtime alive.
         let timer = tokio::spawn(async move {
             tokio::time::sleep(Duration::from_millis(METADATA_TTL_MS)).await;
-            let mut g = inner.lock().unwrap_or_else(|e| e.into_inner());
+            let mut g = inner.lock_recover();
             g.metadata.remove(&evict_id);
             g.eviction_timers.remove(&evict_id);
         });

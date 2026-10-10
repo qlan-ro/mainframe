@@ -1,18 +1,13 @@
-//! Adapts `mainframe_automations::github_issues::GitHubIssuesClient` to the
-//! plugins-crate `GitHubIssues` port. This is where their independent DTO sets
-//! meet: the plugins crate cannot depend on automations, so the shapes are
-//! converted here. The token
-//! is read from the credential store on every call, not cached at
-//! construction, so a token connected after boot (via the link dialog) works
-//! without a daemon restart.
+//! Adapts the shared GitHub Issues client to the capability-gated plugin port.
+//! Credentials are read on every call so a newly connected token works without restart.
 
 use std::sync::Arc;
 
 use mainframe_automations::credentials::CredentialStore;
-use mainframe_automations::github_issues::{self as gh, GitHubIssuesClient};
+use mainframe_github::github_issues::GitHubIssuesClient;
 use mainframe_plugins::{
     BoxFuture, CreateIssue, GitHubIssues, GitHubPortError, IssueFieldTimes, IssuePatch,
-    IssueSnapshot, IssueState, RepoRef,
+    IssueSnapshot, RepoRef,
 };
 
 pub struct DaemonGitHubIssuesPort {
@@ -21,7 +16,7 @@ pub struct DaemonGitHubIssuesPort {
 }
 
 impl DaemonGitHubIssuesPort {
-    pub fn new(credentials: Arc<dyn CredentialStore>) -> Result<Self, gh::GitHubError> {
+    pub fn new(credentials: Arc<dyn CredentialStore>) -> Result<Self, GitHubPortError> {
         Ok(Self {
             client: GitHubIssuesClient::new()?,
             credentials,
@@ -32,7 +27,7 @@ impl DaemonGitHubIssuesPort {
     pub fn with_base_url(
         base_url: impl Into<String>,
         credentials: Arc<dyn CredentialStore>,
-    ) -> Result<Self, gh::GitHubError> {
+    ) -> Result<Self, GitHubPortError> {
         Ok(Self {
             client: GitHubIssuesClient::with_base_url(base_url)?,
             credentials,
@@ -59,15 +54,11 @@ impl GitHubIssues for DaemonGitHubIssuesPort {
         repo: &RepoRef,
         credential_label: &str,
     ) -> BoxFuture<'_, Result<Vec<IssueSnapshot>, GitHubPortError>> {
-        let repo = to_automations_repo(repo);
+        let repo = repo.clone();
         let label = credential_label.to_string();
         Box::pin(async move {
             let token = self.token(&label).await?;
-            self.client
-                .list_open_issues(&repo, &token)
-                .await
-                .map(|issues| issues.into_iter().map(from_automations_snapshot).collect())
-                .map_err(map_error)
+            self.client.list_open_issues(&repo, &token).await
         })
     }
 
@@ -77,15 +68,11 @@ impl GitHubIssues for DaemonGitHubIssuesPort {
         number: u64,
         credential_label: &str,
     ) -> BoxFuture<'_, Result<IssueSnapshot, GitHubPortError>> {
-        let repo = to_automations_repo(repo);
+        let repo = repo.clone();
         let label = credential_label.to_string();
         Box::pin(async move {
             let token = self.token(&label).await?;
-            self.client
-                .get_issue(&repo, number, &token)
-                .await
-                .map(from_automations_snapshot)
-                .map_err(map_error)
+            self.client.get_issue(&repo, number, &token).await
         })
     }
 
@@ -95,18 +82,11 @@ impl GitHubIssues for DaemonGitHubIssuesPort {
         number: u64,
         credential_label: &str,
     ) -> BoxFuture<'_, Result<IssueFieldTimes, GitHubPortError>> {
-        let repo = to_automations_repo(repo);
+        let repo = repo.clone();
         let label = credential_label.to_string();
         Box::pin(async move {
             let token = self.token(&label).await?;
-            self.client
-                .issue_field_times(&repo, number, &token)
-                .await
-                .map(|times| IssueFieldTimes {
-                    title_at: times.title_at,
-                    state_at: times.state_at,
-                })
-                .map_err(map_error)
+            self.client.issue_field_times(&repo, number, &token).await
         })
     }
 
@@ -116,20 +96,11 @@ impl GitHubIssues for DaemonGitHubIssuesPort {
         input: CreateIssue,
         credential_label: &str,
     ) -> BoxFuture<'_, Result<IssueSnapshot, GitHubPortError>> {
-        let repo = to_automations_repo(repo);
+        let repo = repo.clone();
         let label = credential_label.to_string();
-        let input = gh::CreateIssue {
-            title: input.title,
-            body: input.body,
-            labels: input.labels,
-        };
         Box::pin(async move {
             let token = self.token(&label).await?;
-            self.client
-                .create_issue(&repo, input, &token)
-                .await
-                .map(from_automations_snapshot)
-                .map_err(map_error)
+            self.client.create_issue(&repo, input, &token).await
         })
     }
 
@@ -140,64 +111,11 @@ impl GitHubIssues for DaemonGitHubIssuesPort {
         patch: IssuePatch,
         credential_label: &str,
     ) -> BoxFuture<'_, Result<IssueSnapshot, GitHubPortError>> {
-        let repo = to_automations_repo(repo);
+        let repo = repo.clone();
         let label = credential_label.to_string();
-        let patch = gh::IssuePatch {
-            title: patch.title,
-            body: patch.body,
-            labels: patch.labels,
-            state: patch.state.map(to_automations_state),
-            state_reason: patch.state_reason,
-        };
         Box::pin(async move {
             let token = self.token(&label).await?;
-            self.client
-                .update_issue(&repo, number, patch, &token)
-                .await
-                .map(from_automations_snapshot)
-                .map_err(map_error)
+            self.client.update_issue(&repo, number, patch, &token).await
         })
-    }
-}
-
-fn to_automations_repo(repo: &RepoRef) -> gh::RepoRef {
-    gh::RepoRef {
-        owner: repo.owner.clone(),
-        repo: repo.repo.clone(),
-    }
-}
-
-fn to_automations_state(state: IssueState) -> gh::IssueState {
-    match state {
-        IssueState::Open => gh::IssueState::Open,
-        IssueState::Closed => gh::IssueState::Closed,
-    }
-}
-
-fn from_automations_snapshot(snapshot: gh::IssueSnapshot) -> IssueSnapshot {
-    IssueSnapshot {
-        number: snapshot.number,
-        title: snapshot.title,
-        body: snapshot.body,
-        labels: snapshot.labels,
-        state: match snapshot.state {
-            gh::IssueState::Open => IssueState::Open,
-            gh::IssueState::Closed => IssueState::Closed,
-        },
-        html_url: snapshot.html_url,
-        updated_at: snapshot.updated_at,
-    }
-}
-
-fn map_error(err: gh::GitHubError) -> GitHubPortError {
-    match err {
-        gh::GitHubError::NotFound => GitHubPortError::NotFound,
-        gh::GitHubError::Moved => GitHubPortError::Moved,
-        gh::GitHubError::Auth(message) => GitHubPortError::Auth(message),
-        gh::GitHubError::RateLimited { wait } => GitHubPortError::RateLimited { wait },
-        gh::GitHubError::Network(message) => GitHubPortError::Network(message),
-        gh::GitHubError::Request { status, message } => {
-            GitHubPortError::Request { status, message }
-        }
     }
 }

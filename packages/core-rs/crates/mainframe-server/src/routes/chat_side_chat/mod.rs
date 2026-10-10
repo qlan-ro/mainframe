@@ -16,8 +16,8 @@ use mainframe_chat::chat_manager::OpenSideChatError;
 
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok};
-use crate::routes::identifier::is_identifier;
 use crate::routes::projects::parse_body;
+use mainframe_types::ids::is_safe_identifier;
 
 #[cfg(test)]
 mod tests;
@@ -37,7 +37,7 @@ async fn open_side_chat(
     Path(id): Path<String>,
     body: Bytes,
 ) -> Response {
-    if !is_identifier(&id) {
+    if !is_safe_identifier(&id) {
         return fail(StatusCode::BAD_REQUEST, "Invalid chat id");
     }
     if parse_body::<OpenSideChatBody>(&body).is_none() {

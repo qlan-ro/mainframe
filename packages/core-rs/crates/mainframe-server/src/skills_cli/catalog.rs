@@ -37,7 +37,7 @@ pub struct HttpFetcher;
 impl RegistryFetcher for HttpFetcher {
     fn get(&self, url: String) -> BoxFuture<'_, Result<String, String>> {
         Box::pin(async move {
-            let client = reqwest::Client::builder()
+            let client = mainframe_runtime::http::builder()
                 .timeout(REQUEST_TIMEOUT)
                 .build()
                 .map_err(|e| e.to_string())?;

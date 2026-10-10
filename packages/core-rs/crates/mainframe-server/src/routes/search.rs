@@ -16,10 +16,10 @@ use mainframe_types::search::SearchContentResult;
 
 use crate::ctx::AppCtx;
 use crate::fs_utils::{has_binary_extension, relative};
-use crate::path_utils::is_within_base;
 use crate::respond::{fail, ok};
 use crate::ripgrep::{RipgrepOptions, search_with_ripgrep};
 use crate::routes::files::resolve_base;
+use mainframe_runtime::fs::is_within_base;
 
 const MAX_RESULTS: usize = 200;
 const MAX_FILE_SIZE: u64 = 1024 * 1024; // 1MB

@@ -4,13 +4,13 @@ use std::sync::Arc;
 
 use mainframe_adapter_api::AdapterRegistry;
 use mainframe_adapter_api::{AdapterSession, BoxFuture};
-use mainframe_runtime::time::now_iso8601;
 use mainframe_types::chat::{ChatMessage, MessageContent, MessageContentNode};
 use mainframe_types::content::LeafContent;
 use mainframe_types::context::{
     ContextFile, MentionKind, MentionSource, SessionAttachment, SessionContext, SessionMention,
     SkillFileEntry,
 };
+use mainframe_types::time::now_iso8601;
 
 /// The `db.chats.*` surface `context-tracker` reads (narrow slice of `DatabaseManager`).
 pub trait ContextDb: Send + Sync {

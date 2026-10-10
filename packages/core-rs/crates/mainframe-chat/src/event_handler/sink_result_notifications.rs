@@ -61,8 +61,13 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
     }
     fn notify_result_complete(&self, cost: f64) {
         let last_text = {
-            let msgs = self.messages.lock().unwrap_or_else(|e| e.into_inner());
-            get_last_assistant_text(msgs.get(&self.chat_id))
+            let msgs = self.messages.lock_recover();
+            mainframe_types::chat_text::truncate_with_ellipsis(
+                &mainframe_types::chat_text::last_assistant_text(
+                    msgs.get(&self.chat_id).map(Vec::as_slice).unwrap_or(&[]),
+                ),
+                PUSH_BODY_MAX_LENGTH,
+            )
         };
         let body = if last_text.is_empty() {
             format!("Session finished (cost: ${cost:.4})")

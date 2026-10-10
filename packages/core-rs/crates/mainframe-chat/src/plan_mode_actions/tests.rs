@@ -9,10 +9,10 @@
 use super::*;
 use crate::chat_manager::tests::StoreDeps;
 use crate::test_support::test_chat;
-use mainframe_runtime::time::now_iso8601;
 use mainframe_types::adapter::ControlRequest;
 use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent};
 use mainframe_types::content::LeafContent;
+use mainframe_types::time::now_iso8601;
 use std::collections::HashMap;
 
 #[derive(Default)]

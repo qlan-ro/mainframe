@@ -1,5 +1,6 @@
 //! In-memory `OrchestrationPort` for the tool tests.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
@@ -105,7 +106,7 @@ impl FakePort {
     }
 
     pub fn lock(&self) -> std::sync::MutexGuard<'_, FakeState> {
-        self.state.lock().unwrap_or_else(|e| e.into_inner())
+        self.state.lock_recover()
     }
 
     /// Inserts a default chat and returns a copy to tweak and `put` back.

@@ -2,6 +2,7 @@
 //! runs PR scanning at the one seam every adapter crosses.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -21,7 +22,7 @@ struct RecordingSink {
 
 impl RecordingSink {
     fn prs(&self) -> Vec<DetectedPr> {
-        self.prs.lock().unwrap_or_else(|e| e.into_inner()).clone()
+        self.prs.lock_recover().clone()
     }
 }
 
@@ -41,7 +42,7 @@ impl SessionSink for RecordingSink {
     fn on_queued_processed(&self, _uuid: &str) {}
     fn on_todo_update(&self, _todos: Vec<TodoItem>) {}
     fn on_pr_detected(&self, pr: DetectedPr) {
-        self.prs.lock().unwrap_or_else(|e| e.into_inner()).push(pr);
+        self.prs.lock_recover().push(pr);
     }
     fn on_cli_message(&self, _text: &str) {}
     fn on_skill_loaded(&self, _entry: LoadedSkill) {}

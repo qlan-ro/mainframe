@@ -8,6 +8,7 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+mainframe-runtime = { workspace = true }
 tokio = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
@@ -15,8 +16,6 @@ serde_json = { workspace = true }
 rusqlite = { workspace = true }
 chrono = { workspace = true }
 croner = { workspace = true }
-hmac = { workspace = true }
-sha2 = { workspace = true }
 hex = { workspace = true }
 rand = { workspace = true }
 dirs = { workspace = true }
@@ -25,8 +24,11 @@ nanoid = { workspace = true }
 tracing = { workspace = true }
 keyring = { workspace = true }
 mainframe-types = { workspace = true }
+mainframe-github = { workspace = true }
 
 [dev-dependencies]
+hmac = { workspace = true }
+sha2 = { workspace = true }
 chrono-tz = { workspace = true }
 tempfile = { workspace = true }
 wiremock = { workspace = true }

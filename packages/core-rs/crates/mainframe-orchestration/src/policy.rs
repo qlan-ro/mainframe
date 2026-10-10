@@ -1,6 +1,7 @@
 //! Limits and the privilege ceiling. The numbers are first guesses (spec "Open
 //! questions") kept in one place so tuning them is a one-line change.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -197,7 +198,7 @@ impl CreationLimiter {
     /// Creations `chat_id` may still make in the current window.
     pub fn remaining(&self, chat_id: &str) -> usize {
         let now = self.clock.now();
-        let mut events = self.events.lock().unwrap_or_else(|e| e.into_inner());
+        let mut events = self.events.lock_recover();
         let used = prune(events.entry(chat_id.to_string()).or_default(), now);
         CREATION_LIMIT.saturating_sub(used)
     }
@@ -205,7 +206,7 @@ impl CreationLimiter {
     /// Records one creation, or refuses it when the window is full.
     pub(crate) fn try_acquire(&self, chat_id: &str) -> Result<(), ToolError> {
         let now = self.clock.now();
-        let mut events = self.events.lock().unwrap_or_else(|e| e.into_inner());
+        let mut events = self.events.lock_recover();
         let window = events.entry(chat_id.to_string()).or_default();
         if prune(window, now) >= CREATION_LIMIT {
             return Err(ToolError::new(

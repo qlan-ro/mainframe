@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::time::Duration;
 
+use mainframe_git::git_parse::{WorktreeEntry, parse_worktree_list};
 use mainframe_types::chat::Project;
-use serde::{Deserialize, Serialize};
 
 /// Default `execGit` timeout (30s). `0` means no timeout — for genuinely
 /// long-running operations such as `worktree add`.
@@ -46,13 +46,6 @@ async fn exec_git(args: &[&str], cwd: &str, timeout_ms: u64) -> Result<String, W
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct WorktreeEntry {
-    pub path: String,
-    // Wire contract: serialize an absent branch as null, not an omitted key.
-    pub branch: Option<String>,
-}
-
 /// True when `worktreePath` is a usable git worktree: the directory exists AND
 /// carries a `.git` entry. Guards against orphaned stub dirs.
 pub fn is_worktree_present(worktree_path: &str) -> bool {
@@ -68,32 +61,6 @@ pub fn is_directory_present(path: &str) -> bool {
 
 pub async fn is_directory_present_async(path: &str) -> bool {
     tokio::fs::metadata(path).await.is_ok_and(|m| m.is_dir())
-}
-
-pub fn parse_worktree_list(output: &str) -> Vec<WorktreeEntry> {
-    let mut entries: Vec<WorktreeEntry> = Vec::new();
-    let mut current_path: Option<String> = None;
-    let mut current_branch: Option<String> = None;
-
-    for line in output.split('\n') {
-        if let Some(rest) = line.strip_prefix("worktree ") {
-            current_path = Some(rest.to_string());
-            current_branch = None;
-        } else if let Some(rest) = line.strip_prefix("branch ") {
-            current_branch = Some(rest.to_string());
-        } else if line == "detached" {
-            current_branch = None;
-        } else if line.is_empty() && current_path.is_some() {
-            entries.push(WorktreeEntry {
-                path: current_path.take().unwrap_or_default(),
-                branch: current_branch.take(),
-            });
-            current_path = None;
-            current_branch = None;
-        }
-    }
-
-    entries
 }
 
 /// `refs/heads/feat/x` → `feat/x`. `strip_prefix`, not `replace`: a branch named

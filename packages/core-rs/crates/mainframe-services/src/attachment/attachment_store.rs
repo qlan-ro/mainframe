@@ -3,12 +3,6 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 /// A single safe path segment — matches nanoid's alphabet; rejects `..`, `/`, etc.
-fn is_safe_segment(s: &str) -> bool {
-    // /^[A-Za-z0-9_-]+$/
-    !s.is_empty()
-        && s.bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -72,7 +66,7 @@ impl AttachmentStore {
     /// Resolve a chat's attachment dir, rejecting any chatId that is not a single
     /// safe path segment, closing the path-traversal seam.
     fn chat_dir(&self, chat_id: &str) -> Result<PathBuf, AttachmentError> {
-        if !is_safe_segment(chat_id) {
+        if !mainframe_types::ids::is_safe_identifier(chat_id) {
             return Err(AttachmentError::Message(format!(
                 "Invalid chatId path segment: {chat_id:?}"
             )));
@@ -134,14 +128,18 @@ impl AttachmentStore {
     ) -> Result<String, AttachmentError> {
         let safe_name = sanitize_file_name(&attachment.name);
         let materialized = files_dir.join(format!("{id}-{safe_name}"));
-        tokio::fs::write(&materialized, decode_base64(&attachment.data)).await?;
+        tokio::fs::write(
+            &materialized,
+            mainframe_types::base64_data::decode_lenient(&attachment.data),
+        )
+        .await?;
         Ok(materialized.to_string_lossy().into_owned())
     }
 
     pub async fn get(&self, chat_id: &str, attachment_id: &str) -> Option<StoredAttachment> {
         // `attachment_id` is a caller-supplied path segment; reject anything that
         // isn't a single safe segment before it can escape the chat dir.
-        if !is_safe_segment(attachment_id) {
+        if !mainframe_types::ids::is_safe_identifier(attachment_id) {
             return None;
         }
         let dir = self.chat_dir(chat_id).ok()?;
@@ -248,38 +246,6 @@ fn sanitize_file_name(name: &str) -> String {
     } else {
         "attachment.bin".to_string()
     }
-}
-
-/// Lenient base64 decoder: skips invalid characters rather than failing.
-fn decode_base64(input: &str) -> Vec<u8> {
-    fn val(c: u8) -> Option<u8> {
-        match c {
-            b'A'..=b'Z' => Some(c - b'A'),
-            b'a'..=b'z' => Some(c - b'a' + 26),
-            b'0'..=b'9' => Some(c - b'0' + 52),
-            b'+' => Some(62),
-            b'/' => Some(63),
-            _ => None,
-        }
-    }
-    let mut out = Vec::new();
-    let mut buf: u32 = 0;
-    let mut bits: u32 = 0;
-    for &c in input.as_bytes() {
-        if c == b'=' {
-            break;
-        }
-        let Some(v) = val(c) else {
-            continue; // skip whitespace and invalid characters
-        };
-        buf = (buf << 6) | u32::from(v);
-        bits += 6;
-        if bits >= 8 {
-            bits -= 8;
-            out.push((buf >> bits) as u8);
-        }
-    }
-    out
 }
 
 #[cfg(test)]

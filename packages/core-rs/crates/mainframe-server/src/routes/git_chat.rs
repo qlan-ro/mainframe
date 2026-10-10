@@ -23,8 +23,8 @@ use serde_json::{Map, Value, json};
 
 use crate::async_err::internal_error;
 use crate::ctx::AppCtx;
-use crate::path_utils::resolve_and_validate_path;
 use crate::respond::{fail, ok, ok_empty};
+use mainframe_runtime::fs::resolve_and_validate_path;
 
 use super::git::{
     chat_worktree_missing, get_effective_path, git_error_message, is_not_git_repo_err,

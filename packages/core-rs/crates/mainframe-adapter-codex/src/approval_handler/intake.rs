@@ -2,6 +2,7 @@
 //! `requestUserInput` routes to, what `input` it carries, and which option
 //! list the gate offers. The answer path back out lives in `answers.rs`.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 
 use mainframe_adapter_api::ControlRequest;
@@ -73,7 +74,7 @@ impl ApprovalHandler {
                 .map(|groups| groups.iter().flatten().cloned().collect())
                 .unwrap_or_default();
 
-            let plan_ctx = self.plan_context.lock().unwrap_or_else(|e| e.into_inner());
+            let plan_ctx = self.plan_context.lock_recover();
             let is_plan_exit = plan_ctx.plan_mode
                 && plan_ctx.current_turn_plan.is_some()
                 && raw_options.as_ref().map(|o| o.len() == 2).unwrap_or(false);
@@ -148,20 +149,17 @@ impl ApprovalHandler {
             options,
         };
 
-        self.pending
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .insert(
-                mainframe_request_id.clone(),
-                PendingApproval {
-                    json_rpc_id: json_rpc_id.clone(),
-                    respond,
-                    method: method.to_string(),
-                    tool_name: tool_name.clone(),
-                    option_labels,
-                    questions,
-                },
-            );
+        self.pending.lock_recover().insert(
+            mainframe_request_id.clone(),
+            PendingApproval {
+                json_rpc_id: json_rpc_id.clone(),
+                respond,
+                method: method.to_string(),
+                tool_name: tool_name.clone(),
+                option_labels,
+                questions,
+            },
+        );
 
         tracing::info!(
             module = "codex:approvals",

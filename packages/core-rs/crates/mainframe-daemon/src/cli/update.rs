@@ -150,7 +150,8 @@ async fn fetch_releases(version: Option<&str>) -> Result<Vec<release::GhRelease>
         Some(v) => format!("https://api.github.com/repos/{REPO}/releases/tags/{v}"),
         None => format!("https://api.github.com/repos/{REPO}/releases?per_page=30"),
     };
-    let mut req = reqwest::Client::new()
+    let mut req = mainframe_runtime::http::client()
+        .map_err(|err| format!("GitHub API request failed for {url}: {err}"))?
         .get(&url)
         .header("User-Agent", "mainframe-updater");
     if let Ok(token) = std::env::var("GITHUB_TOKEN") {
@@ -190,7 +191,8 @@ async fn install_release(url: &str, artifact: &str, root: &Path) -> Result<(), S
 }
 
 async fn download_tarball(url: &str, dest: &Path) -> Result<(), String> {
-    let res = reqwest::Client::new()
+    let res = mainframe_runtime::http::client()
+        .map_err(|err| format!("Download failed for {url}: {err}"))?
         .get(url)
         .header("User-Agent", "mainframe-updater")
         .send()

@@ -9,11 +9,7 @@
 //! padding; there is no `base64` crate in the workspace allowlist, so the codec
 //! is hand-rolled below (a private helper, not a new dependency).
 
-use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
-use sha2::Sha256;
-
-type HmacSha256 = Hmac<Sha256>;
 
 /// The signed token payload. Field order (deviceId, iat, epoch) is fixed so
 /// `serde_json` reproduces the exact `JSON.stringify` bytes that get signed.
@@ -30,7 +26,7 @@ pub struct TokenPayload {
 pub fn generate_token(secret: &str, device_id: &str, epoch: Option<i64>) -> String {
     let payload = TokenPayload {
         device_id: device_id.to_string(),
-        iat: chrono::Utc::now().timestamp_millis(),
+        iat: mainframe_types::time::now_ms(),
         epoch,
     };
     // Serialization of a plain struct cannot fail.
@@ -74,14 +70,9 @@ pub fn generate_pairing_code() -> String {
 
 /// base64url(HMAC-SHA256(secret, data)).
 fn sign(secret: &str, data: &[u8]) -> String {
-    // `Hmac::new_from_slice` only errors on invalid key length, which HMAC never
-    // rejects (any length is valid); the Err arm is unreachable in practice.
-    let mut mac = match HmacSha256::new_from_slice(secret.as_bytes()) {
-        Ok(mac) => mac,
-        Err(_) => return String::new(),
-    };
-    mac.update(data);
-    base64url::encode(&mac.finalize().into_bytes())
+    super::hmac::sign_sha256(secret.as_bytes(), data)
+        .map(|signature| base64url::encode(&signature))
+        .unwrap_or_default()
 }
 
 /// Length-checked constant-time byte comparison: unequal lengths fail fast,

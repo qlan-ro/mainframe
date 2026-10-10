@@ -1,5 +1,6 @@
 //! Free helpers shared across the facade and the sub-manager Deps wrappers.
 use super::*;
+use mainframe_types::sync::LockExt as _;
 
 pub(super) fn is_working(chat: &Chat) -> bool {
     chat.process_state == Some(Some(ProcessState::Working))
@@ -56,7 +57,7 @@ pub(super) async fn apply_tuning_impl(
 ) {
     let session = active_chats
         .get(chat_id)
-        .and_then(|c| c.lock().unwrap_or_else(|e| e.into_inner()).session.clone());
+        .and_then(|c| c.lock_recover().session.clone());
     let Some(session) = session else {
         return;
     };
@@ -71,8 +72,7 @@ pub(super) async fn apply_tuning_impl(
 // ── queued-ref helpers (shared by the facade + EhDeps) ───────────────────────
 
 pub(super) fn queued_for_chat(refs: &QueuedRefs, chat_id: &str) -> Vec<QueuedMessageRef> {
-    refs.lock()
-        .unwrap_or_else(|e| e.into_inner())
+    refs.lock_recover()
         .iter()
         .filter(|r| r.chat_id == chat_id)
         .cloned()
@@ -81,7 +81,7 @@ pub(super) fn queued_for_chat(refs: &QueuedRefs, chat_id: &str) -> Vec<QueuedMes
 
 pub(super) fn handle_queued_processed(refs: &QueuedRefs, chat_id: &str, uuid: &str) {
     let removed = {
-        let mut guard = refs.lock().unwrap_or_else(|e| e.into_inner());
+        let mut guard = refs.lock_recover();
         guard
             .iter()
             .position(|r| r.uuid == uuid)
@@ -98,7 +98,7 @@ pub(super) fn handle_queued_processed(refs: &QueuedRefs, chat_id: &str, uuid: &s
 }
 
 pub(super) fn clear_all_queued_for_chat(refs: &QueuedRefs, chat_id: &str) {
-    let mut guard = refs.lock().unwrap_or_else(|e| e.into_inner());
+    let mut guard = refs.lock_recover();
     let before = guard.len();
     guard.retain(|r| r.chat_id != chat_id);
     let removed = before - guard.len();
@@ -151,6 +151,4 @@ pub(crate) fn remap_history(history: Vec<ChatMessage>, chat_id: &str) -> Vec<Cha
         .collect()
 }
 
-pub(super) fn now_ms() -> i64 {
-    chrono::Utc::now().timestamp_millis()
-}
+pub(super) use mainframe_types::time::now_ms;

@@ -9,6 +9,7 @@
 
 pub mod capabilities;
 pub mod connection;
+mod container_index;
 pub mod encoder;
 pub mod gate_registry;
 pub mod gates;

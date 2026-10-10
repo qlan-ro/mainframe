@@ -27,34 +27,23 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         self.emit_tool_effects(effects);
     }
     fn collect_tool_effects(&self, tool_use_id: &str, effects: &mut ToolEffects) {
-        let fp = self
-            .pending_file_paths
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .remove(tool_use_id);
+        let fp = self.pending_file_paths.lock_recover().remove(tool_use_id);
         if let Some(fp) = fp {
             effects.edited_paths.push(fp);
         }
-        if self
-            .pending_subagent_ids
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .remove(tool_use_id)
-        {
+        if self.pending_subagent_ids.lock_recover().remove(tool_use_id) {
             effects.subagent_completed = true;
         }
         if self
             .pending_worktree_triggers
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .remove(tool_use_id)
         {
             effects.worktree_trigger = true;
         }
         if self
             .pending_transcript_moves
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .remove(tool_use_id)
         {
             effects.transcript_moved = true;

@@ -10,27 +10,7 @@ pub(crate) fn is_uuid_jsonl(filename: &str) -> bool {
     let Some(stem) = filename.strip_suffix(".jsonl") else {
         return false;
     };
-    is_uuid(stem)
-}
-
-/// `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i`
-fn is_uuid(s: &str) -> bool {
-    const GROUPS: [usize; 5] = [8, 4, 4, 4, 12];
-    let parts: Vec<&str> = s.split('-').collect();
-    if parts.len() != GROUPS.len() {
-        return false;
-    }
-    parts
-        .iter()
-        .zip(GROUPS.iter())
-        .all(|(part, &len)| part.len() == len && part.chars().all(|c| c.is_ascii_hexdigit()))
-}
-
-/// CLI parity: replace EVERY non-alphanumeric char with '-'.
-pub(crate) fn encode_path(p: &str) -> String {
-    p.chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
-        .collect()
+    mainframe_types::paths::is_uuid(stem)
 }
 
 pub(crate) fn projects_root() -> String {
@@ -53,22 +33,10 @@ pub(crate) async fn canonicalize_project_path(p: &str) -> String {
     }
 }
 
-/// Belongs to this project if cwd equals the root or is nested under it.
-pub fn cwd_belongs_to_project(cwd: Option<&str>, project_path: &str) -> bool {
-    let cwd = match cwd {
-        Some(c) if !c.is_empty() => c,
-        _ => return false,
-    };
-    if cwd == project_path {
-        return true;
-    }
-    cwd.starts_with(&format!("{project_path}{}", std::path::MAIN_SEPARATOR))
-}
-
 /// Discover every encoded dir under ~/.claude/projects whose prefix matches the project.
 pub(crate) async fn discover_project_dirs(project_path: &str) -> Vec<String> {
     let root = projects_root();
-    let encoded_prefix = encode_path(project_path);
+    let encoded_prefix = mainframe_types::paths::encode_claude_project_path(project_path);
     let mut entries = match tokio::fs::read_dir(&root).await {
         Ok(e) => e,
         Err(_) => return Vec::new(), // no Claude session dir for this project
@@ -89,7 +57,10 @@ mod tests {
 
     #[test]
     fn encode_path_replaces_every_non_alphanumeric() {
-        assert_eq!(encode_path("/Users/x/my_proj.v2"), "-Users-x-my-proj-v2");
+        assert_eq!(
+            mainframe_types::paths::encode_claude_project_path("/Users/x/my_proj.v2"),
+            "-Users-x-my-proj-v2"
+        );
     }
 
     #[test]
@@ -110,9 +81,20 @@ mod tests {
 
     #[test]
     fn cwd_belongs_to_project_cases() {
-        assert!(cwd_belongs_to_project(Some("/a/proj"), "/a/proj"));
-        assert!(cwd_belongs_to_project(Some("/a/proj/sub"), "/a/proj"));
-        assert!(!cwd_belongs_to_project(Some("/a/proj-web"), "/a/proj"));
-        assert!(!cwd_belongs_to_project(None, "/a/proj"));
+        assert!(mainframe_types::paths::cwd_belongs_to_project(
+            Some("/a/proj"),
+            "/a/proj"
+        ));
+        assert!(mainframe_types::paths::cwd_belongs_to_project(
+            Some("/a/proj/sub"),
+            "/a/proj"
+        ));
+        assert!(!mainframe_types::paths::cwd_belongs_to_project(
+            Some("/a/proj-web"),
+            "/a/proj"
+        ));
+        assert!(!mainframe_types::paths::cwd_belongs_to_project(
+            None, "/a/proj"
+        ));
     }
 }

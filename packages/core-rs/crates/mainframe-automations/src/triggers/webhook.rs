@@ -4,9 +4,7 @@
 //! (webhook_ingest.rs) sequences these and the route maps its decisions onto
 //! HTTP statuses.
 
-use hmac::{Hmac, Mac};
 use serde_json::Value;
-use sha2::Sha256;
 
 use crate::credentials::{CredentialError, CredentialKind, CredentialStore, Credentials};
 use crate::domain::WebhookPreset;
@@ -34,12 +32,7 @@ pub(crate) fn verify_signature(secret: &str, raw_body: &[u8], header: Option<&st
     let Ok(given) = hex::decode(hex_part) else {
         return false;
     };
-    let Ok(mut mac) = Hmac::<Sha256>::new_from_slice(secret.as_bytes()) else {
-        return false;
-    };
-    mac.update(raw_body);
-    // verify_slice is constant-time (subtle under the hood).
-    mac.verify_slice(&given).is_ok()
+    mainframe_runtime::auth::hmac::verify_sha256(secret.as_bytes(), raw_body, &given)
 }
 
 /// A preset's server-side match predicate (contract §4), evaluated after

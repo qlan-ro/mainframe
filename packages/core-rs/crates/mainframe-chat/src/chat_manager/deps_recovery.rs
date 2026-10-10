@@ -1,6 +1,7 @@
 //! Shared-internals wrappers for the transcript-presence and degraded-recovery
 //! deps traits, and their `ChatManager` accessors.
 use super::*;
+use mainframe_types::sync::LockExt as _;
 
 /// Shared-internals wrapper for degraded recovery, constructed on demand.
 pub(super) struct RecoveryWrapper {
@@ -15,20 +16,14 @@ impl RecoveryWrapper {
     fn active_chat_mut(&self, chat_id: &str, f: impl FnOnce(&mut Chat)) {
         if let Some(cell) = self.active_chats.get(chat_id) {
             let cell = cell.value().clone();
-            let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+            let mut guard = cell.lock_recover();
             f(&mut guard.chat);
         }
     }
     fn current_chat(&self, chat_id: &str) -> Option<Chat> {
         self.active_chats
             .get(chat_id)
-            .map(|c| {
-                c.value()
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .chat
-                    .clone()
-            })
+            .map(|c| c.value().lock_recover().chat.clone())
             .or_else(|| self.deps.chats_get(chat_id))
     }
 }
@@ -46,7 +41,7 @@ impl PresenceDeps {
     fn active_chat_mut(&self, chat_id: &str, f: impl FnOnce(&mut Chat)) {
         if let Some(cell) = self.active_chats.get(chat_id) {
             let cell = cell.value().clone();
-            let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+            let mut guard = cell.lock_recover();
             f(&mut guard.chat);
         }
     }
@@ -111,20 +106,13 @@ impl DegradedRecoveryDeps for RecoveryWrapper {
         self.deps.chats_clear_worktree(chat_id);
     }
     fn get_active_session(&self, chat_id: &str) -> Option<Arc<dyn AdapterSession>> {
-        self.active_chats.get(chat_id).and_then(|c| {
-            c.value()
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .session
-                .clone()
-        })
+        self.active_chats
+            .get(chat_id)
+            .and_then(|c| c.value().lock_recover().session.clone())
     }
     fn clear_active_session(&self, chat_id: &str) {
         if let Some(cell) = self.active_chats.get(chat_id) {
-            cell.value()
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .session = None;
+            cell.value().lock_recover().session = None;
         }
     }
     fn sync_chat_fields(&self, chat_id: &str, fields: RecoverySync) {
@@ -147,10 +135,7 @@ impl DegradedRecoveryDeps for RecoveryWrapper {
         }
     }
     fn clear_messages(&self, chat_id: &str) {
-        self.messages
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .delete(chat_id);
+        self.messages.lock_recover().delete(chat_id);
         self.event_handler.clear_display_state(chat_id);
     }
 }

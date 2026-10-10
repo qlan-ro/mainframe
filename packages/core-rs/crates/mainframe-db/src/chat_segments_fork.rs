@@ -5,11 +5,11 @@
 
 use std::collections::HashMap;
 
-use mainframe_runtime::time::now_iso8601;
 use mainframe_types::segment::{
     BorrowConversion, ForkPlan, ForkSegmentRole, HandoffStatus, NativeSessionRecord, SegmentKind,
     SegmentRecord,
 };
+use mainframe_types::time::now_iso8601;
 use rusqlite::Connection;
 
 use crate::chat_native_sessions as natives;

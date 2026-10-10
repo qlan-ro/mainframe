@@ -8,7 +8,7 @@ use super::*;
 fn build_request_matches_the_pinned_option_vocabulary() {
     let request = build_request(
         "chat_9f2a3b1c",
-        RequestId::Str("gate-req_001".into()),
+        RequestId::String("gate-req_001".into()),
         &control_request(),
     );
     let params = request
@@ -36,7 +36,7 @@ fn an_empty_adapter_option_list_offers_only_the_reject_option() {
 
     let built = build_request(
         "chat_9f2a3b1c",
-        RequestId::Str("gate-req_001".into()),
+        RequestId::String("gate-req_001".into()),
         &request,
     );
     let params = built
@@ -75,7 +75,7 @@ fn a_plain_allow_against_an_empty_adapter_list_is_an_unknown_option() {
 fn claude_hides_allow_always_without_suggestions() {
     let no_suggestions = build_request(
         "chat_1",
-        RequestId::Str("gate-req_001".into()),
+        RequestId::String("gate-req_001".into()),
         &control_request(),
     );
     let ids: Vec<String> = no_suggestions.params.unwrap()["options"]
@@ -88,7 +88,7 @@ fn claude_hides_allow_always_without_suggestions() {
 
     let with_suggestion = build_request(
         "chat_1",
-        RequestId::Str("gate-req_001".into()),
+        RequestId::String("gate-req_001".into()),
         &control_request_with_suggestions(vec![mainframe_types::adapter::ControlUpdate::SetMode {
             mode: mainframe_types::settings::PermissionMode::AcceptEdits,
             destination: mainframe_types::adapter::ControlDestination::Session,

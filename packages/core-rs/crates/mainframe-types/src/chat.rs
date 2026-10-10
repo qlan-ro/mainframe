@@ -9,20 +9,6 @@ use crate::context::SessionMention;
 use crate::orchestration::ChatOrchestration;
 use crate::settings::ExecutionMode;
 
-/// Deserialize a `field?: X | null` into the absent/null/value tri-state.
-///
-/// serde only invokes this when the key is present, so absent → `default`
-/// (`None`); present-null → `Some(None)`; present-value → `Some(Some(v))`. The
-/// plain `Option<Option<T>>` deserializer instead collapses null to the outer
-/// `None`, losing the explicit-null case.
-fn double_option<'de, D, T>(de: D) -> Result<Option<Option<T>>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-    T: serde::Deserialize<'de>,
-{
-    serde::Deserialize::deserialize(de).map(Some)
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TodoStatus {
@@ -73,25 +59,25 @@ pub struct NewChat {
 pub struct SessionTuning {
     #[serde(
         default,
-        deserialize_with = "double_option",
+        deserialize_with = "crate::serde_util::double_option",
         skip_serializing_if = "Option::is_none"
     )]
     pub effort: Option<Option<EffortLevel>>,
     #[serde(
         default,
-        deserialize_with = "double_option",
+        deserialize_with = "crate::serde_util::double_option",
         skip_serializing_if = "Option::is_none"
     )]
     pub fast: Option<Option<bool>>,
     #[serde(
         default,
-        deserialize_with = "double_option",
+        deserialize_with = "crate::serde_util::double_option",
         skip_serializing_if = "Option::is_none"
     )]
     pub ultracode: Option<Option<bool>>,
     #[serde(
         default,
-        deserialize_with = "double_option",
+        deserialize_with = "crate::serde_util::double_option",
         skip_serializing_if = "Option::is_none"
     )]
     pub adaptive_thinking: Option<Option<bool>>,
@@ -176,7 +162,7 @@ pub struct Chat {
     pub branch_name: Option<String>,
     #[serde(
         default,
-        deserialize_with = "double_option",
+        deserialize_with = "crate::serde_util::double_option",
         skip_serializing_if = "Option::is_none"
     )]
     pub process_state: Option<Option<ProcessState>>,
@@ -208,25 +194,25 @@ pub struct Chat {
     pub pinned: Option<bool>,
     #[serde(
         default,
-        deserialize_with = "double_option",
+        deserialize_with = "crate::serde_util::double_option",
         skip_serializing_if = "Option::is_none"
     )]
     pub effort: Option<Option<EffortLevel>>,
     #[serde(
         default,
-        deserialize_with = "double_option",
+        deserialize_with = "crate::serde_util::double_option",
         skip_serializing_if = "Option::is_none"
     )]
     pub fast: Option<Option<bool>>,
     #[serde(
         default,
-        deserialize_with = "double_option",
+        deserialize_with = "crate::serde_util::double_option",
         skip_serializing_if = "Option::is_none"
     )]
     pub ultracode: Option<Option<bool>>,
     #[serde(
         default,
-        deserialize_with = "double_option",
+        deserialize_with = "crate::serde_util::double_option",
         skip_serializing_if = "Option::is_none"
     )]
     pub adaptive_thinking: Option<Option<bool>>,
@@ -268,7 +254,7 @@ pub struct Chat {
     /// parent". Survives archive/unarchive; never cascades from the parent.
     #[serde(
         default,
-        deserialize_with = "double_option",
+        deserialize_with = "crate::serde_util::double_option",
         skip_serializing_if = "Option::is_none"
     )]
     pub parent_chat_id: Option<Option<String>>,
@@ -298,7 +284,7 @@ pub struct Project {
     pub last_opened_at: String,
     #[serde(
         default,
-        deserialize_with = "double_option",
+        deserialize_with = "crate::serde_util::double_option",
         skip_serializing_if = "Option::is_none"
     )]
     pub parent_project_id: Option<Option<String>>,

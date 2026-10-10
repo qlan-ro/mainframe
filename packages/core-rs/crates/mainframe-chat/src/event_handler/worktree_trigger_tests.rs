@@ -79,8 +79,7 @@ impl EventHandlerDeps for TriggerDeps {
     fn on_worktree_trigger(&self, chat_id: &str) {
         self.trigger_count.fetch_add(1, Ordering::SeqCst);
         self.triggered_chat_ids
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .push(chat_id.to_string());
     }
     fn on_transcript_moved(&self, _chat_id: &str) {

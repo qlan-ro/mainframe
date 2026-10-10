@@ -9,7 +9,6 @@ pub mod github;
 pub mod http_action;
 pub mod manifest;
 pub mod notion;
-mod paths;
 pub mod registry;
 pub mod run_command;
 mod shell;
@@ -79,20 +78,6 @@ pub trait Action: Send + Sync {
 }
 
 pub(crate) use crate::USER_AGENT;
-
-/// The one client every connector builds from, so no future connector can
-/// reach an API with a bare `reqwest::Client::new()` again.
-pub(crate) fn http_client() -> reqwest::Client {
-    match reqwest::Client::builder().user_agent(USER_AGENT).build() {
-        Ok(client) => client,
-        Err(err) => {
-            // Only the TLS backend can fail here, and that fails every request
-            // anyway — so log and let the call site report the real failure.
-            tracing::error!(%err, "automations: HTTP client built without a User-Agent");
-            reqwest::Client::new()
-        }
-    }
-}
 
 const ERROR_BODY_SNIPPET_CHARS: usize = 500;
 

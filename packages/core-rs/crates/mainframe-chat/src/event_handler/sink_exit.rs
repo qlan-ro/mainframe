@@ -9,8 +9,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
 
         let cell = self.deps.get_active_chat(&self.chat_id);
         let session_id = cell.as_ref().and_then(|c| {
-            c.lock()
-                .unwrap_or_else(|e| e.into_inner())
+            c.lock_recover()
                 .session
                 .as_ref()
                 .map(|s| s.id().to_string())
@@ -42,11 +41,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         });
     }
     fn clear_exit_queue(&self) {
-        let had_queued = self
-            .messages
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .strip_all_queued(&self.chat_id);
+        let had_queued = self.messages.lock_recover().strip_all_queued(&self.chat_id);
         if had_queued {
             self.emit_display();
         }
@@ -61,7 +56,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
     fn clear_exit_state(&self, cell: Option<Arc<Mutex<ActiveChat>>>) {
         if let Some(cell) = &cell {
             let (chat, was_working) = {
-                let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+                let mut guard = cell.lock_recover();
                 let was_working = guard.chat.process_state == Some(Some(ProcessState::Working));
                 guard.chat.process_state = Some(None);
                 (guard.chat.clone(), was_working)

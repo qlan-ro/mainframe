@@ -115,7 +115,7 @@ impl ClaudeSession {
                 }
             });
         }
-        *self.stdin_tx.lock().unwrap_or_else(|e| e.into_inner()) = Some(stdin_tx);
+        *self.stdin_tx.lock_recover() = Some(stdin_tx);
     }
     pub(super) fn start_output<R: tokio::io::AsyncRead + Unpin + Send + 'static>(
         &self,
@@ -162,7 +162,7 @@ impl ClaudeSession {
             handle.closed.notify_waiters();
             sink.on_exit(code);
             if let Some(session) = weak.as_ref().and_then(Weak::upgrade) {
-                let guard = session.on_exit.lock().unwrap_or_else(|e| e.into_inner());
+                let guard = session.on_exit.lock_recover();
                 if let Some(cb) = guard.as_ref() {
                     cb();
                 }

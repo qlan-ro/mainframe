@@ -60,13 +60,15 @@ struct HttpInput {
 }
 
 pub struct HttpRequestAction {
-    client: reqwest::Client,
+    client: Result<reqwest::Client, reqwest::Error>,
 }
 
 impl HttpRequestAction {
     pub fn new() -> Self {
         Self {
-            client: super::http_client(),
+            client: mainframe_runtime::http::builder()
+                .user_agent(super::USER_AGENT)
+                .build(),
         }
     }
 }
@@ -138,6 +140,8 @@ impl Action for HttpRequestAction {
             let method = input.method.unwrap_or(Method::Get);
             let mut request = self
                 .client
+                .as_ref()
+                .map_err(|err| ActionError(format!("HTTP client initialization failed: {err}")))?
                 .request(method.into(), url)
                 .timeout(Duration::from_millis(timeout_ms));
             request = match &input.body {

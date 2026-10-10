@@ -1,38 +1,22 @@
-//! Per-project async mutex map: one `tokio::sync::Mutex` per project path
-//! (fair → FIFO), handing back an owned guard whose drop *is* the release. This
-//! state is a module-level `SHARED_MAP` behind a `OnceLock` (no
-//! `lazy_static`/`static mut`), orthogonal to the chat lock (never nested with it).
+use mainframe_runtime::sync::KeyedMutex;
+use std::sync::OnceLock;
+use tokio::sync::OwnedMutexGuard;
 
-use std::sync::{Arc, OnceLock};
-
-use dashmap::DashMap;
-use tokio::sync::{Mutex, OwnedMutexGuard};
-
-type Locks = DashMap<String, Arc<Mutex<()>>>;
-
-fn locks() -> &'static Locks {
-    static LOCKS: OnceLock<Locks> = OnceLock::new();
-    LOCKS.get_or_init(Locks::new)
-}
-
-/// Acquire a mutex for a project path. Returns a guard; dropping it releases the
-/// lock. Concurrent callers on the same
-/// path wait in FIFO order.
 pub async fn acquire_project_lock(project_path: &str) -> OwnedMutexGuard<()> {
-    // Clone the per-path Arc out of the map, then drop the shard guard *before*
-    // awaiting the lock (never hold a DashMap shard guard across `.await`).
-    let mutex = locks()
-        .entry(project_path.to_string())
-        .or_insert_with(|| Arc::new(Mutex::new(())))
-        .clone();
-    mutex.lock_owned().await
+    static LOCKS: OnceLock<KeyedMutex> = OnceLock::new();
+    LOCKS
+        .get_or_init(KeyedMutex::default)
+        .acquire(project_path)
+        .await
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
+    use tokio::sync::Mutex;
 
     #[tokio::test]
     async fn serializes_concurrent_callers_on_same_path() {

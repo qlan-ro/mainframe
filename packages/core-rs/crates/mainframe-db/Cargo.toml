@@ -15,7 +15,6 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 nanoid = { workspace = true }
 mainframe-types = { workspace = true }
-mainframe-runtime = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

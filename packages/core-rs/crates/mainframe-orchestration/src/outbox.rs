@@ -5,6 +5,7 @@
 //! turn dies with the daemon too. Every change is reported per target, so the
 //! target's `Chat.agent_outbox` stays current.
 
+use mainframe_types::sync::LockExt as _;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -184,7 +185,7 @@ impl Outbox {
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Vec<OutboxEntry>> {
-        self.entries.lock().unwrap_or_else(|e| e.into_inner())
+        self.entries.lock_recover()
     }
 }
 

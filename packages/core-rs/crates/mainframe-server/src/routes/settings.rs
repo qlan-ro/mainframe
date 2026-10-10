@@ -197,21 +197,6 @@ async fn get_general(State(ctx): State<Arc<AppCtx>>) -> Response {
     ok(Value::Object(data))
 }
 
-/// Distinguishes an absent JSON key (`None` — leave unchanged) from an explicit
-/// `null` (`Some(None)` — clear to the default) for a `defaultAdapterId: string |
-/// null` field. Plain `Option<Option<T>>` can't make this distinction on its own:
-/// serde's `Option<T>` deserializer treats a missing key and an explicit `null`
-/// identically. Pairing `#[serde(default)]` (absent key → outer `None`, skips this
-/// fn) with this deserializer (present key, even if `null` → `Some(inner)`) is the
-/// standard hand-rolled equivalent of `serde_with::rust::double_option`.
-fn deserialize_present<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
-where
-    T: Deserialize<'de>,
-    D: serde::Deserializer<'de>,
-{
-    Deserialize::deserialize(deserializer).map(Some)
-}
-
 #[derive(Deserialize)]
 struct GeneralPatch {
     #[serde(rename = "worktreeDir")]
@@ -222,7 +207,7 @@ struct GeneralPatch {
     #[serde(
         rename = "defaultAdapterId",
         default,
-        deserialize_with = "deserialize_present"
+        deserialize_with = "mainframe_types::serde_util::double_option"
     )]
     default_adapter_id: Option<Option<String>>,
 }
@@ -232,13 +217,6 @@ fn is_valid_worktree_dir(s: &str) -> bool {
     !s.is_empty()
         && s.bytes()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
-}
-
-fn is_valid_adapter_id(s: &str) -> bool {
-    // ^[a-zA-Z0-9_-]+$
-    !s.is_empty()
-        && s.bytes()
-            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'))
 }
 
 async fn put_general(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
@@ -264,7 +242,7 @@ async fn put_general(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
         return fail(StatusCode::BAD_REQUEST, "Invalid update channel");
     }
     if let Some(Some(ref id)) = patch.default_adapter_id
-        && !is_valid_adapter_id(id)
+        && !mainframe_types::ids::is_safe_identifier(id)
     {
         return fail(StatusCode::BAD_REQUEST, "Invalid adapter id");
     }

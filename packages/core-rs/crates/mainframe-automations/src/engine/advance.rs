@@ -73,12 +73,8 @@ impl Interpreter {
     /// Serialized per-run entry point.
     pub async fn advance(&self, run_id: &str) -> Result<(), StoreError> {
         let lock = self.locks.lease(run_id);
-        let result = {
-            let _guard = lock.lock().await;
-            self.advance_inner(run_id).await
-        };
-        self.locks.release(run_id, lock);
-        result
+        let _guard = lock.lock().await;
+        self.advance_inner(run_id).await
     }
 
     /// A8 — cancellation is authoritative: abort the in-flight walk, then

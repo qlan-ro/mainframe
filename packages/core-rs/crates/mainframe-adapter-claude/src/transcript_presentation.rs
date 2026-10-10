@@ -1,4 +1,5 @@
 use mainframe_adapter_api::SessionSink;
+use mainframe_types::sync::LockExt as _;
 use mainframe_types::transcript_presentation::{
     PresentationPhase, PresentationState, PresentationTiming, PresentationUpdate,
     TranscriptPresentation,
@@ -163,7 +164,7 @@ pub(crate) fn observe_user(
     let replay = ["isReplay", "is_replay"]
         .iter()
         .any(|key| event.get(key).and_then(Value::as_bool) == Some(true));
-    let mut state = session.state.lock().unwrap_or_else(|e| e.into_inner());
+    let mut state = session.state.lock_recover();
     if replay || (!tool_only && state.presentation.epoch.is_some()) {
         state.presentation.invalidate(sink);
     }

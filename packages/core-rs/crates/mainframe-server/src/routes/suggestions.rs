@@ -11,13 +11,13 @@ use mainframe_git::{GitService, parse_diff_name_status, parse_status_lines};
 use mainframe_types::suggestion::Suggestion;
 
 use crate::ctx::AppCtx;
-use crate::path_utils::is_within_base;
 use crate::respond::ok;
 use crate::ripgrep::{RipgrepOptions, search_with_ripgrep};
 use crate::routes::files::resolve_base;
 use crate::suggestions::{
     ChurnInput, build_churn_suggestions, build_todo_suggestions, merge_suggestions,
 };
+use mainframe_runtime::fs::is_within_base;
 
 use super::git::is_not_git_repo_err;
 

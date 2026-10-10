@@ -1,11 +1,12 @@
 //! Registry/queue reads, enriched registry reads, and in-memory cache sync.
 use super::*;
+use mainframe_types::sync::LockExt as _;
 
 impl ChatManager {
     pub fn get_chat(&self, chat_id: &str) -> Option<Chat> {
         let mut chat = self
             .get_active(chat_id)
-            .map(|c| c.lock().unwrap_or_else(|e| e.into_inner()).chat.clone())
+            .map(|c| c.lock_recover().chat.clone())
             .or_else(|| self.deps.chats_get(chat_id))?;
         self.enricher.enrich(&mut chat);
         Some(chat)
@@ -29,8 +30,7 @@ impl ChatManager {
     pub fn is_chat_running(&self, chat_id: &str) -> bool {
         self.get_active(chat_id)
             .map(|c| {
-                c.lock()
-                    .unwrap_or_else(|e| e.into_inner())
+                c.lock_recover()
                     .session
                     .as_ref()
                     .is_some_and(|s| s.is_spawned())
@@ -40,7 +40,7 @@ impl ChatManager {
 
     pub fn get_session_for_chat(&self, chat_id: &str) -> Option<Arc<dyn AdapterSession>> {
         self.get_active(chat_id)
-            .and_then(|c| c.lock().unwrap_or_else(|e| e.into_inner()).session.clone())
+            .and_then(|c| c.lock_recover().session.clone())
     }
 
     /// Return all queued refs for a chat, oldest-first (enqueue order) —
@@ -107,7 +107,7 @@ impl ChatManager {
         let Some(cell) = self.get_active(chat_id) else {
             return;
         };
-        let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+        let mut guard = cell.lock_recover();
         if let Some(v) = partial.effort {
             guard.chat.effort = Some(v);
         }
@@ -141,7 +141,7 @@ impl ChatManager {
         if let Some(cell) = self.get_active(chat_id)
             && let Some(row) = self.deps.chats_get(chat_id)
         {
-            let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+            let mut guard = cell.lock_recover();
             guard.chat.orchestration = row.orchestration;
             guard.chat.parent_chat_id = row.parent_chat_id;
         }

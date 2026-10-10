@@ -69,6 +69,7 @@ mainframe-types = { path = "crates/mainframe-types" }
 mainframe-runtime = { path = "crates/mainframe-runtime" }
 mainframe-db = { path = "crates/mainframe-db" }
 mainframe-git = { path = "crates/mainframe-git" }
+mainframe-github = { path = "crates/mainframe-github" }
 mainframe-display = { path = "crates/mainframe-display" }
 mainframe-adapter-api = { path = "crates/mainframe-adapter-api" }
 mainframe-adapter-claude = { path = "crates/mainframe-adapter-claude" }
@@ -95,7 +96,7 @@ mainframe-acp = { path = "crates/mainframe-acp" }
 unwrap_used = "deny"
 expect_used = "deny"
 
-# Full DWARF across 21 crates and every dep grew target/debug to 38 GB; line
+# Full DWARF across the daemon crates and every dep grew target/debug to 38 GB; line
 # tables keep backtraces readable for a fraction of the disk.
 [profile.dev]
 debug = "line-tables-only"

@@ -10,8 +10,8 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::engine::BoxFuture;
-use crate::github_http::{GITHUB_API, github_headers};
 use crate::tokens::TokenValue;
+use mainframe_github::github_http::{GITHUB_API, github_headers};
 
 use super::super::manifest::{
     ActionAuth, ActionField, ActionGroup, ActionManifest, ActionOutput, ActionOutputType,
@@ -50,7 +50,7 @@ struct FoundPr {
 
 pub struct GithubListPrsAction {
     base: String,
-    client: reqwest::Client,
+    client: Result<reqwest::Client, reqwest::Error>,
 }
 
 impl GithubListPrsAction {
@@ -61,7 +61,9 @@ impl GithubListPrsAction {
     pub fn with_base_url(base: impl Into<String>) -> Self {
         Self {
             base: base.into(),
-            client: super::super::http_client(),
+            client: mainframe_runtime::http::builder()
+                .user_agent(super::super::USER_AGENT)
+                .build(),
         }
     }
 }
@@ -104,9 +106,13 @@ impl Action for GithubListPrsAction {
             let input: ListPrsInput = parse_input("github.list_prs", params)?;
             let query = format!("is:pr state:open author:{}", input.author);
 
-            let mut request =
-                github_headers(self.client.get(format!("{}/search/issues", self.base)))
-                    .query(&[("q", query)]);
+            let mut request = github_headers(
+                self.client
+                    .as_ref()
+                    .map_err(|err| ActionError(format!("{OP} failed: {err}")))?
+                    .get(format!("{}/search/issues", self.base)),
+            )
+            .query(&[("q", query)]);
             if let Some(creds) = &ctx.creds {
                 request = request.bearer_auth(&creds.token);
             }

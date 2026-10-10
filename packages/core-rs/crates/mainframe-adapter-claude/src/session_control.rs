@@ -4,6 +4,7 @@
 //! map is drained by `events.rs` via [`ControlRequestChannel::resolve`], and by
 //! session close via [`ControlRequestChannel::drain_all_as_failed`].
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -75,16 +76,13 @@ impl ControlRequestChannel {
     ) -> Raw {
         let request_id = self.send(stdin, request);
         let (tx, rx) = oneshot::channel();
-        self.pending
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .insert(
-                request_id.clone(),
-                Pending {
-                    is_terminal: opts.is_terminal,
-                    done: tx,
-                },
-            );
+        self.pending.lock_recover().insert(
+            request_id.clone(),
+            Pending {
+                is_terminal: opts.is_terminal,
+                done: tx,
+            },
+        );
 
         let timeout = Duration::from_millis(opts.timeout_ms.unwrap_or(5_000));
         match tokio::time::timeout(timeout, rx).await {
@@ -93,10 +91,7 @@ impl ControlRequestChannel {
             // entry was removed) — the caller treats this as failure, like undefined.
             Ok(Err(_)) => None,
             Err(_) => {
-                self.pending
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .remove(&request_id);
+                self.pending.lock_recover().remove(&request_id);
                 tracing::warn!(
                     session_id = %self.session_id,
                     request_id = %request_id,
@@ -113,7 +108,7 @@ impl ControlRequestChannel {
     /// (e.g. context-usage) or when the response is a non-terminal intermediate ack
     /// the caller's predicate rejects — in that case the caller keeps waiting.
     pub fn resolve(&self, request_id: &str, raw: Raw) -> bool {
-        let mut pending = self.pending.lock().unwrap_or_else(|e| e.into_inner());
+        let mut pending = self.pending.lock_recover();
         let accepted = match pending.get(request_id) {
             None => return false,
             Some(entry) => match &entry.is_terminal {
@@ -134,8 +129,7 @@ impl ControlRequestChannel {
     pub(crate) fn drain_all_as_failed(&self) {
         let drained: Vec<Pending> = self
             .pending
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .drain()
             .map(|(_, entry)| entry)
             .collect();

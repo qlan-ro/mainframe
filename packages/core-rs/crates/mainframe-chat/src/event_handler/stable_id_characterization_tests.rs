@@ -131,8 +131,7 @@ fn assistant_metadata() -> mainframe_types::adapter::MessageMetadata {
 
 fn cached_messages(messages: &Arc<Mutex<MessageCache>>) -> Vec<ChatMessage> {
     messages
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
+        .lock_recover()
         .get("chat-shape")
         .cloned()
         .unwrap_or_default()

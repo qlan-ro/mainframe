@@ -100,16 +100,9 @@ impl<B: KeyringBackend> KeyringCredentialStore<B> {
         if let Some(parent) = self.index_path.parent() {
             tokio::fs::create_dir_all(parent).await?;
         }
-        let file_name = self
-            .index_path
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "automation-credentials-labels.json".to_string());
-        let tmp = self
-            .index_path
-            .with_file_name(format!("{file_name}.tmp-{}", nanoid::nanoid!(8)));
-        tokio::fs::write(&tmp, json).await?;
-        tokio::fs::rename(&tmp, &self.index_path).await?;
+        mainframe_runtime::fs::write_atomic(&self.index_path, json.as_bytes(), false)
+            .await
+            .map_err(|error| error.source)?;
         Ok(())
     }
 }

@@ -141,7 +141,7 @@ async fn an_error_reply_to_a_gate_denies_it() {
     let ports = FlakyPort::new(0);
     let response = JsonRpcResponse {
         jsonrpc: "2.0".to_string(),
-        id: Some(RequestId::Str(rpc_id.clone())),
+        id: Some(RequestId::String(rpc_id.clone())),
         outcome: JsonRpcOutcome::Error {
             error: JsonRpcErrorObject {
                 code: -32602,

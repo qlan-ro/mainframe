@@ -46,13 +46,6 @@ fn parse_scope(scope: Option<&str>) -> AgentScope {
     }
 }
 
-fn name_ok(name: &str) -> bool {
-    !name.is_empty()
-        && name
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
-}
-
 async fn list(
     State(ctx): State<Arc<AppCtx>>,
     Path(adapter_id): Path<String>,
@@ -94,7 +87,8 @@ async fn create(
     };
     let (Some(project_path), Some(name)) = (
         b.project_path.filter(|p| !p.is_empty()),
-        b.name.filter(|n| name_ok(n)),
+        b.name
+            .filter(|n| mainframe_types::ids::is_safe_identifier(n)),
     ) else {
         return fail(
             StatusCode::BAD_REQUEST,

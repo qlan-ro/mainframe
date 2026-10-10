@@ -7,8 +7,8 @@ use std::path::Path;
 
 use mainframe_types::setup_advisor::ProjectFingerprint;
 
-use crate::path_utils::is_within_base;
 use crate::setup_advisor::detections::push_unique;
+use mainframe_runtime::fs::is_within_base;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Bucket {

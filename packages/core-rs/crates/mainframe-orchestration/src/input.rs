@@ -24,11 +24,7 @@ pub(crate) fn parse_args<T: DeserializeOwned + Validate>(args: Value) -> Result<
 }
 
 pub fn check_id(field: &str, value: &str) -> Result<(), ToolError> {
-    let ok = !value.is_empty()
-        && value.len() <= 64
-        && value
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-');
+    let ok = value.len() <= 64 && mainframe_types::ids::is_safe_identifier(value);
     if ok {
         Ok(())
     } else {

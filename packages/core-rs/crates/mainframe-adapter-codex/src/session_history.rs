@@ -33,11 +33,7 @@ impl CodexSession {
             ThreadTarget::Start => return Ok(Vec::new()),
         };
 
-        let executable = self
-            .history_executable
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone();
+        let executable = self.history_executable.lock_recover().clone();
         let temp = match spawn_temp_app_server(
             &executable,
             Some(Path::new(&self.project_path)),
@@ -73,11 +69,7 @@ impl CodexSession {
         let Some(thread_id) = self.resume_thread_id.clone() else {
             return Ok(Vec::new());
         };
-        let deps = self
-            .scan_deps
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone();
+        let deps = self.scan_deps.lock_recover().clone();
         match rollout_scan_records(&thread_id, deps.as_ref()).await {
             Some(records) => Ok(records),
             None => {

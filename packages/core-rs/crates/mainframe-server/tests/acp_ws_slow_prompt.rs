@@ -3,6 +3,7 @@
 //! `FacadeServer` fixture and a barrier adapter.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+use mainframe_types::sync::LockExt as _;
 mod support;
 
 use std::sync::Arc;
@@ -95,10 +96,7 @@ async fn a_cancel_for_the_same_session_lands_after_its_prompt_is_in_flight() {
     .await;
     let _ = read_until(&mut ws, |v| v["id"] == json!(2)).await;
     assert!(
-        interrupts
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .is_empty(),
+        interrupts.lock_recover().is_empty(),
         "a cancel must not interrupt a turn its own prompt has not started yet"
     );
 
@@ -109,7 +107,7 @@ async fn a_cancel_for_the_same_session_lands_after_its_prompt_is_in_flight() {
     let log = tokio::time::timeout(Duration::from_secs(2), async {
         loop {
             {
-                let seen = interrupts.lock().unwrap_or_else(|e| e.into_inner());
+                let seen = interrupts.lock_recover();
                 if !seen.is_empty() {
                     return seen.clone();
                 }

@@ -3,6 +3,7 @@
 //! temporary-chat discard path (`discard.rs`); the parent re-sync is shared by
 //! both `open_side_chat` and `discard.rs`'s side-chat branch.
 use super::*;
+use mainframe_types::sync::LockExt as _;
 
 /// Whether `chat` is itself a side chat: temporary AND has a parent. No third
 /// concept — this is the wire contract's own definition (plan Goal).
@@ -74,10 +75,7 @@ impl ChatManager {
     /// branch (side chat id cleared).
     pub(super) fn sync_parent_side_chat_id(&self, parent_id: &str, side_chat_id: Option<String>) {
         if let Some(cell) = self.get_active(parent_id) {
-            cell.lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .chat
-                .side_chat_id = side_chat_id;
+            cell.lock_recover().chat.side_chat_id = side_chat_id;
         }
         if let Some(chat) = self.deps.chats_get(parent_id) {
             self.emit(DaemonEvent::ChatUpdated { chat, reason: None });

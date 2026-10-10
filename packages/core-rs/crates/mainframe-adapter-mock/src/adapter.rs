@@ -1,3 +1,4 @@
+use mainframe_types::sync::LockExt as _;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
@@ -101,10 +102,7 @@ impl MockCliAdapter {
     /// The last request `pin_fork_point` received, if any.
     #[cfg(test)]
     pub(crate) fn last_pin_request(&self) -> Option<ForkPinRequest> {
-        self.last_pin_request
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone()
+        self.last_pin_request.lock_recover().clone()
     }
 
     fn bridge(&self) -> Option<Arc<TaskBridge>> {
@@ -239,7 +237,7 @@ impl Adapter for MockCliAdapter {
         };
         let key = self.recording_key();
         let index = {
-            let mut indexes = self.indexes.lock().unwrap_or_else(|e| e.into_inner());
+            let mut indexes = self.indexes.lock_recover();
             let index = *indexes.get(&key).unwrap_or(&0);
             indexes.insert(key.clone(), index + 1);
             index
@@ -271,10 +269,7 @@ impl Adapter for MockCliAdapter {
         &self,
         request: ForkPinRequest,
     ) -> BoxFuture<'_, Result<ForkSource, ForkPinError>> {
-        *self
-            .last_pin_request
-            .lock()
-            .unwrap_or_else(|e| e.into_inner()) = Some(request.clone());
+        *self.last_pin_request.lock_recover() = Some(request.clone());
         if !self.fork_capable {
             return Box::pin(async { Err(ForkPinError::Unsupported) });
         }

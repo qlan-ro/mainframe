@@ -2,6 +2,7 @@
 //! route-facing surface and `stop()`; boot reconcile / sweep arming /
 //! event-source subscription live in `start()`.
 
+use mainframe_types::sync::LockExt as _;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex as StdMutex};
@@ -110,7 +111,7 @@ impl AutomationsEngine {
     /// before `start()` and safe to call twice.
     pub fn stop(&self) {
         let tasks: Vec<JoinHandle<()>> = {
-            let mut guard = self.tasks.lock().unwrap_or_else(|e| e.into_inner());
+            let mut guard = self.tasks.lock_recover();
             guard.drain(..).collect()
         };
         for task in tasks {

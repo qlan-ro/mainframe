@@ -2,6 +2,7 @@
 //! (no `simple-git`). Error strings are kept stable for callers that classify
 //! them.
 
+use crate::git_parse::parse_worktree_list;
 use std::future::Future;
 use std::path::Path;
 
@@ -860,44 +861,6 @@ impl<E: GitExec> GitService<E> {
             branches,
         })
     }
-}
-
-// ---------------------------------------------------------------------------
-// `git worktree list --porcelain` parser. `mainframe-services::workspace::worktree`
-// keeps its own copy because mainframe-git does not depend on mainframe-services;
-// the pure parser is duplicated here so this crate needs no such dependency.
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct WorktreeEntry {
-    path: String,
-    branch: Option<String>,
-}
-
-fn parse_worktree_list(output: &str) -> Vec<WorktreeEntry> {
-    let mut entries: Vec<WorktreeEntry> = Vec::new();
-    let mut current_path: Option<String> = None;
-    let mut current_branch: Option<String> = None;
-
-    for line in output.split('\n') {
-        if let Some(p) = line.strip_prefix("worktree ") {
-            current_path = Some(p.to_string());
-            current_branch = None;
-        } else if let Some(b) = line.strip_prefix("branch ") {
-            current_branch = Some(b.to_string());
-        } else if line == "detached" {
-            current_branch = None;
-        } else if line.is_empty() && current_path.is_some() {
-            entries.push(WorktreeEntry {
-                path: current_path.take().unwrap_or_default(),
-                branch: current_branch.take(),
-            });
-            current_path = None;
-            current_branch = None;
-        }
-    }
-
-    entries
 }
 
 /// `path.basename` — the final component of a path.

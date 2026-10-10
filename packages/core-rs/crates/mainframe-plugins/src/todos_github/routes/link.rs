@@ -7,7 +7,7 @@ use axum::extract::{Json, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use mainframe_git::is_valid_repo_segment;
-use mainframe_runtime::time::now_iso8601;
+use mainframe_types::time::now_iso8601;
 use serde_json::{Value, json};
 
 use crate::PluginContext;

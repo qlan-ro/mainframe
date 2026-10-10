@@ -1,16 +1,17 @@
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use dashmap::DashMap;
 use mainframe_adapter_api::{AdapterError, AdapterSession, BoxFuture, SessionSink};
-use mainframe_runtime::time::now_iso8601;
+use mainframe_runtime::sync::{FlightClaim, FlightWaiter, SingleFlight};
 use mainframe_services::settings::normalize_saved_default_model;
 use mainframe_types::adapter::{SessionOptions, SessionSpawnOptions};
 use mainframe_types::chat::{Chat, ChatMessage, ChatStatus, NewChat, ProcessState, ResolvedTuning};
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::settings::ExecutionMode;
-use tokio::sync::Notify;
+use mainframe_types::time::now_iso8601;
 use tracing::{debug, info, warn};
 
 use crate::chat_cwd::chat_cwd;
@@ -43,9 +44,7 @@ pub(crate) fn is_last_active_chat_for_scope(
 /// Registry of active chats (SHARED_MAP; per-entity values are `Arc<Mutex<ActiveChat>>`).
 pub type ActiveChatRegistry = Arc<DashMap<String, Arc<Mutex<ActiveChat>>>>;
 
-fn now_ms() -> i64 {
-    chrono::Utc::now().timestamp_millis()
-}
+use mainframe_types::time::now_ms;
 
 /// Partial `db.chats.update` patch for the lifecycle paths. Worktree fields are
 /// tri-state (`Some(None)` clears).
@@ -182,23 +181,23 @@ pub trait LifecycleManagerDeps: Send + Sync {
 
 /// Single-flight decision computed under the guard, applied after the guard drops.
 enum Flight {
-    Await(Arc<Notify>),
-    Claimed(Arc<Notify>),
+    Await(FlightWaiter),
+    Claimed(FlightClaim),
     Skip,
 }
 
-/// One in-flight single-flight guard (a `Notify` per key rather than a shared future).
+/// Flight families share an outer lock for cross-operation exclusion.
 #[derive(Default)]
 struct Guards {
-    loading: HashMap<String, Arc<Notify>>,
-    starting: HashMap<String, Arc<Notify>>,
-    interrupting: HashMap<String, Arc<Notify>>,
+    loading: SingleFlight,
+    starting: SingleFlight,
+    interrupting: SingleFlight,
     /// In-flight idle offload per chat (`flight_claims.rs`). An offload claims
     /// this slot only when every other map below is empty for the chat and no
     /// send is registered;
     /// `load_chat`/`start_chat`/`get_messages`/`send_message` all wait it out
     /// before touching the registry or cache.
-    offloading: HashMap<String, Arc<Notify>>,
+    offloading: SingleFlight,
     /// In-flight `send_message` calls per chat (`flight_claims.rs`).
     /// A count, not a flag: nothing in this codebase serializes concurrent
     /// sends to the same chat today, so offload must treat any of them as busy.
@@ -206,31 +205,7 @@ struct Guards {
     /// In-flight on-disk transcript read behind `get_messages` per chat
     /// (`flight_claims.rs`) — single-flights a read that would otherwise race
     /// (two concurrent misses both hit disk).
-    history: HashMap<String, Arc<Notify>>,
-}
-
-/// Join an in-flight single-flight `Notify` without a lost wakeup. `notify_waiters`
-/// stores no permit and only wakes waiters already registered at the call, so the
-/// naive `clone → drop lock → notified.await` races the owner's
-/// `remove + notify_waiters` and can hang forever. Register the waiter (`enable`)
-/// BEFORE re-reading the map, then await only while the SAME `Notify` is still in
-/// flight (`Arc::ptr_eq` guards against an ABA where a newer generation claimed the
-/// slot under the same key).
-async fn join_flight(
-    guards: &Arc<Mutex<Guards>>,
-    existing: Arc<Notify>,
-    select: impl Fn(&Guards) -> Option<&Arc<Notify>>,
-) {
-    let notified = existing.notified();
-    tokio::pin!(notified);
-    notified.as_mut().enable();
-    let still_in_flight = {
-        let g = guards.lock().unwrap_or_else(|e| e.into_inner());
-        select(&g).is_some_and(|current| Arc::ptr_eq(current, &existing))
-    };
-    if still_in_flight {
-        notified.await;
-    }
+    history: SingleFlight,
 }
 
 pub struct ChatLifecycleManager<D: LifecycleManagerDeps + 'static> {
@@ -292,18 +267,18 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
     /// Bump `chat_id`'s in-memory "last used" clock to now, if its registry
     /// cell exists; a no-op otherwise. Called on every path that counts as use
     /// (`load_chat` — including its single-flight `Skip` branch, `start_chat`,
-    /// send begin/end, `release_history`, and a claim-free config read) so an
+    /// send begin/end, history completion, and a claim-free config read) so an
     /// unspawned cell's idle clock (`idle_scanner::idle_since`) tracks real
     /// activity rather than the persisted chat's own age.
     pub(crate) fn touch(&self, chat_id: &str) {
         if let Some(cell) = self.get_active(chat_id) {
-            cell.lock().unwrap_or_else(|e| e.into_inner()).last_used_at = now_ms();
+            cell.lock_recover().last_used_at = now_ms();
         }
     }
 
     fn chat_or_db(&self, chat_id: &str) -> Option<Chat> {
         self.get_active(chat_id)
-            .map(|c| c.lock().unwrap_or_else(|e| e.into_inner()).chat.clone())
+            .map(|c| c.lock_recover().chat.clone())
             .or_else(|| self.deps.chats_get(chat_id))
     }
 
@@ -339,10 +314,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             chat.id.clone(),
             Arc::new(Mutex::new(ActiveChat::new(chat.clone(), None))),
         );
-        self.messages
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .pin(&chat.id);
+        self.messages.lock_recover().pin(&chat.id);
         self.deps.emit_event(DaemonEvent::ChatCreated {
             chat: chat.clone(),
             source: None,
@@ -411,13 +383,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             // TS: `if yolo → start; else if !hasPending → start`. Both branches call
             // startChat, so the identical arms collapse to one guard (hasPending is
             // still short-circuited when yolo, matching the original evaluation).
-            let no_pending = || {
-                !self
-                    .permissions
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .has_pending(chat_id)
-            };
+            let no_pending = || !self.permissions.lock_recover().has_pending(chat_id);
             if is_yolo || no_pending() {
                 self.start_chat(chat_id).await;
             }
@@ -449,20 +415,21 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         // Single-flight: await an in-flight load, else claim the slot (guard is
         // dropped before any `.await` — std MutexGuard is not Send).
         let action = {
-            let mut g = self.guards.lock().unwrap_or_else(|e| e.into_inner());
-            if let Some(existing) = g.loading.get(chat_id).cloned() {
+            let g = self.guards.lock_recover();
+            if let Some(existing) = g.loading.get(chat_id) {
                 Flight::Await(existing)
             } else if self.active_chats.contains_key(chat_id) {
                 Flight::Skip
             } else {
-                let n = Arc::new(Notify::new());
-                g.loading.insert(chat_id.to_string(), n.clone());
-                Flight::Claimed(n)
+                match g.loading.claim(chat_id) {
+                    Ok(claim) => Flight::Claimed(claim),
+                    Err(waiter) => Flight::Await(waiter),
+                }
             }
         };
         let notify = match action {
             Flight::Await(existing) => {
-                join_flight(&self.guards, existing, |g| g.loading.get(chat_id)).await;
+                existing.wait().await;
                 return false;
             }
             // The cell already exists: no reload needed, but this is still a
@@ -475,40 +442,23 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             Flight::Claimed(n) => n,
         };
         let reloaded = self.do_load_chat(chat_id).await;
-        self.guards
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .loading
-            .remove(chat_id);
-        notify.notify_waiters();
+        drop(notify);
         reloaded
     }
 
     /// Await any in-flight load (chat_manager's `getMessages` inflight check).
     pub(crate) async fn await_loading(&self, chat_id: &str) {
-        let n = self
-            .guards
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .loading
-            .get(chat_id)
-            .cloned();
+        let n = self.guards.lock_recover().loading.get(chat_id);
         if let Some(n) = n {
-            join_flight(&self.guards, n, |g| g.loading.get(chat_id)).await;
+            n.wait().await;
         }
     }
 
     /// Await any in-flight spawn (config_manager's `startingChats` check).
     pub(crate) async fn await_starting(&self, chat_id: &str) -> bool {
-        let n = self
-            .guards
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .starting
-            .get(chat_id)
-            .cloned();
+        let n = self.guards.lock_recover().starting.get(chat_id);
         if let Some(n) = n {
-            join_flight(&self.guards, n, |g| g.starting.get(chat_id)).await;
+            n.wait().await;
             true
         } else {
             false
@@ -523,7 +473,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         self.touch(chat_id);
         if let Some(cell) = self.get_active(chat_id) {
             let (spawned, process) = {
-                let guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+                let guard = cell.lock_recover();
                 let spawned = guard.session.as_ref().is_some_and(|s| s.is_spawned());
                 let process = guard.session.as_ref().and_then(|s| s.get_process_info());
                 (spawned, process)
@@ -539,33 +489,29 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             }
         }
 
-        // Claim the single-flight slot (or grab an in-flight Notify) WITHOUT
+        // Claim the single-flight slot WITHOUT
         // holding the guard across the `.await` (std MutexGuard is not Send).
         let action = {
-            let mut g = self.guards.lock().unwrap_or_else(|e| e.into_inner());
-            if let Some(existing) = g.starting.get(chat_id).cloned() {
+            let g = self.guards.lock_recover();
+            if let Some(existing) = g.starting.get(chat_id) {
                 Flight::Await(existing)
             } else {
-                let n = Arc::new(Notify::new());
-                g.starting.insert(chat_id.to_string(), n.clone());
-                Flight::Claimed(n)
+                match g.starting.claim(chat_id) {
+                    Ok(claim) => Flight::Claimed(claim),
+                    Err(waiter) => Flight::Await(waiter),
+                }
             }
         };
         let notify = match action {
             Flight::Await(existing) => {
-                join_flight(&self.guards, existing, |g| g.starting.get(chat_id)).await;
+                existing.wait().await;
                 return;
             }
             Flight::Skip => return, // start_chat never claims Skip
             Flight::Claimed(n) => n,
         };
         let result = self.do_start_chat(chat_id).await;
-        self.guards
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .starting
-            .remove(chat_id);
-        notify.notify_waiters();
+        drop(notify);
         if let Err(err) = result {
             warn!(?err, chat_id, "startChat failed");
             self.deps.emit_event(DaemonEvent::Error {
@@ -580,7 +526,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             return;
         };
         let session = {
-            let guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+            let guard = cell.lock_recover();
             if !guard.session.as_ref().is_some_and(|s| s.is_spawned()) {
                 return;
             }
@@ -588,42 +534,24 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         };
 
         {
-            let mut perms = self.permissions.lock().unwrap_or_else(|e| e.into_inner());
+            let mut perms = self.permissions.lock_recover();
             perms.clear(chat_id);
             perms.mark_interrupted(chat_id);
         }
 
         // SIGINT causes the CLI to exit. Track the exit so sendMessage can wait.
-        let already = self
-            .guards
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .interrupting
-            .contains_key(chat_id);
-        if !already {
-            let notify = Arc::new(Notify::new());
-            self.guards
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .interrupting
-                .insert(chat_id.to_string(), notify.clone());
+        let claim = self.guards.lock_recover().interrupting.claim(chat_id);
+        if let Ok(claim) = claim {
             let cell_poll = cell.clone();
-            let guards = self.guards.clone();
-            let chat_id_owned = chat_id.to_string();
             tokio::spawn(async move {
+                let _claim = claim;
                 let deadline = tokio::time::Instant::now() + Duration::from_millis(5000);
                 loop {
                     let spawned = {
-                        let g = cell_poll.lock().unwrap_or_else(|e| e.into_inner());
+                        let g = cell_poll.lock_recover();
                         g.session.as_ref().is_some_and(|s| s.is_spawned())
                     };
                     if !spawned || tokio::time::Instant::now() >= deadline {
-                        guards
-                            .lock()
-                            .unwrap_or_else(|e| e.into_inner())
-                            .interrupting
-                            .remove(&chat_id_owned);
-                        notify.notify_waiters();
                         return;
                     }
                     tokio::time::sleep(Duration::from_millis(50)).await;
@@ -640,15 +568,9 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
 
     /// Wait for any in-flight interrupt to finish (process exit).
     pub(crate) async fn wait_for_interrupt(&self, chat_id: &str) {
-        let n = self
-            .guards
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .interrupting
-            .get(chat_id)
-            .cloned();
+        let n = self.guards.lock_recover().interrupting.get(chat_id);
         if let Some(n) = n {
-            join_flight(&self.guards, n, |g| g.interrupting.get(chat_id)).await;
+            n.wait().await;
         }
     }
 
@@ -656,9 +578,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
     /// state is dropped afterwards by the facade's `ChatTeardown`.
     pub async fn archive_chat(&self, chat_id: &str, delete_worktree: bool) {
         let cell = self.get_active(chat_id);
-        let session = cell
-            .as_ref()
-            .and_then(|c| c.lock().unwrap_or_else(|e| e.into_inner()).session.clone());
+        let session = cell.as_ref().and_then(|c| c.lock_recover().session.clone());
         let chat = self.chat_or_db(chat_id);
 
         let worktree_path = chat.as_ref().and_then(|c| c.worktree_path.clone());
@@ -741,11 +661,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         let Some(cell) = self.get_active(chat_id) else {
             return;
         };
-        let session = cell
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .session
-            .clone();
+        let session = cell.lock_recover().session.clone();
         let Some(session) = session else {
             return;
         };
@@ -755,7 +671,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             warn!(?err, chat_id, "session.kill failed on stopChat");
         }
         self.orchestration.revoke(chat_id);
-        cell.lock().unwrap_or_else(|e| e.into_inner()).session = None;
+        cell.lock_recover().session = None;
     }
 
     /// Stops the chat's session and marks it ended. The in-memory per-chat
@@ -764,11 +680,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         let Some(cell) = self.get_active(chat_id) else {
             return;
         };
-        let session = cell
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .session
-            .clone();
+        let session = cell.lock_recover().session.clone();
 
         self.deps
             .kill_tasks_for_chat(chat_id, None, session.clone())
@@ -846,12 +758,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             );
             return;
         };
-        let adapter_id = cell
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .chat
-            .adapter_id
-            .clone();
+        let adapter_id = cell.lock_recover().chat.adapter_id.clone();
         if self
             .deps
             .settings_get("general", "titleGeneration.disabled")
@@ -890,7 +797,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
 
     fn apply_generated_title(&self, chat_id: &str, cell: &Arc<Mutex<ActiveChat>>, title: String) {
         let chat = {
-            let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+            let mut guard = cell.lock_recover();
             guard.chat.title = Some(title.clone());
             guard.chat.clone()
         };
@@ -918,7 +825,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         }
         self.deps.mark_context_lost(chat_id, &now);
         if let Some(cell) = self.get_active(chat_id) {
-            cell.lock().unwrap_or_else(|e| e.into_inner()).chat = chat.clone();
+            cell.lock_recover().chat = chat.clone();
         }
         self.deps.emit_event(DaemonEvent::ChatUpdated {
             chat: chat.clone(),
@@ -945,10 +852,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             chat_id.to_string(),
             Arc::new(Mutex::new(ActiveChat::new(chat.clone(), None))),
         );
-        self.messages
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .pin(chat_id);
+        self.messages.lock_recover().pin(chat_id);
 
         // Before any resume target is read below, a dead ephemeral session's
         // context loss must be marked (clears `claude_session_id`, so the early
@@ -1013,7 +917,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             return false;
         };
         if let Some(cell) = self.get_active(chat_id) {
-            cell.lock().unwrap_or_else(|e| e.into_inner()).session = Some(session.clone());
+            cell.lock_recover().session = Some(session.clone());
         }
 
         let history = match composed {
@@ -1040,15 +944,14 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         if let Some((remapped, active_from)) = history
             && !remapped.is_empty()
         {
-            let mut messages = self.messages.lock().unwrap_or_else(|e| e.into_inner());
+            let mut messages = self.messages.lock_recover();
             let previous = messages.get(chat_id).cloned();
             messages.set(chat_id, remapped);
             let remapped = messages.get(chat_id).cloned().unwrap_or_default();
             drop(messages);
             let active_slice = &remapped[active_from.min(remapped.len())..];
             self.permissions
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
+                .lock_recover()
                 .restore_pending_permission(chat_id, active_slice);
             // Raise the resync only when the reload actually changed the
             // cached list — "no previous entry" counts as changed, but a
@@ -1094,7 +997,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         })?;
 
         let (spawned, process, mut chat) = {
-            let guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+            let guard = cell.lock_recover();
             (
                 guard.session.as_ref().is_some_and(|s| s.is_spawned()),
                 guard.session.as_ref().and_then(|s| s.get_process_info()),
@@ -1149,7 +1052,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             .ok_or_else(|| {
                 LifecycleError::Message(format!("Adapter {} not found", chat.adapter_id))
             })?;
-        cell.lock().unwrap_or_else(|e| e.into_inner()).session = Some(session.clone());
+        cell.lock_recover().session = Some(session.clone());
 
         if chat.adapter_id == "codex" {
             self.deps.apply_codex_provider_tuning(&session);
@@ -1202,7 +1105,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
 }
 
 /// Offload/send/history single-flight claims sharing the `Guards` above. A child
-/// module so it can see the private `Guards`/`Flight`/`join_flight` without
+/// module so it can see the private `Guards`/`Flight` without
 /// widening their visibility.
 mod flight_claims;
 
@@ -1914,54 +1817,6 @@ mod tests {
         assert!(deps.ensure_dir_calls.lock().unwrap().is_empty());
     }
 
-    // ── join_flight lost-wakeup regression ───────────────────────────────────
-    // The owner removes the slot + notify_waiters BEFORE the awaiter registers.
-    // `notify_waiters` stores no permit, so a bare `notified().await` would hang
-    // forever; join_flight's enable-then-recheck must observe the empty slot and
-    // return instead of parking on a wakeup that already fired.
-    #[tokio::test]
-    async fn join_flight_returns_when_slot_already_completed() {
-        let guards = Arc::new(Mutex::new(Guards::default()));
-        let n = Arc::new(Notify::new());
-        guards
-            .lock()
-            .unwrap()
-            .loading
-            .insert("c1".to_string(), n.clone());
-        guards.lock().unwrap().loading.remove("c1");
-        n.notify_waiters();
-        tokio::time::timeout(
-            Duration::from_secs(1),
-            join_flight(&guards, n.clone(), |g| g.loading.get("c1")),
-        )
-        .await
-        .expect("join_flight hung after a completed single-flight (lost wakeup)");
-    }
-
-    // A waiter that registers while the slot is live must still be woken when the
-    // owner later completes (remove + notify_waiters).
-    #[tokio::test]
-    async fn join_flight_wakes_when_owner_completes_after_registration() {
-        let guards = Arc::new(Mutex::new(Guards::default()));
-        let n = Arc::new(Notify::new());
-        guards
-            .lock()
-            .unwrap()
-            .loading
-            .insert("c1".to_string(), n.clone());
-        let g2 = guards.clone();
-        let n2 = n.clone();
-        let waiter =
-            tokio::spawn(async move { join_flight(&g2, n2, |g| g.loading.get("c1")).await });
-        tokio::time::sleep(Duration::from_millis(50)).await;
-        guards.lock().unwrap().loading.remove("c1");
-        n.notify_waiters();
-        tokio::time::timeout(Duration::from_secs(1), waiter)
-            .await
-            .expect("waiter never woke after owner completed")
-            .unwrap();
-    }
-
     #[test]
     fn default_model_for_uses_only_explicit_provider_settings() {
         let deps = FakeDeps::new(chat_over("c1", None, ChatStatus::Active), Vec::new());
@@ -1976,12 +1831,6 @@ mod tests {
             assert_eq!(mgr.default_model_for("codex").as_deref(), expected);
         }
     }
-
-    // ── pending-fork session building ─────────────────────────────────────────
-    // An unsent fork has no `claude_session_id` yet, so `do_load_chat`/
-    // `do_start_chat` must not bail out on that early guard alone — they resume
-    // from `chats.pending_fork` instead. Exercised after a restart (the chat
-    // starts out of `active_chats`, matching `load_chat`'s Skip-when-active guard).
 
     fn pending_fork() -> PendingForkState {
         PendingForkState {

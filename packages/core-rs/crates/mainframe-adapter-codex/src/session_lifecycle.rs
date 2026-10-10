@@ -1,37 +1,24 @@
 use super::*;
 impl CodexSession {
     pub(super) async fn kill_inner(&self) -> Result<(), AdapterError> {
-        let sink = self.sink.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        let sink = self.sink.lock_recover().clone();
         clear_after_exit(&self.state, &*sink);
-        let client = self
-            .client
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone();
+        let client = self.client.lock_recover().clone();
         let Some(client) = client else {
             return Ok(());
         };
-        if let Some(approval) = self
-            .approval_handler
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .as_ref()
-        {
+        if let Some(approval) = self.approval_handler.lock_recover().as_ref() {
             approval.reject_all();
         }
         client.close();
         let _ = tokio::time::timeout(Duration::from_millis(3000), client.closed()).await;
-        *self.client.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        *self.client.lock_recover() = None;
         Ok(())
     }
     pub(super) async fn interrupt_inner(&self) -> Result<(), AdapterError> {
-        let client = self
-            .client
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone();
+        let client = self.client.lock_recover().clone();
         let (thread_id, turn_id) = {
-            let mut st = self.state.lock().unwrap_or_else(|e| e.into_inner());
+            let mut st = self.state.lock_recover();
             st.command_state.clear();
             (st.thread_id.clone(), st.current_turn_id.clone())
         };
@@ -59,26 +46,21 @@ impl CodexSession {
 
         JsonRpcHandlers {
             on_notification: Box::new(move |method, params| {
-                let s = sink_n.lock().unwrap_or_else(|e| e.into_inner()).clone();
-                handle_notification(
-                    &method,
-                    &params,
-                    &s,
-                    &mut state_n.lock().unwrap_or_else(|e| e.into_inner()),
-                );
+                let s = sink_n.lock_recover().clone();
+                handle_notification(&method, &params, &s, &mut state_n.lock_recover());
             }),
             on_request: self.request_handler(approval),
             on_error: Box::new(move |error| {
-                let s = sink_e.lock().unwrap_or_else(|e| e.into_inner()).clone();
+                let s = sink_e.lock_recover().clone();
                 s.on_error(AdapterError::Message(error));
             }),
             on_exit: Box::new(move |code| {
-                let s = sink_x.lock().unwrap_or_else(|e| e.into_inner()).clone();
+                let s = sink_x.lock_recover().clone();
                 clear_after_exit(&state_x, &*s);
-                *status_x.lock().unwrap_or_else(|e| e.into_inner()) = AdapterProcessStatus::Stopped;
-                *client_slot_x.lock().unwrap_or_else(|e| e.into_inner()) = None;
+                *status_x.lock_recover() = AdapterProcessStatus::Stopped;
+                *client_slot_x.lock_recover() = None;
                 s.on_exit(code);
-                if let Some(cb) = on_exit_cb.lock().unwrap_or_else(|e| e.into_inner()).take() {
+                if let Some(cb) = on_exit_cb.lock_recover().take() {
                     cb();
                 }
             }),
@@ -93,12 +75,8 @@ impl CodexSession {
         let client_slot_r = self.client.clone();
         let approval_r = approval;
         Box::new(move |method, params, id| {
-            let plan_mode = config_r.lock().unwrap_or_else(|e| e.into_inner()).plan_mode;
-            let current_turn_plan = state_r
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .current_turn_plan
-                .clone();
+            let plan_mode = config_r.lock_recover().plan_mode;
+            let current_turn_plan = state_r.lock_recover().current_turn_plan.clone();
             approval_r.set_plan_context(PlanContext {
                 plan_mode,
                 current_turn_plan,
@@ -109,7 +87,7 @@ impl CodexSession {
                 &params,
                 id,
                 Box::new(move |rpc_id, result| {
-                    if let Some(c) = cs.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+                    if let Some(c) = cs.lock_recover().as_ref() {
                         c.respond(rpc_id, result);
                     }
                 }),
@@ -119,7 +97,7 @@ impl CodexSession {
 }
 
 pub(super) fn clear_after_exit(state: &Mutex<CodexSessionState>, sink: &dyn SessionSink) {
-    let mut state = state.lock().unwrap_or_else(|e| e.into_inner());
+    let mut state = state.lock_recover();
     state.presentation.invalidate_unfinished(sink);
     state.clear_transient();
 }

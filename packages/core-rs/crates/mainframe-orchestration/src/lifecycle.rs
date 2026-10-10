@@ -1,6 +1,7 @@
 //! The service's reactions to chat lifecycle: task progress, outbox
 //! flushes when a target goes idle, and credential revocation on exit.
 
+use mainframe_types::sync::LockExt as _;
 use std::sync::Arc;
 
 use mainframe_types::events::{ChatUpdatedReason, DaemonEvent};
@@ -223,8 +224,7 @@ impl OrchestrationService {
     async fn on_lagged(&self) {
         let tracked: Vec<String> = self
             .active_children
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .values()
             .cloned()
             .collect();

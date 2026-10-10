@@ -50,7 +50,7 @@ pub struct LspServerHandle {
 
 impl LspServerHandle {
     pub(super) fn lock_inner(&self) -> std::sync::MutexGuard<'_, HandleInner> {
-        self.inner.lock().unwrap_or_else(|e| e.into_inner())
+        self.inner.lock_recover()
     }
 
     /// Whether a client is currently attached (parity with `handle.client` truthiness).
@@ -96,12 +96,12 @@ impl LspServerHandle {
 
     /// Take the child's stdout pipe (the bridge or shutdown consumes it once).
     pub fn take_stdout(&self) -> Option<ChildStdout> {
-        self.stdout.lock().unwrap_or_else(|e| e.into_inner()).take()
+        self.stdout.lock_recover().take()
     }
 
     /// Take the child's stderr pipe (the bridge consumes it once).
     pub fn take_stderr(&self) -> Option<ChildStderr> {
-        self.stderr.lock().unwrap_or_else(|e| e.into_inner()).take()
+        self.stderr.lock_recover().take()
     }
 
     #[cfg(test)]

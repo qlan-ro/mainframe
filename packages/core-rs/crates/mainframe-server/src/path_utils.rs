@@ -1,40 +1,5 @@
-//! SECURITY-critical: `resolve_and_validate_path` canonicalizes (realpath) and
-//! then confirms strict containment within the base, closing path-traversal and
-//! sibling-prefix seams. It uses async `tokio::fs::canonicalize` so no blocking
-//! I/O runs on the async executor; symlinks are resolved and non-existent or
-//! escaping paths fail closed.
-
+use mainframe_runtime::fs::{is_within_base, resolve_and_validate_path};
 use std::path::{Path, PathBuf};
-
-/// True when `real_target` is `real_base` itself or lies strictly beneath it.
-/// The separator guard is security-critical: a bare `starts_with` on the string
-/// would admit a sibling like `/proj-evil` for base `/proj`. A filesystem root
-/// already ends in the separator, so a second one must not be appended.
-pub fn is_within_base(real_base: &Path, real_target: &Path) -> bool {
-    if real_target == real_base {
-        return true;
-    }
-    // `Path::starts_with` compares whole components, so `/proj` does NOT
-    // "start with" `/proj-evil` and vice-versa — this is exactly the
-    // separator-boundary guard.
-    real_target.starts_with(real_base)
-}
-
-/// Resolves `requested_path` relative to `base_path` and confirms it is
-/// contained within `base_path` (realpath + containment). Returns the resolved
-/// absolute path or `None` if the path escapes the base or does not exist.
-///
-/// Callers MUST obtain `base_path` from the effective-path resolver first; never
-/// pass a raw user-supplied string as `base_path`. Treat `None` as forbidden
-/// (403) — never fall back to an unvalidated path.
-pub async fn resolve_and_validate_path(base_path: &str, requested_path: &str) -> Option<String> {
-    let real_base = tokio::fs::canonicalize(base_path).await.ok()?;
-    // `Path::join`: an absolute `requested` replaces the base entirely; a
-    // relative one is appended.
-    let joined = Path::new(base_path).join(requested_path);
-    let full_path = tokio::fs::canonicalize(&joined).await.ok()?;
-    is_within_base(&real_base, &full_path).then(|| path_to_string(&full_path))
-}
 
 /// Allow reading files under `~/.claude/` (plans, skills, …) when the path
 /// resolves outside the project directory. Mirrors `resolveClaudeConfigPath`.

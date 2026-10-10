@@ -4,6 +4,7 @@
 //! composed history, and record it as pending before the send. The turn's
 //! result marks it delivered (`event_handler/sink_result.rs`).
 use super::*;
+use mainframe_types::sync::LockExt as _;
 
 use std::collections::HashSet;
 
@@ -106,7 +107,7 @@ impl ChatManager {
         if let (Some(cell), Some(fresh)) =
             (self.get_active(&chat.id), self.deps.chats_get(&chat.id))
         {
-            cell.lock().unwrap_or_else(|e| e.into_inner()).chat = fresh;
+            cell.lock_recover().chat = fresh;
         }
         let fresh_native = NativeSessionRecord {
             adapter_id: native.adapter_id.clone(),

@@ -4,58 +4,44 @@
 //! a step never executes twice from a race; `cancels` lets `cancel_run` abort a
 //! run's in-flight walk via a `watch` channel.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex as StdMutex, MutexGuard};
+use std::sync::{Arc, Mutex as StdMutex};
 
 use tokio::sync::{Mutex as TokioMutex, watch};
 
 pub(crate) struct RunLocks {
-    in_flight: StdMutex<HashMap<String, Arc<TokioMutex<()>>>>,
+    in_flight: mainframe_runtime::sync::KeyedMutex,
     cancels: StdMutex<HashMap<String, watch::Sender<bool>>>,
 }
 
 impl RunLocks {
     pub(crate) fn new() -> Self {
         Self {
-            in_flight: StdMutex::new(HashMap::new()),
+            in_flight: mainframe_runtime::sync::KeyedMutex::default(),
             cancels: StdMutex::new(HashMap::new()),
         }
     }
 
     pub(crate) fn lease(&self, run_id: &str) -> Arc<TokioMutex<()>> {
-        lock_map(&self.in_flight)
-            .entry(run_id.to_string())
-            .or_default()
-            .clone()
-    }
-
-    /// Drops the per-run lock entry once nobody else holds it (checked under
-    /// the map mutex, so no new clone can race the removal).
-    pub(crate) fn release(&self, run_id: &str, lock: Arc<TokioMutex<()>>) {
-        let mut map = lock_map(&self.in_flight);
-        if map
-            .get(run_id)
-            .is_some_and(|entry| Arc::ptr_eq(entry, &lock) && Arc::strong_count(entry) == 2)
-        {
-            map.remove(run_id);
-        }
+        self.in_flight.get(run_id)
     }
 
     pub(crate) fn register_cancel(&self, run_id: &str) -> watch::Receiver<bool> {
         let (tx, rx) = watch::channel(false);
-        lock_map(&self.cancels).insert(run_id.to_string(), tx);
+        self.cancels.lock_recover().insert(run_id.to_string(), tx);
         rx
     }
 
     /// Signals a cancel to the in-flight walk, if one is registered.
     pub(crate) fn request_cancel(&self, run_id: &str) {
-        if let Some(tx) = lock_map(&self.cancels).get(run_id) {
+        if let Some(tx) = self.cancels.lock_recover().get(run_id) {
             let _ = tx.send(true);
         }
     }
 
     pub(crate) fn clear_cancel(&self, run_id: &str) {
-        lock_map(&self.cancels).remove(run_id);
+        self.cancels.lock_recover().remove(run_id);
     }
 }
 
@@ -71,12 +57,4 @@ pub(crate) async fn cancel_requested(rx: &mut watch::Receiver<bool>) {
         }
     }
     std::future::pending::<()>().await
-}
-
-/// A poisoned map mutex only means another task panicked mid-insert; the
-/// map itself is still coherent (db.rs precedent).
-fn lock_map<T>(mutex: &StdMutex<T>) -> MutexGuard<'_, T> {
-    mutex
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }

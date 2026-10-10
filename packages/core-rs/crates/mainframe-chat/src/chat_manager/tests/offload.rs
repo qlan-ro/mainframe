@@ -61,9 +61,7 @@ fn offloader_for(
     )
 }
 
-fn now_ms() -> i64 {
-    chrono::Utc::now().timestamp_millis()
-}
+use mainframe_types::time::now_ms;
 
 fn long_idle() -> i64 {
     now_ms() - IDLE_THRESHOLD_MS - 5_000
@@ -81,7 +79,7 @@ fn history_message(id: &str) -> ChatMessage {
             text: id.to_string(),
             parent_tool_use_id: None,
         })],
-        timestamp: mainframe_runtime::time::now_iso8601(),
+        timestamp: mainframe_types::time::now_iso8601(),
         metadata: None,
     }
 }

@@ -13,21 +13,6 @@ pub struct SessionJsonlPath {
     pub project_dir: String,
 }
 
-/// CLI parity: replace every char NOT in `[a-zA-Z0-9-]` with '-' (keeps dashes).
-/// Also sanitizes session ids before they become a file name.
-pub(crate) fn encode_project_path(project_path: &str) -> String {
-    project_path
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '-' {
-                c
-            } else {
-                '-'
-            }
-        })
-        .collect()
-}
-
 /// `~/.claude/projects` — the parent of every per-project transcript directory.
 fn claude_projects_root() -> PathBuf {
     home_dir()
@@ -38,7 +23,7 @@ fn claude_projects_root() -> PathBuf {
 
 /// Canonical `~/.claude/projects/<encoded>/<sessionId>.jsonl` path for a session.
 pub fn get_session_jsonl_path(session_id: &str, project_path: &str) -> SessionJsonlPath {
-    let encoded = encode_project_path(project_path);
+    let encoded = mainframe_types::paths::encode_claude_project_path(project_path);
     let project_dir = claude_projects_root().join(&encoded);
     let jsonl_path = project_dir.join(format!("{session_id}.jsonl"));
     SessionJsonlPath {
@@ -135,11 +120,14 @@ mod tests {
     #[test]
     fn encode_keeps_dashes_replaces_other_metachars() {
         assert_eq!(
-            encode_project_path("/Users/x/my_proj.v2"),
+            mainframe_types::paths::encode_claude_project_path("/Users/x/my_proj.v2"),
             "-Users-x-my-proj-v2"
         );
         // existing dashes are preserved
-        assert_eq!(encode_project_path("a-b/c"), "a-b-c");
+        assert_eq!(
+            mainframe_types::paths::encode_claude_project_path("a-b/c"),
+            "a-b-c"
+        );
     }
 
     #[tokio::test]

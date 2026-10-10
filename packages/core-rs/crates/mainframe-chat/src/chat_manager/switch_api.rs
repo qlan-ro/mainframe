@@ -3,6 +3,7 @@
 //! (fresh, or resuming its earlier native session) and carries the handoff.
 //! An unsent fork's pin becomes a borrowed view of its parent first.
 use super::*;
+use mainframe_types::sync::LockExt as _;
 
 use mainframe_types::segment::{
     BorrowConversion, SegmentLayout, SwitchCommit, SwitchProviderRequest,
@@ -42,11 +43,11 @@ impl ChatManager {
             self.check_switch(chat_id, req)?;
             // Exclusive with sends, loads and spawns, like an idle offload;
             // a send that arrives meanwhile waits for the release.
-            if !self.lifecycle.try_claim_offload(chat_id) {
+            let Some(claim) = self.lifecycle.try_claim_offload(chat_id) else {
                 return Err(SwitchError::TurnInFlight);
-            }
+            };
             let outcome = self.switch_claimed(chat_id, req, &fork_history).await;
-            self.lifecycle.release_offload(chat_id);
+            drop(claim);
             outcome?
         };
         match outcome {
@@ -191,12 +192,9 @@ impl ChatManager {
 
     /// Kills the CLI if one is spawned; the next send spawns the target.
     async fn detach_session(&self, chat_id: &str) {
-        let session = self.get_active(chat_id).and_then(|cell| {
-            cell.lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .session
-                .take()
-        });
+        let session = self
+            .get_active(chat_id)
+            .and_then(|cell| cell.lock_recover().session.take());
         if let Some(session) = session
             && let Err(err) = session.kill().await
         {
@@ -217,7 +215,7 @@ impl ChatManager {
             .chats_get(chat_id)
             .ok_or_else(|| SwitchError::NotFound(chat_id.to_string()))?;
         if let Some(cell) = self.get_active(chat_id) {
-            cell.lock().unwrap_or_else(|e| e.into_inner()).chat = fresh;
+            cell.lock_recover().chat = fresh;
         }
         let changed = self.apply_divider_changes(chat_id, commit, layout);
         if changed {
@@ -239,7 +237,7 @@ impl ChatManager {
         commit: &SwitchCommit,
         layout: &SegmentLayout,
     ) -> bool {
-        let mut messages = self.messages.lock().unwrap_or_else(|e| e.into_inner());
+        let mut messages = self.messages.lock_recover();
         // A cold chat composes its dividers on load; only a warm cache is edited.
         if messages.get(chat_id).is_none_or(Vec::is_empty) {
             return false;

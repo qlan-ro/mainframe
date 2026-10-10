@@ -268,4 +268,8 @@ fn version_at_least_parses_triples() {
     assert!(!version_at_least("1.0.108", PARTIAL_MESSAGES_MIN_VERSION));
     assert!(!version_at_least("0.2.75", PARTIAL_MESSAGES_MIN_VERSION));
     assert!(!version_at_least("garbage", PARTIAL_MESSAGES_MIN_VERSION));
+    assert!(!version_at_least(
+        "1.0.109-beta",
+        PARTIAL_MESSAGES_MIN_VERSION
+    ));
 }

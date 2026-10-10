@@ -3,8 +3,8 @@
 //! `chat_native_sessions.rs`); `ChatsRepository` routes its session-column
 //! writes through the free functions here, in its own transaction.
 
-use mainframe_runtime::time::now_iso8601;
 use mainframe_types::segment::{SegmentKind, SegmentRecord};
+use mainframe_types::time::now_iso8601;
 use rusqlite::{Connection, OptionalExtension};
 
 use crate::DbError;

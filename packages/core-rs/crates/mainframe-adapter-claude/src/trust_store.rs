@@ -134,36 +134,15 @@ pub async fn write_workspace_trust(
     projects.insert(project_path.to_string(), entry.into());
     config.insert("projects".to_string(), projects.into());
 
-    // Unique per call (not just per process) so two concurrent trust writes
-    // never share a tmp file and clobber or steal each other's rename.
-    let mut tmp = path.clone().into_os_string();
-    tmp.push(format!(".tmp-{}-{}", std::process::id(), nanoid::nanoid!()));
-    let tmp = PathBuf::from(tmp);
     let body = serde_json::to_string_pretty(&config).map_err(TrustStoreError::Serialize)?;
-
-    let result = write_and_rename(&tmp, &path, &body).await;
-    // No-op once the rename above has succeeded; only cleans up an orphan
-    // left behind when the write/rename above failed partway through.
-    let _ = tokio::fs::remove_file(&tmp).await;
-
-    result?;
+    mainframe_runtime::fs::write_atomic(&path, body.as_bytes(), false)
+        .await
+        .map_err(|error| TrustStoreError::Write {
+            path: error.path,
+            source: error.source,
+        })?;
     tracing::info!(project_path, "workspace trusted");
     Ok(())
-}
-
-async fn write_and_rename(tmp: &Path, dest: &Path, body: &str) -> Result<(), TrustStoreError> {
-    tokio::fs::write(tmp, body)
-        .await
-        .map_err(|source| TrustStoreError::Write {
-            path: tmp.to_path_buf(),
-            source,
-        })?;
-    tokio::fs::rename(tmp, dest)
-        .await
-        .map_err(|source| TrustStoreError::Write {
-            path: dest.to_path_buf(),
-            source,
-        })
 }
 
 #[cfg(test)]

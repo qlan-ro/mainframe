@@ -36,7 +36,6 @@ pub mod git_chat;
 pub mod git_remotes;
 pub mod git_write;
 pub mod health;
-mod identifier;
 pub mod launch;
 pub mod lsp_routes;
 pub mod mcp;
