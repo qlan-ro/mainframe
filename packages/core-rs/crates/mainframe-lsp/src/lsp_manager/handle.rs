@@ -39,7 +39,7 @@ pub struct LspServerHandle {
     pub project_path: String,
     pub(super) pid: u32,
     /// Signals for the monitor task, the child's only reaper (see `deliver`).
-    pub(super) signal_tx: mpsc::UnboundedSender<&'static str>,
+    pub(super) signal_tx: mpsc::UnboundedSender<Signal>,
     pub(super) stdin_tx: mpsc::UnboundedSender<Vec<u8>>,
     pub(super) stdout: Mutex<Option<ChildStdout>>,
     pub(super) stderr: Mutex<Option<ChildStderr>>,
@@ -85,8 +85,8 @@ impl LspServerHandle {
         self.lock_inner().initialize_result.clone()
     }
 
-    pub(super) fn signal(&self, flag: &'static str) {
-        let _ = self.signal_tx.send(flag); /* expected: Err means the monitor already reaped the child */
+    pub(super) fn signal(&self, kind: Signal) {
+        let _ = self.signal_tx.send(kind); /* expected: Err means the monitor already reaped the child */
     }
 
     /// Framed writer for this child's stdin (shared by the bridge and shutdown).
@@ -115,14 +115,14 @@ impl LspServerHandle {
         child: &mut Child,
         language: &str,
         project_path: &str,
-        signal_tx: mpsc::UnboundedSender<&'static str>,
+        signal_tx: mpsc::UnboundedSender<Signal>,
     ) -> Self {
         Self {
             language: language.to_string(),
             project_path: project_path.to_string(),
             pid: child.id().unwrap_or(0),
             signal_tx,
-            stdin_tx: spawn_stdin_writer(child.stdin.take()),
+            stdin_tx: mainframe_runtime::process::spawn_stdin_writer(child.stdin.take()),
             stdout: Mutex::new(child.stdout.take()),
             stderr: Mutex::new(child.stderr.take()),
             exited: Arc::new(AtomicBool::new(false)),
@@ -130,19 +130,4 @@ impl LspServerHandle {
             inner: Mutex::new(HandleInner::default()),
         }
     }
-}
-
-fn spawn_stdin_writer(stdin: Option<tokio::process::ChildStdin>) -> mpsc::UnboundedSender<Vec<u8>> {
-    let (tx, mut rx) = mpsc::unbounded_channel::<Vec<u8>>();
-    if let Some(mut stdin) = stdin {
-        tokio::spawn(async move {
-            use tokio::io::AsyncWriteExt;
-            while let Some(bytes) = rx.recv().await {
-                if stdin.write_all(&bytes).await.is_err() || stdin.flush().await.is_err() {
-                    break;
-                }
-            }
-        });
-    }
-    tx
 }
