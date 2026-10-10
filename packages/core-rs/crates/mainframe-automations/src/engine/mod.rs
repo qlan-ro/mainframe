@@ -15,6 +15,7 @@ mod deadline;
 pub(crate) mod expects;
 pub(crate) mod markers;
 pub mod notify_verb;
+mod out_of_band;
 pub mod run_action_verb;
 mod run_locks;
 pub(crate) mod walk;

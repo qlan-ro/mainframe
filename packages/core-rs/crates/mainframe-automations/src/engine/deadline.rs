@@ -20,8 +20,8 @@ use crate::error::StoreError;
 use crate::store::{AutomationCheckpoint, RunRecord, StepStatus, TerminalStatus, epoch_ms_now};
 
 use super::advance::Interpreter;
-use super::checkpoint::{fail_step_entry, has_waiting_entry, recompute_wake_at};
-use super::markers::fail_enclosing_branch;
+use super::checkpoint::recompute_wake_at;
+use super::out_of_band::{AfterFailure, FailingStep, fail_step_out_of_band};
 
 const AGENT_DEADLINE_ERROR: &str = "agent step deadline exceeded";
 
@@ -70,15 +70,8 @@ impl Interpreter {
     /// Fails one step outside the walk, applying the same keepGoing policy
     /// the engine uses everywhere: without it the run finalizes here, since
     /// a later advance() skips `failed` entries without consulting keepGoing.
-    ///
-    /// Extended for Phase 4a concurrency (MUST-FIX 3), identically to
-    /// `agent_settle::fail_waiting_step`: a step inside a concurrent branch
-    /// needs that branch's own marker written here too, or the driver
-    /// launders it into `Succeeded` on replay — unless `keepGoing` is true,
-    /// in which case skipping the marker IS the correct behavior (same
-    /// reasoning as `fail_waiting_step`). A run with an outstanding
-    /// `Waiting` entry must never finalize out-of-band, so a still-waiting
-    /// sibling forces `advance()` regardless of `keepGoing`.
+    /// The write, branch marker and `RunUpdated` emit are shared with the
+    /// agent settle path through `out_of_band::fail_step_out_of_band`.
     pub async fn fail_step(
         &self,
         run_id: &str,
@@ -89,34 +82,22 @@ impl Interpreter {
             return Ok(());
         };
         let (step, enclosing_branch) = lookup_failing_step(&run, step_ref);
-        let step_keep_going = step.is_some_and(Step::keep_going);
-
-        let step_ref_owned = step_ref.to_string();
-        let error_owned = error.to_string();
-        let patched = self
-            .deps
-            .store
-            .patch_checkpoint(run_id, move |cp| {
-                fail_step_entry(cp, &step_ref_owned, &error_owned);
-                if !step_keep_going {
-                    fail_enclosing_branch(cp, &enclosing_branch, &error_owned);
-                }
-                // A sibling branch may still be waiting — recompute rather
-                // than clobbering its deadline with None.
-                recompute_wake_at(cp);
-            })
-            .await;
-        let record = match patched {
-            Ok(record) => record,
-            Err(StoreError::TerminalRun { .. }) => return Ok(()),
-            Err(err) => return Err(err),
+        let failing = FailingStep {
+            run_id,
+            step_ref,
+            keep_going: step.is_some_and(Step::keep_going),
+            enclosing_branch,
         };
-
-        if step.is_some_and(Step::keep_going) || has_waiting_entry(&record.checkpoint) {
-            self.advance(run_id).await
-        } else {
-            self.finalize_and_emit(run_id, TerminalStatus::Failed, Some(error.to_string()))
-                .await
+        let next =
+            fail_step_out_of_band(&self.deps.store, self.deps.events.as_ref(), failing, error)
+                .await?;
+        match next {
+            None => Ok(()),
+            Some(AfterFailure::Advance) => self.advance(run_id).await,
+            Some(AfterFailure::FailRun) => {
+                self.finalize_and_emit(run_id, TerminalStatus::Failed, Some(error.to_string()))
+                    .await
+            }
         }
     }
 

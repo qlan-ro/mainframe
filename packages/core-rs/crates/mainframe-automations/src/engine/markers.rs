@@ -33,8 +33,8 @@ pub(crate) fn branch_marker(block_id: &str, ref_suffix: &str) -> String {
 }
 
 /// Writes the enclosing branch's own marker `Failed`, synchronously and in
-/// place — shared by `agent_settle::fail_waiting_step` and
-/// `deadline::fail_step`, the two out-of-band failure paths that bypass
+/// place — called from `out_of_band::fail_step_out_of_band`, the write
+/// shared by the two failure paths (agent settle, deadline) that bypass
 /// `blocks_concurrent`'s driver entirely. Without this, the driver's next
 /// replay would skip the failed leaf (already terminal) and launder the
 /// branch into `Succeeded`. A no-op outside a concurrent branch.
