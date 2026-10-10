@@ -298,6 +298,15 @@ impl ChatsRepository {
         }
     }
 
+    /// Reads back a row this repository just inserted. Every insert path
+    /// returns its `Chat` through here, so the value a caller emits as
+    /// `chat.created` comes from the same `map_row` mapping as every later
+    /// read and carries the same keys.
+    pub(crate) fn get_inserted(&self, id: &str) -> Result<Chat, DbError> {
+        self.get(id)?
+            .ok_or_else(|| DbError::Message(format!("chat {id} insert did not round-trip")))
+    }
+
     /// `new_chat.scratch_root` is required and used only when `project_id ==
     /// NO_PROJECT_ID`: the row's `scratch_path` becomes `<scratch_root>/<id>`.
     /// Nothing is created on disk here — the directory is created lazily on
@@ -342,57 +351,7 @@ impl ChatsRepository {
         )?;
         chat_segments::ensure_seeded(&self.db, &id)?;
 
-        Ok(Chat {
-            id,
-            adapter_id: new_chat.adapter_id.clone(),
-            no_project: new_chat.project_id == NO_PROJECT_ID,
-            project_id: new_chat.project_id.clone(),
-            title: None,
-            claude_session_id: None,
-            session_file_path: None,
-            model: new_chat.model.clone(),
-            permission_mode: parse_execution_mode(new_chat.permission_mode.clone()),
-            plan_mode: Some(false),
-            status: ChatStatus::Active,
-            created_at: now.clone(),
-            updated_at: now,
-            total_cost: 0.0,
-            total_tokens_input: 0,
-            total_tokens_output: 0,
-            last_context_tokens_input: 0,
-            last_context_total_tokens: None,
-            last_context_max_tokens: None,
-            context_files: None,
-            mentions: None,
-            modified_files: None,
-            worktree_path: None,
-            branch_name: None,
-            process_state: None,
-            display_status: None,
-            is_running: None,
-            background_activity: None,
-            worktree_missing: None,
-            directory_missing: None,
-            missing_directory_path: None,
-            transcript_missing: None,
-            todos: None,
-            pinned: None,
-            effort: None,
-            fast: None,
-            ultracode: None,
-            adaptive_thinking: None,
-            detected_prs: None,
-            tags: None,
-            automation_run_id: new_chat.automation_run_id.clone(),
-            temporary: new_chat.temporary,
-            context_lost_at: None,
-            vendor_session_ephemeral: false,
-            scratch_path,
-            parent_chat_id: None,
-            side_chat_id: None,
-            side_chat_waiting: None,
-            orchestration: Default::default(),
-        })
+        self.get_inserted(&id)
     }
 
     /// A single INSERT that seeds a new chat from its parent's resolved config
@@ -453,57 +412,7 @@ impl ChatsRepository {
         }
         tx.commit()?;
 
-        Ok(Chat {
-            id,
-            adapter_id: insert.adapter_id.to_string(),
-            project_id: insert.project_id.to_string(),
-            title: insert.title.map(str::to_string),
-            claude_session_id: None,
-            session_file_path: None,
-            model: insert.model.map(str::to_string),
-            permission_mode: insert.permission_mode,
-            plan_mode: Some(insert.plan_mode),
-            status: ChatStatus::Active,
-            created_at: now.clone(),
-            updated_at: now,
-            total_cost: 0.0,
-            total_tokens_input: 0,
-            total_tokens_output: 0,
-            last_context_tokens_input: 0,
-            last_context_total_tokens: None,
-            last_context_max_tokens: None,
-            context_files: None,
-            mentions: None,
-            modified_files: None,
-            worktree_path: insert.worktree_path.map(str::to_string),
-            branch_name: insert.branch_name.map(str::to_string),
-            process_state: None,
-            display_status: None,
-            is_running: None,
-            background_activity: None,
-            worktree_missing: None,
-            directory_missing: None,
-            missing_directory_path: None,
-            transcript_missing: None,
-            todos: None,
-            pinned: None,
-            effort: Some(insert.effort),
-            fast: Some(insert.fast),
-            ultracode: Some(insert.ultracode),
-            adaptive_thinking: Some(insert.adaptive_thinking),
-            detected_prs: None,
-            tags: None,
-            automation_run_id: None,
-            temporary: false,
-            no_project: insert.project_id == NO_PROJECT_ID,
-            context_lost_at: None,
-            vendor_session_ephemeral: false,
-            scratch_path: None,
-            parent_chat_id: Some(Some(insert.parent_chat_id.to_string())),
-            side_chat_id: None,
-            side_chat_waiting: None,
-            orchestration: Default::default(),
-        })
+        self.get_inserted(&id)
     }
 
     /// Hard-delete a chat row (rule 5, discard step 4). `chat_tags` cascade via
@@ -1072,7 +981,7 @@ fn parse_todos(value: Option<String>) -> Option<Vec<TodoItem>> {
 // lastContextTokensInput) and transcriptMissing (last, after planMode, `?1:0`).
 // New clear_session (NULL session id/file + transcript_missing=0) and clear_worktree
 // (NULL worktree_path/branch_name) mirror the degraded-recovery helpers. create()
-// seeds the four new Chat fields to None (backgroundActivity is never persisted).
+// and create_fork() insert, then read the row back through map_row.
 // notes(orig): CHAT_SELECT_FIELDS aliases every column to camelCase, read by that name.
 // mapRow's tri-state fields follow the types crate: processState/fast/ultracode/
 // adaptiveThinking are always present (Some(None) for NULL → serializes null);
