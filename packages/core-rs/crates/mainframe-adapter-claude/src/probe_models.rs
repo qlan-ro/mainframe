@@ -1,10 +1,12 @@
 use std::process::Stdio;
 use std::time::Duration;
 
+use mainframe_runtime::ResolvedPath;
+use mainframe_runtime::process::cli_command;
+
 use mainframe_types::adapter::{AdapterModel, EffortLevel};
 use serde_json::Value;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::process::Command;
 
 const PROBE_TIMEOUT_MS: u64 = 10_000;
 
@@ -199,7 +201,7 @@ pub fn extract_probe_payload(event: &Value) -> Option<ProbeResult> {
 /// resolve with the first parsed model catalog (or `None` on error/timeout/exit).
 pub async fn probe_models(executable: &str, path: &str) -> Option<ProbeResult> {
     let cwd = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
-    let mut child = match Command::new(executable)
+    let mut child = match cli_command(executable, &ResolvedPath::from_value(path))
         .args([
             "--output-format",
             "stream-json",
@@ -210,14 +212,8 @@ pub async fn probe_models(executable: &str, path: &str) -> Option<ProbeResult> {
             "stdio",
         ])
         .current_dir(cwd)
-        .env("PATH", path)
-        .env("FORCE_COLOR", "0")
-        .env("NO_COLOR", "1")
         .env_remove("CLAUDECODE")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true)
+        .stderr(Stdio::null())
         .spawn()
     {
         Ok(child) => child,
@@ -227,15 +223,9 @@ pub async fn probe_models(executable: &str, path: &str) -> Option<ProbeResult> {
         }
     };
 
-    let pumps = child
-        .stderr
-        .take()
-        .map(|stderr| mainframe_runtime::process::spawn_chunk_pump(stderr, |_| true))
-        .into_iter()
-        .collect();
     let mut stdin = child.stdin.take();
     let stdout = child.stdout.take();
-    let process = mainframe_runtime::process::ManagedProcess::spawn(child, pumps);
+    let process = mainframe_runtime::process::ManagedProcess::spawn(child, Vec::new());
 
     // Keep stdin open for the lifetime of the read loop (dropping it would close
     // the pipe and the CLI could exit before answering).

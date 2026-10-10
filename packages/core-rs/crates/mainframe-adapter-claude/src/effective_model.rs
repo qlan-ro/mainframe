@@ -1,10 +1,11 @@
 use std::{process::Stdio, time::Duration};
 
 use mainframe_adapter_api::AdapterError;
+use mainframe_runtime::{ResolvedPath, process::cli_command};
 use serde_json::{Value, json};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
-    process::{ChildStdin, ChildStdout, Command},
+    process::{ChildStdin, ChildStdout},
 };
 
 pub(crate) fn applied_model(response: &Value) -> Option<String> {
@@ -31,7 +32,7 @@ pub(crate) async fn required_probe(
 }
 
 pub(crate) async fn probe(executable: &str, path: &str, cwd: &str) -> Option<String> {
-    let mut child = Command::new(executable)
+    let mut child = cli_command(executable, &ResolvedPath::from_value(path))
         .args([
             "--input-format",
             "stream-json",
@@ -43,12 +44,8 @@ pub(crate) async fn probe(executable: &str, path: &str, cwd: &str) -> Option<Str
             "--no-session-persistence",
         ])
         .current_dir(cwd)
-        .env("PATH", path)
         .env_remove("CLAUDECODE")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
         .stderr(Stdio::null())
-        .kill_on_drop(true)
         .spawn()
         .ok()?;
     let stdin = child.stdin.take();
