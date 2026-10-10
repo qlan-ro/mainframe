@@ -5,7 +5,11 @@ use super::{
 use crate::{DbError, sql_types::FromRow};
 use mainframe_types::chat::{Chat, NO_PROJECT_ID};
 
-pub struct ChatRow {
+/// The `chats` columns `CHAT_SELECT_FIELDS` reads, as stored (snake_case,
+/// integers for booleans, JSON text for arrays). `into_chat` is the one
+/// mapping onto the wire `Chat`; derived and enrichment fields are filled by
+/// the caller.
+pub(crate) struct ChatRow {
     id: String,
     adapter_id: String,
     project_id: String,

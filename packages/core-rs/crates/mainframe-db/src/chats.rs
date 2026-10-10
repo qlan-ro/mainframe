@@ -1,7 +1,8 @@
 mod row;
 use crate::chat_assignments::ChatAssignments;
 use crate::sql_types::FromRow;
-pub use row::ChatRow;
+use mainframe_types::chat_patch::ChatPatch;
+use row::ChatRow;
 use std::rc::Rc;
 
 use mainframe_types::adapter::{DetectedPr, DetectedPrSource, EffortLevel, ForkSource};
@@ -99,10 +100,8 @@ pub struct ChatListFilters {
     pub include_temporary: bool,
 }
 
-pub use mainframe_types::chat_patch::ChatPatch as ChatUpdate;
-
 /// The part of a `chats` patch that belongs to the active native session.
-fn native_patch(updates: &ChatUpdate) -> NativePatch {
+fn native_patch(updates: &ChatPatch) -> NativePatch {
     NativePatch {
         adapter_id: updates.adapter_id.clone(),
         model: updates.model.clone(),
@@ -383,7 +382,7 @@ impl ChatsRepository {
     /// usage, `transcript_missing`, adapter and model) are routed through the
     /// segment repository first, in the same transaction, so the `chats`
     /// mirror and the active native-session row never disagree.
-    pub fn update(&self, id: &str, updates: &ChatUpdate) -> Result<(), DbError> {
+    pub fn update(&self, id: &str, updates: &ChatPatch) -> Result<(), DbError> {
         let tx = self.db.unchecked_transaction()?;
         if let Some(native_id) = &updates.claude_session_id {
             chat_segments::record_native_id(
@@ -399,7 +398,7 @@ impl ChatsRepository {
         Ok(())
     }
 
-    fn update_columns(&self, id: &str, updates: &ChatUpdate) -> Result<(), DbError> {
+    fn update_columns(&self, id: &str, updates: &ChatPatch) -> Result<(), DbError> {
         let (sets, mut values) = updates.into_assignments()?;
 
         if sets.is_empty() {

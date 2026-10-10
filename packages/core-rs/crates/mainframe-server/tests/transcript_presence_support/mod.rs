@@ -16,7 +16,6 @@ use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_chat::chat_manager::ChatManager;
 use mainframe_claude_workflows::store::ClaudeWorkflowStore;
 use mainframe_db::DatabaseManager;
-use mainframe_db::chats::ChatUpdate;
 use mainframe_server::chat_seams::{NoopLaunchStopper, NoopScopeTunnelStopper};
 use mainframe_server::{Db, GitFactory, build_chat_manager};
 use mainframe_services::attachment::AttachmentStore;
@@ -24,6 +23,7 @@ use mainframe_services::push::PushService;
 use mainframe_services::quota::{QuotaManager, QuotaManagerDeps, QuotaSettingsStore};
 use mainframe_types::adapter::{AdapterCapabilities, AdapterModel, SessionOptions};
 use mainframe_types::chat::Chat;
+use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::transcript::TranscriptLocation;
 use tempfile::TempDir;
@@ -174,7 +174,7 @@ pub fn harness(adapter: Option<Arc<StubAdapter>>, seed_missing: Option<bool>) ->
     db.call_blocking(move |d| {
         d.chats.update(
             &chat_id_for_seed,
-            &ChatUpdate {
+            &ChatPatch {
                 claude_session_id: Some("sess-1".to_string()),
                 transcript_missing: seed_missing,
                 ..Default::default()

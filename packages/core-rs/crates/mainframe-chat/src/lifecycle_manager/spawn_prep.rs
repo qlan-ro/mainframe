@@ -5,6 +5,7 @@
 //! effective cwd (ensuring a non-project chat's scratch directory along the
 //! way) and the no-persistence decision, then applying that decision's flag
 //! write + active-cell mirror.
+use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::sync::LockExt as _;
 use std::sync::{Arc, Mutex};
 
@@ -14,7 +15,7 @@ use crate::chat_cwd::chat_cwd;
 use crate::no_persistence;
 use crate::types::ActiveChat;
 
-use super::{ChatLifecycleManager, LifecycleChatUpdate, LifecycleError, LifecycleManagerDeps};
+use super::{ChatLifecycleManager, LifecycleError, LifecycleManagerDeps};
 
 /// The per-spawn cwd + persistence decision.
 pub(super) struct SpawnPlan {
@@ -68,7 +69,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
     ) {
         self.deps.chats_update(
             chat_id,
-            &LifecycleChatUpdate {
+            &ChatPatch {
                 vendor_session_ephemeral: Some(no_persistence),
                 ..Default::default()
             },

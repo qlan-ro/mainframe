@@ -46,7 +46,7 @@ impl ChatManager {
             }
             self.deps.chats_update(
                 chat_id,
-                &ChatUpdate {
+                &ChatPatch {
                     title: Some(title),
                     ..Default::default()
                 },

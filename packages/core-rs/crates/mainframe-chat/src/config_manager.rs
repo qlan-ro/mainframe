@@ -5,6 +5,7 @@ use mainframe_adapter_api::{AdapterError, AdapterSession, BoxFuture};
 use mainframe_services::workspace::{create_worktree, move_session_files, remove_worktree};
 use mainframe_types::adapter::model_endpoint;
 use mainframe_types::chat::Project;
+use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::settings::{ExecutionMode, GeneralConfig};
 use tracing::warn;
@@ -33,11 +34,6 @@ pub enum ConfigError {
     Adapter(#[from] AdapterError),
 }
 
-/// A partial `Chat` patch for `chats_update`. Worktree fields are
-/// `Option<Option<String>>` so a clear (set to none) is distinct from "leave
-/// unchanged".
-pub use mainframe_types::chat_patch::ChatPatch as ChatFieldUpdate;
-
 /// Injected dependency surface for [`ChatConfigManager`].
 ///
 /// `get_active_chat` returns the shared per-chat cell (`Arc<Mutex<ActiveChat>>`);
@@ -46,7 +42,7 @@ pub use mainframe_types::chat_patch::ChatPatch as ChatFieldUpdate;
 /// methods actually used (no not-Send `mainframe-db` repo here).
 pub trait ConfigManagerDeps: Send + Sync {
     fn get_active_chat(&self, chat_id: &str) -> Option<Arc<Mutex<ActiveChat>>>;
-    fn chats_update(&self, chat_id: &str, updates: &ChatFieldUpdate);
+    fn chats_update(&self, chat_id: &str, updates: &ChatPatch);
     fn projects_get(&self, project_id: &str) -> Option<Project>;
     fn settings_get(&self, ns: &str, key: &str) -> Option<String>;
     fn emit_event(&self, event: DaemonEvent);
@@ -182,7 +178,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
         // An async setter closure in a generic helper is unergonomic, so the
         // three settings are unrolled with identical control flow (try setter →
         // stage into updates/active.chat on Ok, warn on Err).
-        let mut updates = ChatFieldUpdate::default();
+        let mut updates = ChatPatch::default();
         let mut model_error = None;
 
         if let Some(model) = changes.model {
@@ -224,7 +220,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
             }
         }
 
-        if updates == ChatFieldUpdate::default() {
+        if updates == ChatPatch::default() {
             return model_error.map_or(Ok(()), Err);
         }
         self.deps.chats_update(chat_id, &updates);
@@ -262,7 +258,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
             cell.lock_recover().session = None;
         }
 
-        let mut updates = ChatFieldUpdate::default();
+        let mut updates = ChatPatch::default();
         {
             let mut guard = cell.lock_recover();
             if let Some(adapter_id) = changes.adapter_id {
@@ -314,7 +310,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
         }
         self.deps.chats_update(
             chat_id,
-            &ChatFieldUpdate {
+            &ChatPatch {
                 worktree_path: Some(worktree_path.clone()),
                 branch_name: Some(branch_name),
                 session_file_path,
@@ -692,7 +688,7 @@ mod tests {
 
     struct FakeDeps {
         cell: Arc<Mutex<ActiveChat>>,
-        updates: Mutex<Vec<ChatFieldUpdate>>,
+        updates: Mutex<Vec<ChatPatch>>,
         events: Mutex<Vec<DaemonEvent>>,
         apply_tuning_calls: AtomicUsize,
         project: Option<Project>,
@@ -738,7 +734,7 @@ mod tests {
         fn get_active_chat(&self, _chat_id: &str) -> Option<Arc<Mutex<ActiveChat>>> {
             Some(self.cell.clone())
         }
-        fn chats_update(&self, _chat_id: &str, updates: &ChatFieldUpdate) {
+        fn chats_update(&self, _chat_id: &str, updates: &ChatPatch) {
             self.updates.lock().unwrap().push(updates.clone());
         }
         fn projects_get(&self, _project_id: &str) -> Option<Project> {
@@ -834,7 +830,7 @@ mod tests {
         let updates = manager.deps.updates.lock().unwrap();
         assert_eq!(
             updates.as_slice(),
-            &[ChatFieldUpdate {
+            &[ChatPatch {
                 permission_mode: Some(ExecutionMode::AcceptEdits),
                 ..Default::default()
             }]
@@ -924,7 +920,7 @@ mod tests {
         );
         assert_eq!(
             manager.deps.updates.lock().unwrap().as_slice(),
-            &[ChatFieldUpdate {
+            &[ChatPatch {
                 model: Some("claude-opus-5-5".into()),
                 ..Default::default()
             }]
@@ -1036,7 +1032,7 @@ mod tests {
         let updates = manager.deps.updates.lock().unwrap();
         assert_eq!(
             updates.as_slice(),
-            &[ChatFieldUpdate {
+            &[ChatPatch {
                 worktree_path: Some(Some("/new/wt".to_string())),
                 branch_name: Some(Some("feat".to_string())),
                 ..Default::default()
@@ -1110,7 +1106,7 @@ mod tests {
             .to_string();
         assert_eq!(
             manager.deps.updates.lock().unwrap().as_slice(),
-            &[ChatFieldUpdate {
+            &[ChatPatch {
                 worktree_path: Some(Some("/new/wt".to_string())),
                 branch_name: Some(Some("feat".to_string())),
                 session_file_path: Some(expected.clone()),
@@ -1192,7 +1188,7 @@ mod tests {
         let updates = manager.deps.updates.lock().unwrap();
         assert_eq!(
             updates.as_slice(),
-            &[ChatFieldUpdate {
+            &[ChatPatch {
                 worktree_path: Some(Some("/new/wt".to_string())),
                 branch_name: Some(None),
                 ..Default::default()

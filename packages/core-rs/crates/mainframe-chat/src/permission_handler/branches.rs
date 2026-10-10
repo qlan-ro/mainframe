@@ -3,6 +3,7 @@
 //! escalation, and the normal forward-and-shift path. Split out of
 //! `permission_handler.rs` — a pure move.
 
+use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::sync::LockExt as _;
 use std::sync::{Arc, Mutex};
 
@@ -12,7 +13,7 @@ use mainframe_types::content::LeafContent;
 use mainframe_types::events::DaemonEvent;
 
 use crate::chat_surface::ChatSurfaceEvent;
-use crate::event_handler::{EventChatUpdate, PushOut};
+use crate::event_handler::PushOut;
 use crate::types::ActiveChat;
 
 use super::{ChatPermissionHandler, PermissionError, PermissionHandlerDeps, is_exit_plan_mode};
@@ -46,7 +47,7 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
             };
             self.deps.chats_update(
                 chat_id,
-                &EventChatUpdate {
+                &ChatPatch {
                     process_state: Some(Some(ProcessState::Working)),
                     ..Default::default()
                 },

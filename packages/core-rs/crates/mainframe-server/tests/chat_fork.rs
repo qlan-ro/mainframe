@@ -17,7 +17,6 @@ use mainframe_adapter_mock::MockCliAdapter;
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_claude_workflows::store::ClaudeWorkflowStore;
 use mainframe_db::DatabaseManager;
-use mainframe_db::chats::ChatUpdate;
 use mainframe_server::ctx::{AppCtx, Services};
 use mainframe_server::{
     Db, GitFactory, build_app, build_chat_manager, chat_seams::NoopLaunchStopper,
@@ -28,6 +27,7 @@ use mainframe_services::files::FileWatcherService;
 use mainframe_services::push::PushService;
 use mainframe_services::quota::{QuotaManager, QuotaManagerDeps, QuotaSettingsStore};
 use mainframe_types::chat::ProcessState;
+use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::events::DaemonEvent;
 use serde_json::Value;
 use tempfile::TempDir;
@@ -54,7 +54,7 @@ struct Harness {
 /// `fork_capable` mirrors `MockCliAdapter::with_fork_capable` (default `false`,
 /// like Codex today); `update` lets each scenario set the fields `fork_chat`'s
 /// eligibility checks gate on before the server ever answers a request.
-async fn harness(fork_capable: bool, update: ChatUpdate) -> Harness {
+async fn harness(fork_capable: bool, update: ChatPatch) -> Harness {
     let data_dir = tempfile::tempdir().unwrap();
     let db = Db::spawn(|| DatabaseManager::open(Path::new(":memory:"))).unwrap();
     let (broadcast, _keepalive) = tokio::sync::broadcast::channel::<DaemonEvent>(64);
@@ -191,8 +191,8 @@ impl Harness {
     }
 }
 
-fn with_session() -> ChatUpdate {
-    ChatUpdate {
+fn with_session() -> ChatPatch {
+    ChatPatch {
         claude_session_id: Some("parent-session".to_string()),
         ..Default::default()
     }
@@ -235,7 +235,7 @@ async fn an_adapter_without_fork_capability_returns_422_naming_the_adapter() {
 
 #[tokio::test]
 async fn no_provider_session_returns_409() {
-    let h = harness(true, ChatUpdate::default()).await;
+    let h = harness(true, ChatPatch::default()).await;
     let before = h.chat_count();
 
     let resp = h.fork(&h.chat_id, "{}").await;
@@ -247,7 +247,7 @@ async fn no_provider_session_returns_409() {
 async fn a_missing_transcript_returns_409() {
     let h = harness(
         true,
-        ChatUpdate {
+        ChatPatch {
             transcript_missing: Some(true),
             ..with_session()
         },
@@ -264,7 +264,7 @@ async fn a_missing_transcript_returns_409() {
 async fn a_missing_working_directory_returns_409() {
     let h = harness(
         true,
-        ChatUpdate {
+        ChatPatch {
             worktree_path: Some(Some("/definitely/does/not/exist/todo-343".to_string())),
             ..with_session()
         },
@@ -281,7 +281,7 @@ async fn a_missing_working_directory_returns_409() {
 async fn a_turn_in_flight_returns_409() {
     let h = harness(
         true,
-        ChatUpdate {
+        ChatPatch {
             process_state: Some(Some(ProcessState::Working)),
             ..with_session()
         },

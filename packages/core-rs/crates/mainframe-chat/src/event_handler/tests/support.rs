@@ -7,7 +7,7 @@ pub(super) struct FakeDeps {
     cell: Arc<Mutex<ActiveChat>>,
     events: Mutex<Vec<DaemonEvent>>,
     refs: Mutex<Vec<QueuedMessageRef>>,
-    updates: Mutex<Vec<EventChatUpdate>>,
+    updates: Mutex<Vec<ChatPatch>>,
     quota: Option<Arc<QuotaManager>>,
     /// `db.chats.pendingFork` for "c1"; `None` for every test
     /// outside the retire-on-result coverage.
@@ -77,7 +77,7 @@ impl EventHandlerDeps for FakeDeps {
     fn strip_command_tags(&self, text: &str) -> String {
         text.to_string()
     }
-    fn chats_update(&self, _chat_id: &str, patch: &EventChatUpdate) {
+    fn chats_update(&self, _chat_id: &str, patch: &ChatPatch) {
         self.updates.lock().unwrap().push(patch.clone());
     }
     fn projects_get_path(&self, _project_id: &str) -> Option<String> {

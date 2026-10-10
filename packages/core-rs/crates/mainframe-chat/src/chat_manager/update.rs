@@ -1,4 +1,4 @@
-//! Shared update types: `ProcessedAttachments` and the unified `ChatUpdate` patch.
+//! `ProcessedAttachments`: the attachments prepared for a chat send.
 use super::*;
 
 /// Attachments prepared for a chat send.
@@ -11,7 +11,3 @@ pub struct ProcessedAttachments {
     /// transient metadata; their shape is owned by the attachment layer.
     pub attachment_previews: Vec<serde_json::Value>,
 }
-
-/// Unified `db.chats.update` patch (superset of the sub-manager patch structs).
-/// Tri-state fields use `Some(None)` for an explicit null.
-pub use mainframe_types::chat_patch::ChatPatch as ChatUpdate;

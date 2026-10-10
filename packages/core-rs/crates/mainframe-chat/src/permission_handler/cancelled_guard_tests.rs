@@ -12,8 +12,8 @@ use mainframe_types::chat::ChatMessage;
 use mainframe_types::events::DaemonEvent;
 
 use super::*;
-use crate::event_handler::EventChatUpdate;
 use crate::test_support::{FakeSession, test_chat};
+use mainframe_types::chat_patch::ChatPatch;
 
 #[derive(Default)]
 struct GuardDeps {
@@ -30,7 +30,7 @@ impl PermissionHandlerDeps for GuardDeps {
     }
     fn emit_event(&self, _event: DaemonEvent) {}
     fn emit_display(&self, _chat_id: &str) {}
-    fn chats_update(&self, _chat_id: &str, _patch: &EventChatUpdate) {}
+    fn chats_update(&self, _chat_id: &str, _patch: &ChatPatch) {}
     fn get_messages<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, Vec<ChatMessage>> {
         Box::pin(async { Vec::new() })
     }
@@ -154,7 +154,7 @@ impl PermissionHandlerDeps for RaceDeps {
         self.events.lock().unwrap().push(event);
     }
     fn emit_display(&self, _chat_id: &str) {}
-    fn chats_update(&self, _chat_id: &str, _patch: &EventChatUpdate) {}
+    fn chats_update(&self, _chat_id: &str, _patch: &ChatPatch) {}
     fn get_messages<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, Vec<ChatMessage>> {
         Box::pin(async { Vec::new() })
     }

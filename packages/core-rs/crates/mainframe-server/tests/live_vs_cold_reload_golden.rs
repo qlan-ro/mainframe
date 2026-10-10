@@ -56,6 +56,7 @@
 #[path = "live_vs_cold_reload_golden/timing.rs"]
 mod timing;
 
+use mainframe_types::chat_patch::ChatPatch;
 use std::sync::{Arc, Mutex};
 
 use timing::{OBSERVED_AT, assert_and_remove_live_timing, normalize};
@@ -66,7 +67,7 @@ use mainframe_adapter_claude::history::load_history;
 use mainframe_adapter_claude::messages::display_pipeline::prepare_messages_for_client;
 use mainframe_adapter_claude::session::ClaudeSession;
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
-use mainframe_chat::event_handler::{EventChatUpdate, EventHandler, EventHandlerDeps};
+use mainframe_chat::event_handler::{EventHandler, EventHandlerDeps};
 use mainframe_chat::message_cache::MessageCache;
 use mainframe_chat::permission_manager::PermissionManager;
 use mainframe_chat::types::ActiveChat;
@@ -110,7 +111,7 @@ impl EventHandlerDeps for NoopDeps {
     fn strip_command_tags(&self, text: &str) -> String {
         text.to_string()
     }
-    fn chats_update(&self, _chat_id: &str, _patch: &EventChatUpdate) {}
+    fn chats_update(&self, _chat_id: &str, _patch: &ChatPatch) {}
     fn projects_get_path(&self, _project_id: &str) -> Option<String> {
         None
     }

@@ -22,10 +22,10 @@ use axum::routing::{get, patch, post};
 use serde::Deserialize;
 
 use mainframe_adapter_claude::messages::session_files::extract_session_file_paths;
-use mainframe_chat::chat_manager::ChatFieldsPartial;
 use mainframe_db::chats::ChatListFilters;
 use mainframe_types::adapter::EffortLevel;
 use mainframe_types::chat::Chat;
+use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::transcript::TranscriptLocation;
 
 use crate::ctx::AppCtx;
@@ -235,7 +235,7 @@ async fn set_title(
             .call(move |db| {
                 db.chats.update(
                     &cid,
-                    &mainframe_db::chats::ChatUpdate {
+                    &ChatPatch {
                         title: Some(t),
                         ..Default::default()
                     },
@@ -281,7 +281,7 @@ async fn set_pinned(
         .call(move |db| {
             db.chats.update(
                 &cid,
-                &mainframe_db::chats::ChatUpdate {
+                &ChatPatch {
                     pinned: Some(pinned),
                     ..Default::default()
                 },
@@ -300,7 +300,7 @@ async fn set_pinned(
     if let Some(cm) = ctx.chat_manager.as_ref() {
         cm.sync_chat_fields(
             &id,
-            ChatFieldsPartial {
+            ChatPatch {
                 pinned: Some(pinned),
                 ..Default::default()
             },
@@ -325,24 +325,22 @@ fn parse_nullable_bool_field(v: &serde_json::Value) -> Result<Option<bool>, ()> 
     }
 }
 
-/// Build a tri-state `ChatUpdate` from a raw JSON tuning object. Only present keys
+/// Build a tri-state `ChatPatch` from a raw JSON tuning object. Only present keys
 /// are written (undefined skipped); `null` writes SQL NULL. Returns `Err` on any
 /// ill-typed field so the caller emits the route's 400.
-fn tuning_update(
-    obj: &serde_json::Map<String, serde_json::Value>,
-) -> Result<mainframe_db::chats::ChatUpdate, ()> {
-    let mut update = mainframe_db::chats::ChatUpdate::default();
+fn tuning_update(obj: &serde_json::Map<String, serde_json::Value>) -> Result<ChatPatch, ()> {
+    let mut update = ChatPatch::default();
     if let Some(v) = obj.get("effort") {
-        update.effort = Some(parse_effort_field(v)?);
+        update.tuning.effort = Some(parse_effort_field(v)?);
     }
     if let Some(v) = obj.get("fast") {
-        update.fast = Some(parse_nullable_bool_field(v)?);
+        update.tuning.fast = Some(parse_nullable_bool_field(v)?);
     }
     if let Some(v) = obj.get("ultracode") {
-        update.ultracode = Some(parse_nullable_bool_field(v)?);
+        update.tuning.ultracode = Some(parse_nullable_bool_field(v)?);
     }
     if let Some(v) = obj.get("adaptiveThinking") {
-        update.adaptive_thinking = Some(parse_nullable_bool_field(v)?);
+        update.tuning.adaptive_thinking = Some(parse_nullable_bool_field(v)?);
     }
     Ok(update)
 }
@@ -351,11 +349,7 @@ fn tuning_update(
 /// follow-ups — `sync_chat_fields` (mirror the cache), fire-and-forget
 /// `apply_tuning` (live re-apply, no-op without a session), `emit_chat_updated`
 /// (broadcast).
-async fn apply_and_return(
-    ctx: &Arc<AppCtx>,
-    id: String,
-    update: mainframe_db::chats::ChatUpdate,
-) -> Response {
+async fn apply_and_return(ctx: &Arc<AppCtx>, id: String, update: ChatPatch) -> Response {
     let partial = update.clone();
     let cid = id.clone();
     if let Err(err) = ctx.db.call(move |db| db.chats.update(&cid, &update)).await {
@@ -415,7 +409,7 @@ async fn set_effort(
             "effort must be a valid level or null",
         );
     };
-    let update = mainframe_db::chats::ChatUpdate {
+    let update = ChatPatch {
         tuning: mainframe_types::chat::SessionTuning {
             effort: Some(effort),
             ..Default::default()
@@ -531,7 +525,7 @@ async fn resolve_tool_result_path(ctx: &AppCtx, chat: &Chat) -> Result<Option<St
         .call(move |db| {
             db.chats.update(
                 &cid,
-                &mainframe_db::chats::ChatUpdate {
+                &ChatPatch {
                     session_file_path: Some(fp),
                     ..Default::default()
                 },
@@ -568,8 +562,8 @@ mod tests {
     use super::*;
     use crate::chat_test_support::StubAdapter;
     use axum::body::to_bytes;
-    use mainframe_db::chats::ChatUpdate;
     use mainframe_types::chat::ChatStatus;
+    use mainframe_types::chat_patch::ChatPatch;
     use std::collections::HashMap;
 
     async fn read(resp: Response) -> (StatusCode, serde_json::Value) {
@@ -612,7 +606,7 @@ mod tests {
                         adapter_id: "claude".to_string(),
                         ..Default::default()
                     })?;
-                    let update = ChatUpdate {
+                    let update = ChatPatch {
                         worktree_path: Some(worktree.map(str::to_string)),
                         status: archived.then_some(ChatStatus::Archived),
                         ..Default::default()
@@ -839,7 +833,7 @@ mod tests {
                 })?;
                 db.chats.update(
                     &chat.id,
-                    &ChatUpdate {
+                    &ChatPatch {
                         claude_session_id: Some("session-1".into()),
                         ..Default::default()
                     },

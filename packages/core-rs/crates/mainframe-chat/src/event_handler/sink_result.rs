@@ -90,7 +90,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
 
         self.deps.chats_update(
             &self.chat_id,
-            &EventChatUpdate {
+            &ChatPatch {
                 total_cost: Some(totals.0),
                 total_tokens_input: Some(totals.1),
                 total_tokens_output: Some(totals.2),

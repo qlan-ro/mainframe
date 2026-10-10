@@ -1,12 +1,13 @@
 //! `ChatsRepository::find_or_create_side_chat` and the `sideChatId` projection.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+use mainframe_types::chat_patch::ChatPatch;
 use std::rc::Rc;
 
 use rusqlite::Connection;
 
 use mainframe_db::schema::initialize_schema;
-use mainframe_db::{ChatListFilters, ChatUpdate, ChatsRepository, ProjectsRepository};
+use mainframe_db::{ChatListFilters, ChatsRepository, ProjectsRepository};
 use mainframe_types::chat::NewChat;
 use mainframe_types::settings::ExecutionMode;
 
@@ -54,7 +55,7 @@ fn find_or_create_side_chat_seeds_the_parent_fields_and_nothing_else() {
     chats
         .update(
             &parent.id,
-            &ChatUpdate {
+            &ChatPatch {
                 model: Some("claude-opus".to_string()),
                 permission_mode: Some(ExecutionMode::AcceptEdits),
                 worktree_path: Some(Some("/tmp/wt".to_string())),

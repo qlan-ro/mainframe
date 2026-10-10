@@ -106,23 +106,23 @@ const COLUMNS: &[Column] = &[
         Some(v) => Ok(Some(SqlValue::Integer(i64::from(v)))),
         None => Ok(None),
     }),
-    ("effort = ?", |patch| match &patch.effort {
+    ("effort = ?", |patch| match &patch.tuning.effort {
         Some(v) => Ok(Some(match v {
             Some(e) => SqlValue::Text(enum_to_db_string(e)?),
             None => SqlValue::Null,
         })),
         None => Ok(None),
     }),
-    ("fast = ?", |patch| match &patch.fast {
+    ("fast = ?", |patch| match &patch.tuning.fast {
         Some(v) => Ok(Some(nullable_bool_value(v))),
         None => Ok(None),
     }),
-    ("ultracode = ?", |patch| match &patch.ultracode {
+    ("ultracode = ?", |patch| match &patch.tuning.ultracode {
         Some(v) => Ok(Some(nullable_bool_value(v))),
         None => Ok(None),
     }),
     ("adaptive_thinking = ?", |patch| {
-        match &patch.adaptive_thinking {
+        match &patch.tuning.adaptive_thinking {
             Some(v) => Ok(Some(nullable_bool_value(v))),
             None => Ok(None),
         }

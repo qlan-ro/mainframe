@@ -16,8 +16,8 @@ fn tuning_patch_preserves_absent_null_and_value_on_the_flat_wire() {
         assert_eq!(serde_json::to_value(&patch).unwrap(), payload);
     }
     let patch: ChatPatch = serde_json::from_value(json!({"fast":null})).unwrap();
-    assert_eq!(patch.fast, Some(None));
-    assert_eq!(patch.effort, None);
+    assert_eq!(patch.tuning.fast, Some(None));
+    assert_eq!(patch.tuning.effort, None);
 }
 
 #[test]

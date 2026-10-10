@@ -20,7 +20,7 @@ impl ConfigManagerDeps for CmDeps {
         self.lifecycle.touch(chat_id);
         Some(cell)
     }
-    fn chats_update(&self, chat_id: &str, updates: &ChatFieldUpdate) {
+    fn chats_update(&self, chat_id: &str, updates: &ChatPatch) {
         self.deps.chats_update(chat_id, updates);
     }
 

@@ -51,7 +51,7 @@ impl TranscriptPresenceDeps for PresenceDeps {
     fn chats_update_transcript_missing(&self, chat_id: &str, missing: bool) {
         self.deps.chats_update(
             chat_id,
-            &ChatUpdate {
+            &ChatPatch {
                 transcript_missing: Some(missing),
                 ..Default::default()
             },
@@ -60,7 +60,7 @@ impl TranscriptPresenceDeps for PresenceDeps {
     fn chats_update_session_file_path(&self, chat_id: &str, path: &str) {
         self.deps.chats_update(
             chat_id,
-            &ChatUpdate {
+            &ChatPatch {
                 session_file_path: Some(path.to_string()),
                 ..Default::default()
             },

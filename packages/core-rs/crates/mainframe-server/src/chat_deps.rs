@@ -34,16 +34,13 @@ use mainframe_background_tasks::kill::{KillTasksForChatArgs, SessionLike, kill_t
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_chat::attachment_processor;
 use mainframe_chat::chat_manager::{
-    AdapterForkInfo, ChatManager, ChatManagerDeps, ChatUpdate, ForkCreateInput,
-    ProcessedAttachments,
+    AdapterForkInfo, ChatManager, ChatManagerDeps, ForkCreateInput, ProcessedAttachments,
 };
 use mainframe_chat::context_tracker::{
     AttachmentLister, ContextDb, extract_mentions_from_text, get_session_context,
 };
 use mainframe_chat::event_handler::PushOut;
-use mainframe_chat::external_session_service::{
-    ExternalChatUpdate, ExternalSessionDeps, ExternalSessionService,
-};
+use mainframe_chat::external_session_service::{ExternalSessionDeps, ExternalSessionService};
 use mainframe_chat::fork::PendingForkState;
 use mainframe_chat::resolve_tuning_for_chat::{ResolveTuningDeps, resolve_tuning_for_chat};
 use mainframe_claude_workflows::store::ClaudeWorkflowStore;
@@ -64,6 +61,7 @@ use mainframe_types::background_task::BackgroundTask;
 use mainframe_types::chat::{
     Chat, ChatMessage, ChatMessageType, MessageContent, NewChat, Project, ResolvedTuning, TodoItem,
 };
+use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::content::LeafContent;
 use mainframe_types::context::{
     SessionAttachment, SessionAttachmentKind, SessionMention, SkillFileEntry,
@@ -325,7 +323,8 @@ impl ChatManagerDeps for DaemonChatDeps {
                     adapter_id = new_chat.adapter_id,
                     "chats.create failed"
                 );
-                fallback_chat(new_chat)
+                // Unpersisted stub for the (near-impossible) create failure.
+                Chat::unpersisted(new_chat)
             }
         }
     }
@@ -351,7 +350,7 @@ impl ChatManagerDeps for DaemonChatDeps {
         })
     }
 
-    fn chats_update(&self, chat_id: &str, patch: &ChatUpdate) {
+    fn chats_update(&self, chat_id: &str, patch: &ChatPatch) {
         let id = chat_id.to_string();
         let db_patch = patch.clone();
         if let Err(err) = self
@@ -1022,7 +1021,7 @@ impl ExternalSessionDeps for DaemonChatDeps {
         )
     }
 
-    fn chats_update(&self, chat_id: &str, updates: &ExternalChatUpdate) {
+    fn chats_update(&self, chat_id: &str, updates: &ChatPatch) {
         let id = chat_id.to_string();
         let db_patch = updates.clone();
         if let Err(err) = self
@@ -1308,12 +1307,6 @@ impl AttachmentLister for AttachmentListerHandle {
                 .collect()
         })
     }
-}
-
-/// Unpersisted `Chat` stub for the (near-impossible) `db.chats.create` failure.
-/// Also the automations-deps tests' Chat fixture (pub(crate) for that reason).
-pub(crate) fn fallback_chat(new_chat: &NewChat) -> Chat {
-    Chat::unpersisted(new_chat)
 }
 
 #[cfg(test)]
@@ -2209,7 +2202,7 @@ mod scan_loaded_history_tests {
                 move |d| {
                     d.chats.update(
                         &id,
-                        &mainframe_db::chats::ChatUpdate {
+                        &ChatPatch {
                             claude_session_id: Some("sess-1".to_string()),
                             ..Default::default()
                         },

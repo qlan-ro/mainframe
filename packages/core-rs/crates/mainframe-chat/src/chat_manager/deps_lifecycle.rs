@@ -26,7 +26,7 @@ impl LifecycleManagerDeps for LcDeps {
     fn chats_create(&self, new_chat: &NewChat) -> Chat {
         self.deps.chats_create(new_chat)
     }
-    fn chats_update(&self, chat_id: &str, patch: &LifecycleChatUpdate) {
+    fn chats_update(&self, chat_id: &str, patch: &ChatPatch) {
         self.deps.chats_update(chat_id, patch);
     }
     fn chats_list(&self, project_id: &str) -> Vec<Chat> {

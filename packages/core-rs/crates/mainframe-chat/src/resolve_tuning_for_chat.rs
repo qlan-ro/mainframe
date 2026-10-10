@@ -56,10 +56,10 @@ pub async fn resolve_tuning_for_chat<D: ResolveTuningDeps>(
     };
     Some(resolve_tuning(
         &SessionTuning {
-            effort: chat.effort,
-            fast: chat.fast,
-            ultracode: chat.ultracode,
-            adaptive_thinking: chat.adaptive_thinking,
+            effort: chat.tuning.effort,
+            fast: chat.tuning.fast,
+            ultracode: chat.tuning.ultracode,
+            adaptive_thinking: chat.tuning.adaptive_thinking,
         },
         &provider,
         &model,

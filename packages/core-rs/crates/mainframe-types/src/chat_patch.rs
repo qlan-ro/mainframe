@@ -4,6 +4,12 @@ use crate::{
     settings::ExecutionMode,
 };
 
+/// Present-only patch over a `chats` row: the one shape every writer (routes,
+/// the chat sub-managers, the event sink, the external-session importer)
+/// hands to `ChatsRepository::update`. `None` leaves a column unchanged.
+/// Tri-state fields (`Option<Option<_>>`, including the flattened tuning
+/// columns) use `Some(None)` to write an explicit NULL, so "clear" is
+/// distinct from "leave unchanged".
 #[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatPatch {
@@ -69,16 +75,4 @@ pub struct ChatPatch {
     pub context_lost_at: Option<String>,
     #[serde(flatten)]
     pub tuning: crate::chat::SessionTuning,
-}
-
-impl std::ops::Deref for ChatPatch {
-    type Target = crate::chat::SessionTuning;
-    fn deref(&self) -> &Self::Target {
-        &self.tuning
-    }
-}
-impl std::ops::DerefMut for ChatPatch {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.tuning
-    }
 }

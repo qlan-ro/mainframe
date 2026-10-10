@@ -25,7 +25,6 @@ use mainframe_adapter_claude::transcript::get_session_jsonl_path;
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_claude_workflows::store::{ClaudeWorkflowStore, ProgressUsage};
 use mainframe_db::DatabaseManager;
-use mainframe_db::chats::ChatUpdate;
 use mainframe_server::ctx::{AppCtx, Services};
 use mainframe_server::{
     Db, GitFactory, build_app, build_chat_manager, chat_seams::NoopLaunchStopper,
@@ -35,6 +34,7 @@ use mainframe_services::attachment::AttachmentStore;
 use mainframe_services::files::FileWatcherService;
 use mainframe_services::push::PushService;
 use mainframe_services::quota::{QuotaManager, QuotaManagerDeps, QuotaSettingsStore};
+use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::events::DaemonEvent;
 use serde_json::{Value, json};
 use tempfile::TempDir;
@@ -112,7 +112,7 @@ async fn harness(session_id: &str) -> Harness {
         move |d| {
             d.chats.update(
                 &chat_id,
-                &ChatUpdate {
+                &ChatPatch {
                     claude_session_id: Some(session_id),
                     ..Default::default()
                 },

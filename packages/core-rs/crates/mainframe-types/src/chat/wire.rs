@@ -79,6 +79,11 @@ pub struct Chat {
     pub todos: Option<Vec<TodoItem>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pinned: Option<bool>,
+    /// Per-chat tuning override. Flattened here, between `pinned` and
+    /// `detected_prs`, so `effort`/`fast`/`ultracode`/`adaptiveThinking` keep
+    /// their historical position in the serialized object.
+    #[serde(flatten)]
+    pub tuning: crate::chat::SessionTuning,
     /// PRs detected in the session's tool_results.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detected_prs: Option<Vec<DetectedPr>>,
@@ -135,18 +140,4 @@ pub struct Chat {
     /// Agent provenance and delegated-task state (orchestration MCP server).
     #[serde(flatten)]
     pub orchestration: ChatOrchestration,
-    #[serde(flatten)]
-    pub tuning: crate::chat::SessionTuning,
-}
-
-impl std::ops::Deref for Chat {
-    type Target = crate::chat::SessionTuning;
-    fn deref(&self) -> &Self::Target {
-        &self.tuning
-    }
-}
-impl std::ops::DerefMut for Chat {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.tuning
-    }
 }

@@ -2,12 +2,11 @@
 //! storage seams.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+use mainframe_types::chat_patch::ChatPatch;
 use rusqlite::Connection;
 
 use mainframe_db::schema::initialize_schema;
-use mainframe_db::{
-    ChatListFilters, ChatUpdate, ChatsRepository, ForkInsert, PendingFork, ProjectsRepository,
-};
+use mainframe_db::{ChatListFilters, ChatsRepository, ForkInsert, PendingFork, ProjectsRepository};
 use mainframe_types::adapter::{EffortLevel, ForkSource};
 use mainframe_types::chat::{ChatStatus, NewChat};
 use mainframe_types::settings::ExecutionMode;
@@ -79,10 +78,10 @@ fn create_fork_round_trips_every_inherited_field_and_parent_chat_id() {
     assert_eq!(fork.model.as_deref(), Some("claude-opus"));
     assert_eq!(fork.permission_mode, Some(ExecutionMode::Default));
     assert_eq!(fork.plan_mode, Some(true));
-    assert_eq!(fork.effort, Some(Some(EffortLevel::High)));
-    assert_eq!(fork.fast, Some(Some(true)));
-    assert_eq!(fork.ultracode, Some(Some(false)));
-    assert_eq!(fork.adaptive_thinking, Some(Some(true)));
+    assert_eq!(fork.tuning.effort, Some(Some(EffortLevel::High)));
+    assert_eq!(fork.tuning.fast, Some(Some(true)));
+    assert_eq!(fork.tuning.ultracode, Some(Some(false)));
+    assert_eq!(fork.tuning.adaptive_thinking, Some(Some(true)));
     assert_eq!(fork.worktree_path.as_deref(), Some("/tmp/worktree"));
     assert_eq!(fork.branch_name.as_deref(), Some("feature/fork"));
     assert_eq!(fork.title.as_deref(), Some("Parent title (fork)"));
@@ -98,7 +97,7 @@ fn create_fork_round_trips_every_inherited_field_and_parent_chat_id() {
     let fetched = chats.get(&fork.id).unwrap().unwrap();
     assert_eq!(fetched.parent_chat_id, Some(Some(parent.id)));
     assert_eq!(fetched.model.as_deref(), Some("claude-opus"));
-    assert_eq!(fetched.effort, Some(Some(EffortLevel::High)));
+    assert_eq!(fetched.tuning.effort, Some(Some(EffortLevel::High)));
 }
 
 #[test]
@@ -129,7 +128,7 @@ fn parent_chat_id_survives_archive_and_unarchive() {
     chats
         .update(
             &fork.id,
-            &ChatUpdate {
+            &ChatPatch {
                 status: Some(ChatStatus::Archived),
                 ..Default::default()
             },
@@ -142,7 +141,7 @@ fn parent_chat_id_survives_archive_and_unarchive() {
     chats
         .update(
             &fork.id,
-            &ChatUpdate {
+            &ChatPatch {
                 status: Some(ChatStatus::Active),
                 ..Default::default()
             },

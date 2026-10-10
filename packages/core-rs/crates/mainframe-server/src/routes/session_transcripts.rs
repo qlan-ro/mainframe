@@ -242,7 +242,7 @@ mod tests {
                 .call(move |db| {
                     db.chats.update(
                         &id,
-                        &mainframe_db::ChatUpdate {
+                        &mainframe_types::chat_patch::ChatPatch {
                             claude_session_id: Some("session-1".to_string()),
                             ..Default::default()
                         },

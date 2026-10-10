@@ -2,10 +2,11 @@
 //! the `record_native_id` rule, insert-path seeding, and dedupe.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+use mainframe_types::chat_patch::ChatPatch;
 use rusqlite::Connection;
 
 use mainframe_db::migrations::run_migrations;
-use mainframe_db::{ChatUpdate, DatabaseManager, RecordOutcome, SegmentResultDelta};
+use mainframe_db::{DatabaseManager, RecordOutcome, SegmentResultDelta};
 use mainframe_types::chat::{Chat, NewChat};
 use mainframe_types::segment::{HandoffRecord, HandoffStatus, HandoffStrategy, SegmentKind};
 
@@ -30,7 +31,7 @@ fn set_session(db: &DatabaseManager, chat_id: &str, session: &str) {
     db.chats
         .update(
             chat_id,
-            &ChatUpdate {
+            &ChatPatch {
                 claude_session_id: Some(session.to_string()),
                 ..Default::default()
             },
@@ -188,7 +189,7 @@ fn record_native_id_rebinds_a_still_empty_segment_instead_of_resetting() {
     let (_dir, db, pid) = open();
     let chat = new_chat(&db, &pid, "codex");
     // `chats.rs::update` routes `claude_session_id` and `session_file_path`
-    // through separate `EventChatUpdate`s (see `handle_init`), so the path
+    // through separate `ChatPatch`s (see `handle_init`), so the path
     // argument here is `None`, matching the real call site.
     assert_eq!(
         db.segments
@@ -257,7 +258,7 @@ fn chats_update_keeps_the_mirror_equal_to_the_active_native_row() {
     db.chats
         .update(
             &chat.id,
-            &ChatUpdate {
+            &ChatPatch {
                 claude_session_id: Some("s1".into()),
                 session_file_path: Some("/f/s1.jsonl".into()),
                 last_context_total_tokens: Some(500),

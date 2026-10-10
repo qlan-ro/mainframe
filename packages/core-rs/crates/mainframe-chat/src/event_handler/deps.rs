@@ -10,10 +10,6 @@ pub struct PushOut {
     pub priority: String,
 }
 
-/// Partial `db.chats.update` patch the sink writes. `process_state` is tri-state
-/// (`None` absent, `Some(None)` explicit null, `Some(Some(x))` value).
-pub use mainframe_types::chat_patch::ChatPatch as EventChatUpdate;
-
 /// Injected dependencies for the event handler. Claude-specific pieces
 /// (`stripMainframeCommandTags`, the
 /// display pipeline) and the not-Send db repos are narrowed to trait methods so
@@ -37,7 +33,7 @@ pub trait EventHandlerDeps: Send + Sync {
     fn strip_command_tags(&self, text: &str) -> String;
 
     // db surface --------------------------------------------------------------
-    fn chats_update(&self, chat_id: &str, patch: &EventChatUpdate);
+    fn chats_update(&self, chat_id: &str, patch: &ChatPatch);
     fn projects_get_path(&self, project_id: &str) -> Option<String>;
     /// See `ChatManagerDeps::initial_transcript_path`.
     fn initial_transcript_path(

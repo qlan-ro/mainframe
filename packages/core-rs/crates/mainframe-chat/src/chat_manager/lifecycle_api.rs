@@ -108,7 +108,7 @@ impl ChatManager {
     pub fn unarchive_chat(&self, chat_id: &str) -> Option<Chat> {
         self.deps.chats_update(
             chat_id,
-            &ChatUpdate {
+            &ChatPatch {
                 status: Some(mainframe_types::chat::ChatStatus::Active),
                 ..Default::default()
             },
@@ -124,7 +124,7 @@ impl ChatManager {
     pub fn rename_chat(&self, chat_id: &str, title: &str) {
         self.deps.chats_update(
             chat_id,
-            &ChatUpdate {
+            &ChatPatch {
                 title: Some(title.to_string()),
                 ..Default::default()
             },

@@ -40,7 +40,7 @@ pub mod validate_tag_name;
 pub use chat_handoffs::HandoffsRepository;
 pub use chat_segments::{RecordOutcome, SegmentResultDelta, SegmentsRepository};
 pub use chat_tags::ChatTagsRepository;
-pub use chats::{ChatListFilters, ChatUpdate, ChatsRepository, ForkInsert, PendingFork};
+pub use chats::{ChatListFilters, ChatsRepository, ForkInsert, PendingFork};
 pub use delegated_tasks::DelegatedTasksRepository;
 pub use devices::DevicesRepository;
 pub use projects::ProjectsRepository;

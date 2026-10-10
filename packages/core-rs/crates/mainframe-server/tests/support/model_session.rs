@@ -2,7 +2,7 @@ use std::{os::unix::fs::PermissionsExt, sync::Arc, time::Duration};
 
 use mainframe_adapter_claude::adapter::ClaudeAdapter;
 use mainframe_chat::chat_manager::ChatManager;
-use mainframe_db::chats::ChatUpdate;
+use mainframe_types::chat_patch::ChatPatch;
 use serde_json::Value;
 
 use crate::support::facade::{FacadeServer, spawn_facade_server};
@@ -42,7 +42,7 @@ impl ModelSession {
                 }
                 db.chats.update(
                     &chat_id,
-                    &ChatUpdate {
+                    &ChatPatch {
                         model: chat_model,
                         claude_session_id: Some(SESSION_ID.into()),
                         session_file_path: Some(transcript.to_string_lossy().into_owned()),
