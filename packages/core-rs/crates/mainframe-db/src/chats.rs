@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/db/chats.ts`.
-
 use std::rc::Rc;
 
 use mainframe_runtime::time::now_iso8601;
@@ -971,25 +969,3 @@ fn parse_todos(value: Option<String>) -> Option<Vec<TodoItem>> {
     let value = value.filter(|s| !s.is_empty())?;
     serde_json::from_str(&value).ok()
 }
-
-// PORT STATUS: src/db/chats.ts (405 lines)
-// confidence: high
-// notes: Main catch-up (#423/#424): SELECT + mapRow gain lastContextTotalTokens/
-// lastContextMaxTokens (null → None, stored INTEGER read as i64 → u64) and
-// transcriptMissing (Boolean(row) → Some(bool); column is DEFAULT 0 so always
-// present). ChatUpdate + update() field-map add the two token cols (after
-// lastContextTokensInput) and transcriptMissing (last, after planMode, `?1:0`).
-// New clear_session (NULL session id/file + transcript_missing=0) and clear_worktree
-// (NULL worktree_path/branch_name) mirror the degraded-recovery helpers. create()
-// and create_fork() insert, then read the row back through map_row.
-// notes(orig): CHAT_SELECT_FIELDS aliases every column to camelCase, read by that name.
-// mapRow's tri-state fields follow the types crate: processState/fast/ultracode/
-// adaptiveThinking are always present (Some(None) for NULL → serializes null);
-// effort uses .map(Some) so an invalid/absent value stays absent (None); todos
-// falls back to None (absent). parseJsonColumn is defensive (unwrap_or fallback,
-// never a propagating from_str) per §3. Partial<Chat> becomes ChatUpdate: outer
-// None = skip, and the six `?? null`-transform columns use Option<Option<T>> to
-// clear. update() preserves updateColumnMap's exact column order. transactions
-// are not needed here (all single-statement). Tests in tests/chats.rs +
-// tests/chats_tags.rs.
-// todos: 0

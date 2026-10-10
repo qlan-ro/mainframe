@@ -88,11 +88,3 @@ fn no_ops_when_the_sink_does_not_override_on_provider_quota() {
         &mut state,
     );
 }
-
-// PORT STATUS: src/plugins/builtin/codex/__tests__/quota-notification.test.ts (63 lines)
-// confidence: high
-// todos: 0
-// notes: `NullSink` implements every SessionSink method except on_provider_quota,
-// notes: relying on the trait's default no-op body — Rust has no direct analogue of
-// notes: the TS object-literal-missing-a-key trick, so this is the closest
-// notes: equivalent (still proves the default path never panics).

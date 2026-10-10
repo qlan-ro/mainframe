@@ -171,18 +171,6 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/api/tunnel/stop", post(stop))
 }
 
-// PORT STATUS: src/server/routes/tunnel.ts (108 lines)
-// confidence: medium
-// todos: 1
-// notes: status = getUrl('daemon') + verify (cached /health probe); config reads
-// getConfig hasToken/url. start gates on tunnel_manager + a non-zero port, validates
-// the body (token min(1), url()), falls back to the persisted token/url, short-
-// circuits an already-running tunnel when no new token is given, then start →
-// set_tunnel_url → save_config (credentials only when both were provided). stop
-// stops + set_tunnel_url(None) + save_config({tunnel:false}). KNOWN GAP: clearConfig
-// cannot clear the persisted token/url because save_config's None means "keep"
-// (mainframe-runtime is a done, off-limits crate) — see the TODO(port) above.
-
 #[cfg(test)]
 mod tests {
     use super::*;

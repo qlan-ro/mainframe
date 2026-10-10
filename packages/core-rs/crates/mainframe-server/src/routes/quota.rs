@@ -235,12 +235,3 @@ mod tests {
         assert_eq!(body["success"], serde_json::json!(false));
     }
 }
-
-// PORT STATUS: src/server/routes/quota.ts (2 endpoints)
-// confidence: high
-// todos: 0
-// notes: GET reads ctx.quota.get(id) → ok(blob) / okEmpty; POST refresh awaits
-// ctx.quota.refresh(id) → ok(blob) / okEmpty, 503 when quota is unwired. id
-// validated against QuotaProviderParams `^[a-zA-Z0-9_-]+$` ("invalid provider id").
-// ctx.quota is Option<Arc<dyn QuotaService>> so the route-unit harness injects a
-// FakeQuota, mirroring the TS `{ get, refresh }` mock.

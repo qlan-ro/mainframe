@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/context.ts`.
-//!
 //! Assembles a plugin's capability surface. Each gated subsystem (db,
 //! attachments, events, ui, adapters) is present only when its capability is
 //! declared; otherwise a guard stands in whose use surfaces
@@ -455,17 +453,3 @@ mod guards {
 
     pub use crate::github_port_guard::GuardGitHub;
 }
-
-// PORT STATUS: src/plugins/context.ts
-// confidence: medium
-// todos: 1
-// notes: gating replicated — db/attachments (storage), events
-// (daemon:public-events), ui (ui:panels|ui:notifications), adapters. The
-// throwing Proxy becomes guard impls returning CapabilityRequired for the
-// fallible surfaces (db/attachments/events, asserted by context.test); the sync
-// ui guard (NoopUi) logs+drops instead of throwing (documented deviation, untested
-// path). config/services are always present. The behavioral trait interfaces
-// (deferred from types/plugin.ts) live here over BoxFuture. PluginHostDb is the
-// DatabaseManager slice buildPluginContext reads; the server impls it over the Db
-// actor. TODO(port): getMessages (chat:read:content) is omitted from ChatService
-// (unused by builtins).

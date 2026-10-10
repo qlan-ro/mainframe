@@ -6,9 +6,3 @@ pub mod project_service;
 
 pub use chat_service::build_chat_service;
 pub use project_service::build_project_service;
-
-// PORT STATUS: src/plugins/services/ (module barrel)
-// confidence: high
-// todos: 0
-// notes: both services map host db rows (Chat/Project) to the DTO summaries;
-// createChat gates on the chat:create capability (can_create_chat).

@@ -2368,38 +2368,3 @@ mod scan_loaded_history_tests {
         );
     }
 }
-
-// PORT STATUS: (new — production ChatManagerDeps wiring for chat/chat-manager.ts
-// constructor injection + index.ts `new ChatManager(...)`)
-// confidence: medium
-// todos: 2
-// notes: The one production impl of ChatManagerDeps. DB accessors go through the
-// SYNC-DB BRIDGE (Db::call_blocking) — one WAL connection. notifications / per-chat
-// todos / push / mentions / tuning / title / kill / worktree-remove are wired to
-// the real ported helpers (RtDeps + CtxDbHandle bridge the generic helper trait
-// bounds through the actor). Task 5.4 added chats_list_filtered (translates to the db
-// ChatListFilters), chats_add_mention (db write), and get_session_context (runs the
-// context-tracker read with the AdapterRegistry + an AttachmentListerHandle over the
-// AttachmentStore). scanLoadedHistory now runs the ported pr-detection scan +
-// mention extraction + plan/skill-file persistence by re-deriving a session from
-// the chat row (session_for_scan) since the trait only carries chatId; see that
-// method's doc comment for the fidelity tradeoff. Seams (TODO(port)):
-// applyCodexProviderTuning (codex-only session method, Phase 5),
-// stopLaunchProcesses (LaunchStopper seam, Phase 5). chats_create is infallible
-// per the ported trait; a DB failure logs + returns an unpersisted stub.
-// notes: ExternalSessionDeps (external-session-service.ts's DI surface) is also
-// implemented here and wired into `build_chat_manager` via
-// `ExternalSessionService::new(deps.clone())` + `ChatManager::with_external_sessions`.
-// `listExternalSessions` is not on the polymorphic Adapter trait (adapter-api TODO),
-// so `list_external_sessions` dispatches to the concrete
-// `mainframe_adapter_claude`/`mainframe_adapter_codex` free functions by id rather
-// than through the registry; `external_session_adapter_ids` mirrors the TS capability
-// filter as a hardcoded {claude, codex} id allowlist intersected with what is
-// actually registered. `claude_external_session_cache` is the process-lifetime,
-// injected (not module-singleton) enrichment cache the Claude scan needs.
-// `reconcile_transcript` upgrades a `Weak<ChatManager>` set into
-// `DaemonChatDeps.chat_manager` after construction (`build_chat_manager`) and
-// delegates to `ChatManager::reconcile_transcript`, so the periodic
-// external-session sweep now reconciles transcript presence for chats the user
-// isn't viewing (#289). The `Weak` avoids a reference cycle: the manager is
-// built from these deps, so a strong back-reference would leak both forever.

@@ -1,5 +1,3 @@
-//! Ported from `src/logger.ts`.
-//!
 //! The `tracing` equivalent of the pino setup: a daily-rotated file
 //! `$MAINFRAME_DATA_DIR/logs/server.<YYYY-MM-DD>.log`, a 7-day purge on boot,
 //! `LOG_LEVEL`/`LOG_TO_STDOUT` env handling, stdout added off-production, and
@@ -236,19 +234,3 @@ mod tests {
         purge_old_logs(&PathBuf::from("/nonexistent/mainframe/logs/xyz"));
     }
 }
-
-// PORT STATUS: src/logger.ts (87 lines)
-// confidence: medium
-// todos: 0
-// notes: full behavioral port — daily `server.<date>.log` via the appender
-// builder (filename_suffix "log"), 7-day purge on boot, LOG_LEVEL/LOG_TO_STDOUT,
-// stdout added off-production, silent under NODE_ENV=test/VITEST=true, and the
-// "logger initialized" info line. pino's JSON line format is NOT reproduced (logs
-// aren't a wire contract) — tracing's fmt layer is used; only level names/
-// thresholds/messages match. `createChildLogger` -> `ChildLogger` carrying a
-// `module` field on each tracing macro (structured context per call site is added
-// by consumers when their modules are ported). The purge test cannot set mtime
-// without the `filetime` crate (not in the allowlist), so it only asserts recent
-// server.* logs + non-server files survive; the stale-deletion branch is covered
-// by the read/starts-with/cutoff logic, verified against fresh files. sync fs at
-// boot mirrors pino's sync module-load (readdirSync/mkdirSync), not request I/O.

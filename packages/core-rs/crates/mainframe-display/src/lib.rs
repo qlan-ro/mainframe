@@ -27,23 +27,6 @@ pub use tool_grouping::{
     PartEntry, TaskProgressItem, ToolGroupItem, group_task_children, group_tool_call_parts,
 };
 
-// PORT STATUS: src/messages/index.ts (33 lines) + display-slice module decls
-// confidence: high
-// todos: 0
-// notes: index.ts re-exports collapse here; groupMessages/prepareMessagesForClient/
-// notes: message-parsing exports belong to mainframe-adapter-claude, not re-exported
-// notes: here. tool_categorization, tool_grouping, truncate_tool_content,
-// notes: parse_unified_diff are fully ported + tested (all four self-contained on
-// notes: mainframe-types). display_helpers + display_pipeline REMAIN SKELETON —
-// notes: BLOCKER: both import Claude-specific parsers (message_parsing,
-// notes: message_grouping, parse_ask_user_question, task_subject_backfill) which the
-// notes: crate map §2.7 assigns to mainframe-adapter-claude, and adapter-claude
-// notes: already depends on mainframe-display (Cargo). Porting them here forms a
-// notes: crate cycle. Per the §2.5 "references Claude shapes → adapter-claude" test
-// notes: they should be REASSIGNED to mainframe-adapter-claude (carrying
-// notes: apply-tool-grouping-characterization + display-helpers-* + tool-grouping/
-// notes: display-pipeline tests with them). Left as compiling empty modules.
-
 pub mod tool_call_timing;
 pub use tool_call_timing::{apply_tool_call_timing, apply_tool_call_timing_to_container};
 

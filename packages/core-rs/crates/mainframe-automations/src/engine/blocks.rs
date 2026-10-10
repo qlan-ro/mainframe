@@ -267,10 +267,3 @@ pub(crate) async fn run_loop(
         checkpoint: current,
     })
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T4.2), not a TS port
-// confidence: high
-// todos: 0
-// notes: error strings mirror Node walk.ts verbatim (they cross the wire in
-//        run.error); a body failure bubbles as the BLOCK's result, so the
-//        outer walk consults the block's own keepGoing (Node parity).

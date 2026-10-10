@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/background-tasks/tracker.ts`.
-
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -915,16 +913,3 @@ mod tests {
         assert!(drain(&mut rx).is_empty());
     }
 }
-
-// PORT STATUS: src/background-tasks/tracker.ts (162 lines)
-// confidence: high
-// todos: 0
-// notes: CONCURRENCY.tsv — byChat/pidByChat = SHARED_MAP (Arc<DashMap<ChatId,
-// HashMap<TaskId,_>>>); emitter = BROADCAST (tokio broadcast::Sender<TaskEvent>).
-// `on(event, listener)` → `subscribe() -> broadcast::Receiver` (tests drain via
-// try_recv). Seed carries `kind`; a live-dup start upserts (keeps startedAt +
-// lastOutputLine, emits Updated not Started); list_live/end_all_running added;
-// TaskEvent gains the Updated variant. Locks are never held across the `.send()`
-// (task cloned, guard dropped first). HashMap inner drops Map insertion order;
-// every order-sensitive TS assertion sorts, so parity holds. All 21
-// tracker.test.ts cases translated.

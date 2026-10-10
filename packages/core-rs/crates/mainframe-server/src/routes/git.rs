@@ -321,14 +321,3 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/api/projects/{id}/git/branch", get(branch))
         .route("/api/projects/{id}/git/diff", get(diff))
 }
-
-// PORT STATUS: src/server/routes/git.ts (5 read endpoints)
-// confidence: high
-// todos: 0
-// notes: git-read soft errors stay `success:true` envelopes (status/branch/
-// branch-diffs/diff fall back to empty payloads; only working-stat 500s with the
-// leaked message). `isNotGitRepo` narrows to `GitServiceError::Exec` + the parse
-// helper. The effective-path helpers (get_effective_path / resolve_chat_path /
-// chat_worktree_missing) reconstruct the Phase-4 ChatManager seam from the db
-// repos + workspace::is_worktree_present and are shared with git_write/git_chat.
-// GitDiffQuery.source is validated (non-`git` → 400) but never branched on.

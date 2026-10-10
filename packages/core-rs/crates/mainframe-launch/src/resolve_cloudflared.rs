@@ -1,5 +1,3 @@
-//! Ported from `src/tunnel/resolve-cloudflared.ts`.
-//!
 //! Resolve `cloudflared` to an absolute path by scanning PATH so spawned tunnels
 //! can be recorded and later reaped by exact binary path (never a bare name — a
 //! bare match could kill an unrelated user process after PID reuse). Returns
@@ -159,11 +157,3 @@ mod tests {
         assert_eq!(seen[0], "/usr/bin/cloudflared");
     }
 }
-
-// PORT STATUS: src/tunnel/resolve-cloudflared.ts (40 lines)
-// confidence: high
-// todos: 0
-// notes: scans PATH (host DELIMITER, ':' on unix — the platform param only picks
-// the binary name, matching the TS `delimiter` host constant) for an executable
-// `cloudflared[.exe]`. Default X_OK check = metadata + unix exec-bit. is_executable
-// is an injectable async predicate; all resolve-cloudflared.test.ts cases ported.

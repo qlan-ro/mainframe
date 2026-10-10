@@ -1,5 +1,3 @@
-//! Ported from `packages/types/src/chat.ts`.
-
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
@@ -639,27 +637,3 @@ mod tests {
         }));
     }
 }
-
-// PORT STATUS: packages/types/src/chat.ts (153 lines)
-// confidence: high
-// todos: 0
-// notes: Main catch-up (#423/#424/#425): Chat gains lastContextTotalTokens/
-// lastContextMaxTokens (Option<u64>, persisted), backgroundActivity
-// (Option<BackgroundActivity> from background_task.rs — derived per response,
-// NEVER persisted), transcriptMissing (Option<bool>, persisted). All skip-when-
-// none; serde auto-defaults Option on absent so old payloads still parse.
-// notes(orig): `?: X | null` fields (Chat.processState/effort/fast/ultracode/
-// adaptiveThinking, Project.parentProjectId, SessionTuning.*) use
-// Option<Option<T>> + #[serde(default, skip_serializing_if=Option::is_none)] to
-// preserve the absent/null/value tri-state faithfully (route.projects-list
-// fixture shows parentProjectId present as null); deserialize_with="double_option"
-// is required because plain Option<Option<T>> collapses null to the outer None.
-// WIRE NOTE (Phase B): Chat.totalCost is f64 (0.0842 in fixtures); serde_json
-// renders a whole-valued f64 as `0.0` whereas Node's JSON.stringify emits `0`.
-// Semantically identical (JS coerces) but byte-differs — verify against the live
-// Node output in the differential harness. ChatEffort is a type alias to
-// adapter::EffortLevel. MessageContent is an untagged wrapper over shared
-// LeafContent (content.rs) + transcript-only MessageContentNode (internally
-// tagged, disjoint tags). ToolResultMessageContent (TS Extract alias) has no
-// standalone Rust type — consumers match MessageContentNode::ToolResult.
-// References crate::{content,adapter,context,settings}.

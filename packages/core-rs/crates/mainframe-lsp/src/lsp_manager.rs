@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/lsp/lsp-manager.ts`.
-//!
 //! Per-`(projectId, language)` LSP child lifecycle: single-flight spawn, the
 //! idle-timeout reaper, and the graceful shutdown handshake (shutdown request ->
 //! exit notification -> SIGTERM fallback).
@@ -554,13 +552,3 @@ impl LspManager {
 
 #[cfg(test)]
 mod tests;
-
-// PORT STATUS: packages/core/src/lsp/lsp-manager.ts (202 lines)
-// confidence: high (single-flight, idle reaper, graceful-shutdown handshake)
-// todos: 0
-// notes: `spawning` Map<Promise> -> single-flight `Notify` (rule 9); `handles` ->
-//   DashMap. child.on('exit'/'error') -> a monitor task awaiting `child.wait()`.
-//   `proc.stdin` shared write -> a single stdin-writer task fed by `stdin_tx`.
-//   `proc.kill('SIGTERM')` -> `kill -TERM <pid>` (tokio kills with SIGKILL; unix
-//   only — flagged platform-sensitive). removeHandle guards on Arc identity to
-//   avoid evicting a respawned handle (TS relied on JS single-threadedness).

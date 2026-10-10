@@ -193,9 +193,3 @@ mod run_command_tests;
 
 #[cfg(test)]
 mod user_agent_tests;
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T6.2-T7.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: built-ins (T6.3-T6.5) + curated connectors (T7.1/T7.2) registered;
-//        MCP is a catalog-entry seam only (T7.3, contract §9).

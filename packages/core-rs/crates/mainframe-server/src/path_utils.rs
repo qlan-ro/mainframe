@@ -1,5 +1,3 @@
-//! Ported from `src/server/routes/path-utils.ts`.
-//!
 //! SECURITY-critical: `resolve_and_validate_path` canonicalizes (realpath) and
 //! then confirms strict containment within the base, closing path-traversal and
 //! sibling-prefix seams. The TS used `realpathSync`; the port uses async
@@ -241,13 +239,3 @@ mod tests {
         assert_eq!(result, None);
     }
 }
-
-// PORT STATUS: src/server/routes/path-utils.ts (4 helpers)
-// confidence: high
-// todos: 0
-// notes: `realpathSync` → async `tokio::fs::canonicalize` (no sync I/O in the
-// daemon). `isWithinBase`'s string prefix + separator guard → `Path::starts_with`
-// (component-wise, so the `/proj` vs `/proj-evil` sibling seam stays closed — the
-// dedicated test proves it). Node `path.resolve(base, requested)` (absolute
-// requested wins) → `Path::join`. All 9 path-utils.test.ts cases translated with
-// real tempdirs (real collaborators, no mocks).

@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/chat/external-session-service.ts`.
-
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -684,25 +682,3 @@ mod tests {
         assert_eq!(chat.title.as_deref(), Some("Fallback Title"));
     }
 }
-
-// PORT STATUS: src/chat/external-session-service.ts (198 lines)
-// confidence: medium
-// todos: 0
-// notes: Main catch-up (#424/#430): `sweepTranscriptPresence` (non-archived + has
-// notes: sessionId, reconcile each) runs on the auto-scan cadence (initial + every
-// notes: tick); the optional `reconcileTranscript` callback → a defaulted
-// notes: `reconcile_transcript` deps method (`None` = no-op sweep). Title gen is now
-// notes: adapter-aware via the `generate_title(adapterId,...)` deps method (the free
-// notes: `title_generator::generate_title` moved to the Claude adapter). external-
-// notes: session-sweep.test.ts ported ×2.
-// notes: TS DI (db + AdapterRegistry) → `ExternalSessionDeps` trait. The adapter
-// notes: `listExternalSessions` method is not yet on the ported Adapter trait, so
-// notes: `external_session_adapter_ids` + `list_external_sessions` abstract it.
-// notes: scanIntervals/lastCounts → `Arc<Mutex<HashMap<..>>>` (CONCURRENCY.tsv
-// notes: SHARED_MAP); `setInterval` → a spawned tokio interval task per project
-// notes: (JoinHandle aborted on stop). Merge-sort comparator (modifiedAt desc,
-// notes: sessionId desc tie-break) copied exactly; slice bounds clamped like JS
-// notes: `Array.slice`. Fire-and-forget title gen → `tokio::spawn`. The outer
-// notes: scanPage `.catch` guards are unreachable (deps don't throw) and elided.
-// notes: The only ported test is external-session-sweep.test.ts (the scan/import
-// notes: paths have no TS test file).

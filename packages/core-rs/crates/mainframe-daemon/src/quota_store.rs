@@ -44,11 +44,3 @@ impl QuotaSettingsStore for DaemonQuotaSettings {
         }
     }
 }
-
-// PORT STATUS: (new — production QuotaSettingsStore wiring for quota/manager.ts `settings`)
-// confidence: high
-// todos: 0
-// notes: Bridges the mirrored `quota` settings category through the Db actor's
-// call_blocking (SYNC-DB BRIDGE), matching DaemonPluginHostDb. The QuotaManager
-// only touches settings on boot (load_from_disk) and on ingest/reevaluate persist,
-// never from within a DB-thread closure, so call_blocking is safe here.

@@ -290,9 +290,3 @@ fn screen(
             .rejected(hook_id, "no X-GitHub-Delivery header and no payload id")
     })
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T8.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node routes/automation-webhook.ts order (signature → JSON →
-//        preset → staleness → delivery id → sample → enabled → start).

@@ -1,8 +1,6 @@
 //! The Claude model catalog: the static fallback list, the older-but-still-active
 //! models Mainframe offers on top of the CLI's own picker, and the context-window
 //! reconciliation applied to a live probe.
-//!
-//! Ported from `packages/core/src/plugins/builtin/claude/adapter.ts`.
 
 use std::collections::{HashMap, HashSet};
 

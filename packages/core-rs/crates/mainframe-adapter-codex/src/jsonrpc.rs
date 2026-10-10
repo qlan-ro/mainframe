@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/codex/jsonrpc.ts`.
-//!
 //! Id-correlated request/response over the Codex app-server's line-delimited JSON
 //! framing (the framing — multiple objects per line, partial-object scanning — is
 //! copied exactly from the TS). 30s request timeout; notification + server-request
@@ -614,23 +612,3 @@ mod tests {
         assert_eq!(find_json_object_end(r#"{"a":1"#), None);
     }
 }
-
-// PORT STATUS: src/plugins/builtin/codex/jsonrpc.ts (227 lines)
-// confidence: medium
-// todos: 1
-// notes: The line framing (parse_jsonrpc_messages + find_json_object_end) is copied
-// notes: char-for-char. Concurrency per CONCURRENCY.tsv 96-100: pending is
-// notes: Arc<Mutex<HashMap>>, next_id AtomicI64, closed AtomicBool, close_listeners a
-// notes: drained-once Vec + a Notify for the Rust-native `closed()` await. Writes go
-// notes: through an mpsc to a stdin writer task so notify/respond/write stay sync
-// notes: (TS stdin.write is sync). TODO(port): close() relies on kill_on_drop(SIGKILL)
-// notes: rather than an explicit SIGTERM (no signal crate in the allowlist); parity
-// notes: on "child dies with the client" holds. on_close's unsubscribe is a no-op
-// notes: (listeners drain exactly once on exit). request() returns raw Value; callers
-// notes: deserialize. TEST GAP: `__tests__/codex-jsonrpc.test.ts` (10 cases) is NOT
-// notes: ported — most cases inject a mock ChildProcess (EventEmitter stdin/stdout),
-// notes: but JsonRpcClient::new takes a concrete tokio Child, so faithfully porting
-// notes: request/respond/close/dispatch tests needs a generic-stream refactor
-// notes: (a redesign, out of scope for a structure-preserving port). The pure framing
-// notes: functions (parse_jsonrpc_messages/find_json_object_end) ARE unit-tested inline
-// notes: below; the client-level request/respond/close/dispatch cases remain a gap.

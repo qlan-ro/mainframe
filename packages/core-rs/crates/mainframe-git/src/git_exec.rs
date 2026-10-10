@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/git/git-exec.ts`.
-//!
 //! The single subprocess primitive: run a git command in `cwd` and return
 //! stdout. Array args (no shell), a 30s default timeout for the fast read/parse
 //! commands, and `timeout: 0` for genuinely long-running network ops (0 = no
@@ -122,13 +120,3 @@ pub async fn exec_git(
         })
     }
 }
-
-// PORT STATUS: packages/core/src/git/git-exec.ts (34 lines)
-// confidence: medium
-// notes: `access(cwd)` -> tokio::fs::metadata; `execFile('git', ...)` ->
-// tokio::process::Command with kill_on_drop(true) (SIGKILL on drop vs Node's
-// SIGTERM-on-timeout — no test asserts the timeout signal). GitExecError models
-// the TS `code?: number | string` via GitExecCode enum; on non-zero exit the
-// message embeds stderr so downstream `.contains(...)` classification matches
-// Node's execFile error text (not asserted byte-for-byte). GitExecOptions.timeout
-// is ms; `Some(0)` = uncapped (network ops), absent = 30s default.

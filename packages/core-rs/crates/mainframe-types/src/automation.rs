@@ -202,10 +202,3 @@ pub struct AutomationTimelineEntry {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub finished_at: Option<i64>,
 }
-
-// PORT STATUS: packages/types/src/automation.ts (summaries/timeline/enums only)
-// confidence: high
-// todos: 0
-// notes: definition domain types (steps/triggers/chips) deliberately stay in
-// mainframe-automations::domain (rust-engine plan T1.1); that crate re-exports
-// these so each wire shape has ONE canonical Rust definition.

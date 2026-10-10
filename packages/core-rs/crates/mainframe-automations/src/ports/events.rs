@@ -98,9 +98,3 @@ pub fn to_run_summary(run: &RunRecord) -> RunSummary {
         error: run.checkpoint.error.clone(),
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T4.1, A6), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node engine/run-summary.ts (trigger projects {kind} only;
-//        `tokens` reserved by the AutomationRunSummary type).

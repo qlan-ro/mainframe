@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/history-tool-result.ts`.
-//!
 //! Shared builders for turning a Claude JSONL `message.content` array plus its
 //! `toolUseResult` sidecar into transcript `tool_result` blocks. The TS operates
 //! on untyped `Record<string, unknown>`; the port navigates `serde_json::Value`
@@ -228,15 +226,3 @@ mod tests {
 // under the 300-line cap; `super::*` inside it resolves against this module.
 #[cfg(test)]
 mod image_tests;
-
-// PORT STATUS: src/plugins/builtin/claude/history-tool-result.ts (58 lines)
-// confidence: high
-// todos: 0
-// notes: operates on serde_json::Value like the TS Record<string,unknown>.
-// structuredPatch is deserialized to Vec<DiffHunk> (TS casts blindly); malformed
-// hunks are dropped rather than passed through raw (typed MessageContent can't
-// hold arbitrary JSON) — CLI shape is stable. js_truthy/get are pub(crate) so
-// history-converters/history-subagents share them (3+ call sites) without a new
-// module file. WIRE NOTE: the JSON.stringify fallback for object-shaped
-// tool_result content uses serde_json (BTreeMap-sorted keys) vs JS insertion
-// order — untested edge; the covered paths are string + text-array.

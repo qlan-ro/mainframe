@@ -57,9 +57,3 @@ pub enum StoreError {
     #[error("store task failed: {0}")]
     Task(String),
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T2.1-T2.2), not a TS port
-// confidence: high
-// todos: 0
-// notes: TerminalRun/OutputsTooLarge display text mirrors Node's
-//        store/types.ts + run-store.ts error strings.

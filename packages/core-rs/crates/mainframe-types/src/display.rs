@@ -1,5 +1,3 @@
-//! Ported from `packages/types/src/display.ts`.
-
 use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
@@ -350,16 +348,3 @@ mod tests {
         }));
     }
 }
-
-// PORT STATUS: packages/types/src/display.ts (80 lines)
-// confidence: high
-// todos: 0
-// notes: Main catch-up (#424): ChatHistoryPayload { messages, transcriptMissing }
-// — the GET /api/chats/:id/messages `data` envelope (was a bare DisplayMessage[]).
-// notes(orig): DisplayContent is an untagged wrapper over shared LeafContent
-// (content.rs) + display-only DisplayNode (internally tagged on tool_call/
-// tool_group/task_group/task_progress/permission_request/error/compaction;
-// disjoint from the leaf tags). ToolCategories uses HashSet<String> for the TS
-// `Set<string>` fields. `type` fields use raw identifier `r#type` (serialize as
-// "type"). full DisplayMessage validated by the events.rs golden round-trip of
-// display.message.added. References crate::{content,chat,adapter}.

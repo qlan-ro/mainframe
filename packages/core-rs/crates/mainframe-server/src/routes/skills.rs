@@ -310,10 +310,3 @@ done
         assert_eq!(body["data"][0]["id"], "mock-cli:project:review");
     }
 }
-
-// PORT STATUS: src/server/routes/skills.ts (4 endpoints, 113 lines)
-// confidence: medium
-// todos: 0
-// notes: Mirror of agents.rs over `mainframe_adapter_claude::skills::{list,create,
-// update,delete}_skill`. displayName defaults to name; description/content default
-// to "". Zod 400 messages approximated; status codes + hand-written strings match.

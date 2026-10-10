@@ -156,9 +156,3 @@ impl Action for AdoCreateItemAction {
         })
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T7.2), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node actions/ado.ts (System.Title/System.Description
-//        json-patch, `_links.html.href` URL, PAT basic auth).

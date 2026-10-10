@@ -160,8 +160,3 @@ fn definition_and_create_input_round_trip() {
         "definition rejects unknown fields"
     );
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T1.1), not a TS port
-// confidence: high
-// todos: 0
-// notes: wire literals mirror packages/types/fixtures/automations/ shapes.

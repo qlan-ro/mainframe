@@ -870,20 +870,6 @@ pub async fn activate(ctx: Arc<PluginContext>) -> Result<Router<()>, PluginError
     Ok(routes().with_state(ctx))
 }
 
-// PORT STATUS: src/plugins/builtin/todos/index.ts
-// confidence: high
-// todos: 0
-// notes: Express router → axum Router<Arc<PluginContext>>. parseTodo keeps raw
-// snake_case columns, replacing the three JSON array columns (safeJsonArray
-// tolerates historical double-encoded values). Zod schemas hand-rolled: create
-// requires projectId+title, defaults body/status/type/priority/labels/assignees/
-// dependencies, validates enums; update is all-optional with the same enum/array
-// guards; the move body accepts only the status enum; the attachment upload
-// requires filename+data (empty data allowed) and a non-negative sizeBytes. The
-// per-project `number` uses the same MAX(number)+1 subquery. start-session gates
-// on chat:create (403), builds the initial message, and returns { chatId,
-// initialMessage }. Migrations mirror the additive ALTER-COLUMN backfill.
-
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;

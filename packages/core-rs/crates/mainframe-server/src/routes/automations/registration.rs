@@ -87,10 +87,3 @@ fn to_wire(state: &WebhookState, port: u16) -> WebhookRegistration {
         last_delivery_at: state.last_delivery_at.clone(),
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-25-todo-234-automations-editor-plan.md T7), not a TS port
-// confidence: high
-// todos: 0
-// notes: only the single-automation GET embeds registrations; the list route
-//        would pay a store read per webhook trigger for a column the library
-//        never renders.

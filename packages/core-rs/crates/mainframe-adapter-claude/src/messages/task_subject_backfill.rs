@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/messages/task-subject-backfill.ts`.
-//!
 //! Cross-message pass that gives every task_progress item a resolvable subject.
 //! The CLI's TaskUpdate carries only { taskId, status }; the subject lives on the
 //! TaskCreate (possibly in an earlier grouped message). This walks the display
@@ -524,15 +522,3 @@ mod tests {
         assert_eq!(out[0], user);
     }
 }
-
-// PORT STATUS: src/messages/task-subject-backfill.ts (88 lines)
-// confidence: high
-// todos: 0
-// notes: backfill_blocks returns Option<Vec> (Some=changed) to mirror the TS
-// same-reference optimization; non-mutation of inputs is guaranteed by taking
-// &[DisplayMessage]. item.result (Option<ToolCallResult>) is serialized to a
-// Value for extract_task_id (types crate). js_string_coerce reproduces
-// String(taskId ?? ''). 9 backfillTaskSubjects unit assertions ported; the TS
-// prepareMessagesForClient integration block is intentionally NOT ported here —
-// it exercises display_pipeline (mainframe-display) across the dependency edge.
-// CRATE-SPLIT flagged (see module doc) — likely re-homes to mainframe-display.

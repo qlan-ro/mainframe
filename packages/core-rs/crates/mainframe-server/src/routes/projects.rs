@@ -274,14 +274,3 @@ mod tests {
         assert_eq!(body["success"], false);
     }
 }
-
-// PORT STATUS: src/server/routes/projects.ts (4 endpoints, 57 lines)
-// confidence: medium
-// todos: 0
-// notes: GET list / GET :id / POST ported 1:1 over ctx.db.projects (list/get/
-// get_by_path/create). POST's 409 carries `data: existing` (a non-standard fail
-// envelope) so it is hand-built, not via `fail()`. CreateProjectBody path.min(1)
-// → serde String + explicit non-empty check. DELETE :id calls the real
-// ChatManager.remove_project (stops live sessions + tears down worktrees before
-// the row delete) and maps its Result through `removal_response()`; unwired
-// (Phase-3 harness) → the TS failure-path 500 string.

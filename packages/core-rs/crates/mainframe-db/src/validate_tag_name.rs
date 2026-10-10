@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/lib/validate-tag-name.ts`.
-//!
 //! Relocated into `mainframe-db` (its sole consumer, `tags.rs`) per PORTING.md
 //! §2.15, alongside `tag_color`.
 
@@ -87,12 +85,3 @@ mod tests {
         }
     }
 }
-
-// PORT STATUS: src/lib/validate-tag-name.ts (21 lines)
-// confidence: high
-// notes: RELOCATED from lib/ into mainframe-db per §2.15 (sole consumer is
-// tags.rs). ValidateResult is a Rust enum mirroring the TS discriminated union;
-// error strings are byte-identical (asserted by tags.rs regex tests). Length
-// checks use char counts (JS `.length` is UTF-16 units, but tag input is ASCII).
-// Tests ported from lib/__tests__/validate-tag-name.test.ts.
-// todos: 0

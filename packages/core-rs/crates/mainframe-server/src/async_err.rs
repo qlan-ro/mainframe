@@ -43,11 +43,3 @@ mod tests {
         assert!(!String::from_utf8_lossy(&bytes).contains("devices"));
     }
 }
-
-// PORT STATUS: src/server/routes/async-handler.ts + http.ts global error handler
-// confidence: high
-// todos: 0
-// notes: Rust has no thrown-exception path, so `asyncHandler`'s promise-catch is
-// not a 1:1 wrapper; its EFFECT (log + opaque 500, no internal leak) is provided
-// as `internal_error` for route catch-all arms. Expected 400/404 mappings stay
-// route-local (they were explicit `fail(res, 4xx, ...)` calls in the TS too).

@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/chat/degraded-recovery.ts`.
-//!
 //! Degraded-chat recovery actions (missing transcript / missing worktree).
 //!
 //! Backs the daemon recovery routes and the degraded-chat UI card:
@@ -385,14 +383,3 @@ mod tests {
         assert!(err.to_string().to_lowercase().contains("no worktree"));
     }
 }
-
-// PORT STATUS: src/chat/degraded-recovery.ts (85 lines) — NEW module (#424)
-// confidence: high
-// todos: 0
-// notes: continueHere / continueInProjectRoot / recreateChatWorktree ported. The
-// notes: injectable `git` (`DegradedRecoveryGit`) folds into default `branch_exists`/
-// notes: `add_worktree` trait methods (real `mainframe_services::workspace` ops);
-// notes: tests override them. The 409 `Object.assign(err,{statusCode})` → a
-// notes: `BranchGone` error variant with `status_code() == Some(409)`. syncChatFields'
-// notes: cleared-field partial → a `RecoverySync` enum (internal, not wire). degraded-
-// notes: recovery.test.ts ported ×9 against an in-crate `DegradedRecoveryDeps` fake.

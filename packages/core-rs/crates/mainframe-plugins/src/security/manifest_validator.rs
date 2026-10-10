@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/security/manifest-validator.ts`.
-//!
 //! Hand-rolled equivalent of the Zod schema (no `zod`/`regex` crate in §8). The
 //! validator is lenient about legacy UI zone names (`left-panel`, `right-tab`, …)
 //! exactly as the Zod schema is; it only feeds the dropped on-disk load path in
@@ -311,12 +309,3 @@ mod tests {
         assert!(result.is_ok());
     }
 }
-
-// PORT STATUS: src/plugins/security/manifest-validator.ts
-// confidence: high
-// todos: 0
-// notes: Zod schema hand-rolled (no zod/regex crate in §8). Legacy zone names
-// accepted like the TS union. superRefine rules preserved (adapters⇒adapter,
-// ui-zones⇒ui:panels). Error messages carry the same substrings the oracle
-// asserts (`id`, `adapter`, `ui:panels`); issues joined with `; `. Feeds only the
-// dropped on-disk load path in v1 (builtin path passes its own manifest).

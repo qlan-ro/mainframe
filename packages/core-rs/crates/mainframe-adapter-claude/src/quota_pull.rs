@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/quota-pull.ts`.
-//!
 //! Harvests Claude's plan quota: pulls `/usage`, parses its prose into windows,
 //! and stamps the resolved account identity. Identity and usage are read
 //! concurrently. The identity is stamped even on an `unknown` parse so the
@@ -191,12 +189,3 @@ mod tests {
         assert_eq!(quota.account_identity.as_deref(), Some("unknown"));
     }
 }
-
-// PORT STATUS: src/plugins/builtin/claude/quota-pull.ts (44 lines)
-// confidence: high
-// todos: 0
-// notes: `runUsage`/`readIdentity` are injected as boxed async closures (Rust has
-// notes: no bare async-fn-value equivalent of the TS deps object) so tests need no
-// notes: real spawn or filesystem read, matching the TS seam. `spawnClaudeUsage`
-// notes: mirrors title_generator.rs's Command/Stdio/timeout pattern (PATH threaded
-// notes: explicitly, kill_on_drop, 30s timeout -> Err on elapse).

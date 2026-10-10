@@ -58,10 +58,3 @@ impl AutomationsEngine {
         Ok(())
     }
 }
-
-// PORT STATUS: packages/core/src/automations/service.ts start()/reconcile
-// confidence: high
-// todos: 0
-// notes: reconcile awaits each advance (bounded — to next park/terminal), so a
-//        dropped-then-rebuilt engine over the same DB resumes deterministically
-//        (T10.3). Sweep/event loop are the only long-lived tasks stop() drains.

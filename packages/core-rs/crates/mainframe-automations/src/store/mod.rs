@@ -235,9 +235,3 @@ mod test_support;
 
 #[cfg(test)]
 mod webhook_state_tests;
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T2.1-T2.2), not a TS port
-// confidence: high
-// todos: 0
-// notes: checkpoint serde mirrors Node store/types.ts null-vs-omit exactly
-//        (shared automations.db can be handed between engines on a flip).

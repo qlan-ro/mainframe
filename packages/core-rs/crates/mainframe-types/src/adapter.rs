@@ -1,5 +1,3 @@
-//! Ported from `packages/types/src/adapter.ts`.
-//!
 //! Data types only. The `Adapter` / `AdapterSession` / `SessionSink` *trait*
 //! interfaces from the TS file live in `mainframe-adapter-api` (per the crate
 //! map §2.6); this module ports the serde DTOs they exchange plus the pure
@@ -869,21 +867,3 @@ mod tests {
         assert_eq!(clamp_effort_to_supported(E::High, &[], None), None);
     }
 }
-
-// PORT STATUS: packages/types/src/adapter.ts (395 lines)
-// confidence: high
-// todos: 0
-// notes: Main catch-up (#424/#425/#441): SessionResult.contextTokens (Option<i64>,
-// serde default+skip; absent/null both → None, three-way branch lives in the
-// event-handler producer) and AdapterModel.resolvedModel (Option<String>, skip).
-// The new Adapter TRAIT methods generateTitle/isTranscriptPresent land in
-// mainframe-adapter-api (behavioral half). Data DTOs + effort-clamp logic only;
-// the Adapter/AdapterSession/
-// SessionSink TRAIT interfaces are intentionally NOT here — they port to
-// mainframe-adapter-api (crate map §2.6). MessageMetadata.usage / SessionResult
-// fields stay snake_case (they mirror the CLI usage payload; fixture
-// message.added shows input_tokens/output_tokens). ControlUpdate is internally
-// tagged (rename_all gives addRules/replaceRules/... tag values). References
-// crate::settings::{ExecutionMode,PermissionMode} and crate::chat::ResolvedTuning
-// (owned by the sibling types-port task). TUNABLE_FEATURES / clampEffortToSupported
-// ported as const + fn with a logic-parity test.

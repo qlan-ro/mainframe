@@ -9,9 +9,3 @@ pub use worktree::{
     branch_exists, compute_worktree_parent_links, create_worktree, get_worktrees,
     is_worktree_present, parse_worktree_list, remove_worktree, short_branch,
 };
-
-// PORT STATUS: src/workspace/index.ts (2 lines)
-// confidence: high
-// todos: 0
-// notes: re-export barrel. `backfillWorktreeRelationships` is not re-exported by
-// the TS index but is public in worktree.ts; kept public here for its callers.

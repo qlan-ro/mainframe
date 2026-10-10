@@ -186,28 +186,3 @@ fn apply_cors_headers(headers: &mut HeaderMap, origin: Option<&str>) {
         HeaderValue::from_static("nosniff"),
     );
 }
-
-// PORT STATUS: src/server/http.ts (createHttpServer)
-// confidence: medium
-// todos: 1
-// notes: CORS ported as a from_fn middleware (not tower-http CorsLayer) for
-// byte-exact parity: allowed-origin echo (via cors_origin::is_allowed_origin —
-// widened for packaged Tauri per #411), OPTIONS→204, nosniff. Main catch-up
-// (#424) mounts chat_recovery::router() after worktree. Body limit via
-// tower-http RequestBodyLimitLayer(30mb). Auth is a route_layer over the HTTP
-// routes only; the WS `/` route self-authenticates. `trust proxy = loopback` is
-// realized by net::trust_proxy_client_ip (peer from ConnectInfo), which the WS
-// upgrade now shares with HTTP. TODO(port): the global
-// thrown-error→500 envelope has no Rust analogue (handlers return Responses;
-// unexpected errors map via async_err::internal_error); 404 is axum's default.
-// Task 5.5 mounted the remaining surfaces: launch/tunnel/lsp route modules behind
-// auth, the PluginManager router nested at /api/plugins (nest_service — its state is
-// pre-applied), and the self-authenticating `/lsp/:projectId/:language` WS upgrade
-// alongside the generic `/` WS route. Workflows stay deliberately unmounted
-// (SCOPE DECISION 2026-07-10). Negotiated gzip/brotli response compression
-// (todo #294) is a Rust-side addition with no TS counterpart, layered inside
-// the HTTP router so the WS upgrade routes stay untouched.
-// #219: axum's own DefaultBodyLimit (2mb) sat inside RequestBodyLimitLayer's
-// stack and rejected anything over ~2mb with an empty body before the 30mb
-// layer ever ran — silently breaking 2-5mb attachments on every daemon, local
-// or remote. Disabled so the explicit 30mb layer is the only limit in force.

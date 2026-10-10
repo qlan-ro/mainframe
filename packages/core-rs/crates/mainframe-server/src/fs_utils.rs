@@ -1,5 +1,3 @@
-//! Ported from `src/server/fs-utils.ts`.
-//!
 //! Shared filesystem helpers for the file/search routes: the ignored-directory
 //! and binary-extension deny lists, the `hasBinaryExtension` double-extension
 //! check, and `listProjectFiles` (git `ls-files` primary, symlink-contained walk
@@ -256,17 +254,3 @@ pub(crate) async fn walk_project_files(
 
 #[cfg(test)]
 mod tests;
-
-// PORT STATUS: src/server/fs-utils.ts (IGNORED_DIRS, BINARY_EXTENSIONS,
-// hasBinaryExtension, listProjectFiles/walkProjectFiles)
-// confidence: high
-// todos: 0
-// notes: Node `readdir(withFileTypes)` → `tokio::fs::read_dir`; the recursive
-// `walk` is expressed iteratively with an explicit stack (no async-recursion
-// boxing) — pre-order vs stack order is unobservable (no route asserts walk
-// ordering; the git `ls-files` primary path preserves git's own order). Symlink
-// containment reuses `path_utils::is_within_base` (the sep-guarded prefix check,
-// equivalent to TS `realFull.startsWith(projectPath + sep)`). `git ls-files`
-// via `mainframe_git::exec_git`; non-128 errors log then fall back to the walk,
-// matching the TS `code !== 128` branch. `relative`/`path_resolve` are Node
-// `path` shims added here (std has no analogue) for the route handlers.

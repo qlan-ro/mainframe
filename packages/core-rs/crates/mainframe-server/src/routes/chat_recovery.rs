@@ -1,5 +1,3 @@
-//! Ported from `src/server/routes/chat-recovery.ts`.
-//!
 //! Degraded-chat recovery routes — the actions behind the unified degraded-chat
 //! card (missing transcript / missing worktree). All three re-emit an enriched
 //! `chat.updated` via the ChatManager so clients clear the card live.
@@ -126,14 +124,3 @@ mod tests {
         }
     }
 }
-
-// PORT STATUS: src/server/routes/chat-recovery.ts (3 POST routes)
-// confidence: high
-// todos: 0
-// notes: Main catch-up (#424): new degraded-chat recovery routes
-// (recreate-worktree / continue-here / continue-in-project-root) → okEmpty. The id
-// param 404s an unknown chat before the action runs; a DegradedRecoveryError maps
-// its status_code() (BranchGone → 409) else 400, with the Display message crossing
-// the wire verbatim (as the TS `err.statusCode`/`err.message` pass-through does).
-// ChatManager-backed with no db fallback, so the unwired harness reports the 500
-// seam like the other Phase-4 routes.

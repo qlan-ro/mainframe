@@ -115,10 +115,3 @@ pub async fn build_automations_engine(
 
 #[cfg(test)]
 mod tests;
-
-// PORT STATUS: packages/core/src/index.ts (AutomationService wiring) +
-// automations/agent-port.ts
-// confidence: high
-// todos: 0
-// notes: engine start()/reconcile is T10.1; boot only constructs + stores the
-//        handle in AppCtx and stop()s it in the ordered shutdown.

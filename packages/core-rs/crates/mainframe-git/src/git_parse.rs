@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/git/git-parse.ts`.
-//!
 //! Shared git output parsers used by route handlers and GitService. These are
 //! the porcelain spec — every fixture string is preserved byte-identically in
 //! the ported tests.
@@ -1134,15 +1132,3 @@ mod tests {
         );
     }
 }
-
-// PORT STATUS: packages/core/src/git/git-parse.ts (203 lines)
-// confidence: high
-// notes: All porcelain parsers ported without a regex crate (not in the
-// allowlist) — parseBranchList/parseCommitHash/parseDiffStatSummary use manual
-// scanners that reproduce the exact regex semantics (verified against every
-// ported fixture). `working_dir` stays snake_case (matches the TS field / simple-git
-// shape); DiffEntry.oldPath uses camelCase + skip_serializing_if. is_not_git_repo
-// takes a typed &GitExecError (the TS `unknown`/string/number third assertion is a
-// dynamic-typing artifact, inexpressible in Rust — the two Error assertions are
-// preserved). js_parse_int mirrors `parseInt(x,10)||0` for git-service's numeric
-// fields. All 61 parser assertions ported byte-identically.

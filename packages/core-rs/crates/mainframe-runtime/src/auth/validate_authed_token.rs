@@ -1,5 +1,3 @@
-//! Ported from `src/auth/validate-authed-token.ts`.
-//!
 //! The TS function takes a concrete `DevicesRepository` (from `../db/devices`).
 //! That repository lives in `mainframe-db`, which depends on this crate — so to
 //! avoid a dependency cycle the lookup is abstracted behind the `DeviceLookup`
@@ -127,13 +125,3 @@ mod tests {
         assert!(validate_authed_token(SECRET, &token, &devices).is_none());
     }
 }
-
-// PORT STATUS: src/auth/validate-authed-token.ts (19 lines)
-// confidence: high
-// todos: 0
-// notes: `DevicesRepository` argument abstracted behind the `DeviceLookup` trait
-// to avoid a mainframe-db -> mainframe-runtime dependency cycle (mainframe-db
-// implements the trait). Tests substitute a HashMap-backed `FakeDevices` for the
-// vitest in-memory SQLite `DevicesRepository`, keeping every assertion identical
-// (add / incrementAuthEpoch / findByDeviceId behavior preserved). `epoch ?? -1`
-// -> `payload.epoch.unwrap_or(-1)`.

@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/attachment-context.ts`.
-//!
 //! Per-plugin, per-entity attachment storage under `<pluginDir>/attachments`.
 //! Each attachment is two files in the entity's directory: `<id>-<safeName>`
 //! (the bytes) and `<id>.json` (the metadata record). No `base64` crate is in
@@ -317,12 +315,3 @@ mod tests {
         assert_eq!(sanitize("../../etc/passwd"), "passwd");
     }
 }
-
-// PORT STATUS: src/plugins/attachment-context.ts
-// confidence: high
-// todos: 0
-// notes: two-file layout (`<id>-<safeName>` + `<id>.json`) preserved; async
-// node:fs/promises → tokio::fs. sanitize mirrors the `[\w.\-() ]` allow-class +
-// `attachment.bin` fallback. base64 hand-rolled (no crate in §8) like the main
-// AttachmentStore. get/list/delete swallow missing-dir/malformed-file exactly as
-// the TS `catch` blocks (return None/[]/noop).

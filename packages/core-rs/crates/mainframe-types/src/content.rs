@@ -1,5 +1,3 @@
-//! Ported from `packages/types/src/content.ts`.
-//!
 //! `LeafContent` is the set of leaf content variants shared verbatim between the
 //! transcript-form `MessageContent` (`chat.rs`) and the UI-render-form
 //! `DisplayContent` (`display.rs`). Factoring them here keeps the two unions in
@@ -105,12 +103,3 @@ mod tests {
         assert_eq!(serde_json::to_value(&img).unwrap(), v);
     }
 }
-
-// PORT STATUS: packages/types/src/content.ts (16 lines)
-// confidence: high
-// todos: 0
-// notes: LeafContent is an internally-tagged enum (tag "type"); tag values are
-// snake_case (text/thinking/image/skill_loaded) via rename_all, wire fields are
-// camelCase via rename_all_fields. parentToolUseId is on every variant and is
-// omit-when-absent. Reused by chat::MessageContent and display::DisplayContent
-// as the `Leaf` arm of their untagged wrappers.

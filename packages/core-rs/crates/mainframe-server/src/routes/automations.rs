@@ -275,9 +275,3 @@ mod registration;
 mod automations_tests;
 #[cfg(test)]
 mod registration_tests;
-
-// PORT STATUS: src/server/routes/automations.ts (9 endpoints, 177 lines)
-// confidence: high
-// todos: 0
-// notes: unused `delete`/`put` route fns are used via the builder chain; the
-//        timeline `error` stays `T | null` (Node parity), other optionals omit.

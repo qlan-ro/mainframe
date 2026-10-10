@@ -56,14 +56,6 @@ pub mod user_event;
 pub(crate) mod user_payload;
 pub mod workflow_events;
 
-// PORT STATUS: src/plugins/builtin/claude/* + messages/* (claude slice) — skeleton only (Task 4.1)
-// confidence: low
-// todos: 0
-// notes: module stubs pre-created for parallel ports; no logic yet. Implements the
-// notes: mainframe-adapter-api Adapter/AdapterSession/SessionSink traits when ported.
-// notes: `messages` holds the Claude-specific message files (§2.5 split); the
-// notes: adapter-agnostic pieces live in mainframe-display.
-
 #[cfg(test)]
 mod presentation_history;
 #[cfg(test)]

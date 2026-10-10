@@ -1,5 +1,3 @@
-//! Ported from `packages/types/src/tags.ts`.
-
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -79,12 +77,3 @@ mod tests {
         assert_eq!(serde_json::to_string(&tag).unwrap(), json);
     }
 }
-
-// PORT STATUS: packages/types/src/tags.ts (28 lines)
-// confidence: high
-// todos: 0
-// notes: TagColor is a Rust enum (camelCase rename) + a const TAG_PALETTE array,
-// mirroring the frozen TS const-array + literal-union pair. SyntheticTag /
-// SyntheticTagColor literal-union aliases collapse into the SYNTHETIC_TAGS /
-// SYNTHETIC_TAG_COLOR consts. `Object.isFrozen` has no Rust analogue (const arrays
-// are immutable by construction), so that assertion is dropped.

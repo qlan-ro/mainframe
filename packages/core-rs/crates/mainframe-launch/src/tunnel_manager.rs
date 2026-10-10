@@ -1,5 +1,3 @@
-//! Ported from `src/tunnel/tunnel-manager.ts`.
-//!
 //! Spawns `cloudflared` per label, scans its stdout/stderr for the
 //! `*.trycloudflare.com` URL and the "Registered tunnel connection" line, then
 //! waits for DNS propagation before resolving. Emits `tunnel:status` DaemonEvents
@@ -1173,31 +1171,3 @@ mod tests {
         task.abort();
     }
 }
-
-// PORT STATUS: src/tunnel/tunnel-manager.ts (245 lines)
-// confidence: medium
-// todos: 1
-// notes: cloudflared spawn (tokio::process, kill_on_drop) + line scan for the
-// trycloudflare URL (hand-scanned, no regex) and the "Registered tunnel
-// connection" marker. The TS callback state machine is linearized: Phase 1
-// select loop (stdout/stderr lines vs start-timeout vs early-exit) → Phase 2
-// select (waitForDns vs early-exit), so the start timeout is naturally "cleared"
-// once connected (regression the 45s-timeout test pins). Post-ready exit → a
-// spawned watcher removes the tunnel + broadcasts stopped (the `!done ? reject :
-// delete+stopped` split preserved). stop() shells out to `kill` (house style) and
-// the killed child's watcher re-broadcasts stopped (faithful double-broadcast).
-// verify() = reqwest GET /health with the 30s TTL cache (non-200 caches false;
-// non-JSON/network error returns false without caching). TODO(port): waitForDns
-// uses tokio::net::lookup_host (system resolver) — the TS pins 1.1.1.1 via
-// node:dns Resolver; the specific-resolver behavior is lost (see blockers).
-// Tunnel/verify tests use real spawned processes / a canned local HTTP server,
-// not code mocks. Post-connection, spawn_output_drain keeps reading stdout/stderr
-// for the child's life — dropping the readers closes the pipes and cloudflared
-// dies on SIGPIPE at its next log write (the TS 'data' handlers persist, so the
-// port needs the explicit drain).
-// #431/#442 child-reaping: TunnelManagerOptions{registry,cloudflaredPath} added;
-// recordSpawn/forgetSpawn fire-and-forget against an Arc<dyn ChildRegistryPort>
-// (absolute paths only, via tunnel_record_entry); a `pending` HashSet<pid> tracks
-// mid-start children so stop_all reaps them (the mock-spawn TS tests map to the
-// pure tunnel_record_entry unit tests + real-process record/stop/mid-start-reap
-// tests, matching the crate's real-process test idiom).

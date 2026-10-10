@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/lsp/lsp-connection.ts`.
-//!
 //! The upgrade path parser, the worktree-aware effective-path resolver, the
 //! pre-upgrade validation/decision logic, and the client-attach orchestration
 //! (cached-`initialize` replay for reconnecting clients, init-result capture for
@@ -326,15 +324,3 @@ pub fn attach_client_with_capture(
 
 #[cfg(test)]
 mod tests;
-
-// PORT STATUS: packages/core/src/lsp/lsp-connection.ts (249 lines)
-// confidence: medium (parser + effective-path + validation are direct ports and
-//   tested; the WS-attach orchestration is ported over a channel seam because the
-//   axum WS wiring lives in the deferred `mainframe-server` LSP mount)
-// todos: 1 (server-side WS<->channel + on-close idle-timer glue — see TODO(port))
-// notes: `getEffectivePath` is re-derived here via trait seams (`ProjectStore`/
-//   `ChatStore`) rather than importing it from the server crate (would be a
-//   dependency cycle: server -> lsp). Raw `socket.write('HTTP/1.1 …')` + destroy
-//   becomes an `UpgradeOutcome::Reject(status)` the server writes. All log strings
-//   preserved. The reattach-replay and init-capture logic is factored into pure,
-//   tested helpers (`classify_reattach_first`, `capture_initialize_result`).

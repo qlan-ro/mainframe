@@ -221,11 +221,3 @@ impl RunStore {
             .await
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T2.2), not a TS port
-// confidence: high
-// todos: 0
-// notes: finalize also cancels the run's pending interactions in the same
-//        transaction (A8: run-cancel is atomic with interaction cancel);
-//        Node splits this across savepoint-joined store calls. Row mapping
-//        and in-tx helpers live in run_rows.rs (300-line file cap).

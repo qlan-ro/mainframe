@@ -1,5 +1,3 @@
-//! Ported from `src/files/file-watcher.ts`.
-//!
 //! Node's per-file `fs.watch` becomes a `notify` watcher per subscription. To
 //! stay reliable on macOS FSEvents (which drops single-file watches) the watcher
 //! is placed on the file's parent directory and events are filtered to the target
@@ -467,24 +465,3 @@ mod tests {
         }
     }
 }
-
-// PORT STATUS: src/files/file-watcher.ts (150 lines, incl. #433 re-arm)
-// confidence: medium
-// todos: 0
-// notes: fs.watch → notify RecommendedWatcher per path (SHARED_MAP class:
-// Arc<Mutex<HashMap>>; §3.3 allows RwLock<HashMap>, Mutex chosen for the
-// mutate-heavy entries). The notify callback runs on the backend thread and holds
-// only a Weak to the map (no Arc cycle → no leak; the strong Arc lives in the
-// service and drops with it). 200ms trailing debounce via a spawned task whose
-// JoinHandle is stored for abort (clearTimeout). Emit needs a tokio runtime
-// (captured Handle); without one it broadcasts immediately (graceful). Same
-// debug/warn messages as the TS. The macОС behavior test drives a real file
-// modify; the refcount/lifecycle tests use real (existing) temp files since
-// notify.watch (unlike the TS mock) fails on a missing path.
-// #433 re-arm-on-rename: NOT reproduced as close-then-reopen. The TS re-arms
-// because fs.watch follows the file inode and dies on an atomic rename-over; this
-// port watches the parent dir (stable inode), so the watch survives atomic saves
-// natively. Verified on macOS (keeps_firing_after_atomic_rename_over) and by
-// inotify semantics on Linux. Closing+reopening on rename would open an event gap
-// and regress the parent-dir watch, so the outcome (file:changed keeps firing) is
-// pinned by tests instead. See the module doc for the full reconciliation.

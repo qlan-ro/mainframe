@@ -240,9 +240,3 @@ async fn dispatch(step: &Step, ports: &dyn VerbPorts, ctx: VerbContext<'_>) -> S
         },
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T4.1), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node engine/walk.ts (walkFrame/runLeaf); commits funnel
-//        through RunStore::patch_checkpoint (one-tx read-modify-write).

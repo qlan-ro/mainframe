@@ -1,5 +1,3 @@
-//! Translated from `packages/core/src/__tests__/lsp/lsp-connection.test.ts`.
-
 use super::*;
 use crate::lsp_manager::{ClientRef, CommandResolver, LspManager};
 use crate::lsp_registry::{LspRegistry, ResolvedCommand};

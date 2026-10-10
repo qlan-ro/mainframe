@@ -101,11 +101,3 @@ async fn migrate_legacy_file<B: KeyringBackend + 'static>(
         ),
     }
 }
-
-// PORT STATUS: greenfield (2026-08-19 automations-provider-connections plan, Deliverable 1)
-// confidence: high
-// todos: 0
-// notes: build_with_backend is the generic seam boot_tests.rs drives with a
-//        fake backend, so no test in this crate ever touches the real OS
-//        keychain (see keyring_store_tests.rs for why the crate's own mock
-//        can't do this instead).

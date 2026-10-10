@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/lsp/lsp-proxy.ts`.
-//!
 //! The WS <-> child-stdio bridge. LSP frames its JSON-RPC messages with a
 //! `Content-Length` header; this module owns the byte-accurate framing in both
 //! directions. Per PORTING.md §2.13 the framing is hand-rolled — no LSP crate.
@@ -182,12 +180,3 @@ where
 
 #[cfg(test)]
 mod tests;
-
-// PORT STATUS: packages/core/src/lsp/lsp-proxy.ts (72 lines)
-// confidence: high (Content-Length framing is a direct byte-for-byte port)
-// todos: 0
-// notes: Node stream listeners become tokio pump tasks; `cleanup()` (listener
-//   removal) becomes task-abort (also on Drop). The `ws.readyState === 1` guard
-//   becomes "outgoing sink still connected". stdin writes route through the
-//   manager's shared `stdin_tx` (single ChildStdin writer) rather than a directly
-//   owned stream, matching the TS shared `proc.stdin`. Log strings preserved.

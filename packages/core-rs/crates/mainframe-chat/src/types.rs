@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/chat/types.ts`.
-
 use std::sync::Arc;
 
 use mainframe_adapter_api::AdapterSession;
@@ -49,11 +47,3 @@ impl ActiveChat {
 fn now_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
 }
-
-// PORT STATUS: src/chat/types.ts (8 lines)
-// confidence: high
-// todos: 0
-// notes: `session: AdapterSession | null` → `Option<Arc<dyn AdapterSession>>`
-// notes: (the session handle is shared/`Arc` per CONCURRENCY rule 4). `turnStartedAt`
-// notes: (JS ms epoch) → `Option<i64>`. ActiveChat stays the per-entity value until
-// notes: chat_manager folds it into ChatState (CONCURRENCY.tsv rule 1).

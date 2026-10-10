@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/db-context.ts`.
-//!
 //! `better-sqlite3` is synchronous and single-threaded. Per CONCURRENCY.tsv
 //! (`plugins/db-context.ts` → per-plugin Database, class DB: "one Arc<Db> per
 //! plugin — separate rusqlite conn, spawn_blocking, same handle discipline as
@@ -242,15 +240,3 @@ mod tests {
         assert!(missing.is_none());
     }
 }
-
-// PORT STATUS: src/plugins/db-context.ts
-// confidence: high
-// todos: 0
-// notes: per-plugin SQLite confined to a dedicated worker thread (mpsc actor),
-// a scoped clone of the mainframe-server Db seam — matches better-sqlite3's
-// single-threaded semantics and the tsv's per-plugin "separate rusqlite conn"
-// directive. WAL + foreign_keys pragmas applied on open. Rows map to
-// serde_json::Map (better-sqlite3's plain row objects); params bind via
-// rusqlite::types::Value. `transaction()` is not ported — no builtin uses it
-// (todos runs single statements); a WASM loader restoring third-party plugins
-// would add it alongside the loader.

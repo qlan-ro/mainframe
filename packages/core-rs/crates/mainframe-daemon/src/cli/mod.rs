@@ -14,9 +14,3 @@ pub mod update;
 pub(crate) fn connect_failure_message(base_url: &str) -> String {
     format!("Cannot reach daemon at {base_url}. Is it running?")
 }
-
-// PORT STATUS: src/cli/ (pair.ts + status.ts + update.ts)
-// confidence: medium
-// notes: reqwest clients hitting the loopback daemon; qrcode-terminal → the qrcode
-// crate's Dense1x2 unicode renderer. update.ts's tar extraction shells out to the
-// system `tar` rather than a Rust tar/gzip crate.

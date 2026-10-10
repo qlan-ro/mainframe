@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/background-tasks/spool-walker.ts`.
-
 use std::path::Path;
 
 /// `^[a-z0-9]{6,16}$` — the spool task-id shape (checked without a regex crate).
@@ -144,12 +142,3 @@ mod tests {
         assert!(entries.is_empty());
     }
 }
-
-// PORT STATUS: src/background-tasks/spool-walker.ts (49 lines)
-// confidence: high
-// todos: 0
-// notes: async `onTask` callback → returns Vec<SpoolTaskEntry> in traversal
-// order (callers loop + await per entry); avoids borrowing an async closure
-// across the walk. `readdir` → tokio::fs::read_dir with the same swallow-errors
-// (`safeReaddir` → []). No standalone TS test file existed; added real-tempdir
-// coverage for the TASK_ID_RE filter, scoping, and the empty-root path.

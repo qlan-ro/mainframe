@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/messages/parse-unified-diff.ts`.
-//!
 //! Adapter-agnostic: parses a unified-diff string into `DiffHunk`s (§2.5 display
 //! side). The TS `HUNK_HEADER_RE` regex is hand-rolled here — the display crate
 //! carries no regex dependency and the header grammar is fixed.
@@ -154,13 +152,3 @@ mod tests {
         assert_eq!(hunks[1].lines, vec!["+b".to_string(), "+c".to_string()]);
     }
 }
-
-// PORT STATUS: src/messages/parse-unified-diff.ts (46 lines)
-// confidence: high
-// todos: 0
-// notes: §2.5 display side (pure parser over DiffHunk from mainframe-types::chat).
-// notes: HUNK_HEADER_RE is hand-rolled (no regex dep in the display crate) —
-// notes: same grammar, same defaults (absent count → 1), same non-end-anchored
-// notes: match (trailing section text ignored). Headerless default hunk keeps
-// notes: oldLines/newLines = 0 exactly as the TS lazy branch does. Tests derived
-// notes: from the TS doc contract (TS had no sibling test file).

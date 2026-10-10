@@ -102,8 +102,3 @@ pub(crate) fn tail_chars(s: &str, n: usize) -> &str {
 fn io_error(err: std::io::Error) -> ActionError {
     ActionError(format!("run_command I/O failed: {err}"))
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T6.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: split out of run_command.rs (300-line rule); semantics unchanged.

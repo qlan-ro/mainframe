@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/background-tasks/kill.ts`.
-//!
 //! `treeKill` (npm) is not available as an allowlisted crate, so its POSIX
 //! algorithm is reimplemented here: enumerate the descendant pids (`pgrep -P`
 //! recursion) and signal each. The signal delivery shells out to `kill` (no
@@ -918,16 +916,3 @@ mod tests {
         assert!(out.swept.iter().any(|s| s.pid == 999));
     }
 }
-
-// PORT STATUS: src/background-tasks/kill.ts (207 lines)
-// confidence: high
-// todos: 0
-// notes: `tree-kill` npm dep has no allowlisted equivalent → real_tree_kill
-// reimplements the POSIX algorithm (pgrep -P descendant enumeration + shell-out
-// to `kill`, no libc). tree-kill + `ps -o comm=` are behind global seams
-// (OnceLock<Mutex<KillSeam>>) so the TS module-mock tests translate; GRACE_MS
-// setTimeout → tokio::time::sleep driven by `start_paused` tests (= fake timers).
-// The worktree-sweep `onTask` callback → walk_spool_tasks Vec + loop, tested on a
-// real temp spool fs (real file vs real symlink; real daemon pid filtered). All
-// kill.test.ts + kill-tasks-for-chat.test.ts cases translated. `\u{0}`-packed
-// tuple is a test-helper return shim (temp dirs must outlive the call).

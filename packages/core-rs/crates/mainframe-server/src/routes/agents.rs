@@ -260,14 +260,3 @@ mod tests {
         assert_eq!(body["data"][0]["id"], "mock-cli:project:agent:planner");
     }
 }
-
-// PORT STATUS: src/server/routes/agents.ts (4 endpoints, 112 lines)
-// confidence: medium
-// todos: 0
-// notes: The Adapter trait has no agent methods; only Claude supports them, so the
-// `adapter?.listAgents` capability gate becomes "registered adapter whose id is
-// claude", and CRUD delegates to `mainframe_adapter_claude::skills::{list,create,
-// update,delete}_agent`. axum percent-decodes `{id}` already, so the TS
-// `decodeURIComponent(id)` is implicit. Zod 400 messages are approximated (exact
-// per-field issue strings not reproduced); status codes + the hand-written
-// "Adapter not found or does not support agents" / "Operation failed" match TS.

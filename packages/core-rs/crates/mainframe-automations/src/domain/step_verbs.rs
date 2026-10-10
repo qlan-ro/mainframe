@@ -147,9 +147,3 @@ pub struct SetVariableStep {
     pub name: String,
     pub value: ChipText,
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T1.1), not a TS port
-// confidence: high
-// todos: 0
-// notes: split out of step.rs (Phase 4b, 300-line cap); wire truth =
-//        packages/types/src/automation.ts; A9 attachments included.

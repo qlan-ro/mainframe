@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/chat/plan-mode-handler.ts`.
-
 use std::sync::{Arc, Mutex};
 
 use mainframe_adapter_api::{AdapterError, PlanActionContext, PlanModeActionHandler};
@@ -117,18 +115,3 @@ impl<C: PlanModeContext> PlanModeHandler<C> {
         handler.on_approve(response, action_ctx.as_ref()).await
     }
 }
-
-// PORT STATUS: src/chat/plan-mode-handler.ts (90 lines)
-// confidence: medium
-// todos: 0
-// notes: TS `PlanModeContext` DI bag → `PlanModeContext` trait. `resolveHandler`
-// notes: (`adapter.createPlanModeHandler()`) → `resolve_plan_mode_handler`, backed
-// notes: by `Adapter::create_plan_mode_handler` via `ChatManagerDeps`.
-// notes: `buildActionContext(chatId, active)` → `action_context(chat_id, request_id)`
-// notes: (chat_manager owns the db/messages/permissions/session pieces the
-// notes: PlanActionContext exposes; it re-resolves `active` by id — minor
-// notes: deviation from passing it in; `request_id` threaded in for
-// notes: `permissions_shift`, decision 3). handleNoProcess mutates the shared
-// notes: ActiveChat cell under a short lock and emits after drop (CONCURRENCY rule 3);
-// notes: warn strings copied verbatim (logger name `chat:plan-mode` → tracing target).
-// notes: on_approve* errors propagate (TS awaits them). No TS test file.

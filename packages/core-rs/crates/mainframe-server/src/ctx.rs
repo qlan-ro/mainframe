@@ -260,19 +260,3 @@ impl AppCtx {
         crate::chat_test_support::test_ctx_with_orchestration()
     }
 }
-
-// PORT STATUS: src/server/http.ts (ctx assembly) + WebSocketManager deps
-// confidence: medium
-// todos: 1
-// notes: Narrowed to Phase-3 collaborators, extended in Task 4.6a with the
-// chat-facing handles: `adapter_registry` (AdapterRegistry) + `background_tasks`
-// (BackgroundTaskTracker) are concrete Arcs (cheap ::new); `chat_manager` is
-// Option<Arc<ChatManager>> because ChatManager::new needs a full ChatManagerDeps
-// impl the test harness cannot build — the daemon boot (next task) sets Some(..).
-// Task 5.5 wired the remaining managers: launch_registry, tunnel_manager,
-// lsp_manager, plugin_manager are Option<Arc<..>> (Some in the daemon boot, None in
-// the route-unit harness). `port` backs the tunnel start route; `tunnel_url` is now
-// interior-mutable (Arc<RwLock<..>>) so setTunnelUrl + the boot tunnel start update
-// what /health reports. `effective_path` ports getEffectivePath over the Db actor.
-// workflows stays deliberately unported (SCOPE DECISION 2026-07-10). `Services`
-// bundles the §2.4 handles that routes/WS need (attachments, push, file watcher).

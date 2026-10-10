@@ -310,19 +310,3 @@ mod tests {
         assert_eq!(read(resp).await.0, StatusCode::BAD_REQUEST);
     }
 }
-
-// PORT STATUS: src/server/routes/chat-commands.ts (7 endpoints, 96 lines)
-// confidence: high
-// todos: 0
-// notes: create (createChatWithDefaults) + config PATCH (updateChatConfig) +
-// interrupt/resume/trust-workspace/queue-edit/queue-cancel port over the
-// ChatManager facade — all self-gate on ctx.chat_manager, wired at boot (Task
-// 4.6c), so they are live. updateChatConfig parses UpdateChatConfigBody
-// (permissionMode is z.enum(EXECUTION_MODES) → ExecutionMode, no `plan`),
-// delegates to ChatManager.update_chat_config (chat_manager.rs), then returns
-// ok(get_chat(id)), matching TS. trust-workspace now delegates to
-// ChatManager::trust_workspace (writeWorkspaceTrust is ported in
-// mainframe-adapter-claude::trust_store) — the db existence 404 is honoured
-// first, then any chat/project-not-found or write error 500s with the error
-// message, matching the TS route's try/catch. Zod enum/refine 400 messages are
-// approximated; the both-or-neither worktree refine string matches TS.

@@ -1,5 +1,3 @@
-//! Ported from `src/server/ws-file-watch.ts`.
-//!
 //! Per-connection file-watch bookkeeping (PER_ENTITY per CONCURRENCY.tsv — lives
 //! inside the connection's own state, guarded by that connection's mutex) plus
 //! `resolveSubscribePath`: resolving a client-supplied path to an absolute,
@@ -158,14 +156,3 @@ fn project_path(db: &DatabaseManager, project_id: &str) -> Option<String> {
 pub async fn validate_relative(base: &str, requested_path: &str) -> Option<String> {
     resolve_and_validate_path(base, requested_path).await
 }
-
-// PORT STATUS: src/server/ws-file-watch.ts (WsFileWatch + resolveSubscribePath)
-// confidence: medium
-// todos: 1
-// notes: WsFileWatch is per-connection PER_ENTITY state (guarded by the
-// connection mutex in websocket.rs). `resolveSubscribePath` is split: the
-// db-dependent base resolution + ownership check (`resolve_subscribe_base`) runs
-// on the DB thread; the async realpath containment check (`validate_relative`)
-// runs on the caller task. TODO(port-phase4): `effective_path` approximates
-// ChatManager.getEffectivePath by reading the chat's stored `worktree_path`; the
-// full live-worktree validation lands with the ChatManager port.

@@ -112,10 +112,3 @@ mod tests {
         assert_eq!(adapters[0]["capabilities"]["noPersistence"], false);
     }
 }
-
-// PORT STATUS: src/server/routes/adapters.ts (1 endpoint, 13 lines)
-// confidence: high
-// todos: 0
-// notes: REPLACES the Phase-3 stub-limited absence. `ctx.adapters.list()` →
-// `ctx.adapter_registry.list().await` (the registry owns installed/version probing
-// + single-flight); response wrapped by `ok()`. Envelope `{success,data}` verified.

@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/session-control.ts`.
-//!
 //! One correlation channel per session for `control_request`/`control_response`
 //! round-trips. Fire-and-forget callers use [`ControlRequestChannel::send`];
 //! awaiting callers use [`ControlRequestChannel::send_awaiting`]. A single pending
@@ -230,16 +228,3 @@ mod tests {
         assert_eq!(result, None);
     }
 }
-
-// PORT STATUS: src/plugins/builtin/claude/session-control.ts (76 lines)
-// confidence: high
-// todos: 0
-// notes: pending is Arc<Mutex<HashMap<RequestId, Pending>>> per CONCURRENCY.tsv
-// notes: (session-control.ts:pending → SHARED_MAP, leaf below the session handle).
-// notes: sendAwaiting uses oneshot + tokio::time::timeout; the isTerminal predicate
-// notes: rides on the Pending entry so resolve() can reject intermediate acks. The
-// notes: TS `stdin` (ChildProcess['stdin']) becomes Option<&StdinTx> — an mpsc byte
-// notes: sender to the session's stdin writer task (codex jsonrpc house style), so
-// notes: send/send_awaiting stay sync fire-and-forget. Logger arg dropped (tracing
-// notes: is global; sessionId retained on the warn). Tests ported assertion-for-
-// notes: assertion (fake vi.fn stdin → an mpsc receiver read for the request_id).

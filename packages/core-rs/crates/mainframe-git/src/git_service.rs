@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/git/git-service.ts`.
-//!
 //! Every public method keeps the TS name, argument order, control flow, and
 //! error strings. `GitService` was converted off `simple-git` onto `execGit` +
 //! explicit porcelain parsing in Phase 0 — this ports *our* parsers only.
@@ -1653,22 +1651,3 @@ mod review_tests {
         assert!(result.files.len() >= 2);
     }
 }
-
-// PORT STATUS: packages/core/src/git/git-service.ts (543 lines)
-// confidence: high
-// notes: Every public method keeps the TS name/arg-order/control-flow/error
-// strings. DEVIATIONS (all recorded): (1) `withLock` is inlined as a scoped
-// `let _guard = acquire_project_lock(...)` (guard drop == the TS `finally
-// release()`), avoiding async-closure-borrows-self lifetime issues; behavior
-// identical. (2) An injectable `GitExec` trait + `RealGitExec` is a Rust-port
-// testability seam (no TS counterpart) so the argv-dispatch mock suite ports
-// assertion-for-assertion; production is `GitService<RealGitExec>` via
-// `for_project`. (3) `parse_worktree_list`/`WorktreeEntry` are copied locally
-// from `workspace/worktree.ts` to break a crate cycle (that module also depends
-// on exec_git) — a reviewer picks the final home. (4) `detectBaseBranch`/`abort`
-// inline result objects become local `DetectedBaseBranch`/`AbortResult` structs
-// (no named TS type). rebase()'s inner catch re-throws the ORIGINAL exec error
-// (not a status() error), matching TS. git-dir MERGE_HEAD/rebase-* probes use the
-// path as-returned by `git rev-parse --git-dir` (relative to process cwd, as in
-// TS). Both test suites ported: 20 argv-dispatch mock tests + 11 real-git
-// temp-repo tests.

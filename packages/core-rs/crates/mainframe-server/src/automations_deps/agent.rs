@@ -218,12 +218,3 @@ impl AgentPort for DaemonAgentPort {
         })
     }
 }
-
-// PORT STATUS: packages/core/src/automations/agent-port.ts +
-// verbs/agent-waits.ts onChatFinished (the watch loop folds the wait table
-// into a future — Rust durable-wait design, T4.3)
-// confidence: high
-// todos: 0
-// notes: worktree base branch defaults to the project's current branch when
-//        the step omits baseBranch (the enable-worktree route requires an
-//        explicit base; an automation has no UI picker to supply one).

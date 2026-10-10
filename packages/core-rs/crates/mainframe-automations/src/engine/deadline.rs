@@ -213,9 +213,3 @@ fn due_waiting_entries(checkpoint: &AutomationCheckpoint, now: i64) -> Vec<(Stri
     }
     due
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T4.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: error string mirrors Node's AGENT_DEADLINE_ERROR; fail_step doubles
-//        as the boot reconciler's out-of-band failure hook (T10.1).

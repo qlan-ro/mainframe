@@ -14,9 +14,3 @@
 //! apply-tool-grouping-characterization, display-helpers-*) go with it. The
 //! adapter-agnostic pieces it uses (tool_grouping, tool_categorization,
 //! truncate_tool_content) are fully ported here.
-
-// PORT STATUS: src/messages/display-helpers.ts (335 lines) — NOT ported (blocker)
-// confidence: n/a
-// todos: 0
-// notes: crate-layering blocker; must move to mainframe-adapter-claude. Left as an
-// notes: empty module so the crate compiles without a cycle. See lib.rs trailer.

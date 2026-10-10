@@ -1,5 +1,3 @@
-//! Ported from `src/todos/normalize.ts`.
-
 use std::collections::HashMap;
 
 use mainframe_types::chat::{TodoItem, TodoStatus};
@@ -400,16 +398,3 @@ mod tests {
         assert_eq!(result[0].active_form, "My task");
     }
 }
-
-// PORT STATUS: src/todos/normalize.ts (117 lines)
-// confidence: high
-// todos: 0
-// notes: normalizeTodos reads raw serde_json::Value (dynamic access mirroring the
-// TS `as`-casts). taskV2 accumulates into a Vec<TaskState> + HashMap<id,index>
-// (the JS aliased one object into both list and map; the index sidesteps double
-// mutable borrows). The `Task #(\d+)` regex → extract_task_number (find + digit
-// run). arg_str applies the JS truthy `|| fallback` (present non-empty string).
-// todoV1 keeps the string-content/string-status predicate then deserializes into
-// the typed TodoItem (invalid status / missing activeForm drops the item — an
-// untested divergence from the unchecked JS pass-through). All 21 test assertions
-// ported from __tests__/todos-normalize.test.ts.

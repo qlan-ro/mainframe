@@ -49,10 +49,3 @@ async fn activity(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
 pub fn router() -> Router<Arc<AppCtx>> {
     Router::new().route("/api/device/activity", post(activity))
 }
-
-// PORT STATUS: src/server/routes/device.ts (1 endpoint, 34 lines)
-// confidence: high
-// todos: 0
-// notes: ActivityBodySchema (z.enum(['active','idle'])) → serde enum
-// (rename_all lowercase); parse failure → the verbatim 400 string. pushService?
-// .setDesktopActive → ctx.services.push.set_desktop_active. log.info → tracing::info!.

@@ -1,5 +1,3 @@
-//! Ported from `src/attachment/attachment-store.ts`.
-
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -648,16 +646,3 @@ mod tests {
         assert!(store.list("chat-img-4").await.is_empty());
     }
 }
-
-// PORT STATUS: src/attachment/attachment-store.ts (159 lines)
-// confidence: high
-// todos: 0
-// notes: async fs via tokio::fs (Promise.all → sequential awaits, order preserved).
-// SAFE_SEGMENT regex → is_safe_segment byte check; nanoid! for ids (same alphabet).
-// The .json blob is the StoredAttachment with materializedPath overridden
-// (serde camelCase + skip_serializing_if None mirrors JSON.stringify omitting
-// undefined). delete_chat ignores NotFound to mirror `rm {force:true}`; other
-// errors log the same warn. base64 decode is hand-rolled (no base64 crate in the
-// §8 allowlist) and lenient like Buffer.from. size_bytes is i64. Materialization
-// is kind-agnostic (todo #300): every attachment, image or file, is written to
-// the chat's files/ dir and its path recorded on the stored metadata.

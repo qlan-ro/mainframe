@@ -405,15 +405,3 @@ mod tests {
         assert!(!branch_name_ok(""));
     }
 }
-
-// PORT STATUS: src/server/routes/worktree.ts (6 endpoints, 224 lines)
-// confidence: medium
-// todos: 0
-// notes: GET /api/projects/:id/git/worktrees ports fully over db.projects +
-// mainframe_services::workspace::get_worktrees (filtering the main worktree).
-// enable/disable/attach/fork call the real ChatManager facade (config manager +
-// lifecycle+config for fork; fork maps DirtyWorkingTree → 409 via ForkError::status_code).
-// delete-worktree ports `validateAndDeleteWorktree` whole: canonicalize + registry
-// validation, per-affected-chat killTasksForChat (SessionKillBridge → SessionLike),
-// removeWorktree, then cm.notifyWorktreeDeleted. Unwired (Phase-3 harness) → the TS
-// failure-path envelope after input validation.

@@ -80,7 +80,3 @@ fn lock_map<T>(mutex: &StdMutex<T>) -> MutexGuard<'_, T> {
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T4.1, A8), not a TS port
-// confidence: high
-// notes: split out of advance.rs (300-line rule); logic verbatim, no behavior change.

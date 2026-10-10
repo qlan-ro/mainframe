@@ -233,10 +233,3 @@ pub(crate) async fn resolve_cwd_for_test(
         .map_err(|err| ActionError(err.to_string()))?;
     resolve_cwd(ctx, run_in, custom_path).await
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T6.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node actions/run-command.ts (compileScript/resolveCwd/
-//        spawnScript/formatOutput); 8 MB cap = Node's execFile maxBuffer,
-//        enforced by capped stream reads + kill instead of maxBuffer.

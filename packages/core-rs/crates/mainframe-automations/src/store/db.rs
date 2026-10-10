@@ -110,10 +110,3 @@ impl AutomationDb {
         .map_err(|e| StoreError::Task(e.to_string()))?
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T2.1), not a TS port
-// confidence: high
-// todos: 0
-// notes: DDL column shapes match Node's db.ts exactly (shared automations.db);
-//        index names follow this plan's T2.1 (uq_runs_dedup, idx_runs_*) —
-//        Node creates its own names, both are IF NOT EXISTS and coexist.

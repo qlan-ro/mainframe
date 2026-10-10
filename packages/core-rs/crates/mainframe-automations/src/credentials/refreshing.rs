@@ -169,10 +169,3 @@ fn refresh_failed(label: &str, reason: &str) -> CredentialError {
         reason: reason.to_string(),
     }
 }
-
-// PORT STATUS: greenfield (2026-08-19 GitHub-App-with-refresh plan), not a TS port
-// confidence: high
-// todos: 0
-// notes: sits above CredentialStore rather than implementing it — only
-//        RunActionVerb (the execution path) needs refresh; the admin/UI
-//        accessor and webhook secret lookups keep reading the raw store.

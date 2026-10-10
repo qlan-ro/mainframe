@@ -49,8 +49,3 @@ impl VerbPorts for EngineVerbPorts {
         Box::pin(self.notify.execute(step, ctx))
     }
 }
-
-// PORT STATUS: packages/core/src/automations/service.ts buildPorts (25 lines)
-// confidence: high
-// todos: 0
-// notes: —

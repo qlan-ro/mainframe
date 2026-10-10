@@ -241,15 +241,3 @@ impl PlanActionContext for ChatPlanActionCtx {
 
 #[cfg(test)]
 mod tests;
-
-// PORT STATUS: src/chat/plan-mode-actions.ts — production context, no direct TS
-// counterpart file (the TS `buildActionContext` closure lived inline in
-// chat-manager.ts). See plan_mode_handler.rs's PORT STATUS for the handler port.
-// confidence: medium
-// todos: 0
-// notes: `PlanHost` is the Rust-only seam replacing the TS closure's direct
-// notes: access to `this.eventHandler`/`this.lifecycle`; ChatManager's PlanHostImpl
-// notes: (chat_manager.rs) implements it. Locks are always dropped before an
-// notes: awaited call or a deps persist call (CONCURRENCY rules 1-4).
-// notes: no emit_display: TS's PlanModeHandler DI bag (chat-manager.ts:95-105)
-// notes: never wires it — emitDisplay only reaches ChatPermissionHandler.

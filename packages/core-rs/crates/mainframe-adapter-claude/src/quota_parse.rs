@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/quota-parse.ts`.
-//!
 //! Anchor-based parser for the human-prose output of `claude -p "/usage"`. Percent
 //! is load-bearing (a parse failure fails the whole provider to `unknown`, #251);
 //! reset is best-effort (an unparseable reset nulls that window's `resetsAt` and
@@ -448,14 +446,3 @@ mod tests {
         assert_eq!(quota.status, ProviderQuotaStatus::Unknown);
     }
 }
-
-// PORT STATUS: src/plugins/builtin/claude/quota-parse.ts (158 lines)
-// confidence: high
-// todos: 0
-// notes: hand-rolled anchor matching (no regex crate in this workspace, matching
-// notes: events.rs precedent) instead of the TS RegExp literals; same anchors,
-// notes: same fail-closed/best-effort split. Reset zone math uses chrono-tz's
-// notes: `TimeZone::from_local_datetime` directly instead of the TS Intl-based
-// notes: offset derivation — same result, no hand-rolled UTC-offset arithmetic
-// notes: needed on this side. Golden fixture copied verbatim into
-// notes: src/__fixtures__/claude-usage.txt from the TS test fixture.

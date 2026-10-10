@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/chat/transcript-presence.ts`.
-//!
 //! Transcript-presence reconciliation (degraded-chat detection).
 //!
 //! The CLI owns the transcript file (Claude `~/.claude/projects/...jsonl`,
@@ -151,15 +149,3 @@ fn apply_flag(deps: &dyn TranscriptPresenceDeps, chat: &mut Chat, missing: bool)
         reason: None,
     });
 }
-
-// PORT STATUS: src/chat/transcript-presence.ts (77 lines) — NEW module (#424)
-// confidence: high
-// todos: 0
-// notes: `reconcileTranscriptPresence` ported; `chat` is `&mut Chat` (TS mutates the
-// notes: passed object's `transcriptMissing`). The TS three "cannot judge" branches
-// notes: (no `isTranscriptPresent`, predicate `null`, predicate throws) all collapse
-// notes: to the deps returning `None` → return current unchanged, no emit. transcript-
-// notes: presence.test.ts ported ×7 against an in-crate `TranscriptPresenceDeps` fake
-// notes: (chat tests use trait fakes, not the mainframe-db repos). Rust-only: the
-// notes: predicate became `locate_transcript` so a relocated transcript's path is
-// notes: persisted, and `refresh_transcript_location` follows worktree-tool moves.

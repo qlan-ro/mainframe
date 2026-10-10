@@ -383,8 +383,3 @@ mod tests {
         assert_eq!(body["error"], "chatIds contains an invalid id");
     }
 }
-
-// PORT STATUS: NEW route (#240) — no TS twin, added alongside the Rust-only
-// transcript-location resolution (Group B of the todo-240 plan).
-// confidence: high
-// todos: 0

@@ -1,5 +1,3 @@
-//! Ported from `src/attachment/attachment-helpers.ts`.
-
 use super::attachment_store::StoredAttachment;
 
 pub fn escape_xml_attr(value: &str) -> String {
@@ -66,10 +64,3 @@ mod tests {
         assert!(build_attached_file_path_tag(&a).contains("path=\"/mat/y.png\""));
     }
 }
-
-// PORT STATUS: src/attachment/attachment-helpers.ts (13 lines)
-// confidence: high
-// todos: 0
-// notes: escapeXmlAttr chained replaces (same order: & " < >). resolvedPath uses
-// materializedPath ?? originalPath ?? name via Option::or. No TS test existed;
-// added three focused tests. size_bytes is i64 (types crate); formats identically.

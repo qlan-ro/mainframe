@@ -238,19 +238,6 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/api/projects/{id}/launch/{name}/stop", post(stop))
 }
 
-// PORT STATUS: src/server/routes/launch.ts (187 lines)
-// confidence: medium
-// todos: 0
-// notes: getEffectivePath → ctx.effective_path over the Db actor; a missing project
-// → 404. `status`/`configs` degrade to empty when launch_registry is None (TS
-// optional chaining `ctx.launchRegistry?.…`); `start` returns 500 "LaunchRegistry
-// not available" when None, mirroring the `if (!manager)` guard. Launch config is
-// always read + validated from disk (`.mainframe/launch.json`) via
-// parse_launch_config with a merged process-env + project-.env (parseDotenv
-// hand-matches `^([A-Za-z_][A-Za-z0-9_]*)=(.*)`); ok/fail keep the exact envelope
-// bytes and status codes. `start`/`stop` success → ok_empty() (`{ success: true }`,
-// no `data`); `status`/`configs` → ok(data).
-
 #[cfg(test)]
 mod tests {
     use super::*;

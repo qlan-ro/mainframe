@@ -244,10 +244,3 @@ fn build_request(step: &AskAgentStep, ctx: &VerbContext<'_>) -> AgentRequest {
         attachments: step.attachments.clone().unwrap_or_default(),
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T4.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: no agent_waits table (contract §3: engine-internal caches are not
-//        contract) — the checkpoint entry's chatId is the durable record;
-//        settle/judge live in agent_settle.rs (300-line file cap).

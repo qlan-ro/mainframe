@@ -445,17 +445,3 @@ impl AdapterRegistry {
         }
     }
 }
-
-// PORT STATUS: src/adapters/index.ts (167 lines) + trait half of packages/types/src/adapter.ts
-// confidence: medium
-// notes: index.ts → this lib.rs (AdapterRegistry); the adapter.ts behavioral
-// notes: interfaces landed in the sibling `adapter.rs` (kept out of lib.rs for a
-// notes: clean side-by-side diff and the 300-line budget). Concurrency per
-// notes: CONCURRENCY.tsv 130-135. Two documented gaps vs TS, both benign and
-// notes: untriggered by the ported tests: (1) refresh_all awaits sequentially
-// notes: instead of Promise.allSettled (no futures::join_all); (2) list()'s 2s cap
-// notes: uses tokio::time::timeout, which CANCELS refreshAll on elapse rather than
-// notes: leaving it running — boot calls refreshAll uncapped and single-flight
-// notes: re-triggers make this lossless. Single-flight uses Notify (rule 9) since
-// notes: futures::Shared is a deferred dep. Tests in tests/registry.rs.
-// todos: 0

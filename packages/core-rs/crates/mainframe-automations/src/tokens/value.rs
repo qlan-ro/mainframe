@@ -91,9 +91,3 @@ pub fn js_number_string(n: f64) -> String {
     }
     format!("{n}")
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T3.1), not a TS port
-// confidence: high
-// todos: 0
-// notes: coercion mirrors Node tokens/substitute.ts coerceToString (unset →
-//        '' is the resolver's job — see substitute.rs).

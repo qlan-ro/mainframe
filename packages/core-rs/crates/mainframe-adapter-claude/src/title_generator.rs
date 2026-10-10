@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/title-generator.ts`.
-//!
 //! One-shot Haiku call over the Claude CLI that turns a first user message into a
 //! short chat title. Split out of the generic `chat/title-generator` so the owning
 //! adapter generates its own titles (#430).
@@ -113,17 +111,3 @@ fn truncate_stderr(raw: &[u8]) -> String {
     }
     truncated
 }
-
-// PORT STATUS: src/plugins/builtin/claude/title-generator.ts (48 lines)
-// confidence: high
-// todos: 0
-// notes: Main catch-up (#430). generateClaudeTitle moved out of chat/title-generator.
-// notes: execFileNoStdin → tokio Command with Stdio::null stdin (closes it, mirroring
-// notes: `cp.stdin?.end()`). 30s timeout via tokio::time::timeout → Err on elapse
-// notes: (TS execFile rejects on timeout; callers keep the deterministic title). PATH
-// notes: threaded explicitly + NO_COLOR=1 (edition-2024 can't mutate process env).
-// notes: maxBuffer:8192 dropped (title output is a few words; unbounded read is safe).
-// notes: stderr is piped (not nulled) and capped at 1024 chars in the returned error;
-// notes: a non-zero exit is now Err, not an empty Ok(None) (#287).
-// notes: The quote-strip/length gate moved to mainframe_adapter_api::finalize_title
-// notes: (#275) so the Codex generator can't drift from it; tests moved with it.

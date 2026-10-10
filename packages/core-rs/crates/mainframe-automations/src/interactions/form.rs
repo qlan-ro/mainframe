@@ -84,8 +84,3 @@ fn js_string_or_undefined(value: Option<&Value>) -> String {
         Some(value) => js_string(value),
     }
 }
-
-// PORT STATUS: packages/core/src/automations/verbs/ask-me.ts (validateForm, 139 lines)
-// confidence: high
-// todos: 0
-// notes: tri-state `required` — absent still means required (`!== false`).

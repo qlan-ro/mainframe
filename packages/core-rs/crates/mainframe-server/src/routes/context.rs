@@ -191,13 +191,3 @@ mod tests {
         assert_eq!(body["error"], "Chat not found");
     }
 }
-
-// PORT STATUS: src/server/routes/context.ts (3 endpoints, 93 lines)
-// confidence: medium
-// todos: 0
-// notes: session-file ported fully (db chat/project + resolve_readable_path + async
-// read_to_string). context (getSessionContext) is now a real facade call: the db
-// resolves the chat/project 404s (effectivePath reads the raw worktreePath, so
-// enrichment is irrelevant) and the ChatManager's get_session_context runs the
-// context-tracker read. mentions calls the facade addMention (persist + emit
-// context.updated) when wired, else the db write (harness); returns the nanoid mention.

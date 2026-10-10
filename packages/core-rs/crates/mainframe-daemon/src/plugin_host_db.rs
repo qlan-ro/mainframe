@@ -175,12 +175,3 @@ fn fallback_id() -> String {
         .unwrap_or(0);
     format!("fallback-{nanos}")
 }
-
-// PORT STATUS: (new — production PluginHostDb wiring for plugins/manager.ts `db`)
-// confidence: high
-// todos: 0
-// notes: The one production PluginHostDb; every accessor bridges through the Db
-// actor's call_blocking (SYNC-DB BRIDGE), one WAL connection. chats_create is
-// infallible per the ported trait — a DB failure logs + returns an unpersisted stub.
-// notes: Main catch-up: the defensive stub gains the new Chat fields (lastContextTotalTokens/
-// lastContextMaxTokens/transcriptMissing/backgroundActivity), all None.

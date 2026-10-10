@@ -36,14 +36,3 @@ pub async fn get_health(State(ctx): State<Arc<AppCtx>>) -> Json<HealthResponse> 
         tunnel_url: ctx.tunnel_url(),
     })
 }
-
-// PORT STATUS: src/server/http.ts (GET /health handler)
-// confidence: high
-// todos: 0
-// notes: Main catch-up (#442): the body gains `pid: process.pid`
-// (std::process::id()) so a single curl identifies the port's owner. `tunnelUrl`
-// serializes as `null` (not omitted) to match the fixture, so no
-// `skip_serializing_if`. `timestamp` uses now_iso8601() (millis + `Z`, matching
-// Node's Date.toISOString()), NOT chrono's to_rfc3339(). Byte shape verified in
-// packages/core-rs/crates/mainframe-types/tests/fixtures/route.health.json (the scaffold's assertions moved to
-// the http integration tests).

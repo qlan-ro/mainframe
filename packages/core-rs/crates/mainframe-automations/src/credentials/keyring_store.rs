@@ -163,9 +163,3 @@ impl<B: KeyringBackend + 'static> CredentialStore for KeyringCredentialStore<B> 
         Box::pin(async move { self.labels.read().await.iter().cloned().collect() })
     }
 }
-
-// PORT STATUS: greenfield (2026-08-19 automations-provider-connections plan, Deliverable 1)
-// confidence: high
-// todos: 0
-// notes: the label index is the only non-secret state this store keeps on
-//        disk; the actual token round-trips through `KeyringBackend` alone.

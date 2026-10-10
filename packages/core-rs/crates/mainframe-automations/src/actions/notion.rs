@@ -134,9 +134,3 @@ impl Action for NotionAddRowAction {
         })
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T7.2), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node actions/notion.ts (rich_text-only properties until a
-//        column-picker/schema endpoint exists — contract §9).

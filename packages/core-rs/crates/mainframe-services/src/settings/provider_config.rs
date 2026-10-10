@@ -1,5 +1,3 @@
-//! Ported from `src/settings/provider-config.ts`.
-
 use mainframe_types::settings::ProviderConfig;
 use serde_json::{Map, Value};
 
@@ -90,13 +88,3 @@ mod tests {
         assert_eq!(get_provider_config(&db, "codex"), ProviderConfig::default());
     }
 }
-
-// PORT STATUS: src/settings/provider-config.ts (20 lines)
-// confidence: high
-// todos: 0
-// notes: FIELDS list preserved verbatim (camelCase keys). The TS "assemble a
-// string record then cast" becomes "assemble a serde_json::Map<String,String>
-// then from_value into the typed ProviderConfig" so enum fields (defaultEffort,
-// defaultFast, ...) resolve from their wire strings. Unparseable → default()
-// (TS cast is unchecked; noted deviation). SettingsReader trait mirrors the TS
-// interface; impl'd for DatabaseManager (settings.get error → None).

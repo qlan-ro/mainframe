@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/services/chat-service.ts`.
-//!
 //! Maps host `Chat` rows to `ChatSummary` DTOs and, when `chat:create` is
 //! declared, creates chats (reading the adapter's provider defaults) and emits
 //! `chat.created`.
@@ -108,13 +106,3 @@ impl ChatService for HostChatService {
         })
     }
 }
-
-// PORT STATUS: src/plugins/services/chat-service.ts
-// confidence: high
-// todos: 0
-// notes: listChats/getChatById map Chat→ChatSummary (title stays string|null).
-// getMessages (chat:read:content) returns [] in the TS — no builtin uses it, so
-// it is not part of this trait (a WASM loader would add it with the capability).
-// createChat gates on chat:create (can_create_chat), reads
-// `<adapter>.defaultModel`/`.defaultMode` when model/mode are unset, and emits
-// `chat.created` with `source: None` (the TS event carries only `{ type, chat }`).

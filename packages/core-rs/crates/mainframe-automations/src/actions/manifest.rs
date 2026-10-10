@@ -168,10 +168,3 @@ pub struct ActionManifest {
     /// before executing and are never silently re-run on restart.
     pub idempotent: bool,
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T6.2), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node actions/types.ts ActionDef metadata; params_schema
-//        byte-parity with zod's toJSONSchema is a route-diff concern (T9.3),
-//        not asserted here.

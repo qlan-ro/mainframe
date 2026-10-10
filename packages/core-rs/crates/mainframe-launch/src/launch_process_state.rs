@@ -1,5 +1,3 @@
-//! Ported from `src/launch/launch-process-state.ts`.
-//!
 //! Durable per-config status + recent output, kept independent of
 //! `LaunchManager`'s live process map (which deletes its entry the instant the
 //! child exits). Two races this closes, verbatim from the TS docstring:
@@ -148,12 +146,3 @@ mod tests {
         assert_eq!(buffer.last().unwrap().data, "line-249\n");
     }
 }
-
-// PORT STATUS: src/launch/launch-process-state.ts (68 lines)
-// confidence: high
-// todos: 0
-// notes: two HashMaps behind one Arc<Mutex> (SHARED_MAP); reset/setStatus/
-// getStatus(default stopped)/getAllStatuses/bufferOutput(cap 200, drop oldest)/
-// getOutputBuffer(oldest-first) mirror the TS. LaunchOutputEntry.stream reuses
-// the canonical LaunchStream enum from mainframe-types::events. Cloneable so the
-// manager's reader/exit tasks share one store.

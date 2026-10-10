@@ -628,25 +628,3 @@ pub fn router() -> Router<Arc<AppCtx>> {
             get(config_conflicts),
         )
 }
-
-// PORT STATUS: src/server/routes/settings.ts (5 endpoints, 235 lines)
-// confidence: medium
-// todos: 0
-// notes: general GET/PUT (incl. the per-group notification salvage/merge) and
-// provider PUT port 1:1 over ctx.db.settings. UpdateProviderSettingsBody's enums
-// (each with the '' clear sentinel) validate via explicit allowed-set checks
-// (serde loose Option<String> body → in_enum); truthy→set / falsy→delete;
-// defaultMode also deletes skipPermissions. GET providers ports the DB grouping
-// (skipPermissions→yolo, strip skipPermissions), unions ctx.adapter_registry ids,
-// and attaches resolvedExecutable per adapter via resolve_adapter_executable over
-// a read-only SettingsWriter backed by the fetched provider map (no 2nd db call).
-// PERF(port): the 5s resolve memo (resolveAdapterExecutableCached) is dropped —
-// each request resolves live. config-conflicts reads ~/.claude/settings.json via
-// async tokio::fs (no sync I/O) and matches JS truthiness for allow/deny. Main
-// catch-up (#236): general GET/PUT carries `defaultAdapterId: string | null`
-// (which adapter seeds a new chat). GET always emits the key (explicit `null`
-// default, not omitted). PUT distinguishes an absent key (no change) from an
-// explicit `null` (clear to default) via a hand-rolled double-Option
-// deserializer (`deserialize_present`), since serde's `Option<Option<T>>`
-// collapses both cases to `None` otherwise; a present string is validated
-// against the same `^[a-zA-Z0-9_-]+$` id charset as the TS zod schema.

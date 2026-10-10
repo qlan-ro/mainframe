@@ -299,12 +299,3 @@ mod tests {
         assert_eq!(body["error"], "task not found");
     }
 }
-
-// PORT STATUS: src/server/routes/background-tasks.ts (3 endpoints, 143 lines)
-// confidence: high
-// todos: 0
-// notes: Full port — no seam. tracker = ctx.background_tasks; sessionForChat bridges
-// ChatManager::get_session_for_chat (Arc<dyn AdapterSession>) into SessionLike via
-// AdapterSessionLike; validator = default platform spool-root validator (getuid
-// None). readTail mirrors the TS stat+seek tail read; text/plain output. kill maps
-// KillResult::Ok→okEmpty, Err→502 with the error string (TS `502 result.error`).

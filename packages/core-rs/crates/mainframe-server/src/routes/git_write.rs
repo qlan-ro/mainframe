@@ -456,15 +456,3 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/api/projects/{id}/git/delete-branch", post(delete_branch))
         .route("/api/projects/{id}/git/update-all", post(update_all))
 }
-
-// PORT STATUS: src/server/routes/git-write.ts (13 endpoints)
-// confidence: high
-// todos: 0
-// notes: Order preserved (resolveProject 404 → body 400 → git op). Errors leak
-// the git message via fail(500, message) (NOT the opaque async_err handler) —
-// git-review.test.ts asserts the leaked "Nothing to commit". chatId is read from
-// `?chatId` OR the body (parsed once into a Value). Zod refinements ported
-// explicitly: gitBranchName regex (create/rename newName), min(1) on
-// branch/message/name; GitPullBody's localBranch-requires-branch refine.
-// `branch` (POST create) and `branch` (GET current) share the `/git/branch`
-// path by method, matching the Express router.

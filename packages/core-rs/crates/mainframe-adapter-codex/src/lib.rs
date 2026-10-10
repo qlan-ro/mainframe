@@ -77,16 +77,6 @@ pub use plan_mode_handler::CodexPlanModeHandler;
 pub use quota_identity::{CODEX_IDENTITY_TRANSIENT, read_codex_account_identity_from_disk};
 pub use session::{CodexScanDeps, CodexSession};
 
-// PORT STATUS: src/plugins/builtin/codex/index.ts (8 lines)
-// confidence: high
-// todos: 1
-// notes: index.ts re-exports collapse here. TODO(port): index.ts `activate(ctx)`
-// notes: needs mainframe-plugins PluginContext (not yet ported) to call
-// notes: ctx.adapters.register + ctx.onUnload(killAll); deferred to that phase.
-// notes: quota_rate_limit/quota_identity/quota_pull port the quota harvester
-// notes: (quota-rate-limit.ts, quota-identity.ts, quota-pull.ts); event_mapper.rs
-// notes: wires account/rateLimits/updated to quota_rate_limit's normalizer.
-
 mod notification_types;
 mod presentation_fields;
 mod presentation_history;

@@ -263,10 +263,3 @@ fn require(conn: &Connection, id: &str) -> Result<InteractionRecord, StoreError>
         id: id.to_string(),
     })
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T2.2), not a TS port
-// confidence: high
-// todos: 0
-// notes: resolve mirrors Node's InteractionStore.resolveInOneTx +
-//        ask-me.ts applyAnswers; run-cancel's bulk cancel lives in
-//        RunStore::finalize (same-transaction requirement).

@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/codex/item-types.ts`.
-//!
 //! `ThreadItem` union. INTERNAL to this crate (crate-map §2.8 `types.ts` note) —
 //! deserializes from Codex app-server JSON-RPC payloads, so variant tags track
 //! Codex's camelCase and unknown fields are tolerated (serde ignores them).
@@ -39,17 +37,3 @@ pub enum ThreadItem {
     Sleep(SleepItem),
     HookPrompt(HookPromptItem),
 }
-
-// PORT STATUS: src/plugins/builtin/codex/item-types.ts (119 lines)
-// confidence: high
-// todos: 0
-// notes: ThreadItem is internally tagged on "type" with serde camelCase variant
-// notes: names (AgentMessage -> "agentMessage", etc.). Item statuses are String
-// notes: (not enums) to mirror the TS string-literal comparisons and tolerate
-// notes: unknown Codex status values. PatchChangeKind (in thread_item_variants)
-// notes: keeps `move_path` snake_case (Codex emits it snake) by NOT applying
-// notes: rename_all_fields. Internal to the crate (deserialize from Codex JSON-RPC),
-// notes: not daemon wire types.
-// notes: B1 (2026-07-24) added 7 variants Codex 0.144.3 introduced: subAgentActivity,
-// notes: dynamicToolCall, enteredReviewMode, exitedReviewMode, imageView, sleep,
-// notes: hookPrompt. event_mapper rendering for them is B2/B3, not this file.

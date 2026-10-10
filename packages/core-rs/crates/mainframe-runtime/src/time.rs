@@ -56,11 +56,3 @@ mod tests {
         );
     }
 }
-
-// PORT STATUS: (new helper — no direct TS source file)
-// confidence: high
-// todos: 0
-// notes: shared iso8601 helper backing PORTING.md §4's toISOString() wire-parity
-// rule; `use chrono::Utc; chrono::Timelike::with_nanosecond` is pulled in the test
-// module only. Consumers: mainframe-server::routes::health (and future timestamp
-// string fields). Never emit `to_rfc3339()` for wire output — it drifts (micros/+00:00).

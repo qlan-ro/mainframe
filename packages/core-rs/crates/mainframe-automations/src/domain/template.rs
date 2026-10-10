@@ -24,8 +24,3 @@ pub fn chip_tokens(parts: &[ChipPart]) -> Vec<&TokenRef> {
         })
         .collect()
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T1.1), not a TS port
-// confidence: high
-// todos: 0
-// notes: untagged serde reproduces the TS `string | {token}` union exactly.

@@ -248,9 +248,3 @@ mod tests {
         }
     }
 }
-
-// PORT STATUS: NEW module, split out of session.rs (todo #346 review fix)
-// confidence: high
-// todos: 0
-// notes: pure split, no behavior change — `ensure_thread` calls
-// `build_thread_request` exactly as before; only the enum/fn/tests moved.

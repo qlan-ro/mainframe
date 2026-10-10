@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/db/chat-tags.ts`.
-
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -140,15 +138,3 @@ impl ChatTagsRepository {
         Ok(Some(rows.collect::<Result<Vec<_>, _>>()?))
     }
 }
-
-// PORT STATUS: src/db/chat-tags.ts (96 lines)
-// confidence: high
-// notes: `[...new Set(tags)]` becomes dedup() (order-preserving). Map<string,
-// string[]> → HashMap (key order unobservable). filterChatIds returns
-// Option<Vec> (null → None for empty input). set_for_chat uses
-// unchecked_transaction(); registry.upsert() runs on the same shared connection,
-// so its INSERTs join the transaction and an invalid tag's error rolls the whole
-// set back (the "rolls back when invalid" test). now_iso8601() for created_at.
-// Derives Clone so DatabaseManager can both keep it as a field and hand it to
-// ChatsRepository. Tests in tests/chat_tags.rs.
-// todos: 0

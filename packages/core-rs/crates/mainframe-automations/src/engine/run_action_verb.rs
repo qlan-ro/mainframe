@@ -167,9 +167,3 @@ fn script_parts(chip_text: &ChipText, scope: &Scope<'_>) -> Value {
             .collect(),
     )
 }
-
-// PORT STATUS: packages/core/src/automations/verbs/run-action.ts (100 lines)
-// confidence: high
-// todos: 0
-// notes: input validation is each action's own strict serde parse (Node used
-//        zod safeParse here); path expansion lives in actions::expand_user_path.

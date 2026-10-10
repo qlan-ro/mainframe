@@ -1,5 +1,3 @@
-//! Ported from `packages/types/src/workflow.ts`.
-
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -206,18 +204,3 @@ mod tests {
         assert_eq!(serde_json::to_string(&f).unwrap(), json);
     }
 }
-
-// PORT STATUS: packages/types/src/workflow.ts (66 lines)
-// confidence: high
-// todos: 0
-// notes: two `triggerKind` vocabularies differ (WorkflowSummary.triggers.kind =
-// manual|schedule|event|webhook vs WorkflowRunSummary.triggerKind =
-// manual|cron|event|call) → two enums. `type` field renamed to `field_type`. ms
-// timestamps (startedAt/finishedAt/createdAt/expiresAt) and `attempt` are i64 to
-// stay byte-stable vs fixtures. `outputs`/`input`/`output` are `unknown` →
-// serde_json::Value; `outputs` is required (fixture shows null). `parentRunId`/
-// `stepId`/`error`/`finishedAt`/`expiresAt`/`projectId` are required-nullable →
-// Option WITHOUT skip. `banner?: string | null` is modeled as skip-when-absent
-// Option<String> (fixtures show absent or string; the present-null case is not
-// exercised and is not distinguished from absent). WorkflowRunSummary /
-// WorkflowStepSummary derive PartialEq but not Eq (serde_json::Value is not Eq).

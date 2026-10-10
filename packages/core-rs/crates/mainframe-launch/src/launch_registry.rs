@@ -1,5 +1,3 @@
-//! Ported from `src/launch/launch-registry.ts`.
-//!
 //! One `LaunchManager` per `projectId:projectPath`, created on demand and shared.
 //! CONCURRENCY.tsv: `managers` = `Arc<DashMap<String, Arc<LaunchManager>>>`.
 
@@ -167,12 +165,3 @@ mod tests {
         registry.stop_all().await;
     }
 }
-
-// PORT STATUS: src/launch/launch-registry.ts (32 lines)
-// confidence: high
-// todos: 0
-// notes: managers = Arc<DashMap<"projectId:projectPath", Arc<LaunchManager>>>.
-// get/get_or_create mirror the TS; the shared on_event + tunnelManager + (new
-// #431) child_registry are cloned into each new manager. stopAll → await every
-// manager.stop_all then clear (a local join_all stands in for Promise.allSettled —
-// stop_all is infallible, so sequential await is equivalent; no `futures` crate).

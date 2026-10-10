@@ -1,5 +1,3 @@
-//! Ported from `src/process/sweep.ts`.
-//!
 //! Reaps tunnel and launch children orphaned by a previous daemon run. Reads the
 //! pidfile registry and, for each recorded pid still alive whose identity still
 //! matches (guarding against PID reuse), kills it — the pid for tunnels, the
@@ -897,16 +895,3 @@ mod tests {
         _accepts(&NoopChildRegistry);
     }
 }
-
-// PORT STATUS: src/process/sweep.ts (220 lines)
-// confidence: high
-// todos: 0
-// notes: sweep_stray_children + processMatchesBinary/Launch + orphanStillMatches
-// ported 1:1 (same TERM→grace→KILL ladder, same prune-on-gone/reused/reaped, same
-// win32 skip-and-keep, same EPERM-retain). SweepDeps holds Arc'd closures
-// (process_command/process_cwd = async ProcessQueryFn, kill = sync Fn->bool);
-// default_process_command/_cwd shell out to ps/lsof via tokio (5s timeout),
-// default_kill shells out to `kill` (house style; ESRCH divergence documented on
-// the fn). A JS `throw` from the kill dep maps to `false` (identical sweep
-// outcome). All sweep.test.ts cases ported; the process.kill-specific defaultKill
-// ESRCH/EPERM unit tests are covered by kill_target/signal_flag helper tests.

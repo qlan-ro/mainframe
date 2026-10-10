@@ -146,10 +146,3 @@ pub(crate) async fn run_branches(
         checkpoint: current,
     })
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md Phase 4a), not a TS port
-// confidence: high
-// todos: 0
-// notes: run_branches is the general driver, agnostic to WHICH branches it's
-//        given each pass; blocks_concurrent_repeat.rs is its scheduler for
-//        `repeat`'s `concurrency` field.

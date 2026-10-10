@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/codex/adapter.ts`.
-
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
@@ -533,24 +531,3 @@ mod tests {
         );
     }
 }
-
-// PORT STATUS: src/plugins/builtin/codex/adapter.ts (160 lines)
-// confidence: medium
-// todos: 0
-// notes: #430 — listExternalSessions delegates to the disk scanner (external_sessions.rs;
-// notes: thread/list RPC + ThreadListResult removed). loadModels(executable) extracted;
-// notes: listModels → load_models("codex"), probeModels(exe) → load_models(exe??"codex").
-// notes: spawn_temp_app_server now takes the executable (probe uses the configured path).
-// notes: has_probe_models()=true + probe_models/locate_transcript are Adapter-trait
-// notes: overrides (so the registry dispatch in adapter-api probes Codex with the
-// notes: configured binary, mirroring `typeof adapter.probeModels === 'function'`).
-// notes: list_external_sessions/create_plan_mode_handler stay inherent (the trait defers
-// notes: external-session CRUD + createPlanModeHandler — adapter-api's own TODO(port)).
-// notes: sessions = Arc<Mutex<Vec<Arc<CodexSession>>>> (CONCURRENCY.tsv 103; Vec + id
-// notes: retain instead of a HashSet since Arc<CodexSession> isn't Hash), cachedModels
-// notes: Arc<Mutex<Option<..>>> (104). killAll spawns a kill task per session (TS
-// notes: fire-and-forget .catch). is_installed/get_version shell out to `codex
-// notes: --version`; parse_version mirrors adapter-api's hand-rolled N.N.N scan.
-// notes: get_fallback_models returns Some(vec![]) (TS returns []). mapCodexModel test
-// notes: ported inline; the probeModels-with-configured-path test lives in
-// notes: tests/list_models.rs (fake app-server). index.ts `activate` re-exported from lib.rs.

@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/messages/tool-grouping.ts`.
-//!
 //! Adapter-agnostic (§2.5 display side): post-processes a flat `PartEntry` list
 //! into virtual group wrappers — explore runs collapse into `_tool_group`,
 //! hidden tools are dropped, task-progress tools accumulate into one
@@ -1541,25 +1539,3 @@ mod tests {
         }
     }
 }
-
-// PORT STATUS: src/messages/tool-grouping.ts (269 lines)
-// confidence: high
-// todos: 0
-// notes: §2.5 display side — pure grouping over neutral DisplayContent/
-// notes: ToolCategories; no Claude event/JSONL shapes. Reconciled to origin/main
-// notes: #419 (84a37888): progress accumulates per parentToolUseId into a Vec of
-// notes: ProgressBucket (insertion-ordered so a stable sort_by(insert_index)
-// notes: reproduces JS Map iteration + stable Array.sort); collect_explore_run
-// notes: ends the run on a parent mismatch; sharedParentToolUseId dropped.
-// notes: group_task_children is a two-pass partition — index Tasks, then nest any
-// notes: part by parentToolUseId regardless of position (parallel/interleaved),
-// notes: untagged stay top-level, unknown-parent tags dropped, a childless Task
-// notes: falls back to its bare tool-call. The `'grouped'`/`'accumulated'` markers
-// notes: stay &'static str (never read). parentToolUseId truthy check (undefined
-// notes: AND "" → omit) preserved via `truthy`/`truthy_str`; the bucket key keeps
-// notes: the raw Option so None (main agent) stays distinct from Some("").
-// notes: Oracle: __tests__/messages/tool-grouping.test.ts ported assertion-for-
-// notes: assertion (+ the AskUserQuestion cases from tool-grouping-askuserquestion).
-// notes: display-pipeline.test.ts exercises prepare_messages_for_client, which the
-// notes: crate-layering split homes in mainframe-adapter-claude::messages::
-// notes: display_pipeline (outside this crate) — ported there, not here.

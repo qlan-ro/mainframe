@@ -57,11 +57,4 @@ mod test_support;
 #[cfg(test)]
 mod test_support_chat;
 
-// PORT STATUS: src/chat/* — module files pre-created by Task 4.1, ported
-// incrementally since; see each module's own footer for its state.
-// confidence: low
-// todos: 0
-// notes: this file only wires `pub mod` declarations. Consumes the
-// notes: mainframe-adapter-api traits (sessions are Arc<dyn AdapterSession>).
-
 mod tool_call_timing;

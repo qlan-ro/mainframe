@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/chat/lifecycle-manager.ts`.
-
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
@@ -2043,26 +2041,3 @@ mod tests {
         assert_eq!(last.fork_source, Some(pending_fork().fork_source));
     }
 }
-
-// PORT STATUS: src/chat/lifecycle-manager.ts (530 lines)
-// confidence: medium
-// notes: TS `LifecycleManagerDeps` DI bag → `LifecycleManagerDeps` trait; the
-// notes: activeChats registry is the shared `Arc<DashMap<_, Arc<Mutex<ActiveChat>>>>`,
-// notes: messages/permissions shared `Arc<Mutex<..>>`. loadingChats/startingChats/
-// notes: interruptingChats single-flight → per-chat `Notify` maps (rule 9; no
-// notes: futures::Shared in the workspace). Awaiters use `join_flight`: enable the
-// notes: Notified BEFORE re-reading the map (ptr_eq) so the owner's remove +
-// notes: notify_waiters is never lost (Notify stores no permit). The 50ms interrupt
-// notes: poll → a spawned tokio poll task that notify_waiters on exit/5s. killTasksForChat +
-// notes: removeWorktree are routed through deps seams so archive stays observable and
-// notes: decoupled from git/spool I/O (tests assert order). doLoadChat's
-// notes: Claude-specific mention/PR-URL history scan is relocated to the injected
-// notes: `scan_loaded_history` seam (adapter-claude is out of this crate's dep set).
-// notes: TODO(port): the plan/skill-file persist inside doLoadChat is owned by the
-// notes: scan seam; the enableWorktree fork callback is wired by chat_manager (holds
-// notes: config_manager). Ported: isLastActiveChatForScope (5), archive kills-tasks
-// notes: (1), archive releases-scope (3) test cases.
-// notes: Title gen is adapter-aware — `generate_title` gained an `adapter_id`
-// notes: arg so the deps seam resolves `adapters.get(adapterId).generateTitle` (deterministic
-// notes: title stands when the adapter has none).
-// todos: 1

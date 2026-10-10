@@ -209,11 +209,3 @@ impl CredentialStore for FileCredentialStore {
         Box::pin(async move { self.cache.read().await.keys().cloned().collect() })
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T6.1;
-// keyring backend + migration is the 2026-08-19 provider-connections plan), not a TS port
-// confidence: high
-// todos: 0
-// notes: FileCredentialStore is now the fallback store, not the only one —
-//        see keyring_store.rs (OS-keychain impl) and boot.rs (which one a
-//        daemon boots with, and the file→keychain migration).

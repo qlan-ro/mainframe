@@ -182,13 +182,3 @@ mod tests {
         assert_eq!(body["error"], "Chat not found");
     }
 }
-
-// PORT STATUS: new for #346 (no TS twin)
-// confidence: high
-// todos: 0
-// notes: discard's 404/fail split reads the chat once via ctx.db (matching the
-// chat_commands.rs chat_exists pattern) before handing off to
-// ChatManager::discard_chat for the live-state teardown, attachment delete,
-// scratch-dir removal and row delete (chat_manager/discard.rs). A discard whose
-// directory removal fails returns the deps error and leaves the row (and
-// `chat.temporary`) intact, so a retry through this same route stays possible.

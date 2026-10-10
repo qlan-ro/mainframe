@@ -830,26 +830,3 @@ mod tests {
         );
     }
 }
-
-// PORT STATUS: src/server/websocket.ts (+ ws-file-watch wiring, ws-schemas seam)
-// confidence: medium
-// todos: 1
-// notes: Single-task-per-connection select! (write task folded in) because
-// splitting axum's WebSocket needs futures_util (off-allowlist) — see the header.
-// Chat subscriptions = shared Mutex<HashSet> (read by fan-out, tsv PER_ENTITY);
-// file-watch state = task-local (single owner). Broadcast fan-out = one pump task
-// over broadcast::Receiver → per-client mpsc, with the exact chatId-scoped vs
-// connection-global gating. The legacy chat dialect's client frames
-// (message.send, permission.respond) and subscribe's message.queued.snapshot
-// died with spec decision 24 — chat sends and gates ride the /acp/{profile}
-// facade now; this socket keeps only the non-chat domains and rejects the
-// retired frames at the schema seam (ws_schemas.rs). Adapter-replay
-// (buildConnectReplayEvents over
-// the live registry snapshots) streams right after connection.ready so a
-// reconnecting client's catalog is authoritative. Task 5.5 added lsp_ws_handler:
-// the `/lsp/:projectId/:language` route self-authenticates, validates+spawns via
-// LspConnectionHandler (Db-backed ProjectStore/ChatStore), and drives the socket ↔
-// child bridge (first-connect capture via attach_client_with_capture; reconnect
-// replays the cached initialize + re-bridges). KNOWN GAP: the mainframe-lsp seam
-// consumes the child's stdout/stderr on first attach, so a reconnect after the
-// first bridge tore down cannot re-proxy (start_reattach_bridge warns) — flagged.

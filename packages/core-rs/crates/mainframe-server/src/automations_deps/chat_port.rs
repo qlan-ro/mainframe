@@ -120,8 +120,3 @@ impl AgentChatPort for ChatManagerPort {
         Box::pin(async move { self.chats.interrupt_chat(chat_id).await })
     }
 }
-
-// PORT STATUS: packages/core/src/automations/agent-port.ts (ChatPortDeps)
-// confidence: high
-// todos: 0
-// notes: —

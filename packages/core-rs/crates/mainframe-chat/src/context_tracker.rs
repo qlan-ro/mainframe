@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/chat/context-tracker.ts`.
-
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
@@ -636,24 +634,3 @@ mod tests {
         );
     }
 }
-
-// PORT STATUS: src/chat/context-tracker.ts (199 lines)
-// confidence: medium
-// todos: 0
-// notes: Main catch-up (#432): dedupeContextFiles / toAbsoluteContextPath (`~`/rel
-// notes: resolution) + dedupeSkillFiles (path dedup then on-disk existence tie-break
-// notes: within a display-name group) + get_session_context wires both; SessionContext
-// notes: shape unchanged. `path.join` → a minimal POSIX join_path (single-segment
-// notes: relative inputs only, as the callers guarantee). context-tracker.test.ts
-// notes: ported (dedupeSkillFiles ×5, dedupeContextFiles ×2, getSessionContext ×1 via
-// notes: an in-crate ContextDb + Adapter double, since chat tests use trait fakes not
-// notes: mainframe-db).
-// notes: 4 free functions ported. The four JS regexes are hand-rolled (no regex
-// notes: crate in the allowlist): `@(\S+)` mention scan, the two plan-path patterns
-// notes: (saved = last `.md` in the leading run; generic = a `/…​.md` run bounded by
-// notes: start/space/backtick), and the `</…>`+trailing-punct ref cleanup — medium
-// notes: confidence pending a fixture. `path.relative` → a POSIX `path_relative`
-// notes: (absolute inputs only, as the callers guarantee). `db`/`attachmentStore`
-// notes: are narrow injected traits; `adapters` uses the concrete AdapterRegistry
-// notes: (get_context_files is on the Adapter trait). No TS test file; added sanity
-// notes: tests for the hand-rolled parsers.

@@ -61,9 +61,3 @@ impl TriggerFirer {
         Ok(Some(run))
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T8.2), not a TS port
-// confidence: high
-// todos: 0
-// notes: unlike Node's fireRun (fire-and-forget, swallows everything), this
-//        returns unexpected store errors so callers can log with context.

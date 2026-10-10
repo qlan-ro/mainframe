@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/chat/message-cache.ts`.
-
 use std::collections::{HashMap, HashSet};
 
 use mainframe_runtime::time::now_iso8601;
@@ -394,16 +392,6 @@ mod tests {
         );
     }
 }
-
-// PORT STATUS: src/chat/message-cache.ts (76 lines)
-// confidence: high
-// todos: 0
-// notes: `Map<string, ChatMessage[]>` → `HashMap` + an `order: Vec<String>` that
-// notes: mirrors JS `Map` insertion order so `evict_if_needed` drops the oldest
-// notes: unpinned chat (`cache.keys().next()`, skipping pinned keys — todo #350
-// notes: R1, D1). No per-chat message cap: a chat with a live registry cell is
-// notes: pinned whole. nanoid + now_iso8601 for createTransientMessage.
-// notes: move-to-end test ported verbatim.
 
 #[cfg(test)]
 pub(crate) mod timing_tests;

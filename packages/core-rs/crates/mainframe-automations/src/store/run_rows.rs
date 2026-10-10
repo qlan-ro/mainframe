@@ -159,8 +159,3 @@ pub(crate) fn is_unique_violation(err: &rusqlite::Error) -> bool {
             if e.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE
     )
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T2.2), not a TS port
-// confidence: high
-// todos: 0
-// notes: split from run_store.rs for the 300-line file cap.

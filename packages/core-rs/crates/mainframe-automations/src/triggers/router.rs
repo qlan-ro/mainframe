@@ -200,9 +200,3 @@ pub fn spawn_event_loop(
         }
     })
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T8.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: bindings derived per event instead of Node's armed array; the
-//        chaining hook lives in completion.rs (300-line file cap).

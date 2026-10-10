@@ -192,8 +192,3 @@ pub(crate) fn set_variable_name_issue(name: &str, claimed: &HashSet<String>) -> 
     }
     None
 }
-
-// PORT STATUS: TS port of packages/types/src/automation-domain/validate.ts (T6)
-// confidence: high
-// todos: 0
-// notes: split from validate.rs to keep both files inside the 300-line cap.

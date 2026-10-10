@@ -72,9 +72,3 @@ pub fn router() -> Router<Arc<AppCtx>> {
 
 #[cfg(test)]
 mod automation_webhook_tests;
-
-// PORT STATUS: src/server/routes/automation-webhook.ts (124 lines)
-// confidence: high
-// todos: 0
-// notes: decision→status table mirrors triggers/webhook_ingest.rs's module
-//        doc exactly; the ingest pipeline itself is engine-side (T8.3).

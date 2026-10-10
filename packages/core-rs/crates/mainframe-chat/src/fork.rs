@@ -242,7 +242,3 @@ mod tests {
         );
     }
 }
-
-// PORT STATUS: new (todo #343 Group 3)
-// confidence: high
-// todos: 0

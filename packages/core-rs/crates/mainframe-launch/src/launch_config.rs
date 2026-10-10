@@ -1,5 +1,3 @@
-//! Ported from `src/launch/launch-config.ts`.
-//!
 //! Variable-expansion + validation for a raw `launch.json`. The TS uses a Zod
 //! schema; there is no allowlisted schema crate, so the same rules are checked
 //! by hand and the custom `message` strings are reproduced verbatim. Structural
@@ -471,15 +469,3 @@ mod tests {
         assert!(err.contains("At least one configuration is required"));
     }
 }
-
-// PORT STATUS: src/launch/launch-config.ts (65 lines)
-// confidence: medium
-// todos: 1
-// notes: Zod schema → hand validation; custom `message` strings reproduced
-// verbatim (safe-executable, positive-port, preview cap, min-1 configs, env-key).
-// Structural/type-error messages are best-effort (not asserted by any test).
-// Port transform keeps the TS asymmetry: a JSON number passes through
-// unvalidated; only string ports run parseInt + positive check. TODO(port):
-// url() strictness — a permissive scheme://host shape stands in for Zod's URL
-// validator (no test rejects a URL). All 6 launch-config.test.ts cases + 3 added
-// guard cases pass.

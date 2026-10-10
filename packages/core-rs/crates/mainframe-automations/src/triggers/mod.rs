@@ -29,9 +29,3 @@ mod webhook_ingest_tests;
 
 #[cfg(test)]
 mod webhook_tests;
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T8.2/T8.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: fire.rs is the shared best-effort path; webhook_ingest bypasses it
-//        so the route can tell duplicates (200) from start failures (500).

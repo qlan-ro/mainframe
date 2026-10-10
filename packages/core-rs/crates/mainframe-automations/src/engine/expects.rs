@@ -165,9 +165,3 @@ fn collect_top_level_objects(text: &str) -> Vec<&str> {
     }
     candidates
 }
-
-// PORT STATUS: packages/core/src/automations/verbs/expects.ts (118 lines)
-// confidence: high
-// todos: 0
-// notes: number coercion via parse::<f64> mirrors JS Number(raw) for the
-//        strings agents actually emit; Infinity/NaN are rejected either way.

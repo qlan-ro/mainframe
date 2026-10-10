@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/chat/config-manager.ts`.
-
 use std::sync::{Arc, Mutex};
 
 use mainframe_adapter_api::{AdapterError, AdapterSession, BoxFuture};
@@ -1210,19 +1208,3 @@ mod tests {
         assert_eq!(binding_changed.as_slice(), &[Some("/new/wt".to_string())]);
     }
 }
-
-// PORT STATUS: src/chat/config-manager.ts (270 lines)
-// confidence: medium
-// todos: 0
-// notes: TS `ConfigManagerDeps` DI object → `ConfigManagerDeps` trait; `getActiveChat`
-// notes: returns the shared `Arc<Mutex<ActiveChat>>` cell (CONCURRENCY.tsv PER_ENTITY),
-// notes: mutated under short locks with session I/O + emitEvent kept OUTSIDE the lock
-// notes: (rule 3). The generic `applyLiveSetting<K>` is unrolled into three identical
-// notes: blocks (async-closure-in-generic is unergonomic); warn strings ("setModel
-// notes: rejected; not persisting model" etc.) copied verbatim. `startingChats` →
-// notes: `take_starting_chat` single-flight seam; `setStopLaunchProcesses` late-bind
-// notes: setter dropped (the trait method covers it). start/stop/applyTuning deps
-// notes: futures are infallible here (TS Promise<void> rejection propagation is a
-// notes: seam chat_manager wires). Both config-manager.test.ts cases ported. `db`
-// notes: is narrow trait methods (no not-Send mainframe-db repo); workspace fns come
-// notes: from mainframe-services directly.

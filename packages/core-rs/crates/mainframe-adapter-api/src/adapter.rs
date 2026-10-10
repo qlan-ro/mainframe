@@ -265,19 +265,3 @@ pub trait Adapter: Send + Sync {
     // (unsupported vs empty) must be pinned against those callers, not guessed
     // here. The registry + chat-session consumers do not need them.
 }
-
-// PORT STATUS: behavioral half of packages/types/src/adapter.ts (Adapter/
-// AdapterSession/SessionSink traits)
-// confidence: high
-// todos: 1 (skill/agent/command/external-session CRUD, deferred to the
-//   concrete-adapter phase — see the TODO above)
-// notes: Main catch-up (#424/#430) adds two OPTIONAL Adapter methods with default
-// `Ok(None)` bodies so existing adapters keep compiling and each concrete adapter
-// (Wave 1) overrides: generate_title(content, binary) and is_transcript_present(
-// session_id, project_path, session_file_path). Owned `String` params (not &str)
-// to stay consistent with this trait's async BoxFuture methods; `None` return =
-// "unsupported / cannot determine — don't flag".
-// notes: todo #240 adds a third optional method, locate_transcript, alongside
-// is_transcript_present — same default-Ok(None) shape, same owned-String args.
-// notes: is_transcript_present was later folded into locate_transcript (presence
-// is `Present`), so reconciliation can also follow a relocated transcript.

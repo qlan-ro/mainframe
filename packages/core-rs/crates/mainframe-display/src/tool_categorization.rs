@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/messages/tool-categorization.ts`.
-//!
 //! Adapter-declared tool categorization. Adapter-agnostic: operates purely on the
 //! neutral `ToolCategories` sets from `mainframe-types` (§2.5 display side).
 
@@ -75,12 +73,3 @@ mod tests {
         assert!(!is_hidden_tool_part("Read", Some("hidden"), &c));
     }
 }
-
-// PORT STATUS: src/messages/tool-categorization.ts (22 lines)
-// confidence: high
-// todos: 0
-// notes: lands on the mainframe-display side of the §2.5 split — operates only on
-// notes: the neutral ToolCategories sets, no Claude event/JSONL shapes. TS `Set.has`
-// notes: → `HashSet::contains`. `category` param is Option<&str> (TS `string |
-// notes: undefined`). All five predicates are pub (tool-grouping imports
-// notes: is_hidden_tool_part; index.ts re-exports the other four).

@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/codex/quota-pull.ts`.
-//!
 //! Harvests Codex's plan quota: pulls `account/rateLimits/read`, normalizes its
 //! windows, and stamps the resolved account identity. Rate limits and identity
 //! are read concurrently over the same connection — the caller (manual-refresh
@@ -190,14 +188,3 @@ mod tests {
         );
     }
 }
-
-// PORT STATUS: src/plugins/builtin/codex/quota-pull.ts (47 lines)
-// confidence: high
-// todos: 0
-// notes: runRateLimits/readAccount are injected as boxed async closures (Rust has
-// notes: no bare async-fn-value equivalent), mirroring the Claude quota_pull seam.
-// notes: pull_codex_quota_via_temp_app_server takes an explicit `path` param (the
-// notes: TS spawnTempAppServer inherits process.env directly; Rust's
-// notes: spawn_temp_app_server requires PATH threaded explicitly per the crate's
-// notes: edition-2024 no-env-mutation convention). client.close() runs after the
-// notes: pull unconditionally (Rust has no try/finally) via a stored Result.

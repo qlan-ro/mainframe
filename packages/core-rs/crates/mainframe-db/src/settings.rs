@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/db/settings.ts`.
-
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -61,12 +59,3 @@ impl SettingsRepository {
         Ok(())
     }
 }
-
-// PORT STATUS: src/db/settings.ts (31 lines)
-// confidence: high
-// notes: getByCategory returns a HashMap (the TS Object.fromEntries record); the
-// query has no ORDER BY, so key order is unobservable and a HashMap is faithful.
-// upsert uses nanoid + now_iso8601 like the TS. No dedicated test file in the TS
-// __tests__ suite; behavior is exercised via migration 24's settings backfill in
-// tests/migrations.rs.
-// todos: 0

@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/external-session-enrich.ts`.
-//!
 //! Reads the head/tail of an external session JSONL, applies hide rules
 //! (sidechain / team / wrong-cwd), and projects it to an `ExternalSession`.
 
@@ -376,17 +374,3 @@ mod tests {
         assert_eq!(s.title.as_deref(), Some(SYNTHETIC_TITLE));
     }
 }
-
-// PORT STATUS: src/plugins/builtin/claude/external-session-enrich.ts (140 lines)
-// confidence: high
-// todos: 0
-// notes: readHeadTail uses positional read_exact (head from 0, tail via seek);
-// Buffer.toString('utf-8') → from_utf8_lossy (64KB boundary may split a
-// codepoint). The hide-flag regexes and cleanPrompt's three regexes are
-// hand-rolled. `.slice(0,N)` → chars().take(N) (UTF-16-unit vs char divergence on
-// astral chars — untested edge). summary is intentionally NOT populated (the TS
-// return omits it though it feeds title precedence). mtime → chrono
-// DateTime::<Utc>::from(SystemTime); the mtimeMs fallback uses
-// from_timestamp_millis. All 6 TS tests ported using real temp files (the TS
-// mocked fs open/stat — tokio::fs isn't mockable, so real files exercise the
-// same path and assert the same title/firstPrompt outputs).

@@ -201,13 +201,3 @@ fn map_error(err: gh::GitHubError) -> GitHubPortError {
         }
     }
 }
-
-// PORT STATUS: (new — production GitHubIssues wiring for the todos-plugin
-// sync engine, task 5b)
-// confidence: high
-// todos: 0
-// notes: the credential label is resolved per call via `CredentialStore::get`,
-// never cached, so a token connected after boot (link dialog → set_credential)
-// resolves without a restart. GitHubError -> GitHubPortError is a 1:1 mapping;
-// GitHubPortError::Unavailable is unreachable from this adapter (only the
-// plugins-crate guard constructs it).

@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/db/migrations.ts`.
-
 use mainframe_runtime::time::now_iso8601;
 use mainframe_types::chat::NO_PROJECT_ID;
 use rusqlite::Connection;
@@ -567,16 +565,3 @@ pub fn run_migrations(db: &Connection, target: i64) -> Result<(), DbError> {
     }
     Ok(())
 }
-
-// PORT STATUS: src/db/migrations.ts (253 lines)
-// confidence: high
-// notes: same 25 numbered migrations, same in-body table_info guards and data
-// backfills, same LATEST_VERSION=25 (25 merged from main's 34-commit catch-up).
-// MIGRATIONS (const array in TS) becomes migrations() returning a Vec<Migration>
-// with non-capturing closures coerced to fn pointers (a Vec can't be const).
-// LATEST_VERSION is a const literal (25)
-// rather than MIGRATIONS[last].version; tests/migrations.rs asserts they agree.
-// The TS default param `target=LATEST_VERSION` becomes an explicit argument
-// (schema::initialize_schema passes LATEST_VERSION). now_iso8601() from
-// mainframe_runtime keeps `new Date().toISOString()` wire parity in migration 24.
-// todos: 0

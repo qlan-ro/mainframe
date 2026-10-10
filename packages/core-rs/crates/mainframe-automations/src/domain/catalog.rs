@@ -70,9 +70,3 @@ pub(crate) fn capitalize(s: &str) -> String {
         None => String::new(),
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T1.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: table is contract §5 verbatim; `run_command` outputAs:"lines" still
-//        catalogs `output` as text (Node catalog parity).

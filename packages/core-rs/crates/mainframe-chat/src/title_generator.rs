@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/chat/title-generator.ts`.
-//!
 //! Callers must hand these functions [`crate::message_markers::visible_message_text`]
 //! output, not a raw wire body — a title has to read like the message did.
 
@@ -86,12 +84,3 @@ mod tests {
         assert!(!out.contains("  "));
     }
 }
-
-// PORT STATUS: src/chat/title-generator.ts (7 lines)
-// confidence: high
-// todos: 0
-// notes: Main catch-up (#430): `generateTitle` was moved out to the Claude adapter
-// notes: (`mainframe-adapter-claude::title_generator::generate_claude_title`); this
-// notes: module now keeps only the deterministic `deriveTitleFromMessage` fallback.
-// notes: String slicing uses `chars` (Rust scalar) vs TS UTF-16 units — divergence
-// notes: only on astral-plane input.

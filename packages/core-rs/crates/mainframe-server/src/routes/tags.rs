@@ -208,15 +208,3 @@ mod tests {
         assert_eq!(body["error"], "cannot tag a temporary chat");
     }
 }
-
-// PORT STATUS: src/server/routes/tags.ts (6 endpoints, 98 lines)
-// confidence: high
-// todos: 0
-// notes: z.enum(TAG_PALETTE) → Option<TagColor> serde parse (out-of-palette →
-// body-parse fail → 400). PatchBody's `.refine(rename||color)` → explicit
-// both-None → 400 "rename or color required". Mutating handlers map DbError →
-// 400 with the verbatim message (TS try/catch → String(err.message), which also
-// carries the validate-tag-name reserved/short strings); read handlers → opaque
-// 500. rename+setColor+get run in ONE db.call so the read-back is atomic on the
-// DB thread. DELETE ends 204 with an empty body (the pinned deviation). The
-// optional ctx.chats.syncChatTags hook is a Phase-4/5 no-op and is omitted.

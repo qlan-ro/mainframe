@@ -286,11 +286,3 @@ impl RunAdvancer for Interpreter {
         })
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T4.1, A8), not a TS port
-// confidence: high
-// todos: 0
-// notes: cancellation aborts the walk structurally (future drop via select!)
-//        instead of Node's cooperative AbortSignal; the A8 store guard
-//        rejects any straggler commit. sweep_deadlines/fail_step land with
-//        the agent phase (T4.3+).

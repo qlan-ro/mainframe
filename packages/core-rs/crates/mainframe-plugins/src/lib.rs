@@ -60,14 +60,3 @@ pub enum PluginError {
     #[error("{0}")]
     Message(String),
 }
-
-// PORT STATUS: src/plugins/ (crate root barrel)
-// confidence: medium
-// todos: 1
-// notes: builtin-only per §2.9/§5 — dynamic JS load path dropped (manager keeps
-// load_builtin only). Behavioral interfaces the types crate deferred
-// (PluginContext, PluginEventBus, PluginUIContext, ChatServiceAPI, …) land here
-// as Rust traits over BoxFuture (dyn-safe, reusing mainframe-adapter-api). The
-// per-plugin SQLite runs on a dedicated actor thread (db_context) mirroring the
-// main Db actor's single-connection discipline (CONCURRENCY.tsv db-context row).
-// TODO(port): external plugin loading dropped in v1.

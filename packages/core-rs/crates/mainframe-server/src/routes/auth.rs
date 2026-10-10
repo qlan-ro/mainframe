@@ -438,17 +438,3 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/api/auth/devices/{deviceId}", delete(delete_device))
         .route("/api/auth/pair-status", get(pair_status))
 }
-
-// PORT STATUS: src/server/routes/auth.ts (7 endpoints, 249 lines)
-// confidence: high
-// todos: 0
-// notes: module-global pairing/rate-limit/recent Maps → one LazyLock<Mutex<AuthState>>
-// (process-global, matching TS semantics) with identical TTLs/thresholds;
-// `_resetAuthState` → `reset_auth_state`. Secret read from AppCtx.auth_secret (boot
-// value), not process.env. `req.ip` (trust-proxy=loopback) → net::trust_proxy_client_ip
-// over ConnectInfo + x-forwarded-for. `req.auth` → Extension<TokenPayload>. Zod schemas
-// (confirmBodySchema uuid+min1, registerPushSchema min1, pairStatusQuerySchema
-// [A-Z0-9]{6}) → serde parse + explicit refinements (is_valid_uuid, non-empty,
-// is_valid_pair_code). devices/push via AppCtx handles. No QR payload is emitted by
-// this route (the terminal QR is CLI-side, per the task note). Locks are never held
-// across an await (confirm validates + drops the lock before the DB call).

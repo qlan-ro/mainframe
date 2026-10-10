@@ -115,8 +115,3 @@ pub fn summarize_run_result(run: &RunRecord) -> String {
         _ => serde_json::to_string(outputs).unwrap_or_default(),
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T8.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: split from router.rs for the 300-line file cap.

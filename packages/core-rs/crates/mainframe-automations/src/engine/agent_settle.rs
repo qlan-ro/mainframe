@@ -241,9 +241,3 @@ fn judge(
         }
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T4.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node AgentWaitService.onChatFinished/succeedWaitingStep/
-//        failWaitingStep; A2 parse+retry extends the Completed arm in T4.4.

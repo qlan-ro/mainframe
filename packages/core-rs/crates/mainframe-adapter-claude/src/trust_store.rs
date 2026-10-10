@@ -305,19 +305,3 @@ mod tests {
         assert_eq!(entries, vec![std::ffi::OsString::from(".claude.json")]);
     }
 }
-
-// PORT STATUS: src/plugins/builtin/claude/trust-store.ts (85/85 lines)
-// confidence: high
-// todos: 0
-// notes: readClaudeAccountIdentity + writeWorkspaceTrust both ported. Async via
-// notes: tokio::fs (no sync I/O), mirroring node:fs/promises. write_workspace_trust
-// notes: mirrors the TS read-modify-write: ENOENT -> empty config (create on first
-// notes: trust), any other read or JSON-parse error propagates (never clobbers an
-// notes: existing file); the unique-per-call tmp file + rename is atomic, with a
-// notes: best-effort tmp cleanup mirroring the TS try/finally `rm(tmp, {force:true})`.
-// notes: One deliberate deviation: object key order in the rewritten JSON follows
-// notes: serde_json::Map's default (BTreeMap, alphabetical) rather than JS insertion
-// notes: order — this file is a local Claude-CLI config, not a wire contract, so byte-
-// notes: for-byte key order was not preserved. Wired via
-// notes: mainframe-chat::ChatManager::trust_workspace (chat_manager.rs) and
-// notes: POST /api/chats/:id/trust-workspace (mainframe-server::routes::chat_commands).

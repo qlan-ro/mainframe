@@ -77,15 +77,3 @@ struct RawQuery {
 pub fn router() -> Router<Arc<AppCtx>> {
     Router::new().route("/api/lsp/languages", get(get_languages))
 }
-
-// PORT STATUS: src/server/routes/lsp-routes.ts (44 lines)
-// confidence: high
-// todos: 0
-// notes: `LspLanguagesQuerySchema.safeParse` → a required non-empty `projectId`.
-// The 400 body reproduces Zod's first-issue message verbatim: missing param →
-// "Invalid input: expected string, received undefined"; empty param → the
-// `.min(1)` "Too small: expected string to have >=1 characters".
-// Reads active languages from the manager + the registry's language ids, resolving
-// each server binary (`resolveCommand`) for `installed`. `active` = the project's
-// live processes. The `LspManager` is an Option on AppCtx (Some in the daemon boot);
-// when None the endpoint returns an empty language list.

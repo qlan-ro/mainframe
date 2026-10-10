@@ -415,8 +415,3 @@ fn check_ref(step: &Step, token_ref: &TokenRef, scope: &[TokenInfo], ctx: &mut C
         message,
     });
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T1.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: scope semantics mirror Node's token-scope.ts walk (If leaks, Repeat isolates).

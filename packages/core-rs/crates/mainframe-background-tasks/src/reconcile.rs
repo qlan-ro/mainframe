@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/background-tasks/reconcile.ts`.
-
 use std::collections::HashMap;
 use std::fs::Metadata;
 use std::sync::Arc;
@@ -569,16 +567,3 @@ mod tests {
         assert!(tracker.list("chat-sess1").is_empty());
     }
 }
-
-// PORT STATUS: src/background-tasks/reconcile.ts (103 lines)
-// confidence: high
-// todos: 0
-// notes: recovered snapshot stamps kind:'bash' (only bash spools to disk).
-// `deps.db` structural type → ReconcileDb trait (chats_list_all /
-// project_path) so this crate stays decoupled from mainframe-db. The TS outer
-// try/catch guarded against unexpected throws; every fallible step here is handled
-// inline (Option/Result → skip), so the 'reconcileBackgroundTasks aborted' warn is
-// unreachable and omitted. st.ctimeMs/mtimeMs → MetadataExt ctime/mtime (unix) with
-// a SystemTime fallback. vitest fs mocks → real temp spool + real project dir
-// (canonicalize must succeed, so a real project path is required); the events test
-// asserts a SET (real readdir order is nondeterministic vs TS's ordered mock).

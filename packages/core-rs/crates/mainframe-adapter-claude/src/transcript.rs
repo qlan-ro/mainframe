@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/transcript.ts`.
-//!
 //! The canonical `~/.claude/projects/<encoded>/<sessionId>.jsonl` path helper
 //! (moved here out of `history.ts` to dedup) plus the transcript-presence probe
 //! used by degraded-chat recovery.
@@ -282,13 +280,3 @@ mod tests {
         );
     }
 }
-
-// PORT STATUS: src/plugins/builtin/claude/transcript.ts (34 lines)
-// confidence: high
-// todos: 0
-// notes: Main catch-up (#424). getSessionJsonlPath moved here from history.ts
-// notes: (history.rs now imports it — its private session_jsonl_path/encode_project_path
-// notes: are removed and the encode_project_path test relocated here).
-// notes: is_claude_transcript_present maps `access(_, R_OK)` to tokio::fs::metadata
-// notes: (same present/missing signal for readable .jsonl files). Returns bool (never
-// notes: null) — the adapter wraps it as Ok(Some(bool)). transcript.test.ts translated.

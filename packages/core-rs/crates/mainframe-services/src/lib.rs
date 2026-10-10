@@ -18,10 +18,3 @@ pub mod quota;
 pub mod settings;
 pub mod todos;
 pub mod workspace;
-
-// PORT STATUS: crate root for src/{workspace,attachment,push,todos,commands,notifications,settings,files}
-// confidence: high
-// todos: 0
-// notes: lib/tag-color.ts + lib/validate-tag-name.ts landed in mainframe-db (§2.15),
-// not here. mainframe-git::exec_git (§2.4) is not yet ported, so workspace::worktree
-// carries a local `exec_git` helper marked TODO(port) until the git crate lands.

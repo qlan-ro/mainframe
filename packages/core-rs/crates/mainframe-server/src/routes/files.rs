@@ -1,5 +1,3 @@
-//! Ported from `src/server/routes/files.ts`.
-//!
 //! Eight endpoints over project files and the filesystem: directory tree,
 //! file-name search, flat file listing, GET/PUT file content, path resolution,
 //! external absolute-path read, and filesystem browse. Every project-scoped path
@@ -811,22 +809,3 @@ mod tests {
         assert!(!is_blocked_external("/home/u/project/file.txt"));
     }
 }
-
-// PORT STATUS: src/server/routes/files.ts (8 endpoints) + types.ts getEffectivePath
-// confidence: high
-// todos: 2
-// notes: getEffectivePath (from types.ts) lives here as effective_path_sync until
-// a shared routes-helpers module exists — TODO(port): consolidate once all
-// Phase-3 route files land (git.rs et al. need it too). worktreeMissing is a
-// ChatManager runtime field absent from the DB, so the missing-worktree
-// short-circuit (null / 409) is a Phase-4/5 seam (always inert here). Zod v4
-// `validate()` 400 bodies reproduced byte-for-byte ("Invalid input: expected
-// string, received undefined", "Too small: expected string to have >=1
-// characters", the type-mismatch prose) + the booleanish union's "Invalid
-// input". `path.relative`/`path.resolve` via fs_utils shims;
-// realpathSync → tokio canonicalize. Tree/browse sort uses byte Ord (not JS
-// localeCompare) — ordering is unasserted. base64 hand-rolled (no crate in the
-// allowlist), verified against Node Buffer vectors. Main catch-up (#436): the
-// external-file route accepts `encoding=base64` (10MB cap, base64 body +
-// `encoding:'base64'`; else 2MB utf-8) and the blocklist adds `.aws/credentials`,
-// `.netrc`, and `.gnupg/`.

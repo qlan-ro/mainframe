@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/messages/display-pipeline.ts`.
-//!
 //! Transforms raw `ChatMessage[]` into display-ready `DisplayMessage[]`.
 //!
 //! CRATE-SPLIT NOTE (PORTING §2.5 amendment): REASSIGNED from mainframe-display to

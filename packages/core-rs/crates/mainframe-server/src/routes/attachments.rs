@@ -151,17 +151,3 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/api/chats/{id}/attachments", post(upload))
         .route("/api/chats/{chatId}/attachments/{attachmentId}", get(serve))
 }
-
-// PORT STATUS: src/server/routes/attachments.ts (upload + serve)
-// confidence: high
-// todos: 0
-// notes: The "store not configured" 500 branch is unreachable — AppCtx always
-// carries an Arc<AttachmentStore>, so that field cannot be None. Size check is
-// byte-identical: computed = floor(len*3/4), rejected when the declared OR
-// computed size exceeds 5MB. kind defaults to image/ vs file by mediaType. save
-// failure → opaque 500 (Express 5 forwards the async rejection to the global
-// handler). GET returns the stored attachment in the success envelope; None →
-// 404. No chat-existence check — the TS route performs none either.
-// Observability (#219): one tracing record per upload outcome (chat_id, count,
-// total_bytes, outcome — never a name, the base64 payload, or original_path)
-// and one for a GET 404, so a rejected upload leaves server-side evidence.

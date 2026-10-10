@@ -105,8 +105,3 @@ mod fixture_tests {
         }
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T1.1-T1.2), not a TS port
-// confidence: high
-// todos: 0
-// notes: fixture validate-clean assertion lands with validation (T1.3).

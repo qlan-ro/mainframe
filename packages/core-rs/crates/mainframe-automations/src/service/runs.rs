@@ -61,9 +61,3 @@ impl AutomationsEngine {
         Ok(self.interpreter.cancel_run(run_id).await?)
     }
 }
-
-// PORT STATUS: packages/core/src/automations/service.ts (runs surface)
-// confidence: high
-// todos: 0
-// notes: run_manually returns as soon as the run row exists; advance runs on a
-//        detached task so the route can answer 202.

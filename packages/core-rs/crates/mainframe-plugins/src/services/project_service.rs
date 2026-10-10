@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/services/project-service.ts`.
-
 use std::sync::Arc;
 
 use mainframe_adapter_api::BoxFuture;
@@ -47,8 +45,3 @@ impl ProjectService for HostProjectService {
         Box::pin(async move { Ok(self.host_db.projects_get(&id).as_ref().map(to_summary)) })
     }
 }
-
-// PORT STATUS: src/plugins/services/project-service.ts
-// confidence: high
-// todos: 0
-// notes: maps Project→ProjectSummary { id, name, path }.

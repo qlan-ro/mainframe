@@ -1,5 +1,3 @@
-//! Ported from `packages/types/src/events.ts`.
-//!
 //! The daemon WebSocket wire contract: `DaemonEvent` (server→client) and
 //! `ClientEvent` (client→server). Both are internally tagged on `type`; tag
 //! values are copied verbatim (dotted / colon-delimited) via per-variant
@@ -819,19 +817,3 @@ mod tests {
         }));
     }
 }
-
-// PORT STATUS: packages/types/src/events.ts
-// confidence: high
-// todos: 0
-// notes: DaemonEvent + ClientEvent as internally-tagged enums; dotted/colon tag
-// strings via per-variant rename, fields camelCased via rename_all_fields.
-// Numbers per §6.3: tokens/port/count=i64. workflow.step.updated's `step` is a
-// dedicated WorkflowStepUpdate struct (TS Pick has no direct Rust analog).
-// Golden round-trip tests include_str! the fixtures relative to the workspace
-// root.
-// The golden comparator canonicalizes numbers to f64 so a fixture's
-// integer-literal `0` for an f64 field (Chat.totalCost) matches Rust's `0.0` —
-// see the Phase-B WIRE NOTE in chat.rs (serde_json `0.0` vs Node `0`). The
-// legacy chat dialect (display.message.*, message.added/.updated,
-// permission.*, message.send, permission.respond) was retired for the ACP
-// facade (todo #350) — see crate::acp.

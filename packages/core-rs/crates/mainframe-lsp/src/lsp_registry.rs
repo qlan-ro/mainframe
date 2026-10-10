@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/lsp/lsp-registry.ts`.
-//!
 //! Language-server registry: the static `id -> LspServerConfig` table, the
 //! extension -> language map, and bring-your-own command resolution. The TS
 //! twin resolved `typescript-language-server`/`pyright` from `node_modules`
@@ -230,14 +228,3 @@ impl Default for LspRegistry {
 
 #[cfg(test)]
 mod tests;
-
-// PORT STATUS: packages/core/src/lsp/lsp-registry.ts (99 lines)
-// confidence: high (config table, extension map) / new (BYO resolution order)
-// todos: 0
-// notes: the TS twin resolved bundled servers via `require.resolve` against the
-//   Node daemon's own node_modules, which has no Rust analogue and no live
-//   deployment behavior worth preserving byte-for-byte (Rust ships no bundled
-//   servers). `resolve_command` instead does bring-your-own discovery for every
-//   language, config-driven rather than a `bundled: bool` branch: project-local
-//   `node_modules/.bin`, then a Python venv, then the `command -v` PATH probe
-//   `jdtls` already used. Unknown-language and PATH-probe branches are faithful.

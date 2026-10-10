@@ -144,10 +144,3 @@ pub fn scheduled_for_string<Tz: TimeZone>(occurrence: &DateTime<Tz>) -> String {
 fn parse_cron(pattern: &SchedulePattern) -> Result<Cron, ScheduleError> {
     Ok(Cron::from_str(&compile_schedule(pattern)?)?)
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T8.1), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node triggers/schedule.ts compileSchedule + cron-parser
-//        local-time evaluation; croner replaces cron-parser, and
-//        find_previous_occurrence replaces Node's stored next_fire_at rows.

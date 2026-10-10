@@ -104,15 +104,3 @@ mod tests {
         assert_eq!(chat.claude_session_id.as_deref(), Some("sess-1"));
     }
 }
-
-// PORT STATUS: NEW module (todo #346, G2b)
-// confidence: high
-// todos: 0
-// notes: `should_start_without_persistence`/`context_was_lost` are pure booleans,
-// notes: private now that `no_persistence_for_spawn`/`take_context_loss` are the
-// notes: only call sites (the review fix moving `lifecycle_manager`'s inline spawn
-// notes: prep into `lifecycle_manager/spawn_prep.rs`). The DB write + in-memory
-// notes: sync + broadcast that "marking" the loss performs live in
-// notes: `lifecycle_manager::ChatLifecycleManager::mark_context_lost_if_needed`,
-// notes: which needs the deps seam and the active-chat cell this module does
-// notes: not have access to.

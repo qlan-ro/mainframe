@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/adapters/__tests__/registry.test.ts`.
-//!
 //! Integration test (exercises only the public `AdapterRegistry` surface + the
 //! `Adapter` / `AdapterSession` / `RefreshDeps` traits) so `lib.rs` stays a clean
 //! port of `index.ts`. The five `AdapterRegistry catalog materialization`

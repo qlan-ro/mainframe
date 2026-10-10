@@ -211,10 +211,3 @@ fn params_schema() -> Value {
         "additionalProperties": false
     })
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T6.5), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node actions/http.ts (bearer-unless-authored auth,
-//        x-idempotency-key, JSON body content-type, >=400 throw); reqwest
-//        follows redirects like fetch.

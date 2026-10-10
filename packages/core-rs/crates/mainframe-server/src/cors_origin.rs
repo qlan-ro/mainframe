@@ -1,5 +1,3 @@
-//! Ported from `src/server/cors-origin.ts`.
-//!
 //! Origins permitted to make cross-origin requests to the daemon.
 //!
 //! The daemon only ever serves localhost clients, but a desktop webview does not
@@ -135,11 +133,3 @@ mod tests {
         assert!(!is_allowed_origin(Some("null")));
     }
 }
-
-// PORT STATUS: src/server/cors-origin.ts (isAllowedOrigin)
-// confidence: high
-// todos: 0
-// notes: Main catch-up (#411): the allowlist widens from localhost/127.0.0.1 to
-// also accept the packaged-Tauri origins (`tauri://localhost`,
-// `http(s)://tauri.localhost`). Regex hand-matched (no `regex` crate in the
-// allowlist); all 16 cors-origin.test.ts cases translated 1:1.

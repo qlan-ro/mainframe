@@ -1,5 +1,3 @@
-//! Ported from `src/launch/expand-variables.ts`.
-//!
 //! Recursive `${VAR}` / `${VAR:-default}` substitution plus leading-`~`
 //! expansion over an arbitrary JSON value. Non-string scalars pass through
 //! unchanged. The TS uses a global regex
@@ -234,13 +232,3 @@ mod tests {
         assert_eq!(result, json!({ "name": "Core Daemon" }));
     }
 }
-
-// PORT STATUS: src/launch/expand-variables.ts (32 lines)
-// confidence: high
-// todos: 0
-// notes: global regex → hand-scanned `${NAME(:-default)?}` grammar with JS
-// String.replace semantics (an invalid `${` is emitted literally, scan resumes
-// +1). env is a HashMap (TS `Record<string,string|undefined>`); an empty-string
-// value is present (Some("")) and wins over a default, matching `!= null`.
-// homedir → dirs::home_dir(); `~/rest` → `${home}/rest` mirrors `home +
-// slice(1)`. All 13 expand-variables.test.ts cases translated.

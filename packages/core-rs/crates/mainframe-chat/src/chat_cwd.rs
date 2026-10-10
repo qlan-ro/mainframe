@@ -69,11 +69,3 @@ mod tests {
         assert_eq!(chat_cwd(None, None, None), None);
     }
 }
-
-// PORT STATUS: NEW module (todo #346, G2b)
-// confidence: high
-// todos: 0
-// notes: pure rule-6 resolver, parameterized on the three raw fields so both
-// notes: full-`Chat` consumers (lifecycle_manager, transcript_presence) and the
-// notes: partial-field consumer (event_handler's `on_init`, which only holds
-// notes: destructured fields under its active-chat lock) share one function.

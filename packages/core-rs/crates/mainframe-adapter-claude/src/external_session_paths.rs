@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/external-session-paths.ts`.
-//!
 //! Path helpers for discovering Claude's own external session JSONL files under
 //! `~/.claude/projects/<encoded>/`.
 
@@ -120,12 +118,3 @@ mod tests {
         assert!(!cwd_belongs_to_project(None, "/a/proj"));
     }
 }
-
-// PORT STATUS: src/plugins/builtin/claude/external-session-paths.ts (58 lines)
-// confidence: high
-// todos: 1
-// notes: UUID_RE hand-rolled as 8-4-4-4-12 hex groups. encodePath replaces every
-// non-alphanumeric (incl. dashes) with '-' — distinct from history.ts's encoding
-// which keeps dashes. cwd path.sep → std::path::MAIN_SEPARATOR. realpath →
-// tokio::fs::canonicalize. The 1 TODO(port): NFC normalization skipped (no crate
-// on the allowlist; ASCII unaffected). All 4 TS path tests ported.

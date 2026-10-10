@@ -69,9 +69,3 @@ impl NotifyVerb {
         }
     }
 }
-
-// PORT STATUS: packages/core/src/automations/verbs/notify.ts (108 lines)
-// confidence: high
-// todos: 0
-// notes: Node emits the WS event inline and treats only push as the side
-//        channel; Rust hands both to the Notifier port (T9.2 wires WS+push).

@@ -79,16 +79,3 @@ mod tests {
         assert_eq!(trust_proxy_client_ip("127.0.0.1", None), "127.0.0.1");
     }
 }
-
-// PORT STATUS: src/server/middleware/auth.ts + websocket.ts (LOCALHOST_IPS + XFF)
-// confidence: high
-// todos: 0
-// notes: single source for the loopback set and the one client-IP rule every
-// transport now uses. `trust_proxy_client_ip` = Express `req.ip` under `trust
-// proxy = 'loopback'` (proxy-addr's leftmost-untrusted walk), used by the HTTP
-// auth middleware, routes reading `req.ip`, and the WS upgrade; a forged
-// leftmost `127.0.0.1` cannot spoof loopback through the tunnel. The TS
-// websocket.ts first-hop rule (`forwarded.split(',')[0]`) is deliberately NOT
-// ported — it was the R2.7 spoof. `::ffff:127.0.0.1` kept explicitly
-// (IpAddr::is_loopback returns false for the IPv4-mapped form, but Express's
-// set trusts it).

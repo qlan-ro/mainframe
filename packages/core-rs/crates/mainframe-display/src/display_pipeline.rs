@@ -11,9 +11,3 @@
 //! resolution: reassign display-pipeline to `mainframe-adapter-claude::messages`
 //! alongside display-helpers (the tool-grouping-askuserquestion
 //! `prepareMessagesForClient` case ports with it).
-
-// PORT STATUS: src/messages/display-pipeline.ts (152 lines) — NOT ported (blocker)
-// confidence: n/a
-// todos: 0
-// notes: crate-layering blocker; must move to mainframe-adapter-claude. Left as an
-// notes: empty module so the crate compiles without a cycle. See lib.rs trailer.

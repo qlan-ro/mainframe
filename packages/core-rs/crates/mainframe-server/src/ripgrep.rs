@@ -1,5 +1,3 @@
-//! Ported from `src/server/ripgrep.ts`.
-//!
 //! Content and file-name search reimplemented in-process on ripgrep's own
 //! library crates (`ignore` + `grep-searcher` + `grep-regex`, pinned to the
 //! versions ripgrep 14.1.1 itself vendors) instead of shelling out to a
@@ -179,22 +177,3 @@ fn list_files_blocking(dir_path: &str, opts: &ListFilesOptions) -> Vec<String> {
 
 #[cfg(test)]
 mod tests;
-
-// PORT STATUS: src/server/ripgrep.ts (parseRipgrepOutput, getRgPath,
-// searchWithRipgrep, listFilesWithRipgrep, isRipgrepAvailable)
-// confidence: high
-// todos: 0
-// notes: Rewritten for PR 1 of the Rust-daemon cutover onto ripgrep's own
-// library crates (`ignore` + `grep-searcher` + `grep-regex`, pinned to the
-// exact versions ripgrep 14.1.1 vendors) instead of shelling out to a resolved
-// `rg` binary. Search always runs in-process now, so `isRipgrepAvailable`,
-// binary resolution, and `MAINFRAME_RG_PATH` have no successor — every
-// caller's "unavailable, fall back to a walk" branch became unreachable and
-// was deleted along with it (routes/search.rs's `search_directory_fallback`,
-// routes/files.rs's `search_walk`). `--no-require-git` -> `WalkBuilder::
-// require_git(false)`; `--no-ignore --hidden` -> `disable_ignore_rules`;
-// `--max-count 50` -> the sink's per-file `hits_in_file` cap; `--max-filesize`
-// -> `parse_max_file_size` + `WalkBuilder::max_filesize`. Both entry points
-// move the synchronous walk/search onto `spawn_blocking` (the daemon forbids
-// sync I/O on the async runtime). `line.slice(0,500)` (UTF-16 units) -> first
-// 500 chars (UTF-8 safe), same as before.

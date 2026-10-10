@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/adapters/resolve-executable.ts`.
-//!
 //! Resolves an adapter's CLI executable path (configured → detected → fallback)
 //! and persists a detected absolute path back to settings. The TS `ResolverDeps`
 //! carried an inline `{ settings: { get, set } }`; here settings persistence goes
@@ -591,12 +589,3 @@ mod tests {
         assert!(!r.ok);
     }
 }
-
-// PORT STATUS: src/adapters/resolve-executable.ts (109 lines)
-// confidence: high
-// notes: SettingsWriter trait replaces the inline `{settings:{get,set}}` dep (no
-// notes: mainframe-db cycle); module-level resolveMemo → injectable ResolveMemo
-// notes: (CONCURRENCY.tsv row 136, rule 8). parseVersion hand-rolled (no regex
-// notes: crate). backfill try/catch collapses — deps are infallible-by-type. All
-// notes: 10 vitest assertions ported.
-// todos: 0

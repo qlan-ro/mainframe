@@ -148,12 +148,3 @@ async fn create(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
 pub fn router() -> Router<Arc<AppCtx>> {
     Router::new().route("/api/chats", post(create))
 }
-
-// PORT STATUS: split out of src/server/routes/chat-commands.ts's `create`
-// confidence: high
-// todos: 0
-// notes: rule 2's create validator (#346) — exactly one of a non-empty
-// projectId or noProject: true, adapterId required, no worktree on a
-// non-project chat, and the project must exist (the hidden scratch row is
-// excluded from `projects.get`, so passing it as `projectId` 400s like any
-// other unknown id).

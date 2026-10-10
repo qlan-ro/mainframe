@@ -62,11 +62,3 @@ async fn open_side_chat(
 pub fn router() -> Router<Arc<AppCtx>> {
     Router::new().route("/api/chats/{id}/side-chat", post(open_side_chat))
 }
-
-// PORT STATUS: new for #344 (no TS twin)
-// confidence: high
-// todos: 0
-// notes: mirrors chat_discard.rs's 404/fail split, delegating the whole
-// orchestration to ChatManager::open_side_chat. filter_temporary's own
-// exclusion logic lives in routes/chats.rs; this file's route-level tests
-// exercise it through the wired ChatManager facade instead of duplicating it.

@@ -1,5 +1,3 @@
-//! Ported from `packages/types/src/task-progress.ts`.
-//!
 //! Shared helpers for reading V2 task-tool (TaskCreate/TaskUpdate) results.
 //! Used by the daemon's cross-message subject backfill AND the UI's
 //! TaskProgressCard reducer — keep the two sides' id semantics identical.
@@ -103,11 +101,3 @@ mod tests {
         );
     }
 }
-
-// PORT STATUS: packages/types/src/task-progress.ts (24 lines)
-// confidence: high
-// todos: 0
-// notes: `unknown` result → serde_json::Value; JS `undefined`/`null` both map to
-// Value::Null (both yield "" / None, matching the TS tests). The `/Task #(\d+)/`
-// regex is hand-implemented because the `regex` crate is not on the allowlist —
-// same first-match, one-or-more-digits semantics.

@@ -202,10 +202,3 @@ impl Action for GithubCreatePrAction {
         })
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T7.1;
-// REST migration off `gh` is the 2026-08-19 provider-connections plan), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors ado.rs/notion.rs's shape now (bearer token from ctx.creds,
-//        injectable base_url for wiremock tests) instead of shelling out.

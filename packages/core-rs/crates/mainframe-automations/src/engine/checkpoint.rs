@@ -224,10 +224,3 @@ fn visible_plain_id<'r>(step_ref: &'r str, ref_suffix: &str) -> Option<&'r str> 
         .strip_suffix(ref_suffix)
         .filter(|plain| !plain.contains('#'))
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T4.1), not a TS port
-// confidence: high
-// todos: 0
-// notes: set_step preserves chatId/interactionId (deliberate divergence from
-//        Node's setStep, which rebuilds without them — Rust's T4.3 stamps
-//        chatId on the entry itself); visibility mirrors Node stepsView.

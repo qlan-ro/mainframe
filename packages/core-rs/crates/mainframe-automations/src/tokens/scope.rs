@@ -118,9 +118,3 @@ pub(crate) fn dig(value: &TokenValue, field: &str) -> Option<TokenValue> {
     }
     Some(cursor)
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T3.1), not a TS port
-// confidence: high
-// todos: 0
-// notes: `current` ignores TokenRef.output (Node parity — the editor writes
-//        output:"item" but resolution keys on the reserved stepId alone).

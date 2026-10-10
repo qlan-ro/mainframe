@@ -183,10 +183,3 @@ fn write_manifest(id: &'static str, title: &'static str, idempotent: bool) -> Ac
         idempotent,
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T6.4), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node actions/files.ts; files.write idempotent:true follows
-//        the shipped Node engine (plan text said false — cross-engine
-//        restart-policy parity wins, and a truncating write IS safe).

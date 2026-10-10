@@ -1,5 +1,3 @@
-//! Ported from `packages/types/src/settings.ts`.
-
 use serde::{Deserialize, Serialize};
 
 pub const EXECUTION_MODES: [ExecutionMode; 4] = [
@@ -344,21 +342,3 @@ mod tests {
         );
     }
 }
-
-// PORT STATUS: packages/types/src/settings.ts (68 lines)
-// confidence: high
-// todos: 0
-// notes: literal-union settings → enums (ExecutionMode, PermissionMode, BoolString,
-// Personality, ReasoningSummary, ResolvedExecutableSource). NOTIFICATION_DEFAULTS /
-// GENERAL_DEFAULTS map to Default impls. NotificationConfig's inline nested object
-// types are named structs (NotificationChatConfig etc.). ProviderConfig.default_effort
-// is crate::adapter::EffortLevel (the real enum). ProviderConfigUpdate's `X | ''`
-// sentinel fields (default_effort included) stay Option<String> so `''` round-trips
-// (a serde enum can't carry it).
-// catch-up (#236): GeneralConfig.default_adapter_id: Option<String> (TS
-// `defaultAdapterId: string | null`) has no skip_serializing_if, so it always
-// serializes (as `null` when unset) — matches the TS route always including the
-// key via the GENERAL_DEFAULTS spread.
-// catch-up (#325): ExecutionMode and PermissionMode gained a fourth/fifth variant,
-// Auto, mirroring the Claude CLI's native `auto` permission mode. EXECUTION_MODES
-// is now `[Default, AcceptEdits, Auto, Yolo]`.

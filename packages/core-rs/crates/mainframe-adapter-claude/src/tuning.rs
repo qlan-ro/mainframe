@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/tuning.ts`.
-
 use mainframe_types::adapter::TUNABLE_FEATURES;
 use mainframe_types::chat::ResolvedTuning;
 use serde_json::{Map, Value};
@@ -66,9 +64,3 @@ mod tests {
         );
     }
 }
-
-// PORT STATUS: src/plugins/builtin/claude/tuning.ts (11 lines)
-// confidence: high
-// todos: 0
-// notes: returns serde_json::Map (the TS Record<string, unknown>); the JS dynamic
-// notes: `t[f.key]` index becomes a match on the three fixed TUNABLE_FEATURES keys.

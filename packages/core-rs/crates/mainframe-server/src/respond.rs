@@ -61,11 +61,3 @@ mod tests {
         assert_eq!(body, json!({ "success": false, "error": "Not found" }));
     }
 }
-
-// PORT STATUS: src/server/routes/respond.ts (3 helpers)
-// confidence: high
-// todos: 0
-// notes: TS mutates an Express `res`; the Rust port returns an axum `Response`
-// so handlers stay `-> Response`. `ok`/`ok_empty` default to 200 (Express
-// `res.json` default); `fail` carries the status. Envelope bytes verified
-// against respond.test.ts assertions (translated below).

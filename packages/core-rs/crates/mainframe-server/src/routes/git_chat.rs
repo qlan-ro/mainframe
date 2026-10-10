@@ -275,13 +275,3 @@ pub fn router() -> Router<Arc<AppCtx>> {
             post(diff_since_main),
         )
 }
-
-// PORT STATUS: src/server/routes/git-chat.ts (6 endpoints)
-// confidence: high
-// todos: 0
-// notes: chatRoute failures → 400 with the leaked git message; worktree-missing
-// → 409, unknown chat → 404 "Chat not found". Empty `files` short-circuits to
-// okEmpty (no git call). commit stages then commits; push maps Rejected → 400.
-// diff-since-main uses the project-scoped resolver (409 vs 404 "Project not
-// found"). Chat/project resolution runs through the shared git.rs helpers (the
-// Phase-4 ChatManager seam) — no ChatManager dependency.

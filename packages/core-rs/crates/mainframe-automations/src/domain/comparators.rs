@@ -51,8 +51,3 @@ pub(crate) fn comparator_wire_name(comparator: Comparator) -> &'static str {
         Comparator::IsOneOf => "is_one_of",
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T1.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: split out of scope.rs when the `$name` namespace landed there.

@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/db/devices.ts`.
-
 use std::rc::Rc;
 
 use mainframe_runtime::time::now_iso8601;
@@ -88,11 +86,3 @@ impl DevicesRepository {
         }
     }
 }
-
-// PORT STATUS: src/db/devices.ts (64 lines)
-// confidence: high
-// notes: DeviceRow composes the flattened Device + authEpoch (types crate).
-// incrementAuthEpoch uses UPDATE ... RETURNING; QueryReturnedNoRows maps to 0
-// (the TS `?? 0`). now_iso8601() keeps the `new Date().toISOString()` format.
-// Tests in tests/devices.rs (devices.test.ts builds its own devices table).
-// todos: 0

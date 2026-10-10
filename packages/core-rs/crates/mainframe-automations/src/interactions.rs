@@ -243,9 +243,3 @@ fn failed(err: StoreError) -> StepOutcome {
         error: err.to_string(),
     }
 }
-
-// PORT STATUS: packages/core/src/automations/verbs/ask-me.ts (139 lines)
-// confidence: high
-// todos: 0
-// notes: Rust adds the T5.1 Notifier ping on pause (plan-mandated; Node has
-//        no interaction push) and stamps interactionId on the entry.

@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/messages/display-helpers.ts`.
-//!
 //! CRATE-SPLIT NOTE (PORTING §2.5 amendment): this file imports the Claude-
 //! specific message parsers (`message_parsing`, `parse_ask_user_question`) and the
 //! Claude `GroupedMessage`, so — per the "references Claude shapes → adapter-claude"

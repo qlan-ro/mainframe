@@ -202,9 +202,3 @@ pub async fn ensure_webhook_secret(
         .await?;
     Ok(token)
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T8.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node triggers/webhook.ts; sample capture is in-memory in
-//        webhook_ingest.rs (R3) instead of Node's trigger_state column.

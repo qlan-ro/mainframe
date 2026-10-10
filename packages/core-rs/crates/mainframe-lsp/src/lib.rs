@@ -20,9 +20,3 @@ pub use lsp_connection::{
 pub use lsp_manager::{ClientRef, CommandResolver, LspError, LspManager, LspServerHandle};
 pub use lsp_proxy::{BridgeHandle, LspFrameParser, bridge_ws_to_process, encode_json_rpc};
 pub use lsp_registry::{LspRegistry, ResolvedCommand};
-
-// PORT STATUS: packages/core/src/lsp/index.ts (5 lines)
-// confidence: high (re-export surface)
-// todos: 0
-// notes: adds `ClientRef`/`CommandResolver`/`LspFrameParser`/reattach helpers to
-//   the TS re-export set — Rust seams the deferred server WS layer consumes.

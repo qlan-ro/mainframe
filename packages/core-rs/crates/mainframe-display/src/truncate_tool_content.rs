@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/messages/truncate-tool-content.ts`.
-//!
 //! Adapter-agnostic: truncates an oversized tool-result string for display. No
 //! Claude event/JSONL shapes (§2.5 display side).
 
@@ -109,14 +107,3 @@ mod tests {
         assert!(!truncate_tool_content(&exact).truncated);
     }
 }
-
-// PORT STATUS: src/messages/truncate-tool-content.ts (34 lines)
-// confidence: high
-// todos: 0
-// notes: §2.5 display side (pure string helper). `Buffer.byteLength(content,'utf8')`
-// notes: → `str::len()` (UTF-8 bytes). The few-lines branch mirrors JS
-// notes: `String.slice(0,n)`/`slice(-n)` which count UTF-16 code units, so it
-// notes: slices via encode_utf16 + from_utf16_lossy (a slice boundary landing mid
-// notes: surrogate-pair yields U+FFFD; V8 would emit a lone surrogate — an
-// notes: astral-plane-at-16384-boundary edge only). Marker literals (…, ·, —)
-// notes: copied verbatim. All four truncate-tool-content.test.ts cases ported.

@@ -130,9 +130,3 @@ fn is_empty(operand: &TokenValue) -> bool {
         TokenValue::Number(_) | TokenValue::Record(_) => false,
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T3.2), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node engine/comparators.ts, including the scalar-only
-//        array rejection and the null-operand short-circuit.

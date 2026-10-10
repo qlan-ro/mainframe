@@ -181,10 +181,3 @@ async fn mark_watermark(
         .await?;
     Ok(record.checkpoint)
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md Phase 4a), not a TS port
-// confidence: high
-// todos: 0
-// notes: split out of blocks_concurrent.rs (300-line cap) — this file owns
-//        "which iterations run this pass", blocks_concurrent.rs owns
-//        "running a given list of branches to a verdict".

@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/codex/types.ts`.
-//!
 //! JSON-RPC 2.0 framing + Codex app-server protocol serde types. INTERNAL to this
 //! crate (crate-map §2.8): they deserialize from / serialize to the Codex
 //! app-server, NOT the daemon wire, so field casing tracks Codex exactly (mostly

@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/probe-models.ts`.
-
 use std::process::Stdio;
 use std::time::Duration;
 

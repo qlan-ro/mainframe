@@ -86,11 +86,5 @@ fn format_devices(devices: &[Value]) -> String {
     lines.join("\n")
 }
 
-// PORT STATUS: src/cli/status.ts (46 lines)
-// confidence: high
-// notes: reqwest GET /health + /api/auth/devices against the loopback daemon.
-// `lastSeen` is printed verbatim (the TS `new Date(...).toLocaleString()` is locale-
-// dependent; the ISO string is the faithful, deterministic rendering here).
-
 #[cfg(test)]
 mod tests;

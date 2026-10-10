@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/lib/tag-color.ts`.
-//!
 //! Relocated into `mainframe-db` (its sole consumer, `tags.rs`) per PORTING.md
 //! §2.15's explicit example ("`tag_color` only used by `mainframe-db`, the
 //! trailer records the move"); it does NOT also land in `mainframe-services`.
@@ -47,12 +45,3 @@ mod tests {
         assert!(colors.iter().any(|c| *c != colors[0]));
     }
 }
-
-// PORT STATUS: src/lib/tag-color.ts (11 lines)
-// confidence: high
-// notes: RELOCATED from lib/ into mainframe-db per §2.15 (sole consumer is
-// tags.rs; mainframe-services isn't available and would risk a cycle). djb2 hash
-// uses i32 wrapping arithmetic to mirror JS `| 0`; encode_utf16() mirrors
-// charCodeAt(); the index uses i64 abs to avoid i32::MIN overflow (JS Math.abs
-// promotes to float). Tests ported from lib/__tests__/tag-color.test.ts.
-// todos: 0

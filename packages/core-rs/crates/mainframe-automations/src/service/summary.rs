@@ -50,8 +50,3 @@ pub(super) fn join_validation(errors: &[ValidationError]) -> String {
         joined
     }
 }
-
-// PORT STATUS: packages/core/src/automations/service-helpers.ts rowToSummary (12 lines)
-// confidence: high
-// todos: 0
-// notes: —

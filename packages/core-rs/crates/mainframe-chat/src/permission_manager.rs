@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/chat/permission-manager.ts`.
-
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use mainframe_types::adapter::ControlRequest;
@@ -231,20 +229,3 @@ impl PermissionManager {
 
 #[cfg(test)]
 mod cancel_tests;
-
-// PORT STATUS: src/chat/permission-manager.ts (90 lines)
-// confidence: high
-// todos: 0
-// notes: `pendingPermissions: Map<string, ControlRequest[]>` → `HashMap<String,
-// notes: VecDeque<ControlRequest>>` (FIFO, front = active). `shift` returns the NEW
-// notes: front (or None when drained), matching the TS `queue[0]` return; the absent-
-// notes: chat branch returns None instead of building a throwaway array. TS block
-// notes: `type` checks map onto the untagged MessageContent (Leaf/Node) arms;
-// notes: ControlRequest gains `decision_reason: None` (field added in the Rust type).
-// notes: `cancel`/`was_cancelled`/`forget` (#284) are Rust-side additions with no TS
-// notes: original: `control_cancel_request` removal-by-id + a bounded (32) per-chat
-// notes: tombstone ring so a late in-flight answer for a withdrawn request is dropped.
-// notes: `shift` (#284) gained an id-scoped guard with no TS original: it now pops
-// notes: the front only when it still matches the id being answered, so a `cancel`
-// notes: landing mid-response can't make the completion-side shift promote the
-// notes: wrong request past the one the cancel already promoted.

@@ -159,14 +159,3 @@ impl DatabaseManager {
         &self.db
     }
 }
-
-// PORT STATUS: src/db/index.ts (49 lines)
-// confidence: medium
-// notes: `DatabaseManager` mirrors the TS class (pub repo fields, WAL +
-// foreign_keys pragmas, initializeSchema). getDataDir() is replicated locally
-// pending mainframe_runtime::config porting the dataDir path (see the inline
-// deferral marker at get_data_dir). Repositories share one Rc<Connection> (single-threaded,
-// synchronous) — Phase B replaces this with the async Db handle / spawn_blocking.
-// close() consumes self (Rust drops the connection when the last Rc is released).
-// DbError + enum_to_db_string are crate-wide helpers with no TS counterpart.
-// todos: 1

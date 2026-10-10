@@ -154,9 +154,3 @@ impl ActionRegistry {
         entries
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T6.2), not a TS port
-// confidence: high
-// todos: 0
-// notes: Vec keeps Node's Map-insertion catalog order; linear lookup is fine
-//        for the ≤10-action catalog.

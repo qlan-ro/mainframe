@@ -995,16 +995,3 @@ mod tests {
         assert_eq!(got, labels(&ids, &["c1", "c2", "c3", "c4", "c5"]));
     }
 }
-
-// PORT STATUS: src/server/routes/chats.ts (13 endpoints, 295 lines)
-// confidence: medium
-// todos: 0
-// notes: Reads (list/listFiltered, listChats, getChat) route through the ChatManager
-// facade (enriched: displayStatus/isRunning/worktreeMissing) when wired, else the raw
-// db path (Phase-3 harness). archive / getDisplayMessages (messages) /
-// getMessagesFromDisk (session-files) / getPendingPermission / unarchive are now real
-// facade calls. pinned/tuning/effort PATCH + tool-result port over ctx.db.chats
-// (+ compute_session_file_path / read_tool_result_from_jsonl / extract_session_file_paths
-// helpers); the tuning/pinned PATCHes run the TS `applyChatTuning` follow-ups
-// (syncChatFields + fire-and-forget applyTuning + emitChatUpdated) when the manager is
-// wired. title uses the facade rename when wired, else a db title write.

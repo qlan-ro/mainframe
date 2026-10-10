@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/codex/__tests__/external-sessions.test.ts`.
-//!
 //! The global meta/prompt caches (module statics) are shared across the whole test
 //! binary, so — like vitest's per-file serial run + `beforeEach` cache clear — each
 //! test takes a serial lock and clears the cache before running.

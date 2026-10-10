@@ -182,12 +182,3 @@ impl ScopeTunnelStopper for RegistryScopeTunnelStopper {
         }))
     }
 }
-
-// PORT STATUS: (launch seam for chat/index.ts setStopLaunchProcesses)
-// confidence: high
-// todos: 0
-// notes: Task 5.5 wired the real RegistryLaunchStopper over mainframe-launch's
-// LaunchRegistry (get(projectId, path) → if Some, stop_all()), matching the TS
-// `setStopLaunchProcesses` closure exactly. NoopLaunchStopper stays as the
-// route-unit/test fallback (→ None, the `if (m)` guard with no manager).
-// notifications / per-chat todos / push are ported + wired in chat_deps.rs.

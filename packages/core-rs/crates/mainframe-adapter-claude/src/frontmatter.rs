@@ -156,11 +156,3 @@ mod tests {
         assert_eq!(out, "---\nname: PDF\ndescription: d\n---\n\n# Body");
     }
 }
-
-// PORT STATUS: src/plugins/builtin/claude/frontmatter.ts (30 lines)
-// confidence: high
-// todos: 0
-// notes: parseFrontmatter returns a Frontmatter struct (attributes map + body).
-// buildFrontmatter takes an ordered &[(&str,&str)] instead of a Record so the
-// emitted key order (name, description) matches the TS Object.entries order —
-// HashMap has no insertion order. Sole caller is skills::create_skill.

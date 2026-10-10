@@ -119,8 +119,3 @@ pub(super) async fn build(
         started: std::sync::atomic::AtomicBool::new(false),
     }))
 }
-
-// PORT STATUS: packages/core/src/automations/service.ts (constructor)
-// confidence: high
-// todos: 0
-// notes: —

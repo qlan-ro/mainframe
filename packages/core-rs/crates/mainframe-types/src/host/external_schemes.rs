@@ -1,5 +1,3 @@
-//! Ported from `packages/types/src/host/external-schemes.ts`.
-//!
 //! The single canonical allowlist of URL schemes safe to forward to the OS opener.
 //! THIS constant is the source of truth. All hosts (Electron main process, Tauri
 //! Rust shell) must derive or mirror this set so both behave 1:1.
@@ -87,10 +85,3 @@ mod tests {
         assert!(ALLOWED_EXTERNAL_SCHEMES.iter().all(|s| !s.ends_with(':')));
     }
 }
-
-// PORT STATUS: packages/types/src/host/external-schemes.ts (30 lines)
-// confidence: high
-// todos: 0
-// notes: pure const + predicate; ported assertion-for-assertion. `ssh://host` and
-// `data:text/html,x` correctly reject because those schemes are not in the list
-// (matches the TS: prefix check only fires for allowlisted schemes).

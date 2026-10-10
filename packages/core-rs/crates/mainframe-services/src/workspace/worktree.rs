@@ -1,5 +1,3 @@
-//! Ported from `src/workspace/worktree.ts`.
-
 use std::collections::HashMap;
 use std::path::Path;
 use std::time::Duration;
@@ -460,19 +458,3 @@ mod tests {
         assert!(!branch_exists(repo, "does-not-exist").await);
     }
 }
-
-// PORT STATUS: src/workspace/worktree.ts (150 lines, incl. #424 recovery helpers)
-// confidence: medium
-// todos: 1
-// notes: parseWorktreeList / isWorktreePresent are exact ports (isWorktreePresent
-// keeps the intentional sync existsSync via Path::exists). exec_git is a LOCAL
-// faithful port of exec-git.ts (mainframe_git::exec_git §2.4 not yet ported —
-// TODO(port) marks the swap). backfill takes &ProjectsRepository (mainframe-db,
-// Rc<Connection> → !Send): the future is !Send, fine while un-spawned; a later
-// phase wraps the DB in a Send handle. has_parent mirrors the JS truthy check on
-// parentProjectId (non-null, non-empty). remove_worktree returns () (all steps
-// best-effort, swallowed like the TS). #424 degraded-recovery helpers added:
-// branch_exists (rev-parse --verify --quiet refs/heads/<b>, Err→false) and
-// add_worktree_for_branch (best-effort `worktree prune` then `worktree add path
-// branch`, no timeout). Tests ported from worktree.test.ts + a real-git
-// branch_exists check.

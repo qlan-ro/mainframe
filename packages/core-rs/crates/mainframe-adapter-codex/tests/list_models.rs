@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/codex/__tests__/list-models.test.ts`.
-//!
 //! The `mapCodexModel` mapping assertions live inline in `src/adapter.rs`; this file
 //! ports the `probes models with the configured executable path` case. The vitest
 //! version mocks `node:child_process`; the Rust port drives a real `codex app-server`

@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/messages/message-parsing.ts`.
-//!
 //! Claude-specific slash-command / attached-file / mainframe-command tag
 //! parsing. The TS source leans on regexes; the `regex` crate is not on the
 //! port allowlist (see task-progress.rs), so each pattern is matched by hand
@@ -462,17 +460,3 @@ mod tests {
         assert_eq!(out.clean_text, "keep  tail");
     }
 }
-
-// PORT STATUS: src/messages/message-parsing.ts (99 lines)
-// confidence: medium
-// todos: 0
-// notes: `regex` is not on the allowlist, so every RE is hand-rolled with the
-// same semantics: COMMAND_NAME_RE / command tag replaces (`<t>[^<]*</t>`),
-// ATTACHED_FILE_PATH_RE (`<attached_file_path\s+([^>]+?)\/?>`), the
-// IMAGE_COORDINATE_NOTE_RE fixed template, and the mainframe-command response/
-// wrapper patterns. parseRawCommand's `Array<{name}>` param is taken as the
-// command names (`&[String]`); only `.name` was read. Math.round → floor(x+0.5)
-// (positive-only path); `.toFixed(1)` → `{:.1}` (round-half-to-even may differ
-// from JS on exact .05 boundaries in 1.0..10.0 — untested edge). Only
-// stripMainframeCommandTags is covered by a ported TS test; the rest carry
-// sanity tests. IMAGE note matcher confidence medium — no TS test exercises it.

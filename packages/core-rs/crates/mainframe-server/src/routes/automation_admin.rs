@@ -171,8 +171,3 @@ pub fn router() -> Router<Arc<AppCtx>> {
 
 #[cfg(test)]
 mod automation_admin_tests;
-
-// PORT STATUS: src/server/routes/automation-admin.ts (7 endpoints, 128 lines)
-// confidence: high
-// todos: 0
-// notes: —

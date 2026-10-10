@@ -27,9 +27,3 @@ pub(crate) async fn resolve_and_validate_path(
     let full_path = tokio::fs::canonicalize(&joined).await.ok()?;
     is_within_base(&real_base, &full_path).then(|| full_path.to_string_lossy().into_owned())
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T6.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirror of mainframe-server/src/path_utils.rs (itself the port of
-//        server/routes/path-utils.ts resolveAndValidatePath).

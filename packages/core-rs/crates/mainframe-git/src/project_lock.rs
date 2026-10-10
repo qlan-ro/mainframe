@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/git/project-lock.ts`.
-//!
 //! Per-project async mutex map. The TS module chained a `Map<string,
 //! Promise<void>>` and returned a `release()` callback; the Rust port keeps one
 //! `tokio::sync::Mutex` per project path (fair → FIFO) and hands back an owned
@@ -79,12 +77,3 @@ mod tests {
         assert!(acquired.is_ok());
     }
 }
-
-// PORT STATUS: packages/core/src/git/project-lock.ts (20 lines)
-// confidence: high
-// notes: The TS FIFO promise-chain becomes one tokio::sync::Mutex per path
-// (tokio's Mutex is fair, so FIFO holds). `release()` -> dropping the returned
-// OwnedMutexGuard. State: OnceLock<DashMap<String, Arc<Mutex<()>>>> per
-// CONCURRENCY.tsv (SHARED_MAP; module-level singleton, no static mut). Key is
-// String (the raw project path, matching the TS Map<string> key) rather than the
-// tsv's suggested PathBuf, to avoid path normalization diverging from TS keying.

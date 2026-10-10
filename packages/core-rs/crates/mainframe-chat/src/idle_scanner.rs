@@ -319,22 +319,3 @@ mod tests {
         assert_eq!(offloader.calls.lock().unwrap().clone(), vec!["idle-chat"]);
     }
 }
-
-// PORT STATUS: src/chat/idle-scanner.ts (58 lines)
-// confidence: high
-// todos: 0
-// notes: `timer`/`setInterval` → a spawned tokio interval task + JoinHandle (SINGLE_TASK,
-// notes: CONCURRENCY.tsv); `stop()` aborts. The first interval tick is skipped so the
-// notes: loop fires after one period (setInterval semantics); `unref()` has no tokio
-// notes: analogue (dropped — ordered shutdown aborts the handle). `scan()` snapshots
-// notes: the SHARED_MAP via `select_idle_candidates` (no shard guard held across an
-// notes: `.await`, rules 2-3). Injected `now` closure mirrors the TS `now = () =>
-// notes: Date.now()` seam; all three original idle-scanner test cases ported as pure
-// notes: `select_idle_candidates` checks.
-// notes: todo #178 split the bare `session.kill()` into candidate selection (here,
-// notes: pure) + a full offload re-check-and-release sequence (`idle_offload.rs`,
-// notes: `IdleOffloader` trait object) so a race between the two steps always favors
-// notes: NOT offloading a chat that woke up (AC4). Behavioral offload coverage
-// notes: (kill/cache/registry/event, permission skip, race, idempotency — AC1-5)
-// notes: lives in `chat_manager::tests::offload`, where a real `ChatManager` wires the
-// notes: real `ChatOffload` end to end.

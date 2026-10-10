@@ -1,5 +1,3 @@
-//! Ported from `src/server/ws-schemas.ts`.
-//!
 //! The wire shape of `ClientEvent` lives in `mainframe_types::events`; serde
 //! deserialization enforces the discriminated-union shape and required fields.
 //! The Zod *refinements* (min-length strings) have no serde analogue, so they
@@ -136,14 +134,3 @@ mod tests {
         ));
     }
 }
-
-// PORT STATUS: src/server/ws-schemas.ts (ClientEventSchema + refinements)
-// confidence: high
-// todos: 0
-// notes: shape enforced by `serde_json::from_value::<ClientEvent>` (the type in
-// mainframe_types::events); the Zod `.min(1)` refinements are the explicit
-// `validate()` fn (§3.1). Error strings are best-effort (the wire contract
-// freezes only `{type:'error', error:<reason>}`, not the reason text). The
-// message.send/permission.respond arms died with the legacy chat dialect
-// (todo #350) — the command-name identifier rule now lives on the facade's
-// prompt path.

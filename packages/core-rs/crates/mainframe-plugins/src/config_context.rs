@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/config-context.ts`.
-//!
 //! A namespaced key/value view over the host settings store. Keys are prefixed
 //! with `plugin:<pluginId>:`; the JSON encode/decode lives in the injected
 //! getter/setter closures (as in `context.ts`), so this module only owns the
@@ -89,11 +87,3 @@ mod tests {
         assert_eq!(all.get("theme"), Some(&Value::from("dark")));
     }
 }
-
-// PORT STATUS: src/plugins/config-context.ts
-// confidence: high
-// todos: 0
-// notes: prefix `plugin:<id>:` + a Mutex<Vec<String>> keys set backing getAll,
-// matching the TS closure-injected getSetting/setSetting split (JSON codec stays
-// in the caller's closures, as in context.ts). undefined getAll values become
-// Value::Null (JS keeps the key with `undefined`).

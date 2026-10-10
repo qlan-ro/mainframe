@@ -1,5 +1,3 @@
-//! Translated from `packages/core/src/__tests__/lsp/lsp-proxy.test.ts`.
-
 use super::*;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc;

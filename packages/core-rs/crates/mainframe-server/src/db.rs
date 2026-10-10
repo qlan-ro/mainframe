@@ -175,16 +175,3 @@ mod tests {
         assert!(result.is_err());
     }
 }
-
-// PORT STATUS: (new — realizes CONCURRENCY.tsv class DB for db/index.ts)
-// confidence: high
-// todos: 0
-// notes: DatabaseManager is !Send (Rc<Connection>); this actor confines it to a
-// dedicated thread and serializes access, matching better-sqlite3's
-// single-threaded semantics and the tsv's "single connection / spawn_blocking"
-// directive. `mpsc::UnboundedSender` is Send+Sync+Clone so `Db` (and therefore
-// AppCtx) is Send+Sync. Worker-death folds into DbError so route handlers keep a
-// single `?`. Open errors surface synchronously via a std oneshot. Task 4.6c adds
-// `call_blocking` (the SYNC-DB BRIDGE): the synchronous ChatManagerDeps accessors
-// dispatch onto this same actor thread and block on a std::sync::mpsc — one WAL
-// connection, no second writer, faithful to better-sqlite3's blocking semantics.

@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/context-files.ts`.
-//!
 //! Collects the Claude context files (`CLAUDE.md`/`AGENTS.md`) that apply to a
 //! session — user-global under `~/.claude` (as ABSOLUTE paths so the daemon's
 //! GET /files route whitelists them and can tell a global file from a same-named
@@ -140,15 +138,3 @@ mod tests {
         assert!(files.project.is_empty());
     }
 }
-
-// PORT STATUS: src/plugins/builtin/claude/context-files.ts (53 lines)
-// confidence: high
-// todos: 0
-// notes: Main catch-up (#432). Global files now carry the ABSOLUTE ~/.claude path
-// notes: (was a bare name in the old inline session.rs version) so GET /files can
-// notes: whitelist + disambiguate them. home_dir injectable (Option<&Path>, None →
-// notes: dirs::home_dir) for testability. Sync std::fs mirrors the TS existsSync/
-// notes: readFileSync (this is a sync getContextFiles path, as in session.rs).
-// notes: Returns mainframe_adapter_api::ContextFiles (the { global, project } shape).
-// notes: context-files.test.ts translated (relative path assertion built with
-// notes: Path::join so it matches the platform separator).

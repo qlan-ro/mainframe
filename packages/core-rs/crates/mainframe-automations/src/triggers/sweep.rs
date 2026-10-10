@@ -118,9 +118,3 @@ impl ScheduleSweeper {
         })
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T8.2), not a TS port
-// confidence: high
-// todos: 0
-// notes: replaces Node's CronScheduler + trigger_state rows with derived
-//        latest-occurrence math over the runs table's unique index.

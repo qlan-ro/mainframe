@@ -1,5 +1,3 @@
-//! Port target for `packages/core/src/plugins/builtin/codex/plan-mode-handler.ts`.
-//!
 //! The `PlanModeActionHandler`/`PlanActionContext` traits and the `Adapter::
 //! create_plan_mode_handler` seam this handler needs now all exist
 //! (`mainframe_adapter_api::plan_mode_actions`, wired for Claude in
@@ -25,14 +23,3 @@ impl CodexPlanModeHandler {
         Self
     }
 }
-
-// PORT STATUS: src/plugins/builtin/codex/plan-mode-handler.ts (84 lines)
-// confidence: low
-// todos: 1
-// notes: structural blocker (the PlanModeActionHandler/PlanActionContext traits and
-// notes: the Adapter::create_plan_mode_handler seam) is resolved — both now exist and
-// notes: are exercised by mainframe-chat's Claude wiring. Remaining gap is purely
-// notes: behavioral: onApprove/onApproveAndClearContext/onReject/onRevise + the
-// notes: plan-mode-handler.test.ts port. Ships as a unit struct returned by the
-// notes: inherent CodexAdapter::create_plan_mode_handler; the Adapter trait override
-// notes: stays on its default (None) until the four methods land. TODO(port).

@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/event-bus.ts`.
-//!
 //! Two channels per plugin: an in-process emitter for the plugin's own
 //! `emit`/`on`/`onChatEvent` topics, and a subscription to the sanitized public
 //! daemon bus (`onDaemonEvent`). Public events are namespaced under
@@ -159,15 +157,3 @@ mod tests {
         assert_eq!(PUBLIC_DAEMON_EVENT_PREFIX, "plugin:public:");
     }
 }
-
-// PORT STATUS: src/plugins/event-bus.ts
-// confidence: medium
-// todos: 1
-// notes: internal EventEmitter → Mutex<HashMap<topic, Vec<handler>>> with
-// synchronous emit dispatch (Node EventEmitter semantics). onDaemonEvent
-// subscribes to a shared PublicDaemonBus (broadcast) and forwards on a spawned
-// task. No builtin uses the bus yet (todos never touches ctx.events), so this is
-// wired but exercised only by the emit/on unit test. TODO(port): the
-// `plugin:public:<name>` topic filtering collapses into the bus carrying only
-// sanitized public events; revisit if per-event subscription granularity is
-// needed when ChatManager starts publishing.

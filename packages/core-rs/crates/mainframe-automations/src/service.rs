@@ -307,12 +307,3 @@ mod credentials_accessor_tests;
 mod registration_tests;
 #[cfg(test)]
 mod service_tests;
-
-// PORT STATUS: packages/core/src/automations/service.ts (facade surface; arm/
-// disarm is derived state here, so create/update/setEnabled need no trigger
-// re-arming)
-// confidence: high
-// todos: 0
-// notes: start()/reconcile/sweep arming live in service/start.rs; `tasks` is
-//        the JoinHandle holder stop() drains; `agent_verb` re-attaches watches
-//        via resume_run_watches during reconcile.

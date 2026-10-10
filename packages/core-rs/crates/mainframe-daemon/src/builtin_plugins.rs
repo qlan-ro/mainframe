@@ -100,13 +100,3 @@ async fn noop_activate(
 ) -> Result<Router<()>, PluginError> {
     Ok(Router::new())
 }
-
-// PORT STATUS: src/index.ts (the three loadBuiltin calls) + builtin manifests
-// confidence: medium
-// todos: 0
-// notes: claude/codex/todos loaded in index.ts order. claude/codex activate is a
-// no-op (adapter registered directly on the AdapterRegistry in main — reconciles the
-// "adapters stay on the AdapterRegistry" decision with the GET /api/plugins listing
-// expectation). todos loads its ported activate + gets its storage dir created
-// (mkdirSync parity). Manifests are verbatim copies of the TS manifest.json (no
-// cross-crate include_str! for the READ-ONLY TS source).

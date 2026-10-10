@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/messages/message-grouping.ts`.
-//!
 //! Merges consecutive assistant/tool_use messages into a single turn and
 //! attaches tool_result data so assistant-ui can show both invocation and
 //! result.
@@ -242,13 +240,3 @@ mod tests {
         );
     }
 }
-
-// PORT STATUS: src/messages/message-grouping.ts (73 lines)
-// confidence: high
-// todos: 0
-// notes: GroupedMessage models the TS `extends ChatMessage { _toolResults? }` as
-// a { base, tool_results } struct (the `_`-prefixed field is transient, never
-// serialized). CRATE-SPLIT: see the module-doc note — this neutral-pipeline file
-// likely belongs in mainframe-display (§2.5) but was scaffolded here; a cycle
-// blocks display_pipeline from importing it. No dedicated TS test exists; sanity
-// tests cover merge/attach/dedupe/turn-duration.

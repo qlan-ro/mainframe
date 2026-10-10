@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/background-tasks/lsof.ts`.
-
 use std::future::Future;
 use std::pin::Pin;
 use std::process::Stdio;
@@ -359,15 +357,3 @@ mod tests {
         set_logger_for_tests(default_logger());
     }
 }
-
-// PORT STATUS: src/background-tasks/lsof.ts (90 lines)
-// confidence: high
-// todos: 0
-// notes: module-level `_exec`/`_log`/`warnedMissing` seams → OnceLock<Mutex<Seam>>
-// (no static mut / lazy_static). `__setExecForTests`/`__setLoggerForTests` →
-// set_exec_for_tests/set_logger_for_tests (both reset warned_missing, as TS).
-// Real `_exec` runs the exact `lsof -F pan -- <path>` argv with a 2s timeout
-// (kill_on_drop). Seam lock is never held across `.await`. lsofWritersDetailed's
-// `{ok,pids}|{ok,error}` union → Result<Vec<u32>,String>. Tests serialize on the
-// crate seam guard (parallel test threads share the global). All lsof.test.ts
-// cases translated, incl. warn-once.

@@ -1,5 +1,3 @@
-//! Ported (RELOCATED) from `packages/core/src/chat/plan-mode-actions.ts`.
-//!
 //! ORCHESTRATOR RELOCATION (crate-map amendment recorded in PORTING.md §2.10):
 //! the TS `PlanModeActionHandler` / `PlanActionContext` pair lived in the `chat`
 //! module, which forced an adapter→chat layering inversion (the claude/codex
@@ -145,13 +143,3 @@ pub trait PlanModeActionHandler: Send + Sync {
         context: &'a dyn PlanActionContext,
     ) -> BoxFuture<'a, Result<(), AdapterError>>;
 }
-
-// PORT STATUS: src/chat/plan-mode-actions.ts (43 lines) — RELOCATED to mainframe-adapter-api
-// confidence: high
-// todos: 0
-// notes: Orchestrator-mandated relocation breaking the adapter→chat inversion.
-// notes: TS interface fields (chat/db/messages/permissions/active.session) become
-// notes: PlanActionContext trait methods so this crate needs no chat/db dep;
-// notes: mainframe-chat implements the trait. PlanModeActionHandler async methods
-// notes: return BoxFuture (no async-trait in the workspace). Crate-map row
-// notes: chat/plan-mode-actions.ts amended in PORTING.md §2.10 to point here.

@@ -157,11 +157,3 @@ fn reason_str(reason: ChatUpdatedReason) -> &'static str {
         ChatUpdatedReason::Interrupted => "interrupted",
     }
 }
-
-// PORT STATUS: packages/core/src/automations/service.ts onDaemonEvent +
-// verbs/notify.ts push path
-// confidence: high
-// todos: 0
-// notes: the source keeps its own channel so subscribers created later
-//        (start(), T10.1) miss nothing that matters — bindings are derived
-//        per event, no arming state.

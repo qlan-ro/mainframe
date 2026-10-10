@@ -56,13 +56,3 @@ pub mod tunnel;
 pub mod tunnel_ports;
 pub mod worktree;
 pub mod worktree_offer;
-
-// PORT STATUS: src/server/routes/index.ts (mount table)
-// confidence: high
-// todos: 1
-// notes: `health` is a live handler (mounted directly in http.rs); the other 12
-// are EMPTY `router()` stubs for the Phase-3 route agents. Phase 4/5 route files
-// (chats, chat-commands, context, worktree, external-sessions, background-tasks,
-// adapters, agents, skills, lsp-routes, tunnel, workflows, workflow-admin,
-// launch) are intentionally absent — added when those phases land. `suggestions`
-// landed as a Phase-6 gap fix (churn + TODO-scan starting-point suggestions).

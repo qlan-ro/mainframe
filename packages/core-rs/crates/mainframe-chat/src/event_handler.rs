@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/chat/event-handler.ts`.
-
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;

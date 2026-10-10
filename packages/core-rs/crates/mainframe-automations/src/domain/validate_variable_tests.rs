@@ -190,9 +190,3 @@ fn a_name_claimed_later_in_the_enclosing_region_still_clashes() {
         "an enclosing region's names reach into the body"
     );
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-25-todo-234-automations-editor-plan.md T5/T6), not a TS port
-// confidence: high
-// todos: 0
-// notes: messages mirror automation-domain/validate.ts; the namespace they
-//        check against is tokens::variables::build_variable_namespace.

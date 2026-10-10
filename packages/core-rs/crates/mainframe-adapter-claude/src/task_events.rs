@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/task-events.ts`.
-//!
 //! Bridges the CLI's `task_started` / `task_notification` system events to the
 //! `BackgroundTaskTracker`. A 60s TTL cache maps a Bash/Monitor `tool_use_id` to
 //! its `{ toolName, command }` so the tracker entry carries the real command.
@@ -686,23 +684,3 @@ mod tests {
         assert!(path.ends_with("/-Users-x-proj/sess-uuid/tasks/tkid01.output"));
     }
 }
-
-// PORT STATUS: src/plugins/builtin/claude/task-events.ts (147 lines)
-// confidence: high
-// todos: 0
-// notes: Main catch-up (#425): map_task_kind(task_type, has_bash_metadata) — prefix-
-// notes: tolerant (contains bash/agent|teammate/workflow → kind, else Other; missing
-// notes: task_type → Bash iff a Bash/Monitor tool_use was captured, else Other). The
-// notes: TaskSeed now carries `kind` (added in mainframe-background-tasks::tracker,
-// notes: cluster F — see blocker if that field is absent). handle_task_updated ends the
-// notes: task ONLY on a terminal status (completed/failed/stopped guard mirrors the
-// notes: KNOWN_STATUSES.has check), with empty output/summary + None usage; the tracker
-// notes: dedups a prior notification. task-events.test.ts kind-mapping + handleTaskUpdated
-// notes: blocks translated assertion-for-assertion.
-// notes(orig): metadata + evictionTimers held behind one Arc<Mutex<Inner>> so the 60s
-// notes: eviction sleep task can delete its own entry (CONCURRENCY.tsv 91-92
-// notes: SINGLE_TASK; the shared inner is a session-local decoupling, not a
-// notes: cross-session lock). spoolRoot() PathBuf is stringified for the same
-// notes: `${spoolRoot()}/...` path. task-events.test.ts ported: the "threads
-// notes: deterministic outputPath" spy assertion reads the real tracker's stored
-// notes: output_path instead of spying tracker.start (same behavioral fact).

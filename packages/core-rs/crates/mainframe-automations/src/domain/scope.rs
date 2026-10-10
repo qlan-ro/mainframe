@@ -291,9 +291,3 @@ pub(crate) fn step_refs(step: &Step) -> Vec<&TokenRef> {
         Step::Loop(s) => s.conditions.iter().map(|c| &c.token).collect(),
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T1.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: the contract §5 output table lives in catalog.rs; scope semantics
-//        mirror Node's token-scope.ts (If leaks, Repeat isolates).

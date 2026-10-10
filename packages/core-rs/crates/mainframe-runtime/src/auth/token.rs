@@ -1,5 +1,3 @@
-//! Ported from `src/auth/token.ts`.
-//!
 //! WIRE-CRITICAL: a device token minted by the Node daemon must validate here
 //! and vice versa. The payload string, the HMAC-SHA256 input bytes, and the
 //! base64url encoding are reproduced exactly. `payload` is
@@ -283,14 +281,3 @@ mod tests {
         assert_eq!(sig, super::sign("test-secret", payload_b64.as_bytes()));
     }
 }
-
-// PORT STATUS: src/auth/token.ts (39 lines)
-// confidence: high
-// todos: 0
-// notes: WIRE-VERIFIED against Node vectors (createHmac + base64url) hardcoded in
-// tests — Node-minted tokens validate here; Rust-minted signatures reproduce
-// Node's construction. base64url is hand-rolled (no `base64` crate in the
-// allowlist) and vector-checked against Buffer.toString('base64url'). iat uses
-// Utc::now().timestamp_millis() (== Date.now()). timingSafeEqual maps to a
-// length-checked constant-time compare. `sign` returns "" on the unreachable
-// HMAC InvalidLength arm (no unwrap/expect outside tests).

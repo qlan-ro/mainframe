@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/chat/attachment-processor.ts`.
-//!
 //! Pure transform: already-fetched attachments → the `ProcessedAttachments`
 //! the sendMessage seam feeds to the adapter. Images become inline `image`
 //! content (plus `ImageInput`s for adapters that take images out-of-band);

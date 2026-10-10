@@ -1,5 +1,3 @@
-//! Translated from `packages/core/src/__tests__/lsp/lsp-manager.test.ts`.
-//!
 //! The TS suite mocks `child_process.spawn` and `resolveCommand`. Here the
 //! resolver is a fake pointing at a real `cat` child (reads stdin, echoes stdout,
 //! stays alive until SIGTERM) — the parity of the mocked long-lived process. Idle

@@ -101,8 +101,3 @@ fn hook_id_of(definition: &AutomationDefinition, trigger_id: &str) -> Option<Str
             _ => None,
         })
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-25-todo-234-automations-editor-plan.md T7), not a TS port
-// confidence: high
-// todos: 0
-// notes: Node has no registration API; its editor showed the hook id raw.

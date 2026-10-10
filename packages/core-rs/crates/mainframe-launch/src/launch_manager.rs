@@ -1,5 +1,3 @@
-//! Ported from `src/launch/launch-manager.ts`.
-//!
 //! Spawns a user launch process per config name, streams its stdout/stderr as
 //! `launch.output` events, waits for its TCP port before declaring `running`,
 //! and tears it down (process-group SIGTERM → SIGKILL) on stop. Status/output
@@ -1516,27 +1514,3 @@ mod tests {
         crate::process::sweep::default_kill(pid, "SIGKILL", true);
     }
 }
-
-// PORT STATUS: src/launch/launch-manager.ts (405 lines)
-// confidence: medium
-// todos: 0
-// notes: tokio::process spawn (detached: process_group(0)) + two chunk-reader
-// tasks (buffer + emit launch.output; stderr also keeps a 20-line tail for the
-// exit log) + a wait task that runs the exit handler (terminal status guarded by
-// `!= stopped`, state update before emit, map delete, tunnel teardown, exit
-// signal). Port readiness = TCP connect (PORTING.md §2.12) replacing the TS HTTP
-// HEAD; a `watch<bool>` replaces the exit-promise so stop() can await
-// SIGTERM→(5s)→SIGKILL. Group kill shells out to `kill -<SIG> -<pid>` with a
-// single-pid fallback (house style; no libc/nix). clean_env threads an env
-// snapshot (no set_var) so the MAINFRAME_ORIG_PATH contract is a pure unit test.
-// All launch-manager.test.ts cases (both files) translated with real /bin/sh
-// processes and a real ephemeral-port listener; the cleanEnv spawn-arg assertions
-// became direct clean_env unit tests.
-// #431 child-reaping: ctor gains child_registry + injectable read_process_command
-// (ReadCommandFn); recordSpawn records the LIVE `ps` command line (post-`#!` argv)
-// + realpath cwd, awaited after spawn-confirm and BEFORE the port wait;
-// forgetSpawn fires on exit (wait task). Relative-executable resolution now
-// lexically normalizes (`.`/`..`) to match Node `path.resolve` so the reap
-// command matches. launch-manager-tracking.test.ts + launch-reap-integration.test.ts
-// ported with real processes (the TS 'error'-event forget maps onto the exit path,
-// since a Rust spawn either yields a pid or fails without one).

@@ -11,10 +11,3 @@ pub trait ProjectRegistry: Send + Sync {
     /// fallback chain ends at the daemon cwd (Node parity).
     fn resolve_project_root<'a>(&'a self, project_id: Option<&'a str>) -> BoxFuture<'a, String>;
 }
-
-// PORT STATUS: packages/core/src/automations/service.ts resolveProjectRoot (7 lines)
-// confidence: high
-// todos: 0
-// notes: worktree-aware run-in stays unwired on BOTH engines (Node never
-//        populates ActionCtx.worktreePath); run_command's `worktree` mode
-//        fails with its clear in-action error until a later pass wires it.

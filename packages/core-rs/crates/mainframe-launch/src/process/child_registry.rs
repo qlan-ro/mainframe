@@ -1,5 +1,3 @@
-//! Ported from `src/process/child-registry.ts`.
-//!
 //! A persistent pidfile of daemon-spawned children (tunnels + launch configs),
 //! written at spawn and pruned on stop. It survives daemon crashes so the next
 //! startup sweep (`process::sweep`) can reap children this daemon leaked. Writes
@@ -405,16 +403,3 @@ mod tests {
         );
     }
 }
-
-// PORT STATUS: src/process/child-registry.ts (147 lines)
-// confidence: high
-// todos: 0
-// notes: ManagedChildEntry/ManagedChildKind serde structs (camelCase; kind
-// lowercase; cwd serialized as explicit null per the round-trip test). The TS
-// tail-promise serialization becomes a tokio::sync::Mutex held across each
-// read-modify-write; atomic write = tmp (pid-suffixed) + rename via tokio::fs.
-// Drop-on-read of malformed/stale entries = per-element serde_json::from_value
-// (missing required non-Option fields → dropped). ChildRegistryPort is
-// object-safe via manually boxed BoxFuture (no async-trait dep); methods are
-// infallible — FileChildRegistry logs+swallows read/write errors (the TS callers
-// all .catch()-and-log, same effect). All child-registry.test.ts cases ported.

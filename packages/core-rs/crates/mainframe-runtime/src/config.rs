@@ -1,5 +1,3 @@
-//! Ported from `src/config.ts`.
-//!
 //! `config.json` load/merge/persist under `$MAINFRAME_DATA_DIR` (default
 //! `~/.mainframe`), env overrides, and the 32-byte random-hex auth secret.
 //!
@@ -365,16 +363,3 @@ mod tests {
         assert_ne!(secret, generate_auth_secret());
     }
 }
-
-// PORT STATUS: src/config.ts (86 lines)
-// confidence: high
-// todos: 0
-// notes: full port — config.json load/merge/persist, env overrides, and the
-// 32-byte hex auth secret. `resolve_port`/`resolve_port_from` are scaffold
-// conveniences (no TS counterpart) kept because mainframe-daemon::main consumes
-// them; they overlap `get_config().port`. Deviations documented at module top:
-// `port` is `u16` (rejects out-of-range instead of storing); env reads are ported
-// verbatim (safe in Rust); `ensureAuthSecret` persists to config.json and never
-// mutates env, so no env-state threading is needed. save/merge are exercised
-// with tempfile dirs (no `set_var`); the env-reading `get_config`/`save_config`/
-// `ensure_auth_secret` wrappers are thin shells over the tested pure functions.

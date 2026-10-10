@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/manager.ts`.
-//!
 //! Builtin plugin registry + the `/api/plugins` listing surface. v1 is
 //! builtin-only (§2.9/§5): the on-disk `loadAll`/`loadPlugin` discovery path and
 //! the `_require` JS loader are dropped; only `load_builtin` remains. The
@@ -325,19 +323,6 @@ async fn plugin_detail(State(inner): State<Arc<ManagerInner>>, Path(id): Path<St
             .into_response(),
     }
 }
-
-// PORT STATUS: src/plugins/manager.ts
-// confidence: medium
-// todos: 1
-// notes: builtin-only (§2.9/§5) — loadAll/loadPlugin disk discovery + the
-// `_require` JS loader are dropped; only load_builtin remains. panelEvents →
-// DashMap<pluginId, Vec<(panelId, event)>> (insertion-ordered, mirroring the TS
-// Map<panelId, event>), actionEvents → DashMap<pluginId, Vec<event>>, updated by a
-// tracking emit sink (kept off the LoadedPlugin entries to avoid a ctx↔sink Arc
-// cycle). The insertion-ordered Vec (not a HashMap) makes the legacy `.panel`
-// (= panels[0]) and `.panels[]` deterministic per launch. The listing routes
-// (GET / and GET /:id) + per-plugin `/<id>` nesting mirror the Express router
-// surface. TODO(port): external/on-disk plugin loading dropped in v1.
 
 #[cfg(test)]
 mod tests {
