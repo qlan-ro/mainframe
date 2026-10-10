@@ -2,7 +2,6 @@
 //! short chat title. Lives in this crate so the owning adapter generates its own
 //! titles (#430).
 
-use std::process::Stdio;
 use std::time::Duration;
 
 use mainframe_adapter_api::{AdapterError, finalize_title};
@@ -21,7 +20,8 @@ pub async fn generate_claude_title(
         "Generate a short title (2-5 words) for a coding chat that starts with this message.\nRules: Title case. No quotes. No punctuation. Be specific about the task.\nExamples: Auth Refactor, Fix Login Bug, Add Dark Mode Toggle, Optimize DB Queries\n\nMessage: {message}\n\nTitle:"
     );
 
-    let run = Command::new(binary)
+    let mut command = Command::new(binary);
+    command
         .args([
             "-p",
             &prompt,
@@ -40,23 +40,23 @@ pub async fn generate_claude_title(
         // PATH is threaded explicitly (edition-2024 forbids mutating process env)
         // so packaged builds find `claude`.
         .env("PATH", path)
-        .env("NO_COLOR", "1")
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true)
-        .output();
+        .env("NO_COLOR", "1");
 
-    let output = match tokio::time::timeout(Duration::from_millis(TITLE_TIMEOUT_MS), run).await {
-        Ok(res) => res.map_err(|err| {
-            AdapterError::Message(format!("failed to spawn title binary {binary}: {err}"))
-        })?,
-        Err(_) => {
-            return Err(AdapterError::Message(
-                "claude title generation timed out".into(),
-            ));
+    let output = mainframe_runtime::process::run_captured(
+        command,
+        Some(Duration::from_millis(TITLE_TIMEOUT_MS)),
+    )
+    .await
+    .map_err(|error| match error {
+        mainframe_runtime::process::ExecError::Timeout => {
+            AdapterError::Message("claude title generation timed out".into())
         }
-    };
+        mainframe_runtime::process::ExecError::Spawn(error)
+        | mainframe_runtime::process::ExecError::Io(error) => {
+            AdapterError::Message(format!("failed to spawn title binary {binary}: {error}"))
+        }
+        error => AdapterError::Message(error.to_string()),
+    })?;
 
     interpret_output(output, binary)
 }
