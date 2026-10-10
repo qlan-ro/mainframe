@@ -41,16 +41,16 @@ impl PluginConfig for PluginConfigImpl {
     }
 
     fn set(&self, key: &str, value: Value) {
-        if let Ok(mut keys) = self.keys.lock()
-            && !keys.iter().any(|k| k == key)
-        {
+        let mut keys = self.keys.lock().unwrap_or_else(|e| e.into_inner());
+        if !keys.iter().any(|k| k == key) {
             keys.push(key.to_string());
         }
+        drop(keys);
         (self.set_setting)(&format!("{}{}", self.prefix, key), value);
     }
 
     fn get_all(&self) -> Map<String, Value> {
-        let keys = self.keys.lock().map(|k| k.clone()).unwrap_or_default();
+        let keys = self.keys.lock().unwrap_or_else(|e| e.into_inner()).clone();
         keys.into_iter()
             .map(|k| {
                 let value = self.get(&k).unwrap_or(Value::Null);

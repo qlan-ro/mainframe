@@ -39,9 +39,10 @@ pub fn create_plugin_ui_context(
 impl PluginUi for UiContextImpl {
     fn add_panel(&self, zone: UiZone, label: &str, icon: Option<&str>) -> String {
         let panel_id = nanoid::nanoid!();
-        if let Ok(mut ids) = self.active_panel_ids.lock() {
-            ids.insert(panel_id.clone());
-        }
+        self.active_panel_ids
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(panel_id.clone());
         (self.emit)(DaemonEvent::PluginPanelRegistered {
             plugin_id: self.plugin_id.clone(),
             panel_id: panel_id.clone(),
@@ -55,9 +56,10 @@ impl PluginUi for UiContextImpl {
     fn remove_panel(&self, id: Option<&str>) {
         match id {
             Some(id) => {
-                if let Ok(mut ids) = self.active_panel_ids.lock() {
-                    ids.remove(id);
-                }
+                self.active_panel_ids
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .remove(id);
                 (self.emit)(DaemonEvent::PluginPanelUnregistered {
                     plugin_id: self.plugin_id.clone(),
                     panel_id: Some(id.to_string()),
@@ -68,17 +70,20 @@ impl PluginUi for UiContextImpl {
                 let ids: Vec<String> = self
                     .active_panel_ids
                     .lock()
-                    .map(|guard| guard.iter().cloned().collect())
-                    .unwrap_or_default();
+                    .unwrap_or_else(|e| e.into_inner())
+                    .iter()
+                    .cloned()
+                    .collect();
                 for panel_id in ids {
                     (self.emit)(DaemonEvent::PluginPanelUnregistered {
                         plugin_id: self.plugin_id.clone(),
                         panel_id: Some(panel_id),
                     });
                 }
-                if let Ok(mut guard) = self.active_panel_ids.lock() {
-                    guard.clear();
-                }
+                self.active_panel_ids
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clear();
             }
         }
     }
@@ -154,6 +159,37 @@ mod tests {
             level: Some("success".into()),
         });
         assert!(seen.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn panel_registration_survives_a_poisoned_lock() {
+        let (seen, emit) = sink();
+        let ui = create_plugin_ui_context("todos", emit, None);
+        std::thread::scope(|scope| {
+            assert!(
+                scope
+                    .spawn(|| {
+                        let _guard = ui.active_panel_ids.lock().unwrap();
+                        panic!("poison panel registry");
+                    })
+                    .join()
+                    .is_err()
+            );
+        });
+
+        let panel = ui.add_panel(UiZone::Fullview, "Tasks", None);
+        assert!(
+            ui.active_panel_ids
+                .lock()
+                .unwrap_err()
+                .into_inner()
+                .contains(&panel)
+        );
+        ui.remove_panel(None);
+        assert!(seen.lock().unwrap().iter().any(|event| matches!(
+            event,
+            DaemonEvent::PluginPanelUnregistered { panel_id: Some(id), .. } if id == &panel
+        )));
     }
 }
 

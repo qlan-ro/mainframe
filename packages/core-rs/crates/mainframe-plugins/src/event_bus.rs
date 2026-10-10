@@ -77,7 +77,9 @@ impl PluginEventBusImpl {
         let handlers = self
             .internal
             .lock()
-            .map(|map| map.get(topic).cloned().unwrap_or_default())
+            .unwrap_or_else(|e| e.into_inner())
+            .get(topic)
+            .cloned()
             .unwrap_or_default();
         for handler in handlers {
             handler(payload.clone());
@@ -85,9 +87,12 @@ impl PluginEventBusImpl {
     }
 
     fn register(&self, topic: String, handler: InternalHandler) {
-        if let Ok(mut map) = self.internal.lock() {
-            map.entry(topic).or_default().push(handler);
-        }
+        self.internal
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .entry(topic)
+            .or_default()
+            .push(handler);
     }
 }
 

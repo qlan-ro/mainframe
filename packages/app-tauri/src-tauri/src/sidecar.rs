@@ -37,13 +37,16 @@ impl DaemonHandle {
     }
 
     pub fn kill(&self) {
-        if let Ok(mut guard) = self.child.lock() {
-            // take() empties the slot so the exit watcher knows this death was
-            // intentional; wait() reaps the child (no <defunct> zombie).
-            if let Some(mut child) = guard.take() {
-                let _ = child.kill();
-                let _ = child.wait();
-                tracing::info!("daemon sidecar killed");
+        let mut guard = self.child.lock().unwrap_or_else(|e| e.into_inner());
+        // take() empties the slot so the exit watcher knows this death was
+        // intentional; wait() reaps the child (no <defunct> zombie).
+        if let Some(mut child) = guard.take() {
+            match child.kill() {
+                Ok(()) => tracing::info!("daemon sidecar killed"),
+                Err(err) => tracing::warn!(%err, "daemon sidecar kill failed"),
+            }
+            if let Err(err) = child.wait() {
+                tracing::warn!(%err, "daemon sidecar wait failed");
             }
         }
     }
@@ -63,10 +66,7 @@ impl DaemonHandle {
             let mut on_exit = Some(on_exit);
             loop {
                 {
-                    let mut guard = match child.lock() {
-                        Ok(g) => g,
-                        Err(_) => return,
-                    };
+                    let mut guard = child.lock().unwrap_or_else(|e| e.into_inner());
                     match guard.as_mut() {
                         None => return, /* expected — killed on app exit or external daemon */
                         Some(c) => match c.try_wait() {
@@ -95,8 +95,9 @@ impl DaemonHandle {
     pub fn pid(&self) -> Option<u32> {
         self.child
             .lock()
-            .ok()
-            .and_then(|g| g.as_ref().map(|c| c.id()))
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .map(|c| c.id())
     }
 }
 
@@ -243,7 +244,8 @@ mod tests {
 
         // A sibling `node` must not satisfy the mainframe-daemon scan.
         let mut n = std::fs::File::create(dir.join("node")).unwrap();
-        n.write_all(&vec![0u8; (MIN_SIDECAR_BIN_BYTES + 1) as usize]).unwrap();
+        n.write_all(&vec![0u8; (MIN_SIDECAR_BIN_BYTES + 1) as usize])
+            .unwrap();
         assert!(find_bundled_binary_in(&dir, "mainframe-daemon").is_none());
 
         // Zero-byte placeholder ignored.
@@ -253,7 +255,8 @@ mod tests {
         // Real-sized triple binary found via the fallback.
         let mut f =
             std::fs::File::create(dir.join("mainframe-daemon-x86_64-unknown-linux-gnu")).unwrap();
-        f.write_all(&vec![0u8; (MIN_SIDECAR_BIN_BYTES + 1) as usize]).unwrap();
+        f.write_all(&vec![0u8; (MIN_SIDECAR_BIN_BYTES + 1) as usize])
+            .unwrap();
         assert_eq!(
             find_bundled_binary_in(&dir, "mainframe-daemon"),
             Some(dir.join("mainframe-daemon-x86_64-unknown-linux-gnu"))
@@ -261,7 +264,8 @@ mod tests {
 
         // Exact base name wins over the triple sibling.
         let mut f = std::fs::File::create(dir.join("mainframe-daemon")).unwrap();
-        f.write_all(&vec![0u8; (MIN_SIDECAR_BIN_BYTES + 1) as usize]).unwrap();
+        f.write_all(&vec![0u8; (MIN_SIDECAR_BIN_BYTES + 1) as usize])
+            .unwrap();
         assert_eq!(
             find_bundled_binary_in(&dir, "mainframe-daemon"),
             Some(dir.join("mainframe-daemon"))
@@ -286,3 +290,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "sidecar_poison_tests.rs"]
+mod poison_tests;
