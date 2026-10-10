@@ -134,20 +134,6 @@ async fn poll_added(registry: &RecordingRegistry) -> ManagedChildEntry {
     panic!("no launch pid was recorded");
 }
 
-// End-to-end proof (no mocks) that the real sweep reaps a launch orphan. The
-// child is a #! shell script, so the kernel rewrites its argv — the exact case
-// a bare-executable identity guard silently fails to match.
-//
-// Ignored on Linux: `process_matches_launch` compares the recorded command line
-// against `ps -o command=`, and Linux reports a shebang child's argv differently
-// than macOS, so this real-spawn integration test doesn't reap there. The daemon
-// is macOS-verified only (Linux is a platform-matrix TODO); the
-// 325-case unit matching tests still run on Linux. Revisit the matcher against
-// real Linux `ps` output when Linux packaging is taken up.
-#[cfg_attr(
-    target_os = "linux",
-    ignore = "sweep argv-match is macOS-shaped; Linux is a packaging TODO"
-)]
 mod cases_0;
 
 mod cases_1;
