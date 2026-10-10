@@ -12,6 +12,9 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+mod step_kind;
+pub use step_kind::AutomationStepKind;
+
 /// Run statuses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

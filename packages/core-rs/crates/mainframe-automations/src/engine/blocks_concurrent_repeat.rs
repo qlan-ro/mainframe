@@ -16,13 +16,13 @@ use serde_json::{Map, Value};
 
 use crate::domain::RepeatBlock;
 use crate::error::StoreError;
-use crate::store::{AutomationCheckpoint, StepStatus};
+use crate::store::{AutomationCheckpoint, StepKind, StepStatus};
 use crate::tokens::TokenValue;
 
 use super::WalkResult;
 use super::blocks_concurrent::{Branch, run_branches};
-use super::checkpoint::{WalkFrame, set_step};
-use super::markers::{REPEAT_WATERMARK_KIND, branch_marker};
+use super::checkpoint::WalkFrame;
+use super::markers::branch_marker;
 use super::walk::{StepsResult, WalkCtx};
 
 /// Concurrency-driven Repeat: iterations still use `frame.iteration(index,
@@ -167,11 +167,10 @@ async fn mark_watermark(
     let record = ctx
         .store
         .patch_checkpoint(ctx.run_id, move |cp| {
-            set_step(
-                cp,
+            cp.set_step(
                 &marker,
                 &block_id,
-                REPEAT_WATERMARK_KIND,
+                StepKind::RepeatWatermark,
                 StepStatus::Succeeded,
                 Some(outputs),
                 None,
