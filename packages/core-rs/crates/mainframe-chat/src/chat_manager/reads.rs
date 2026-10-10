@@ -101,24 +101,26 @@ impl ChatManager {
 
     // ── in-memory cache sync + out-of-band broadcast ─────────────────────────
 
-    /// Apply a partial DB-backed update to the cached active chat (same staleness
-    /// guard as `sync_chat_tags`). Only present fields are written.
-    pub fn sync_chat_fields(&self, chat_id: &str, partial: ChatFieldsPartial) {
+    /// Apply the tuning and `pinned` fields of an already-persisted patch to the
+    /// cached active chat (same staleness guard as `sync_chat_tags`). Only
+    /// present fields are written; every other `ChatPatch` field is ignored
+    /// because the tuning/pinned PATCH routes are the only callers.
+    pub fn sync_chat_fields(&self, chat_id: &str, partial: ChatPatch) {
         let Some(cell) = self.get_active(chat_id) else {
             return;
         };
         let mut guard = cell.lock_recover();
-        if let Some(v) = partial.effort {
-            guard.chat.effort = Some(v);
+        if let Some(v) = partial.tuning.effort {
+            guard.chat.tuning.effort = Some(v);
         }
-        if let Some(v) = partial.fast {
-            guard.chat.fast = Some(v);
+        if let Some(v) = partial.tuning.fast {
+            guard.chat.tuning.fast = Some(v);
         }
-        if let Some(v) = partial.ultracode {
-            guard.chat.ultracode = Some(v);
+        if let Some(v) = partial.tuning.ultracode {
+            guard.chat.tuning.ultracode = Some(v);
         }
-        if let Some(v) = partial.adaptive_thinking {
-            guard.chat.adaptive_thinking = Some(v);
+        if let Some(v) = partial.tuning.adaptive_thinking {
+            guard.chat.tuning.adaptive_thinking = Some(v);
         }
         if let Some(v) = partial.pinned {
             guard.chat.pinned = Some(v);

@@ -47,7 +47,7 @@ impl EventHandlerDeps for TriggerDeps {
     fn strip_command_tags(&self, text: &str) -> String {
         text.to_string()
     }
-    fn chats_update(&self, _chat_id: &str, _patch: &EventChatUpdate) {}
+    fn chats_update(&self, _chat_id: &str, _patch: &ChatPatch) {}
     fn projects_get_path(&self, _project_id: &str) -> Option<String> {
         None
     }

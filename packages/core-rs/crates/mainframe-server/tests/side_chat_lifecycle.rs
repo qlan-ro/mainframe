@@ -7,8 +7,8 @@
 
 mod temporary_chat_lifecycle_support;
 
-use mainframe_db::ChatUpdate;
 use mainframe_types::chat::Chat;
+use mainframe_types::chat_patch::ChatPatch;
 
 use temporary_chat_lifecycle_support as support;
 
@@ -22,7 +22,7 @@ fn create_parent_with_worktree(h: &support::Harness, worktree_path: Option<&str>
         h.db.call_blocking(move |d| {
             d.chats.update(
                 &id,
-                &ChatUpdate {
+                &ChatPatch {
                     worktree_path: Some(Some(wt)),
                     ..Default::default()
                 },

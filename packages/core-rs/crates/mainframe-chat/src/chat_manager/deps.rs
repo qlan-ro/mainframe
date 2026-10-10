@@ -34,7 +34,7 @@ pub trait ChatManagerDeps: Send + Sync {
     /// retry stays possible.
     fn remove_scratch_dir<'a>(&'a self, scratch_path: &'a str)
     -> BoxFuture<'a, Result<(), String>>;
-    fn chats_update(&self, chat_id: &str, patch: &ChatUpdate);
+    fn chats_update(&self, chat_id: &str, patch: &ChatPatch);
     fn chats_list(&self, project_id: &str) -> Vec<Chat>;
     fn chats_list_all(&self) -> Vec<Chat>;
     /// `db.chats.listFiltered(filters)` — the fields are passed unwrapped to avoid

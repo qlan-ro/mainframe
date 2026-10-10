@@ -53,7 +53,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
             if let Some(chat) = updated {
                 self.deps.chats_update(
                     &self.chat_id,
-                    &EventChatUpdate {
+                    &ChatPatch {
                         process_state: Some(Some(ProcessState::Working)),
                         ..Default::default()
                     },
@@ -113,7 +113,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
             if let Some(chat) = updated {
                 self.deps.chats_update(
                     &self.chat_id,
-                    &EventChatUpdate {
+                    &ChatPatch {
                         plan_mode: Some(true),
                         ..Default::default()
                     },

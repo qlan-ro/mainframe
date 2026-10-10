@@ -10,14 +10,11 @@ mod runs;
 use mainframe_types::time::now_iso8601;
 
 use crate::todos;
-use crate::todos_github::schema::run_github_migrations;
 use crate::todos_github::store::{Link, Pair};
 
 /// A fresh todos+github db, migrated for both plugin surfaces.
 async fn setup() -> todos::tests::Harness {
-    let h = todos::tests::setup().await;
-    run_github_migrations(&h.ctx).await.unwrap();
-    h
+    todos::tests::setup().await
 }
 
 fn sample_link(project_id: &str) -> Link {

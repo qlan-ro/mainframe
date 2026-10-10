@@ -97,9 +97,9 @@ fn create_returns_the_row_exactly_as_get_reads_it() {
     assert_eq!(created.process_state, Some(None));
     assert_eq!(created.transcript_missing, Some(false));
     assert_eq!(created.pinned, Some(false));
-    assert_eq!(created.fast, Some(None));
-    assert_eq!(created.ultracode, Some(None));
-    assert_eq!(created.adaptive_thinking, Some(None));
+    assert_eq!(created.tuning.fast, Some(None));
+    assert_eq!(created.tuning.ultracode, Some(None));
+    assert_eq!(created.tuning.adaptive_thinking, Some(None));
     assert_eq!(created.parent_chat_id, Some(None));
     assert_eq!(created.tags, Some(vec![]));
 }
@@ -133,10 +133,10 @@ fn create_fork_returns_the_row_exactly_as_get_reads_it() {
     let fetched = db.chats.get(&fork.id).unwrap().unwrap();
     assert_eq!(fork, fetched);
 
-    assert_eq!(fork.effort, Some(Some(EffortLevel::High)));
-    assert_eq!(fork.fast, Some(None));
-    assert_eq!(fork.ultracode, Some(Some(true)));
-    assert_eq!(fork.adaptive_thinking, Some(None));
+    assert_eq!(fork.tuning.effort, Some(Some(EffortLevel::High)));
+    assert_eq!(fork.tuning.fast, Some(None));
+    assert_eq!(fork.tuning.ultracode, Some(Some(true)));
+    assert_eq!(fork.tuning.adaptive_thinking, Some(None));
     assert_eq!(fork.pinned, Some(false));
     assert_eq!(fork.mentions, Some(vec![]));
     assert_eq!(fork.process_state, Some(None));

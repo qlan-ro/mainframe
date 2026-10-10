@@ -10,25 +10,6 @@ pub struct PushOut {
     pub priority: String,
 }
 
-/// Partial `db.chats.update` patch the sink writes. `process_state` is tri-state
-/// (`None` absent, `Some(None)` explicit null, `Some(Some(x))` value).
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct EventChatUpdate {
-    pub claude_session_id: Option<String>,
-    pub session_file_path: Option<String>,
-    pub plan_mode: Option<bool>,
-    pub total_cost: Option<f64>,
-    pub total_tokens_input: Option<i64>,
-    pub total_tokens_output: Option<i64>,
-    pub last_context_tokens_input: Option<i64>,
-    /// The CLI's own context totals (`onContextUsage`) — persisted so the meter
-    /// survives reloads (#197).
-    pub last_context_total_tokens: Option<u64>,
-    pub last_context_max_tokens: Option<u64>,
-    pub process_state: Option<Option<ProcessState>>,
-    pub updated_at: Option<String>,
-}
-
 /// Injected dependencies for the event handler. Claude-specific pieces
 /// (`stripMainframeCommandTags`, the
 /// display pipeline) and the not-Send db repos are narrowed to trait methods so
@@ -52,7 +33,7 @@ pub trait EventHandlerDeps: Send + Sync {
     fn strip_command_tags(&self, text: &str) -> String;
 
     // db surface --------------------------------------------------------------
-    fn chats_update(&self, chat_id: &str, patch: &EventChatUpdate);
+    fn chats_update(&self, chat_id: &str, patch: &ChatPatch);
     fn projects_get_path(&self, project_id: &str) -> Option<String>;
     /// See `ChatManagerDeps::initial_transcript_path`.
     fn initial_transcript_path(

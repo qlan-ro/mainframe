@@ -9,6 +9,7 @@ use mainframe_runtime::sync::{FlightClaim, FlightWaiter, SingleFlight};
 use mainframe_services::settings::normalize_saved_default_model;
 use mainframe_types::adapter::{SessionOptions, SessionSpawnOptions};
 use mainframe_types::chat::{Chat, ChatMessage, ChatStatus, NewChat, ProcessState, ResolvedTuning};
+use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::settings::ExecutionMode;
 use mainframe_types::time::now_iso8601;
@@ -46,19 +47,6 @@ pub type ActiveChatRegistry = Arc<DashMap<String, Arc<Mutex<ActiveChat>>>>;
 
 use mainframe_types::time::now_ms;
 
-/// Partial `db.chats.update` patch for the lifecycle paths. Worktree fields are
-/// tri-state (`Some(None)` clears).
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct LifecycleChatUpdate {
-    pub worktree_path: Option<Option<String>>,
-    pub branch_name: Option<Option<String>>,
-    pub plan_mode: Option<bool>,
-    pub title: Option<String>,
-    pub status: Option<ChatStatus>,
-    /// The no-persistence flag write, persisted before every spawn.
-    pub vendor_session_ephemeral: Option<bool>,
-}
-
 /// Errors surfaced by lifecycle ops (strings cross the wire; copied verbatim).
 #[derive(Debug, thiserror::Error)]
 pub enum LifecycleError {
@@ -76,7 +64,7 @@ pub trait LifecycleManagerDeps: Send + Sync {
     // db ----------------------------------------------------------------------
     fn chats_get(&self, id: &str) -> Option<Chat>;
     fn chats_create(&self, new_chat: &NewChat) -> Chat;
-    fn chats_update(&self, chat_id: &str, patch: &LifecycleChatUpdate);
+    fn chats_update(&self, chat_id: &str, patch: &ChatPatch);
     fn chats_list(&self, project_id: &str) -> Vec<Chat>;
     fn projects_get_path(&self, project_id: &str) -> Option<String>;
     fn settings_get(&self, ns: &str, key: &str) -> Option<String>;
@@ -294,7 +282,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         if let (Some(wt), Some(branch)) = (worktree_path, branch_name) {
             self.deps.chats_update(
                 &chat.id,
-                &LifecycleChatUpdate {
+                &ChatPatch {
                     worktree_path: Some(Some(wt.to_string())),
                     branch_name: Some(Some(branch.to_string())),
                     ..Default::default()
@@ -362,7 +350,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             chat.plan_mode = Some(true);
             self.deps.chats_update(
                 &chat.id,
-                &LifecycleChatUpdate {
+                &ChatPatch {
                     plan_mode: Some(true),
                     ..Default::default()
                 },
@@ -645,7 +633,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         self.deps.attachment_delete_chat(chat_id).await;
         self.deps.chats_update(
             chat_id,
-            &LifecycleChatUpdate {
+            &ChatPatch {
                 status: Some(ChatStatus::Archived),
                 ..Default::default()
             },
@@ -695,7 +683,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
 
         self.deps.chats_update(
             chat_id,
-            &LifecycleChatUpdate {
+            &ChatPatch {
                 status: Some(ChatStatus::Ended),
                 ..Default::default()
             },
@@ -803,7 +791,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         };
         self.deps.chats_update(
             chat_id,
-            &LifecycleChatUpdate {
+            &ChatPatch {
                 title: Some(title),
                 ..Default::default()
             },
@@ -1354,7 +1342,7 @@ mod tests {
             *self.created_chat.lock().unwrap() = Some(new_chat.clone());
             self.chat.clone()
         }
-        fn chats_update(&self, _chat_id: &str, patch: &LifecycleChatUpdate) {
+        fn chats_update(&self, _chat_id: &str, patch: &ChatPatch) {
             if let Some(title) = &patch.title {
                 self.title_updates.lock().unwrap().push(title.clone());
             }

@@ -1,19 +1,25 @@
 //! Each plugin gets its own rusqlite connection to its `data.db`, with the
-//! same handle discipline as the main Db: the connection is confined to one
-//! dedicated OS thread and every query is serialized onto it via an mpsc
-//! actor — a private clone of the `mainframe-server` `Db` seam, scoped to a
-//! single plugin's `data.db`.
+//! same handle discipline as the daemon database: the connection is confined
+//! to one dedicated OS thread (the shared `mainframe_db::actor::SqliteActor`)
+//! and every query is serialized onto it, scoped to a single plugin's
+//! `data.db`.
 //!
 //! The generic row shape (`serde_json::Map`) is one plain JSON object per
-//! row.
+//! row. Builtin plugins can also reach the typed actor through
+//! `PluginDatabase::actor`.
 
 use std::path::Path;
+use std::time::Duration;
 
 use mainframe_adapter_api::BoxFuture;
+use mainframe_db::{
+    OpenOptions,
+    actor::{ActorError, SqliteActor},
+    open_sqlite,
+};
 use rusqlite::Connection;
 use rusqlite::types::{Value as SqlValue, ValueRef};
 use serde_json::{Map, Value};
-use tokio::sync::{mpsc, oneshot};
 
 use crate::PluginError;
 use crate::context::PluginDatabase;
@@ -21,86 +27,71 @@ use crate::context::PluginDatabase;
 /// A single database row as a JSON object (column name → value), matching the
 /// plain object better-sqlite3 hands back.
 pub type Row = Map<String, Value>;
+pub type PluginSqlite = SqliteActor<Connection, PluginError>;
 
-type Job = Box<dyn FnOnce(&Connection) + Send>;
+/// How long a statement waits on a lock held by another connection (outside
+/// writers such as the `todos` skill open `data.db` directly) before failing
+/// with `SQLITE_BUSY`. Matches the automations store.
+const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// Per-plugin SQLite handle. Holds a `Send + Sync + Clone` mpsc sender to the
-/// dedicated worker thread that owns the `Connection`.
 #[derive(Clone)]
 pub struct PluginDatabaseContext {
-    tx: mpsc::UnboundedSender<Job>,
+    actor: PluginSqlite,
+}
+
+impl From<ActorError> for PluginError {
+    fn from(error: ActorError) -> Self {
+        match error {
+            ActorError::Io(error) => Self::Io(error),
+            other => Self::Message(format!("plugin {other}")),
+        }
+    }
 }
 
 impl PluginDatabaseContext {
-    /// Opens (creating the parent dirs of) the plugin's `data.db` on a dedicated worker
-    /// thread, applying `journal_mode = WAL` and `foreign_keys = ON`. Open failures
-    /// surface synchronously.
+    /// Opens (creating the parent dirs of) the plugin's `data.db` on a
+    /// dedicated worker thread, applying `journal_mode = WAL`,
+    /// `foreign_keys = ON` and a 5 s busy timeout. Open failures surface
+    /// synchronously.
     pub fn open(db_path: &Path) -> Result<Self, PluginError> {
         if let Some(parent) = db_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
         let path = db_path.to_path_buf();
-        let (tx, mut rx) = mpsc::unbounded_channel::<Job>();
-        let (ready_tx, ready_rx) = std::sync::mpsc::channel::<Result<(), PluginError>>();
-
-        std::thread::Builder::new()
-            .name("mainframe-plugin-db".into())
-            .spawn(move || {
-                let conn = match open_connection(&path) {
-                    Ok(conn) => {
-                        if ready_tx.send(Ok(())).is_err() {
-                            return;
-                        }
-                        conn
-                    }
-                    Err(err) => {
-                        let _ = ready_tx.send(Err(err));
-                        return;
-                    }
-                };
-                while let Some(job) = rx.blocking_recv() {
-                    job(&conn);
-                }
-            })
-            .map_err(PluginError::Io)?;
-
-        match ready_rx.recv() {
-            Ok(Ok(())) => Ok(Self { tx }),
-            Ok(Err(err)) => Err(err),
-            Err(_) => Err(PluginError::Message(
-                "plugin database worker failed to start".into(),
-            )),
-        }
+        let actor = SqliteActor::spawn_named("mainframe-plugin-db", move || {
+            let options = OpenOptions {
+                busy_timeout: Some(BUSY_TIMEOUT),
+            };
+            Ok::<_, PluginError>(open_sqlite(&path, options)?)
+        })?;
+        Ok(Self { actor })
     }
 
-    /// Runs `f` on the DB thread and awaits its result. Mirrors the main Db
-    /// actor's `call`; a dropped worker folds into a `PluginError`.
+    /// Runs `f` on the DB thread and awaits its result.
     async fn call<F, R>(&self, f: F) -> Result<R, PluginError>
     where
         F: FnOnce(&Connection) -> Result<R, PluginError> + Send + 'static,
         R: Send + 'static,
     {
-        let (res_tx, res_rx) = oneshot::channel::<Result<R, PluginError>>();
-        let job: Job = Box::new(move |conn| {
-            let _ = res_tx.send(f(conn));
-        });
-        self.tx
-            .send(job)
-            .map_err(|_| PluginError::Message("plugin database worker unavailable".into()))?;
-        match res_rx.await {
-            Ok(result) => result,
-            Err(_) => Err(PluginError::Message(
-                "plugin database worker dropped the request".into(),
-            )),
-        }
+        self.actor.call(move |connection| f(connection)).await
     }
 }
 
 impl PluginDatabase for PluginDatabaseContext {
-    /// `runMigration(sql)` — `db.exec(sql)`.
+    fn actor(&self) -> Result<&PluginSqlite, PluginError> {
+        Ok(&self.actor)
+    }
+
+    /// `runMigration(sql)` — `db.exec(sql)` inside one transaction, so a
+    /// failing statement leaves none of the batch applied.
+    ///
+    /// Plugin migration SQL must therefore not contain `BEGIN`/`COMMIT`
+    /// (SQLite does not nest transactions, so the batch fails) or
+    /// `PRAGMA journal_mode` (it cannot change inside a transaction); the
+    /// connection is already opened in WAL mode.
     fn run_migration(&self, sql: String) -> BoxFuture<'_, Result<(), PluginError>> {
         Box::pin(self.call(move |conn| {
-            conn.execute_batch(&sql)?;
+            mainframe_db::migrate::run_batch(conn, &sql)?;
             Ok(())
         }))
     }
@@ -153,13 +144,6 @@ impl PluginDatabase for PluginDatabaseContext {
             }
         }))
     }
-}
-
-fn open_connection(path: &Path) -> Result<Connection, PluginError> {
-    let conn = Connection::open(path)?;
-    conn.pragma_update(None, "journal_mode", "WAL")?;
-    conn.pragma_update(None, "foreign_keys", "ON")?;
-    Ok(conn)
 }
 
 /// Convert one row to a JSON object using the prepared statement's column names,

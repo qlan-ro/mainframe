@@ -103,7 +103,7 @@ mod tests {
     }
 
     fn test_chat(temporary: bool) -> Chat {
-        let mut chat = crate::chat_deps::fallback_chat(&NewChat {
+        let mut chat = Chat::unpersisted(&NewChat {
             project_id: "p1".to_string(),
             adapter_id: "claude".to_string(),
             temporary,

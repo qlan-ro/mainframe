@@ -1,8 +1,9 @@
 //! Provider segments: switch commits, handoff rows and per-segment counters.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use mainframe_db::{ChatUpdate, DatabaseManager, SegmentResultDelta};
+use mainframe_db::{DatabaseManager, SegmentResultDelta};
 use mainframe_types::chat::{Chat, NewChat};
+use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::segment::{
     ClosedSnapshot, OpenNative, OpenSegment, PendingDeletion, SegmentKind, SwitchCommit,
     SwitchSettings,
@@ -29,7 +30,7 @@ fn set_session(db: &DatabaseManager, chat_id: &str, session: &str) {
     db.chats
         .update(
             chat_id,
-            &ChatUpdate {
+            &ChatPatch {
                 claude_session_id: Some(session.to_string()),
                 ..Default::default()
             },

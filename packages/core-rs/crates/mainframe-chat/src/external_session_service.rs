@@ -7,6 +7,7 @@ use std::time::Duration;
 use mainframe_adapter_api::{AdapterError, BoxFuture};
 use mainframe_types::adapter::{ExternalSession, ExternalSessionPage};
 use mainframe_types::chat::{Chat, ChatStatus, Project};
+use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::events::DaemonEvent;
 use tokio::task::JoinHandle;
 use tracing::{debug, info, warn};
@@ -16,15 +17,6 @@ use crate::title_generator::{derive_title_from_message, resolve_title_binary};
 
 /// 5 minutes.
 const SCAN_INTERVAL_MS: u64 = 5 * 60 * 1000;
-
-/// A partial `Chat` patch used by the import + title paths (`Partial<Chat>`).
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct ExternalChatUpdate {
-    pub claude_session_id: Option<String>,
-    pub title: Option<String>,
-    pub created_at: Option<String>,
-    pub updated_at: Option<String>,
-}
 
 /// Injected surface — the `db.*` / `adapters.*` reads the service makes.
 ///
@@ -36,7 +28,7 @@ pub trait ExternalSessionDeps: Send + Sync {
     fn get_imported_session_ids(&self, project_id: &str) -> Vec<String>;
     fn find_by_external_session_id(&self, session_id: &str, project_id: &str) -> Option<Chat>;
     fn chats_create(&self, project_id: &str, adapter_id: &str) -> Chat;
-    fn chats_update(&self, chat_id: &str, updates: &ExternalChatUpdate);
+    fn chats_update(&self, chat_id: &str, updates: &ChatPatch);
     /// `db.chats.list(projectId)` — used by the transcript-presence sweep.
     fn chats_list(&self, project_id: &str) -> Vec<Chat>;
     fn settings_get(&self, ns: &str, key: &str) -> Option<String>;
@@ -118,7 +110,7 @@ impl<D: ExternalSessionDeps + 'static> ExternalSessionService<D> {
         }
 
         let mut chat = self.deps.chats_create(project_id, adapter_id);
-        let mut updates = ExternalChatUpdate {
+        let mut updates = ChatPatch {
             claude_session_id: Some(session_id.to_string()),
             ..Default::default()
         };
@@ -365,7 +357,7 @@ async fn generate_import_title<D: ExternalSessionDeps>(
     chat.title = Some(title.clone());
     deps.chats_update(
         &chat.id,
-        &ExternalChatUpdate {
+        &ChatPatch {
             title: Some(title),
             ..Default::default()
         },
@@ -486,7 +478,7 @@ mod tests {
         fn chats_create(&self, _project_id: &str, _adapter_id: &str) -> Chat {
             test_chat("new")
         }
-        fn chats_update(&self, _chat_id: &str, updates: &ExternalChatUpdate) {
+        fn chats_update(&self, _chat_id: &str, updates: &ChatPatch) {
             if let Some(title) = &updates.title {
                 self.title_updates.lock_recover().push(title.clone());
             }

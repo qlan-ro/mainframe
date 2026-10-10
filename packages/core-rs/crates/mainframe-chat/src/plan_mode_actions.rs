@@ -3,6 +3,7 @@
 //! active-chat/message/permission state via the narrow `PlanHost` seam, so this
 //! module never names `EhDeps`/`LcDeps` and `chat_manager.rs` stays wiring-only.
 
+use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::sync::LockExt as _;
 use std::sync::{Arc, Mutex};
 
@@ -14,7 +15,7 @@ use mainframe_types::adapter::ControlResponse;
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::settings::ExecutionMode;
 
-use crate::chat_manager::{ChatManagerDeps, ChatUpdate};
+use crate::chat_manager::ChatManagerDeps;
 use crate::context_tracker::extract_latest_plan_file_from_messages;
 use crate::message_cache::MessageCache;
 use crate::permission_manager::PermissionManager;
@@ -52,7 +53,7 @@ impl PlanModeContext for ChatPlanModeCtx {
     fn chats_update(&self, chat_id: &str, permission_mode: ExecutionMode, plan_mode: bool) {
         self.deps.chats_update(
             chat_id,
-            &ChatUpdate {
+            &ChatPatch {
                 permission_mode: Some(permission_mode),
                 plan_mode: Some(plan_mode),
                 ..Default::default()
@@ -124,7 +125,7 @@ impl PlanActionContext for ChatPlanActionCtx {
         }
         self.deps.chats_update(
             &self.chat_id,
-            &ChatUpdate {
+            &ChatPatch {
                 permission_mode: patch.permission_mode,
                 plan_mode: patch.plan_mode,
                 ..Default::default()

@@ -1,8 +1,9 @@
 use mainframe_chat::chat_surface::{ChatSurface, ChatSurfaceEvent};
-use mainframe_chat::event_handler::{EventChatUpdate, EventHandlerDeps};
+use mainframe_chat::event_handler::EventHandlerDeps;
 use mainframe_chat::types::ActiveChat;
 use mainframe_types::adapter::DetectedPr;
 use mainframe_types::chat::{QueuedMessageRef, TodoItem};
+use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::context::SkillFileEntry;
 use mainframe_types::display::{DisplayMessage, StreamingLeafKind, ToolCategories};
 use mainframe_types::events::DaemonEvent;
@@ -33,7 +34,7 @@ impl EventHandlerDeps for Deps {
     fn strip_command_tags(&self, text: &str) -> String {
         text.to_string()
     }
-    fn chats_update(&self, _chat_id: &str, _patch: &EventChatUpdate) {}
+    fn chats_update(&self, _chat_id: &str, _patch: &ChatPatch) {}
     fn projects_get_path(&self, _project_id: &str) -> Option<String> {
         None
     }

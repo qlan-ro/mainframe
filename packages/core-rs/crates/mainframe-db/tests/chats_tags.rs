@@ -170,7 +170,7 @@ fn list_filtered_includes_archived_chats_when_include_archived_is_true() {
     s.chats
         .update(
             &archived.id,
-            &mainframe_db::ChatUpdate {
+            &mainframe_types::chat_patch::ChatPatch {
                 status: Some(mainframe_types::chat::ChatStatus::Archived),
                 ..Default::default()
             },

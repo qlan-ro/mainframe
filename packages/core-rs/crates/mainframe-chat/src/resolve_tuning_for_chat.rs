@@ -56,10 +56,10 @@ pub async fn resolve_tuning_for_chat<D: ResolveTuningDeps>(
     };
     Some(resolve_tuning(
         &SessionTuning {
-            effort: chat.effort,
-            fast: chat.fast,
-            ultracode: chat.ultracode,
-            adaptive_thinking: chat.adaptive_thinking,
+            effort: chat.tuning.effort,
+            fast: chat.tuning.fast,
+            ultracode: chat.tuning.ultracode,
+            adaptive_thinking: chat.tuning.adaptive_thinking,
         },
         &provider,
         &model,
@@ -107,10 +107,12 @@ mod tests {
             transcript_missing: None,
             todos: None,
             pinned: None,
-            effort: Some(Some(effort)),
-            fast: None,
-            ultracode: None,
-            adaptive_thinking: None,
+            tuning: mainframe_types::chat::SessionTuning {
+                effort: Some(Some(effort)),
+                fast: None,
+                ultracode: None,
+                adaptive_thinking: None,
+            },
             detected_prs: None,
             tags: None,
             automation_run_id: None,

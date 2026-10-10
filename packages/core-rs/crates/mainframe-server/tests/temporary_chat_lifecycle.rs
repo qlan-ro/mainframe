@@ -158,7 +158,7 @@ fn give_worktree(h: &support::Harness, chat_id: &str, path: &str) {
     h.db.call_blocking(move |d| {
         d.chats.update(
             &chat_id,
-            &mainframe_db::chats::ChatUpdate {
+            &mainframe_types::chat_patch::ChatPatch {
                 worktree_path: Some(Some(path)),
                 branch_name: Some(Some("wt".to_string())),
                 ..Default::default()

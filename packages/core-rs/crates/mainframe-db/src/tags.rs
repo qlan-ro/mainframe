@@ -4,16 +4,15 @@ use mainframe_types::tags::{Tag, TagColor};
 use mainframe_types::time::now_iso8601;
 use rusqlite::Connection;
 
-use crate::DbError;
 use crate::tag_color::hash_tag_color;
 use crate::validate_tag_name::{ValidateResult, validate_tag_name};
+use crate::{
+    DbError,
+    sql_types::{FromRow, SqlEnum, query_all, query_opt},
+};
 
 pub struct TagsRepository {
     db: Rc<Connection>,
-}
-
-fn parse_tag_color(s: String) -> Result<TagColor, DbError> {
-    Ok(serde_json::from_value(serde_json::Value::String(s))?)
 }
 
 impl TagsRepository {
@@ -26,35 +25,19 @@ impl TagsRepository {
     }
 
     pub fn list(&self) -> Result<Vec<Tag>, DbError> {
-        let mut stmt = self
-            .db
-            .prepare("SELECT name, color, created_at as createdAt FROM tags ORDER BY name")?;
-        let mut rows = stmt.query([])?;
-        let mut out = Vec::new();
-        while let Some(row) = rows.next()? {
-            out.push(Tag {
-                name: row.get("name")?,
-                color: parse_tag_color(row.get("color")?)?,
-                created_at: row.get("createdAt")?,
-            });
-        }
-        Ok(out)
+        query_all(
+            &self.db,
+            "SELECT name, color, created_at FROM tags ORDER BY name",
+            [],
+        )
     }
 
     pub fn get(&self, name: &str) -> Result<Option<Tag>, DbError> {
-        let normalized = self.normalize(name);
-        let mut stmt = self
-            .db
-            .prepare("SELECT name, color, created_at as createdAt FROM tags WHERE name = ?")?;
-        let mut rows = stmt.query([normalized])?;
-        match rows.next()? {
-            Some(row) => Ok(Some(Tag {
-                name: row.get("name")?,
-                color: parse_tag_color(row.get("color")?)?,
-                created_at: row.get("createdAt")?,
-            })),
-            None => Ok(None),
-        }
+        query_opt(
+            &self.db,
+            "SELECT name, color, created_at FROM tags WHERE name = ?",
+            [self.normalize(name)],
+        )
     }
 
     /// Idempotent upsert. Returns the existing row if present, else creates with auto color.
@@ -132,5 +115,30 @@ impl TagsRepository {
         }
         tx.commit()?;
         Ok(())
+    }
+}
+
+impl FromRow for Tag {
+    type Error = DbError;
+
+    /// A stored colour outside the palette is logged and read as the name's
+    /// hashed palette colour (what `upsert` would have assigned), the same
+    /// warn-and-default policy as the chat and todo rows, so one bad row does
+    /// not fail every tag listing.
+    fn from_row(row: &rusqlite::Row<'_>) -> Result<Self, DbError> {
+        let name: String = row.get("name")?;
+        let raw: String = row.get("color")?;
+        let color = SqlEnum::<TagColor>::parse(raw.clone()).unwrap_or_else(|error| {
+            tracing::warn!(
+                tag = %name, raw, %error,
+                "tags: invalid stored colour; using the name's palette colour"
+            );
+            hash_tag_color(&name)
+        });
+        Ok(Self {
+            name,
+            color,
+            created_at: row.get("created_at")?,
+        })
     }
 }

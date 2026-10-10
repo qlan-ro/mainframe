@@ -23,7 +23,7 @@ impl ConfigManagerDeps for Deps {
     fn get_active_chat(&self, _chat_id: &str) -> Option<Arc<Mutex<ActiveChat>>> {
         None
     }
-    fn chats_update(&self, _chat_id: &str, _updates: &crate::config_manager::ChatFieldUpdate) {}
+    fn chats_update(&self, _chat_id: &str, _updates: &mainframe_types::chat_patch::ChatPatch) {}
     fn projects_get(&self, _project_id: &str) -> Option<Project> {
         None
     }

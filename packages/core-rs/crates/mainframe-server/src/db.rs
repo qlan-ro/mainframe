@@ -1,132 +1,21 @@
-//! The Send+Sync database handle backing `AppCtx.db`.
+//! The `Send + Sync` database handle backing `AppCtx.db`.
 //!
 //! `mainframe_db::DatabaseManager` owns an `Rc<rusqlite::Connection>` and is
-//! therefore `!Send` — it cannot live behind the `Arc<AppCtx>` that axum shares
-//! across worker tasks. So the single WAL-mode rusqlite connection, which every
-//! repository borrows, is confined to one dedicated thread and every query is
-//! serialized onto it. The wrapper lives here, in its sole consumer, rather than
-//! in the db crate.
-//!
-//! The handle (`Db`) holds a `tokio::mpsc::UnboundedSender<Job>`, which is
-//! `Send + Sync + Clone`; the `DatabaseManager` is constructed on, and never
-//! leaves, the worker thread. `call` ships an `FnOnce(&DatabaseManager)` closure
-//! and awaits its result over a oneshot.
+//! therefore `!Send`, so it cannot live behind the `Arc<AppCtx>` that axum
+//! shares across worker tasks. The single WAL-mode connection every repository
+//! borrows is confined to one dedicated thread by the shared
+//! `mainframe_db::actor::SqliteActor`, and every query is serialized onto it.
+//! See `SqliteActor::call_blocking` for the rule the synchronous
+//! `ChatManagerDeps` bridge must follow.
 
-use mainframe_db::{DatabaseManager, DbError};
-use tokio::sync::{mpsc, oneshot};
-
-type Job = Box<dyn FnOnce(&DatabaseManager) + Send>;
-
-/// Send+Sync handle to the single-threaded `DatabaseManager`.
-#[derive(Clone)]
-pub struct Db {
-    tx: mpsc::UnboundedSender<Job>,
-}
-
-impl Db {
-    /// Spawns the DB worker thread, running `open` on it to construct the
-    /// `DatabaseManager`, and returns a handle once the open succeeds. A failure
-    /// inside `open` (bad path, migration error) is surfaced synchronously.
-    pub fn spawn<F>(open: F) -> Result<Self, DbError>
-    where
-        F: FnOnce() -> Result<DatabaseManager, DbError> + Send + 'static,
-    {
-        let (tx, mut rx) = mpsc::unbounded_channel::<Job>();
-        let (ready_tx, ready_rx) = std::sync::mpsc::channel::<Result<(), DbError>>();
-
-        std::thread::Builder::new()
-            .name("mainframe-db".into())
-            .spawn(move || {
-                let db = match open() {
-                    Ok(db) => {
-                        // If the handle was already dropped the send fails; the
-                        // thread then just exits (db drops, connection closes).
-                        if ready_tx.send(Ok(())).is_err() {
-                            return;
-                        }
-                        db
-                    }
-                    Err(err) => {
-                        let _ = ready_tx.send(Err(err));
-                        return;
-                    }
-                };
-                // Blocking recv is correct here: this is a plain OS thread, not a
-                // tokio worker, so blocking it never stalls the runtime.
-                while let Some(job) = rx.blocking_recv() {
-                    job(&db);
-                }
-            })
-            .map_err(DbError::Io)?;
-
-        match ready_rx.recv() {
-            Ok(Ok(())) => Ok(Self { tx }),
-            Ok(Err(err)) => Err(err),
-            Err(_) => Err(DbError::Message("database worker failed to start".into())),
-        }
-    }
-
-    /// Runs `f` on the DB thread and awaits its `Result`. The closure receives a
-    /// shared `&DatabaseManager`, so all six repositories are reachable
-    /// (`|db| db.chats.list(&pid)`). A dropped worker maps to a `DbError`.
-    pub async fn call<F, R>(&self, f: F) -> Result<R, DbError>
-    where
-        F: FnOnce(&DatabaseManager) -> Result<R, DbError> + Send + 'static,
-        R: Send + 'static,
-    {
-        let (res_tx, res_rx) = oneshot::channel::<Result<R, DbError>>();
-        let job: Job = Box::new(move |db| {
-            let _ = res_tx.send(f(db));
-        });
-        self.tx
-            .send(job)
-            .map_err(|_| DbError::Message("database worker unavailable".into()))?;
-        match res_rx.await {
-            Ok(result) => result,
-            Err(_) => Err(DbError::Message(
-                "database worker dropped the request".into(),
-            )),
-        }
-    }
-
-    /// Synchronous sibling of [`Db::call`]: dispatches `f` onto the DB thread and
-    /// **blocks** the caller until the result comes back over a `std::sync::mpsc`
-    /// channel. This is the SYNC-DB BRIDGE that lets the `ChatManager`'s
-    /// synchronous `ChatManagerDeps` accessors (`chats_get`, `chats_update`, …)
-    /// reach the single WAL connection without ever opening a second one — the
-    /// closure runs on the *same* thread that owns the `DatabaseManager`, so its
-    /// better-sqlite3-style single-threaded semantics are preserved exactly.
-    ///
-    /// Safety / deadlock note: the DB worker is a dedicated **OS** thread, never a
-    /// tokio worker, so blocking a tokio worker here can never starve the actor —
-    /// the actor makes progress independently and unblocks us. This must **never**
-    /// be called from within a closure already running on the DB thread (that
-    /// would wait on the thread for itself); every `ChatManagerDeps` caller runs
-    /// on a tokio task, so that invariant holds.
-    pub fn call_blocking<F, R>(&self, f: F) -> Result<R, DbError>
-    where
-        F: FnOnce(&DatabaseManager) -> Result<R, DbError> + Send + 'static,
-        R: Send + 'static,
-    {
-        let (res_tx, res_rx) = std::sync::mpsc::channel::<Result<R, DbError>>();
-        let job: Job = Box::new(move |db| {
-            let _ = res_tx.send(f(db));
-        });
-        self.tx
-            .send(job)
-            .map_err(|_| DbError::Message("database worker unavailable".into()))?;
-        match res_rx.recv() {
-            Ok(result) => result,
-            Err(_) => Err(DbError::Message(
-                "database worker dropped the request".into(),
-            )),
-        }
-    }
-}
+/// Handle to the single-threaded `DatabaseManager`. `call` ships an
+/// `FnOnce(&DatabaseManager)` closure, so every repository is reachable.
+pub type Db = mainframe_db::actor::SqliteActor<mainframe_db::DatabaseManager>;
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::Db;
+    use mainframe_db::DatabaseManager;
 
     fn open_in_memory() -> Db {
         Db::spawn(|| DatabaseManager::open(std::path::Path::new(":memory:"))).unwrap()

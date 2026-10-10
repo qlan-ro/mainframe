@@ -33,7 +33,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         if usage.max_tokens > 0 {
             self.deps.chats_update(
                 &self.chat_id,
-                &EventChatUpdate {
+                &ChatPatch {
                     last_context_total_tokens: Some(usage.total_tokens as u64),
                     last_context_max_tokens: Some(usage.max_tokens as u64),
                     ..Default::default()
@@ -114,7 +114,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         };
         self.deps.chats_update(
             &self.chat_id,
-            &EventChatUpdate {
+            &ChatPatch {
                 claude_session_id: Some(session_id.to_string()),
                 ..Default::default()
             },
@@ -132,7 +132,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         }) {
             self.deps.chats_update(
                 &self.chat_id,
-                &EventChatUpdate {
+                &ChatPatch {
                     session_file_path: Some(session_file_path.clone()),
                     ..Default::default()
                 },

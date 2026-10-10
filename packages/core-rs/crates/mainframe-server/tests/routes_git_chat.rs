@@ -1,7 +1,7 @@
 //! Route tests for `git_chat.rs` — the worktree-missing (409) / chat-not-found
 //! (404) guards and the cross-project guard, on a real DB + real git repos.
 //! Chats are created via the db chats repo and their `worktree_path` set through
-//! `ChatUpdate` (no ChatManager is required — resolution goes through the shared
+//! `ChatPatch` (no ChatManager is required — resolution goes through the shared
 //! git.rs helpers).
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -9,7 +9,7 @@ mod support;
 
 use std::path::Path;
 
-use mainframe_db::ChatUpdate;
+use mainframe_types::chat_patch::ChatPatch;
 use reqwest::StatusCode;
 use serde_json::{Value, json};
 use support::{TestServer, spawn_test_server};
@@ -67,7 +67,7 @@ async fn set_worktree(server: &TestServer, chat_id: &str, path: &str) {
         .call(move |db| {
             db.chats.update(
                 &cid,
-                &ChatUpdate {
+                &ChatPatch {
                     worktree_path: Some(Some(wt)),
                     ..Default::default()
                 },

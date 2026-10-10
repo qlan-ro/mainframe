@@ -38,7 +38,7 @@ mod teardown;
 pub(crate) struct StoreDeps {
     store: Mutex<HashMap<String, Chat>>,
     events: Mutex<Vec<DaemonEvent>>,
-    updates: Mutex<Vec<(String, ChatUpdate)>>,
+    updates: Mutex<Vec<(String, ChatPatch)>>,
     order: Arc<Mutex<Vec<String>>>,
     project_removed: Mutex<Vec<String>>,
     mentions: Mutex<Vec<(String, String)>>,
@@ -362,7 +362,7 @@ impl ChatManagerDeps for StoreDeps {
             }
         })
     }
-    fn chats_update(&self, chat_id: &str, patch: &ChatUpdate) {
+    fn chats_update(&self, chat_id: &str, patch: &ChatPatch) {
         self.updates
             .lock()
             .unwrap()
@@ -745,10 +745,12 @@ impl ChatManagerDeps for StoreDeps {
             transcript_missing: None,
             todos: None,
             pinned: None,
-            effort: Some(insert.effort),
-            fast: Some(insert.fast),
-            ultracode: Some(insert.ultracode),
-            adaptive_thinking: Some(insert.adaptive_thinking),
+            tuning: mainframe_types::chat::SessionTuning {
+                effort: Some(insert.effort),
+                fast: Some(insert.fast),
+                ultracode: Some(insert.ultracode),
+                adaptive_thinking: Some(insert.adaptive_thinking),
+            },
             detected_prs: None,
             tags: None,
             automation_run_id: None,
@@ -848,10 +850,12 @@ impl ChatManagerDeps for StoreDeps {
             transcript_missing: None,
             todos: None,
             pinned: None,
-            effort: None,
-            fast: None,
-            ultracode: None,
-            adaptive_thinking: None,
+            tuning: mainframe_types::chat::SessionTuning {
+                effort: None,
+                fast: None,
+                ultracode: None,
+                adaptive_thinking: None,
+            },
             detected_prs: None,
             tags: None,
             automation_run_id: None,
@@ -2111,20 +2115,23 @@ async fn sync_chat_fields_mirrors_tuning_onto_the_cached_active_chat() {
 
     mgr.sync_chat_fields(
         "c1",
-        ChatFieldsPartial {
-            effort: Some(Some(EffortLevel::High)),
-            fast: Some(Some(true)),
+        ChatPatch {
+            tuning: mainframe_types::chat::SessionTuning {
+                effort: Some(Some(EffortLevel::High)),
+                fast: Some(Some(true)),
+                ..Default::default()
+            },
             pinned: Some(true),
             ..Default::default()
         },
     );
 
     let chat = mgr.get_active("c1").unwrap().lock().unwrap().chat.clone();
-    assert_eq!(chat.effort, Some(Some(EffortLevel::High)));
-    assert_eq!(chat.fast, Some(Some(true)));
+    assert_eq!(chat.tuning.effort, Some(Some(EffortLevel::High)));
+    assert_eq!(chat.tuning.fast, Some(Some(true)));
     assert_eq!(chat.pinned, Some(true));
     // Untouched fields stay unchanged.
-    assert_eq!(chat.ultracode, test_chat("c1").ultracode);
+    assert_eq!(chat.tuning.ultracode, test_chat("c1").tuning.ultracode);
 }
 
 #[tokio::test]
@@ -2495,12 +2502,7 @@ impl crate::external_session_service::ExternalSessionDeps for FakeExternalDeps {
         c.adapter_id = adapter_id.to_string();
         c
     }
-    fn chats_update(
-        &self,
-        _chat_id: &str,
-        _updates: &crate::external_session_service::ExternalChatUpdate,
-    ) {
-    }
+    fn chats_update(&self, _chat_id: &str, _updates: &mainframe_types::chat_patch::ChatPatch) {}
     fn chats_list(&self, _project_id: &str) -> Vec<Chat> {
         Vec::new()
     }

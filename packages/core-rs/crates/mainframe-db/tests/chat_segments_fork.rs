@@ -3,9 +3,10 @@
 //! row into a borrowed view of the parent.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use mainframe_db::{ChatUpdate, DatabaseManager, ForkInsert, PendingFork};
+use mainframe_db::{DatabaseManager, ForkInsert, PendingFork};
 use mainframe_types::adapter::ForkSource;
 use mainframe_types::chat::{Chat, NewChat};
+use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::segment::{
     BorrowConversion, ClosedSnapshot, ForkPlan, ForkSegmentPlan, ForkSegmentRole, HandoffRecord,
     HandoffStatus, HandoffStrategy, OpenNative, OpenSegment, SegmentBound, SegmentKind,
@@ -20,7 +21,7 @@ fn open() -> (tempfile::TempDir, DatabaseManager, String) {
 }
 
 fn set_session(db: &DatabaseManager, chat_id: &str, session: &str) {
-    let update = ChatUpdate {
+    let update = ChatPatch {
         claude_session_id: Some(session.to_string()),
         session_file_path: Some(format!("/t/{session}.jsonl")),
         ..Default::default()

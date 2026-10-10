@@ -1,3 +1,8 @@
+mod row;
+use crate::chat_assignments::ChatAssignments;
+use crate::sql_types::FromRow;
+use mainframe_types::chat_patch::ChatPatch;
+use row::ChatRow;
 use std::rc::Rc;
 
 use mainframe_types::adapter::{DetectedPr, DetectedPrSource, EffortLevel, ForkSource};
@@ -17,24 +22,24 @@ use crate::chat_tags::ChatTagsRepository;
 use crate::{DbError, enum_to_db_string};
 
 // pub(crate): reused by `side_chats.rs` for the side chat's own SELECT.
-pub(crate) const CHAT_SELECT_FIELDS: &str = "id, adapter_id as adapterId, project_id as projectId, \
-  title, claude_session_id as claudeSessionId, model, \
-  permission_mode as permissionMode, status, \
-  created_at as createdAt, updated_at as updatedAt, \
-  total_cost as totalCost, total_tokens_input as totalTokensInput, \
-  total_tokens_output as totalTokensOutput, last_context_tokens_input as lastContextTokensInput, \
-  last_context_total_tokens as lastContextTotalTokens, last_context_max_tokens as lastContextMaxTokens, \
-  mentions, modified_files as modifiedFiles, \
-  worktree_path as worktreePath, branch_name as branchName, \
-  process_state as processState, todos, pinned, effort, \
-  plan_mode as planMode, detected_prs as detectedPrs, \
-  session_file_path as sessionFilePath, \
-  transcript_missing as transcriptMissing, \
+pub(crate) const CHAT_SELECT_FIELDS: &str = "id, adapter_id, project_id, \
+  title, claude_session_id, model, \
+  permission_mode, status, \
+  created_at, updated_at, \
+  total_cost, total_tokens_input, \
+  total_tokens_output, last_context_tokens_input, \
+  last_context_total_tokens, last_context_max_tokens, \
+  mentions, modified_files, \
+  worktree_path, branch_name, \
+  process_state, todos, pinned, effort, \
+  plan_mode, detected_prs, \
+  session_file_path, \
+  transcript_missing, \
   fast, ultracode, adaptive_thinking, \
-  automation_run_id as automationRunId, \
-  temporary, vendor_session_ephemeral as vendorSessionEphemeral, \
-  context_lost_at as contextLostAt, scratch_path as scratchPath, \
-  parent_chat_id as parentChatId, \
+  automation_run_id, \
+  temporary, vendor_session_ephemeral, \
+  context_lost_at, scratch_path, \
+  parent_chat_id, \
   (SELECT s.id FROM chats s WHERE s.parent_chat_id = chats.id AND s.temporary = 1) AS sideChatId, \
   created_by_chat_id as createdByChatId, \
   (SELECT t.id || ' ' || t.role || ' ' || t.status FROM delegated_tasks t \
@@ -95,44 +100,8 @@ pub struct ChatListFilters {
     pub include_temporary: bool,
 }
 
-/// Partial-update payload for `ChatsRepository::update`.
-/// A `None` outer field means "not part of this update" (skipped). The six
-/// clearable columns use `Option<Option<T>>`: inner `None` writes SQL NULL
-/// (the `?? null` transforms in `updateColumnMap`).
-#[derive(Debug, Clone, Default)]
-pub struct ChatUpdate {
-    pub adapter_id: Option<String>,
-    pub model: Option<String>,
-    pub claude_session_id: Option<String>,
-    pub session_file_path: Option<String>,
-    pub status: Option<ChatStatus>,
-    pub total_cost: Option<f64>,
-    pub total_tokens_input: Option<i64>,
-    pub total_tokens_output: Option<i64>,
-    pub last_context_tokens_input: Option<i64>,
-    pub last_context_total_tokens: Option<u64>,
-    pub last_context_max_tokens: Option<u64>,
-    pub title: Option<String>,
-    pub permission_mode: Option<ExecutionMode>,
-    pub worktree_path: Option<Option<String>>,
-    pub branch_name: Option<Option<String>>,
-    pub mentions: Option<Vec<SessionMention>>,
-    pub process_state: Option<Option<ProcessState>>,
-    pub created_at: Option<String>,
-    pub updated_at: Option<String>,
-    pub pinned: Option<bool>,
-    pub effort: Option<Option<EffortLevel>>,
-    pub fast: Option<Option<bool>>,
-    pub ultracode: Option<Option<bool>>,
-    pub adaptive_thinking: Option<Option<bool>>,
-    pub plan_mode: Option<bool>,
-    pub transcript_missing: Option<bool>,
-    pub vendor_session_ephemeral: Option<bool>,
-    pub context_lost_at: Option<String>,
-}
-
 /// The part of a `chats` patch that belongs to the active native session.
-fn native_patch(updates: &ChatUpdate) -> NativePatch {
+fn native_patch(updates: &ChatPatch) -> NativePatch {
     NativePatch {
         adapter_id: updates.adapter_id.clone(),
         model: updates.model.clone(),
@@ -145,60 +114,31 @@ fn native_patch(updates: &ChatUpdate) -> NativePatch {
 }
 
 fn parse_effort(value: Option<String>) -> Option<EffortLevel> {
-    serde_json::from_value(Value::String(value?)).ok()
+    crate::sql_types::SqlEnum::or_default(value, None)
 }
 
-/// `v == null ? null : Boolean(v)` — the tri-state stays present (never absent).
-fn parse_nullable_bool(v: Option<i64>) -> Option<Option<bool>> {
-    Some(v.map(|n| n != 0))
+fn parse_nullable_bool(value: Option<i64>) -> Option<Option<bool>> {
+    Some(value.map(|value| value != 0))
 }
 
 fn parse_execution_mode(value: Option<String>) -> Option<ExecutionMode> {
-    value
-        .filter(|s| !s.is_empty())
-        .and_then(|s| serde_json::from_value(Value::String(s)).ok())
+    crate::sql_types::SqlEnum::or_default(value, None)
 }
 
 fn parse_process_state(value: Option<String>) -> Option<ProcessState> {
-    value
-        .filter(|s| !s.is_empty())
-        .and_then(|s| serde_json::from_value(Value::String(s)).ok())
+    crate::sql_types::SqlEnum::or_default(value, None)
 }
 
 fn parse_chat_status(value: String) -> ChatStatus {
-    serde_json::from_value(Value::String(value)).unwrap_or(ChatStatus::Active)
+    crate::sql_types::SqlEnum::or_default(Some(value), ChatStatus::Active)
 }
 
-fn parse_json_column<T>(value: Option<String>, fallback: T) -> T
-where
-    T: serde::de::DeserializeOwned,
-{
-    match value.filter(|s| !s.is_empty()) {
-        // expected: malformed stored JSON column, fall back
-        Some(s) => serde_json::from_str(&s).unwrap_or(fallback),
-        None => fallback,
-    }
+fn parse_json_column<T: serde::de::DeserializeOwned>(value: Option<String>, fallback: T) -> T {
+    crate::sql_types::JsonCol::or_default(value, fallback)
 }
 
-fn parse_json_array<T>(value: Option<String>) -> Vec<T>
-where
-    T: serde::de::DeserializeOwned,
-{
+fn parse_json_array<T: serde::de::DeserializeOwned>(value: Option<String>) -> Vec<T> {
     parse_json_column(value, Vec::new())
-}
-
-fn opt_text(v: &Option<String>) -> SqlValue {
-    match v {
-        Some(s) => SqlValue::Text(s.clone()),
-        None => SqlValue::Null,
-    }
-}
-
-fn nullable_bool_value(v: &Option<bool>) -> SqlValue {
-    match v {
-        Some(b) => SqlValue::Integer(i64::from(*b)),
-        None => SqlValue::Null,
-    }
 }
 
 pub struct ChatsRepository {
@@ -331,7 +271,8 @@ impl ChatsRepository {
             None
         };
 
-        self.db.execute(
+        let tx = self.db.unchecked_transaction()?;
+        tx.execute(
             "INSERT INTO chats (id, adapter_id, project_id, model, permission_mode, status, created_at, updated_at, automation_run_id, temporary, scratch_path) \
              VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)",
             rusqlite::params![
@@ -349,7 +290,9 @@ impl ChatsRepository {
         )?;
         chat_segments::ensure_seeded(&self.db, &id)?;
 
-        self.get_inserted(&id)
+        let chat = self.get_inserted(&id)?;
+        tx.commit()?;
+        Ok(chat)
     }
 
     /// A single INSERT that seeds a new chat from its parent's resolved config:
@@ -408,9 +351,9 @@ impl ChatsRepository {
             )?,
             None => chat_segments::ensure_seeded(&tx, &id)?,
         }
+        let chat = self.get_inserted(&id)?;
         tx.commit()?;
-
-        self.get_inserted(&id)
+        Ok(chat)
     }
 
     /// Hard-delete a chat row (rule 5, discard step 4). `chat_tags` cascade via
@@ -439,7 +382,7 @@ impl ChatsRepository {
     /// usage, `transcript_missing`, adapter and model) are routed through the
     /// segment repository first, in the same transaction, so the `chats`
     /// mirror and the active native-session row never disagree.
-    pub fn update(&self, id: &str, updates: &ChatUpdate) -> Result<(), DbError> {
+    pub fn update(&self, id: &str, updates: &ChatPatch) -> Result<(), DbError> {
         let tx = self.db.unchecked_transaction()?;
         if let Some(native_id) = &updates.claude_session_id {
             chat_segments::record_native_id(
@@ -455,129 +398,8 @@ impl ChatsRepository {
         Ok(())
     }
 
-    fn update_columns(&self, id: &str, updates: &ChatUpdate) -> Result<(), DbError> {
-        let mut sets: Vec<&str> = Vec::new();
-        let mut values: Vec<SqlValue> = Vec::new();
-
-        // Fixed column order.
-        if let Some(v) = &updates.adapter_id {
-            sets.push("adapter_id = ?");
-            values.push(SqlValue::Text(v.clone()));
-        }
-        if let Some(v) = &updates.model {
-            sets.push("model = ?");
-            values.push(SqlValue::Text(v.clone()));
-        }
-        if let Some(v) = &updates.claude_session_id {
-            sets.push("claude_session_id = ?");
-            values.push(SqlValue::Text(v.clone()));
-        }
-        if let Some(v) = &updates.session_file_path {
-            sets.push("session_file_path = ?");
-            values.push(SqlValue::Text(v.clone()));
-        }
-        if let Some(v) = &updates.status {
-            sets.push("status = ?");
-            values.push(SqlValue::Text(enum_to_db_string(v)?));
-        }
-        if let Some(v) = updates.total_cost {
-            sets.push("total_cost = ?");
-            values.push(SqlValue::Real(v));
-        }
-        if let Some(v) = updates.total_tokens_input {
-            sets.push("total_tokens_input = ?");
-            values.push(SqlValue::Integer(v));
-        }
-        if let Some(v) = updates.total_tokens_output {
-            sets.push("total_tokens_output = ?");
-            values.push(SqlValue::Integer(v));
-        }
-        if let Some(v) = updates.last_context_tokens_input {
-            sets.push("last_context_tokens_input = ?");
-            values.push(SqlValue::Integer(v));
-        }
-        if let Some(v) = updates.last_context_total_tokens {
-            sets.push("last_context_total_tokens = ?");
-            values.push(SqlValue::Integer(v as i64));
-        }
-        if let Some(v) = updates.last_context_max_tokens {
-            sets.push("last_context_max_tokens = ?");
-            values.push(SqlValue::Integer(v as i64));
-        }
-        if let Some(v) = &updates.title {
-            sets.push("title = ?");
-            values.push(SqlValue::Text(v.clone()));
-        }
-        if let Some(v) = &updates.permission_mode {
-            sets.push("permission_mode = ?");
-            values.push(SqlValue::Text(enum_to_db_string(v)?));
-        }
-        if let Some(v) = &updates.worktree_path {
-            sets.push("worktree_path = ?");
-            values.push(opt_text(v));
-        }
-        if let Some(v) = &updates.branch_name {
-            sets.push("branch_name = ?");
-            values.push(opt_text(v));
-        }
-        if let Some(v) = &updates.mentions {
-            sets.push("mentions = ?");
-            values.push(SqlValue::Text(serde_json::to_string(v)?));
-        }
-        if let Some(v) = &updates.process_state {
-            sets.push("process_state = ?");
-            values.push(match v {
-                Some(ps) => SqlValue::Text(enum_to_db_string(ps)?),
-                None => SqlValue::Null,
-            });
-        }
-        if let Some(v) = &updates.created_at {
-            sets.push("created_at = ?");
-            values.push(SqlValue::Text(v.clone()));
-        }
-        if let Some(v) = &updates.updated_at {
-            sets.push("updated_at = ?");
-            values.push(SqlValue::Text(v.clone()));
-        }
-        if let Some(v) = updates.pinned {
-            sets.push("pinned = ?");
-            values.push(SqlValue::Integer(i64::from(v)));
-        }
-        if let Some(v) = &updates.effort {
-            sets.push("effort = ?");
-            values.push(match v {
-                Some(e) => SqlValue::Text(enum_to_db_string(e)?),
-                None => SqlValue::Null,
-            });
-        }
-        if let Some(v) = &updates.fast {
-            sets.push("fast = ?");
-            values.push(nullable_bool_value(v));
-        }
-        if let Some(v) = &updates.ultracode {
-            sets.push("ultracode = ?");
-            values.push(nullable_bool_value(v));
-        }
-        if let Some(v) = &updates.adaptive_thinking {
-            sets.push("adaptive_thinking = ?");
-            values.push(nullable_bool_value(v));
-        }
-        if let Some(v) = updates.plan_mode {
-            sets.push("plan_mode = ?");
-            values.push(SqlValue::Integer(i64::from(v)));
-        }
-        if let Some(v) = updates.transcript_missing {
-            sets.push("transcript_missing = ?");
-            values.push(SqlValue::Integer(i64::from(v)));
-        }
-        if let Some(v) = updates.vendor_session_ephemeral {
-            sets.push("vendor_session_ephemeral = ?");
-            values.push(SqlValue::Integer(i64::from(v)));
-        }
-        if let Some(v) = &updates.context_lost_at {
-            sets.push("context_lost_at = ?");
-            values.push(SqlValue::Text(v.clone()));
-        }
+    fn update_columns(&self, id: &str, updates: &ChatPatch) -> Result<(), DbError> {
+        let (sets, mut values) = updates.into_assignments()?;
 
         if sets.is_empty() {
             return Ok(());
@@ -890,82 +712,12 @@ impl ChatsRepository {
 }
 
 fn map_row(row: &rusqlite::Row<'_>) -> Result<Chat, DbError> {
-    Ok(Chat {
-        id: row.get("id")?,
-        adapter_id: row.get("adapterId")?,
-        project_id: row.get("projectId")?,
-        title: row.get("title")?,
-        claude_session_id: row.get("claudeSessionId")?,
-        session_file_path: row.get("sessionFilePath")?,
-        model: row.get("model")?,
-        permission_mode: parse_execution_mode(row.get::<_, Option<String>>("permissionMode")?),
-        plan_mode: Some(row.get::<_, i64>("planMode")? != 0),
-        status: parse_chat_status(row.get::<_, String>("status")?),
-        created_at: row.get("createdAt")?,
-        updated_at: row.get("updatedAt")?,
-        total_cost: row.get("totalCost")?,
-        total_tokens_input: row.get("totalTokensInput")?,
-        total_tokens_output: row.get("totalTokensOutput")?,
-        last_context_tokens_input: row.get("lastContextTokensInput")?,
-        // null → None; stored INTEGER read as i64 then widened.
-        last_context_total_tokens: row
-            .get::<_, Option<i64>>("lastContextTotalTokens")?
-            .map(|n| n as u64),
-        last_context_max_tokens: row
-            .get::<_, Option<i64>>("lastContextMaxTokens")?
-            .map(|n| n as u64),
-        context_files: None,
-        mentions: Some(parse_json_array(row.get::<_, Option<String>>("mentions")?)),
-        modified_files: Some(parse_json_array(
-            row.get::<_, Option<String>>("modifiedFiles")?,
-        )),
-        worktree_path: row
-            .get::<_, Option<String>>("worktreePath")?
-            .filter(|s| !s.is_empty()),
-        branch_name: row
-            .get::<_, Option<String>>("branchName")?
-            .filter(|s| !s.is_empty()),
-        process_state: Some(parse_process_state(
-            row.get::<_, Option<String>>("processState")?,
-        )),
-        display_status: None,
-        is_running: None,
-        background_activity: None,
-        worktree_missing: None,
-        directory_missing: None,
-        missing_directory_path: None,
-        // `Boolean(row.transcriptMissing)` — column is DEFAULT 0, always present.
-        transcript_missing: Some(
-            row.get::<_, Option<i64>>("transcriptMissing")?
-                .is_some_and(|n| n != 0),
-        ),
-        todos: parse_todos(row.get::<_, Option<String>>("todos")?),
-        pinned: Some(row.get::<_, Option<i64>>("pinned")?.is_some_and(|n| n != 0)),
-        effort: parse_effort(row.get::<_, Option<String>>("effort")?).map(Some),
-        fast: parse_nullable_bool(row.get::<_, Option<i64>>("fast")?),
-        ultracode: parse_nullable_bool(row.get::<_, Option<i64>>("ultracode")?),
-        adaptive_thinking: parse_nullable_bool(row.get::<_, Option<i64>>("adaptive_thinking")?),
-        detected_prs: Some(parse_json_array(
-            row.get::<_, Option<String>>("detectedPrs")?,
-        )),
-        tags: None,
-        automation_run_id: row.get("automationRunId")?,
-        temporary: row.get::<_, i64>("temporary")? != 0,
-        no_project: row.get::<_, String>("projectId")? == NO_PROJECT_ID,
-        context_lost_at: row.get("contextLostAt")?,
-        vendor_session_ephemeral: row
-            .get::<_, Option<i64>>("vendorSessionEphemeral")?
-            .is_some_and(|n| n != 0),
-        scratch_path: row.get("scratchPath")?,
-        parent_chat_id: Some(row.get::<_, Option<String>>("parentChatId")?),
-        side_chat_id: row.get("sideChatId")?,
-        // Waiting state is enrichment-only (chat_manager), never derived here.
-        side_chat_waiting: None,
-        orchestration: crate::orchestration::map_orchestration(row)?,
-    })
+    let mut chat = ChatRow::from_row(row)?.into_chat();
+    chat.side_chat_id = row.get("sideChatId")?;
+    chat.orchestration = crate::orchestration::map_orchestration(row)?;
+    Ok(chat)
 }
 
 fn parse_todos(value: Option<String>) -> Option<Vec<TodoItem>> {
-    let value = value.filter(|s| !s.is_empty())?;
-    serde_json::from_str(&value).ok()
+    parse_json_column(value, None)
 }

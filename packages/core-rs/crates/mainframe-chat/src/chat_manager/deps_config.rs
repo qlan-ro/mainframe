@@ -20,21 +20,10 @@ impl ConfigManagerDeps for CmDeps {
         self.lifecycle.touch(chat_id);
         Some(cell)
     }
-    fn chats_update(&self, chat_id: &str, updates: &ChatFieldUpdate) {
-        self.deps.chats_update(
-            chat_id,
-            &ChatUpdate {
-                adapter_id: updates.adapter_id.clone(),
-                model: updates.model.clone(),
-                permission_mode: updates.permission_mode,
-                plan_mode: updates.plan_mode,
-                worktree_path: updates.worktree_path.clone(),
-                branch_name: updates.branch_name.clone(),
-                session_file_path: updates.session_file_path.clone(),
-                ..Default::default()
-            },
-        );
+    fn chats_update(&self, chat_id: &str, updates: &ChatPatch) {
+        self.deps.chats_update(chat_id, updates);
     }
+
     fn projects_get(&self, project_id: &str) -> Option<Project> {
         // The config manager only ever reads `project.path`; the facade dep exposes
         // exactly that, so a minimal `Project` (path only) is behaviourally faithful.

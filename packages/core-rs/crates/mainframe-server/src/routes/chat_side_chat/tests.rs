@@ -235,7 +235,7 @@ async fn filter_temporary_drops_a_side_chat_even_when_include_temporary_is_set()
 // ── refusals already in place ───────────────────────────────────────────
 
 fn side_chat_fixture() -> Chat {
-    let mut chat = crate::chat_deps::fallback_chat(&NewChat {
+    let mut chat = Chat::unpersisted(&NewChat {
         project_id: "p1".to_string(),
         adapter_id: "claude".to_string(),
         temporary: true,

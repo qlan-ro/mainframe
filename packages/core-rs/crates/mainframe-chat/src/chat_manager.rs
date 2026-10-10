@@ -26,8 +26,7 @@ use mainframe_services::commands::{find_mainframe_command, wrap_mainframe_comman
 use mainframe_services::workspace::is_worktree_present;
 use mainframe_services::workspace::worktree::is_directory_present;
 use mainframe_types::adapter::{
-    ControlResponse, DetectedPr, EffortLevel, ExternalSessionPage, ForkSource, ProviderQuota,
-    SessionOptions,
+    ControlResponse, DetectedPr, ExternalSessionPage, ForkSource, ProviderQuota, SessionOptions,
 };
 use mainframe_types::background_task::{
     BackgroundTask, derive_background_activity, to_activity_task,
@@ -36,6 +35,7 @@ use mainframe_types::chat::{
     Chat, ChatMessage, ChatMessageType, ChatStatus, DisplayStatus, MessageContent, NewChat,
     ProcessState, Project, QueuedMessageRef, TodoItem,
 };
+use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::content::LeafContent;
 use mainframe_types::context::{SessionContext, SessionMention, SkillFileEntry};
 use mainframe_types::display::ChatHistoryPayload;
@@ -47,15 +47,13 @@ use tracing::info;
 
 use delivery::Delivery;
 
-use crate::config_manager::{ChatConfigManager, ChatFieldUpdate, ConfigError, ConfigManagerDeps};
+use crate::config_manager::{ChatConfigManager, ConfigError, ConfigManagerDeps};
 use crate::degraded_recovery::{DegradedRecoveryDeps, DegradedRecoveryError, RecoverySync};
-use crate::event_handler::{EventChatUpdate, EventHandler, EventHandlerDeps, PushOut};
+use crate::event_handler::{EventHandler, EventHandlerDeps, PushOut};
 use crate::external_session_service::{ExternalSessionDeps, ExternalSessionService};
 use crate::fork::{PendingForkState, fork_title};
 use crate::history_cache::{HistoryFingerprint, HistorySnapshotCache};
-use crate::lifecycle_manager::{
-    ChatLifecycleManager, LifecycleChatUpdate, LifecycleError, LifecycleManagerDeps,
-};
+use crate::lifecycle_manager::{ChatLifecycleManager, LifecycleError, LifecycleManagerDeps};
 use crate::message_cache::MessageCache;
 use crate::message_markers::visible_message_text;
 use crate::permission_handler::{ChatPermissionHandler, PermissionError, PermissionHandlerDeps};
@@ -99,12 +97,12 @@ mod switch_api;
 mod update;
 
 pub use deps::ChatManagerDeps;
-pub use errors::{ChatFieldsPartial, CommandMeta, ForkError, SendError, TrustWorkspaceError};
+pub use errors::{CommandMeta, ForkError, SendError, TrustWorkspaceError};
 pub use external_facade::ExternalSessionFacade;
 pub use history::ResumeSnapshot;
 pub(crate) use shared::remap_history as remap_history_for;
 pub use side_chat::OpenSideChatError;
-pub use update::{ChatUpdate, ProcessedAttachments};
+pub use update::ProcessedAttachments;
 
 // `ForkChatError` (the fork-a-chat action, `fork_api.rs`) is distinct from
 // `ForkError` above (the `fork_to_worktree` action).

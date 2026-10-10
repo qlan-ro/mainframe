@@ -154,7 +154,7 @@ impl ChatManager {
         }
         self.deps.chats_update(
             chat_id,
-            &ChatUpdate {
+            &ChatPatch {
                 process_state: Some(Some(ProcessState::Working)),
                 updated_at: Some(now.to_string()),
                 ..Default::default()

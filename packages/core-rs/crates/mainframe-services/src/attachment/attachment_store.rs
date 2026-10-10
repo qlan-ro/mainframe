@@ -216,7 +216,10 @@ impl AttachmentStore {
     }
 }
 
-fn sanitize_file_name(name: &str) -> String {
+/// `basename(name).replace(/[^\w.\-() ]+/g, '_').trim()` with an
+/// `attachment.bin` fallback for an empty result — the on-disk name for an
+/// uploaded file (the record keeps the original).
+pub fn sanitize_file_name(name: &str) -> String {
     let base = Path::new(name)
         .file_name()
         .map(|s| s.to_string_lossy().into_owned())
@@ -278,6 +281,14 @@ mod tests {
             });
         }
         out
+    }
+
+    #[test]
+    fn sanitize_collapses_disallowed_runs_and_strips_directories() {
+        assert_eq!(sanitize_file_name("a b*c**d.txt"), "a b_c_d.txt");
+        assert_eq!(sanitize_file_name("***"), "_");
+        assert_eq!(sanitize_file_name("   "), "attachment.bin");
+        assert_eq!(sanitize_file_name("../../etc/passwd"), "passwd");
     }
 
     async fn store() -> (tempfile::TempDir, AttachmentStore) {

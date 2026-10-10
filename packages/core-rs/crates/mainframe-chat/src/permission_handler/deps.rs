@@ -2,6 +2,7 @@
 //! split out of `permission_handler.rs` — a pure move; `permission_handler`
 //! re-exports both under their original paths.
 
+use mainframe_types::chat_patch::ChatPatch;
 use std::sync::{Arc, Mutex};
 
 use mainframe_adapter_api::{AdapterError, BoxFuture};
@@ -9,7 +10,7 @@ use mainframe_types::adapter::ControlResponse;
 use mainframe_types::chat::ChatMessage;
 use mainframe_types::events::DaemonEvent;
 
-use crate::event_handler::{EventChatUpdate, PushOut};
+use crate::event_handler::PushOut;
 use crate::types::ActiveChat;
 
 /// Errors surfaced by permission handling. Strings cross the wire, copied verbatim.
@@ -30,7 +31,7 @@ pub trait PermissionHandlerDeps: Send + Sync {
     fn start_chat<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()>;
     fn emit_event(&self, event: DaemonEvent);
     fn emit_display(&self, chat_id: &str);
-    fn chats_update(&self, chat_id: &str, patch: &EventChatUpdate);
+    fn chats_update(&self, chat_id: &str, patch: &ChatPatch);
     fn get_messages<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, Vec<ChatMessage>>;
     fn should_notify_permission(&self, tool_name: Option<&str>) -> bool;
     fn send_push(&self, _msg: PushOut) {}

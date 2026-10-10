@@ -2,7 +2,6 @@ use serde_json::json;
 
 use crate::db_context::text;
 use crate::todos;
-use crate::todos_github::schema::run_github_migrations;
 
 use super::setup;
 
@@ -35,12 +34,12 @@ async fn migration_creates_every_table_on_a_fresh_db() {
 
 #[tokio::test]
 async fn migration_is_additive_over_preexisting_todos() {
-    // todos::tests::setup() already runs the github migration (it is wired
-    // into todos::run_migrations), so re-running it here exercises the same
+    // todos::tests::setup() already runs the github migration (it is part of
+    // the todos schema version), so re-running it here exercises the same
     // "migration already ran, todos already exist" case AC31 requires.
     let h = todos::tests::setup().await;
     todos::tests::create_todo(&h, json!({ "projectId": "p1", "title": "Existing" })).await;
-    run_github_migrations(&h.ctx).await.unwrap();
+    todos::migrations::run(&h.ctx).await.unwrap();
     let rows = h
         .ctx
         .db
@@ -60,6 +59,6 @@ async fn migration_is_additive_over_preexisting_todos() {
 #[tokio::test]
 async fn migration_is_idempotent() {
     let h = setup().await;
-    run_github_migrations(&h.ctx).await.unwrap();
-    run_github_migrations(&h.ctx).await.unwrap();
+    todos::migrations::run(&h.ctx).await.unwrap();
+    todos::migrations::run(&h.ctx).await.unwrap();
 }

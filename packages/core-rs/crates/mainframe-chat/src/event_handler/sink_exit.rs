@@ -63,7 +63,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
             };
             self.deps.chats_update(
                 &self.chat_id,
-                &EventChatUpdate {
+                &ChatPatch {
                     process_state: Some(None),
                     ..Default::default()
                 },

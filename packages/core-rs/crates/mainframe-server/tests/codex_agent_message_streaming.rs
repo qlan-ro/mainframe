@@ -7,12 +7,13 @@
 //! completion under the same item id, and no overlay left behind.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+use mainframe_types::chat_patch::ChatPatch;
 use std::sync::{Arc, Mutex};
 
 use mainframe_acp::encoder::{EncodedItem, encode_revision};
 use mainframe_adapter_codex::event_mapper::{CodexSessionState, handle_notification};
 use mainframe_chat::chat_surface::{ChatSurface, ChatSurfaceEvent};
-use mainframe_chat::event_handler::{EventChatUpdate, EventHandler, EventHandlerDeps};
+use mainframe_chat::event_handler::{EventHandler, EventHandlerDeps};
 use mainframe_chat::message_cache::MessageCache;
 use mainframe_chat::permission_manager::PermissionManager;
 use mainframe_chat::types::ActiveChat;
@@ -56,7 +57,7 @@ impl EventHandlerDeps for Deps {
     fn strip_command_tags(&self, text: &str) -> String {
         text.to_string()
     }
-    fn chats_update(&self, _chat_id: &str, _patch: &EventChatUpdate) {}
+    fn chats_update(&self, _chat_id: &str, _patch: &ChatPatch) {}
     fn projects_get_path(&self, _project_id: &str) -> Option<String> {
         None
     }

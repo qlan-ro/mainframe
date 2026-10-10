@@ -33,18 +33,6 @@ pub enum TrustWorkspaceError {
     Write(String),
 }
 
-/// Present-only partial for `sync_chat_fields` (mirrors the `Partial<Chat>` the
-/// tuning/pinned PATCH routes write). Tri-state fields (`Some(None)` = explicit
-/// null) match the DB tuning columns; `pinned` is a plain bool.
-#[derive(Debug, Clone, Default)]
-pub struct ChatFieldsPartial {
-    pub effort: Option<Option<EffortLevel>>,
-    pub fast: Option<Option<bool>>,
-    pub ultracode: Option<Option<bool>>,
-    pub adaptive_thinking: Option<Option<bool>>,
-    pub pinned: Option<bool>,
-}
-
 /// Error surfaced by `fork_to_worktree` (the create step is fallible, the enable step
 /// too). `status_code` maps a dirty tree to 409 and everything else to 500.
 #[derive(Debug, thiserror::Error)]

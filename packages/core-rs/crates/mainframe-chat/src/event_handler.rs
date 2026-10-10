@@ -15,6 +15,7 @@ use mainframe_types::chat::{
     ChatMessage, ChatMessageType, MessageContent, MessageContentNode, ProcessState,
     QueuedMessageRef, TodoItem,
 };
+use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::content::LeafContent;
 use mainframe_types::context::SkillFileEntry;
 use mainframe_types::display::{DisplayMessage, StreamingLeafKind, ToolCategories};
@@ -235,7 +236,7 @@ mod tool_timing;
 mod tool_timing_tests;
 
 mod deps;
-pub use deps::{EventChatUpdate, EventHandlerDeps, PushOut};
+pub use deps::{EventHandlerDeps, PushOut};
 mod display_emission;
 use display_emission::emit_display_for;
 mod sink;

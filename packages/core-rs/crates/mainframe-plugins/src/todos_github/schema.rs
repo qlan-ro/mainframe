@@ -1,9 +1,8 @@
 //! Additive DDL for the GitHub sync tables, layered onto the todos
 //! plugin's `data.db`. `CREATE TABLE IF NOT EXISTS` makes every run idempotent
-//! (AC31), matching the pattern `todos::run_migrations` already uses.
+//! (AC31); the todos migration applies it inside its versioned transaction.
 
-use crate::PluginError;
-use crate::context::PluginContext;
+use rusqlite::Connection;
 
 const MIGRATION: &str = "
 CREATE TABLE IF NOT EXISTS github_links (
@@ -37,8 +36,8 @@ CREATE TABLE IF NOT EXISTS github_report_rows (
 CREATE INDEX IF NOT EXISTS github_report_rows_run ON github_report_rows(run_id);
 ";
 
-/// Called from `todos::run_migrations` alongside the base todos migration —
-/// every activation keeps both surfaces on the same schema version.
-pub(crate) async fn run_github_migrations(ctx: &PluginContext) -> Result<(), PluginError> {
-    ctx.db.run_migration(MIGRATION.into()).await
+/// Applied by the todos schema migration alongside the base table, so both
+/// surfaces share one schema version.
+pub(crate) fn apply_github_schema(db: &Connection) -> rusqlite::Result<()> {
+    db.execute_batch(MIGRATION)
 }

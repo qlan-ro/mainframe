@@ -1,11 +1,14 @@
 //! Per-plugin, per-entity attachment storage under `<pluginDir>/attachments`.
 //! Each attachment is two files in the entity's directory: `<id>-<safeName>`
-//! (the bytes) and `<id>.json` (the metadata record). Attachment data uses
-//! the shared standard base64 codec with the historical lenient decoder.
+//! (the bytes) and `<id>.json` (the metadata record). Entity and attachment
+//! ids are caller-supplied path segments and must be single safe identifiers;
+//! file names go through the chat attachment store's sanitizer.
 
 use std::path::{Path, PathBuf};
 
 use mainframe_adapter_api::BoxFuture;
+use mainframe_services::attachment::sanitize_file_name;
+use mainframe_types::ids::is_safe_identifier;
 use mainframe_types::plugin::PluginAttachmentMeta;
 use mainframe_types::time::now_iso8601;
 
@@ -24,10 +27,10 @@ impl FsAttachmentContext {
         }
     }
 
-    /// `entityDir(id)` — `join(baseDir, basename(id))` (basename guards against
-    /// path traversal in a caller-supplied id).
-    fn entity_dir(&self, id: &str) -> PathBuf {
-        self.base_dir.join(basename(id))
+    /// The entity's directory, or `None` when the id is not a single safe
+    /// path segment (so it can never escape the base directory).
+    fn entity_dir(&self, id: &str) -> Option<PathBuf> {
+        is_safe_identifier(id).then(|| self.base_dir.join(id))
     }
 }
 
@@ -38,10 +41,14 @@ impl PluginAttachments for FsAttachmentContext {
         file: AttachmentUpload,
     ) -> BoxFuture<'_, Result<PluginAttachmentMeta, PluginError>> {
         let dir = self.entity_dir(entity_id);
+        let entity_id = entity_id.to_string();
         Box::pin(async move {
+            let dir = dir.ok_or_else(|| {
+                PluginError::Message(format!("Invalid entityId path segment: {entity_id:?}"))
+            })?;
             tokio::fs::create_dir_all(&dir).await?;
             let id = nanoid::nanoid!();
-            let safe_name = sanitize(&file.filename);
+            let safe_name = sanitize_file_name(&file.filename);
             tokio::fs::write(
                 dir.join(format!("{id}-{safe_name}")),
                 mainframe_types::base64_data::decode_lenient(&file.data),
@@ -65,8 +72,11 @@ impl PluginAttachments for FsAttachmentContext {
         id: &str,
     ) -> BoxFuture<'_, Result<Option<AttachmentData>, PluginError>> {
         let dir = self.entity_dir(entity_id);
-        let id = id.to_string();
+        let id = is_safe_identifier(id).then(|| id.to_string());
         Box::pin(async move {
+            let (Some(dir), Some(id)) = (dir, id) else {
+                return Ok(None);
+            };
             let meta_raw = match tokio::fs::read(dir.join(format!("{id}.json"))).await {
                 Ok(bytes) => bytes,
                 // expected: attachment dir or file does not exist
@@ -93,6 +103,9 @@ impl PluginAttachments for FsAttachmentContext {
     ) -> BoxFuture<'_, Result<Vec<PluginAttachmentMeta>, PluginError>> {
         let dir = self.entity_dir(entity_id);
         Box::pin(async move {
+            let Some(dir) = dir else {
+                return Ok(Vec::new());
+            };
             let mut entries = match tokio::fs::read_dir(&dir).await {
                 Ok(entries) => entries,
                 Err(_) => return Ok(Vec::new()),
@@ -120,8 +133,11 @@ impl PluginAttachments for FsAttachmentContext {
 
     fn delete(&self, entity_id: &str, id: &str) -> BoxFuture<'_, Result<(), PluginError>> {
         let dir = self.entity_dir(entity_id);
-        let id = id.to_string();
+        let id = is_safe_identifier(id).then(|| id.to_string());
         Box::pin(async move {
+            let (Some(dir), Some(id)) = (dir, id) else {
+                return Ok(());
+            };
             let mut entries = match tokio::fs::read_dir(&dir).await {
                 Ok(entries) => entries,
                 // directory may not exist; nothing to delete
@@ -139,42 +155,6 @@ impl PluginAttachments for FsAttachmentContext {
             Ok(())
         })
     }
-}
-
-/// Last path component (`basename`), falling back to the input when it has none.
-fn basename(name: &str) -> String {
-    Path::new(name)
-        .file_name()
-        .map(|s| s.to_string_lossy().into_owned())
-        .unwrap_or_else(|| name.to_string())
-}
-
-/// `basename(name).replace(/[^\w.\-() ]+/g, '_').trim()` with an
-/// `attachment.bin` fallback for an empty result.
-fn sanitize(name: &str) -> String {
-    let base = basename(name);
-    let mut out = String::with_capacity(base.len());
-    let mut in_run = false;
-    for ch in base.chars() {
-        if is_allowed(ch) {
-            out.push(ch);
-            in_run = false;
-        } else if !in_run {
-            out.push('_');
-            in_run = true;
-        }
-    }
-    let trimmed = out.trim();
-    if trimmed.is_empty() {
-        "attachment.bin".to_string()
-    } else {
-        trimmed.to_string()
-    }
-}
-
-/// The `[\w.\-() ]` character class: word chars, `.`, `-`, `(`, `)`, space.
-fn is_allowed(ch: char) -> bool {
-    ch.is_alphanumeric() || matches!(ch, '_' | '.' | '-' | '(' | ')' | ' ')
 }
 
 /// Find the data file for `id`: `startsWith('<id>-') && !endsWith('.json')`.
@@ -195,20 +175,21 @@ async fn find_data_file(dir: &Path, id: &str) -> Option<PathBuf> {
 mod tests {
     use super::*;
 
+    fn upload(filename: &str, bytes: &[u8]) -> AttachmentUpload {
+        AttachmentUpload {
+            filename: filename.into(),
+            mime_type: "application/octet-stream".into(),
+            data: mainframe_types::base64_data::encode(bytes),
+            size_bytes: bytes.len() as i64,
+        }
+    }
+
     #[tokio::test]
     async fn save_list_get_delete_roundtrip() {
         let dir = tempfile::tempdir().unwrap();
         let ctx = FsAttachmentContext::new(dir.path().join("attachments"));
         let meta = ctx
-            .save(
-                "todo-1",
-                AttachmentUpload {
-                    filename: "notes.txt".into(),
-                    mime_type: "text/plain".into(),
-                    data: mainframe_types::base64_data::encode(b"hello"),
-                    size_bytes: 5,
-                },
-            )
+            .save("todo-1", upload("notes.txt", b"hello"))
             .await
             .unwrap();
         assert_eq!(meta.filename, "notes.txt");
@@ -230,29 +211,53 @@ mod tests {
     async fn zero_byte_file_saves() {
         let dir = tempfile::tempdir().unwrap();
         let ctx = FsAttachmentContext::new(dir.path().join("attachments"));
-        let meta = ctx
-            .save(
-                "todo-1",
-                AttachmentUpload {
-                    filename: "empty.txt".into(),
-                    mime_type: "application/octet-stream".into(),
-                    data: String::new(),
-                    size_bytes: 0,
-                },
-            )
-            .await
-            .unwrap();
+        let meta = ctx.save("todo-1", upload("empty.txt", b"")).await.unwrap();
         assert_eq!(meta.size_bytes, 0);
     }
 
-    #[test]
-    fn sanitize_replaces_disallowed_runs() {
-        // A run of disallowed chars collapses to a single `_`.
-        assert_eq!(sanitize("a b*c**d.txt"), "a b_c_d.txt");
-        // Non-empty result (even a bare `_`) is kept; only an empty trim falls back.
-        assert_eq!(sanitize("***"), "_");
-        assert_eq!(sanitize("   "), "attachment.bin");
-        // basename() runs first, so directory parts are stripped.
-        assert_eq!(sanitize("../../etc/passwd"), "passwd");
+    /// The uploaded file name is sanitized on disk but kept verbatim in the record.
+    #[tokio::test]
+    async fn file_names_are_sanitized_on_disk_only() {
+        let dir = tempfile::tempdir().unwrap();
+        let base = dir.path().join("attachments");
+        let ctx = FsAttachmentContext::new(&base);
+        let meta = ctx
+            .save("todo-1", upload("../../etc/pass wd*.txt", b"x"))
+            .await
+            .unwrap();
+        assert_eq!(meta.filename, "../../etc/pass wd*.txt");
+        assert!(
+            base.join("todo-1")
+                .join(format!("{}-pass wd_.txt", meta.id))
+                .exists()
+        );
+        assert!(!dir.path().join("etc").exists());
+    }
+
+    /// Entity and attachment ids that are not single safe segments never
+    /// touch the filesystem: writes fail, reads are empty, deletes are no-ops.
+    #[tokio::test]
+    async fn traversal_ids_are_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let base = dir.path().join("attachments");
+        let ctx = FsAttachmentContext::new(&base);
+        let kept = ctx.save("todo-1", upload("a.txt", b"a")).await.unwrap();
+
+        let err = ctx
+            .save("../escape", upload("a.txt", b"a"))
+            .await
+            .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "Invalid entityId path segment: \"../escape\""
+        );
+        assert!(!dir.path().join("escape").exists());
+
+        assert!(ctx.list("../todo-1").await.unwrap().is_empty());
+        assert!(ctx.get("todo-1", "../todo-1/x").await.unwrap().is_none());
+        assert!(ctx.get("todo-1/..", &kept.id).await.unwrap().is_none());
+        ctx.delete("todo-1", "..").await.unwrap();
+        ctx.delete("..", &kept.id).await.unwrap();
+        assert_eq!(ctx.list("todo-1").await.unwrap().len(), 1);
     }
 }

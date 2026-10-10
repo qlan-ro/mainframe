@@ -16,7 +16,6 @@ use mainframe_types::chat::Chat;
 use mainframe_types::events::{ChatUpdatedReason, DaemonEvent};
 use tokio::sync::broadcast;
 
-use crate::chat_deps::fallback_chat;
 use crate::ctx::GitFactory;
 use crate::db::Db;
 
@@ -122,7 +121,7 @@ fn request(project_id: Option<&str>) -> AgentRequest {
 }
 
 fn chat(id: &str) -> Chat {
-    let mut chat = fallback_chat(&mainframe_types::chat::NewChat {
+    let mut chat = mainframe_types::chat::Chat::unpersisted(&mainframe_types::chat::NewChat {
         project_id: "p1".to_string(),
         adapter_id: "claude".to_string(),
         ..Default::default()
