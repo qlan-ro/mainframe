@@ -6,6 +6,7 @@
 pub mod auth;
 pub mod config;
 pub mod fs;
+pub mod http;
 #[cfg(any(test, feature = "test-support"))]
 pub mod log_capture;
 pub mod logging;

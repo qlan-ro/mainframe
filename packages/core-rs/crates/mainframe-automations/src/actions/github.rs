@@ -96,7 +96,7 @@ struct CreatedPr {
 
 pub struct GithubCreatePrAction {
     base: String,
-    client: reqwest::Client,
+    client: Result<reqwest::Client, reqwest::Error>,
 }
 
 impl GithubCreatePrAction {
@@ -107,7 +107,9 @@ impl GithubCreatePrAction {
     pub fn with_base_url(base: impl Into<String>) -> Self {
         Self {
             base: base.into(),
-            client: super::http_client(),
+            client: mainframe_runtime::http::builder()
+                .user_agent(super::USER_AGENT)
+                .build(),
         }
     }
 }
@@ -166,6 +168,8 @@ impl Action for GithubCreatePrAction {
 
             let mut request = github_headers(
                 self.client
+                    .as_ref()
+                    .map_err(|err| ActionError(format!("{OP} failed: {err}")))?
                     .post(format!("{}/repos/{}/pulls", self.base, input.repo)),
             )
             .json(&json!({

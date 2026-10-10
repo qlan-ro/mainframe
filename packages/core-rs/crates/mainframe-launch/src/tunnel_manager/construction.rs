@@ -15,7 +15,7 @@ impl TunnelManager {
             verified_at: Arc::new(DashMap::new()),
             broadcast: broadcast.unwrap_or_else(|| Arc::new(|_event| {})),
             config,
-            client: reqwest::Client::new(),
+            client: mainframe_runtime::http::client(),
             registry: Arc::new(NoopChildRegistry),
             resolved_path: None,
             signal: kill_signal(),

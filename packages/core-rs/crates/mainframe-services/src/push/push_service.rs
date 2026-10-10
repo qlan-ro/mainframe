@@ -59,7 +59,7 @@ struct Inner {
 pub struct PushService {
     inner: Arc<Mutex<Inner>>,
     rt: Option<Handle>,
-    client: reqwest::Client,
+    client: Result<reqwest::Client, reqwest::Error>,
     url: String,
 }
 
@@ -78,7 +78,7 @@ impl PushService {
                 staleness_handle: None,
             })),
             rt: Handle::try_current().ok(),
-            client: reqwest::Client::new(),
+            client: mainframe_runtime::http::client(),
             url: EXPO_PUSH_URL.to_string(),
         }
     }
@@ -164,7 +164,14 @@ impl PushService {
             return;
         }
 
-        match self.client.post(&self.url).json(&messages).send().await {
+        let client = match &self.client {
+            Ok(client) => client,
+            Err(err) => {
+                tracing::error!(module = "push", ?err, "failed to send push notification");
+                return;
+            }
+        };
+        match client.post(&self.url).json(&messages).send().await {
             Ok(res) => {
                 if !res.status().is_success() {
                     tracing::error!(

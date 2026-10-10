@@ -100,7 +100,7 @@ fn is_image_model(id: &str) -> bool {
 /// The proxy's chat catalog, or `None` on any transport or non-200 result — which is
 /// also how "installed but not running" reads.
 pub(crate) async fn fetch_models(config: &CliProxyConfig) -> Option<Vec<ProxyModel>> {
-    let client = reqwest::Client::builder()
+    let client = mainframe_runtime::http::builder()
         .timeout(FETCH_TIMEOUT)
         .build()
         .ok()?;

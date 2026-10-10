@@ -37,7 +37,7 @@ struct CreatedPage {
 
 pub struct NotionAddRowAction {
     base: String,
-    client: reqwest::Client,
+    client: Result<reqwest::Client, reqwest::Error>,
 }
 
 impl NotionAddRowAction {
@@ -48,7 +48,9 @@ impl NotionAddRowAction {
     pub fn with_base_url(base: impl Into<String>) -> Self {
         Self {
             base: base.into(),
-            client: super::http_client(),
+            client: mainframe_runtime::http::builder()
+                .user_agent(super::USER_AGENT)
+                .build(),
         }
     }
 }
@@ -103,6 +105,8 @@ impl Action for NotionAddRowAction {
 
             let mut request = self
                 .client
+                .as_ref()
+                .map_err(|err| ActionError(format!("HTTP client initialization failed: {err}")))?
                 .post(format!("{}/v1/pages", self.base))
                 .header("Notion-Version", NOTION_VERSION)
                 .json(&json!({
@@ -131,5 +135,33 @@ impl Action for NotionAddRowAction {
             outputs.insert("pageUrl".to_string(), TokenValue::Text(page.url));
             Ok(outputs)
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn initialization_failure_is_an_action_error_without_a_fallback_request() {
+        let action = NotionAddRowAction {
+            base: "http://127.0.0.1:1".to_string(),
+            client: mainframe_runtime::http::builder()
+                .user_agent("invalid\nagent")
+                .build(),
+        };
+        assert!(action.client.is_err());
+        let ctx = ActionCtx {
+            creds: None,
+            credential_label: None,
+            idempotency_key: "run:step".to_string(),
+            project_root: "/project".to_string(),
+            worktree_path: None,
+        };
+        let error = action
+            .execute(&json!({"databaseId": "db-1", "Name": "row"}), &ctx)
+            .await
+            .unwrap_err();
+        assert_eq!(error.0, "HTTP client initialization failed: builder error");
     }
 }

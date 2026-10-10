@@ -154,7 +154,7 @@ pub struct TunnelManager {
     verified_at: Arc<DashMap<String, VerifyResult>>,
     broadcast: BroadcastFn,
     config: TunnelConfig,
-    client: reqwest::Client,
+    client: Result<reqwest::Client, reqwest::Error>,
     /// Pidfile registry so a crashed daemon's next startup sweep can reap tunnels
     /// it leaked. Defaults to `NoopChildRegistry`.
     registry: Arc<dyn ChildRegistryPort>,

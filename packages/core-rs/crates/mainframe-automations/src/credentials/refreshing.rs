@@ -30,7 +30,7 @@ const REFRESH_SKEW_MS: i64 = 5 * 60 * 1000;
 pub struct RefreshingCredentialStore {
     inner: Arc<dyn CredentialStore>,
     clock: Arc<dyn Clock>,
-    client: reqwest::Client,
+    client: Result<reqwest::Client, reqwest::Error>,
     token_url: String,
     client_id: &'static str,
     label_locks: KeyedMutex,
@@ -47,10 +47,9 @@ impl RefreshingCredentialStore {
         token_url: String,
         client_id: &'static str,
     ) -> Self {
-        let client = reqwest::Client::builder()
+        let client = mainframe_runtime::http::builder()
             .user_agent(USER_AGENT)
-            .build()
-            .unwrap_or_else(|_| reqwest::Client::new());
+            .build();
         Self {
             inner,
             clock,
@@ -108,6 +107,8 @@ impl RefreshingCredentialStore {
         let refresh_token = creds.refresh_token.as_deref().unwrap_or_default();
         let response = self
             .client
+            .as_ref()
+            .map_err(|err| refresh_failed(label, &err.to_string()))?
             .post(&self.token_url)
             .header("Accept", "application/json")
             .form(&[
