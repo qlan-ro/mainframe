@@ -33,8 +33,4 @@ fn writers_exec(pids: &'static [u32]) -> ExecFn {
 
 use mainframe_types::time::now_ms;
 
-// --- wake-detection helper + composed scenario (drives the same decision the
-// scheduler loop makes, deterministically — the async interval loop is covered
-// by `stop_prevents_further_ticks`). ---
-
-mod cases_0;
+mod ticks;
