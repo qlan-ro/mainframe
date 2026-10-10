@@ -97,7 +97,14 @@ pub fn init(log_dir: &std::path::Path) -> Option<WorkerGuard> {
     let force_stdout = std::env::var("LOG_TO_STDOUT").as_deref() == Ok("true");
 
     let dir = log_dir.to_path_buf();
-    let _ = fs::create_dir_all(&dir); // ensureLogDir(); mkdir -p
+    if let Err(err) = fs::create_dir_all(&dir) {
+        // The subscriber is not installed yet, so `tracing` would drop this.
+        // Logging falls back to stdout-only below when the appender can't be built.
+        eprintln!(
+            "mainframe: could not create log directory {}: {err}",
+            dir.display()
+        );
+    }
     purge_old_logs(&dir);
 
     let filter = EnvFilter::try_new(&level).unwrap_or_else(|_| EnvFilter::new("info"));

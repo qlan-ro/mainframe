@@ -147,7 +147,8 @@ struct DaemonConfigFile {
 /// The daemon's data directory, resolved by the daemon's own rule
 /// (`mainframe_runtime::config`): a non-empty `$MAINFRAME_DATA_DIR` wins;
 /// otherwise `dataDir` from `<default_dir>/config.json`; otherwise
-/// `default_dir`. An unreadable or malformed `config.json` counts as absent.
+/// `default_dir`. An unreadable or malformed `config.json`, or a blank
+/// `dataDir`, counts as absent.
 ///
 /// Takes the env value and default directory as parameters so it is testable
 /// without touching the process environment or the home directory.
@@ -159,7 +160,8 @@ fn data_dir_from(env_data_dir: Option<&str>, default_dir: &Path) -> PathBuf {
     let configured = std::fs::read_to_string(&config_path)
         .ok()
         .and_then(|content| serde_json::from_str::<DaemonConfigFile>(&content).ok())
-        .and_then(|config| config.data_dir);
+        .and_then(|config| config.data_dir)
+        .filter(|dir| !dir.trim().is_empty());
     match configured {
         Some(dir) => PathBuf::from(dir),
         None => default_dir.to_path_buf(),
@@ -360,6 +362,20 @@ mod tests {
         .unwrap();
         assert_eq!(data_dir_from(None, &default_dir), PathBuf::from("/srv/from-config"));
         assert_eq!(data_dir_from(Some(""), &default_dir), PathBuf::from("/srv/from-config"));
+        std::fs::remove_dir_all(&default_dir).ok();
+    }
+
+    #[test]
+    fn data_dir_ignores_a_blank_config_json_data_dir() {
+        let default_dir = temp_default_dir("blank");
+        for blank in [
+            r#"{"dataDir":""}"#,
+            r#"{"dataDir":"   "}"#,
+            r#"{"dataDir":"\t\n"}"#,
+        ] {
+            std::fs::write(default_dir.join("config.json"), blank).unwrap();
+            assert_eq!(data_dir_from(None, &default_dir), default_dir);
+        }
         std::fs::remove_dir_all(&default_dir).ok();
     }
 

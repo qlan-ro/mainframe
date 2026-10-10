@@ -268,8 +268,8 @@ module, not generated from each other.
 
 SQLite via `rusqlite` (not `better-sqlite3` — that was the Node daemon's
 driver and is gone), at `<dataDir>/mainframe.db`. `dataDir` is the merged
-config value: a non-empty `$MAINFRAME_DATA_DIR` wins, then `dataDir` from
-`config.json`, then `~/.mainframe`. `config.json` itself is always read from
+config value: a non-empty `$MAINFRAME_DATA_DIR` wins, then a non-blank `dataDir`
+from `config.json`, then `~/.mainframe`. `config.json` itself is always read from
 `$MAINFRAME_DATA_DIR` or `~/.mainframe`. Daemon logs (`server.*`) and the
 Tauri shell's logs (`app-tauri.*`) go to `<dataDir>/logs`. A database found
 only in the config directory (where releases before this rule kept it) is

@@ -124,7 +124,9 @@ fn merge_config(file: PartialMainframeConfig, env: PartialMainframeConfig) -> Ma
         if let Some(port) = partial.port {
             config.port = port;
         }
-        if let Some(data_dir) = partial.data_dir {
+        // A blank `dataDir` would become a relative path; treat it as unset,
+        // like an empty `$MAINFRAME_DATA_DIR`.
+        if let Some(data_dir) = partial.data_dir.filter(|dir| !dir.trim().is_empty()) {
             config.data_dir = data_dir;
         }
         if let Some(tunnel) = partial.tunnel {
@@ -317,6 +319,40 @@ mod tests {
         assert_eq!(merged.port, 41000);
         assert_eq!(merged.auth_secret.as_deref(), Some("from-file"));
         assert!(merged.data_dir.ends_with(".mainframe"));
+    }
+
+    #[test]
+    fn merge_treats_blank_data_dir_as_unset() {
+        for blank in ["", "   ", "\t\n"] {
+            let file = PartialMainframeConfig {
+                data_dir: Some(blank.into()),
+                ..Default::default()
+            };
+            let merged = merge_config(file, PartialMainframeConfig::default());
+            assert_eq!(PathBuf::from(&merged.data_dir), default_data_dir());
+        }
+
+        // A blank file value does not mask the default, and a set env value still wins.
+        let file = PartialMainframeConfig {
+            data_dir: Some("  ".into()),
+            ..Default::default()
+        };
+        let env = PartialMainframeConfig {
+            data_dir: Some("/srv/from-env".into()),
+            ..Default::default()
+        };
+        assert_eq!(merge_config(file, env).data_dir, "/srv/from-env");
+
+        // A blank env value leaves the file's `dataDir` in place.
+        let file = PartialMainframeConfig {
+            data_dir: Some("/srv/from-file".into()),
+            ..Default::default()
+        };
+        let env = PartialMainframeConfig {
+            data_dir: Some(" ".into()),
+            ..Default::default()
+        };
+        assert_eq!(merge_config(file, env).data_dir, "/srv/from-file");
     }
 
     #[test]
