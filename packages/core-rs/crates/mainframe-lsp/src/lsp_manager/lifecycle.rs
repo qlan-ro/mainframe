@@ -74,9 +74,13 @@ impl ManagerState {
                 "jsonrpc": "2.0", "id": "shutdown", "method": "shutdown", "params": null
             })
             .to_string();
-            let _ = handle
+            if let Err(error) = handle
                 .stdin_tx
-                .send(encode_json_rpc(&shutdown_req).into_bytes());
+                .write(encode_json_rpc(&shutdown_req).into_bytes())
+                .await
+            {
+                tracing::debug!(%error, "LSP shutdown request not written");
+            }
 
             if let Some(mut stdout) = handle.take_stdout() {
                 let mut buf = [0u8; 8192];
@@ -87,9 +91,13 @@ impl ManagerState {
             }
 
             let exit_notif = serde_json::json!({ "jsonrpc": "2.0", "method": "exit" }).to_string();
-            let _ = handle
+            if let Err(error) = handle
                 .stdin_tx
-                .send(encode_json_rpc(&exit_notif).into_bytes());
+                .write(encode_json_rpc(&exit_notif).into_bytes())
+                .await
+            {
+                tracing::debug!(%error, "LSP exit notification not written");
+            }
 
             return wait_for_handle_exit(handle, self.shutdown_exit_timeout).await;
         }

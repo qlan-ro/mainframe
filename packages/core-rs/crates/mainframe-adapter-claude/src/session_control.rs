@@ -11,16 +11,17 @@ use std::time::Duration;
 
 use nanoid::nanoid;
 use serde_json::{Value, json};
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::oneshot;
 
 /// `Raw = Record<string, unknown> | undefined` — a control_response object, or
 /// absent (timeout / drained).
 pub type Raw = Option<Value>;
 
 /// The stdin write handle the session hands to `send`/`send_awaiting` (`None`
-/// when the process is gone): bytes are pushed to the session's stdin writer
-/// task, sync fire-and-forget.
-pub type StdinTx = mpsc::UnboundedSender<Vec<u8>>;
+/// when the process is gone): bytes are queued for the session's stdin writer
+/// task without waiting, so a full queue is reported rather than buffered.
+pub type StdinTx = mainframe_runtime::process::StdinWriter;
+pub use mainframe_runtime::process::StdinWriteError;
 
 /// When provided, `resolve` fulfills only on a response the predicate accepts —
 /// intermediate acks are ignored.
@@ -53,7 +54,14 @@ impl ControlRequestChannel {
         }
     }
 
-    pub fn send(&self, stdin: Option<&StdinTx>, request: &Value) -> String {
+    /// Queue a `control_request`; the id to correlate its response with. A
+    /// missing stdin still yields an id (the caller's await then times out);
+    /// a closed or full queue is the error.
+    pub fn send(
+        &self,
+        stdin: Option<&StdinTx>,
+        request: &Value,
+    ) -> Result<String, StdinWriteError> {
         let request_id = nanoid!();
         if let Some(tx) = stdin {
             let mut line = serde_json::to_string(&json!({
@@ -63,9 +71,9 @@ impl ControlRequestChannel {
             }))
             .unwrap_or_default();
             line.push('\n');
-            let _ = tx.send(line.into_bytes());
+            tx.try_write(line.into_bytes())?;
         }
-        request_id
+        Ok(request_id)
     }
 
     pub(crate) async fn send_awaiting(
@@ -74,7 +82,19 @@ impl ControlRequestChannel {
         request: &Value,
         opts: SendAwaitingOpts,
     ) -> Raw {
-        let request_id = self.send(stdin, request);
+        let request_id = match self.send(stdin, request) {
+            Ok(request_id) => request_id,
+            Err(error) => {
+                tracing::warn!(
+                    session_id = %self.session_id,
+                    label = %opts.label,
+                    %error,
+                    "{} control_request not written",
+                    opts.label
+                );
+                return None;
+            }
+        };
         let (tx, rx) = oneshot::channel();
         self.pending.lock_recover().insert(
             request_id.clone(),
@@ -142,8 +162,9 @@ impl ControlRequestChannel {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokio::sync::mpsc;
 
-    fn read_request_id(rx: &mut mpsc::UnboundedReceiver<Vec<u8>>) -> String {
+    fn read_request_id(rx: &mut mpsc::Receiver<Vec<u8>>) -> String {
         let bytes = rx.try_recv().expect("a control_request was written");
         let written: Value = serde_json::from_slice(&bytes).unwrap();
         written["request_id"].as_str().unwrap().to_string()
@@ -152,7 +173,7 @@ mod tests {
     #[tokio::test]
     async fn correlates_a_response_to_its_awaiting_caller_by_request_id() {
         let ch = ControlRequestChannel::new("s1".to_string());
-        let (tx, mut rx) = mpsc::unbounded_channel();
+        let (tx, mut rx) = StdinTx::channel(8);
         let request = json!({ "subtype": "set_model", "model": "x" });
         let opts = SendAwaitingOpts {
             label: "set_model".to_string(),
@@ -186,7 +207,7 @@ mod tests {
     #[tokio::test]
     async fn ignores_a_non_terminal_ack_then_resolves_on_the_terminal_shape() {
         let ch = ControlRequestChannel::new("s1".to_string());
-        let (tx, mut rx) = mpsc::unbounded_channel();
+        let (tx, mut rx) = StdinTx::channel(8);
         let request = json!({ "subtype": "cancel_async_message" });
         let opts = SendAwaitingOpts {
             label: "cancel_async_message".to_string(),

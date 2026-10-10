@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use serde_json::{Map, Value};
 use tokio::process::Child;
-use tokio::sync::{Notify, mpsc, oneshot};
+use tokio::sync::{Notify, oneshot};
 
 use crate::types::{
     RequestId, is_json_rpc_error, is_json_rpc_notification, is_json_rpc_response,
@@ -42,7 +42,7 @@ pub struct JsonRpcClient {
     exited: Arc<AtomicBool>,
     close_notify: Arc<Notify>,
     kill_notify: Arc<Notify>,
-    write_tx: mpsc::UnboundedSender<Vec<u8>>,
+    write_tx: mainframe_runtime::process::StdinWriter,
     request_timeout_ms: u64,
 }
 
@@ -60,7 +60,12 @@ impl JsonRpcClient {
         let msg = serde_json::json!({ "id": id, "method": method, "params": params.unwrap_or(Value::Object(Map::new())) });
         let (tx, rx) = oneshot::channel();
         self.pending.lock_recover().insert(req_id.clone(), tx);
-        self.write(&msg);
+        if let Err(error) = self.write(&msg) {
+            self.pending.lock_recover().remove(&req_id);
+            return Err(JsonRpcError(format!(
+                "Request {method} (id={id}) not written: {error}"
+            )));
+        }
 
         match tokio::time::timeout(Duration::from_millis(self.request_timeout_ms), rx).await {
             Ok(Ok(result)) => result,
@@ -80,7 +85,9 @@ impl JsonRpcClient {
             return;
         }
         let msg = serde_json::json!({ "method": method, "params": params.unwrap_or(Value::Object(Map::new())) });
-        self.write(&msg);
+        if let Err(error) = self.write(&msg) {
+            tracing::warn!(module = "codex:jsonrpc", method, %error, "notification not written");
+        }
     }
 
     pub fn respond(&self, id: RequestId, result: Value) {
@@ -88,7 +95,9 @@ impl JsonRpcClient {
             return;
         }
         let msg = serde_json::json!({ "id": id, "result": result });
-        self.write(&msg);
+        if let Err(error) = self.write(&msg) {
+            tracing::warn!(module = "codex:jsonrpc", ?id, %error, "response not written");
+        }
     }
 
     pub fn close(&self) {
@@ -110,11 +119,13 @@ impl JsonRpcClient {
         }
     }
 
-    fn write(&self, msg: &Value) {
+    /// Queue one message for the app-server's stdin without waiting; a full
+    /// queue (the server stopped reading) is an error, not a growing buffer.
+    fn write(&self, msg: &Value) -> Result<(), mainframe_runtime::process::StdinWriteError> {
         let mut json = serde_json::to_string(msg).unwrap_or_default();
         json.push('\n');
         tracing::trace!(module = "codex:jsonrpc", "jsonrpc write");
-        let _ = self.write_tx.send(json.into_bytes());
+        self.write_tx.try_write(json.into_bytes())
     }
 }
 

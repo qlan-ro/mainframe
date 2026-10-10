@@ -92,18 +92,3 @@ pub fn parse_pids(stdout: &str, accept: impl Fn(&str) -> bool) -> Vec<u32> {
     }
     pids
 }
-
-pub async fn writers_of(file: &str, path: &ResolvedPath) -> Result<Vec<u32>, super::ExecError> {
-    let mut command = Command::new("lsof");
-    command.args(["-F", "pan", "--", file]);
-    path.apply(&mut command);
-    let output = run_captured(command, Some(Duration::from_secs(2))).await?;
-    if output.status.success() || output.status.code() == Some(1) {
-        Ok(parse_pids(
-            &String::from_utf8_lossy(&output.stdout),
-            |mode| mode == "w" || mode == "u",
-        ))
-    } else {
-        Err(std::io::Error::other(format!("lsof exited with {}", output.status)).into())
-    }
-}

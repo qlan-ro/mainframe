@@ -1,10 +1,18 @@
-use std::{io, time::Duration};
+use mainframe_types::sync::LockExt;
+use std::{
+    io,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 use tokio::{
     io::{AsyncRead, AsyncReadExt},
     process::Command,
     sync::oneshot,
+    task::JoinHandle,
 };
 
+/// Output retained from a captured run that may have hit its deadline:
+/// `exit_code` is `None` when `timed_out`.
 pub struct RetainedOutput {
     pub timed_out: bool,
     pub exit_code: Option<i32>,
@@ -12,12 +20,18 @@ pub struct RetainedOutput {
     pub stderr: Vec<u8>,
 }
 
+/// Run `command` with stdin closed, keeping the first `limit` bytes of each
+/// stream even when `timeout` kills the child. Once the child is gone the
+/// readers get [`super::PUMP_DRAIN_GRACE`] to finish; a grandchild still
+/// holding the pipes cannot extend the deadline, and whatever was read by then
+/// is returned.
 pub async fn run_captured_prefix(
     mut command: Command,
     timeout: Duration,
     limit: usize,
 ) -> io::Result<RetainedOutput> {
     let mut child = command
+        .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .kill_on_drop(true)
@@ -26,8 +40,8 @@ pub async fn run_captured_prefix(
     let stderr = child.stderr.take();
     let (cancel, cancelled) = oneshot::channel::<()>();
     let owner = tokio::spawn(async move {
-        let stdout = tokio::spawn(read_prefix(stdout, limit));
-        let stderr = tokio::spawn(read_prefix(stderr, limit));
+        let stdout = PrefixReader::spawn(stdout, limit);
+        let stderr = PrefixReader::spawn(stderr, limit);
         let (timed_out, status) = tokio::select! {
             result = child.wait() => (false, result),
             () = tokio::time::sleep(timeout) => (true, stop(&mut child).await),
@@ -44,8 +58,8 @@ pub async fn run_captured_prefix(
         RetainedOutput {
             timed_out,
             exit_code,
-            stdout: stdout.await.unwrap_or_default(),
-            stderr: stderr.await.unwrap_or_default(),
+            stdout: stdout.finish().await,
+            stderr: stderr.finish().await,
         }
     });
     let result = owner
@@ -62,23 +76,46 @@ async fn stop(child: &mut tokio::process::Child) -> io::Result<std::process::Exi
     child.wait().await
 }
 
-async fn read_prefix(reader: Option<impl AsyncRead + Unpin>, limit: usize) -> Vec<u8> {
-    let Some(mut reader) = reader else {
-        return Vec::new();
-    };
-    let mut output = Vec::new();
-    let mut chunk = [0; 8192];
-    loop {
-        let count = match reader.read(&mut chunk).await {
-            Ok(count) => count,
-            Err(error) => {
-                tracing::debug!(%error, "prefix capture reader closed");
-                return output;
+/// Reads a stream's prefix into a buffer the owner can take back even when the
+/// reader is still blocked on a pipe held open by a grandchild.
+struct PrefixReader {
+    output: Arc<Mutex<Vec<u8>>>,
+    task: JoinHandle<()>,
+}
+
+impl PrefixReader {
+    fn spawn(reader: Option<impl AsyncRead + Unpin + Send + 'static>, limit: usize) -> Self {
+        let output = Arc::new(Mutex::new(Vec::new()));
+        let sink = output.clone();
+        let task = tokio::spawn(async move {
+            let Some(mut reader) = reader else { return };
+            let mut chunk = [0; 8192];
+            loop {
+                let count = match reader.read(&mut chunk).await {
+                    Ok(0) => return,
+                    Ok(count) => count,
+                    Err(error) => {
+                        tracing::debug!(%error, "prefix capture reader closed");
+                        return;
+                    }
+                };
+                let mut output = sink.lock_recover();
+                if output.len() >= limit {
+                    return;
+                }
+                output.extend_from_slice(&chunk[..count]);
             }
-        };
-        if count == 0 || output.len() >= limit {
-            return output;
+        });
+        Self { output, task }
+    }
+
+    async fn finish(mut self) -> Vec<u8> {
+        if tokio::time::timeout(super::PUMP_DRAIN_GRACE, &mut self.task)
+            .await
+            .is_err()
+        {
+            self.task.abort();
         }
-        output.extend_from_slice(&chunk[..count]);
+        std::mem::take(&mut *self.output.lock_recover())
     }
 }
