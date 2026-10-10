@@ -21,7 +21,7 @@ async fn seed_step(
     kind: &str,
     status: StepStatus,
 ) {
-    let (step_id, kind) = (step_id.to_string(), kind.to_string());
+    let (step_id, kind) = (step_id.to_string(), kind.into());
     h.store
         .patch_checkpoint(run_id, move |cp| {
             cp.steps.insert(

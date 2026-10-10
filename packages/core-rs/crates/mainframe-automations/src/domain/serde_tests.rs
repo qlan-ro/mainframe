@@ -223,7 +223,7 @@ fn set_variable_round_trips_and_answers_the_three_exhaustive_methods() {
         "value": ["Release ", {"token": {"stepId": "collect", "output": "version"}}]
     }));
     assert_eq!(step.id(), "set-headline");
-    assert_eq!(step.kind_name(), "set_variable");
+    assert_eq!(step.kind().as_str(), "set_variable");
     assert!(!step.keep_going());
     let Step::SetVariable(set) = step else {
         panic!("expected set_variable")
