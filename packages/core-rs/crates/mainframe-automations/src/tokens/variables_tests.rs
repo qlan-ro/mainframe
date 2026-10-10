@@ -3,14 +3,13 @@
 //! fixtures/automations/variable-substitution.json.
 
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use serde_json::Value;
 
 use crate::domain::LoopMode;
 use crate::domain::{AutomationDefinition, TokenRef};
 use crate::engine::test_support::{
-    FakeClock, ask_agent_step, cond_is, loop_step, named_ask_agent_step, notify_step,
+    ask_agent_step, cond_is, fake_clock, loop_step, named_ask_agent_step, notify_step,
     parallel_step, repeat_step, retry_step, set_variable_step, text, token_ref,
 };
 
@@ -304,7 +303,7 @@ fn renders_every_shared_substitution_case() {
 
     for case in cases {
         let name = case["name"].as_str().unwrap();
-        let mut scope = Scope::root(Arc::new(FakeClock));
+        let mut scope = Scope::root(fake_clock());
         let mut names = NameMap::new();
         for (key, value) in case["scope"].as_object().unwrap() {
             if let Some(token_value) = TokenValue::from_json(value) {

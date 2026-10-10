@@ -13,7 +13,7 @@ use crate::domain::{
     AutomationCreateInput, AutomationDefinition, AutomationScope, DailySchedule, OnMissed,
     OnceSchedule, SchedulePattern, ScheduleTrigger, Trigger,
 };
-use crate::engine::test_support::{CollectingSink, FakeClock, FakePorts};
+use crate::engine::test_support::{CollectingSink, FakePorts, fake_clock};
 use crate::engine::{Interpreter, InterpreterDeps};
 use crate::store::{AutomationDb, AutomationStore, RunStore, RunTriggerKind};
 
@@ -38,7 +38,7 @@ async fn harness() -> SweepHarness {
         store: runs.clone(),
         ports: Arc::new(FakePorts::default()),
         events: Arc::new(CollectingSink::default()),
-        clock: Arc::new(FakeClock),
+        clock: fake_clock(),
         is_idempotent: None,
         agent_waits: None,
         on_finalized: None,

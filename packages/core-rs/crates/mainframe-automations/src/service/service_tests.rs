@@ -6,65 +6,23 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
+use mainframe_types::BoxFuture;
 use tempfile::TempDir;
 
 use crate::credentials::FileCredentialStore;
 use crate::domain::{
     AskMeStep, AutomationCreateInput, AutomationFormField, AutomationScope, FormFieldType, Step,
 };
-use crate::engine::BoxFuture;
 use crate::engine::test_support::{
-    CollectingSink, FakeClock, ask_agent_step, definition, notify_step, text,
+    CollectingSink, ask_agent_step, definition, fake_clock, notify_step, text,
 };
 use crate::error::StoreError;
-use crate::ports::{
-    AgentHandle, AgentOutcome, AgentPort, AgentPortError, AgentRequest, Notification, Notifier,
-    NotifyError, ProjectRegistry,
-};
+use crate::ports::{AgentHandle, AgentOutcome, AgentPort, AgentPortError, AgentRequest};
 use crate::store::RunStatus;
+use crate::testkit::{FakeAgentPort, FakeNotifier, FixedProjects};
 
 use super::start::StartError;
 use super::{AutomationsConfig, AutomationsEngine, AutomationsPorts, EngineError};
-
-struct NoAgent;
-
-impl AgentPort for NoAgent {
-    fn start(&self, _request: AgentRequest) -> BoxFuture<'_, Result<AgentHandle, AgentPortError>> {
-        Box::pin(async { Err(AgentPortError("no agent in this test".to_string())) })
-    }
-    fn watch<'a>(
-        &'a self,
-        _chat_id: &'a str,
-    ) -> BoxFuture<'a, Result<AgentOutcome, AgentPortError>> {
-        Box::pin(async { Err(AgentPortError("no agent in this test".to_string())) })
-    }
-    fn retry<'a>(
-        &'a self,
-        _chat_id: &'a str,
-        _correction: &'a str,
-    ) -> BoxFuture<'a, Result<AgentOutcome, AgentPortError>> {
-        Box::pin(async { Err(AgentPortError("no agent in this test".to_string())) })
-    }
-    fn cancel<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, Result<(), AgentPortError>> {
-        Box::pin(async { Ok(()) })
-    }
-}
-
-struct OkNotifier;
-
-impl Notifier for OkNotifier {
-    fn notify(&self, _notification: Notification) -> BoxFuture<'_, Result<(), NotifyError>> {
-        Box::pin(async { Ok(()) })
-    }
-}
-
-struct FixedProjects(String);
-
-impl ProjectRegistry for FixedProjects {
-    fn resolve_project_root<'a>(&'a self, _project_id: Option<&'a str>) -> BoxFuture<'a, String> {
-        Box::pin(async move { self.0.clone() })
-    }
-}
 
 pub(super) async fn engine() -> (Arc<AutomationsEngine>, Arc<CollectingSink>, TempDir) {
     let dir = tempfile::tempdir().unwrap();
@@ -77,11 +35,11 @@ pub(super) async fn engine() -> (Arc<AutomationsEngine>, Arc<CollectingSink>, Te
             credentials,
         },
         AutomationsPorts {
-            agent: Arc::new(NoAgent),
-            notifier: Arc::new(OkNotifier),
+            agent: Arc::new(FakeAgentPort::failing_start("no agent in this test")),
+            notifier: Arc::new(FakeNotifier::default()),
             events: sink.clone(),
             projects: Arc::new(FixedProjects(dir.path().to_string_lossy().into_owned())),
-            clock: Arc::new(FakeClock),
+            clock: fake_clock(),
             event_source: None,
             registry: None,
         },
@@ -107,10 +65,10 @@ async fn build_engine(
         },
         AutomationsPorts {
             agent,
-            notifier: Arc::new(OkNotifier),
+            notifier: Arc::new(FakeNotifier::default()),
             events: sink,
             projects: Arc::new(FixedProjects(".".to_string())),
-            clock: Arc::new(FakeClock),
+            clock: fake_clock(),
             event_source: None,
             registry: None,
         },
