@@ -190,15 +190,7 @@ impl HistorySnapshotCache {
             messages,
         })
         .map_err(|e| e.to_string())?;
-        // Write-then-rename: a reader never observes a half-written file, and a
-        // daemon crash mid-write leaves only an orphaned `.tmp` (next prune's
-        // `read_dir` skips it — non-`.json` — so it's inert, not a leak that
-        // breaks reads).
-        let tmp_path = self.snapshot_path(&format!("{chat_id}.{}.tmp", std::process::id()));
-        tokio::fs::write(&tmp_path, &json)
-            .await
-            .map_err(|e| e.to_string())?;
-        tokio::fs::rename(&tmp_path, self.snapshot_path(chat_id))
+        mainframe_runtime::fs::write_atomic(&self.snapshot_path(chat_id), &json, false)
             .await
             .map_err(|e| e.to_string())?;
         self.prune().await;

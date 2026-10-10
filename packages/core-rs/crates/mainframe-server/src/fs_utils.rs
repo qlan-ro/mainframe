@@ -198,7 +198,7 @@ pub(crate) async fn walk_project_files(
                 Ok(p) => p,
                 Err(_) => continue,
             };
-            if !crate::path_utils::is_within_base(root, &real_full) {
+            if !mainframe_runtime::fs::is_within_base(root, &real_full) {
                 continue;
             }
             let is_dir = match entry.file_type().await {

@@ -142,38 +142,17 @@ impl FileCredentialStore {
         }
     }
 
-    /// Serializes under the write lock (writers stay ordered), then writes a
-    /// nanoid-suffixed sibling and renames over the real file, so a reader
-    /// never sees a half-written file.
+    /// The caller holds the write lock so persisted updates remain ordered.
     async fn persist(&self, cache: &BTreeMap<String, Credentials>) -> Result<(), CredentialError> {
         let json = serde_json::to_string_pretty(cache)?;
         if let Some(parent) = self.path.parent() {
             tokio::fs::create_dir_all(parent).await?;
         }
-        let file_name = self
-            .path
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "automation-credentials.json".to_string());
-        let tmp = self
-            .path
-            .with_file_name(format!("{file_name}.tmp-{}", nanoid::nanoid!(8)));
-        tokio::fs::write(&tmp, json).await?;
-        set_owner_only(&tmp).await?;
-        tokio::fs::rename(&tmp, &self.path).await?;
+        mainframe_runtime::fs::write_atomic(&self.path, json.as_bytes(), true)
+            .await
+            .map_err(|error| error.source)?;
         Ok(())
     }
-}
-
-#[cfg(unix)]
-async fn set_owner_only(path: &std::path::Path) -> std::io::Result<()> {
-    use std::os::unix::fs::PermissionsExt;
-    tokio::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).await
-}
-
-#[cfg(not(unix))]
-async fn set_owner_only(_path: &std::path::Path) -> std::io::Result<()> {
-    Ok(())
 }
 
 impl CredentialStore for FileCredentialStore {

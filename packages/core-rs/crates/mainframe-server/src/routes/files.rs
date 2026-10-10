@@ -22,9 +22,10 @@ use serde::Serialize;
 use crate::async_err::internal_error;
 use crate::ctx::AppCtx;
 use crate::fs_utils::{has_binary_extension, is_ignored_dir, path_resolve, relative};
-use crate::path_utils::{resolve_and_validate_path, resolve_readable_path};
+use crate::path_utils::resolve_readable_path;
 use crate::respond::{fail, ok};
 use crate::ripgrep::{ListFilesOptions, list_files_with_ripgrep};
+use mainframe_runtime::fs::resolve_and_validate_path;
 
 const TREE_HIDDEN: &[&str] = &[".git"];
 

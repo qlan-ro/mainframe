@@ -9,7 +9,6 @@ pub mod github;
 pub mod http_action;
 pub mod manifest;
 pub mod notion;
-mod paths;
 pub mod registry;
 pub mod run_command;
 mod shell;

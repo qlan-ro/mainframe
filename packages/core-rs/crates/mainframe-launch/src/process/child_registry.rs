@@ -149,13 +149,17 @@ impl FileChildRegistry {
                 return;
             }
         };
-        let tmp = format!("{}.{}.tmp", self.file, std::process::id());
-        if let Err(err) = tokio::fs::write(&tmp, json).await {
-            tracing::warn!(target: "child-registry", ?err, file = %self.file, "child registry write failed");
-            return;
-        }
-        if let Err(err) = tokio::fs::rename(&tmp, &self.file).await {
-            tracing::warn!(target: "child-registry", ?err, file = %self.file, "child registry rename failed");
+        if let Err(err) =
+            mainframe_runtime::fs::write_atomic(Path::new(&self.file), json.as_bytes(), false).await
+        {
+            match err.stage {
+                mainframe_runtime::fs::AtomicWriteStage::Write => {
+                    tracing::warn!(target: "child-registry", err = ?err.source, file = %self.file, "child registry write failed");
+                }
+                mainframe_runtime::fs::AtomicWriteStage::Rename => {
+                    tracing::warn!(target: "child-registry", err = ?err.source, file = %self.file, "child registry rename failed");
+                }
+            }
         }
     }
 }

@@ -14,9 +14,9 @@ use crate::tokens::TokenValue;
 use super::manifest::{
     ActionAuth, ActionField, ActionGroup, ActionManifest, ActionOutput, ActionOutputType,
 };
-use super::paths::resolve_and_validate_path;
 use super::shell::{resolve_shell, spawn_script, tail_chars};
 use super::{Action, ActionCtx, ActionError, ActionOutputs, parse_input};
+use mainframe_runtime::fs::resolve_and_validate_path;
 
 const STDERR_TAIL_CHARS: usize = 4000;
 

@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 use mainframe_db::DatabaseManager;
 use mainframe_services::files::FileWatcherService;
 
-use crate::path_utils::resolve_and_validate_path;
+use mainframe_runtime::fs::resolve_and_validate_path;
 
 /// Composite map key so the same relative path under different projects/chats
 /// never collides. Mirrors `compositeKey`.
