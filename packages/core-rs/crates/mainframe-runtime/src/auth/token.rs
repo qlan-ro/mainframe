@@ -44,7 +44,7 @@ pub fn generate_token(secret: &str, device_id: &str, epoch: Option<i64>) -> Stri
 }
 
 /// Mirrors `validateToken(secret, token)`.
-pub fn validate_token(secret: &str, token: &str) -> Option<TokenPayload> {
+pub(crate) fn validate_token(secret: &str, token: &str) -> Option<TokenPayload> {
     let parts: Vec<&str> = token.split('.').collect();
     if parts.len() != 2 {
         return None;

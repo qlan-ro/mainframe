@@ -12,7 +12,7 @@ use serde_json::Value;
 pub const TASK_ID_PREFIX: &str = "Task #";
 
 /// Plain text of a task tool result — bare string or ToolCallResult-shaped `{ content }`.
-pub fn task_result_text(result: &Value) -> String {
+pub(crate) fn task_result_text(result: &Value) -> String {
     if let Value::String(s) = result {
         return s.clone();
     }

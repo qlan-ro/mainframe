@@ -51,7 +51,7 @@ fn is_capture_row(line: &str) -> bool {
 /// Drops the sentinel, the header, and the row run, keeping the user's own text.
 /// A malformed line ends the row run and everything from there survives —
 /// `parseSandboxCaptureBlock`'s semantics.
-pub fn strip_sandbox_capture_block(text: &str) -> String {
+pub(crate) fn strip_sandbox_capture_block(text: &str) -> String {
     let Some(body) = text.strip_prefix(SANDBOX_CAPTURE_SENTINEL) else {
         return text.to_string();
     };
@@ -93,7 +93,7 @@ fn is_reference_line(line: &str) -> bool {
 /// Strips every block-initial run of reference lines (a run starting at line 0 or
 /// preceded by a blank line) plus one adjacent blank line, mirroring the TS
 /// `stripReferenceLines` byte-for-byte.
-pub fn strip_reference_lines(text: &str) -> String {
+pub(crate) fn strip_reference_lines(text: &str) -> String {
     let source: Vec<&str> = text.split('\n').collect();
     let mut kept: Vec<&str> = Vec::new();
     let mut changed = false;
@@ -131,7 +131,7 @@ pub fn strip_reference_lines(text: &str) -> String {
 /// What the reader saw: every fenced block stripped. Idempotent. References go
 /// first — they sit at offset 0, so removing them is what puts a capture sentinel
 /// back at the start of the string where its own strip can find it.
-pub fn visible_message_text(text: &str) -> String {
+pub(crate) fn visible_message_text(text: &str) -> String {
     strip_sandbox_capture_block(&strip_reference_lines(&unwrap_agent_message(text)))
 }
 
@@ -144,7 +144,7 @@ const AGENT_MESSAGE_CLOSE: &str = "</mainframe-agent-message>";
 /// prompts from the orchestration MCP server), so a chat an agent launched is
 /// titled after the prompt, not the marker. Mirrors the TS
 /// `parseAgentMessage`; anything else passes through unchanged.
-pub fn unwrap_agent_message(text: &str) -> String {
+pub(crate) fn unwrap_agent_message(text: &str) -> String {
     let trimmed = text.trim();
     let Some(rest) = trimmed.strip_prefix(AGENT_MESSAGE_OPEN) else {
         return text.to_string();

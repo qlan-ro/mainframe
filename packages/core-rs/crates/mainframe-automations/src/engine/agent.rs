@@ -45,7 +45,7 @@ impl AgentVerb {
 
     /// Two-phase init: the Interpreter owns the VerbPorts that contain this
     /// verb, so the advancer is bound after construction.
-    pub fn bind_advancer(&self, advancer: Arc<dyn RunAdvancer>) {
+    pub(crate) fn bind_advancer(&self, advancer: Arc<dyn RunAdvancer>) {
         if self.advancer.set(advancer).is_err() {
             tracing::warn!("agent verb advancer already bound; ignoring rebind");
         }
@@ -118,7 +118,7 @@ impl AgentVerb {
 
     /// Boot/restart path: re-attach a watch for every `waiting` ask_agent
     /// entry (its chatId is on the checkpoint — the wait is durable).
-    pub fn resume_run_watches(self: &Arc<Self>, run: &RunRecord) {
+    pub(crate) fn resume_run_watches(self: &Arc<Self>, run: &RunRecord) {
         if run.status.is_terminal() {
             return;
         }

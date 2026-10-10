@@ -132,7 +132,7 @@ impl ClaudeSession {
     pub fn is_spawned(&self) -> bool {
         self.state().child.is_some()
     }
-    pub fn is_endpoint_session(&self) -> bool {
+    pub(crate) fn is_endpoint_session(&self) -> bool {
         self.shared.endpoint.load(Ordering::SeqCst)
     }
 

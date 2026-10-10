@@ -61,7 +61,8 @@ impl MockCliAdapter {
 
     /// Opt the mock adapter into reporting the no-persistence capability, so
     /// integration tests can exercise both the on and off paths (todo #346).
-    pub fn with_no_persistence(mut self, value: bool) -> Self {
+    #[cfg(test)]
+    pub(crate) fn with_no_persistence(mut self, value: bool) -> Self {
         self.no_persistence = value;
         self
     }
@@ -82,7 +83,7 @@ impl MockCliAdapter {
     }
 
     /// The environment variable naming this adapter's recordings key.
-    pub fn recording_key_var(&self) -> Option<String> {
+    pub(crate) fn recording_key_var(&self) -> Option<String> {
         let (id, _) = self.identity.as_ref()?;
         Some(format!(
             "E2E_RECORDING_KEY_{}",
@@ -98,7 +99,8 @@ impl MockCliAdapter {
     }
 
     /// The last request `pin_fork_point` received, if any.
-    pub fn last_pin_request(&self) -> Option<ForkPinRequest> {
+    #[cfg(test)]
+    pub(crate) fn last_pin_request(&self) -> Option<ForkPinRequest> {
         self.last_pin_request
             .lock()
             .unwrap_or_else(|e| e.into_inner())

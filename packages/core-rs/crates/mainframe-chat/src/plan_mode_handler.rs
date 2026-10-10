@@ -49,7 +49,7 @@ impl<C: PlanModeContext> PlanModeHandler<C> {
     /// No active session path. Persist the chosen execution mode and clear
     /// planMode so a follow-up spawn starts out of plan. The adapter handler is
     /// intentionally NOT invoked here — there is no session for it to manipulate.
-    pub fn handle_no_process(
+    pub(crate) fn handle_no_process(
         &self,
         chat_id: &str,
         active: &Arc<Mutex<ActiveChat>>,
@@ -74,7 +74,7 @@ impl<C: PlanModeContext> PlanModeHandler<C> {
     }
 
     /// User approved AND asked to clear context. Delegates to the adapter handler.
-    pub async fn handle_clear_context(
+    pub(crate) async fn handle_clear_context(
         &self,
         chat_id: &str,
         active: &Arc<Mutex<ActiveChat>>,
@@ -97,7 +97,7 @@ impl<C: PlanModeContext> PlanModeHandler<C> {
     }
 
     /// User approved without clearing context. Delegates to the adapter handler.
-    pub async fn handle_escalation(
+    pub(crate) async fn handle_escalation(
         &self,
         chat_id: &str,
         active: &Arc<Mutex<ActiveChat>>,

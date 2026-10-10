@@ -69,7 +69,7 @@ impl ControlRequestChannel {
         request_id
     }
 
-    pub async fn send_awaiting(
+    pub(crate) async fn send_awaiting(
         &self,
         stdin: Option<&StdinTx>,
         request: &Value,
@@ -133,7 +133,7 @@ impl ControlRequestChannel {
     }
 
     /// Fail every pending caller when the session dies, so no awaiter hangs forever.
-    pub fn drain_all_as_failed(&self) {
+    pub(crate) fn drain_all_as_failed(&self) {
         let drained: Vec<Pending> = self
             .pending
             .lock()

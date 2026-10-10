@@ -25,7 +25,7 @@ pub fn new_external_session_cache() -> ExternalSessionCache {
     Arc::new(Mutex::new(HashMap::new()))
 }
 
-pub fn get_cached(
+pub(crate) fn get_cached(
     cache: &ExternalSessionCache,
     session_id: &str,
     mtime_ms: f64,
@@ -39,7 +39,7 @@ pub fn get_cached(
     Some(e.meta.clone())
 }
 
-pub fn set_cached(
+pub(crate) fn set_cached(
     cache: &ExternalSessionCache,
     session_id: &str,
     mtime_ms: f64,
@@ -56,7 +56,8 @@ pub fn set_cached(
     );
 }
 
-pub fn clear_external_session_cache(cache: &ExternalSessionCache) {
+#[cfg(test)]
+pub(crate) fn clear_external_session_cache(cache: &ExternalSessionCache) {
     cache.lock().unwrap_or_else(|e| e.into_inner()).clear();
 }
 

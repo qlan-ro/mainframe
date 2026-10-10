@@ -137,7 +137,7 @@ pub async fn continue_in_project_root(
     Ok(())
 }
 
-pub async fn recreate_chat_worktree(
+pub(crate) async fn recreate_chat_worktree(
     deps: &dyn DegradedRecoveryDeps,
     chat_id: &str,
 ) -> Result<(), DegradedRecoveryError> {

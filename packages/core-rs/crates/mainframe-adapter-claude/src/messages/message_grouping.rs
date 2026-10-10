@@ -26,7 +26,7 @@ pub struct GroupedMessage {
     pub tool_results: HashMap<String, MessageContent>,
 }
 
-pub fn is_assistant_or_tool_use(t: ChatMessageType) -> bool {
+pub(crate) fn is_assistant_or_tool_use(t: ChatMessageType) -> bool {
     matches!(t, ChatMessageType::Assistant | ChatMessageType::ToolUse)
 }
 
@@ -57,7 +57,7 @@ pub enum GroupingDecision {
     NewGroup,
 }
 
-pub fn classify_message(msg: &ChatMessage, prev_mergeable: bool) -> GroupingDecision {
+pub(crate) fn classify_message(msg: &ChatMessage, prev_mergeable: bool) -> GroupingDecision {
     if msg.r#type == ChatMessageType::System
         && let Some(duration) = turn_duration(msg)
     {

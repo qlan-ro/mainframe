@@ -61,7 +61,7 @@ impl AutomationStore {
             .await
     }
 
-    pub async fn list_enabled(&self) -> Result<Vec<AutomationRecord>, StoreError> {
+    pub(crate) async fn list_enabled(&self) -> Result<Vec<AutomationRecord>, StoreError> {
         self.db
             .call(|conn| {
                 let mut stmt = conn

@@ -36,7 +36,7 @@ pub struct CodexTurnConfig {
 /// deliberately does NOT re-gate on model capabilities (see the TS note): `fast`
 /// is already clamped by resolveTuning and `codex.personality` is already gated by
 /// the settings UI.
-pub fn build_turn_config(
+pub(crate) fn build_turn_config(
     tuning: &ResolvedTuning,
     codex: &CodexProviderTuning,
     model: &str,

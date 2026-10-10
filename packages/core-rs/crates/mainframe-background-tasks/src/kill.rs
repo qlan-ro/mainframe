@@ -101,12 +101,14 @@ fn lock_kill_seam() -> MutexGuard<'static, KillSeam> {
 }
 
 /// Test-only seam — swap the tree-kill implementation.
-pub fn set_tree_kill_for_tests(fn_: TreeKillFn) {
+#[cfg(test)]
+pub(crate) fn set_tree_kill_for_tests(fn_: TreeKillFn) {
     lock_kill_seam().tree_kill = fn_;
 }
 
 /// Test-only seam — swap the `ps -o comm=` implementation.
-pub fn set_ps_comm_for_tests(fn_: PsCommFn) {
+#[cfg(test)]
+pub(crate) fn set_ps_comm_for_tests(fn_: PsCommFn) {
     lock_kill_seam().ps_comm = fn_;
 }
 

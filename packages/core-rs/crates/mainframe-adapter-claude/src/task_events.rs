@@ -133,7 +133,7 @@ impl ClaudeTaskEvents {
 
     /// `task_progress`: forwards cumulative usage and an optional structure
     /// snapshot to the workflow-run store.
-    pub fn apply_workflow_progress(
+    pub(crate) fn apply_workflow_progress(
         &self,
         chat_id: &str,
         task_id: &str,
@@ -149,7 +149,7 @@ impl ClaudeTaskEvents {
     }
 
     /// Called from events.rs for every tool_use event.
-    pub fn capture_tool_use(&self, tool_use_id: &str, name: &str, input: Option<&Value>) {
+    pub(crate) fn capture_tool_use(&self, tool_use_id: &str, name: &str, input: Option<&Value>) {
         let run_in_background = input
             .and_then(|i| i.get("run_in_background"))
             .and_then(Value::as_bool)
@@ -261,7 +261,7 @@ impl ClaudeTaskEvents {
     /// `task_updated` fires alongside `task_notification` (post-leak CLI addition).
     /// Only a terminal status closes the task — the tracker dedups when the
     /// notification already landed; non-terminal updates carry nothing we track.
-    pub fn handle_task_updated(
+    pub(crate) fn handle_task_updated(
         &self,
         chat_id: &str,
         payload: TaskUpdatedPayload,
@@ -285,7 +285,7 @@ impl ClaudeTaskEvents {
         self.stamp_run(chat_id, &payload.task_id, &payload.status, loc);
     }
 
-    pub fn handle_task_notification(
+    pub(crate) fn handle_task_notification(
         &self,
         chat_id: &str,
         payload: TaskNotificationPayload,

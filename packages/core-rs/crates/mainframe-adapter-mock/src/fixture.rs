@@ -43,11 +43,11 @@ impl ReplayState {
         Self { events, cursor: 0 }
     }
 
-    pub fn is_exhausted(&self) -> bool {
+    pub(crate) fn is_exhausted(&self) -> bool {
         self.cursor >= self.events.len()
     }
 
-    pub fn consume_input(&mut self) -> Option<RecordedEvent> {
+    pub(crate) fn consume_input(&mut self) -> Option<RecordedEvent> {
         let event = self.events.get(self.cursor)?;
         if event.dir != EventDirection::In {
             return None;
@@ -56,7 +56,7 @@ impl ReplayState {
         Some(event.clone())
     }
 
-    pub fn drain_outputs(&mut self) -> Vec<RecordedEvent> {
+    pub(crate) fn drain_outputs(&mut self) -> Vec<RecordedEvent> {
         let start = self.cursor;
         while self.cursor < self.events.len() && self.events[self.cursor].dir != EventDirection::In
         {
@@ -65,7 +65,7 @@ impl ReplayState {
         self.events[start..self.cursor].to_vec()
     }
 
-    pub fn drain_optional_interrupts(&mut self) -> Vec<RecordedEvent> {
+    pub(crate) fn drain_optional_interrupts(&mut self) -> Vec<RecordedEvent> {
         let mut drained = Vec::new();
         while self.peek_input("interrupt") {
             self.cursor += 1;
@@ -74,7 +74,7 @@ impl ReplayState {
         drained
     }
 
-    pub fn peek_input(&self, method: &str) -> bool {
+    pub(crate) fn peek_input(&self, method: &str) -> bool {
         self.events
             .get(self.cursor)
             .map(|event| event.dir == EventDirection::In && event.method == method)

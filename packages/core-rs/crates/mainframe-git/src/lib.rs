@@ -6,7 +6,6 @@
 #![forbid(unsafe_code)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
-pub mod exec_git;
 pub mod git_exec;
 pub mod git_parse;
 pub mod git_service;

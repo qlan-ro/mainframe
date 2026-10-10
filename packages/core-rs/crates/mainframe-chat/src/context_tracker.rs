@@ -145,7 +145,7 @@ pub async fn get_session_context(
 /// keep every entry whose file exists (distinct real skills survive), and drop
 /// the non-existent fallback stubs. When nothing in the group exists, keep the
 /// first so the skill name still surfaces. `path_exists` is injectable for tests.
-pub fn dedupe_skill_files(
+pub(crate) fn dedupe_skill_files(
     skills: Vec<SkillFileEntry>,
     path_exists: impl Fn(&str) -> bool,
 ) -> Vec<SkillFileEntry> {
@@ -203,7 +203,7 @@ pub struct DedupedContextFiles {
 /// to the same physical file as a global one (e.g. a session opened at the home
 /// dir, where .claude/CLAUDE.md IS the global CLAUDE.md) so it isn't listed twice
 /// (#222). Global entries are kept as canonical.
-pub fn dedupe_context_files(
+pub(crate) fn dedupe_context_files(
     global: Vec<ContextFile>,
     project: Vec<ContextFile>,
     project_path: &str,
@@ -257,7 +257,7 @@ fn join_path(base: &str, rest: &str) -> String {
     )
 }
 
-pub fn extract_latest_plan_file_from_messages(messages: &[ChatMessage]) -> Option<String> {
+pub(crate) fn extract_latest_plan_file_from_messages(messages: &[ChatMessage]) -> Option<String> {
     for msg in messages.iter().rev() {
         for block in msg.content.iter().rev() {
             let text = match block {
@@ -279,7 +279,7 @@ pub fn extract_latest_plan_file_from_messages(messages: &[ChatMessage]) -> Optio
     None
 }
 
-pub fn extract_plan_file_path_from_text(text: &str) -> Option<String> {
+pub(crate) fn extract_plan_file_path_from_text(text: &str) -> Option<String> {
     if let Some(saved) = match_saved_plan(text) {
         return Some(saved);
     }

@@ -12,14 +12,11 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
 pub mod attachment_context;
-pub mod config_context;
 pub mod context;
 pub mod db_context;
-pub mod event_bus;
 pub mod github_port;
 mod github_port_guard;
 pub mod manager;
-pub mod security;
 pub mod services;
 pub mod todos;
 pub mod todos_github;
@@ -29,10 +26,9 @@ pub mod ui_context;
 mod github_port_tests;
 
 pub use context::{
-    AdapterRegistrar, AttachmentData, AttachmentUpload, ChatService, CreateChatArgs,
-    CreateChatResult, EmitSink, NotifyOptions, PluginAttachments, PluginConfig, PluginContext,
-    PluginContextDeps, PluginDatabase, PluginEventBus, PluginHostDb, PluginUi, ProjectService,
-    build_plugin_context,
+    AttachmentData, AttachmentUpload, ChatService, CreateChatArgs, CreateChatResult, EmitSink,
+    NotifyOptions, PluginAttachments, PluginContext, PluginContextDeps, PluginDatabase,
+    PluginHostDb, PluginUi, build_plugin_context,
 };
 pub use db_context::PluginDatabaseContext;
 pub use github_port::{

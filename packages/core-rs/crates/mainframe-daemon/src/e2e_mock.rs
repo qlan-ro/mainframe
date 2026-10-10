@@ -13,7 +13,7 @@ pub const SECOND_MOCK_ID: &str = "mock-cli-b";
 pub const SECOND_MOCK_NAME: &str = "Mock CLI B";
 
 /// The mock adapters to register, given an env lookup (injected for tests).
-pub fn mock_adapters(
+pub(crate) fn mock_adapters(
     tracker: &Arc<BackgroundTaskTracker>,
     workflows: &Arc<ClaudeWorkflowStore>,
     env: impl Fn(&str) -> Option<String>,

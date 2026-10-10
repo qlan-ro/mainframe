@@ -60,7 +60,7 @@ impl InteractionStore {
         self.db.call(move |conn| get_by_id(conn, &id)).await
     }
 
-    pub async fn find_pending_for_step(
+    pub(crate) async fn find_pending_for_step(
         &self,
         run_id: &str,
         step_ref: &str,
@@ -79,7 +79,7 @@ impl InteractionStore {
             .await
     }
 
-    pub async fn list_pending(&self) -> Result<Vec<InteractionRecord>, StoreError> {
+    pub(crate) async fn list_pending(&self) -> Result<Vec<InteractionRecord>, StoreError> {
         self.db
             .call(|conn| {
                 let mut stmt = conn.prepare(
@@ -95,7 +95,7 @@ impl InteractionStore {
     /// step's Record output in ONE transaction. Returns `false` when the
     /// interaction was already answered or cancelled (the second claim).
     /// Any failure past the claim rolls the claim back with it.
-    pub async fn resolve_interaction(
+    pub(crate) async fn resolve_interaction(
         &self,
         id: &str,
         answers: serde_json::Map<String, Value>,
@@ -154,7 +154,10 @@ impl InteractionStore {
     /// `RunStore::finalize`'s single transaction — this standalone variant
     /// is the ask_me verb's cleanup when its park loses the cancel race
     /// (the interaction row was created after finalize already swept).
-    pub async fn cancel_pending_for_run(&self, run_id: &str) -> Result<Vec<String>, StoreError> {
+    pub(crate) async fn cancel_pending_for_run(
+        &self,
+        run_id: &str,
+    ) -> Result<Vec<String>, StoreError> {
         let run_id = run_id.to_string();
         self.db
             .call(move |conn| {

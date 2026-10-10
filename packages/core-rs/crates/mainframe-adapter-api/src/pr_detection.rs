@@ -18,7 +18,6 @@ mod text;
 
 pub use command::{
     ToolUseMeta, is_pr_create_command, is_pr_mutation_command, parse_pr_identifier_from_args,
-    should_scan_tool_result_for_pr,
 };
 pub use history::scan_history_for_prs;
 pub use live::LivePrScanner;
@@ -43,7 +42,7 @@ pub struct DetectedPrCore {
 impl DetectedPrCore {
     /// Rebuild the full `DetectedPr` (`{ ...core, source }`) — the events layer
     /// stamps `source` when emitting `onPrDetected`.
-    pub fn with_source(self, source: DetectedPrSource) -> DetectedPr {
+    pub(crate) fn with_source(self, source: DetectedPrSource) -> DetectedPr {
         DetectedPr {
             url: self.url,
             owner: self.owner,

@@ -41,7 +41,7 @@ pub fn no_persistence_for_spawn(temporary: bool, adapter_supports_no_persistence
 /// pure half of `lifecycle_manager::ChatLifecycleManager::mark_context_lost_if_needed`
 /// — the DB write, active-cell mirror and broadcast stay there (they need the
 /// deps seam and the active-chat cell this module does not have access to).
-pub fn take_context_loss(chat: &mut Chat, now: &str) -> bool {
+pub(crate) fn take_context_loss(chat: &mut Chat, now: &str) -> bool {
     if !context_was_lost(
         chat.vendor_session_ephemeral,
         chat.claude_session_id.as_deref(),

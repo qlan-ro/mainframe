@@ -76,14 +76,16 @@ fn lock_seam() -> MutexGuard<'static, Seam> {
 }
 
 /// Test-only seam (also resets the ENOENT warn-once latch).
-pub fn set_exec_for_tests(fn_: ExecFn) {
+#[cfg(test)]
+pub(crate) fn set_exec_for_tests(fn_: ExecFn) {
     let mut g = lock_seam();
     g.exec = fn_;
     g.warned_missing = false;
 }
 
 /// Test-only seam — swap the logger so warn calls are observable.
-pub fn set_logger_for_tests(logger: WarnFn) {
+#[cfg(test)]
+pub(crate) fn set_logger_for_tests(logger: WarnFn) {
     let mut g = lock_seam();
     g.logger = logger;
     g.warned_missing = false;
@@ -213,16 +215,17 @@ fn parse_pids(stdout: &str, accept: impl Fn(&str) -> bool) -> Vec<u32> {
     pids
 }
 
-pub async fn lsof_writers_detailed(path: &str) -> Result<Vec<u32>, String> {
+pub(crate) async fn lsof_writers_detailed(path: &str) -> Result<Vec<u32>, String> {
     let stdout = run_lsof(path).await?;
     Ok(parse_pids(&stdout, |m| m == "w" || m == "u"))
 }
 
-pub async fn lsof_writers(path: &str) -> Vec<u32> {
+pub(crate) async fn lsof_writers(path: &str) -> Vec<u32> {
     lsof_writers_detailed(path).await.unwrap_or_default()
 }
 
-pub async fn lsof_any(path: &str) -> Vec<u32> {
+#[cfg(test)]
+pub(crate) async fn lsof_any(path: &str) -> Vec<u32> {
     match run_lsof(path).await {
         Ok(stdout) => parse_pids(&stdout, |_| true),
         Err(_) => Vec::new(),

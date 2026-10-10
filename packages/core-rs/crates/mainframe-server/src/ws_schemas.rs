@@ -28,7 +28,7 @@ impl ClientEventError {
 
 /// Parse a raw WS text frame into a validated `ClientEvent`, mirroring
 /// `JSON.parse` → `ClientEventSchema.safeParse`.
-pub fn parse_client_event(raw: &str) -> Result<ClientEvent, ClientEventError> {
+pub(crate) fn parse_client_event(raw: &str) -> Result<ClientEvent, ClientEventError> {
     let value: serde_json::Value =
         serde_json::from_str(raw).map_err(|_| ClientEventError::InvalidJson)?;
     let event: ClientEvent =

@@ -12,23 +12,19 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use mainframe_adapter_api::BoxFuture;
-use mainframe_types::chat::{Chat, Project};
+use mainframe_types::chat::Chat;
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::plugin::{
-    ChatEvent, ChatSummary, PluginAttachmentMeta, PluginCapability, PluginManifest, ProjectSummary,
-    PublicDaemonEvent, UiZone,
+    ChatSummary, PluginAttachmentMeta, PluginCapability, PluginManifest, UiZone,
 };
 use rusqlite::types::Value as SqlValue;
 use serde::Serialize;
-use serde_json::{Map, Value};
 
 use crate::PluginError;
 use crate::attachment_context::FsAttachmentContext;
-use crate::config_context::create_plugin_config;
 use crate::db_context::{PluginDatabaseContext, Row};
-use crate::event_bus::{PublicDaemonBus, create_plugin_event_bus};
 use crate::github_port::GitHubIssues;
-use crate::services::{build_chat_service, build_project_service};
+use crate::services::build_chat_service;
 use crate::ui_context::create_plugin_ui_context;
 
 /// Event fan-out sink handed to every context (`emitEvent`).
@@ -123,31 +119,6 @@ pub trait PluginUi: Send + Sync {
     fn notify(&self, options: NotifyOptions);
 }
 
-/// `PluginConfig` — namespaced settings.
-pub trait PluginConfig: Send + Sync {
-    fn get(&self, key: &str) -> Option<Value>;
-    fn set(&self, key: &str, value: Value);
-    fn get_all(&self) -> Map<String, Value>;
-}
-
-/// `PluginEventBus` — plugin-scoped + sanitized public events
-/// (`daemon:public-events`).
-pub trait PluginEventBus: Send + Sync {
-    fn emit(&self, event: &str, payload: Value) -> Result<(), PluginError>;
-    fn on(&self, event: &str, handler: Arc<dyn Fn(Value) + Send + Sync>)
-    -> Result<(), PluginError>;
-    fn on_daemon_event(
-        &self,
-        event: &str,
-        handler: Arc<dyn Fn(PublicDaemonEvent) + Send + Sync>,
-    ) -> Result<(), PluginError>;
-    fn on_chat_event(
-        &self,
-        event: &str,
-        handler: Arc<dyn Fn(ChatEvent) + Send + Sync>,
-    ) -> Result<(), PluginError>;
-}
-
 /// `ChatServiceAPI` exposed to plugins.
 pub trait ChatService: Send + Sync {
     fn list_chats(&self, project_id: &str) -> BoxFuture<'_, Result<Vec<ChatSummary>, PluginError>>;
@@ -161,21 +132,6 @@ pub trait ChatService: Send + Sync {
         &self,
         args: CreateChatArgs,
     ) -> BoxFuture<'_, Result<CreateChatResult, PluginError>>;
-}
-
-/// `ProjectServiceAPI` exposed to plugins.
-pub trait ProjectService: Send + Sync {
-    fn list_projects(&self) -> BoxFuture<'_, Result<Vec<ProjectSummary>, PluginError>>;
-    fn get_project_by_id(
-        &self,
-        id: &str,
-    ) -> BoxFuture<'_, Result<Option<ProjectSummary>, PluginError>>;
-}
-
-/// `AdapterRegistrationAPI` — `adapters` capability. No builtin uses it in v1
-/// (claude/codex are native crates); kept for the manifest/capability model.
-pub trait AdapterRegistrar: Send + Sync {
-    fn register(&self, adapter: Value);
 }
 
 /// The host database surface the context reads (the `DatabaseManager` slice the
@@ -192,9 +148,6 @@ pub trait PluginHostDb: Send + Sync {
         permission_mode: Option<&str>,
     ) -> Chat;
     fn settings_get(&self, category: &str, key: &str) -> Option<String>;
-    fn settings_set(&self, category: &str, key: &str, value: &str);
-    fn projects_list(&self) -> Vec<Project>;
-    fn projects_get(&self, id: &str) -> Option<Project>;
 }
 
 type UnloadFn = Box<dyn FnOnce() + Send>;
@@ -204,19 +157,15 @@ pub struct PluginContext {
     pub manifest: PluginManifest,
     pub db: Arc<dyn PluginDatabase>,
     pub attachments: Arc<dyn PluginAttachments>,
-    pub events: Arc<dyn PluginEventBus>,
     pub ui: Arc<dyn PluginUi>,
-    pub config: Arc<dyn PluginConfig>,
     pub chats: Arc<dyn ChatService>,
-    pub projects: Arc<dyn ProjectService>,
-    pub adapters: Option<Arc<dyn AdapterRegistrar>>,
     pub github: Arc<dyn GitHubIssues>,
     on_unload: Mutex<Vec<UnloadFn>>,
 }
 
 impl PluginContext {
     /// `onUnload(fn)` — register a teardown callback.
-    pub fn on_unload(&self, cb: impl FnOnce() + Send + 'static) {
+    pub(crate) fn on_unload(&self, cb: impl FnOnce() + Send + 'static) {
         self.on_unload
             .lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -225,7 +174,7 @@ impl PluginContext {
 
     /// Drain and return the registered teardown callbacks (the manager runs them
     /// during `unloadAll`).
-    pub fn take_unload_callbacks(&self) -> Vec<UnloadFn> {
+    pub(crate) fn take_unload_callbacks(&self) -> Vec<UnloadFn> {
         std::mem::take(&mut *self.on_unload.lock().unwrap_or_else(|e| e.into_inner()))
     }
 }
@@ -235,10 +184,7 @@ pub struct PluginContextDeps {
     pub manifest: PluginManifest,
     pub plugin_dir: PathBuf,
     pub host_db: Arc<dyn PluginHostDb>,
-    pub daemon_bus: Arc<PublicDaemonBus>,
     pub emit: EmitSink,
-    /// The adapter registrar, exposed only when `adapters` is declared.
-    pub adapters: Option<Arc<dyn AdapterRegistrar>>,
     /// The GitHub Issues port, exposed only when `http:outbound` is declared
     /// (D2). `None` when the daemon's automations engine failed to start.
     pub github: Option<Arc<dyn GitHubIssues>>,
@@ -265,12 +211,6 @@ pub fn build_plugin_context(deps: PluginContextDeps) -> Result<Arc<PluginContext
         Arc::new(guards::GuardAttachments)
     };
 
-    let events: Arc<dyn PluginEventBus> = if has(PluginCapability::DaemonPublicEvents) {
-        Arc::new(create_plugin_event_bus(&deps.manifest.id, deps.daemon_bus))
-    } else {
-        Arc::new(guards::GuardEventBus)
-    };
-
     let ui: Arc<dyn PluginUi> =
         if has(PluginCapability::UiPanels) || has(PluginCapability::UiNotifications) {
             let host_db = Arc::clone(&deps.host_db);
@@ -284,36 +224,11 @@ pub fn build_plugin_context(deps: PluginContextDeps) -> Result<Arc<PluginContext
             Arc::new(guards::NoopUi)
         };
 
-    let config = {
-        let read_db = Arc::clone(&deps.host_db);
-        let write_db = Arc::clone(&deps.host_db);
-        Arc::new(create_plugin_config(
-            &deps.manifest.id,
-            Box::new(move |key| {
-                read_db
-                    .settings_get("plugin", key)
-                    .and_then(|s| serde_json::from_str(&s).ok())
-            }),
-            Box::new(move |key, value| {
-                let encoded = serde_json::to_string(&value).unwrap_or_default();
-                write_db.settings_set("plugin", key, &encoded);
-            }),
-        ))
-    };
-
     let chats = build_chat_service(
         &deps.manifest,
         Arc::clone(&deps.host_db),
         Arc::clone(&deps.emit),
     );
-    let projects = build_project_service(Arc::clone(&deps.host_db));
-
-    let adapters = if has(PluginCapability::Adapters) {
-        deps.adapters
-    } else {
-        None
-    };
-
     let github: Arc<dyn GitHubIssues> = if has(PluginCapability::HttpOutbound) {
         match deps.github {
             Some(github) => github,
@@ -327,12 +242,8 @@ pub fn build_plugin_context(deps: PluginContextDeps) -> Result<Arc<PluginContext
         manifest: deps.manifest,
         db,
         attachments,
-        events,
         ui,
-        config,
         chats,
-        projects,
-        adapters,
         github,
         on_unload: Mutex::new(Vec::new()),
     }))
@@ -408,30 +319,6 @@ mod guards {
         }
         fn delete(&self, _e: &str, _id: &str) -> BoxFuture<'_, Result<(), PluginError>> {
             Box::pin(async { Err(cap_err("storage")) })
-        }
-    }
-
-    pub struct GuardEventBus;
-    impl PluginEventBus for GuardEventBus {
-        fn emit(&self, _e: &str, _p: Value) -> Result<(), PluginError> {
-            Err(cap_err("daemon:public-events"))
-        }
-        fn on(&self, _e: &str, _h: Arc<dyn Fn(Value) + Send + Sync>) -> Result<(), PluginError> {
-            Err(cap_err("daemon:public-events"))
-        }
-        fn on_daemon_event(
-            &self,
-            _e: &str,
-            _h: Arc<dyn Fn(PublicDaemonEvent) + Send + Sync>,
-        ) -> Result<(), PluginError> {
-            Err(cap_err("daemon:public-events"))
-        }
-        fn on_chat_event(
-            &self,
-            _e: &str,
-            _h: Arc<dyn Fn(ChatEvent) + Send + Sync>,
-        ) -> Result<(), PluginError> {
-            Err(cap_err("daemon:public-events"))
         }
     }
 

@@ -144,7 +144,7 @@ pub(crate) fn expand_user_path(path: &str) -> PathBuf {
 
 /// Registers every launch built-in (Node actions/register-all.ts). MCP stays
 /// a catalog seam (contract §9) — nothing registers an `mcp:*` action here.
-pub fn register_builtin_actions(registry: &mut ActionRegistry) -> Result<(), ActionError> {
+pub(crate) fn register_builtin_actions(registry: &mut ActionRegistry) -> Result<(), ActionError> {
     registry.register(Box::new(run_command::RunCommandAction))?;
     registry.register(Box::new(files::FilesAppendAction))?;
     registry.register(Box::new(files::FilesWriteAction))?;
@@ -154,7 +154,7 @@ pub fn register_builtin_actions(registry: &mut ActionRegistry) -> Result<(), Act
 }
 
 /// Curated connectors (plan Phase 7).
-pub fn register_curated_actions(registry: &mut ActionRegistry) -> Result<(), ActionError> {
+pub(crate) fn register_curated_actions(registry: &mut ActionRegistry) -> Result<(), ActionError> {
     registry.register(Box::new(github::GithubCreatePrAction::new()))?;
     registry.register(Box::new(github::GithubListPrsAction::new()))?;
     registry.register(Box::new(notion::NotionAddRowAction::new()))?;
@@ -164,7 +164,7 @@ pub fn register_curated_actions(registry: &mut ActionRegistry) -> Result<(), Act
 
 /// The launch catalog: built-ins + curated connectors, in Node's
 /// register-all.ts order.
-pub fn register_all_actions(registry: &mut ActionRegistry) -> Result<(), ActionError> {
+pub(crate) fn register_all_actions(registry: &mut ActionRegistry) -> Result<(), ActionError> {
     register_builtin_actions(registry)?;
     register_curated_actions(registry)?;
     Ok(())

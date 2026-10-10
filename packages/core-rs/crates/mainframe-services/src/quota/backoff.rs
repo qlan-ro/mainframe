@@ -6,7 +6,7 @@ use super::status::derive_provider_status;
 
 /// An empty `unknown` blob stamped with the given clock.
 #[must_use]
-pub fn unknown_provider_quota(now: i64) -> ProviderQuota {
+pub(crate) fn unknown_provider_quota(now: i64) -> ProviderQuota {
     ProviderQuota {
         status: ProviderQuotaStatus::Unknown,
         session: None,
@@ -21,7 +21,7 @@ pub fn unknown_provider_quota(now: i64) -> ProviderQuota {
 /// not the failure itself — decide whether the provider still reads as
 /// trustworthy.
 #[must_use]
-pub fn handle_pull_failure(prior: Option<&ProviderQuota>, now: i64) -> ProviderQuota {
+pub(crate) fn handle_pull_failure(prior: Option<&ProviderQuota>, now: i64) -> ProviderQuota {
     match prior {
         None => unknown_provider_quota(now),
         Some(prior) => {

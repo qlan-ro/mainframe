@@ -39,6 +39,6 @@ CREATE INDEX IF NOT EXISTS github_report_rows_run ON github_report_rows(run_id);
 
 /// Called from `todos::run_migrations` alongside the base todos migration —
 /// every activation keeps both surfaces on the same schema version.
-pub async fn run_github_migrations(ctx: &PluginContext) -> Result<(), PluginError> {
+pub(crate) async fn run_github_migrations(ctx: &PluginContext) -> Result<(), PluginError> {
     ctx.db.run_migration(MIGRATION.into()).await
 }

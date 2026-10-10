@@ -23,12 +23,12 @@ const INTERNAL_USER_TAG: &str = "<mainframe-command";
 
 /// Returns `Some(id)` when `id` is a non-empty string, `None` otherwise (the TS
 /// `withParentId` truthy check: `undefined` and `""` both collapse to nothing).
-pub fn with_parent_id(id: &Option<String>) -> Option<String> {
+pub(crate) fn with_parent_id(id: &Option<String>) -> Option<String> {
     id.as_ref().filter(|s| !s.is_empty()).cloned()
 }
 
 /// True if a user message is internal (mainframe commands or skill invocations).
-pub fn is_internal_user_message(content: &[MessageContent]) -> bool {
+pub(crate) fn is_internal_user_message(content: &[MessageContent]) -> bool {
     content.iter().any(|block| match block {
         MessageContent::Leaf(LeafContent::Text { text, .. }) => matches_internal_user(text),
         _ => false,
@@ -50,7 +50,10 @@ fn matches_internal_user(text: &str) -> bool {
 }
 
 /// Categorize a tool by name, returning its display category.
-pub fn categorize_tool_call(name: &str, categories: Option<&ToolCategories>) -> ToolCategory {
+pub(crate) fn categorize_tool_call(
+    name: &str,
+    categories: Option<&ToolCategories>,
+) -> ToolCategory {
     let Some(c) = categories else {
         return ToolCategory::Default;
     };
@@ -110,7 +113,7 @@ fn extract_known_questions(
 
 /// Build a `ToolCallResult` from a tool_result content block. Returns `None` if
 /// `block` is not a tool_result node (the TS type narrows to a tool_result).
-pub fn to_tool_call_result(
+pub(crate) fn to_tool_call_result(
     block: &MessageContent,
     tool_name: Option<&str>,
     tool_input: Option<&HashMap<String, Value>>,
@@ -154,7 +157,7 @@ pub fn to_tool_call_result(
 /// Convert a grouped assistant message to `DisplayContent[]`.
 pub use super::display_assistant::convert_assistant_content;
 pub use super::display_tool_groups::apply_tool_grouping;
-pub use super::display_user::convert_user_content;
+pub(crate) use super::display_user::convert_user_content;
 #[cfg(test)]
 #[path = "display_helpers_tests.rs"]
 mod tests;

@@ -57,7 +57,7 @@ pub trait TranscriptPresenceDeps: Send + Sync {
 /// - the chat has an active run — the CLI owns the file mid-session;
 /// - the chat was started with no vendor persistence (rule 7) — it never wrote one;
 /// - the adapter cannot determine the transcript's location.
-pub async fn reconcile_transcript_presence(
+pub(crate) async fn reconcile_transcript_presence(
     deps: &dyn TranscriptPresenceDeps,
     chat: &mut Chat,
 ) -> bool {
@@ -98,7 +98,10 @@ pub async fn reconcile_transcript_presence(
 /// unlike [`reconcile_transcript_presence`]: it only acts on a transcript it
 /// found — re-pointing the path and clearing a stale missing flag — and never
 /// flags one missing while the CLI may still be writing it.
-pub async fn refresh_transcript_location(deps: &dyn TranscriptPresenceDeps, chat: &mut Chat) {
+pub(crate) async fn refresh_transcript_location(
+    deps: &dyn TranscriptPresenceDeps,
+    chat: &mut Chat,
+) {
     if chat.vendor_session_ephemeral || chat.claude_session_id.is_none() {
         return;
     }

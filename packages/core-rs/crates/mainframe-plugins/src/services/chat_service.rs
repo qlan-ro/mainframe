@@ -21,7 +21,7 @@ struct HostChatService {
 }
 
 /// `buildChatService(manifest, db, emitEvent)`.
-pub fn build_chat_service(
+pub(crate) fn build_chat_service(
     manifest: &PluginManifest,
     host_db: Arc<dyn PluginHostDb>,
     emit: EmitSink,

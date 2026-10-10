@@ -5,7 +5,7 @@
 
 /// Deterministic fallback title: the first user message, cleaned and truncated at
 /// a word boundary.
-pub fn derive_title_from_message(content: &str) -> String {
+pub(crate) fn derive_title_from_message(content: &str) -> String {
     let cleaned = collapse_whitespace(content);
     let chars: Vec<char> = cleaned.chars().collect();
     if chars.len() <= 50 {
@@ -24,7 +24,7 @@ pub fn derive_title_from_message(content: &str) -> String {
 /// setting wins; otherwise each adapter titles with its own binary. It used to fall back
 /// to `claude` for every adapter, which asked a Codex-only user's machine to shell out to
 /// a CLI it may not have installed (#275).
-pub fn resolve_title_binary(setting: Option<String>, adapter_id: &str) -> String {
+pub(crate) fn resolve_title_binary(setting: Option<String>, adapter_id: &str) -> String {
     setting
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| adapter_id.to_string())

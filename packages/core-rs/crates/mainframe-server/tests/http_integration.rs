@@ -6,8 +6,6 @@
 
 mod support;
 
-use std::time::Duration;
-
 use reqwest::{Method, StatusCode};
 use support::spawn_test_server;
 
@@ -272,8 +270,3 @@ async fn echoes_localhost_origin_but_not_foreign_origin() {
         "tauri://localhost"
     );
 }
-
-// A short delay is baked into spawn_test_server; expose the constant so the
-// intent is obvious if a reader wonders why we don't poll for readiness.
-#[allow(dead_code)]
-const _READY_HINT: Duration = Duration::from_millis(20);

@@ -201,7 +201,10 @@ fn fallback_from_ms(ms: f64) -> String {
 
 /// Read the file's head/tail, apply hide rules, and project to an
 /// `ExternalSession` (or `None` to drop).
-pub async fn enrich_session(candidate: &Candidate, project_path: &str) -> Option<ExternalSession> {
+pub(crate) async fn enrich_session(
+    candidate: &Candidate,
+    project_path: &str,
+) -> Option<ExternalSession> {
     let (head, tail) = match read_head_tail(&candidate.file_path).await {
         Ok(ht) => ht,
         Err(err) => {

@@ -119,7 +119,7 @@ impl ActionField {
         Self::new(key, label, ActionFieldControl::Chip)
     }
 
-    pub fn chiparea(key: &str, label: &str) -> Self {
+    pub(crate) fn chiparea(key: &str, label: &str) -> Self {
         Self::new(key, label, ActionFieldControl::Chiparea)
     }
 

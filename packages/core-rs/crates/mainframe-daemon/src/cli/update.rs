@@ -28,7 +28,7 @@ pub struct UpdateOptions {
 }
 
 /// `parseUpdateArgs()`.
-pub fn parse_update_args(argv: &[String]) -> Result<UpdateOptions, String> {
+pub(crate) fn parse_update_args(argv: &[String]) -> Result<UpdateOptions, String> {
     let mut opts = UpdateOptions::default();
     let mut i = 0;
     while i < argv.len() {
@@ -54,7 +54,7 @@ pub fn parse_update_args(argv: &[String]) -> Result<UpdateOptions, String> {
 /// `resolveInstallRoot()`. The standalone layout has no `lib/` anymore (T5.3
 /// drops the Node bundle), so the marker is the daemon binary itself:
 /// `bin/mainframe-daemon` beside the `mainframe` wrapper.
-pub fn resolve_install_root(
+pub(crate) fn resolve_install_root(
     env: &HashMap<String, String>,
     exe_path: &Path,
 ) -> Result<PathBuf, String> {
@@ -99,7 +99,7 @@ fn arch_name() -> &'static str {
 }
 
 /// `runUpdate()`.
-pub async fn run_update(argv: Vec<String>) -> Result<(), String> {
+pub(crate) async fn run_update(argv: Vec<String>) -> Result<(), String> {
     let opts = parse_update_args(&argv).inspect_err(|_| print_usage())?;
     if opts.help {
         print_usage();

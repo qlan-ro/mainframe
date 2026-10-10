@@ -31,7 +31,7 @@ pub struct ActiveSession<'a> {
 /// path, for the live cell and the mirror. A deps impl without segments
 /// reports no owned sessions; the active one is then moved as before.
 /// Stops at the first failure: rows already moved keep their new paths.
-pub async fn relocate_claude_transcripts<D: ConfigManagerDeps>(
+pub(crate) async fn relocate_claude_transcripts<D: ConfigManagerDeps>(
     deps: &D,
     chat_id: &str,
     active: ActiveSession<'_>,

@@ -1435,7 +1435,6 @@ dependencies = [
  "dirs",
  "mainframe-adapter-api",
  "mainframe-background-tasks",
- "mainframe-display",
  "mainframe-orchestration",
  "mainframe-runtime",
  "mainframe-types",
@@ -1502,7 +1501,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
- "thiserror",
  "tokio",
  "tracing",
 ]
@@ -1541,7 +1539,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
- "thiserror",
  "tokio",
  "tracing",
 ]
@@ -1552,7 +1549,6 @@ version = "0.0.0"
 dependencies = [
  "axum",
  "dashmap",
- "dirs",
  "mainframe-acp",
  "mainframe-adapter-api",
  "mainframe-adapter-claude",
@@ -1747,7 +1743,6 @@ dependencies = [
  "serde_json",
  "sha2",
  "tempfile",
- "thiserror",
  "tokio",
  "toml",
  "tower-http",
@@ -1760,7 +1755,6 @@ dependencies = [
 name = "mainframe-services"
 version = "0.0.0"
 dependencies = [
- "dashmap",
  "dirs",
  "mainframe-db",
  "mainframe-types",
@@ -1780,7 +1774,6 @@ dependencies = [
 name = "mainframe-types"
 version = "0.0.0"
 dependencies = [
- "chrono",
  "serde",
  "serde_json",
 ]

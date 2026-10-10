@@ -139,7 +139,7 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
     /// Notify the attached surface (a no-op when none is attached). Public so
     /// `ChatManager`'s send path (turn accepted/started, outside the sink)
     /// can drive the same observer the sink drives.
-    pub fn notify_chat_surface(&self, event: ChatSurfaceEvent) {
+    pub(crate) fn notify_chat_surface(&self, event: ChatSurfaceEvent) {
         chat_surface::notify(self.chat_surface.get(), event);
     }
 
@@ -172,7 +172,7 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
     }
 
     /// Emit a display revision for a chat (code paths outside the session sink).
-    pub fn emit_display(&self, chat_id: &str) {
+    pub(crate) fn emit_display(&self, chat_id: &str) {
         let categories = self.deps.get_tool_categories(chat_id);
         emit_display_for(
             chat_id,

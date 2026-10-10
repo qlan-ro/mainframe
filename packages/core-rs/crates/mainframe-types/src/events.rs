@@ -23,7 +23,6 @@ use crate::chat::{Chat, TodoItem};
 use crate::claude_workflow::ClaudeWorkflowRun;
 use crate::launch::LaunchProcessStatus;
 use crate::plugin::UiZone;
-use crate::workflow::{WorkflowInteractionSummary, WorkflowRunSummary, WorkflowStepStatus};
 use crate::worktree_offer::{WorktreeOfferOutcome, WorktreeSwitchOffer};
 
 // ─── Small payload enums (event-local literal unions) ────────────────────────
@@ -75,17 +74,6 @@ pub enum TunnelState {
     DnsVerified,
     Error,
     Stopped,
-}
-
-/// The `step` payload of `workflow.step.updated` — a TS
-/// `Pick<WorkflowStepSummary, 'stepPath'|'stepId'|'status'|'attempt'>`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WorkflowStepUpdate {
-    pub step_path: String,
-    pub step_id: Option<String>,
-    pub status: WorkflowStepStatus,
-    pub attempt: i64,
 }
 
 /// `notification.created`'s optional `links` payload. Unlike
@@ -337,35 +325,11 @@ pub enum DaemonEvent {
         chat_id: String,
         task: BackgroundTask,
     },
-    /// Distinct from the Automations `workflow.run.updated` below — this one carries
-    /// a Claude CLI `/workflows` run, not an Automations `WorkflowRunSummary`.
+    /// Carries a Claude CLI `/workflows` run.
     #[serde(rename = "claude_workflow.run.updated")]
     ClaudeWorkflowRunUpdated {
         chat_id: String,
         run: ClaudeWorkflowRun,
-    },
-    #[serde(rename = "workflow.run.updated")]
-    WorkflowRunUpdated { run: WorkflowRunSummary },
-    #[serde(rename = "workflow.step.updated")]
-    WorkflowStepUpdated {
-        run_id: String,
-        step: WorkflowStepUpdate,
-    },
-    #[serde(rename = "workflow.interaction.created")]
-    WorkflowInteractionCreated {
-        interaction: WorkflowInteractionSummary,
-    },
-    #[serde(rename = "workflow.interaction.resolved")]
-    WorkflowInteractionResolved {
-        interaction_id: String,
-        run_id: String,
-    },
-    #[serde(rename = "workflow.completed")]
-    WorkflowCompleted {
-        workflow_id: String,
-        workflow_name: String,
-        run_id: String,
-        outputs: serde_json::Value,
     },
     // ── Automations v2 (contract §4 — all five are chatId-less) ─────────────
     /// A6 — emitted on run start, EVERY leaf-step terminal transition, park,
@@ -496,13 +460,6 @@ mod tests {
     }
 
     #[test]
-    fn fixture_workflow_run_updated() {
-        assert_daemon_roundtrip(include_str!(
-            "../tests/fixtures/event.workflow-run-updated.json"
-        ));
-    }
-
-    #[test]
     fn fixture_background_task_updated() {
         assert_daemon_roundtrip(include_str!(
             "../tests/fixtures/event.background_task-updated.json"
@@ -541,13 +498,6 @@ mod tests {
     #[test]
     fn fixture_tunnel_status() {
         assert_daemon_roundtrip(include_str!("../tests/fixtures/event.tunnel-status.json"));
-    }
-
-    #[test]
-    fn fixture_workflow_step_updated() {
-        assert_daemon_roundtrip(include_str!(
-            "../tests/fixtures/event.workflow-step-updated.json"
-        ));
     }
 
     #[test]

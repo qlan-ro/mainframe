@@ -54,7 +54,7 @@ impl Interpreter {
         }
     }
 
-    pub async fn start_run(
+    pub(crate) async fn start_run(
         &self,
         automation_id: &str,
         definition: AutomationDefinition,

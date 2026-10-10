@@ -43,7 +43,12 @@ impl LivePrScanner {
     /// Records a tool_use block's metadata and, for a `Bash`/`BashTool` PR
     /// command, registers it as a pending create and/or mutation. Mirrors
     /// `assistant_event.rs:143-172`.
-    pub fn observe_tool_use(&mut self, id: &str, name: &str, input: &HashMap<String, Value>) {
+    pub(crate) fn observe_tool_use(
+        &mut self,
+        id: &str,
+        name: &str,
+        input: &HashMap<String, Value>,
+    ) {
         if id.is_empty() || name.is_empty() {
             return;
         }
@@ -76,7 +81,7 @@ impl LivePrScanner {
 
     /// Consumes a tool_result for `tool_use_id`, evicting its recorded meta
     /// regardless of outcome. Mirrors `user_event.rs:433-467`.
-    pub fn observe_tool_result(
+    pub(crate) fn observe_tool_result(
         &mut self,
         tool_use_id: &str,
         text: &str,

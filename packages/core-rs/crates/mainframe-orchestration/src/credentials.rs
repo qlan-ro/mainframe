@@ -34,7 +34,7 @@ impl Caller {
     /// Claims one of the credential's blocking-call slots; `None` when all
     /// [`MAX_CONCURRENT_WAITS`] are taken. The slot frees on drop.
     #[must_use]
-    pub fn try_begin_wait(&self) -> Option<WaitSlot> {
+    pub(crate) fn try_begin_wait(&self) -> Option<WaitSlot> {
         let prev = self.waits.fetch_add(1, Ordering::SeqCst);
         if prev >= MAX_CONCURRENT_WAITS {
             self.waits.fetch_sub(1, Ordering::SeqCst);
@@ -126,7 +126,7 @@ impl CredentialRegistry {
     }
 
     /// Revokes `chat_id`'s credential and cancels its in-flight calls.
-    pub fn revoke_chat(&self, chat_id: &str) {
+    pub(crate) fn revoke_chat(&self, chat_id: &str) {
         let mut inner = self.lock();
         if let Some(digest) = inner.by_chat.remove(chat_id)
             && let Some(entry) = inner.by_hash.remove(&digest)
@@ -136,25 +136,9 @@ impl CredentialRegistry {
         }
     }
 
-    /// Revokes only when the chat's live credential belongs to `session_id`, so
-    /// a late exit of a replaced process cannot revoke its successor's token.
-    pub fn revoke_session(&self, chat_id: &str, session_id: &str) {
-        let matches = {
-            let inner = self.lock();
-            inner
-                .by_chat
-                .get(chat_id)
-                .and_then(|d| inner.by_hash.get(d))
-                .is_some_and(|e| e.session_id == session_id)
-        };
-        if matches {
-            self.revoke_chat(chat_id);
-        }
-    }
-
     /// Revokes the credential issued for the process with `session_id`,
     /// whichever chat holds it.
-    pub fn revoke_by_session_id(&self, session_id: &str) {
+    pub(crate) fn revoke_by_session_id(&self, session_id: &str) {
         let chat_id = {
             let inner = self.lock();
             inner
@@ -170,7 +154,7 @@ impl CredentialRegistry {
 
     /// Cancels the chat's in-flight calls but keeps the credential: a stopped
     /// turn's waits end now, and the chat's next turn can still call tools.
-    pub fn cancel_inflight(&self, chat_id: &str) {
+    pub(crate) fn cancel_inflight(&self, chat_id: &str) {
         let mut inner = self.lock();
         let Some(digest) = inner.by_chat.get(chat_id).copied() else {
             return;
@@ -248,7 +232,7 @@ mod tests {
         let reg = CredentialRegistry::new();
         reg.issue("chat", "old");
         let token = reg.issue("chat", "new");
-        reg.revoke_session("chat", "old");
+        reg.revoke_by_session_id("old");
         assert!(reg.resolve(token.expose()).is_some());
         reg.revoke_by_session_id("new");
         assert!(reg.resolve(token.expose()).is_none());

@@ -97,10 +97,10 @@ mod history_discovery;
 #[cfg(test)]
 #[path = "history_tests.rs"]
 mod tests;
-pub use history_discovery::*;
+pub(crate) use history_discovery::*;
 #[path = "history_paths.rs"]
 mod history_paths;
-pub use history_paths::*;
+pub(crate) use history_paths::*;
 
 #[derive(Default)]
 struct HistoryLoad {

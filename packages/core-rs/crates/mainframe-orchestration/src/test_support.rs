@@ -41,7 +41,7 @@ pub fn chat_view(id: &str) -> ChatView {
 }
 
 /// A minimal wire `Chat` for `chat.updated` events in tests.
-pub fn wire_chat(id: &str) -> Chat {
+pub(crate) fn wire_chat(id: &str) -> Chat {
     let value = json!({
         "id": id, "adapterId": "claude", "projectId": "p", "status": "active",
         "createdAt": "", "updatedAt": "", "totalCost": 0.0,
@@ -109,7 +109,7 @@ impl FakePort {
     }
 
     /// Inserts a default chat and returns a copy to tweak and `put` back.
-    pub fn add_chat(&self, id: &str) -> ChatView {
+    pub(crate) fn add_chat(&self, id: &str) -> ChatView {
         let chat = chat_view(id);
         self.lock().chats.insert(id.into(), chat.clone());
         chat
@@ -262,11 +262,14 @@ impl OrchestrationPort for FakePort {
 }
 
 /// A service over `port` and a live call context for `caller_chat_id`.
-pub fn service_with(port: FakePort, caller_chat_id: &str) -> (Arc<OrchestrationService>, CallCtx) {
+pub(crate) fn service_with(
+    port: FakePort,
+    caller_chat_id: &str,
+) -> (Arc<OrchestrationService>, CallCtx) {
     service_with_tasks(port, FakeTasks::default(), caller_chat_id)
 }
 
-pub fn service_with_tasks(
+pub(crate) fn service_with_tasks(
     port: FakePort,
     tasks: FakeTasks,
     caller_chat_id: &str,
@@ -282,7 +285,7 @@ pub fn service_with_tasks(
 }
 
 /// A live call context for another chat on the same service.
-pub fn call_ctx(svc: &OrchestrationService, chat_id: &str) -> CallCtx {
+pub(crate) fn call_ctx(svc: &OrchestrationService, chat_id: &str) -> CallCtx {
     let token = svc
         .issue_launch(chat_id, &format!("session-{chat_id}"))
         .token;

@@ -30,46 +30,6 @@ pub trait ChatStore: Send + Sync {
     fn get_chat(&self, chat_id: &str) -> Option<Chat>;
 }
 
-/// Parsed `/lsp/:projectId/:language` upgrade target.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LspUpgradeTarget {
-    pub project_id: String,
-    pub language: String,
-    pub chat_id: Option<String>,
-}
-
-/// Parse `/lsp/:projectId/:language` from a URL path. Returns `None` if not an LSP path.
-pub fn parse_lsp_upgrade_path(url: &str) -> Option<LspUpgradeTarget> {
-    let (pathname, qs) = match url.split_once('?') {
-        Some((p, q)) => (p, q),
-        None => (url, ""),
-    };
-
-    // Match `^/lsp/([^/]+)/([^/]+)$`.
-    let rest = pathname.strip_prefix("/lsp/")?;
-    let mut segments = rest.split('/');
-    let project_id = segments.next()?;
-    let language = segments.next()?;
-    if project_id.is_empty() || language.is_empty() || segments.next().is_some() {
-        return None;
-    }
-
-    let chat_id = parse_query_param(qs, "chatId");
-    Some(LspUpgradeTarget {
-        project_id: project_id.to_string(),
-        language: language.to_string(),
-        chat_id,
-    })
-}
-
-/// Extract a single query-string parameter value (first occurrence).
-fn parse_query_param(qs: &str, name: &str) -> Option<String> {
-    qs.split('&').find_map(|pair| {
-        let (k, v) = pair.split_once('=')?;
-        if k == name { Some(v.to_string()) } else { None }
-    })
-}
-
 /// Worktree-aware effective path. Parity with `getEffectivePath`: the chat's
 /// worktree when the chatId points to a live worktree; the project root otherwise.
 /// Rejects cross-project access and missing worktrees by returning `None`.

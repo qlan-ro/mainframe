@@ -165,8 +165,4 @@ impl ChatManager {
     pub fn has_pending_permission(&self, chat_id: &str) -> bool {
         self.permission_handler.has_pending_permission(chat_id)
     }
-
-    pub fn clear_pending_permission(&self, chat_id: &str) {
-        self.permission_handler.clear_pending_permission(chat_id);
-    }
 }

@@ -157,40 +157,6 @@ pub fn init() -> Option<WorkerGuard> {
     Some(guard)
 }
 
-/// Mirrors `createChildLogger(name)`: a logger scoped with a `module` field.
-///
-/// pino child loggers carry `{ module: name }` on every line; the returned
-/// [`ChildLogger`] threads that field through the `tracing` macros.
-pub fn create_child_logger(name: &str) -> ChildLogger {
-    ChildLogger {
-        module: name.to_string(),
-    }
-}
-
-/// A `module`-scoped logger — the port's stand-in for `logger.child({ module })`.
-#[derive(Debug, Clone)]
-pub struct ChildLogger {
-    module: String,
-}
-
-impl ChildLogger {
-    pub fn trace(&self, message: &str) {
-        tracing::trace!(module = %self.module, "{message}");
-    }
-    pub fn debug(&self, message: &str) {
-        tracing::debug!(module = %self.module, "{message}");
-    }
-    pub fn info(&self, message: &str) {
-        tracing::info!(module = %self.module, "{message}");
-    }
-    pub fn warn(&self, message: &str) {
-        tracing::warn!(module = %self.module, "{message}");
-    }
-    pub fn error(&self, message: &str) {
-        tracing::error!(module = %self.module, "{message}");
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -103,7 +103,7 @@ fn scan_body(text: &str, from: usize) -> (String, Vec<String>, usize) {
 /// The braced spelling exists because the bare one needs a word boundary, so
 /// `todo/$id` is literal text; the editor inserts `${id}` mid-word, and it is
 /// recognized anywhere.
-pub fn extract_variable_refs(text: &str) -> Vec<VariableRef> {
+pub(crate) fn extract_variable_refs(text: &str) -> Vec<VariableRef> {
     let bytes = text.as_bytes();
     let mut refs = Vec::new();
     let mut i = 0;
@@ -157,7 +157,7 @@ const IMPLICIT_AGENT_OUTPUTS: [&str; 2] = ["result", "chatId"];
 
 /// Folds arbitrary text into a `$name`-safe identifier. Lossy on purpose —
 /// collisions are resolved by suffixing in `build_variable_namespace`.
-pub fn sanitize_variable_name(raw: &str) -> String {
+pub(crate) fn sanitize_variable_name(raw: &str) -> String {
     let mut snake = String::with_capacity(raw.len() + 1);
     let mut previous: Option<char> = None;
     for ch in raw.chars() {
@@ -251,7 +251,7 @@ fn target_for(info: &TokenInfo) -> NameTarget {
 /// through `Step::child_bodies` and starts from `body_scope`, so `if` leaks
 /// both branches to later siblings, `repeat` adds `Current item`, and
 /// `repeat`/`loop`/`retry`/`parallel` keep their bodies' outputs inside.
-pub fn build_name_index(definition: &AutomationDefinition) -> NameIndex {
+pub(crate) fn build_name_index(definition: &AutomationDefinition) -> NameIndex {
     let mut scope = builtin_tokens();
     scope.extend(trigger_tokens(&definition.triggers));
     let mut index = NameIndex::new();

@@ -36,7 +36,11 @@ async fn stamp(
 
 /// A freshly created todo starts fully "locally recent" — every tracked field
 /// stamps at creation time.
-pub async fn stamp_create(ctx: &PluginContext, todo_id: &str, at: &str) -> Result<(), PluginError> {
+pub(crate) async fn stamp_create(
+    ctx: &PluginContext,
+    todo_id: &str,
+    at: &str,
+) -> Result<(), PluginError> {
     for field in TRACKED_FIELDS {
         stamp(ctx, todo_id, field, at).await?;
     }
@@ -47,7 +51,7 @@ pub async fn stamp_create(ctx: &PluginContext, todo_id: &str, at: &str) -> Resul
 /// stamp only on an actual value change (rewriting the held value stamps
 /// nothing); `status` stamps `state` only when the write crosses the `done`
 /// boundary. Every other field patch_todo accepts is untracked by design.
-pub async fn stamp_patch(
+pub(crate) async fn stamp_patch(
     ctx: &PluginContext,
     todo_id: &str,
     existing: &Row,
@@ -74,7 +78,7 @@ pub async fn stamp_patch(
 /// `move_todo`'s status write is projection-aware the same way (D3):
 /// open↔in_progress never stamps; crossing the `done` boundary in either
 /// direction stamps `state`.
-pub async fn stamp_move(
+pub(crate) async fn stamp_move(
     ctx: &PluginContext,
     todo_id: &str,
     prev_status: &str,
@@ -93,7 +97,7 @@ fn crosses_done_boundary(prev: &str, next: &str) -> bool {
 
 /// The delete-todo cascade's touch half (AC24) — the pair row itself is
 /// `store::delete_pair`'s job, dispatched alongside this from `delete_todo`.
-pub async fn clear_for_todo(ctx: &PluginContext, todo_id: &str) -> Result<(), PluginError> {
+pub(crate) async fn clear_for_todo(ctx: &PluginContext, todo_id: &str) -> Result<(), PluginError> {
     ctx.db
         .execute(
             "DELETE FROM github_touch WHERE todo_id = ?".into(),
@@ -102,7 +106,7 @@ pub async fn clear_for_todo(ctx: &PluginContext, todo_id: &str) -> Result<(), Pl
         .await
 }
 
-pub async fn read_touch(
+pub(crate) async fn read_touch(
     ctx: &PluginContext,
     todo_id: &str,
 ) -> Result<HashMap<String, String>, PluginError> {

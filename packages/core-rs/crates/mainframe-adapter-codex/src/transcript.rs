@@ -30,7 +30,7 @@ fn default_sessions_root() -> Option<PathBuf> {
 /// rollout path, or the path escapes `~/.codex/sessions` (untrusted input,
 /// mirrors rollout-reader.rs containment). `Some(Missing)` when the rollout
 /// file was deleted, `Some(Present(path))` when it is present and contained.
-pub async fn locate_codex_transcript(
+pub(crate) async fn locate_codex_transcript(
     thread_id: &str,
     deps: Option<&CodexTranscriptDeps<'_>>,
 ) -> Option<TranscriptLocation> {

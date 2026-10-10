@@ -24,7 +24,7 @@ pub use mainframe_adapter_api::FORK_CUT_NOT_FOUND_REASON as CUT_NOT_FOUND_REASON
 /// Otherwise the message's ordinal among sent user messages is used, but only
 /// when both lists hold the same number of them: failing closed never forks
 /// at the wrong point.
-pub fn resolve_fork_cut(
+pub(crate) fn resolve_fork_cut(
     live: &[ChatMessage],
     disk: &[ChatMessage],
     message_id: &str,
@@ -52,7 +52,7 @@ pub fn resolve_fork_cut(
 /// and forking before it means "after the previous provider's last turn".
 /// Both lists are then narrowed to that segment, so the ordinal fallback
 /// counts only its messages.
-pub fn resolve_segment_fork_cut(
+pub(crate) fn resolve_segment_fork_cut(
     live: &[ChatMessage],
     disk: &[ChatMessage],
     message_id: &str,

@@ -10,7 +10,7 @@ use serde_json::{Map, Value};
 /// The TS returns `Record<string, unknown>`; the Rust equivalent is a
 /// `serde_json::Map` (the object body of the `apply_flag_settings` control_request
 /// `settings` field).
-pub fn tuning_to_flag_settings(t: &ResolvedTuning) -> Map<String, Value> {
+pub(crate) fn tuning_to_flag_settings(t: &ResolvedTuning) -> Map<String, Value> {
     let mut s: Map<String, Value> = Map::new();
     if let Some(effort) = t.effort {
         s.insert(

@@ -17,7 +17,7 @@ pub struct ChurnInput {
 /// Derive up-to-two "churn" suggestions from cheap git signals: the dirty
 /// working tree (accent) and, when the branch diverges from its detected base,
 /// a branch summary (accent). Pure — the route gathers the counts via GitService.
-pub fn build_churn_suggestions(input: &ChurnInput) -> Vec<Suggestion> {
+pub(crate) fn build_churn_suggestions(input: &ChurnInput) -> Vec<Suggestion> {
     let mut out = Vec::new();
 
     if input.working_file_count > 0 {
@@ -72,7 +72,7 @@ fn top_area(file: &str) -> &str {
 /// One amber suggestion for the directory holding the most TODO/FIXME matches.
 /// `matches` come from a bounded ripgrep pass in the route (already
 /// path-contained).
-pub fn build_todo_suggestions(matches: &[String]) -> Vec<Suggestion> {
+pub(crate) fn build_todo_suggestions(matches: &[String]) -> Vec<Suggestion> {
     if matches.is_empty() {
         return Vec::new();
     }
@@ -109,7 +109,7 @@ pub fn build_todo_suggestions(matches: &[String]) -> Vec<Suggestion> {
 }
 
 /// Churn first, then todos, capped to at most 3.
-pub fn merge_suggestions(churn: Vec<Suggestion>, todos: Vec<Suggestion>) -> Vec<Suggestion> {
+pub(crate) fn merge_suggestions(churn: Vec<Suggestion>, todos: Vec<Suggestion>) -> Vec<Suggestion> {
     churn
         .into_iter()
         .chain(todos)

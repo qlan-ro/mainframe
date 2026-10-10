@@ -101,14 +101,6 @@ impl ProjectsRepository {
         })
     }
 
-    pub fn update_last_opened(&self, id: &str) -> Result<(), DbError> {
-        self.db.execute(
-            "UPDATE projects SET last_opened_at = ? WHERE id = ?",
-            rusqlite::params![now_iso8601(), id],
-        )?;
-        Ok(())
-    }
-
     /// Refuses the hidden scratch project row (rule 1): removing it would
     /// cascade-delete every non-project chat's row.
     pub fn remove(&self, id: &str) -> Result<(), DbError> {

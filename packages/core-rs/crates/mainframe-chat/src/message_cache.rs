@@ -57,7 +57,7 @@ impl MessageCache {
 
     /// Unpin `chat_id` without touching its cache entry (`end_chat`: the
     /// registry cell goes, but the cache stays, now evictable).
-    pub fn unpin(&mut self, chat_id: &str) {
+    pub(crate) fn unpin(&mut self, chat_id: &str) {
         self.pinned.remove(chat_id);
     }
 

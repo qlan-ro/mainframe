@@ -52,7 +52,7 @@ impl McpOutcome {
     }
 }
 
-pub fn parse_call(event: &RecordedEvent) -> Result<McpCall, String> {
+pub(crate) fn parse_call(event: &RecordedEvent) -> Result<McpCall, String> {
     let arg = event.args.first().cloned().ok_or("missing argument 0")?;
     serde_json::from_value(arg).map_err(|error| error.to_string())
 }
@@ -93,7 +93,7 @@ pub async fn call_tool(
 
 /// A JSON-RPC response to `tools/call`: the first text block of `result`, or
 /// the protocol error's message.
-pub fn parse_response(text: &str) -> McpOutcome {
+pub(crate) fn parse_response(text: &str) -> McpOutcome {
     let Ok(value) = serde_json::from_str::<Value>(text) else {
         return McpOutcome::failed("mcp response is not JSON");
     };

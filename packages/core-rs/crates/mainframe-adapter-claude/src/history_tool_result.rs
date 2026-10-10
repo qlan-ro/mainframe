@@ -23,7 +23,10 @@ pub(crate) fn js_truthy(v: Option<&Value>) -> bool {
     }
 }
 
-pub fn derive_modified_file(tur: Option<&Value>, original_file: Option<&str>) -> Option<String> {
+pub(crate) fn derive_modified_file(
+    tur: Option<&Value>,
+    original_file: Option<&str>,
+) -> Option<String> {
     let tur = tur?;
     let tur_type = tur.get("type").and_then(Value::as_str);
     if let Some(Value::String(content)) = tur.get("content")
@@ -48,7 +51,7 @@ pub fn derive_modified_file(tur: Option<&Value>, original_file: Option<&str>) ->
     None
 }
 
-pub fn extract_tool_result_content(content: Option<&Value>) -> String {
+pub(crate) fn extract_tool_result_content(content: Option<&Value>) -> String {
     // `JSON.stringify(content ?? '')`: null/absent → '' → `""`.
     let Some(value) = content else {
         return "\"\"".to_string();
@@ -86,7 +89,7 @@ pub fn extract_tool_result_content(content: Option<&Value>) -> String {
 /// Extract `source.type == "base64"` image blocks from a `tool_result`
 /// content array, in source order. Non-array content and non-base64 or
 /// malformed image blocks yield nothing (todo #363).
-pub fn extract_tool_result_images(content: Option<&Value>) -> Vec<ToolResultImage> {
+pub(crate) fn extract_tool_result_images(content: Option<&Value>) -> Vec<ToolResultImage> {
     let Some(Value::Array(arr)) = content else {
         return Vec::new();
     };
@@ -109,7 +112,10 @@ pub fn extract_tool_result_images(content: Option<&Value>) -> Vec<ToolResultImag
         .collect()
 }
 
-pub fn build_tool_result_blocks(message: &Value, tur: Option<&Value>) -> Vec<MessageContent> {
+pub(crate) fn build_tool_result_blocks(
+    message: &Value,
+    tur: Option<&Value>,
+) -> Vec<MessageContent> {
     let raw_content = match message.get("content") {
         Some(Value::Array(arr)) => arr,
         _ => return Vec::new(),

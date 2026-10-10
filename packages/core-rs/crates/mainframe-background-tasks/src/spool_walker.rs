@@ -33,7 +33,7 @@ pub struct WalkOpts {
 /// The TS source invokes an async `onTask` callback per entry; the Rust port
 /// returns the entries in the same traversal order and lets the caller loop,
 /// which sidesteps borrowing an async closure across the walk.
-pub async fn walk_spool_tasks(opts: &WalkOpts) -> Vec<SpoolTaskEntry> {
+pub(crate) async fn walk_spool_tasks(opts: &WalkOpts) -> Vec<SpoolTaskEntry> {
     let mut out = Vec::new();
     let cwd_segs = match &opts.scoped_cwd_seg {
         Some(seg) => vec![seg.clone()],

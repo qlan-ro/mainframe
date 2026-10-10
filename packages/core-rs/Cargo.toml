@@ -20,9 +20,6 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2"
 thiserror = "2"
-# Binary crate (`mainframe-daemon`) top-level only — library crates use thiserror.
-# The verify gate exempts `anyhow` for the binary crate and forbids it elsewhere.
-anyhow = "1"
 hmac = "0.12"
 sha2 = "0.10"
 hex = "0.4"

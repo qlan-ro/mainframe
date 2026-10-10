@@ -49,7 +49,7 @@ impl Step {
         }
     }
 
-    pub fn kind_name(&self) -> &'static str {
+    pub(crate) fn kind_name(&self) -> &'static str {
         match self {
             Step::AskAgent(_) => "ask_agent",
             Step::AskMe(_) => "ask_me",
@@ -66,7 +66,7 @@ impl Step {
         }
     }
 
-    pub fn keep_going(&self) -> bool {
+    pub(crate) fn keep_going(&self) -> bool {
         match self {
             Step::AskAgent(s) => s.keep_going,
             Step::AskMe(s) => s.keep_going,
@@ -228,7 +228,7 @@ pub struct ParallelBlock {
 /// `repeat`/`loop`/`retry`'s inner steps, and every `parallel` branch — the
 /// same tree shape the walk traverses (Node parity:
 /// automation-domain/tokens.ts `findStepById`).
-pub fn find_step_by_id<'a>(steps: &'a [Step], step_id: &str) -> Option<&'a Step> {
+pub(crate) fn find_step_by_id<'a>(steps: &'a [Step], step_id: &str) -> Option<&'a Step> {
     for step in steps {
         if step.id() == step_id {
             return Some(step);

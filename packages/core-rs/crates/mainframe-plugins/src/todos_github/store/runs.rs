@@ -39,7 +39,7 @@ pub struct ReportRow {
     pub replaced_value: String,
 }
 
-pub async fn insert_run(ctx: &PluginContext, run: &Run) -> Result<(), PluginError> {
+pub(crate) async fn insert_run(ctx: &PluginContext, run: &Run) -> Result<(), PluginError> {
     ctx.db
         .execute(
             "INSERT INTO github_runs
@@ -61,7 +61,10 @@ pub async fn insert_run(ctx: &PluginContext, run: &Run) -> Result<(), PluginErro
         .await
 }
 
-pub async fn latest_run(ctx: &PluginContext, project_id: &str) -> Result<Option<Run>, PluginError> {
+pub(crate) async fn latest_run(
+    ctx: &PluginContext,
+    project_id: &str,
+) -> Result<Option<Run>, PluginError> {
     let row = ctx
         .db
         .query_one(
@@ -77,7 +80,7 @@ pub async fn latest_run(ctx: &PluginContext, project_id: &str) -> Result<Option<
 
 /// Deletes every run past the most recent `keep`, cascading to its report
 /// rows first (no FK — the app layer owns the order, same as fact 5's cascade).
-pub async fn prune_runs(
+pub(crate) async fn prune_runs(
     ctx: &PluginContext,
     project_id: &str,
     keep: i64,
@@ -108,7 +111,7 @@ pub async fn prune_runs(
         .await
 }
 
-pub async fn insert_report_rows(
+pub(crate) async fn insert_report_rows(
     ctx: &PluginContext,
     rows: &[ReportRow],
 ) -> Result<(), PluginError> {
@@ -142,7 +145,10 @@ pub async fn insert_report_rows(
     Ok(())
 }
 
-pub async fn read_report(ctx: &PluginContext, run_id: &str) -> Result<Vec<ReportRow>, PluginError> {
+pub(crate) async fn read_report(
+    ctx: &PluginContext,
+    run_id: &str,
+) -> Result<Vec<ReportRow>, PluginError> {
     let rows = ctx
         .db
         .query_all(

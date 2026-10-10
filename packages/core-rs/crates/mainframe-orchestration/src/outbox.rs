@@ -97,7 +97,7 @@ impl Outbox {
     }
 
     #[must_use]
-    pub fn has_for(&self, target: &str) -> bool {
+    pub(crate) fn has_for(&self, target: &str) -> bool {
         self.lock().iter().any(|e| e.target_chat_id == target)
     }
 
@@ -114,7 +114,7 @@ impl Outbox {
     }
 
     #[must_use]
-    pub fn list_for(&self, target: &str) -> Vec<OutboxEntry> {
+    pub(crate) fn list_for(&self, target: &str) -> Vec<OutboxEntry> {
         self.lock()
             .iter()
             .filter(|e| e.target_chat_id == target)
@@ -123,7 +123,7 @@ impl Outbox {
     }
 
     /// Removes and returns every entry owed to `target`, oldest first.
-    pub fn take_for(&self, target: &str) -> Vec<OutboxEntry> {
+    pub(crate) fn take_for(&self, target: &str) -> Vec<OutboxEntry> {
         let taken = {
             let mut entries = self.lock();
             let (taken, kept): (Vec<_>, Vec<_>) =
@@ -149,12 +149,12 @@ impl Outbox {
     }
 
     /// Drops every entry owed to `target` (Stop cascade step 3).
-    pub fn drop_for_target(&self, target: &str) -> usize {
+    pub(crate) fn drop_for_target(&self, target: &str) -> usize {
         self.take_for(target).len()
     }
 
     /// Drops one task's delivery wherever it is queued.
-    pub fn drop_task(&self, task_id: &str) {
+    pub(crate) fn drop_task(&self, task_id: &str) {
         let is_task = |e: &OutboxEntry| matches!(&e.kind, OutboxKind::TaskResult { task_id: t } if t == task_id);
         let targets: Vec<String> = {
             let mut entries = self.lock();
@@ -190,7 +190,7 @@ impl Outbox {
 
 /// One user message carrying every held entry, oldest first.
 #[must_use]
-pub fn batch_body(entries: &[OutboxEntry]) -> String {
+pub(crate) fn batch_body(entries: &[OutboxEntry]) -> String {
     entries
         .iter()
         .map(|e| e.body.as_str())

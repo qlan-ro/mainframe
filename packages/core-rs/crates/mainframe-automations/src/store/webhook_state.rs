@@ -20,7 +20,7 @@ impl WebhookStateStore {
 
     /// Stamps the hook's last accepted delivery. `at` is an RFC 3339 string:
     /// the value goes straight to the wire, and the editor renders it.
-    pub async fn record_delivery(&self, hook_id: &str, at: &str) -> Result<(), StoreError> {
+    pub(crate) async fn record_delivery(&self, hook_id: &str, at: &str) -> Result<(), StoreError> {
         let hook_id = hook_id.to_string();
         let at = at.to_string();
         self.db

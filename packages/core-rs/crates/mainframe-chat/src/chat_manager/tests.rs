@@ -2189,12 +2189,6 @@ async fn get_messages_is_empty_without_a_claude_session() {
     assert!(mgr.get_messages("c1").await.is_empty());
 }
 
-// Keep ChatStatus referenced (used by test_chat defaults).
-#[allow(dead_code)]
-fn _status() -> ChatStatus {
-    ChatStatus::Active
-}
-
 // ── chat-manager-background-activity.test.ts (enrichChat derivation) ──────────
 // The TS test drives `manager.getChat` with a fake-timed tracker; the Rust port's
 // backgroundActivity derivation lives in the private `enrich_chat`, tested here

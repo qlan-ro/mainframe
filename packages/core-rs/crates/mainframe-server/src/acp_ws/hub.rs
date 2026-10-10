@@ -77,7 +77,7 @@ impl FacadeHub {
         (client_id, connection, rx)
     }
 
-    pub fn unregister(&self, client_id: &str) {
+    pub(crate) fn unregister(&self, client_id: &str) {
         self.connections.remove(client_id);
     }
 
@@ -236,13 +236,13 @@ impl FacadeHub {
         self.locked_registry().claim(chat_id, request_id)
     }
 
-    pub fn release_gate(&self, chat_id: &str, request_id: &str) {
+    pub(crate) fn release_gate(&self, chat_id: &str, request_id: &str) {
         self.locked_registry().release(chat_id, request_id);
     }
 
     /// Flush every attached session's held throttle tail on `connection` —
     /// the socket loop's periodic tick.
-    pub fn flush_connection(&self, connection: &FacadeConnection) {
+    pub(crate) fn flush_connection(&self, connection: &FacadeConnection) {
         let now = now_ms();
         let mut sessions = connection.locked_sessions();
         for (chat_id, slot) in sessions.iter_mut() {

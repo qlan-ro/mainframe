@@ -23,7 +23,7 @@ pub struct NormalizedAttention {
 
 /// Trim the raw tool-call message and truncate it for push/OS delivery;
 /// `None` when nothing is left after trimming.
-pub fn normalize_attention_body(raw: &str) -> Option<NormalizedAttention> {
+pub(crate) fn normalize_attention_body(raw: &str) -> Option<NormalizedAttention> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
         return None;

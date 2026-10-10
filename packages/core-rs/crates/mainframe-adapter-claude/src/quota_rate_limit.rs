@@ -40,7 +40,7 @@ fn kind_by_type(rate_limit_type: &str) -> Option<KindMapping> {
     }
 }
 
-pub fn normalize_rate_limit_event(info: Option<&Value>, now: i64) -> Option<ProviderQuota> {
+pub(crate) fn normalize_rate_limit_event(info: Option<&Value>, now: i64) -> Option<ProviderQuota> {
     let info = info?;
     let utilization = info.get("utilization")?.as_f64()?;
     let rate_limit_type = info.get("rateLimitType")?.as_str()?;

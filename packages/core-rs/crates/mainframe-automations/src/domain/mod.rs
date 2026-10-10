@@ -19,18 +19,18 @@ pub(crate) mod validate_concurrency;
 pub(crate) mod validate_variables;
 
 pub use automation::{AutomationCreateInput, AutomationDefinition, AutomationScope};
-pub use concurrent_branch::enclosing_concurrent_branch;
+pub(crate) use concurrent_branch::enclosing_concurrent_branch;
 pub use condition::{Comparator, ConditionMatch, ConditionRow, ConditionValue, ScalarValue};
 pub use form::{AutomationFormField, FormFieldType, ShowWhen};
+pub(crate) use step::find_step_by_id;
 pub use step::{
     BreakStep, IfBlock, LoopBlock, LoopMode, ParallelBlock, RepeatBlock, RetryBlock, Step,
-    find_step_by_id,
 };
 pub use step_verbs::{
     AskAgentStep, AskMeStep, ExpectedOutput, ExpectedOutputType, NotifyStep, OutputAs,
     RunActionStep, SetVariableStep, WaitStep, WorktreeSpec,
 };
-pub use template::{ChipPart, ChipText, chip_tokens};
+pub use template::{ChipPart, ChipText};
 pub use token::{TOKEN_STEP_BUILTIN, TOKEN_STEP_CURRENT, TOKEN_STEP_TRIGGER, TokenRef};
 pub use trigger::{
     AutomationEventName, DailySchedule, EventTrigger, EveryNHoursSchedule, OnMissed, OnceSchedule,

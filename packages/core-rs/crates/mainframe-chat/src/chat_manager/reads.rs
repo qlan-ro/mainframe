@@ -61,12 +61,9 @@ impl ChatManager {
         );
     }
 
-    pub fn handle_queued_processed(&self, chat_id: &str, uuid: &str) {
+    #[cfg(test)]
+    pub(crate) fn handle_queued_processed(&self, chat_id: &str, uuid: &str) {
         handle_queued_processed(&self.queued_refs, chat_id, uuid);
-    }
-
-    pub fn clear_all_queued_for_chat(&self, chat_id: &str) {
-        clear_all_queued_for_chat(&self.queued_refs, chat_id);
     }
 
     // ── registry reads (enriched) ────────────────────────────────────────────
@@ -102,23 +99,7 @@ impl ChatManager {
         self.deps.projects_get_path(&chat.project_id)
     }
 
-    pub fn get_project_path(&self, project_id: &str) -> Option<String> {
-        self.deps.projects_get_path(project_id)
-    }
-
-    pub fn get_chat_project_id(&self, chat_id: &str) -> Option<String> {
-        self.get_chat(chat_id).map(|c| c.project_id)
-    }
-
     // ── in-memory cache sync + out-of-band broadcast ─────────────────────────
-
-    /// Mirror the persisted tags onto the cached active chat so a later
-    /// `chat.updated` (e.g. from resumeChat) does not broadcast stale tags.
-    pub fn sync_chat_tags(&self, chat_id: &str, tags: Vec<String>) {
-        if let Some(cell) = self.get_active(chat_id) {
-            cell.lock().unwrap_or_else(|e| e.into_inner()).chat.tags = Some(tags);
-        }
-    }
 
     /// Apply a partial DB-backed update to the cached active chat (same staleness
     /// guard as `sync_chat_tags`). Only present fields are written.

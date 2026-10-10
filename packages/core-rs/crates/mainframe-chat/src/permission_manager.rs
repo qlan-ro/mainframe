@@ -40,19 +40,19 @@ impl PermissionManager {
         Self::default()
     }
 
-    pub fn get_pending(&self, chat_id: &str) -> Option<&ControlRequest> {
+    pub(crate) fn get_pending(&self, chat_id: &str) -> Option<&ControlRequest> {
         self.pending_permissions
             .get(chat_id)
             .and_then(|q| q.front())
     }
 
-    pub fn has_pending(&self, chat_id: &str) -> bool {
+    pub(crate) fn has_pending(&self, chat_id: &str) -> bool {
         self.pending_permissions
             .get(chat_id)
             .is_some_and(|q| !q.is_empty())
     }
 
-    pub fn matches_pending(&self, chat_id: &str, request_id: &str) -> bool {
+    pub(crate) fn matches_pending(&self, chat_id: &str, request_id: &str) -> bool {
         self.pending_permissions
             .get(chat_id)
             .and_then(|q| q.front())
@@ -161,11 +161,11 @@ impl PermissionManager {
         self.interrupted_chats.insert(chat_id.to_string());
     }
 
-    pub fn clear_interrupted(&mut self, chat_id: &str) -> bool {
+    pub(crate) fn clear_interrupted(&mut self, chat_id: &str) -> bool {
         self.interrupted_chats.remove(chat_id)
     }
 
-    pub fn restore_pending_permission(&mut self, chat_id: &str, messages: &[ChatMessage]) {
+    pub(crate) fn restore_pending_permission(&mut self, chat_id: &str, messages: &[ChatMessage]) {
         if self.has_pending(chat_id) {
             return;
         }

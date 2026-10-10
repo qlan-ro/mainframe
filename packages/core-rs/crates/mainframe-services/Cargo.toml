@@ -18,7 +18,6 @@ notify = { workspace = true }
 dirs = { workspace = true }
 nanoid = { workspace = true }
 rand = { workspace = true }
-dashmap = { workspace = true }
 mainframe-types = { workspace = true }
 mainframe-db = { workspace = true }
 

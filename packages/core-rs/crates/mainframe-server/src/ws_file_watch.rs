@@ -14,7 +14,7 @@ use crate::path_utils::resolve_and_validate_path;
 
 /// Composite map key so the same relative path under different projects/chats
 /// never collides. Mirrors `compositeKey`.
-pub fn composite_key(
+pub(crate) fn composite_key(
     requested_path: &str,
     project_id: Option<&str>,
     chat_id: Option<&str>,
@@ -101,7 +101,7 @@ impl WsFileWatch {
     }
 
     /// Drop every watch this client holds (on socket close).
-    pub fn unsubscribe_all(&mut self, file_watcher: &FileWatcherService) {
+    pub(crate) fn unsubscribe_all(&mut self, file_watcher: &FileWatcherService) {
         for path in self.file_subscriptions.drain() {
             file_watcher.unsubscribe(&path);
         }
@@ -117,7 +117,7 @@ impl WsFileWatch {
 ///
 /// Absolute paths are handled by the caller (returned as-is, no base) exactly as
 /// the TS `if (requestedPath.startsWith('/')) return requestedPath;` fast-path.
-pub fn resolve_subscribe_base(
+pub(crate) fn resolve_subscribe_base(
     db: &DatabaseManager,
     project_id: &str,
     chat_id: Option<&str>,
@@ -155,7 +155,7 @@ fn project_path(db: &DatabaseManager, project_id: &str) -> Option<String> {
 /// Containment-validate a relative `requested_path` against `base` (async
 /// realpath), matching the `resolveAndValidatePath(base, requested)` tail of
 /// `resolveSubscribePath`.
-pub async fn validate_relative(base: &str, requested_path: &str) -> Option<String> {
+pub(crate) async fn validate_relative(base: &str, requested_path: &str) -> Option<String> {
     resolve_and_validate_path(base, requested_path).await
 }
 

@@ -39,8 +39,7 @@ type WatcherMap = Mutex<HashMap<String, WatchEntry>>;
 struct WatchEntry {
     // Held for its lifetime: dropping the watcher stops it (the field is never
     // read directly, but must outlive the subscription).
-    #[allow(dead_code)]
-    watcher: notify::RecommendedWatcher,
+    _watcher: notify::RecommendedWatcher,
     ref_count: i32,
     debounce: Option<JoinHandle<()>>,
 }
@@ -67,7 +66,8 @@ impl FileWatcherService {
         self.watchers.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    pub fn is_watching(&self, key: &str) -> bool {
+    #[cfg(test)]
+    pub(crate) fn is_watching(&self, key: &str) -> bool {
         self.lock().contains_key(key)
     }
 
@@ -169,7 +169,7 @@ impl FileWatcherService {
         self.lock().insert(
             key.to_string(),
             WatchEntry {
-                watcher,
+                _watcher: watcher,
                 ref_count: 1,
                 debounce: None,
             },

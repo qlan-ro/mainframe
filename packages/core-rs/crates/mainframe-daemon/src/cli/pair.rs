@@ -13,7 +13,7 @@ use serde_json::{Value, json};
 use super::connect_failure_message;
 
 /// `runPair()`.
-pub async fn run_pair() {
+pub(crate) async fn run_pair() {
     let port = match mainframe_runtime::config::get_config() {
         Ok(config) => config.port,
         Err(err) => {

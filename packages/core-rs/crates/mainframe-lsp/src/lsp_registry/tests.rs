@@ -56,28 +56,6 @@ fn returns_none_for_unknown_language() {
 }
 
 #[test]
-fn resolves_language_from_file_extension() {
-    let r = registry();
-    assert_eq!(
-        r.get_language_for_extension(".ts").as_deref(),
-        Some("typescript")
-    );
-    assert_eq!(
-        r.get_language_for_extension(".tsx").as_deref(),
-        Some("typescript")
-    );
-    assert_eq!(
-        r.get_language_for_extension(".py").as_deref(),
-        Some("python")
-    );
-    assert_eq!(
-        r.get_language_for_extension(".java").as_deref(),
-        Some("java")
-    );
-    assert_eq!(r.get_language_for_extension(".rs"), None);
-}
-
-#[test]
 fn lists_all_registered_language_ids() {
     assert_eq!(
         registry().get_all_language_ids(),

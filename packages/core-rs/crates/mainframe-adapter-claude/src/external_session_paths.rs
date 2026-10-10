@@ -8,7 +8,7 @@ use std::path::Path;
 use dirs::home_dir;
 
 /// basename (minus `.jsonl`) is a UUID — skips progress.jsonl, queue-operation.jsonl, etc.
-pub fn is_uuid_jsonl(filename: &str) -> bool {
+pub(crate) fn is_uuid_jsonl(filename: &str) -> bool {
     let Some(stem) = filename.strip_suffix(".jsonl") else {
         return false;
     };
@@ -29,13 +29,13 @@ fn is_uuid(s: &str) -> bool {
 }
 
 /// CLI parity: replace EVERY non-alphanumeric char with '-'.
-pub fn encode_path(p: &str) -> String {
+pub(crate) fn encode_path(p: &str) -> String {
     p.chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
         .collect()
 }
 
-pub fn projects_root() -> String {
+pub(crate) fn projects_root() -> String {
     home_dir()
         .unwrap_or_default()
         .join(".claude")
@@ -46,7 +46,7 @@ pub fn projects_root() -> String {
 
 /// Canonicalize like the CLI before encoding: resolve symlinks (realpath) and
 /// normalize Unicode (NFC). Falls back to the input if it can't be realpath'd.
-pub async fn canonicalize_project_path(p: &str) -> String {
+pub(crate) async fn canonicalize_project_path(p: &str) -> String {
     // TODO(port): JS `p.normalize('NFC')` is skipped — no unicode-normalization
     // crate on the allowlist. ASCII paths (the common case) are unaffected;
     // non-ASCII paths with combining marks may encode differently than the CLI.
@@ -70,7 +70,7 @@ pub fn cwd_belongs_to_project(cwd: Option<&str>, project_path: &str) -> bool {
 }
 
 /// Discover every encoded dir under ~/.claude/projects whose prefix matches the project.
-pub async fn discover_project_dirs(project_path: &str) -> Vec<String> {
+pub(crate) async fn discover_project_dirs(project_path: &str) -> Vec<String> {
     let root = projects_root();
     let encoded_prefix = encode_path(project_path);
     let mut entries = match tokio::fs::read_dir(&root).await {

@@ -67,14 +67,6 @@ fn now_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
 }
 
-/// Test-only reset of the process-global pairing state (mirrors `_resetAuthState`).
-pub fn reset_auth_state() {
-    let mut state = AUTH_STATE.lock().unwrap_or_else(|e| e.into_inner());
-    state.pending.clear();
-    state.rate.clear();
-    state.recent.clear();
-}
-
 fn clean_recent_pairings(state: &mut AuthState) {
     let now = now_ms();
     state

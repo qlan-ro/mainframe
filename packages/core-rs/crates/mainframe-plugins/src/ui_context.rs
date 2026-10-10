@@ -23,7 +23,7 @@ pub struct UiContextImpl {
 }
 
 /// `createPluginUIContext(pluginId, emitEvent, deps)`.
-pub fn create_plugin_ui_context(
+pub(crate) fn create_plugin_ui_context(
     plugin_id: &str,
     emit: EmitSink,
     is_notify_enabled: Option<NotifyGate>,

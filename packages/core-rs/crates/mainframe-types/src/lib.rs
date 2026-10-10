@@ -37,7 +37,6 @@ pub mod suggestion;
 pub mod tags;
 pub mod task_progress;
 pub mod transcript;
-pub mod workflow;
 pub mod worktree_offer;
 
 pub mod tool_call_timing;

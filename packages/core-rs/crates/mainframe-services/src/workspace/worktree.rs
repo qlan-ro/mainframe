@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::time::Duration;
 
-use mainframe_db::ProjectsRepository;
 use mainframe_types::chat::Project;
 use serde::{Deserialize, Serialize};
 
@@ -18,8 +17,6 @@ pub enum WorktreeError {
     Git(String),
     #[error(transparent)]
     Io(#[from] std::io::Error),
-    #[error(transparent)]
-    Db(#[from] mainframe_db::DbError),
 }
 
 /// Local faithful port of `src/server/routes/exec-git.ts` (`execGit`).
@@ -161,22 +158,6 @@ pub async fn create_worktree(
         worktree_path: worktree_path_str,
         branch_name: branch_name.to_string(),
     })
-}
-
-pub async fn backfill_worktree_relationships(
-    projects: &ProjectsRepository,
-) -> Result<(), WorktreeError> {
-    let all_projects = projects.list()?;
-    for (child_id, parent_id) in compute_worktree_parent_links(&all_projects).await {
-        tracing::info!(
-            module = "worktree-backfill",
-            child_id = %child_id,
-            parent_id = %parent_id,
-            "Backfilling worktree relationship"
-        );
-        projects.set_parent_project(&child_id, &parent_id)?;
-    }
-    Ok(())
 }
 
 /// Git-only phase of the worktree backfill: over a snapshot of every project,

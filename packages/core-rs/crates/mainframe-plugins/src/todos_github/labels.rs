@@ -23,12 +23,12 @@ pub const WORKFLOW_LABELS: [&str; 7] = [
     "dispatched",
 ];
 
-pub fn is_workflow_label(label: &str) -> bool {
+pub(crate) fn is_workflow_label(label: &str) -> bool {
     WORKFLOW_LABELS.contains(&label) || WORKFLOW_LABEL_PREFIXES.iter().any(|p| label.starts_with(p))
 }
 
 /// The outbound label set for a local task: every workflow label stripped.
-pub fn syncable_labels(local: &[String]) -> Vec<String> {
+pub(crate) fn syncable_labels(local: &[String]) -> Vec<String> {
     local
         .iter()
         .filter(|l| !is_workflow_label(l))
@@ -40,7 +40,7 @@ pub fn syncable_labels(local: &[String]) -> Vec<String> {
 /// stripped of anything workflow-shaped) plus whichever workflow labels the
 /// task already carries locally — remote never introduces one, and one
 /// removed locally never resurfaces.
-pub fn keep_workflow_labels(local: &[String], remote: &[String]) -> Vec<String> {
+pub(crate) fn keep_workflow_labels(local: &[String], remote: &[String]) -> Vec<String> {
     let mut merged: Vec<String> = remote
         .iter()
         .filter(|l| !is_workflow_label(l))

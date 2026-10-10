@@ -41,7 +41,10 @@ pub async fn resolve_and_validate_path(base_path: &str, requested_path: &str) ->
 
 /// Allow reading files under `~/.claude/` (plans, skills, …) when the path
 /// resolves outside the project directory. Mirrors `resolveClaudeConfigPath`.
-pub async fn resolve_claude_config_path(base_path: &str, requested_path: &str) -> Option<String> {
+pub(crate) async fn resolve_claude_config_path(
+    base_path: &str,
+    requested_path: &str,
+) -> Option<String> {
     let claude_dir = tokio::fs::canonicalize(claude_dir()?).await.ok()?;
     let joined = Path::new(base_path).join(requested_path);
     let full_path = tokio::fs::canonicalize(&joined).await.ok()?;
@@ -50,7 +53,7 @@ pub async fn resolve_claude_config_path(base_path: &str, requested_path: &str) -
 
 /// Resolve a requested path for reading: validated inside the project base, or —
 /// as a fallback — under `~/.claude/` or a Codex global instruction file.
-pub async fn resolve_readable_path(base_path: &str, requested_path: &str) -> Option<String> {
+pub(crate) async fn resolve_readable_path(base_path: &str, requested_path: &str) -> Option<String> {
     match resolve_and_validate_path(base_path, requested_path).await {
         Some(p) => Some(p),
         None => {

@@ -30,7 +30,7 @@ impl RunStore {
     /// `dedup_key` is `None` for manual runs — SQLite treats every NULL as
     /// distinct in the unique index, so manual runs never collide, while a
     /// duplicate trigger fire loses the insert race (`DuplicateFire`).
-    pub async fn create_run(
+    pub(crate) async fn create_run(
         &self,
         automation_id: &str,
         definition: AutomationDefinition,
@@ -91,7 +91,7 @@ impl RunStore {
     /// Boot reconcile's entry point — every `running|waiting` run. One row
     /// with a corrupt checkpoint must not abort the scan for the rest: it is
     /// finalized `failed` in place and excluded.
-    pub async fn list_live_runs(&self) -> Result<Vec<RunRecord>, StoreError> {
+    pub(crate) async fn list_live_runs(&self) -> Result<Vec<RunRecord>, StoreError> {
         self.db
             .call(|conn| {
                 let mut stmt = conn.prepare(
@@ -124,7 +124,8 @@ impl RunStore {
     /// Whole-checkpoint write (the engine single-flights per run). Refuses a
     /// terminal run (A8), enforces the 4 MB per-step outputs cap, and derives
     /// the run-level status from the new checkpoint (A5).
-    pub async fn save_checkpoint(
+    #[cfg(test)]
+    pub(crate) async fn save_checkpoint(
         &self,
         run_id: &str,
         checkpoint: AutomationCheckpoint,
@@ -150,7 +151,7 @@ impl RunStore {
     /// commit funnel. Same A8/cap/A5 guarantees as `save_checkpoint`, but the
     /// read and the write share a transaction so a concurrent interaction
     /// resolve can never be clobbered by a stale in-memory copy.
-    pub async fn patch_checkpoint(
+    pub(crate) async fn patch_checkpoint(
         &self,
         run_id: &str,
         mutate: impl FnOnce(&mut AutomationCheckpoint) + Send + 'static,

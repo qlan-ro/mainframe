@@ -290,7 +290,7 @@ fn parse_legacy(body: &str) -> Vec<AskUserQuestionAnswer> {
     out
 }
 
-pub fn parse_ask_user_question_result(
+pub(crate) fn parse_ask_user_question_result(
     content: &str,
     questions: Option<&[KnownQuestion]>,
 ) -> Vec<AskUserQuestionAnswer> {

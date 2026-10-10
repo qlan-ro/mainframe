@@ -5,7 +5,7 @@ use std::path::PathBuf;
 /// Real uid of this process — the value `process.getuid()` returns inside the
 /// CLI, which names its per-user temp dir `claude-<uid>`. `getuid(2)` cannot fail.
 #[cfg(unix)]
-pub fn current_uid() -> u32 {
+pub(crate) fn current_uid() -> u32 {
     rustix::process::getuid().as_raw()
 }
 

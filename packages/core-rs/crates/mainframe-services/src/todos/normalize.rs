@@ -3,27 +3,12 @@
 use std::collections::HashMap;
 
 use mainframe_types::chat::{TodoItem, TodoStatus};
-use serde::Deserialize;
 use serde_json::Value;
 
 /// The three sources that can produce a TodoItem list.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TodoSource {
-    TodoV1,
     TaskV2,
-    CodexTodoList,
-}
-
-/// A single V2 task event (TaskCreate, TaskUpdate, TaskStop). Kept for callers
-/// that build events in Rust; `normalize_todos` itself reads the raw `Value`.
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TaskV2Event {
-    pub tool_name: String,
-    #[serde(default)]
-    pub args: serde_json::Map<String, Value>,
-    #[serde(default)]
-    pub result: Option<Value>,
 }
 
 /// Internal mutable task state used while accumulating V2 events.
@@ -36,27 +21,8 @@ struct TaskState {
 /// Normalize raw payload from a given source into a canonical `TodoItem` list.
 pub fn normalize_todos(source: TodoSource, payload: &Value) -> Vec<TodoItem> {
     match source {
-        TodoSource::TodoV1 => normalize_todo_v1(payload),
         TodoSource::TaskV2 => normalize_task_v2(payload),
-        TodoSource::CodexTodoList => normalize_codex_todo_list(payload),
     }
-}
-
-fn normalize_todo_v1(payload: &Value) -> Vec<TodoItem> {
-    let Some(arr) = payload.as_array() else {
-        return Vec::new();
-    };
-    arr.iter()
-        .filter(|t| {
-            t.is_object()
-                && t.get("content").and_then(Value::as_str).is_some()
-                && t.get("status").and_then(Value::as_str).is_some()
-        })
-        // The TS returns matching items as-is; the typed TodoItem requires a valid
-        // status + activeForm, so a bad status / missing activeForm drops the item
-        // (untested divergence from the unchecked JS pass-through).
-        .filter_map(|t| serde_json::from_value::<TodoItem>(t.clone()).ok())
-        .collect()
 }
 
 fn normalize_task_v2(payload: &Value) -> Vec<TodoItem> {
@@ -167,27 +133,6 @@ fn task_status_to_todo_status(status: &str) -> TodoStatus {
     }
 }
 
-fn normalize_codex_todo_list(payload: &Value) -> Vec<TodoItem> {
-    let Some(arr) = payload.as_array() else {
-        return Vec::new();
-    };
-    arr.iter()
-        .filter_map(|t| {
-            let text = t.get("text").and_then(Value::as_str)?;
-            let completed = t.get("completed").and_then(Value::as_bool).unwrap_or(false);
-            Some(TodoItem {
-                content: text.to_string(),
-                status: if completed {
-                    TodoStatus::Completed
-                } else {
-                    TodoStatus::Pending
-                },
-                active_form: text.to_string(),
-            })
-        })
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -199,50 +144,6 @@ mod tests {
             status,
             active_form: active_form.to_string(),
         }
-    }
-
-    // --- todoV1 ---
-
-    #[test]
-    fn todo_v1_returns_valid_items_as_is() {
-        let input = json!([
-            { "content": "Write tests", "status": "pending", "activeForm": "Write tests" },
-            { "content": "Fix bug", "status": "in_progress", "activeForm": "Fixing the bug" },
-            { "content": "Ship it", "status": "completed", "activeForm": "Ship it" },
-        ]);
-        assert_eq!(
-            normalize_todos(TodoSource::TodoV1, &input),
-            vec![
-                todo("Write tests", TodoStatus::Pending, "Write tests"),
-                todo("Fix bug", TodoStatus::InProgress, "Fixing the bug"),
-                todo("Ship it", TodoStatus::Completed, "Ship it"),
-            ]
-        );
-    }
-
-    #[test]
-    fn todo_v1_filters_out_items_missing_content_or_status() {
-        let input = json!([
-            { "content": "Valid", "status": "pending", "activeForm": "Valid" },
-            { "status": "pending" },
-            { "content": "Also valid", "status": "completed", "activeForm": "" },
-        ]);
-        let result = normalize_todos(TodoSource::TodoV1, &input);
-        assert_eq!(result.len(), 2);
-        assert_eq!(result[0].content, "Valid");
-        assert_eq!(result[1].content, "Also valid");
-    }
-
-    #[test]
-    fn todo_v1_returns_empty_for_non_array_payload() {
-        assert!(normalize_todos(TodoSource::TodoV1, &json!(null)).is_empty());
-        assert!(normalize_todos(TodoSource::TodoV1, &json!("string")).is_empty());
-        assert!(normalize_todos(TodoSource::TodoV1, &json!({})).is_empty());
-    }
-
-    #[test]
-    fn todo_v1_returns_empty_for_empty_input() {
-        assert!(normalize_todos(TodoSource::TodoV1, &json!([])).is_empty());
     }
 
     // --- taskV2 ---
@@ -343,61 +244,6 @@ mod tests {
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].content, "Mystery Task");
         assert_eq!(result[0].status, TodoStatus::InProgress);
-    }
-
-    // --- codexTodoList ---
-
-    #[test]
-    fn codex_maps_items_to_pending_completed() {
-        let items = json!([
-            { "text": "Write tests", "completed": false },
-            { "text": "Fix bug", "completed": true },
-        ]);
-        assert_eq!(
-            normalize_todos(TodoSource::CodexTodoList, &items),
-            vec![
-                todo("Write tests", TodoStatus::Pending, "Write tests"),
-                todo("Fix bug", TodoStatus::Completed, "Fix bug"),
-            ]
-        );
-    }
-
-    #[test]
-    fn codex_returns_empty_for_empty_items() {
-        assert!(normalize_todos(TodoSource::CodexTodoList, &json!([])).is_empty());
-    }
-
-    #[test]
-    fn codex_returns_empty_for_non_array_payload() {
-        assert!(normalize_todos(TodoSource::CodexTodoList, &json!(null)).is_empty());
-        assert!(normalize_todos(TodoSource::CodexTodoList, &json!({})).is_empty());
-    }
-
-    #[test]
-    fn codex_filters_out_items_without_text_field() {
-        let items = json!([
-            { "text": "Valid", "completed": false },
-            { "completed": true },
-            { "text": "Also valid", "completed": false },
-        ]);
-        assert_eq!(normalize_todos(TodoSource::CodexTodoList, &items).len(), 2);
-    }
-
-    #[test]
-    fn codex_all_completed_maps_to_all_completed() {
-        let items = json!([
-            { "text": "Done 1", "completed": true },
-            { "text": "Done 2", "completed": true },
-        ]);
-        let result = normalize_todos(TodoSource::CodexTodoList, &items);
-        assert!(result.iter().all(|t| t.status == TodoStatus::Completed));
-    }
-
-    #[test]
-    fn codex_active_form_matches_content() {
-        let items = json!([{ "text": "My task", "completed": false }]);
-        let result = normalize_todos(TodoSource::CodexTodoList, &items);
-        assert_eq!(result[0].active_form, "My task");
     }
 }
 

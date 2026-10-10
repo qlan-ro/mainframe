@@ -18,7 +18,10 @@ fn kind_by_duration_mins(mins: i64) -> Option<QuotaWindowKind> {
     }
 }
 
-pub fn normalize_rate_limit_snapshot(snapshot: &RateLimitSnapshot, now: i64) -> ProviderQuota {
+pub(crate) fn normalize_rate_limit_snapshot(
+    snapshot: &RateLimitSnapshot,
+    now: i64,
+) -> ProviderQuota {
     let mut quota = ProviderQuota {
         status: ProviderQuotaStatus::Ok,
         observed_at: now,
@@ -74,7 +77,7 @@ fn map_window(
 /// windows (an all-unrecognized or empty snapshot) must not ingest — it would bump
 /// freshness without any data behind it (#268/C2).
 #[must_use]
-pub fn has_recognized_window(quota: &ProviderQuota) -> bool {
+pub(crate) fn has_recognized_window(quota: &ProviderQuota) -> bool {
     quota.session.is_some() || quota.weekly.is_some() || !quota.model_windows.is_empty()
 }
 
@@ -82,7 +85,7 @@ pub fn has_recognized_window(quota: &ProviderQuota) -> bool {
 /// genuine format drift (windows present but none recognized -> warn) from a benign
 /// empty snapshot.
 #[must_use]
-pub fn snapshot_has_window(snapshot: &RateLimitSnapshot) -> bool {
+pub(crate) fn snapshot_has_window(snapshot: &RateLimitSnapshot) -> bool {
     snapshot.primary.is_some() || snapshot.secondary.is_some()
 }
 

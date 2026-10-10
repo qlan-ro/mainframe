@@ -82,7 +82,7 @@ impl LaunchProcessState {
         self.lock().statuses.clone()
     }
 
-    pub fn buffer_output(&self, name: &str, stream: LaunchStream, data: &str) {
+    pub(crate) fn buffer_output(&self, name: &str, stream: LaunchStream, data: &str) {
         let mut state = self.lock();
         let buffer = state.output_buffers.entry(name.to_string()).or_default();
         buffer.push_back(LaunchOutputEntry {

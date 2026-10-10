@@ -17,7 +17,7 @@ pub fn is_supported_version(version: &str) -> bool {
 }
 
 #[must_use]
-pub fn negotiate_version(requested: Option<&str>) -> &'static str {
+pub(crate) fn negotiate_version(requested: Option<&str>) -> &'static str {
     requested
         .and_then(|v| SUPPORTED_PROTOCOL_VERSIONS.iter().find(|s| **s == v))
         .copied()
@@ -104,7 +104,7 @@ fn is_valid_id(id: &Value) -> bool {
 }
 
 #[must_use]
-pub fn rpc_result(id: Value, result: Value) -> Value {
+pub(crate) fn rpc_result(id: Value, result: Value) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "result": result })
 }
 

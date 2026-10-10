@@ -54,7 +54,7 @@ pub struct SwitchCheck<'a> {
 }
 
 /// `None` and `"default"` both mean "the adapter's default model".
-pub fn is_default_model(model: Option<&str>) -> bool {
+pub(crate) fn is_default_model(model: Option<&str>) -> bool {
     model.is_none_or(|m| m.is_empty() || m == "default")
 }
 

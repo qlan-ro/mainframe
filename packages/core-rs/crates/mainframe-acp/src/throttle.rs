@@ -60,7 +60,11 @@ impl Throttle {
     /// revision it describes — `coalesce` then drops every cursor but the
     /// last in whatever batch it ends up in, since only the newest boundary
     /// matters once a batch flushes together.
-    pub fn push_cursor(&mut self, now_ms: i64, cursor: RevisionCursor) -> Vec<ThrottledFrame> {
+    pub(crate) fn push_cursor(
+        &mut self,
+        now_ms: i64,
+        cursor: RevisionCursor,
+    ) -> Vec<ThrottledFrame> {
         self.push_frame(now_ms, ThrottledFrame::Cursor(cursor))
     }
 

@@ -21,7 +21,7 @@ use super::{WorktreeOfferRegistry, resolved_event};
 impl WorktreeOfferRegistry {
     /// Records what is registered right now and drops any pending offers, so a
     /// re-activated chat never re-offers a worktree the user already lived with.
-    pub async fn seed_baseline(&self, chat_id: &str, project_path: &str) {
+    pub(crate) async fn seed_baseline(&self, chat_id: &str, project_path: &str) {
         let listing = self.canonical_listing(project_path).await;
         let seen = identities(&listing).await;
         let mut state = self.lock();
@@ -32,7 +32,7 @@ impl WorktreeOfferRegistry {
 
     /// Sync and cheap — the sink calls it on every confirmed worktree-creating
     /// tool result. A burst collapses into the running scan plus one trailing rescan.
-    pub fn on_trigger(self: &Arc<Self>, chat_id: &str) {
+    pub(crate) fn on_trigger(self: &Arc<Self>, chat_id: &str) {
         {
             let mut state = self.lock();
             let chat = state.entry(chat_id.to_string()).or_default();

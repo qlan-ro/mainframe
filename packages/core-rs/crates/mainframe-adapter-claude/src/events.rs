@@ -57,7 +57,7 @@ fn is_trust_permissions(lower: &str) -> bool {
     lower.contains("permissions.allow") || lower.contains("hastrustdialogaccepted")
 }
 
-pub fn handle_stderr(session: &ClaudeSession, chunk: &[u8], sink: &dyn SessionSink) {
+pub(crate) fn handle_stderr(session: &ClaudeSession, chunk: &[u8], sink: &dyn SessionSink) {
     let message = String::from_utf8_lossy(chunk).trim().to_string();
     if message.is_empty() {
         return;
@@ -137,7 +137,7 @@ mod event_system;
 use event_system::*;
 #[path = "event_control.rs"]
 mod event_control;
-pub use event_control::handle_control_response_event;
+pub(crate) use event_control::handle_control_response_event;
 use event_control::{handle_control_cancel_request_event, handle_control_request_event};
 #[path = "event_result.rs"]
 mod event_result;

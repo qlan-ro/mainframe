@@ -10,7 +10,7 @@ use tokio::process::Command;
 const TITLE_TIMEOUT_MS: u64 = 30_000;
 
 /// One-shot `codex exec` call that turns a first message into a short title.
-pub async fn generate_codex_title(
+pub(crate) async fn generate_codex_title(
     content: &str,
     binary: &str,
     path: &str,

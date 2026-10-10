@@ -6,11 +6,10 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use mainframe_types::chat::{Chat, Project};
+use mainframe_types::chat::Chat;
 use mainframe_types::plugin::{PluginCapability, PluginManifest};
 
 use super::context::{EmitSink, PluginContextDeps, PluginHostDb, build_plugin_context};
-use super::event_bus::PublicDaemonBus;
 use super::github_port::{GitHubIssues, RepoRef};
 
 #[derive(Default)]
@@ -32,13 +31,6 @@ impl PluginHostDb for NullHostDb {
         .unwrap()
     }
     fn settings_get(&self, _c: &str, _k: &str) -> Option<String> {
-        None
-    }
-    fn settings_set(&self, _c: &str, _k: &str, _v: &str) {}
-    fn projects_list(&self) -> Vec<Project> {
-        Vec::new()
-    }
-    fn projects_get(&self, _id: &str) -> Option<Project> {
         None
     }
 }
@@ -125,9 +117,7 @@ fn deps(caps: Vec<PluginCapability>, github: Option<Arc<dyn GitHubIssues>>) -> P
         manifest: manifest(caps),
         plugin_dir: PathBuf::new(),
         host_db: Arc::new(NullHostDb),
-        daemon_bus: Arc::new(PublicDaemonBus::new()),
         emit,
-        adapters: None,
         github,
     }
 }

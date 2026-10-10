@@ -83,7 +83,7 @@ impl ApprovalHandler {
         }
     }
 
-    pub fn reject_all(&self) {
+    pub(crate) fn reject_all(&self) {
         let mut pending = self.pending.lock().unwrap_or_else(|e| e.into_inner());
         for (_, entry) in pending.drain() {
             if entry.method == "item/tool/requestUserInput" {

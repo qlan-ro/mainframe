@@ -65,12 +65,12 @@ impl ClaudeSession {
         self.state().interrupt_timer = Some(handle);
         Ok(())
     }
-    pub fn clear_interrupt_timer(&self) {
+    pub(crate) fn clear_interrupt_timer(&self) {
         if let Some(h) = self.state().interrupt_timer.take() {
             h.abort();
         }
     }
-    pub fn request_context_usage(&self) {
+    pub(crate) fn request_context_usage(&self) {
         if self.state().child.is_none() {
             return;
         }

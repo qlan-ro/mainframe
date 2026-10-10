@@ -68,7 +68,11 @@ fn scan_attention_requests(content: &[Value], sink: &dyn SessionSink) {
     }
 }
 
-pub fn handle_assistant_event(session: &ClaudeSession, event: &Value, sink: &dyn SessionSink) {
+pub(crate) fn handle_assistant_event(
+    session: &ClaudeSession,
+    event: &Value,
+    sink: &dyn SessionSink,
+) {
     let message = event.get("message");
     let usage = message.and_then(|m| m.get("usage"));
 

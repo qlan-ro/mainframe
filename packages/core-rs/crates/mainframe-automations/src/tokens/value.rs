@@ -17,7 +17,7 @@ impl TokenValue {
     /// JSON → token value. `Null` is "unset" (`None`); booleans stringify
     /// the way JS renders them; null list items become empty text so list
     /// lengths survive the conversion.
-    pub fn from_json(value: &Value) -> Option<TokenValue> {
+    pub(crate) fn from_json(value: &Value) -> Option<TokenValue> {
         match value {
             Value::Null => None,
             Value::Bool(b) => Some(TokenValue::Text(b.to_string())),
@@ -60,7 +60,7 @@ impl TokenValue {
 
     /// Literal substitution (contract Decision 9): text verbatim, numbers
     /// without a spurious `.0`, lists newline-joined, records as JSON.
-    pub fn coerce_to_string(&self) -> String {
+    pub(crate) fn coerce_to_string(&self) -> String {
         match self {
             TokenValue::Text(s) => s.clone(),
             TokenValue::Number(n) => js_number_string(*n),
@@ -76,7 +76,7 @@ impl TokenValue {
 
 /// Mirrors JS `String(number)` for the values automations produce: integral
 /// floats print without a decimal point (`String(5)` → `"5"`, never `"5.0"`).
-pub fn js_number_string(n: f64) -> String {
+pub(crate) fn js_number_string(n: f64) -> String {
     if n.is_nan() {
         return "NaN".to_string();
     }

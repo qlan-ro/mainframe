@@ -32,7 +32,9 @@ pub struct PullCodexQuotaDeps<'a> {
     pub now: i64,
 }
 
-pub async fn pull_codex_quota(deps: PullCodexQuotaDeps<'_>) -> Result<ProviderQuota, AdapterError> {
+pub(crate) async fn pull_codex_quota(
+    deps: PullCodexQuotaDeps<'_>,
+) -> Result<ProviderQuota, AdapterError> {
     let (result, account_identity) = tokio::join!(
         (deps.run_rate_limits)(),
         read_codex_account_identity(ReadCodexAccountIdentityDeps {

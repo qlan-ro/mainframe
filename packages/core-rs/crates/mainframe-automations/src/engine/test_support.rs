@@ -51,7 +51,7 @@ impl CollectingSink {
             .collect()
     }
 
-    pub fn interaction_created(&self) -> Vec<crate::ports::InteractionSummary> {
+    pub(crate) fn interaction_created(&self) -> Vec<crate::ports::InteractionSummary> {
         self.events
             .lock()
             .unwrap()
@@ -64,7 +64,7 @@ impl CollectingSink {
     }
 
     /// `(interactionId, runId)` pairs from `automation.interaction.resolved`.
-    pub fn interaction_resolved(&self) -> Vec<(String, String)> {
+    pub(crate) fn interaction_resolved(&self) -> Vec<(String, String)> {
         self.events
             .lock()
             .unwrap()

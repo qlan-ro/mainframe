@@ -81,7 +81,7 @@ pub fn clear_codex_external_session_cache() {
         .clear();
 }
 
-pub fn codex_sessions_root() -> PathBuf {
+pub(crate) fn codex_sessions_root() -> PathBuf {
     dirs::home_dir()
         .map(|h| h.join(".codex").join("sessions"))
         .unwrap_or_else(|| PathBuf::from(".codex").join("sessions"))

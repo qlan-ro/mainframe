@@ -109,7 +109,7 @@ impl OrchestrationService {
 
     /// Stop step 1: end the chat's in-flight calls and refuse late mutating
     /// calls from the stopped turn until the chat goes idle.
-    pub fn mark_stopping(&self, chat_id: &str) {
+    pub(crate) fn mark_stopping(&self, chat_id: &str) {
         self.credentials.cancel_inflight(chat_id);
         self.lock_stopping().insert(chat_id.to_string());
     }
@@ -231,7 +231,7 @@ impl OrchestrationService {
     }
 
     #[must_use]
-    pub fn state_of(&self, chat: &ChatView) -> ChatState {
+    pub(crate) fn state_of(&self, chat: &ChatView) -> ChatState {
         derive_state(chat, self.outbox.has_for(&chat.id))
     }
 

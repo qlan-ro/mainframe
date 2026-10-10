@@ -53,7 +53,7 @@ impl Interpreter {
     /// The 30 s driver, armed by `AutomationsEngine::start`. Without this the
     /// `wakeAt` column is inert: agent deadlines never fire and a `wait` step
     /// parks forever.
-    pub fn spawn_due_sweep(self: Arc<Self>) -> tokio::task::JoinHandle<()> {
+    pub(crate) fn spawn_due_sweep(self: Arc<Self>) -> tokio::task::JoinHandle<()> {
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(DUE_SWEEP_INTERVAL);
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -72,7 +72,7 @@ impl Interpreter {
     /// a later advance() skips `failed` entries without consulting keepGoing.
     /// The write, branch marker and `RunUpdated` emit are shared with the
     /// agent settle path through `out_of_band::fail_step_out_of_band`.
-    pub async fn fail_step(
+    pub(crate) async fn fail_step(
         &self,
         run_id: &str,
         step_ref: &str,

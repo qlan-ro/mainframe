@@ -22,10 +22,8 @@ use serde_json::{Value, json};
 
 use crate::PluginError;
 use crate::context::{
-    AdapterRegistrar, EmitSink, PluginContext, PluginContextDeps, PluginHostDb,
-    build_plugin_context,
+    EmitSink, PluginContext, PluginContextDeps, PluginHostDb, build_plugin_context,
 };
-use crate::event_bus::PublicDaemonBus;
 use crate::github_port::GitHubIssues;
 
 /// Tracks panel/action registrations per plugin (the `panelEvents`/`actionEvents`
@@ -152,9 +150,7 @@ struct ManagerInner {
 /// `pluginsDirs`).
 pub struct PluginManagerDeps {
     pub host_db: Arc<dyn PluginHostDb>,
-    pub daemon_bus: Arc<PublicDaemonBus>,
     pub emit: EmitSink,
-    pub adapters: Option<Arc<dyn AdapterRegistrar>>,
     /// The GitHub Issues port (task 5), `None` when the automations engine
     /// did not start — `build_plugin_context` answers that case with the
     /// engine-unavailable guard rather than treating it as a fatal error.
@@ -165,8 +161,6 @@ pub struct PluginManager {
     inner: Arc<ManagerInner>,
     emit: EmitSink,
     host_db: Arc<dyn PluginHostDb>,
-    daemon_bus: Arc<PublicDaemonBus>,
-    adapters: Option<Arc<dyn AdapterRegistrar>>,
     github: Option<Arc<dyn GitHubIssues>>,
 }
 
@@ -179,8 +173,6 @@ impl PluginManager {
             }),
             emit: deps.emit,
             host_db: deps.host_db,
-            daemon_bus: deps.daemon_bus,
-            adapters: deps.adapters,
             github: deps.github,
         }
     }
@@ -210,9 +202,7 @@ impl PluginManager {
             manifest: manifest.clone(),
             plugin_dir,
             host_db: Arc::clone(&self.host_db),
-            daemon_bus: Arc::clone(&self.daemon_bus),
             emit,
-            adapters: self.adapters.clone(),
             github: self.github.clone(),
         })?;
         let router = activate(Arc::clone(&ctx)).await?;
@@ -241,7 +231,8 @@ impl PluginManager {
         self.inner.tracker.actions.clear();
     }
 
-    pub fn get_plugin(&self, id: &str) -> bool {
+    #[cfg(test)]
+    pub(crate) fn get_plugin(&self, id: &str) -> bool {
         self.inner.loaded.contains_key(id)
     }
 
@@ -347,7 +338,7 @@ mod tests {
         CreateIssue, GitHubPortError, IssueFieldTimes, IssuePatch, IssueSnapshot, IssueState,
         RepoRef,
     };
-    use mainframe_types::chat::{Chat, Project};
+    use mainframe_types::chat::Chat;
     use mainframe_types::plugin::{PluginCapability, UiZone};
     use std::sync::Mutex;
 
@@ -372,13 +363,6 @@ mod tests {
         fn settings_get(&self, _c: &str, _k: &str) -> Option<String> {
             None
         }
-        fn settings_set(&self, _c: &str, _k: &str, _v: &str) {}
-        fn projects_list(&self) -> Vec<Project> {
-            Vec::new()
-        }
-        fn projects_get(&self, _id: &str) -> Option<Project> {
-            None
-        }
     }
 
     fn manager() -> (PluginManager, Arc<Mutex<Vec<DaemonEvent>>>) {
@@ -393,9 +377,7 @@ mod tests {
         let emit: EmitSink = Arc::new(move |e| sink.lock().unwrap().push(e));
         let mgr = PluginManager::new(PluginManagerDeps {
             host_db: Arc::new(NullHostDb),
-            daemon_bus: Arc::new(PublicDaemonBus::new()),
             emit,
-            adapters: None,
             github,
         });
         (mgr, events)
