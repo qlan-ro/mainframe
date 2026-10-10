@@ -1,9 +1,7 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/plan-mode-handler.ts`.
-//!
-//! Implements the (relocated) `PlanModeActionHandler` trait from
-//! `mainframe-adapter-api`. The `extractLatestPlanFileFromMessages` call in the
-//! TS `onApproveAndClearContext` lives on the `PlanActionContext` side now
-//! (`recover_latest_plan_file`) so this crate needs no chat dependency.
+//! Implements the `PlanModeActionHandler` trait from `mainframe-adapter-api`.
+//! Recovering the latest plan file for approve-and-clear-context lives on the
+//! `PlanActionContext` side (`recover_latest_plan_file`) so this crate needs no
+//! chat dependency.
 
 use mainframe_adapter_api::{
     AdapterError, BoxFuture, PlanActionContext, PlanChatUpdate, PlanModeActionHandler,
@@ -333,12 +331,3 @@ mod tests {
         assert_eq!(rec.kills, 0);
     }
 }
-
-// PORT STATUS: src/plugins/builtin/claude/plan-mode-handler.ts (70 lines)
-// confidence: high
-// todos: 0
-// notes: implements the relocated mainframe-adapter-api::PlanModeActionHandler.
-// notes: extractLatestPlanFileFromMessages moved to PlanActionContext
-// notes: (recover_latest_plan_file) so no chat/context-tracker dep is needed here.
-// notes: plan-mode-handler.test.ts ported assertion-for-assertion against a
-// notes: recording MockCtx (mirrors the TS vi.fn() mock context).

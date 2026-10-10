@@ -1,7 +1,7 @@
-//! Pure GitHub sync reconciliation (todo #286): a 3-way comparison of the
+//! Pure GitHub sync reconciliation: a 3-way comparison of the
 //! local task, the remote issue, and the stored baseline decides what
 //! changed — never a clock alone (spec "What a sync run does"). No I/O here;
-//! `run.rs` is the only caller and owns every side effect this plan names.
+//! `run.rs` is the only caller and owns every side effect.
 
 mod fields;
 mod labels;
@@ -45,7 +45,7 @@ pub struct Baseline {
     pub labels: Vec<String>,
 }
 
-/// The per-field-family local-recency clock (D3) — never the task row's
+/// The per-field-family local-recency clock — never the task row's
 /// general `updated_at`. Absent entries compare as unresolved, same as a
 /// remote stamp that can't be read.
 #[derive(Debug, Clone, Default, PartialEq)]

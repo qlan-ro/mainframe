@@ -1,4 +1,4 @@
-//! Ported from `src/quota/status.ts` — provider-level fail-closed status.
+//! Derive provider status, failing closed when quota data is missing.
 
 use mainframe_types::adapter::{ProviderQuota, ProviderQuotaStatus};
 

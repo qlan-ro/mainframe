@@ -6,7 +6,7 @@ use super::*;
 /// `ChatManager`'s privately-typed event/lifecycle pieces. `send_message` needs a
 /// live `ChatManager` (the clear-context path's follow-up "Implement the
 /// following plan:" send), so it upgrades a weak self-reference rather than
-/// re-implementing the send path (T5 wires `self_ref`; see `attach_self`).
+/// re-implementing the send path (`attach_self` sets `self_ref`).
 struct PlanHostImpl {
     event_handler: Arc<EventHandler<EhDeps>>,
     lifecycle: Arc<ChatLifecycleManager<LcDeps>>,

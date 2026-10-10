@@ -24,7 +24,7 @@ pub struct WebhookState {
 }
 
 /// Manual Debug: the secret must not reach logs or error messages, matching
-/// the `Credentials` redaction (plan T6.1).
+/// the `Credentials` redaction.
 impl fmt::Debug for WebhookState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("WebhookState")
@@ -101,8 +101,3 @@ fn hook_id_of(definition: &AutomationDefinition, trigger_id: &str) -> Option<Str
             _ => None,
         })
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-25-todo-234-automations-editor-plan.md T7), not a TS port
-// confidence: high
-// todos: 0
-// notes: Node has no registration API; its editor showed the hook id raw.

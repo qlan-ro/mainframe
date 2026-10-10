@@ -1,4 +1,4 @@
-//! The typed value a token resolves to (plan T3.1):
+//! The typed value a token resolves to:
 //! `TokenValue = Text | Number(f64) | List | Record`.
 
 use std::collections::BTreeMap;
@@ -58,7 +58,7 @@ impl TokenValue {
         }
     }
 
-    /// Literal substitution (contract Decision 9): text verbatim, numbers
+    /// Literal substitution: text verbatim, numbers
     /// without a spurious `.0`, lists newline-joined, records as JSON.
     pub(crate) fn coerce_to_string(&self) -> String {
         match self {
@@ -74,7 +74,7 @@ impl TokenValue {
     }
 }
 
-/// Mirrors JS `String(number)` for the values automations produce: integral
+/// Renders like JS `String(number)` for the values automations produce: integral
 /// floats print without a decimal point (`String(5)` → `"5"`, never `"5.0"`).
 pub(crate) fn js_number_string(n: f64) -> String {
     if n.is_nan() {
@@ -91,9 +91,3 @@ pub(crate) fn js_number_string(n: f64) -> String {
     }
     format!("{n}")
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T3.1), not a TS port
-// confidence: high
-// todos: 0
-// notes: coercion mirrors Node tokens/substitute.ts coerceToString (unset →
-//        '' is the resolver's job — see substitute.rs).

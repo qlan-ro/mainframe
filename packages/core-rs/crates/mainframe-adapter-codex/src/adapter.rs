@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/codex/adapter.ts`.
-
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
@@ -71,23 +69,22 @@ pub fn map_codex_model(m: &ModelInfo) -> AdapterModel {
 pub struct CodexAdapter {
     sessions: Arc<Mutex<Vec<Arc<CodexSession>>>>,
     /// Model catalog is static per session; cache it so resolution doesn't respawn
-    /// a temp app-server each time (CONCURRENCY.tsv 104).
+    /// a temp app-server each time.
     cached_models: Arc<Mutex<Option<Vec<AdapterModel>>>>,
     /// Boot-resolved login-shell `PATH`, applied to every spawned `codex` CLI so
-    /// packaged builds find it outside the bare launchd `PATH` (mirrors the TS
-    /// `enrichPath` env mutation).
+    /// packaged builds find it outside the bare launchd `PATH`.
     resolved_path: ResolvedPath,
-    /// Shared with every other adapter (todo #327) so a Codex sub-agent's
+    /// Shared with every other adapter so a Codex sub-agent's
     /// activity row lands in the same chat-scoped live set a Claude sub-agent's
     /// does.
     background_tasks: Arc<BackgroundTaskTracker>,
-    /// The CLI version the registry's last successful refresh observed (todo
-    /// #368) — `AdapterRegistry::run_refresh` reports it via
-    /// `observe_cli_version` before calling the now-synchronous `capabilities()`.
-    /// `None` before the first refresh, or when the version could not be
-    /// determined; `capabilities().fork` is `false` in both cases.
+    /// The CLI version the registry's last successful refresh observed —
+    /// `AdapterRegistry::run_refresh` reports it via `observe_cli_version` before
+    /// calling the synchronous `capabilities()`. `None` before the first
+    /// refresh, or when the version could not be determined; `capabilities().fork`
+    /// is `false` in both cases.
     observed_version: Arc<Mutex<Option<String>>>,
-    /// Test seam only (todo #368) — `pin_fork_point`'s temp-app-server
+    /// Test seam only — `pin_fork_point`'s temp-app-server
     /// executable. `"codex"` in production; see `CodexSession::
     /// history_executable`'s doc comment for why bare-name PATH resolution
     /// can't be overridden from a test.
@@ -115,8 +112,8 @@ impl CodexAdapter {
         }
     }
 
-    /// Test-only override for `pin_fork_point`'s temp-app-server executable
-    /// (todo #368) — see the field doc comment.
+    /// Test-only override for `pin_fork_point`'s temp-app-server executable — see
+    /// the field doc comment.
     pub fn set_pin_executable(&self, executable: &str) {
         *self
             .pin_executable
@@ -220,13 +217,13 @@ impl Adapter for CodexAdapter {
             // gate and an interrupt working, with no rollout file or threads row. See
             // docs/research/adapters/codex/CONSUMED-SURFACE.md.
             no_persistence: true,
-            // True only on a CLI with the `thread/fork` `lastTurnId` surface (todo
-            // #368) — `None` (never refreshed, or version undetermined) is `false`.
+            // True only on a CLI with the `thread/fork` `lastTurnId` surface —
+            // `None` (never refreshed, or version undetermined) is `false`.
             fork: version.as_deref().is_some_and(fork_supported),
         }
     }
 
-    /// Todo #368: the registry calls this once per refresh (before
+    /// The registry calls this once per refresh (before
     /// `apply_refresh`), on both the primary and fallback version-detection
     /// path, so `capabilities().fork`'s version gate stays synchronous.
     fn observe_cli_version(&self, version: Option<&str>) {
@@ -245,7 +242,7 @@ impl Adapter for CodexAdapter {
         fork_unavailable_reason_for(version.as_deref())
     }
 
-    /// Pin a fork's starting point (todo #368): read the parent thread through a
+    /// Pin a fork's starting point: read the parent thread through a
     /// temporary app-server and pin its last turn id. Writes nothing to
     /// `request.dest_dir` — Codex's `thread/fork` needs no on-disk snapshot.
     fn pin_fork_point(
@@ -405,7 +402,7 @@ impl Adapter for CodexAdapter {
     }
 }
 
-/// The first `N.N.N` triple in `stdout` (mirrors the TS `stdout.match(/(\d+\.\d+\.\d+)/)`).
+/// The first `N.N.N` triple in `stdout` (`/(\d+\.\d+\.\d+)/`).
 fn parse_version(stdout: &str) -> Option<String> {
     let b = stdout.as_bytes();
     let n = b.len();
@@ -453,7 +450,7 @@ mod tests {
         );
     }
 
-    // --- list-models.test.ts ---
+    // --- model list mapping ---
     #[test]
     fn maps_efforts_default_fast_tier_personality_is_default() {
         let m = ModelInfo {
@@ -541,24 +538,3 @@ mod tests {
         );
     }
 }
-
-// PORT STATUS: src/plugins/builtin/codex/adapter.ts (160 lines)
-// confidence: medium
-// todos: 0
-// notes: #430 — listExternalSessions delegates to the disk scanner (external_sessions.rs;
-// notes: thread/list RPC + ThreadListResult removed). loadModels(executable) extracted;
-// notes: listModels → load_models("codex"), probeModels(exe) → load_models(exe??"codex").
-// notes: spawn_temp_app_server now takes the executable (probe uses the configured path).
-// notes: has_probe_models()=true + probe_models/locate_transcript are Adapter-trait
-// notes: overrides (so the registry dispatch in adapter-api probes Codex with the
-// notes: configured binary, mirroring `typeof adapter.probeModels === 'function'`).
-// notes: list_external_sessions/create_plan_mode_handler stay inherent (the trait defers
-// notes: external-session CRUD + createPlanModeHandler — adapter-api's own TODO(port)).
-// notes: sessions = Arc<Mutex<Vec<Arc<CodexSession>>>> (CONCURRENCY.tsv 103; Vec + id
-// notes: retain instead of a HashSet since Arc<CodexSession> isn't Hash), cachedModels
-// notes: Arc<Mutex<Option<..>>> (104). killAll spawns a kill task per session (TS
-// notes: fire-and-forget .catch). is_installed/get_version shell out to `codex
-// notes: --version`; parse_version mirrors adapter-api's hand-rolled N.N.N scan.
-// notes: get_fallback_models returns Some(vec![]) (TS returns []). mapCodexModel test
-// notes: ported inline; the probeModels-with-configured-path test lives in
-// notes: tests/list_models.rs (fake app-server). index.ts `activate` re-exported from lib.rs.

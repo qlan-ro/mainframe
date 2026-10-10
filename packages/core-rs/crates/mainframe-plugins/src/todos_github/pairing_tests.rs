@@ -1,4 +1,4 @@
-//! Task 16: explicit pairing — import creates one task per selected issue
+//! Explicit pairing — import creates one task per selected issue
 //! (AC3, AC5), re-import is idempotent (AC4), publish creates an issue from
 //! an existing task and closes it when the task is `done` (AC6), a paired
 //! task refuses a second publish, and the issue list annotates pairing

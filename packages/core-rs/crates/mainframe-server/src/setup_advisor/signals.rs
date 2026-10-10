@@ -182,7 +182,7 @@ mod tests {
         assert_eq!(build_signals(&fp), Vec::<String>::new());
     }
 
-    /// Spec AC 2: a near-empty project reads as "thin" to the UI, which
+    /// A near-empty project reads as "thin" to the UI, which
     /// nudges the user whenever fewer than 3 chips come back.
     #[test]
     fn a_near_empty_fingerprint_with_one_weak_detection_yields_fewer_than_three_chips() {

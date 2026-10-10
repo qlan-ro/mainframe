@@ -1,7 +1,6 @@
-//! In-place patches (todo #376) that touch one settled group without a
-//! rewind: a `timing(id)` change, and a best-effort `nested(index)`
-//! re-conversion that falls back to a counted rewind when it cannot stay
-//! local (see the plan's "Update dispatch" step 3).
+//! In-place patches that touch one settled group without a rewind: a
+//! `timing(id)` change, and a best-effort `nested(index)` re-conversion that
+//! falls back to a counted rewind when it cannot stay local.
 
 use std::collections::{HashMap, HashSet};
 
@@ -51,9 +50,9 @@ pub(crate) enum NestedPatchOutcome {
 /// would have given this group — its own tool-call timing
 /// (`apply_timing_tail`'s per-group pass) and subject backfill continuing
 /// the scope entering it (`backfill_tail`) — so an in-place patch produces
-/// exactly what a rewind through this group would have (todo #376
-/// follow-up: a raw `fold_merge_group` result always carries
-/// `timing: None` and no backfilled subject).
+/// exactly what a rewind through this group would have (a raw
+/// `fold_merge_group` result always carries `timing: None` and no backfilled
+/// subject).
 pub(crate) fn try_patch_nested(
     groups: &mut [Group],
     raw: &[ChatMessage],

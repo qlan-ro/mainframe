@@ -1,4 +1,4 @@
-//! Red-phase (todo #338, Task 1): pins `spool_root()` and the un-injected
+//! Pins `spool_root()` and the un-injected
 //! production default validator to the daemon's *real* uid instead of the
 //! `unwrap_or(0)` stub. Every case here reads the expected uid from an
 //! independent oracle (`id -u`), never from the code under test.

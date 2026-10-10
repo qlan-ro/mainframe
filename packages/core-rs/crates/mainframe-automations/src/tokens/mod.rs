@@ -1,7 +1,6 @@
-//! Token resolution + literal substitution (contract Decision 9, plan Phase
-//! 3). `Scope::resolve` returns the raw typed value (comparators and Repeat
-//! need a real list/number, not a string); `substitute::render` stringifies
-//! for prompt/param text.
+//! Token resolution + literal substitution. `Scope::resolve` returns the raw
+//! typed value (comparators and Repeat need a real list/number, not a string);
+//! `substitute::render` stringifies for prompt/param text.
 
 pub mod compare;
 pub mod scope;
@@ -24,8 +23,3 @@ mod substitute_tests;
 
 #[cfg(test)]
 mod variables_tests;
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T3.1), not a TS port
-// confidence: high
-// todos: 0
-// notes: none.

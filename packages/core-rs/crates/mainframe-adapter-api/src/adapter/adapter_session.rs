@@ -1,7 +1,7 @@
 use super::*;
 use std::path::PathBuf;
 
-/// A live adapter session (mirrors the TS `AdapterSession`). Trait object stored
+/// A live adapter session. Trait object stored
 /// as `Arc<dyn AdapterSession>`; read-only props are getters, everything async is
 /// a hand-rolled `BoxFuture`.
 pub trait AdapterSession: Send + Sync {
@@ -109,8 +109,8 @@ pub trait AdapterSession: Send + Sync {
         task_id: String,
     ) -> BoxFuture<'_, Result<StopBackgroundTaskResult, AdapterError>>;
 
-    /// Apply a fully-resolved tuning to a live session. `applyTuning?` is optional
-    /// in TS (callers use `session.applyTuning?.(t)`); default is a no-op.
+    /// Apply a fully-resolved tuning to a live session. Optional; the default is
+    /// a no-op.
     fn apply_tuning(&self, tuning: ResolvedTuning) -> BoxFuture<'_, Result<(), AdapterError>> {
         let _ = tuning;
         Box::pin(async { Ok(()) })

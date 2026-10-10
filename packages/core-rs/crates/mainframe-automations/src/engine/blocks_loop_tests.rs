@@ -1,6 +1,6 @@
-//! Condition loops + `break` (Part 3 Phase 2). What separates a loop from a
-//! Repeat is that the continue test is re-evaluated every pass against a
-//! freshly built scope, so these tests drive it from a body step's own output.
+//! Condition loops + `break`. What separates a loop from a Repeat is that the
+//! continue test is re-evaluated every pass against a freshly built scope, so
+//! these tests drive it from a body step's own output.
 
 use std::sync::{Arc, Mutex};
 

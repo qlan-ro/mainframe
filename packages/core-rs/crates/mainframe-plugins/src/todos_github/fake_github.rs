@@ -1,7 +1,7 @@
-//! A `GitHubIssues` test double (todo #286) shared by `run_tests.rs` and
+//! A `GitHubIssues` test double shared by `run_tests.rs` and
 //! `pairing_tests.rs`: every call is recorded so a test can assert exactly
-//! which issues a run touched, and each method's response is scripted ahead
-//! of time per issue number.
+//! which issues a run touched, and each method's response is scripted ahead of
+//! time per issue number.
 
 use std::collections::HashMap;
 use std::sync::Mutex;

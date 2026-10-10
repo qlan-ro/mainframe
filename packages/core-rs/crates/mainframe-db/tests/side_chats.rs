@@ -1,5 +1,4 @@
-//! `ChatsRepository::find_or_create_side_chat` and the `sideChatId` projection
-//! (todo #344, Task 1 — daemon-side-chats).
+//! `ChatsRepository::find_or_create_side_chat` and the `sideChatId` projection.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::rc::Rc;

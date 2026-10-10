@@ -1,5 +1,3 @@
-//! Ported from `packages/types/src/events.ts`.
-//!
 //! The daemon WebSocket wire contract: `DaemonEvent` (server→client) and
 //! `ClientEvent` (client→server). Both are internally tagged on `type`; tag
 //! values are copied verbatim (dotted / colon-delimited) via per-variant
@@ -106,7 +104,7 @@ pub enum DaemonEvent {
     },
     #[serde(rename = "chat.ended")]
     ChatEnded { chat_id: String },
-    /// Idle whole-chat offload (todo #178): the daemon released the chat's CLI
+    /// Idle whole-chat offload: the daemon released the chat's CLI
     /// process, cached history, and registry cell as one unit. Connection-global
     /// (see `mainframe-server::websocket::CONNECTION_GLOBAL_EVENT_TYPES`) so a
     /// client reaches every subscriber, not only one subscribed to this chat.
@@ -244,7 +242,7 @@ pub enum DaemonEvent {
         /// than the field, and then keeps the flag it already has.
         #[serde(skip_serializing_if = "Option::is_none")]
         installed: Option<bool>,
-        /// The adapter's current capabilities (todo #368), attached whenever this
+        /// The adapter's current capabilities, attached whenever this
         /// event fires — including a fire triggered only by a capability or
         /// `fork_unavailable_reason` change, with no catalog change at all — so a
         /// client sees the freshest known values without waiting for its next
@@ -252,7 +250,7 @@ pub enum DaemonEvent {
         /// older than this field.
         #[serde(skip_serializing_if = "Option::is_none")]
         capabilities: Option<AdapterCapabilities>,
-        /// Mirrors `AdapterInfo.fork_unavailable_reason` (todo #368), attached
+        /// Mirrors `AdapterInfo.fork_unavailable_reason`, attached
         /// under the same "whenever this event fires" rule as `capabilities`.
         #[serde(skip_serializing_if = "Option::is_none")]
         fork_unavailable_reason: Option<String>,
@@ -364,8 +362,8 @@ pub enum DaemonEvent {
         body: String,
         links: AutomationNotificationLinks,
     },
-    /// A standalone, run-less notification — `POST /api/notifications`
-    /// (contract §4a). Distinct from `automation.notification`, whose
+    /// A standalone, run-less notification — `POST /api/notifications`.
+    /// Distinct from `automation.notification`, whose
     /// `runId`/`automationId` a caller outside a run doesn't have (e.g.
     /// `lane_apply.py`, a plain script posting from loopback).
     #[serde(rename = "notification.created")]
@@ -533,7 +531,7 @@ mod tests {
         assert_eq!(v, back);
     }
 
-    // ── Automations v2 events (contract §4 — no captured fixtures yet; the
+    // ── Automations v2 events (no captured fixtures yet; the
     // expected JSON below IS the ratified wire shape) ────────────────────────
     fn assert_daemon_wire(event: DaemonEvent, expected: Value) {
         let serialized = serde_json::to_value(&event).unwrap();
@@ -769,19 +767,3 @@ mod tests {
         }));
     }
 }
-
-// PORT STATUS: packages/types/src/events.ts
-// confidence: high
-// todos: 0
-// notes: DaemonEvent + ClientEvent as internally-tagged enums; dotted/colon tag
-// strings via per-variant rename, fields camelCased via rename_all_fields.
-// Numbers per §6.3: tokens/port/count=i64. workflow.step.updated's `step` is a
-// dedicated WorkflowStepUpdate struct (TS Pick has no direct Rust analog).
-// Golden round-trip tests include_str! the fixtures relative to the workspace
-// root.
-// The golden comparator canonicalizes numbers to f64 so a fixture's
-// integer-literal `0` for an f64 field (Chat.totalCost) matches Rust's `0.0` —
-// see the Phase-B WIRE NOTE in chat.rs (serde_json `0.0` vs Node `0`). The
-// legacy chat dialect (display.message.*, message.added/.updated,
-// permission.*, message.send, permission.respond) was retired for the ACP
-// facade (todo #350) — see crate::acp.

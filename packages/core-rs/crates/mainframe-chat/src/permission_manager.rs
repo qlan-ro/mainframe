@@ -1,21 +1,17 @@
-//! Ported from `packages/core/src/chat/permission-manager.ts`.
-
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use mainframe_types::adapter::ControlRequest;
 use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent, MessageContentNode};
 use mainframe_types::content::LeafContent;
 
-/// Per-chat cap on remembered cancelled request ids (D4): far more than a racing
+/// Per-chat cap on remembered cancelled request ids: far more than a racing
 /// in-flight answer could ever need to outlive.
 const CANCELLED_MEMORY: usize = 32;
 
 /// Per-chat FIFO of pending permission requests + the interrupted flag.
 ///
-/// CONCURRENCY.tsv (`permission-manager.ts`): `pendingPermissions` and
-/// `interruptedChats` are PER_ENTITY — they fold into `ChatState.pending_permissions:
-/// VecDeque<ControlRequest>` (front is active) and `ChatState.interrupted: bool`.
-/// The multi-`control_request`-per-turn FIFO is load-bearing (a chat can hold
+/// Both are tracked per chat; the queue's front is the active request. The
+/// multi-`control_request`-per-turn FIFO is load-bearing (a chat can hold
 /// several queued permission prompts; the front is answered first).
 #[derive(Default)]
 pub struct PermissionManager {
@@ -112,11 +108,10 @@ impl PermissionManager {
             .is_some_and(|ring| ring.iter().any(|id| id == request_id))
     }
 
-    /// Clears the pending queue AND drops its cancelled-id tombstones. Used when
-    /// the chat is deleted (discard, project removal) and by idle offload, which
-    /// runs only after hours idle with no prompt pending, so no answer to a
-    /// cancelled prompt can still be in flight. An interrupt or archive must
-    /// keep using `clear`, not this — see D4.
+    /// Permanent per-chat teardown only (e.g. project removal): clears the pending
+    /// queue AND drops its cancelled-id tombstones. An interrupt or archive must
+    /// keep using `clear`, not this, so the remembered cancelled ids still reject
+    /// a late answer.
     pub fn forget(&mut self, chat_id: &str) {
         self.clear(chat_id);
         self.cancelled_requests.remove(chat_id);
@@ -135,10 +130,10 @@ impl PermissionManager {
     /// Drop the front request only if it still matches `request_id`; returns the
     /// new front, or `None` when the queue empties or the front no longer matches.
     ///
-    /// The mismatch case (#284) means a concurrent `cancel` already popped this
-    /// same front and promoted + emitted a different request while the answer
-    /// for it was in flight; shifting again here would silently drop that
-    /// promoted request from the queue. Plain equality also covers the
+    /// The mismatch case means a concurrent `cancel` already popped this same
+    /// front and promoted + emitted a different request while the answer for it
+    /// was in flight; shifting again here would silently drop that promoted
+    /// request from the queue. Plain equality also covers the
     /// `restore_pending_permission` placeholder (`request_id == ""`) answered
     /// with an equally empty id, so no separate empty-id case is needed.
     pub fn shift(&mut self, chat_id: &str, request_id: &str) -> Option<ControlRequest> {
@@ -233,20 +228,3 @@ impl PermissionManager {
 
 #[cfg(test)]
 mod cancel_tests;
-
-// PORT STATUS: src/chat/permission-manager.ts (90 lines)
-// confidence: high
-// todos: 0
-// notes: `pendingPermissions: Map<string, ControlRequest[]>` → `HashMap<String,
-// notes: VecDeque<ControlRequest>>` (FIFO, front = active). `shift` returns the NEW
-// notes: front (or None when drained), matching the TS `queue[0]` return; the absent-
-// notes: chat branch returns None instead of building a throwaway array. TS block
-// notes: `type` checks map onto the untagged MessageContent (Leaf/Node) arms;
-// notes: ControlRequest gains `decision_reason: None` (field added in the Rust type).
-// notes: `cancel`/`was_cancelled`/`forget` (#284) are Rust-side additions with no TS
-// notes: original: `control_cancel_request` removal-by-id + a bounded (32) per-chat
-// notes: tombstone ring so a late in-flight answer for a withdrawn request is dropped.
-// notes: `shift` (#284) gained an id-scoped guard with no TS original: it now pops
-// notes: the front only when it still matches the id being answered, so a `cancel`
-// notes: landing mid-response can't make the completion-side shift promote the
-// notes: wrong request past the one the cancel already promoted.

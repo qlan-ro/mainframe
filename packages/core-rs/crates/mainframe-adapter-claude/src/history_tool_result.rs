@@ -1,16 +1,13 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/history-tool-result.ts`.
-//!
 //! Shared builders for turning a Claude JSONL `message.content` array plus its
-//! `toolUseResult` sidecar into transcript `tool_result` blocks. The TS operates
-//! on untyped `Record<string, unknown>`; the port navigates `serde_json::Value`
-//! the same way. Also home to the small JS-semantics JSON helpers reused by the
-//! history-converters / history-subagents siblings.
+//! `toolUseResult` sidecar into transcript `tool_result` blocks, navigating
+//! untyped `serde_json::Value`. Also home to the small JSON compatibility helpers
+//! reused by the history-converters / history-subagents siblings.
 
 use mainframe_types::chat::{DiffHunk, MessageContent, MessageContentNode};
 use mainframe_types::content::ToolResultImage;
 use serde_json::Value;
 
-// ── shared JS-semantics helpers ─────────────────────────────────────────────
+// ── shared JSON compatibility helpers ─────────────────────────────────────────────
 
 /// JS truthiness for a possibly-absent JSON value (`!!v`).
 pub(crate) fn js_truthy(v: Option<&Value>) -> bool {
@@ -69,8 +66,8 @@ pub(crate) fn extract_tool_result_content(content: Option<&Value>) -> String {
                 return texts.join("\n");
             }
             // An image-only array (no text blocks) never stringifies to JSON —
-            // the images travel separately via `extract_tool_result_images`
-            // (todo #363); base64 must never land in the text content.
+            // the images travel separately via `extract_tool_result_images`;
+            // base64 must never land in the text content.
             let is_image_only = !arr.is_empty()
                 && arr
                     .iter()
@@ -88,7 +85,7 @@ pub(crate) fn extract_tool_result_content(content: Option<&Value>) -> String {
 
 /// Extract `source.type == "base64"` image blocks from a `tool_result`
 /// content array, in source order. Non-array content and non-base64 or
-/// malformed image blocks yield nothing (todo #363).
+/// malformed image blocks yield nothing.
 pub(crate) fn extract_tool_result_images(content: Option<&Value>) -> Vec<ToolResultImage> {
     let Some(Value::Array(arr)) = content else {
         return Vec::new();
@@ -230,19 +227,7 @@ mod tests {
     }
 }
 
-// Tool-result image tests (todo #363) live in a sibling file to keep this one
+// Tool-result image tests live in a sibling file to keep this one
 // under the 300-line cap; `super::*` inside it resolves against this module.
 #[cfg(test)]
 mod image_tests;
-
-// PORT STATUS: src/plugins/builtin/claude/history-tool-result.ts (58 lines)
-// confidence: high
-// todos: 0
-// notes: operates on serde_json::Value like the TS Record<string,unknown>.
-// structuredPatch is deserialized to Vec<DiffHunk> (TS casts blindly); malformed
-// hunks are dropped rather than passed through raw (typed MessageContent can't
-// hold arbitrary JSON) — CLI shape is stable. js_truthy/get are pub(crate) so
-// history-converters/history-subagents share them (3+ call sites) without a new
-// module file. WIRE NOTE: the JSON.stringify fallback for object-shaped
-// tool_result content uses serde_json (BTreeMap-sorted keys) vs JS insertion
-// order — untested edge; the covered paths are string + text-array.

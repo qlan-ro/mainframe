@@ -1,10 +1,7 @@
 //! Pins the ordering of `DefaultBodyLimit::disable()` above
-//! `RequestBodyLimitLayer` in `build_app` (todo #299). Asserts against the
-//! assembled router, not the limit constants in isolation, so a limit
-//! relocated into a different layer is still covered. These tests are green
-//! from birth — they cover behavior that already shipped in PR #549 — and
-//! their red-phase evidence is the manual sabotage pass recorded in the PR
-//! description, not a failing run here.
+//! `RequestBodyLimitLayer` in `build_app`. Asserts against the assembled
+//! router, not the limit constants in isolation, so a limit relocated into a
+//! different layer is still covered.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod support;
@@ -13,8 +10,8 @@ use reqwest::StatusCode;
 use serde_json::Value;
 use support::spawn_test_server;
 
-/// axum's old built-in per-extractor default, which used to shadow the
-/// explicit `RequestBodyLimitLayer` before PR #549.
+/// axum's built-in per-extractor default, which shadows the explicit
+/// `RequestBodyLimitLayer` unless `DefaultBodyLimit::disable()` sits above it.
 const DEFAULT_EXTRACTOR_LIMIT_BYTES: usize = 2 * 1024 * 1024;
 
 #[tokio::test]

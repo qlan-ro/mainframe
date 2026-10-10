@@ -1,9 +1,9 @@
-//! `run_command` (T6.3, Node actions/run-command.ts). A1 (contract §6):
-//! script chips never touch shell text — each chip becomes its own `MF_<n>`
-//! child env var and the script gets a quoted `"$MF_<n>"` where the chip
-//! sat; only author-typed literal text is shell source. `cwd` is never
-//! shell source either: `custom` is the one mode that runs user text, and
-//! it goes through realpath containment against the project root.
+//! `run_command`. A1 (contract §6): script chips never touch shell text — each
+//! chip becomes its own `MF_<n>` child env var and the script gets a quoted
+//! `"$MF_<n>"` where the chip sat; only author-typed literal text is shell
+//! source. `cwd` is never shell source either: `custom` is the one mode that
+//! runs user text, and it goes through realpath containment against the project
+//! root.
 
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -233,10 +233,3 @@ pub(crate) async fn resolve_cwd_for_test(
         .map_err(|err| ActionError(err.to_string()))?;
     resolve_cwd(ctx, run_in, custom_path).await
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T6.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node actions/run-command.ts (compileScript/resolveCwd/
-//        spawnScript/formatOutput); 8 MB cap = Node's execFile maxBuffer,
-//        enforced by capped stream reads + kill instead of maxBuffer.

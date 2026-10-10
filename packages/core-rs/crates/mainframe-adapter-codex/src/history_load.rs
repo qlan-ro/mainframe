@@ -1,6 +1,5 @@
-//! Moved out of `session.rs` (task 3, todo #247) to keep that file smaller.
 //! `load_history_inner` — the loadHistory temp-app-server + thread/read
-//! recursion, unchanged.
+//! recursion, kept apart from `session.rs` to keep that file smaller.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -16,12 +15,12 @@ use crate::session::de;
 use crate::thread_registry::{AgentMetadata, lookup_agent_metadata};
 use crate::types::{ThreadItem, ThreadReadResult, ThreadReadTurn};
 
-/// An unsent fork's `load_history` reads the *source* thread through its
-/// pinned `last_turn_id`, inclusive — everything after stays invisible until
-/// the fork's own first turn actually inherits it via `thread/fork` (todo
-/// #368). A cap id absent from the source (fork point retired, or a stale pin)
-/// keeps every turn rather than silently emptying the transcript. Pure and
-/// unit-testable, split out of `load_history_inner`'s live-client call.
+/// An unsent fork's `load_history` reads the *source* thread through its pinned
+/// `last_turn_id`, inclusive — everything after stays invisible until the
+/// fork's own first turn actually inherits it via `thread/fork`. A cap id
+/// absent from the source (fork point retired, or a stale pin) keeps every turn
+/// rather than silently emptying the transcript. Pure and unit-testable, split
+/// out of `load_history_inner`'s live-client call.
 pub(crate) fn truncate_at_turn_cap(
     mut turns: Vec<ThreadReadTurn>,
     turn_cap: Option<&str>,
@@ -131,9 +130,9 @@ async fn load_children(
     Ok(child_items_by_thread)
 }
 
-/// Child thread ids to fetch and nest, from both naming routes (todo #247
-/// task 21): a `subAgentActivity` ping of any kind, and a `wait`'s
-/// `receiverThreadIds` (the legacy route). Deduped and order-preserving.
+/// Child thread ids to fetch and nest, from both naming routes: a
+/// `subAgentActivity` ping of any kind, and a `wait`'s `receiverThreadIds` (the
+/// legacy route). Deduped and order-preserving.
 fn collect_child_thread_ids(all_items: &[ThreadItem]) -> Vec<String> {
     let mut child_thread_ids: Vec<String> = Vec::new();
     let mut push_unique = |id: &str| {
@@ -175,7 +174,7 @@ mod tests {
         }
     }
 
-    // ---- truncate_at_turn_cap (todo #368) ----
+    // ---- truncate_at_turn_cap ----
 
     #[test]
     fn no_cap_keeps_every_turn() {

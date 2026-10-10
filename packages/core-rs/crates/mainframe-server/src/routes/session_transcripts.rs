@@ -1,5 +1,5 @@
-//! `POST /api/session-transcripts/resolve` — batch @-mention transcript lookup
-//! (todo #240): given a set of chat ids, resolve each one's CLI transcript
+//! `POST /api/session-transcripts/resolve` — batch @-mention transcript lookup:
+//! given a set of chat ids, resolve each one's CLI transcript
 //! location without the caller needing to already hold a session id.
 
 use std::sync::Arc;
@@ -383,8 +383,3 @@ mod tests {
         assert_eq!(body["error"], "chatIds contains an invalid id");
     }
 }
-
-// PORT STATUS: NEW route (#240) — no TS twin, added alongside the Rust-only
-// transcript-location resolution (Group B of the todo-240 plan).
-// confidence: high
-// todos: 0

@@ -1,4 +1,4 @@
-//! `wait` step end-to-end through the real facade (Part 3 Phase 1).
+//! `wait` step end-to-end through the real facade.
 //!
 //! The property worth proving here rather than in a lib test: a parked wait
 //! lives entirely in the checkpoint, so a daemon crash mid-wait resumes on

@@ -1,10 +1,9 @@
-//! Incremental display projection contract (todo #376).
+//! Incremental display projection contract.
 //!
 //! A per-chat projector turns raw-cache changes plus the partial overlay into
 //! a [`DisplayDelta`] that touches only the containers a mutation actually
-//! affected. See `docs/plans/2026-10-03-todo-376-incremental-display-projection-plan.md`
-//! for the full design; this module carries the shared contract types that
-//! both `mainframe-chat` (host) and `mainframe-adapter-claude`
+//! affected. This module carries the shared contract types that both
+//! `mainframe-chat` (host) and `mainframe-adapter-claude`
 //! (`IncrementalProjector`) depend on.
 
 mod delta;

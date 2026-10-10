@@ -1,5 +1,3 @@
-//! Ported from `src/push/push-service.ts`.
-
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
@@ -29,7 +27,7 @@ pub struct PushMessage {
 }
 
 /// The outbound per-token Expo message. `sound` is `'default'` for high-priority
-/// pushes, omitted otherwise (mirrors `sound: undefined`).
+/// pushes, omitted otherwise.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 struct ExpoPushMessage {
     to: String,
@@ -181,9 +179,8 @@ impl PushService {
         }
     }
 
-    /// The message-building half of `sendPush`, factored out so it is testable
-    /// without a live network round-trip (the TS test mocked `fetch`; this port
-    /// asserts the built messages directly). Returns empty when suppressed or
+    /// Builds outbound messages separately from the network call so it is testable
+    /// without a live network round-trip. Returns empty when suppressed or
     /// when there are no disconnected devices.
     fn collect_push_messages(&self, message: &PushMessage) -> Vec<ExpoPushMessage> {
         let tokens = {
@@ -386,17 +383,3 @@ mod tests {
         service.dispose();
     }
 }
-
-// PORT STATUS: src/push/push-service.ts (112 lines)
-// confidence: high
-// todos: 0
-// notes: JS class → Arc<Mutex<Inner>> (devices + desktop_active + timer handle)
-// shared with the spawned staleness timer (§3.3). setTimeout → tokio::spawn +
-// JoinHandle captured for abort (clearTimeout). setDesktopActive spawns via a
-// stored runtime Handle (captured in new()); with no runtime the timer is skipped
-// (graceful). std Mutex poison is recovered (into_inner) — never .unwrap(). The
-// `messages` construction is extracted into collect_push_messages so tests assert
-// the built payload without a network mock (the TS test stubbed global.fetch);
-// send_push keeps the reqwest POST + the same status/err error logs. HashMap
-// iteration order differs from the JS Map insertion order — only observable with
-// multiple distinct disconnected tokens, an outbound (non-frozen) ordering.

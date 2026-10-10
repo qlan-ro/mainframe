@@ -1,4 +1,4 @@
-//! `ChatManager::fork_chat` (todo #343 Group 3, plan item 1). A child module of
+//! `ChatManager::fork_chat` tests. A child module of
 //! `tests`, so it sees `tests`' private `StoreDeps`.
 
 use super::*;
@@ -35,7 +35,7 @@ async fn adapter_without_fork_capability_is_unsupported_422() {
     assert_eq!(err.status_code(), 422);
 }
 
-// Todo #368: a version-gated adapter (Codex below the fork-RPC floor) reports
+// A version-gated adapter (Codex below the fork-RPC floor) reports
 // a specific reason through `adapter_fork_info`; `fork_chat`'s 422 body must
 // carry that reason verbatim instead of the generic "isn't available" message.
 #[tokio::test]

@@ -1,5 +1,5 @@
 //! Golden round-trip harness over every captured fixture in
-//! `packages/core-rs/crates/mainframe-types/tests/fixtures/` (Phase 0 artifacts).
+//! `packages/core-rs/crates/mainframe-types/tests/fixtures/`.
 //!
 //! For each `event.*.json` the payload is deserialized into [`DaemonEvent`],
 //! re-serialized, and compared for JSON-*semantic* equality with the original
@@ -7,7 +7,7 @@
 //! `{minimal, full}` wrapper is unfolded so both optional-field variants are
 //! exercised. For each `route.*.json` the body is round-tripped through the
 //! matching `mainframe-types` response type where one exists, else through
-//! `serde_json::Value` (see the TODO(port) below for which routes are deferred).
+//! `serde_json::Value` (see the note below for which route has no dedicated type).
 //!
 //! Failures are collected across *all* fixtures and reported together with the
 //! offending filename (and payload variant) so a single drifting fixture is
@@ -16,9 +16,7 @@
 //! Semantic equality canonicalizes every JSON number to `f64` before comparing,
 //! so a fixture's integer literal `0` for an `f64` field (e.g. `Chat.totalCost`)
 //! matches Rust's serialized `0.0`. All fixture numbers are < 2^53, so this is
-//! lossless. This mirrors the byte-vs-semantic WIRE NOTE in `chat.rs`; true
-//! byte-parity against the live Node serializer is a later differential-harness
-//! concern, out of scope for these type round-trips.
+//! lossless. Byte-level equality is out of scope for these type round-trips.
 
 // Test crate: unwrap/expect on setup (file IO, JSON parse) is how a broken
 // fixture surfaces as a loud test failure. Matches the per-crate `lib.rs`
@@ -142,9 +140,9 @@ fn read_fixture(path: &Path) -> Value {
 /// and will break loudly if the fixture is corrected (move it out of this list)
 /// or the type is later loosened to accept the bad value.
 ///
-/// TODO(port): `event.plugin-panel-registered.json` uses `"zone": "sidebar"`,
+/// TODO: `event.plugin-panel-registered.json` uses `"zone": "sidebar"`,
 /// which is not a valid `UIZone` (`ZoneId | 'fullview'`, see
-/// `packages/types/src/plugin.ts`). The Phase-0 fixture owner should replace it
+/// `packages/types/src/plugin.ts`). The fixture owner should replace it
 /// with a real zone (e.g. `"right-bottom"`); this harness cannot edit fixtures.
 const KNOWN_CONTRACT_VIOLATIONS: &[(&str, &str)] = &[(
     "event.plugin-panel-registered.json",
@@ -207,10 +205,10 @@ fn every_route_fixture_round_trips() {
         let body = strip_meta(read_fixture(path));
 
         // Route each fixture through its matching `mainframe-types` response
-        // type. TODO(port): `route.health.json` (GET /health) has no dedicated
-        // type in `mainframe-types` yet — the health/status envelope is defined
-        // in `mainframe-server` and gets its own type when that crate is ported;
-        // until then it round-trips through `serde_json::Value` (identity). Every
+        // type. `route.health.json` (GET /health) has no dedicated type in
+        // `mainframe-types` — the health/status envelope is defined in
+        // `mainframe-server` — so it round-trips through `serde_json::Value`
+        // (identity). Every
         // other route below is backed by a real type, so these assertions do
         // catch type drift.
         let result = match name.as_str() {

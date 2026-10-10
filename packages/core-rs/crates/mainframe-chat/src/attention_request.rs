@@ -1,7 +1,6 @@
-//! Pure normalization + dedupe for Claude's `PushNotification` tool call
-//! (todo #293). Kept free of `EventHandlerDeps` so the rules — trim, empty
-//! check, truncation, and per-session dedupe — exist in exactly one place
-//! (plan decision P2).
+//! Pure normalization + dedupe for Claude's `PushNotification` tool call. Kept
+//! free of `EventHandlerDeps` so the rules — trim, empty check, truncation, and
+//! per-session dedupe — exist in exactly one place.
 
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -12,9 +11,9 @@ use crate::event_handler::truncate_push_body;
 /// is suppressed.
 pub const ATTENTION_DEDUPE_WINDOW: Duration = Duration::from_secs(60);
 
-/// The trimmed-but-untruncated dedupe key alongside the display body (spec
-/// D7: the 60s window keys on exact message text, not the truncated body
-/// that ships in the notification).
+/// The trimmed-but-untruncated dedupe key alongside the display body (the 60s
+/// window keys on exact message text, not the truncated body that ships in the
+/// notification).
 #[derive(Debug, PartialEq, Eq)]
 pub struct NormalizedAttention {
     pub dedupe_key: String,
@@ -35,18 +34,17 @@ pub(crate) fn normalize_attention_body(raw: &str) -> Option<NormalizedAttention>
 }
 
 /// Per-(chat, exact message text) admission window. Lives on `EventHandler`,
-/// not the per-session sink, so it survives a session resume (plan decision
-/// P3).
+/// not the per-session sink, so it survives a session resume.
 #[derive(Default)]
 pub struct AttentionDedupe {
     seen: HashMap<(String, String), Instant>,
 }
 
 impl AttentionDedupe {
-    /// `true` when this message should raise a notification now; `false`
-    /// when the same chat + exact message text was already admitted within
-    /// [`ATTENTION_DEDUPE_WINDOW`]. `key` must be the untruncated message
-    /// (spec D7) so two texts sharing a truncated prefix don't collide.
+    /// `true` when this message should raise a notification now; `false` when
+    /// the same chat + exact message text was already admitted within
+    /// [`ATTENTION_DEDUPE_WINDOW`]. `key` must be the untruncated message so
+    /// two texts sharing a truncated prefix don't collide.
     pub fn admit(&mut self, chat_id: &str, key: &str, now: Instant) -> bool {
         self.seen
             .retain(|_, seen_at| now.duration_since(*seen_at) < ATTENTION_DEDUPE_WINDOW);

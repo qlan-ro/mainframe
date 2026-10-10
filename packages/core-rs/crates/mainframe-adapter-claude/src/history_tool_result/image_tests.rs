@@ -1,4 +1,4 @@
-//! Tool-result image tests for todo #363, split out of `history_tool_result.rs`
+//! Tool-result image tests, split out of `history_tool_result.rs`
 //! to keep that file under the 300-line cap.
 
 use super::*;

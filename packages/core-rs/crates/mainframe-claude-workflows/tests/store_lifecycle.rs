@@ -1,6 +1,5 @@
-//! Red-phase (Task 9): `store::ClaudeWorkflowStore`'s full lifecycle — seed,
-//! link, progress, stamp, record reconciliation, sweep, subscribe, remove.
-//! Turned green by Task 16.
+//! `store::ClaudeWorkflowStore`'s full lifecycle — seed, link, progress, stamp,
+//! record reconciliation, sweep, subscribe, remove.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::time::Duration;

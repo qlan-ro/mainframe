@@ -1,8 +1,7 @@
-//! Integration tests for `routes/search.rs`, translated from
-//! `server/routes/__tests__/search.test.ts` and `search-symlink-fallback.test.ts`.
-//! Real spawned app + in-memory DB + tempdir project. The symlink-containment
-//! specs exercise the in-process searcher's default (`ignore::WalkBuilder`
-//! never follows symlinks), so the leaked file is never read.
+//! Integration tests for `routes/search.rs`. Real spawned app + in-memory DB +
+//! tempdir project. The symlink-containment specs exercise the in-process
+//! searcher's default (`ignore::WalkBuilder` never follows symlinks), so the
+//! leaked file is never read.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod support;

@@ -1,7 +1,6 @@
-//! If/Repeat block execution (Node walk.ts `runIf`/`runRepeat`, contract
-//! Decisions 3/8). Blocks never write a checkpoint entry under their own id
-//! — only leaf verbs do — so re-entering one on resume is always safe: the
-//! nested walk short-circuits on already-terminal steps.
+//! If/Repeat block execution. Blocks never write a checkpoint entry under their
+//! own id — only leaf verbs do — so re-entering one on resume is always safe:
+//! the nested walk short-circuits on already-terminal steps.
 
 use crate::domain::{IfBlock, LoopBlock, LoopMode, RepeatBlock, RetryBlock};
 use crate::error::StoreError;
@@ -70,7 +69,7 @@ pub(crate) async fn run_repeat(
     }
 
     // Absent or 1 keeps this exact sequential loop; concurrency > 1 hands
-    // scheduling to the branch driver instead (Phase 4a).
+    // scheduling to the branch driver instead.
     if let Some(concurrency) = block.concurrency.filter(|&n| n > 1) {
         return blocks_concurrent_repeat::run_repeat_concurrent(
             block,
@@ -106,8 +105,8 @@ pub(crate) async fn run_repeat(
     })
 }
 
-/// Retry (Part 3 Phase 3): re-walk the body from the top until it succeeds or
-/// the attempts run out.
+/// Retry: re-walk the body from the top until it succeeds or the attempts run
+/// out.
 ///
 /// Attempts cannot be inferred by replaying the walk: `walk_frame` treats an
 /// already-`failed` entry as settled and continues past it, so a replayed
@@ -189,9 +188,9 @@ async fn mark_attempt(
     mark_outcome(ctx, marker, &block.id, RETRY_ATTEMPT_KIND, status, error).await
 }
 
-/// Condition loop (Part 3 Phase 2). Unlike `run_repeat`, the continue test is
-/// re-evaluated against a freshly built scope every pass, so the body's own
-/// outputs decide whether there is another one.
+/// Condition loop. Unlike `run_repeat`, the continue test is re-evaluated
+/// against a freshly built scope every pass, so the body's own outputs decide
+/// whether there is another one.
 pub(crate) async fn run_loop(
     block: &LoopBlock,
     checkpoint: AutomationCheckpoint,
@@ -267,10 +266,3 @@ pub(crate) async fn run_loop(
         checkpoint: current,
     })
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T4.2), not a TS port
-// confidence: high
-// todos: 0
-// notes: error strings mirror Node walk.ts verbatim (they cross the wire in
-//        run.error); a body failure bubbles as the BLOCK's result, so the
-//        outer walk consults the block's own keepGoing (Node parity).

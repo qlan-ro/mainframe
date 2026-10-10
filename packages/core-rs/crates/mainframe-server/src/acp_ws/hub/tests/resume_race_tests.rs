@@ -132,10 +132,9 @@ async fn a_detach_during_the_snapshot_await_is_not_undone_by_the_resume() {
     assert!(drain(&mut rx).is_empty());
 }
 
-/// Spec Decision 38: the session-gone arm sends `replay_complete` too, right
-/// after the reply — the invariant ("every successful reply is followed by
-/// exactly one marker") holds even when the client's own detach won the race
-/// against the resume.
+/// The session-gone arm sends `replay_complete` too, right after the reply —
+/// the invariant ("every successful reply is followed by exactly one marker")
+/// holds even when the client's own detach won the race against the resume.
 #[tokio::test]
 async fn a_reply_to_a_dropped_session_is_followed_by_replay_complete() {
     let hub = hub();
@@ -154,10 +153,10 @@ async fn a_reply_to_a_dropped_session_is_followed_by_replay_complete() {
     assert!(frames[1]["params"].get("aborted").is_none());
 }
 
-/// Spec Decision 38: the full resume order is reply, replay (item creates
-/// ending with the turn state), `queue_state`, `replay_complete`, then
-/// whatever the `AwaitingSeed` window buffered — the marker sits exactly
-/// between the replay's own tail and the catch-up it never overtakes.
+/// The full resume order is reply, replay (item creates ending with the turn
+/// state), `queue_state`, `replay_complete`, then whatever the `AwaitingSeed`
+/// window buffered — the marker sits exactly between the replay's own tail and
+/// the catch-up it never overtakes.
 #[tokio::test]
 async fn replay_complete_follows_queue_state_and_precedes_catch_up() {
     let hub = hub();
@@ -269,7 +268,7 @@ async fn a_reply_to_a_dropped_session_is_marked_sent_too() {
     assert!(replied.load(Ordering::SeqCst), "the reply went out");
 }
 
-// ── Replay result previews (spec Decision 41) ────────────────────────────────
+// ── Replay result previews ───────────────────────────────────────────────────
 
 fn tool_message(id: &str, result: &str) -> DisplayMessage {
     use mainframe_types::display::{DisplayNode, ToolCallResult, ToolCategory};

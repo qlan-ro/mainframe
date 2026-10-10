@@ -1,19 +1,14 @@
-//! Group 2 task 21 (todo #350, R2.8/R3.15): live-vs-history id parity for
-//! the Codex adapter, mirroring `mainframe-adapter-claude/tests/
-//! live_vs_history_id_parity.rs`. Two cases drive one recorded rollout
+//! Live-vs-history id parity for the Codex adapter. Two cases drive one recorded rollout
 //! (`collab-delegation-0.144.3.jsonl`, already the shared fixture behind
 //! `tests/collab_delegation.rs` and `tests/collab_reload.rs`) through both
 //! `handle_notification` (live) and `convert_thread_items` (reload), and
 //! assert the two paths assign the same id.
 //!
-//! R3.16 (history resolves a sub-agent card against the turn that raised it,
-//! not the child's own `turn/completed`) and R3.18 (sub-agent history mints
-//! `rollout-{n}` for nested tool calls instead of the app-server item id —
-//! `rollout_reader.rs`'s `next_id`, a raw-`.jsonl`-rescan path this crate's
-//! captured JSON-RPC fixtures never exercise) are NOT covered here: neither
+//! History resolution against the wrong turn and nested tool-call IDs from
+//! the raw JSONL rescan (`rollout_reader.rs::next_id`) are not covered here.
+//! Neither
 //! has a fixture in this crate that reproduces it, and fabricating one risks
-//! pinning the wrong shape. Left as named, unverified findings for T22's
-//! continuation rather than a guessed `#[ignore]`d test.
+//! pinning the wrong shape.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod common;
@@ -92,7 +87,7 @@ fn collab_card_id(blocks: &[Value]) -> String {
         .to_string()
 }
 
-/// T21: the delegation card's id — independently derived on each path (live
+/// The delegation card's id — independently derived on each path (live
 /// from the `subAgentActivity` started ping, per `tests/collab_delegation.rs`'s
 /// module doc; reload from `history_collab_resolve.rs::open_card`'s
 /// `card_id` parameter) — must agree, or a client resuming mid-session and
@@ -128,7 +123,7 @@ fn live_and_reload_agree_on_the_delegation_cards_id() {
     assert_eq!(live_card_id, reload_card_id);
 }
 
-/// T22, R3.17 (fixed): reload dropped every `dynamicToolCall` item silently
+/// Reload dropped every `dynamicToolCall` item silently
 /// (`history_convert.rs`'s catch-all `_ => {}`) — no fixture in this crate's
 /// captures contains one, so this drives a synthetic item through both
 /// paths directly.
@@ -174,7 +169,7 @@ fn dynamic_tool_call_reload_matches_the_live_tool_use_id_and_name() {
     assert_eq!(live_value["name"], json!("web__search"));
 }
 
-/// Todo #356 gate 3: an `openPage` `webSearch` item must produce the identical
+/// An `openPage` `webSearch` item must produce the identical
 /// tool_use id, name, and empty tool_result content on both paths.
 #[test]
 fn web_search_open_page_reload_matches_the_live_tool_use_id_name_and_empty_result() {

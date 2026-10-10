@@ -1,11 +1,8 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/external-session-cache.ts`.
-//!
 //! Process-lifetime metadata cache keyed by sessionId, validated by mtime+size.
 //!
-//! CONCURRENCY (CONCURRENCY.tsv → SHARED_MAP): the TS module-level singleton is
-//! forbidden by rule 8. The cache is an injected `Arc<Mutex<HashMap<..>>>` owned
-//! by the adapter; every accessor takes the handle. `new_external_session_cache`
-//! constructs it at adapter init.
+//! Concurrency: no module-level singleton. The cache is an injected
+//! `Arc<Mutex<HashMap<..>>>` owned by the adapter; every accessor takes the
+//! handle. `new_external_session_cache` constructs it at adapter init.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -132,11 +129,3 @@ mod tests {
         assert_eq!(get_cached(&cache, "a", 100.0, 50), None);
     }
 }
-
-// PORT STATUS: src/plugins/builtin/claude/external-session-cache.ts (24 lines)
-// confidence: high
-// todos: 0
-// notes: SHARED_MAP per CONCURRENCY.tsv — the module-global Map is replaced by an
-// injected Arc<Mutex<HashMap>>; get/set/clear take the handle (no module state,
-// rule 8). All 4 TS tests ported against
-// a freshly-constructed cache handle (replacing the TS beforeEach(clear)).

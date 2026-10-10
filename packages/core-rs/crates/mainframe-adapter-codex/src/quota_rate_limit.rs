@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/codex/quota-rate-limit.ts`.
-//!
 //! Normalizes an `account/rateLimits/updated` (or `.../read`) snapshot into a
 //! `ProviderQuota`. Each window is keyed by `windowDurationMins` (300=session,
 //! 10080=weekly), never by its `primary`/`secondary` slot; an absent or
@@ -233,11 +231,3 @@ mod tests {
         assert!(!snapshot_has_window(&snapshot(None, None)));
     }
 }
-
-// PORT STATUS: src/plugins/builtin/codex/quota-rate-limit.ts (46 lines)
-// confidence: high
-// todos: 0
-// notes: kind_by_duration_mins is a match (not the TS lookup object) but the
-// notes: 300/10080 -> session/weekly mapping and the drop-on-unrecognized/null-
-// notes: duration behavior are identical; resetsAt sec->ms conversion and the
-// notes: sparse per-window Option semantics match normalizeRateLimitSnapshot exactly.

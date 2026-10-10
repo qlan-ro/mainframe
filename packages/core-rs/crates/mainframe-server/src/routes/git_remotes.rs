@@ -1,7 +1,5 @@
-//! `GET /api/projects/:id/git/github-remotes` — task 24 of the GitHub Issues
-//! sync plan (group `git-remotes`). Kept out of `git.rs` per the plan's
-//! fallback instruction: that file is already at the 300-line file cap, so
-//! this route and its tests live in their own module instead.
+//! `GET /api/projects/:id/git/github-remotes`: the GitHub remotes offered to
+//! the repo-link dialog.
 
 use std::sync::Arc;
 
@@ -20,8 +18,8 @@ use crate::respond::{fail, ok};
 use crate::routes::git::{ChatIdQuery, get_effective_path, is_not_git_repo_err};
 
 /// A GitHub remote derived from `git remote -v`, offered to the repo-link
-/// dialog. Only remotes whose URL yields a valid `owner/repo` are included
-/// (AC2) — other hosts and malformed paths are silently dropped.
+/// dialog. Only remotes whose URL yields a valid `owner/repo` are included —
+/// other hosts and malformed paths are silently dropped.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct GitHubRemote {

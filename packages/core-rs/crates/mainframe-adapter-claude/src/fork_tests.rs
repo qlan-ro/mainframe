@@ -46,7 +46,7 @@ fn no_own_id_and_no_fork_source_is_fresh() {
     assert_eq!(resolve_resume(None, false, None), ResumeTarget::Fresh);
 }
 
-/// Existing (pre-#343) behavior: a regular chat with a stored session id
+/// Non-fork behavior: a regular chat with a stored session id
 /// and no pending fork always resumes plainly, even when the transcript
 /// presence probe says no — that probe only gates the fork-source arms.
 /// The CLI is responsible for failing loudly if `own-id` turns out to be

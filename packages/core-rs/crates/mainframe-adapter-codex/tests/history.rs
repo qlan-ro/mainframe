@@ -1,4 +1,4 @@
-//! Ports `__tests__/history.test.ts` (convertThreadItems) assertion-for-assertion.
+//! `convert_thread_items` history conversion tests.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::collections::HashMap;
@@ -54,7 +54,7 @@ fn also_accepts_the_rollout_jsonl_shape_input_text() {
     );
 }
 
-// --- thread/read reload tolerates item types added after this port ---
+// --- thread/read reload tolerates item types added after this version ---
 
 // Regression: Codex 0.144.3 emits items that `ThreadItem` doesn't know (e.g.
 // `subAgentActivity`). Because `ThreadReadTurn.items` is a hard
@@ -358,7 +358,7 @@ fn converts_web_search_to_a_tool_use_plus_tool_result_pair_named_web_search() {
     );
 }
 
-/// Gate 3 (todo #356): reload must resolve an `openPage` item to the same
+/// Reload must resolve an `openPage` item to the same
 /// WebFetch{url} + empty tool_result pair the live path renders.
 #[test]
 fn converts_web_search_open_page_action_to_a_web_fetch_tool_use_with_an_empty_result() {
@@ -416,7 +416,7 @@ fn sets_chat_id_on_all_messages() {
     assert_eq!(out[0].chat_id, "my-chat");
 }
 
-// --- convertThreadItems — sub-agent cards on reload (todo #247, task 19/20) ---
+// Sub-agent cards on reload
 
 fn card_blocks(out: &[ChatMessage]) -> Vec<Value> {
     out.iter()

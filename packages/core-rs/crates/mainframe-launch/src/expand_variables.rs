@@ -1,10 +1,8 @@
-//! Ported from `src/launch/expand-variables.ts`.
-//!
 //! Recursive `${VAR}` / `${VAR:-default}` substitution plus leading-`~`
 //! expansion over an arbitrary JSON value. Non-string scalars pass through
-//! unchanged. The TS uses a global regex
+//! unchanged. The grammar is the global regex
 //! (`/\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-(.*?))?\}/g`); no `regex` crate is
-//! allowlisted, so the same grammar is hand-scanned left-to-right with JS
+//! allowlisted, so it is hand-scanned left-to-right with JS
 //! `String.replace` semantics: a `${` that does not form a valid reference is
 //! emitted literally and scanning resumes one byte later.
 
@@ -13,7 +11,7 @@ use std::collections::HashMap;
 use serde_json::{Map, Value};
 
 /// Expand every string in `raw`, recursing into arrays and objects. Errors with
-/// the TS message when a referenced variable is unset and carries no default.
+/// a fixed message when a referenced variable is unset and carries no default.
 pub fn expand_variables(raw: &Value, env: &HashMap<String, String>) -> Result<Value, String> {
     match raw {
         Value::String(s) => Ok(Value::String(expand_string(s, env)?)),
@@ -234,13 +232,3 @@ mod tests {
         assert_eq!(result, json!({ "name": "Core Daemon" }));
     }
 }
-
-// PORT STATUS: src/launch/expand-variables.ts (32 lines)
-// confidence: high
-// todos: 0
-// notes: global regex → hand-scanned `${NAME(:-default)?}` grammar with JS
-// String.replace semantics (an invalid `${` is emitted literally, scan resumes
-// +1). env is a HashMap (TS `Record<string,string|undefined>`); an empty-string
-// value is present (Some("")) and wins over a default, matching `!= null`.
-// homedir → dirs::home_dir(); `~/rest` → `${home}/rest` mirrors `home +
-// slice(1)`. All 13 expand-variables.test.ts cases translated.

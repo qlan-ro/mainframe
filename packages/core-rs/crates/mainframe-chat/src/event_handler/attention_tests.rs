@@ -1,5 +1,5 @@
 //! `SessionSinkImpl::on_attention_request` — the sink side of Claude's
-//! `PushNotification` tool call (todo #293): gate, dedupe, then notify+push.
+//! `PushNotification` tool call: gate, dedupe, then notify+push.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 

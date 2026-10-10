@@ -1,4 +1,3 @@
-//! Ported from `packages/core/src/db/__tests__/chats.test.ts`.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::rc::Rc;
@@ -265,7 +264,7 @@ fn dismissed_worktrees_are_scoped_per_chat() {
     );
 }
 
-// ── effort round-trip (todo #302) ──────────────────────────────────────────
+// ── effort round-trip ──────────────────────────────────────────────────────
 
 #[test]
 fn chat_effort_round_trips_ultra() {
@@ -377,7 +376,7 @@ fn permission_mode_reads_back_none_for_a_bogus_stored_value() {
     assert_eq!(fetched.permission_mode, None);
 }
 
-// ── temporary / non-project sessions (#346) ─────────────────────────────────
+// ── temporary / non-project sessions ────────────────────────────────────────
 
 #[test]
 fn a_normal_chat_defaults_to_not_temporary_and_not_no_project() {

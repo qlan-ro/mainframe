@@ -12,8 +12,8 @@ use crate::frontmatter::parse_frontmatter;
 
 use super::{ADAPTER_ID, home_dir, nonempty_attr, read_dir_names, skill_scope_str};
 
-/// Insertion-ordered dedupe map mirroring the TS `Map<string, Skill>`
-/// (`set` overwrites in place, iteration preserves first-insert order).
+/// Insertion-ordered dedupe map (`set` overwrites in place, iteration
+/// preserves first-insert order).
 struct SkillMap {
     order: Vec<String>,
     map: HashMap<String, Skill>,

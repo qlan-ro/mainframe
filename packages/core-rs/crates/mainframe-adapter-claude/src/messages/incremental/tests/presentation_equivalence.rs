@@ -1,9 +1,8 @@
-//! Equivalence with transcript presentation metadata (todo #376 x #384):
-//! `group_messages` seeds `presentationSources` per raw message, re-bases
-//! them on every merge, and prunes/re-indexes them alongside tool_use ids
-//! the dedupe drops. The projector's chunked fold must produce the same
-//! sources byte for byte, including across a settled-group refold and an
-//! in-place presentation update.
+//! Equivalence with transcript presentation metadata: `group_messages` seeds
+//! `presentationSources` per raw message, re-bases them on every merge, and
+//! prunes/re-indexes them alongside tool_use ids the dedupe drops. The
+//! projector's chunked fold must produce the same source fields,
+//! including across a settled-group refold and an in-place presentation update.
 
 use mainframe_display::{RawChange, RawChanges};
 use mainframe_types::chat::ChatMessage;

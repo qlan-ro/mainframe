@@ -1,5 +1,5 @@
-//! Engine assembly (Node AutomationService constructor): stores → registry →
-//! verbs → interpreter → interaction service → trigger plumbing.
+//! Engine assembly: stores → registry → verbs → interpreter → interaction
+//! service → trigger plumbing.
 
 use std::sync::{Arc, Mutex as StdMutex};
 
@@ -119,8 +119,3 @@ pub(super) async fn build(
         started: std::sync::atomic::AtomicBool::new(false),
     }))
 }
-
-// PORT STATUS: packages/core/src/automations/service.ts (constructor)
-// confidence: high
-// todos: 0
-// notes: —

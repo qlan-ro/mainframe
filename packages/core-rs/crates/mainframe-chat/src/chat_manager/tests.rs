@@ -1,5 +1,5 @@
-//! Ports the chat-manager `__tests__` (cli-queue, recover-working, turn-timing,
-//! command-routing, remove-project-kills-tasks) assertion-for-assertion.
+//! Chat-manager tests for queueing, recovery, timing, command routing, and
+//! project teardown.
 
 use super::*;
 use crate::test_support::test_chat;
@@ -76,22 +76,22 @@ pub(crate) struct StoreDeps {
     /// What `create_plan_mode_handler` returns, so plan-mode dispatcher tests
     /// can inject a recorder (or leave `None` for the unresolved-handler path).
     plan_handler: Mutex<Option<Arc<dyn PlanModeActionHandler>>>,
-    /// What `adapter_supports_no_persistence` answers (todo #346, G2b).
+    /// What `adapter_supports_no_persistence` answers.
     no_persistence_capability: Mutex<bool>,
     /// Every `ensure_dir` path, in order.
     ensure_dir_calls: Mutex<Vec<String>>,
     /// Every `mark_context_lost(chat_id, context_lost_at)` call, in order.
     mark_context_lost_calls: Mutex<Vec<(String, String)>>,
-    /// Every `remove_scratch_dir` path, in order (todo #346).
+    /// Every `remove_scratch_dir` path, in order.
     remove_scratch_dir_calls: Mutex<Vec<String>>,
     /// When `Some`, `remove_scratch_dir` fails with this message instead of
     /// recording success. Cleared by the test between a failing call and a
-    /// retry, so `discard_chat` can be proven retryable (todo #346).
+    /// retry, so `discard_chat` can be proven retryable.
     fail_remove_scratch_dir: Mutex<Option<String>>,
-    /// `adapter_fork_info(adapter_id).fork` — todo #343's fork_chat tests flip
+    /// `adapter_fork_info(adapter_id).fork` — fork_chat tests flip
     /// this on; every other test leaves the trait default (`false`).
     fork_capable: Mutex<bool>,
-    /// `adapter_fork_info(adapter_id).unavailable_reason` — todo #368's
+    /// `adapter_fork_info(adapter_id).unavailable_reason` —
     /// version-gate tests set this to prove the reason wins over the generic
     /// `Unsupported` message; every other test leaves it `None`.
     fork_unavailable_reason: Mutex<Option<String>>,
@@ -223,7 +223,7 @@ impl StoreDeps {
     fn raw_chats(&self) -> Vec<Chat> {
         self.store.lock().unwrap().values().cloned().collect()
     }
-    /// Mirrors the DB's correlated `sideChatId` subquery (todo #344) for this
+    /// Mirrors the DB's correlated `sideChatId` subquery for this
     /// in-memory double: the id of the (at most one) temporary chat in `all`
     /// whose `parent_chat_id` is `chat_id`.
     fn derive_side_chat_id(chat_id: &str, all: &[Chat]) -> Option<String> {
@@ -245,12 +245,12 @@ impl StoreDeps {
     /// carrying the same id/timestamp/type and its leaf content verbatim,
     /// `Node` content dropped) — real conversion (grouping, tag stripping)
     /// lives outside this crate's dep set. Carrying the type and leaf
-    /// content through (todo #382) is what lets `resume_overlay.rs`'s
+    /// content through is what lets `resume_overlay.rs`'s
     /// streaming-attribution assertions (which need an `Assistant` message
     /// whose own last leaf matches the overlay's) exercise the real
     /// projection path, not just COUNT/id-order retention checks. Shared by
     /// `prepare_messages_for_client` (REST) and `display_projector` (the
-    /// live/resume path), so both answer identically (todo #376).
+    /// live/resume path), so both answer identically.
     fn convert(raw: &[ChatMessage], _categories: Option<&ToolCategories>) -> Vec<DisplayMessage> {
         raw.iter()
             .map(|m| DisplayMessage {
@@ -293,7 +293,7 @@ impl ChatManagerDeps for StoreDeps {
     /// carrying the same id/timestamp/type and its leaf content verbatim,
     /// `Node` content dropped) — real conversion (grouping, tag stripping)
     /// lives outside this crate's dep set. Carrying the type and leaf
-    /// content through (todo #382) is what lets `resume_overlay.rs`'s
+    /// content through is what lets `resume_overlay.rs`'s
     /// streaming-attribution assertions (which need an `Assistant` message
     /// whose own last leaf matches the overlay's) exercise the real
     /// `project_display` path, not just COUNT/id-order retention checks.
@@ -304,7 +304,7 @@ impl ChatManagerDeps for StoreDeps {
     ) -> Vec<DisplayMessage> {
         Self::convert(raw, categories)
     }
-    /// Wraps the same 1:1 echo in a `FullRebuildProjector` (todo #376): the
+    /// Wraps the same 1:1 echo in a `FullRebuildProjector`: the
     /// closure appends the overlay itself before converting, reproducing
     /// what the deleted `project_display` free function used to do for
     /// every `EventHandlerDeps`/`ChatManagerDeps` caller.
@@ -334,7 +334,7 @@ impl ChatManagerDeps for StoreDeps {
     }
     fn chats_create(&self, _new_chat: &mainframe_types::chat::NewChat) -> Chat {
         let chat = test_chat("new");
-        // Mirrors the real repository (persist, then return): todo #381's
+        // The repository persists before returning:
         // offload-of-a-just-created-chat tests need `chats_get("new")` to find
         // it afterward, the same way a real `create_chat` leaves a row behind.
         self.store
@@ -380,7 +380,7 @@ impl ChatManagerDeps for StoreDeps {
             if let Some(vse) = patch.vendor_session_ephemeral {
                 c.vendor_session_ephemeral = vse;
             }
-            // todo #381's config-after-offload tests assert the model/worktree
+            // config-after-offload tests assert the model/worktree
             // binding actually persisted to the store, not just the live cell.
             if let Some(model) = patch.model.clone() {
                 c.model = Some(model);
@@ -884,7 +884,7 @@ struct RecSession {
     /// `images.len()` from every `send_message` call, in order.
     images_calls: Mutex<Vec<usize>>,
     /// Every `respond_to_permission` call, in order — pins the plan-mode escalation
-    /// double-send (decision 6).
+    /// double-send.
     responded_calls: Mutex<Vec<ControlResponse>>,
     /// Every `set_permission_mode` call, in order.
     permission_mode_calls: Mutex<Vec<ExecutionMode>>,
@@ -1095,7 +1095,7 @@ fn working_chat(id: &str, title: Option<&str>, working: bool) -> Chat {
     c
 }
 
-// ── chat-manager-cli-queue.test.ts ───────────────────────────────────────────
+// ── CLI queue ───────────────────────────────────────────
 
 #[tokio::test]
 async fn writes_to_cli_immediately_with_uuid_and_records_queued_ref() {
@@ -1322,7 +1322,7 @@ async fn edit_lost_race_silently_discards_the_edit() {
     assert_eq!(mgr.get_queued_for_chat("c1").len(), 1);
 }
 
-// ── chat-manager-turn-timing.test.ts ─────────────────────────────────────────
+// ── Turn timing ─────────────────────────────────────────
 
 #[tokio::test]
 async fn stamps_turn_started_at_right_before_dispatching_to_the_cli() {
@@ -1341,7 +1341,7 @@ async fn stamps_turn_started_at_right_before_dispatching_to_the_cli() {
     assert!(ts >= before && ts <= after);
 }
 
-// ── chat-manager-recover-working.test.ts ─────────────────────────────────────
+// ── Working-state recovery ─────────────────────────────────────
 
 fn stored(id: &str, ps: Option<Option<ProcessState>>) -> Chat {
     let mut c = test_chat(id);
@@ -1416,7 +1416,7 @@ async fn resets_every_working_chat_when_multiple_are_stale() {
     );
 }
 
-// ── command-routing.test.ts (ChatManager routing cases) ──────────────────────
+// ── Command routing ──────────────────────
 
 fn cmd_chat() -> Chat {
     let mut c = test_chat("chat-1");
@@ -1968,7 +1968,7 @@ async fn mentions_in_plain_text_still_emit_context_updated() {
     assert_eq!(context_updates, 1);
 }
 
-// ── remove-project-kills-tasks.test.ts ───────────────────────────────────────
+// ── Project removal and task termination ───────────────────────────────────────
 
 #[tokio::test]
 async fn calls_kill_tasks_before_session_kill_for_each_chat() {
@@ -2026,7 +2026,7 @@ async fn remove_project_propagates_a_row_delete_failure() {
     );
 }
 
-// ── discard_chat (todo #346, rule 5) ─────────────────────────────────────────
+// ── discard_chat (rule 5) ─────────────────────────────────────────
 
 #[tokio::test]
 async fn discard_chat_stops_the_process_deletes_the_row_and_removes_the_scratch_dir() {
@@ -2093,7 +2093,7 @@ async fn discard_chat_404s_for_an_unknown_chat() {
     );
 }
 
-// ── Task 5.4 facade methods ──────────────────────────────────────────────────
+// ── facade methods ──────────────────────────────────────────────────
 
 use mainframe_types::adapter::EffortLevel;
 use mainframe_types::context::{MentionKind, MentionSource, SessionMention};
@@ -2378,7 +2378,7 @@ mod background_activity {
     }
 }
 
-// ── chat-manager-degraded.test.ts ────────────────────────────────────────────
+// ── Degraded chat recovery ────────────────────────────────────────────
 fn history_message() -> ChatMessage {
     ChatMessage {
         id: "m1".to_string(),

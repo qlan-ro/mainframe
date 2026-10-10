@@ -48,10 +48,10 @@ impl Accum {
         }
     }
 
-    /// Segment 0 keeps the unsuffixed id (Decision 23: a top-level
-    /// container's message item id IS the message id), so the overwhelmingly
-    /// common single-segment turn encodes exactly as it did before segments
-    /// existed. Later segments suffix the index.
+    /// Segment 0 keeps the unsuffixed id (a top-level container's message item
+    /// id IS the message id), so the overwhelmingly common single-segment turn
+    /// encodes exactly as it did before segments existed. Later segments suffix
+    /// the index.
     fn id(&self, container: &Container<'_>) -> String {
         let base = match self.kind {
             AccumKind::Message(_) => container.message_item_id(),
@@ -79,11 +79,10 @@ impl Accum {
         }
     }
 
-    /// Build the open segment's finished item, draining the accumulated
-    /// state so the accumulator is ready to open the next one. `streaming`
-    /// is `true` only for the segment still open at `finish` for the
-    /// overlay's leaf kind (spec Decision 39) — `claim`'s early close of an
-    /// interrupted segment always passes `false`.
+    /// Build the open segment's finished item, draining the accumulated state
+    /// so the accumulator is ready to open the next one. `streaming` is `true`
+    /// only for the segment still open at `finish` for the overlay's leaf kind
+    /// — `claim`'s early close of an interrupted segment always passes `false`.
     fn build(&mut self, container: &Container<'_>, streaming: bool) -> EncodedItem {
         let id = self.id(container);
         let content = std::mem::take(&mut self.blocks);

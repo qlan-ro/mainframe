@@ -1,4 +1,4 @@
-//! Ported from `src/quota/window-lifecycle.ts` — window trust/expiry + staleness.
+//! Quota window trust, expiry, and staleness.
 //!
 //! A window is trusted until its own `resetsAt` passes; a null `resetsAt` is
 //! synthesized into a per-kind ceiling so a window can't display forever.

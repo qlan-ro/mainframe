@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/history-subagents.ts`.
-//!
 //! Subagent inlining for history replay: collect a subagent's assistant blocks
 //! and tool_results (from `agent_progress` events and subagent JSONL files),
 //! then inject them under the parent thread's Agent/Task tool_use.
@@ -364,7 +362,7 @@ mod tests {
                 assert_eq!(tool_use_id, "child");
                 // parentToolUseId inherited from the tool_use block.
                 assert_eq!(parent_tool_use_id.as_deref(), Some("agent-tu"));
-                // images carry through the field-by-field rebuild (todo #363).
+                // images carry through the field-by-field rebuild.
                 assert_eq!(images.len(), 1);
                 assert_eq!(images[0].media_type, "image/png");
             }
@@ -384,12 +382,3 @@ mod tests {
         assert_eq!(map.get("agent-9").map(String::as_str), Some("tu_parent"));
     }
 }
-
-// PORT STATUS: src/plugins/builtin/claude/history-subagents.ts (147 lines)
-// confidence: high
-// todos: 0
-// notes: JSONL entries navigated as serde_json::Value. appendAssistantBlocks's
-// get-or-new + set-back is a clone-modify-reinsert (observationally identical to
-// the TS in-place mutate + redundant set). `{...tr, parentToolUseId}` spread is a
-// field-by-field ToolResult rebuild with parent_tool_use_id overridden. No TS
-// __tests__ file for this module — added sanity tests for the core paths.

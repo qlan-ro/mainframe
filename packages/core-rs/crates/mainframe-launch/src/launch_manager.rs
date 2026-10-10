@@ -1,5 +1,3 @@
-//! Ported from `src/launch/launch-manager.ts`.
-//!
 //! Spawns a user launch process per config name, streams its stdout/stderr as
 //! `launch.output` events, waits for its TCP port before declaring `running`,
 //! and tears it down (process-group SIGTERM → SIGKILL) on stop. Status/output
@@ -7,7 +5,7 @@
 //! `preview` with a port and a `TunnelManager` is present, a tunnel is started
 //! and its URL / failure emitted.
 //!
-//! CONCURRENCY.tsv: `processes` = `Arc<DashMap<String, ManagedProcess>>` (name →
+//! State: `processes` = `Arc<DashMap<String, ManagedProcess>>` (name →
 //! child handle + status). Env is threaded explicitly (no `std::env::set_var`):
 //! `clean_env` reads a snapshot map, so the MAINFRAME_ORIG_PATH clean-env
 //! contract is unit-testable without mutating global state.
@@ -41,7 +39,7 @@ fn default_read_command() -> ReadCommandFn {
 }
 
 /// Lexically resolve a relative executable against an absolute project dir,
-/// matching Node's `path.resolve(projectPath, exe)` (normalizes `.`/`..`), so the
+/// normalizing `.`/`..` like `path.resolve(projectPath, exe)`, so the
 /// recorded reap command matches what the sweep reads back.
 fn lexical_resolve(base: &str, rel: &str) -> String {
     let mut stack: Vec<&str> = Vec::new();
@@ -57,8 +55,8 @@ fn lexical_resolve(base: &str, rel: &str) -> String {
     format!("/{}", stack.join("/"))
 }
 
-/// Tunable timings; defaults match the TS constants
-/// (`PORT_POLL_MS`, `PORT_TIMEOUT_MS`, and the 5s SIGTERM→SIGKILL grace).
+/// Tunable timings: the port poll interval, the port-readiness timeout, and the
+/// 5s SIGTERM→SIGKILL grace.
 #[derive(Debug, Clone)]
 pub struct LaunchTimings {
     pub port_poll: Duration,
@@ -166,7 +164,7 @@ pub fn clean_env(source: &HashMap<String, String>) -> HashMap<String, String> {
 }
 
 /// Compose a launch child's env exactly as `start` does: inject the boot-resolved
-/// login-shell `PATH` (mirrors the TS `enrichPath` mutation) into the daemon's
+/// login-shell `PATH` into the daemon's
 /// process env, then run `clean_env`. When `MAINFRAME_ORIG_PATH` is present it
 /// still overrides the injected `PATH` inside `clean_env` (the standalone
 /// contract); when absent the resolved `PATH` reaches the child.
@@ -199,9 +197,9 @@ struct Inner {
     child_registry: Option<Arc<dyn ChildRegistryPort>>,
     /// Reads a pid's live command line for the sweep identity guard; injectable.
     read_process_command: ReadCommandFn,
-    /// Boot-resolved login-shell `PATH` forwarded to launch children (mirrors the
-    /// TS `enrichPath` env mutation; `MAINFRAME_ORIG_PATH` still overrides it in
-    /// `clean_env`). `None` = inherit the daemon `PATH`.
+    /// Boot-resolved login-shell `PATH` forwarded to launch children
+    /// (`MAINFRAME_ORIG_PATH` still overrides it in `clean_env`). `None`
+    /// inherits the daemon `PATH`.
     resolved_path: Option<String>,
 }
 
@@ -301,7 +299,7 @@ impl LaunchManager {
     }
 
     /// Like `new`, but with an injectable `read_process_command` (the sweep
-    /// identity reader). Mirrors the TS ctor's last positional param.
+    /// identity reader).
     #[cfg(test)]
     pub(crate) fn with_read_command(
         project_id: impl Into<String>,
@@ -395,9 +393,8 @@ impl LaunchManager {
             config.runtime_executable.clone()
         };
 
-        // Mirror the TS: `enrichPath` had mutated `process.env.PATH`, so the
-        // launch env snapshot saw the enriched value. Inject it here before
-        // `clean_env` so launch children resolve the user's toolchain when
+        // Inject the boot-resolved login-shell `PATH` before `clean_env` so
+        // launch children resolve the user's toolchain when
         // `MAINFRAME_ORIG_PATH` is absent (when present, `clean_env` still
         // overrides `PATH` with the pristine value — the standalone contract).
         let mut env =
@@ -702,8 +699,8 @@ async fn wait_for_exit_task(
 }
 
 /// Poll `localhost:port` until it accepts a TCP connection or the process
-/// exits/stops. Returns `true` if it timed out (PORTING.md: TCP-connect
-/// readiness, replacing the TS HTTP HEAD probe).
+/// exits/stops. Returns `true` if it timed out. Readiness is a TCP connect, not
+/// an HTTP probe.
 async fn wait_for_port(
     port: u16,
     status: &Arc<Mutex<LaunchProcessStatus>>,
@@ -745,7 +742,7 @@ async fn wait_until_exited(rx: &mut watch::Receiver<bool>) {
 }
 
 /// Signal a process group (negative pid) by shelling out to `kill`; fall back to
-/// the single pid if the group signal fails (house style — no `libc`/`nix`).
+/// the single pid if the group signal fails.
 async fn kill_process(pid: Option<u32>, flag: &'static str) {
     let Some(pid) = pid else {
         return;
@@ -1217,7 +1214,7 @@ mod tests {
         manager.stop("web").await;
     }
 
-    // --- registry tracking (#431 launch child reaping) ---
+    // --- registry tracking (launch child reaping) ---
 
     use crate::process::{
         BoxFuture, ChildRegistryPort, FileChildRegistry, ManagedChildEntry, ManagedChildKind,
@@ -1389,7 +1386,7 @@ mod tests {
     #[tokio::test]
     async fn forgets_the_pid_when_the_launch_process_exits() {
         // In Rust a spawn either yields a pid (recorded, forgotten on exit) or
-        // fails without one — the TS 'error'-event case collapses into this path.
+        // fails without one.
         let dir = tempfile::tempdir().unwrap();
         let registry = RecordingRegistry::new();
         let manager = LaunchManager::with_read_command(
@@ -1453,7 +1450,7 @@ mod tests {
     // Ignored on Linux: `process_matches_launch` compares the recorded command line
     // against `ps -o command=`, and Linux reports a shebang child's argv differently
     // than macOS, so this real-spawn integration test doesn't reap there. The daemon
-    // is macOS-verified only (Linux is a platform-matrix TODO in CUTOVER.md §5); the
+    // is macOS-verified only (Linux is a platform-matrix TODO); the
     // 325-case unit matching tests still run on Linux. Revisit the matcher against
     // real Linux `ps` output when Linux packaging is taken up.
     #[cfg_attr(
@@ -1517,27 +1514,3 @@ mod tests {
         crate::process::sweep::default_kill(pid, "SIGKILL", true);
     }
 }
-
-// PORT STATUS: src/launch/launch-manager.ts (405 lines)
-// confidence: medium
-// todos: 0
-// notes: tokio::process spawn (detached: process_group(0)) + two chunk-reader
-// tasks (buffer + emit launch.output; stderr also keeps a 20-line tail for the
-// exit log) + a wait task that runs the exit handler (terminal status guarded by
-// `!= stopped`, state update before emit, map delete, tunnel teardown, exit
-// signal). Port readiness = TCP connect (PORTING.md §2.12) replacing the TS HTTP
-// HEAD; a `watch<bool>` replaces the exit-promise so stop() can await
-// SIGTERM→(5s)→SIGKILL. Group kill shells out to `kill -<SIG> -<pid>` with a
-// single-pid fallback (house style; no libc/nix). clean_env threads an env
-// snapshot (no set_var) so the MAINFRAME_ORIG_PATH contract is a pure unit test.
-// All launch-manager.test.ts cases (both files) translated with real /bin/sh
-// processes and a real ephemeral-port listener; the cleanEnv spawn-arg assertions
-// became direct clean_env unit tests.
-// #431 child-reaping: ctor gains child_registry + injectable read_process_command
-// (ReadCommandFn); recordSpawn records the LIVE `ps` command line (post-`#!` argv)
-// + realpath cwd, awaited after spawn-confirm and BEFORE the port wait;
-// forgetSpawn fires on exit (wait task). Relative-executable resolution now
-// lexically normalizes (`.`/`..`) to match Node `path.resolve` so the reap
-// command matches. launch-manager-tracking.test.ts + launch-reap-integration.test.ts
-// ported with real processes (the TS 'error'-event forget maps onto the exit path,
-// since a Rust spawn either yields a pid or fails without one).

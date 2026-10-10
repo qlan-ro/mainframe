@@ -1,5 +1,3 @@
-//! Ported from `packages/types/src/launch.ts`.
-
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -68,10 +66,3 @@ mod tests {
         );
     }
 }
-
-// PORT STATUS: packages/types/src/launch.ts (17 lines)
-// confidence: high
-// todos: 0
-// notes: `port: number | null` and `url: string | null` are required-nullable →
-// Option WITHOUT skip (serialize null). `preview?`/`env?` are optional →
-// skip_serializing_if. port → i64 (TCP port). env → HashMap<String,String>.

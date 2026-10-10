@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/adapter.ts`.
-//!
 //! The `ClaudeAdapter` struct (the `Adapter` trait impl). The catalog surface it
 //! serves — the static fallback list, the older-model merge and
 //! `enrich_with_context_window` — lives in [`crate::models`].
@@ -23,8 +21,8 @@ use crate::session::ClaudeSession;
 use crate::title_generator::generate_claude_title;
 use crate::transcript::{encode_project_path, get_session_jsonl_path, locate_claude_transcript};
 
-/// The manifest `name` (the TS adapter imports `manifest.json`; the Rust port has
-/// no manifest asset, so the string is inlined).
+/// The adapter's display name (there is no manifest asset, so the string is
+/// inlined).
 const CLAUDE_ADAPTER_NAME: &str = "Claude Code";
 
 /// `\d+\.\d+\.\d+` — the first N.N.N triple in `stdout` (no regex crate).
@@ -84,8 +82,7 @@ pub struct ClaudeAdapter {
     /// expected steady state — most installs have no proxy.
     proxy_models: Arc<Mutex<Vec<AdapterModel>>>,
     /// Boot-resolved login-shell `PATH`, applied to every spawned `claude` CLI so
-    /// packaged builds find it outside the bare launchd `PATH` (mirrors the TS
-    /// `enrichPath` env mutation).
+    /// packaged builds find it outside the bare launchd `PATH`.
     resolved_path: ResolvedPath,
 }
 
@@ -139,7 +136,7 @@ impl Adapter for ClaudeAdapter {
             // all work with --no-session-persistence, and no session JSONL is written.
             // See docs/research/adapters/claude/CONSUMED-SURFACE.md.
             no_persistence: true,
-            // fork.rs (todo #343, Group 2) implements pin_fork_point below.
+            // fork.rs implements pin_fork_point below.
             fork: true,
         }
     }
@@ -441,27 +438,3 @@ mod tests {
         assert_eq!(first_version_triple("no version here"), None);
     }
 }
-
-// PORT STATUS: src/plugins/builtin/claude/adapter.ts (300 lines)
-// confidence: high
-// todos: 0
-// notes: Main catch-up: enrich_with_context_window now reads each entry's own
-// notes: resolved_model for the 1M-suffix check AND the static-catalog fallback
-// notes: (default_resolved_model kept for legacy default-only payloads); added the
-// notes: claude-sonnet-5 catalog entry (extended window, live-verified 967k). Wired
-// notes: two Adapter overrides: generate_title → generate_claude_title(content, binary,
-// notes: resolved PATH); locate_transcript → locate_claude_transcript (never null).
-// notes: adapter-enrich.test.ts new cases translated.
-// notes: FULL port. Pure catalog surface (claude_models, enrich_with_context_window,
-// notes: window constants) + the ClaudeAdapter Adapter-trait impl: is_installed /
-// notes: get_version (execFile `claude --version` → tokio Command; version regex
-// notes: hand-rolled), list_models (dynamic or static fallback), probe_models
-// notes: (enrich + cache, has_probe_models=true), get_fallback_models,
-// notes: create_session (registers in a Arc<Mutex<HashMap>> keyed by id; on_exit
-// notes: deregisters — the TS Set.delete(session) modelled as a late-bound
-// notes: set_on_exit since the id only exists post-construction), kill_all
-// notes: (fire-and-forget tokio::spawn per session, like the TS .catch), capabilities
-// notes: {plan_mode:true}, get_tool_categories. createPlanModeHandler is an inherent
-// notes: method (not in the Adapter trait yet — the skill/agent/external-session
-// notes: CRUD + createPlanModeHandler are still adapter-api TODOs). manifest.name
-// notes: ("Claude Code") inlined (no manifest.json asset in the crate).

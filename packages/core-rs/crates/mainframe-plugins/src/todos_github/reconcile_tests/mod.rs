@@ -1,8 +1,7 @@
-//! Pure reconciliation tests (todo #286): title/body dispute rules, label
-//! merging, and state's `in_progress` special case, mirroring
-//! `reconcile/{fields,labels,state}.rs`. Split by submodule to stay under
-//! the 300-line file cap (finding #13); this module holds the shared
-//! fixture builders.
+//! Pure reconciliation tests: title/body dispute rules, label merging, and
+//! state's `in_progress` special case, mirroring
+//! `reconcile/{fields,labels,state}.rs`. Split by submodule to stay under the
+//! 300-line file cap; this module holds the shared fixture builders.
 
 mod fields;
 mod labels;

@@ -1,10 +1,9 @@
-//! The GitHub Issues port `PluginContext` exposes to the todos plugin (D1).
-//! This crate depends on neither `mainframe-automations` nor `mainframe-git`
-//! (fact 12), so the DTOs mirror `mainframe_automations::github_issues`
-//! rather than importing it — the daemon's adapter (composition root) is the
-//! only place the two shapes meet. Every method takes a credential label, not
-//! a token: the port never sees a secret, only the automations engine's
-//! credential store does.
+//! The GitHub Issues port `PluginContext` exposes to the todos plugin. This
+//! crate depends on neither `mainframe-automations` nor `mainframe-git`, so the
+//! DTOs mirror `mainframe_automations::github_issues` rather than importing it
+//! — the daemon's adapter (composition root) is the only place the two shapes
+//! meet. Every method takes a credential label, not a token: the port never
+//! sees a secret, only the automations engine's credential store does.
 
 use std::time::Duration;
 
@@ -56,9 +55,9 @@ pub struct IssuePatch {
 }
 
 /// The failure taxonomy the todos-plugin sync engine matches on, plus a
-/// catch-all `Unavailable` for the two guard reasons (D2, fact 10): those
-/// carry pre-formatted text rather than a structured cause because they name
-/// a configuration problem, not a GitHub API response.
+/// catch-all `Unavailable` for the two guard reasons: those carry pre-formatted
+/// text rather than a structured cause because they name a configuration
+/// problem, not a GitHub API response.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum GitHubPortError {
     #[error("not found")]

@@ -10,8 +10,8 @@
 //! usage) needs: message/thought chunks and upserts, tool-call
 //! updates/chunks, foreground-state transitions, and usage. `terminal_*`
 //! (declined, see tool_call.rs), `plan_update`, `available_commands_update`,
-//! `config_option_update`, and `session_info_update` are not modeled — none
-//! are in task 1's frame list.
+//! `config_option_update`, and `session_info_update` are not modeled — the
+//! facade emits none of them.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

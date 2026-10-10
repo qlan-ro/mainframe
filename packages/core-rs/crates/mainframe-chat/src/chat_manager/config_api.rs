@@ -10,12 +10,12 @@ impl ChatManager {
         permission_mode: Option<ExecutionMode>,
         plan_mode: Option<bool>,
     ) -> Result<(), ConfigError> {
-        // Rebuild an offloaded cell before the edit (todo #381): a chat opened
-        // in the UI but left unsent past the idle threshold has no registry
-        // cell, and `ChatConfigManager::require_active_chat` would otherwise
-        // fail with "Chat {id} not found". `load_chat` skips (and touches)
-        // when the cell already exists, and waits out any in-flight offload
-        // when it does not, so this is a no-op for the common case.
+        // Rebuild an offloaded cell before the edit: a chat opened in the UI
+        // but left unsent past the idle threshold has no registry cell, and
+        // `ChatConfigManager::require_active_chat` would otherwise fail with
+        // "Chat {id} not found". `load_chat` skips (and touches) when the cell
+        // already exists, and waits out any in-flight offload when it does not,
+        // so this is a no-op for the common case.
         self.lifecycle.load_chat(chat_id).await;
         self.config
             .update_chat_config(chat_id, adapter_id, model, permission_mode, plan_mode)
@@ -31,7 +31,7 @@ impl ChatManager {
         branch_name: &str,
     ) -> Result<(), ConfigError> {
         // See `update_chat_config`'s matching call: rebuild before the
-        // `is_chat_working` check sees the cell (todo #381).
+        // `is_chat_working` check sees the cell.
         self.lifecycle.load_chat(chat_id).await;
         if self.is_chat_working(chat_id) {
             return Err(ConfigError::ChatBusy);
@@ -47,7 +47,7 @@ impl ChatManager {
         worktree_path: &str,
         branch_name: Option<&str>,
     ) -> Result<(), ConfigError> {
-        // See `update_chat_config`'s matching call (todo #381).
+        // See `update_chat_config`'s matching call.
         self.lifecycle.load_chat(chat_id).await;
         if self.is_chat_working(chat_id) {
             return Err(ConfigError::ChatBusy);
@@ -76,7 +76,7 @@ impl ChatManager {
         chat_id: &str,
         worktree_path: &str,
     ) -> Result<(), OfferError> {
-        // See `update_chat_config`'s matching call (todo #381): rebuild before
+        // See `update_chat_config`'s matching call: rebuild before
         // either the working check or the accept claim sees the cell.
         self.lifecycle.load_chat(chat_id).await;
         // The rebind restarts the CLI, which would kill a turn mid-answer and
@@ -101,7 +101,7 @@ impl ChatManager {
     }
 
     pub async fn disable_worktree(&self, chat_id: &str) -> Result<(), ConfigError> {
-        // See `update_chat_config`'s matching call (todo #381): without it,
+        // See `update_chat_config`'s matching call: without it,
         // `ChatConfigManager::disable_worktree` silently no-ops on a missing
         // cell instead of clearing the binding.
         self.lifecycle.load_chat(chat_id).await;
@@ -113,7 +113,7 @@ impl ChatManager {
 
     /// Fork the chat's history into a fresh worktree-backed chat. The lifecycle
     /// creates the new (active) chat; the config manager then enables the worktree
-    /// on it — mirrors the TS `forkToWorktree(..., enableWorktreeFn)` callback.
+    /// on it.
     pub async fn fork_to_worktree(
         &self,
         chat_id: &str,
@@ -131,14 +131,14 @@ impl ChatManager {
     }
 
     /// Remove a project and all its chats' live resources. Refuses the hidden
-    /// scratch project (rule 1): removing it would cascade-delete every
-    /// non-project chat's row.
+    /// scratch project: removing it would cascade-delete every non-project
+    /// chat's row.
     pub async fn remove_project(&self, project_id: &str) -> Result<(), String> {
         if project_id == mainframe_types::chat::NO_PROJECT_ID {
             return Err("cannot remove the hidden scratch project".to_string());
         }
         // Unfiltered `ChatsRepository::list` (via `chats_list`), so a temporary
-        // chat's live state and row are torn down along with the project (AC 10).
+        // chat's live state and row are torn down along with the project.
         let chats = self.deps.chats_list(project_id);
         for chat in chats {
             self.teardown_live_chat(&chat).await;

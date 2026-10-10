@@ -1,6 +1,5 @@
-//! Narrow ChatManager seam for the agent port (Node agent-port.ts
-//! `ChatPortDeps` structural subset) — fakeable in unit tests without a full
-//! `ChatManagerDeps` graph.
+//! Narrow ChatManager seam for the agent port — fakeable in unit tests without
+//! a full `ChatManagerDeps` graph.
 
 use std::sync::Arc;
 
@@ -10,8 +9,8 @@ use mainframe_orchestration::last_assistant_text;
 use mainframe_types::chat::NewChat;
 
 pub trait AgentChatPort: Send + Sync {
-    /// `createChatWithDefaults` → the new chat id. `branch_name` rides the
-    /// create so the chat row carries it from birth (v1 agent-port parity).
+    /// `create_chat_with_defaults` → the new chat id. `branch_name` rides the
+    /// create so the chat row carries it from birth.
     /// `automation_run_id` stamps the chat as automation-created so the
     /// sessions sidebar hides it from the default list.
     #[allow(clippy::too_many_arguments)]
@@ -71,7 +70,7 @@ impl AgentChatPort for ChatManagerPort {
                         model: model.map(str::to_string),
                         permission_mode: permission_mode.map(str::to_string),
                         automation_run_id: Some(automation_run_id.to_string()),
-                        // An existing caller passing temporary=false (rule 2):
+                        // An existing caller passing temporary=false:
                         // automation-created chats are already hidden from the
                         // default listing by `automation_run_id`.
                         temporary: false,
@@ -120,8 +119,3 @@ impl AgentChatPort for ChatManagerPort {
         Box::pin(async move { self.chats.interrupt_chat(chat_id).await })
     }
 }
-
-// PORT STATUS: packages/core/src/automations/agent-port.ts (ChatPortDeps)
-// confidence: high
-// todos: 0
-// notes: —

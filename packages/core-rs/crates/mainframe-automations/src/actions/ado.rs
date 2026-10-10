@@ -1,9 +1,8 @@
-//! ado.create_item connector (T7.2, Node actions/ado.ts). Azure DevOps
-//! auths via PAT basic auth (`:<token>` base64 — reqwest's `basic_auth`
-//! with an empty username); the work item type is a URL path segment
-//! prefixed with `$`, and the create call is a POST whose body is a
-//! JSON-patch document (`application/json-patch+json`) per the ADO REST API
-//! — the plan's "ado PATCH" refers to that body format, not the HTTP verb.
+//! ado.create_item connector. Azure DevOps auths via PAT basic auth (`:<token>`
+//! base64 — reqwest's `basic_auth` with an empty username); the work item type
+//! is a URL path segment prefixed with `$`, and the create call is a POST whose
+//! body is a JSON-patch document (`application/json-patch+json`) per the ADO
+//! REST API — "patch" here is the body format, not the HTTP verb.
 
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -156,9 +155,3 @@ impl Action for AdoCreateItemAction {
         })
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T7.2), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node actions/ado.ts (System.Title/System.Description
-//        json-patch, `_links.html.href` URL, PAT basic auth).

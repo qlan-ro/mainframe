@@ -1,8 +1,10 @@
-//! Ported from `src/server/routes/respond.ts` — the canonical response envelope.
+//! The canonical response envelope.
 //!
 //! `ok(data)` → `{"success":true,"data":<data>}`, `ok_empty()` →
 //! `{"success":true}`, `fail(status, error)` → `{"success":false,"error":"..."}`.
 //! Each returns an axum `Response` so route handlers stay `-> Response`.
+//! Wire contract: the UI matches these field names
+//! (`packages/ui/src/lib/api/http.ts` reads `success`, `data` and `error`).
 
 use axum::Json;
 use axum::http::StatusCode;
@@ -61,11 +63,3 @@ mod tests {
         assert_eq!(body, json!({ "success": false, "error": "Not found" }));
     }
 }
-
-// PORT STATUS: src/server/routes/respond.ts (3 helpers)
-// confidence: high
-// todos: 0
-// notes: TS mutates an Express `res`; the Rust port returns an axum `Response`
-// so handlers stay `-> Response`. `ok`/`ok_empty` default to 200 (Express
-// `res.json` default); `fail` carries the status. Envelope bytes verified
-// against respond.test.ts assertions (translated below).

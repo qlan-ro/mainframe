@@ -1,5 +1,3 @@
-//! Ported from `packages/types/src/display.ts`.
-
 use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
@@ -37,7 +35,7 @@ pub struct ToolCallResult {
     pub full_bytes: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ask_user_question: Option<Vec<AskUserQuestionAnswer>>,
-    /// Base64 image blocks carried on the tool result (todo #363), source
+    /// Base64 image blocks carried on the tool result, in source
     /// order. Not subject to text truncation; omitted when empty.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub images: Vec<ToolResultImage>,
@@ -63,8 +61,8 @@ pub enum ToolCategory {
     Subagent,
 }
 
-/// Which leaf kind the partial-message overlay currently backs (spec
-/// Decision 39). An in-process contract between `emit_display_for` and
+/// Which leaf kind the partial-message overlay currently backs. An in-process
+/// contract between `emit_display_for` and
 /// `mainframe_acp::encoder::encode_revision` — never serialized, since the
 /// wire only ever sees the resulting `ItemMeta.streaming: bool`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -350,16 +348,3 @@ mod tests {
         }));
     }
 }
-
-// PORT STATUS: packages/types/src/display.ts (80 lines)
-// confidence: high
-// todos: 0
-// notes: Main catch-up (#424): ChatHistoryPayload { messages, transcriptMissing }
-// — the GET /api/chats/:id/messages `data` envelope (was a bare DisplayMessage[]).
-// notes(orig): DisplayContent is an untagged wrapper over shared LeafContent
-// (content.rs) + display-only DisplayNode (internally tagged on tool_call/
-// tool_group/task_group/task_progress/permission_request/error/compaction;
-// disjoint from the leaf tags). ToolCategories uses HashSet<String> for the TS
-// `Set<string>` fields. `type` fields use raw identifier `r#type` (serialize as
-// "type"). full DisplayMessage validated by the events.rs golden round-trip of
-// display.message.added. References crate::{content,chat,adapter}.

@@ -1,7 +1,6 @@
-//! Task 14 (group D, todo #350): end-to-end proof, over a real `ChatManager`,
-//! that the chat-surface seam (task 10) carries the two prompt-lifecycle
-//! criteria the facade's `session/prompt`/`session/cancel` dispatch (plan
-//! task 14, `mainframe-acp/src/prompt.rs`) relies on:
+//! End-to-end proof over a real `ChatManager`
+//! that the chat-surface seam carries the two prompt-lifecycle
+//! criteria required by `session/prompt` and `session/cancel`:
 //!
 //! - criterion 5: a prompt accepted while another turn is running is
 //!   `TurnAccepted` immediately but not `TurnStarted` until the CLI actually

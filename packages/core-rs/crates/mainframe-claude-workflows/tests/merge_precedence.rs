@@ -1,5 +1,4 @@
-//! Red-phase (Task 8): `merge::merge_runs` precedence rules, one test per
-//! numbered rule in the plan's *Merge precedence*. Turned green by Task 15.
+//! `merge::merge_runs` precedence rules, one test per numbered rule.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use mainframe_claude_workflows::merge::merge_runs;

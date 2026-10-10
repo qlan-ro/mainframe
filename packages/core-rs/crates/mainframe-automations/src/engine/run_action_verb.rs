@@ -1,7 +1,7 @@
-//! run_action verb (Node verbs/run-action.ts makeRunActionExecutor): renders
-//! every ChipText param into one joined string (Decision 9) EXCEPT
-//! run_command's `script`, which keeps chip boundaries as raw
-//! `{literal}|{chip}` parts so A1's per-chip env-var injection applies.
+//! run_action verb: renders every ChipText param into one joined string
+//! (literal substitution) EXCEPT run_command's `script`, which keeps chip
+//! boundaries as raw `{literal}|{chip}` parts so A1's per-chip env-var
+//! injection applies.
 
 use std::sync::Arc;
 
@@ -87,8 +87,8 @@ impl RunActionVerb {
             credential_label,
             idempotency_key: format!("{}:{}", ctx.run_id, ctx.step_ref),
             project_root: self.resolve_project_root(ctx.run_id).await,
-            // Neither engine populates run-in `worktree` yet (Node parity —
-            // ActionCtx.worktreePath is never set); run_command fails loudly.
+            // Nothing populates run-in `worktree` yet; run_command fails
+            // loudly.
             worktree_path: None,
         };
 
@@ -103,7 +103,7 @@ impl RunActionVerb {
         }
     }
 
-    /// Node service.resolveProjectRoot: run → automation → its project.
+    /// Resolves the project root: run → automation → its project.
     async fn resolve_project_root(&self, run_id: &str) -> String {
         let automation = match self.runs.get_run(run_id).await {
             Ok(Some(run)) => self
@@ -149,7 +149,7 @@ pub(crate) fn build_action_input(
 }
 
 /// A1: each token part becomes its own `{chip}` entry — never spliced into a
-/// shared string with literal text. Unset tokens render empty (T3.1 rule).
+/// shared string with literal text. Unset tokens render empty.
 fn script_parts(chip_text: &ChipText, scope: &Scope<'_>) -> Value {
     Value::Array(
         chip_text
@@ -167,9 +167,3 @@ fn script_parts(chip_text: &ChipText, scope: &Scope<'_>) -> Value {
             .collect(),
     )
 }
-
-// PORT STATUS: packages/core/src/automations/verbs/run-action.ts (100 lines)
-// confidence: high
-// todos: 0
-// notes: input validation is each action's own strict serde parse (Node used
-//        zod safeParse here); path expansion lives in actions::expand_user_path.

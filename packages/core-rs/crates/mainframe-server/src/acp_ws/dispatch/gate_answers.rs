@@ -1,6 +1,6 @@
-//! A client's answer to a daemon-initiated `session/request_permission`
-//! (todo #350, live-wiring pass) — split out of `dispatch.rs` to keep it
-//! under the 300-line cap (T10). `handle_gate_answer` is `dispatch.rs`'s
+//! A client's answer to a daemon-initiated `session/request_permission` —
+//! split out of `dispatch.rs` to keep it under the 300-line cap.
+//! `handle_gate_answer` is `dispatch.rs`'s
 //! only call in; everything else here is this module's own plumbing.
 
 use mainframe_acp::{AnswerOutcome, GateAnswerError, parse_permission_answer};
@@ -41,8 +41,7 @@ pub(super) async fn handle_gate_answer(
         }
         JsonRpcOutcome::Error { error } => {
             // A client that cannot parse the gate says so; treat it as a
-            // deny instead of leaving the turn hanging until the CLI dies
-            // (R3.7).
+            // deny instead of leaving the turn hanging until the CLI dies.
             warn!(
                 rpc_id,
                 code = error.code,
@@ -99,9 +98,8 @@ async fn apply_gate_answer(
 }
 
 /// The claim-apply tail shared by a parsed client answer and a synthesized
-/// deny (T4): remove the connection's own pending entry, claim the gate on
-/// the hub, and forward to the port — restoring both on a transport failure
-/// (T3).
+/// deny: remove the connection's own pending entry, claim the gate on the
+/// hub, and forward to the port — restoring both on a transport failure.
 async fn apply_control_response(
     rpc_id: &str,
     pending: PendingGate,
@@ -122,7 +120,7 @@ async fn apply_control_response(
                 // AlreadyResolved, and restore the connection's own pending
                 // entry so the SAME rpc_id is answerable again — a transport
                 // failure must not strand the CLI waiting on a gate the
-                // client believes it already answered (R2.5).
+                // client believes it already answered.
                 hub.release_gate(&pending.chat_id, &request_id);
                 connection.restore_gate(rpc_id, pending);
                 warn!(rpc_id, %err, "acp facade: respond_to_permission failed");

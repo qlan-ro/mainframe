@@ -1,7 +1,7 @@
 //! A minimal `Adapter` whose session `spawn()` blocks on a `oneshot` gate
-//! until released (todo #350, plan task 10) — the deterministic
-//! (non-timing-dependent) way to prove a slow cold-chat start does not block
-//! the socket loop's handling of a concurrent frame for another chat.
+//! until released — the deterministic (non-timing-dependent) way to prove a
+//! slow cold-chat start does not block the socket loop's handling of a
+//! concurrent frame for another chat.
 //! Every other method is a trivial success stub: the test that uses this
 //! adapter only cares about the spawn barrier.
 

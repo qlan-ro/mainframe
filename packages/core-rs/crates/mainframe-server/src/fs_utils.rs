@@ -1,16 +1,15 @@
-//! Ported from `src/server/fs-utils.ts`.
-//!
 //! Shared filesystem helpers for the file/search routes: the ignored-directory
-//! and binary-extension deny lists, the `hasBinaryExtension` double-extension
-//! check, and `listProjectFiles` (git `ls-files` primary, symlink-contained walk
-//! fallback). Also hosts two Node-`path` shims (`relative`, `path_resolve`) the
-//! route handlers lean on, since the std library has no direct analogue.
+//! and binary-extension deny lists, the `has_binary_extension` double-extension
+//! check, and `list_project_files` (git `ls-files` primary, symlink-contained
+//! walk fallback). Also hosts two lexical path helpers (`relative`,
+//! `path_resolve`) the route handlers lean on, since the std library has no
+//! direct analogue.
 
 use std::collections::HashSet;
 use std::path::{Component, Path, PathBuf};
 
 /// Directories skipped by the project walk and excluded from ripgrep `--files`
-/// globs. Mirrors the TS `IGNORED_DIRS` set (order preserved for the glob build).
+/// globs. The order is preserved for the glob build.
 pub const IGNORED_DIRS: &[&str] = &[
     ".git",
     "node_modules",
@@ -89,7 +88,7 @@ pub(crate) fn has_binary_extension(file_path: &str) -> bool {
     !ext.is_empty() && BINARY_EXTENSIONS.contains(&ext)
 }
 
-/// Node `path.extname`: the substring from the last dot in the segment, or `""`
+/// The extension: the substring from the last dot in the segment, or `""`
 /// when there is no dot or the only dot is the leading one (e.g. `.env` → `""`).
 fn extname(base: &str) -> &str {
     match base.rfind('.') {
@@ -98,9 +97,10 @@ fn extname(base: &str) -> &str {
     }
 }
 
-/// Node `path.relative(from, to)` over absolute, normalized paths: the shared
-/// prefix is dropped, remaining `from` components become `..`, then the `to`
-/// tail is appended. Used to re-base absolute paths to project-relative ones.
+/// The relative path from `from` to `to` over absolute, normalized paths: the
+/// shared prefix is dropped, remaining `from` components become `..`, then the
+/// `to` tail is appended. Used to re-base absolute paths to project-relative
+/// ones.
 pub fn relative(from: &Path, to: &Path) -> String {
     let from_comps: Vec<Component<'_>> = from.components().collect();
     let to_comps: Vec<Component<'_>> = to.components().collect();
@@ -118,10 +118,10 @@ pub fn relative(from: &Path, to: &Path) -> String {
     out.to_string_lossy().into_owned()
 }
 
-/// Node `path.resolve(base, requested)` (lexical, no filesystem access): an
-/// absolute `requested` replaces `base`; otherwise they are joined; then `.`/`..`
-/// segments are collapsed. Used only as the best-effort fallback in
-/// `paths/resolve` when `realpath` fails.
+/// Lexical path resolution of `requested` against `base` (no filesystem
+/// access): an absolute `requested` replaces `base`; otherwise they are joined;
+/// then `.`/`..` segments are collapsed. Used only as the best-effort fallback
+/// in `paths/resolve` when `realpath` fails.
 pub fn path_resolve(base: &str, requested: &str) -> String {
     let joined = if Path::new(requested).is_absolute() {
         PathBuf::from(requested)
@@ -223,17 +223,3 @@ pub(crate) async fn walk_project_files(
 
 #[cfg(test)]
 mod tests;
-
-// PORT STATUS: src/server/fs-utils.ts (IGNORED_DIRS, BINARY_EXTENSIONS,
-// hasBinaryExtension, listProjectFiles/walkProjectFiles)
-// confidence: high
-// todos: 0
-// notes: Node `readdir(withFileTypes)` → `tokio::fs::read_dir`; the recursive
-// `walk` is expressed iteratively with an explicit stack (no async-recursion
-// boxing) — pre-order vs stack order is unobservable (no route asserts walk
-// ordering; the git `ls-files` primary path preserves git's own order). Symlink
-// containment reuses `path_utils::is_within_base` (the sep-guarded prefix check,
-// equivalent to TS `realFull.startsWith(projectPath + sep)`). `git ls-files`
-// via `mainframe_git::exec_git`; non-128 errors log then fall back to the walk,
-// matching the TS `code !== 128` branch. `relative`/`path_resolve` are Node
-// `path` shims added here (std has no analogue) for the route handlers.

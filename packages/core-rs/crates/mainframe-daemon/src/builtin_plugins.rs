@@ -1,15 +1,10 @@
-//! Loads the three builtin plugins into the `PluginManager`, mirroring the three
-//! `pluginManager.loadBuiltin(...)` calls in `index.ts` (claude, codex, todos).
+//! Loads the claude, codex, and todos builtin plugins into the `PluginManager`.
 //!
-//! In the TS daemon the claude/codex `activate` register their adapter into the
-//! shared `AdapterRegistry`. In the Rust port the adapters are registered directly
-//! on the `AdapterRegistry` at boot (see `main`), so their plugin `activate` is a
-//! no-op that only publishes the manifest for the `/api/plugins` listing — the
-//! PLUGIN identity/manifest surface still matches `GET /api/plugins`. The `todos`
-//! plugin owns the real builtin router + storage, so it loads its ported `activate`.
+//! The claude/codex adapters are registered directly on the `AdapterRegistry`
+//! at boot (see `main`), so their plugin `activate` only publishes the manifest
+//! for `/api/plugins`. The `todos` plugin owns its router and storage.
 //!
-//! The manifests are verbatim copies of the TS `manifest.json` files (which live in
-//! the READ-ONLY TS package and cannot be `include_str!`'d across crates).
+//! The manifests are embedded locally so this crate can load them at boot.
 
 use std::path::Path;
 
@@ -84,7 +79,7 @@ pub(crate) async fn load_builtin_plugins(
 
     // todos: real builtin router + storage — its data.db lives under the plugin dir.
     let todos_dir = plugins_dir.join("todos");
-    tokio::fs::create_dir_all(&todos_dir).await?; // mkdirSync(todosPluginDir)
+    tokio::fs::create_dir_all(&todos_dir).await?;
     let todos: PluginManifest = serde_json::from_str(TODOS_MANIFEST)?;
     plugin_manager
         .load_builtin(todos, todos_dir, mainframe_plugins::todos::activate)
@@ -100,13 +95,3 @@ async fn noop_activate(
 ) -> Result<Router<()>, PluginError> {
     Ok(Router::new())
 }
-
-// PORT STATUS: src/index.ts (the three loadBuiltin calls) + builtin manifests
-// confidence: medium
-// todos: 0
-// notes: claude/codex/todos loaded in index.ts order. claude/codex activate is a
-// no-op (adapter registered directly on the AdapterRegistry in main — reconciles the
-// "adapters stay on the AdapterRegistry" decision with the GET /api/plugins listing
-// expectation). todos loads its ported activate + gets its storage dir created
-// (mkdirSync parity). Manifests are verbatim copies of the TS manifest.json (no
-// cross-crate include_str! for the READ-ONLY TS source).

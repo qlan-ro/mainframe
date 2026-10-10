@@ -1,5 +1,5 @@
-//! Fan-out validation shared by Repeat's `concurrency` field (Phase 4a) and
-//! Parallel's branch list (Phase 4b): both are "how many chats can this one
+//! Fan-out validation shared by Repeat's `concurrency` field and
+//! Parallel's branch list: both are "how many chats can this one
 //! block open at once", and a block nested inside another concurrent block
 //! multiplies rather than adds — one shared cap and one shared nested-product
 //! check, so there is one model to learn instead of two. Split out of
@@ -97,11 +97,3 @@ fn check_product(
         ),
     );
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md Phase 4a/4b), not a TS port
-// confidence: high
-// todos: 0
-// notes: split out of validate.rs once Parallel's branch-count check pushed
-//        it over the 300-line cap; message wording is a deliberate superset
-//        of the Phase 4a repeat-only text (existing tests assert substrings
-//        that both still contain).

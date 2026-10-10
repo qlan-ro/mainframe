@@ -1,15 +1,15 @@
-//! Ported from `src/server/routes/chats.ts` — chat registry reads, archive,
-//! title/pinned/tuning/effort PATCH, unarchive, messages/display-messages,
-//! session-files and tool-result.
+//! Chat registry reads, archive, title/pinned/tuning/effort PATCH, unarchive,
+//! messages/display-messages, session-files and tool-result.
 //!
-//! Reads (`listFiltered`/`listChats`/`getChat`) route through the ChatManager
+//! Reads (`list_filtered`/`list_chats`/`get_chat`) route through the ChatManager
 //! facade when it is wired (enriched: displayStatus/isRunning/worktreeMissing),
-//! else the raw `ctx.db.chats` path (Phase-3 harness). The pinned/tuning/effort
-//! PATCH routes persist via `ctx.db.chats.update` then run the TS `applyChatTuning`
-//! follow-ups (`syncChatFields` + fire-and-forget `applyTuning` + `emitChatUpdated`)
+//! else the raw `ctx.db.chats` path (the test harness). The pinned/tuning/effort
+//! PATCH routes persist via `ctx.db.chats.update`, then run the tuning follow-ups
+//! (`sync_chat_fields` + fire-and-forget `apply_tuning` + `emit_chat_updated`)
 //! through the facade when wired. Live-session-orchestration routes (archive,
-//! getDisplayMessages, getMessagesFromDisk, getPendingPermission, unarchive) call the
-//! real facade methods, falling back to the failure envelope when it is unavailable.
+//! `get_display_messages`, `get_messages_from_disk`, `get_pending_permission`,
+//! unarchive) call the real facade methods, falling back to the failure envelope
+//! when it is unavailable.
 
 use std::sync::Arc;
 
@@ -58,7 +58,7 @@ pub(crate) struct ListQuery {
 }
 
 pub(crate) async fn list(State(ctx): State<Arc<AppCtx>>, Query(q): Query<ListQuery>) -> Response {
-    // Zod `.refine` — every parsed tag must match [a-z0-9-]+ or the whole query 400s.
+    // Every parsed tag must match [a-z0-9-]+ or the whole query 400s.
     let tags_all: Option<Vec<String>> = match &q.tags {
         Some(raw) => {
             let parts = split_csv(raw);
@@ -73,7 +73,7 @@ pub(crate) async fn list(State(ctx): State<Arc<AppCtx>>, Query(q): Query<ListQue
     let has_worktree = synth.iter().any(|s| s == "has-worktree");
     let include_temporary = q.include_temporary.unwrap_or(false);
     // The facade enriches (displayStatus/isRunning/worktreeMissing); the db path is
-    // the Phase-3 harness fallback (chat_manager unwired) and returns raw rows.
+    // the test-harness fallback (chat_manager unwired) and returns raw rows.
     if let Some(cm) = ctx.chat_manager.as_ref() {
         return ok(cm.list_filtered(
             q.project.as_deref(),
@@ -107,11 +107,11 @@ pub(crate) struct ListForProjectQuery {
 }
 
 /// `ChatsRepository::list` (backing both the facade and db paths here) is the
-/// SAME unfiltered read `remove_project` uses internally (rule 3), so it must
-/// keep returning temporary chats; this route filters the result itself
-/// instead of adding a filter to that shared read. Also drops a side chat
-/// (temporary with a parent, todo #344) even with `include_temporary` set —
-/// `list`'s DB-layer filter already excludes it (mainframe-db rule 7).
+/// SAME unfiltered read `remove_project` uses internally, so it must keep
+/// returning temporary chats; this route filters the result itself instead of
+/// adding a filter to that shared read. Also drops a side chat (temporary with
+/// a parent) even with `include_temporary` set — `list`'s DB-layer filter
+/// already excludes it.
 fn filter_temporary(chats: Vec<Chat>, include_temporary: bool) -> Vec<Chat> {
     let is_side_chat =
         |c: &Chat| c.temporary && c.parent_chat_id.as_ref().is_some_and(|p| p.is_some());
@@ -224,8 +224,8 @@ async fn set_title(
         Some(t) if !t.trim().is_empty() => t.trim().to_string(),
         _ => return fail(StatusCode::BAD_REQUEST, "Title is required"),
     };
-    // Faithful path uses the facade rename (emits chat.updated); when the manager
-    // is not wired yet (Phase-3 harness) the db write is the load-bearing effect.
+    // The wired path uses the facade rename (emits chat.updated); when the manager
+    // is not wired (the test harness) the db write is the load-bearing effect.
     if let Some(cm) = ctx.chat_manager.as_ref() {
         cm.rename_chat(&id, &title);
     } else {
@@ -360,9 +360,9 @@ fn tuning_partial(update: &mainframe_db::chats::ChatUpdate) -> ChatFieldsPartial
 }
 
 /// Persist the RAW tuning partial (tri-state), fetch the chat, then run the facade
-/// follow-ups — `syncChatFields` (mirror the cache), fire-and-forget `applyTuning`
-/// (live re-apply, no-op without a session), `emitChatUpdated` (broadcast). Mirrors
-/// the TS `applyChatTuning`.
+/// follow-ups — `sync_chat_fields` (mirror the cache), fire-and-forget
+/// `apply_tuning` (live re-apply, no-op without a session), `emit_chat_updated`
+/// (broadcast).
 async fn apply_and_return(
     ctx: &Arc<AppCtx>,
     id: String,
@@ -596,7 +596,7 @@ mod tests {
     }
 
     /// Seeds the chats-filter fixture and returns the label→id map (ids are nanoid,
-    /// so the TS `c1..c5` labels are captured, not asserted literally).
+    /// so the `c1..c5` labels are captured, not asserted literally).
     async fn seed(ctx: &Arc<AppCtx>) -> HashMap<&'static str, String> {
         ctx.db
             .call(|db| {
@@ -938,7 +938,7 @@ mod tests {
         assert_eq!(stored.session_file_path.as_deref(), jsonl.to_str());
     }
 
-    // ── includeTemporary (todo #346, AC 26) ───────────────────────────────────
+    // ── includeTemporary ─────────────────────────────────────────────────────
 
     async fn seed_one_temporary_chat(ctx: &Arc<AppCtx>) -> (String, String, String) {
         ctx.db
@@ -1022,8 +1022,7 @@ mod tests {
     }
 
     // Side-chat listing-exclusion tests moved to routes/chat_side_chat/tests.rs.
-    // ── archive/unarchive refuse a temporary chat (todo #346, AC 26 — needs a
-    // real ChatManager) ───────────────────────────────────────────────────────
+    // ── archive/unarchive refuse a temporary chat (needs a real ChatManager) ───
 
     async fn create_temporary_chat(ctx: &Arc<AppCtx>) -> String {
         ctx.chat_manager
@@ -1110,16 +1109,3 @@ mod tests {
         assert_eq!(got, labels(&ids, &["c1", "c2", "c3", "c4", "c5"]));
     }
 }
-
-// PORT STATUS: src/server/routes/chats.ts (13 endpoints, 295 lines)
-// confidence: medium
-// todos: 0
-// notes: Reads (list/listFiltered, listChats, getChat) route through the ChatManager
-// facade (enriched: displayStatus/isRunning/worktreeMissing) when wired, else the raw
-// db path (Phase-3 harness). archive / getDisplayMessages (messages) /
-// getMessagesFromDisk (session-files) / getPendingPermission / unarchive are now real
-// facade calls. pinned/tuning/effort PATCH + tool-result port over ctx.db.chats
-// (+ read_tool_result_from_jsonl / extract_session_file_paths
-// helpers); the tuning/pinned PATCHes run the TS `applyChatTuning` follow-ups
-// (syncChatFields + fire-and-forget applyTuning + emitChatUpdated) when the manager is
-// wired. title uses the facade rename when wired, else a db title write.

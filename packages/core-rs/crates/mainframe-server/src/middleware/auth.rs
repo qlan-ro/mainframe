@@ -1,5 +1,3 @@
-//! Ported from `src/server/middleware/auth.ts`.
-//!
 //! Bearer-token gate with the loopback bypass. When `AUTH_TOKEN_SECRET` is unset
 //! the middleware is a no-op. `/health` and the three unauthenticated auth paths
 //! are always allowed. Loopback callers are never rejected — a token is validated
@@ -28,8 +26,8 @@ const UNAUTHENTICATED_PATHS: [&str; 3] = [
     "/api/auth/pair-status",
 ];
 
-/// `POST /api/automation-webhooks/:hookId` is auth-exempt BY PATH (contract
-/// §4 — external senders can't hold a device token; HMAC verifies them).
+/// `POST /api/automation-webhooks/:hookId` is auth-exempt BY PATH (external
+/// senders can't hold a device token; HMAC verifies them).
 /// Exactly one non-empty segment after the prefix, so nothing else under
 /// `/api/automation*` rides the exemption.
 fn is_webhook_ingress(path: &str) -> bool {
@@ -39,8 +37,7 @@ fn is_webhook_ingress(path: &str) -> bool {
 
 /// Adapts a `&DevicesRepository` (fallible `find_by_device_id`) to the
 /// `DeviceLookup` trait `validate_authed_token` consumes. A DB error fails
-/// closed (`None`) — the TS `findByDeviceId` returns `DeviceRow | null` and the
-/// caller never distinguishes "absent" from "errored".
+/// closed (`None`): the caller never distinguishes "absent" from "errored".
 struct RepoLookup<'a>(&'a mainframe_db::DevicesRepository);
 
 impl DeviceLookup for RepoLookup<'_> {
@@ -126,18 +123,3 @@ pub(crate) async fn auth_middleware(
     req.extensions_mut().insert(payload);
     next.run(req).await
 }
-
-// PORT STATUS: src/server/middleware/auth.ts (52 lines)
-// confidence: high
-// todos: 0
-// notes: `req.auth = payload` → `req.extensions_mut().insert(TokenPayload)`.
-// `req.ip` (Express trust-proxy=loopback) → `net::trust_proxy_client_ip(peer,
-// x-forwarded-for)` (proxy-addr leftmost-untrusted, NOT the WS first-hop rule).
-// The TS `!devicesRepo → 401` branch has no Rust analogue (a `Db` is always
-// present); its behavior is subsumed — a valid signature for an absent device
-// still yields `None` → 401 (covered by the deleted-device test). Secret read
-// from `AppCtx.auth_secret` (the daemon reads `AUTH_TOKEN_SECRET` at boot), not
-// `process.env` per-request.
-// Observability (#219): a rejected request never reaches the route, so
-// `unauthorized()` logs the path + reason (missing bearer / invalid token) —
-// never the token, header, or forwarded-IP chain.

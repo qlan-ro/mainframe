@@ -1,11 +1,11 @@
-//! Integration tests for negotiated HTTP response compression (todo #294):
-//! gzip/brotli negotiation, the size floor, CORS/attachment interaction, and
-//! the WS upgrade staying untouched — all against the production `build_app`
-//! router (real spawned app, no mocks).
+//! Integration tests for negotiated HTTP response compression: gzip/brotli
+//! negotiation, the size floor, CORS/attachment interaction, and the WS upgrade
+//! staying untouched — all against the production `build_app` router (real
+//! spawned app, no mocks).
 //!
-//! Decision D4: `GET /api/chats/{id}/messages` self-gates on `ctx.chat_manager`,
-//! which this harness leaves `None`, so it never produces a large real payload
-//! here. The negotiation/byte-identity/threshold criteria are proven instead
+//! `GET /api/chats/{id}/messages` self-gates on `ctx.chat_manager`, which this
+//! harness leaves `None`, so it never produces a large real payload here. The
+//! negotiation/byte-identity/threshold criteria are proven instead
 //! against `GET /api/projects/{id}/files?path=big.txt`, a large *real* payload
 //! through the same layer; the chat-history route gets its own dedicated
 //! byte-identity assertion.
@@ -73,10 +73,9 @@ fn unbrotli(bytes: &[u8]) -> Vec<u8> {
 
 // ── negotiation, byte-identity, and the size floor ──────────────────────────
 //
-// Tests 1, 3, and 4 are red-phase evidence: each must fail against the
-// uncompressed daemon on the missing `content-encoding` header. Tests 2, 5,
-// and 6 are identity guards — already true today, so they pass in both
-// phases by design; they exist to catch Group B over-reaching.
+// Tests 1, 3, and 4 fail against an uncompressed daemon on the missing
+// `content-encoding` header. Tests 2, 5, and 6 are identity guards that catch
+// the compression layer over-reaching.
 
 #[tokio::test]
 async fn gzip_negotiation_returns_a_body_identical_to_the_identity_response() {
@@ -157,9 +156,9 @@ async fn small_responses_pass_through_uncompressed() {
 
 #[tokio::test]
 async fn chat_history_route_is_byte_identical_through_the_layer() {
-    // This harness leaves `chat_manager: None` (Decision D4), so the envelope
-    // here is the small failure body, below the floor either way — the job of
-    // this test is byte-identity, not proving compression on this route.
+    // This harness leaves `chat_manager: None`, so the envelope here is the
+    // small failure body, below the floor either way — the job of this test is
+    // byte-identity, not proving compression on this route.
     let server = spawn_test_server(None).await;
     let path = "/api/chats/c1/messages";
 
@@ -279,10 +278,9 @@ async fn attachment_responses_are_not_double_encoded() {
 
 // ── the WebSocket upgrade is unaffected ──────────────────────────────────────
 
-/// Passes before and after Group B by design — this is the regression guard
-/// for Decision D5 (compression scoped to the HTTP router only), not red-phase
-/// evidence: advertising `Accept-Encoding` on the WS upgrade must never affect
-/// the handshake or subsequent frames.
+/// Regression guard for compression being scoped to the HTTP router only:
+/// advertising `Accept-Encoding` on the WS upgrade must never affect the
+/// handshake or subsequent frames.
 #[tokio::test]
 async fn websocket_upgrade_completes_when_the_client_advertises_an_encoding() {
     let server = spawn_test_server(None).await;

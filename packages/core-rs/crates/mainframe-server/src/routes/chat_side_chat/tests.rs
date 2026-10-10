@@ -29,7 +29,7 @@ async fn open(ctx: &Arc<AppCtx>, id: &str, body: &'static [u8]) -> (StatusCode, 
 }
 
 /// A real project + parent chat, registered under the `claude` StubAdapter
-/// (fork: false), through a real `ChatManager` (todo #346's AC 26 harness).
+/// (fork: false), through a real `ChatManager`.
 async fn setup() -> (Arc<AppCtx>, mainframe_types::chat::Project, Chat) {
     // `enrich_chat`'s directory-missing check stats the real filesystem, so
     // the project's path must actually exist for open_side_chat's OWN
@@ -161,7 +161,7 @@ async fn two_concurrent_opens_leave_one_row() {
     assert_eq!(side_chats, 1, "exactly one side-chat row must exist");
 }
 
-// ── listing exclusion (rule 7) ───────────────────────────────────────────
+// ── listing exclusion ────────────────────────────────────────────────────
 
 #[tokio::test]
 async fn list_filtered_excludes_the_side_chat_with_and_without_include_temporary_while_get_chat_returns_it()
@@ -182,8 +182,8 @@ async fn list_filtered_excludes_the_side_chat_with_and_without_include_temporary
 
 #[tokio::test]
 async fn filter_temporary_drops_a_side_chat_even_when_include_temporary_is_set() {
-    // Pure unit coverage of the DB-level exclusion (mainframe-db rule 7)
-    // through the same filters the wired `list` route builds.
+    // Pure unit coverage of the DB-level exclusion through the same filters
+    // the wired `list` route builds.
     std::fs::create_dir_all("/tmp/side-chat-filtered").unwrap();
     let ctx = AppCtx::test_ctx_with_chat_manager();
     ctx.adapter_registry
@@ -232,7 +232,7 @@ async fn filter_temporary_drops_a_side_chat_even_when_include_temporary_is_set()
     );
 }
 
-// ── refusals already in place (rule 8) ──────────────────────────────────
+// ── refusals already in place ───────────────────────────────────────────
 
 fn side_chat_fixture() -> Chat {
     let mut chat = crate::chat_deps::fallback_chat(&NewChat {
@@ -275,7 +275,7 @@ async fn fork_refuses_a_side_chat() {
     assert_ne!(err.status_code(), 200);
 }
 
-// ── project removal cascade (rule 6) ────────────────────────────────────
+// ── project removal cascade ─────────────────────────────────────────────
 
 #[tokio::test]
 async fn removing_the_project_deletes_the_side_chats_row() {
@@ -290,10 +290,9 @@ async fn removing_the_project_deletes_the_side_chats_row() {
     assert!(cm.get_chat(&side_id).is_none());
 }
 
-// ── side chats are never listed, even with includeTemporary (todo #344,
-// rule 7) — moved here from routes/chats.rs (review, keeps that file under
-// the 1000-line gate); exercises `chats::list`/`list_for_project`/`get_one`
-// directly since those routes, not this one, own the listing exclusion. ────
+// ── side chats are never listed, even with includeTemporary — exercises
+// `chats::list`/`list_for_project`/`get_one` directly since those routes,
+// not this one, own the listing exclusion. ────────────────────────────────
 
 fn q(project: Option<&str>, tags: Option<&str>, synthetic: Option<&str>) -> Query<ListQuery> {
     Query(ListQuery {

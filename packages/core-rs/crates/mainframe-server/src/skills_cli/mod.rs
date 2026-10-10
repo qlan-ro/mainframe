@@ -1,7 +1,6 @@
-//! Skills-CLI service (todo #243): install/uninstall skills via the `skills`
-//! CLI, spawned on the daemon host. Split into submodules to keep every file
-//! under the 300-line/50-line limits; see the plan's Group B
-//! (`rust-cli-service`) task list for the file-by-file breakdown.
+//! Skills-CLI service: install/uninstall skills via the `skills` CLI, spawned
+//! on the daemon host. Split into submodules to keep every file under the
+//! 300-line/50-line limits.
 //!
 //! Each entry point validates input, resolves the CLI binary
 //! ([`resolve::resolve_cli`]), builds the argv ([`args`]), runs it
@@ -233,7 +232,7 @@ pub async fn probe(
 }
 
 // The 8-argument signature is pinned by tests/skills_cli_unit.rs's doc
-// comment (Group A's contract); a params struct would diverge from it.
+// comment; a params struct would diverge from it.
 #[allow(clippy::too_many_arguments)]
 pub async fn install(
     runner: &dyn SkillsCliRunner,

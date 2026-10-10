@@ -1,7 +1,7 @@
 //! Resolution-side half of the CollabAgent card engine (`collab_card.rs`'s
 //! sibling, split out to stay under the 300-line ceiling): closing a card via
 //! `wait`'s `receiverThreadIds`/`agentsStates`, or failing every open card on
-//! an unnamed `wait` failure (spec decision 2).
+//! an unnamed `wait` failure.
 
 use std::sync::Arc;
 
@@ -81,7 +81,7 @@ pub(crate) fn on_wait_started(
 /// An unnamed (`receiverThreadIds` empty) `wait` can only ever fail cards, never
 /// complete them — an empty/unknown status is indistinguishable from a
 /// timed-out wait, so treating it as success would risk closing a card no
-/// child actually finished (spec decision 2). Success on the unnamed route only
+/// child actually finished. Success on the unnamed route only
 /// ever arrives via the child's own `turn/completed` or the parent-turn-end
 /// backstop.
 pub(crate) fn on_wait_completed(

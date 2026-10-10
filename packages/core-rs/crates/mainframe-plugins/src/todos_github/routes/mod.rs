@@ -1,7 +1,6 @@
-//! The todos-plugin GitHub sub-router (todo #286, task 19): raw-JSON handlers
-//! (no `ok`/`fail` envelope — that convention is the daemon's own routes, not
-//! this plugin's, per the frozen wire contract) mounted under `/github` by
-//! `todos::routes()`.
+//! The todos-plugin GitHub sub-router: raw-JSON handlers (no `ok`/`fail`
+//! envelope — that convention is the daemon's own routes, not this plugin's,
+//! per the frozen wire contract) mounted under `/github` by `todos::routes()`.
 
 pub mod link;
 pub mod pairs;

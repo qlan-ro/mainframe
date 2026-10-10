@@ -1,6 +1,6 @@
-//! T3.2 — comparator matrix (contract §1/A3). Unset tokens are false, never
+//! Comparator matrix (contract §1/A3). Unset tokens are false, never
 //! an error; scalar comparators reject array operands/values outright
-//! (the Node fix — a joined-string coincidence must not match).
+//! (a joined-string coincidence must not match).
 
 use std::sync::Arc;
 
@@ -283,7 +283,7 @@ fn scalar_comparators_return_false_for_array_operands_and_values() {
 #[test]
 fn unset_tokens_are_false_never_an_error() {
     let scope = scope_with(&[]);
-    // Even is_not / is_empty — Node short-circuits a null operand to false.
+    // Even is_not / is_empty — a null operand short-circuits to false.
     assert!(!eval_one(
         &scope,
         cond("ghost", "result", Comparator::IsNot, text_value("x"))
@@ -308,7 +308,7 @@ fn all_and_any_match_modes() {
     assert!(!evaluate(&[hit(), miss()], ConditionMatch::All, &scope));
     assert!(evaluate(&[miss(), hit()], ConditionMatch::Any, &scope));
     assert!(!evaluate(&[miss(), miss()], ConditionMatch::Any, &scope));
-    // Vacuous truth mirrors JS every()/some().
+    // Vacuous truth: an empty `all` holds, an empty `any` does not.
     assert!(evaluate(&[], ConditionMatch::All, &scope));
     assert!(!evaluate(&[], ConditionMatch::Any, &scope));
 }

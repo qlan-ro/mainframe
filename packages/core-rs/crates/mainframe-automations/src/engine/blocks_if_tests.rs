@@ -1,5 +1,4 @@
-//! T4.2 — If blocks: branch pick, nesting, and scope visibility (Node
-//! parity: engine-blocks.test.ts).
+//! If blocks: branch pick, nesting, and scope visibility.
 
 use std::sync::{Arc, Mutex};
 

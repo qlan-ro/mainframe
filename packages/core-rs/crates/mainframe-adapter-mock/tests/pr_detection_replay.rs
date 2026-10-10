@@ -1,10 +1,9 @@
-//! "Any adapter inherits detection" spec (todo #339, task 9): drives the mock
+//! "Any adapter inherits detection" spec: drives the mock
 //! adapter — a stand-in for "some adapter that isn't Claude" — through
 //! `PrDetectionSink` using only the crate's public replay surface (`dispatch`
 //! is private, `emit_event` is `pub(crate)`; see `src/dispatch.rs:23,29`).
 //! Proves the decorator applies to every adapter, not just Claude's own
-//! NDJSON handlers. Red-phase until Group C lands `PrDetectionSink`: expect
-//! "cannot find type/function `PrDetectionSink`" until then.
+//! NDJSON handlers.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::sync::{Arc, Mutex};

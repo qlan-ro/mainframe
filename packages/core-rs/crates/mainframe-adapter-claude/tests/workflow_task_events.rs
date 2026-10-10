@@ -1,9 +1,7 @@
-//! Red-phase (Task 10): pins the not-yet-existing `workflow_events` module's
-//! public surface (Task 17's `task_updated_payload` / `parse_launch_result`),
-//! `task_events::map_task_kind`'s workflow/agent split, and three lock-regression
-//! dispatch tests that drive `events::handle_stdout` end-to-end. The pure tests
-//! turn green at Task 17; the three dispatch tests stay red until Task 20 wires
-//! `workflow_events` into `events.rs`/`user_event.rs`.
+//! Pins the `workflow_events` module's public surface (`task_updated_payload` /
+//! `parse_launch_result`), `task_events::map_task_kind`'s workflow/agent split,
+//! and three lock-regression dispatch tests that drive `events::handle_stdout`
+//! end-to-end.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::sync::Arc;
@@ -24,7 +22,7 @@ use mainframe_types::claude_workflow::{
 };
 use serde_json::json;
 
-// ---- pure functions (green at Task 17) ----
+// ---- pure functions ----
 
 #[test]
 fn task_updated_payload_prefers_patch_status_over_the_top_level_status() {
@@ -97,7 +95,7 @@ fn parse_launch_result_returns_none_without_a_run_id() {
     assert!(parse_launch_result(&text).is_none());
 }
 
-// ---- dispatch lock-regression tests (green at Task 20) ----
+// ---- dispatch lock-regression tests ----
 
 struct NoopSink;
 impl SessionSink for NoopSink {
@@ -138,9 +136,8 @@ impl SessionSink for NoopSink {
 
 const CHAT: &str = "mf-chat-1";
 
-/// Pins Task 18's threading of the workflow store alongside `background_tasks`
-/// into `ClaudeSession::new`. Task 18 owns adjusting this call if it settles on
-/// a different constructor shape.
+/// Builds a session with the workflow store threaded alongside
+/// `background_tasks` into `ClaudeSession::new`.
 fn session_with_store(
     tracker: Arc<BackgroundTaskTracker>,
     store: Arc<ClaudeWorkflowStore>,

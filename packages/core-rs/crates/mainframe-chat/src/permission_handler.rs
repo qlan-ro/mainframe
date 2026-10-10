@@ -1,7 +1,6 @@
-//! Ported from `packages/core/src/chat/permission-handler.ts`. The answer
-//! path itself lives in `respond.rs` (guards + dispatch) and `branches.rs`
-//! (what each outcome does); this file owns the handler's state and the
-//! pending-gate lookups.
+//! The permission handler. The answer path itself lives in `respond.rs`
+//! (guards + dispatch) and `branches.rs` (what each outcome does); this file
+//! owns the handler's state and the pending-gate lookups.
 
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -22,12 +21,12 @@ pub struct ChatPermissionHandler<D: PermissionHandlerDeps> {
     permissions: Arc<Mutex<PermissionManager>>,
     messages: Arc<Mutex<MessageCache>>,
     deps: D,
-    /// The chat-surface observer (todo #350, plan task 17): unlike
-    /// `EventHandler`, this handler owns the normal (non-cancelled)
-    /// permission-answer path, so it needs its own attach point to emit
-    /// `GateResolved`/`GateRaised` there — mirrors `chat_surface.rs`'s
-    /// documented constructor-injection pattern (a handler with none
-    /// attached is a silent no-op, not a construction-time obligation).
+    /// The chat-surface observer: unlike `EventHandler`, this handler owns the
+    /// normal (non-cancelled) permission-answer path, so it needs its own
+    /// attach point to emit `GateResolved`/`GateRaised` there — mirrors
+    /// `chat_surface.rs`'s documented constructor-injection pattern (a handler
+    /// with none attached is a silent no-op, not a construction-time
+    /// obligation).
     chat_surface: Arc<OnceLock<Arc<dyn ChatSurface>>>,
 }
 
@@ -100,20 +99,3 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
 
 #[cfg(test)]
 mod cancelled_guard_tests;
-
-// PORT STATUS: src/chat/permission-handler.ts (156 lines)
-// confidence: medium
-// notes: TS `PermissionHandlerDeps` DI bag → `PermissionHandlerDeps` trait; the
-// notes: `permissions`/`messages` PER_ENTITY caches are shared `Arc<Mutex<..>>`
-// notes: (the sink task also touches them). `planMode.*` calls become three deps
-// notes: methods (handle_no_process sync; clear_context/escalation async) so the
-// notes: handler avoids being generic over PlanModeContext; chat_manager forwards
-// notes: to its PlanModeHandler. Session I/O (respondToPermission) is cloned out of
-// notes: the ActiveChat cell and awaited outside the lock (CONCURRENCY rule 4).
-// notes: warn/info strings + the "No session for chat {id}" throw copied verbatim.
-// notes: No dedicated TS test file (exercised via chat-manager + plan-mode paths).
-// notes: (#284) `respond_to_permission`'s leading `was_cancelled` guard is a
-// notes: Rust-side addition with no TS original: it drops an answer naming a
-// notes: request the CLI already withdrew via `control_cancel_request`, before
-// notes: even checking for an active session. See `cancelled_guard_tests.rs`.
-// todos: 0

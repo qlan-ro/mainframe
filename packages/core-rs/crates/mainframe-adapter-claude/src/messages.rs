@@ -1,11 +1,11 @@
-//! Claude-specific slice of `packages/core/src/messages/*` (the pieces that
-//! reference Claude event / JSONL shapes, per the crate map §2.5/§2.7 split).
-//! The adapter-agnostic display pieces live in `mainframe-display` instead.
+//! Claude-specific slice of the message pipeline (the pieces that reference
+//! Claude event / JSONL shapes). The adapter-agnostic display pieces live in
+//! `mainframe-display` instead.
 //!
-//! `display_helpers` + `display_pipeline` are REASSIGNED here from
-//! `mainframe-display` (§2.5 amendment): they import Claude-specific parsers and
-//! the Claude `GroupedMessage`, so putting them in `mainframe-display` would form
-//! a Cargo cycle (that crate leaves them as compiling empty modules).
+//! `display_helpers` + `display_pipeline` live here rather than in
+//! `mainframe-display`: they import Claude-specific parsers and the Claude
+//! `GroupedMessage`, so putting them in `mainframe-display` would form a Cargo
+//! cycle (that crate leaves them as compiling empty modules).
 
 pub mod display_helpers;
 pub mod display_pipeline;

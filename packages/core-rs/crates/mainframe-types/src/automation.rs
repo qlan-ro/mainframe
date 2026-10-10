@@ -1,18 +1,18 @@
 //! Automations v2 wire projections (packages/types/src/automation.ts).
 //!
 //! Only the surface the daemon wire needs lives here: run/interaction
-//! summaries (the §4 WS event payloads + REST bodies), the timeline entry,
+//! summaries (the WS event payloads + REST bodies), the timeline entry,
 //! and their status enums. The full definition domain model (steps,
 //! triggers, chips) is engine-side in `mainframe-automations`, which
 //! re-exports these types so there is a single canonical definition of each
-//! wire shape (contract: docs/plans/2026-07-12-automations-v2-contract.md).
+//! wire shape.
 
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-/// Run statuses (contract §1).
+/// Run statuses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AutomationRunStatus {
@@ -34,7 +34,7 @@ impl AutomationRunStatus {
         }
     }
 
-    /// A8 — terminal runs are immutable.
+    /// Terminal runs are immutable.
     pub fn is_terminal(self) -> bool {
         matches!(
             self,
@@ -51,7 +51,7 @@ impl fmt::Display for AutomationRunStatus {
     }
 }
 
-/// Checkpoint step statuses (contract §2).
+/// Checkpoint step statuses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AutomationStepStatus {
@@ -62,7 +62,7 @@ pub enum AutomationStepStatus {
     Skipped,
 }
 
-/// Interaction statuses (contract §1) — no expiry in v2.
+/// Interaction statuses — no expiry in v2.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AutomationInteractionStatus {
@@ -99,7 +99,7 @@ pub enum AutomationCompletedStatus {
     Failed,
 }
 
-/// Ask-me form field types (contract §1): five types.
+/// Ask-me form field types: five types.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AutomationFormFieldType {
@@ -127,7 +127,7 @@ pub struct AutomationFormField {
     pub label: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub options: Option<Vec<String>>,
-    /// Tri-state on purpose (Node `required !== false`): an ABSENT
+    /// Tri-state on purpose: an ABSENT
     /// `required` still means required — only an explicit `false` opts out.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub required: Option<bool>,
@@ -172,7 +172,7 @@ pub struct AutomationInteractionSummary {
     pub resolved_at: Option<i64>,
 }
 
-/// `automation.notification`'s `links` payload (contract §4).
+/// `automation.notification`'s `links` payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AutomationNotificationLinks {
@@ -182,7 +182,7 @@ pub struct AutomationNotificationLinks {
 
 /// One `GET /api/automation-runs/:id` timeline entry (TS
 /// `AutomationTimelineEntry`): optionals are TS-optional, omitted when
-/// absent — except `error`, which Node projects as `T | null`.
+/// absent — except `error`, which is projected as `T | null`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AutomationTimelineEntry {
@@ -202,10 +202,3 @@ pub struct AutomationTimelineEntry {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub finished_at: Option<i64>,
 }
-
-// PORT STATUS: packages/types/src/automation.ts (summaries/timeline/enums only)
-// confidence: high
-// todos: 0
-// notes: definition domain types (steps/triggers/chips) deliberately stay in
-// mainframe-automations::domain (rust-engine plan T1.1); that crate re-exports
-// these so each wire shape has ONE canonical Rust definition.

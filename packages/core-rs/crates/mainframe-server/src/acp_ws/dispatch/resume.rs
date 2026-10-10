@@ -1,9 +1,8 @@
 //! `session/resume`: the one method whose cost is unbounded — a cold chat's
 //! snapshot loads the whole transcript off disk — so it runs off the
-//! socket-loop task (todo #350, PR #688 review). Only the `AwaitingSeed`
-//! claim stays inline, because live frames racing the snapshot must be
-//! buffered from the moment the client asked, not from whenever the spawned
-//! task gets scheduled.
+//! socket-loop task. Only the `AwaitingSeed` claim stays inline, because live
+//! frames racing the snapshot must be buffered from the moment the client
+//! asked, not from whenever the spawned task gets scheduled.
 
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -33,11 +32,11 @@ pub(super) fn start_resume(
     ports: Arc<dyn ResumePort>,
 ) {
     let session_id = params_session_id(request.params.as_ref());
-    // Mark this session as awaiting its snapshot BEFORE anything awaits, so
-    // a live revision that races it is buffered rather than lost (T5, R2.9).
-    // `begin_resume` also hands back the chat's revision log (todo #377)
-    // paired with its pre-snapshot boundary, which the reply's `cursor`
-    // must carry (see `begin_resume`'s doc for the race argument).
+    // Mark this session as awaiting its snapshot BEFORE anything awaits, so a
+    // live revision that races it is buffered rather than lost. `begin_resume`
+    // also hands back the chat's revision log paired with its pre-snapshot
+    // boundary, which the reply's `cursor` must carry (see `begin_resume`'s doc
+    // for the race argument).
     let (revision_log, resume_boundary) = session_id
         .as_deref()
         .and_then(|id| ctx.facade_hub.begin_resume(connection, id))
@@ -61,7 +60,7 @@ pub(super) fn start_resume(
 
 /// The two settlement flags a resume delivery and its failure path share —
 /// bundled so `deliver_resume` stays under clippy's argument-count limit
-/// now that it also takes `revision_log` (todo #377).
+/// now that it also takes `revision_log`.
 struct DeliveryProgress {
     /// Set the moment the reply goes out, so the failure path below knows
     /// whether the client's promise has settled without asking the session
@@ -83,7 +82,7 @@ struct ResumeTask {
     ctx: Arc<AppCtx>,
     connection: Arc<FacadeConnection>,
     ports: Arc<dyn ResumePort>,
-    /// The chat's revision log (todo #377), from `begin_resume` — `None`
+    /// The chat's revision log, from `begin_resume` — `None`
     /// for a connection that did not opt into revision cursors.
     revision_log: Option<Arc<Mutex<RevisionLog>>>,
     /// `begin_resume`'s pre-snapshot boundary for `revision_log` — carried
@@ -194,7 +193,7 @@ fn fail_resume(failure: ResumeFailure<'_>) {
     // `reset_session`'s own `replay_complete` send — this delivery still
     // owes the client the closing marker for the reply it already has, with
     // `aborted: true` so a staged client discards whatever partial replay it
-    // received (spec Decision 38).
+    // received.
     if replied && !completed {
         connection.send_json(&mainframe_acp::replay_complete_notification(
             session_id, true,
@@ -233,7 +232,7 @@ async fn deliver_resume(
     ctx: &Arc<AppCtx>,
     connection: &Arc<FacadeConnection>,
     ports: &dyn ResumePort,
-    // The log paired with `begin_resume`'s pre-snapshot boundary (#377):
+    // The log paired with `begin_resume`'s pre-snapshot boundary:
     // one tuple, so the reply cursor cannot drift from the planned-against log.
     revision_log: Option<(&Mutex<RevisionLog>, RevisionCursor)>,
     progress: DeliveryProgress,
@@ -264,7 +263,7 @@ async fn deliver_resume(
     };
     let hub = &ctx.facade_hub;
     hub.reset_session(connection, &session_id, seed, |conn| {
-        // Spec Decision 42: an opted-in connection takes the replay as a few
+        // An opted-in connection takes the replay as a few
         // compressed batches; every other arm below is unchanged either way.
         if conn.is_compressed_replay_opted_in() {
             for note in mainframe_acp::replay_batch_notifications(&session_id, &replay.updates) {

@@ -1,9 +1,8 @@
-//! `EncodedDelta` (todo #376 G2 task 2): the hub-side half of the container
-//! delta contract `mainframe-display::DisplayDelta` defines on the chat
-//! side. It carries one changed container's encoded items instead of its
-//! `DisplayMessage`, so `SessionState`/`RevisionLog`/`SessionStream` can
-//! apply a partial update without re-encoding or re-comparing settled
-//! containers.
+//! `EncodedDelta`: the hub-side half of the container delta contract
+//! `mainframe-display::DisplayDelta` defines on the chat side. It carries one
+//! changed container's encoded items instead of its `DisplayMessage`, so
+//! `SessionState`/`RevisionLog`/`SessionStream` can apply a partial update
+//! without re-encoding or re-comparing settled containers.
 //!
 //! `merge` coalesces buffered deltas the same way the hub's `buffer_op`
 //! coalesces buffered revisions today — "latest wins" over the union of

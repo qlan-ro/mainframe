@@ -1,8 +1,5 @@
-//! Integration tests for the not-yet-mounted
-//! `GET /api/projects/{id}/automation-recommendations` route (spec AC 7).
-//!
-//! T18 is expected RED: the handler is T19's job. Do not stub it to pass this
-//! file — a route this file can't reach proves nothing about T19's behavior.
+//! Integration tests for the `GET /api/projects/{id}/automation-recommendations`
+//! route.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod support;
@@ -29,7 +26,8 @@ fn run_git(cwd: &Path, args: &[&str]) {
     );
 }
 
-/// The rich fixture from T9's fingerprint test: a Next.js + React + Supabase
+/// The rich fixture from the fingerprint tests
+/// (`src/setup_advisor/fingerprint/tests.rs`): a Next.js + React + Supabase
 /// project with prettier/tsconfig/docker tooling, a tests dir, env + lock
 /// files, and a GitHub origin.
 fn rich_fixture_repo() -> tempfile::TempDir {

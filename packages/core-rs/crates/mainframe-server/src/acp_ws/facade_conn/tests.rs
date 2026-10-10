@@ -1,6 +1,6 @@
 //! Per-connection bookkeeping lifecycle: what `forget_chat` must reclaim so a
 //! long-lived connection does not accumulate per-chat state for chats that
-//! ended (todo #350, PR #688 review).
+//! ended.
 
 use super::*;
 

@@ -1,6 +1,6 @@
 //! The permission handler's injected dependency surface and its error type,
-//! split out of `permission_handler.rs` (todo #350, PR #688 review) — a pure
-//! move; `permission_handler` re-exports both under their original paths.
+//! split out of `permission_handler.rs` — a pure move; `permission_handler`
+//! re-exports both under their original paths.
 
 use std::sync::{Arc, Mutex};
 
@@ -21,9 +21,9 @@ pub enum PermissionError {
     Adapter(#[from] AdapterError),
 }
 
-/// The injected dependency surface (mirrors the TS `PermissionHandlerDeps`).
-/// `planMode` delegation is exposed as three methods so this handler need not be
-/// generic over the plan-mode context; chat_manager forwards them to its
+/// The injected dependency surface for the permission handler. Plan-mode
+/// delegation is exposed as three methods so this handler need not be generic
+/// over the plan-mode context; chat_manager forwards them to its
 /// `PlanModeHandler`.
 pub trait PermissionHandlerDeps: Send + Sync {
     fn get_active_chat(&self, chat_id: &str) -> Option<Arc<Mutex<ActiveChat>>>;

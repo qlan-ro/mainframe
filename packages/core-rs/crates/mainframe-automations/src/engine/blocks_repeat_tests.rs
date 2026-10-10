@@ -1,6 +1,5 @@
-//! T4.2 — Repeat blocks: `#<i>` stepRefs, `current` isolation, the
-//! MAX_REPEAT_ITEMS guard, mid-iteration parks, and nested `#i#j` chaining
-//! (Node parity: engine-blocks.test.ts).
+//! Repeat blocks: `#<i>` stepRefs, `current` isolation, the MAX_REPEAT_ITEMS
+//! guard, mid-iteration parks, and nested `#i#j` chaining.
 
 use std::sync::{Arc, Mutex};
 

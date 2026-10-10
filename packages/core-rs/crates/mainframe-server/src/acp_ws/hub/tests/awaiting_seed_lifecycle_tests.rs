@@ -1,8 +1,7 @@
 //! Turn, usage, and retry events raised during the `AwaitingSeed` window.
-//! Unlike a revision or a raw frame they carry no content of their own, so
-//! they were dropped outright — a turn that ended while a client was
-//! resuming left it showing a running spinner until the next turn (todo
-//! #350, PR #688 review).
+//! Unlike a revision or a raw frame they carry no content of their own, but
+//! dropping them leaves a client that resumed while a turn ended showing a
+//! running spinner until the next turn.
 
 use mainframe_chat::chat_surface::TurnStopReason;
 use mainframe_types::adapter::ContextUsage;

@@ -1,10 +1,8 @@
-//! Ported from `packages/core/src/plugins/manager.ts`.
-//!
-//! Builtin plugin registry + the `/api/plugins` listing surface. v1 is
-//! builtin-only (§2.9/§5): the on-disk `loadAll`/`loadPlugin` discovery path and
-//! the `_require` JS loader are dropped; only `load_builtin` remains. The
-//! per-plugin sub-router (returned by `activate`) is mounted under `/<id>`, and
-//! `GET /` / `GET /:id` list the loaded plugins with their tracked panels/actions.
+//! Builtin plugin registry + the `/api/plugins` listing surface. Plugins are
+//! builtin-only: there is no on-disk discovery path and no JS loader; only
+//! `load_builtin` registers plugins. The per-plugin sub-router (returned by
+//! `activate`) is mounted under `/<id>`, and `GET /` / `GET /:id` list the
+//! loaded plugins with their tracked panels/actions.
 
 use std::future::Future;
 use std::path::PathBuf;
@@ -33,10 +31,9 @@ use crate::github_port::GitHubIssues;
 struct Tracker {
     /// pluginId → the `plugin.panel.registered` events, in insertion order
     /// (keyed by panelId). A `Vec<(panelId, event)>` — not a `HashMap` — so the
-    /// legacy `.panel` (= `panels[0]`) and the `.panels[]` array are deterministic,
-    /// matching the TS insertion-ordered `Map<panelId, event>`. HashMap iteration
-    /// order is randomized per launch, which made the `/api/plugins` listing
-    /// (and hence the diffd `plugins-list` probe) non-deterministic.
+    /// legacy `.panel` (= `panels[0]`) and the `.panels[]` array are deterministic.
+    /// HashMap iteration order is randomized per launch, which would make the
+    /// `/api/plugins` listing non-deterministic.
     panels: DashMap<String, Vec<(String, DaemonEvent)>>,
     /// pluginId → the `plugin.action.registered` events.
     actions: DashMap<String, Vec<DaemonEvent>>,
@@ -151,7 +148,7 @@ struct ManagerInner {
 pub struct PluginManagerDeps {
     pub host_db: Arc<dyn PluginHostDb>,
     pub emit: EmitSink,
-    /// The GitHub Issues port (task 5), `None` when the automations engine
+    /// The GitHub Issues port, `None` when the automations engine
     /// did not start — `build_plugin_context` answers that case with the
     /// engine-unavailable guard rather than treating it as a fatal error.
     pub github: Option<Arc<dyn GitHubIssues>>,
@@ -279,9 +276,8 @@ async fn list_plugins(State(inner): State<Arc<ManagerInner>>) -> Response {
                 "capabilities".into(),
                 serde_json::to_value(&p.manifest.capabilities).unwrap_or(Value::Null),
             );
-            // Legacy `panel` (TS: `panels[0]`) is `undefined` when there are no
-            // panels — JSON.stringify drops it, so omit the key entirely rather
-            // than emit `null`, matching the Express listing byte-for-byte.
+            // Legacy `panel` (= `panels[0]`) is absent when there are no
+            // panels: omit the key entirely rather than emit `null`.
             if let Some(first) = panels.first() {
                 obj.insert("panel".into(), json!(first));
             }
@@ -316,19 +312,6 @@ async fn plugin_detail(State(inner): State<Arc<ManagerInner>>, Path(id): Path<St
             .into_response(),
     }
 }
-
-// PORT STATUS: src/plugins/manager.ts
-// confidence: medium
-// todos: 1
-// notes: builtin-only (§2.9/§5) — loadAll/loadPlugin disk discovery + the
-// `_require` JS loader are dropped; only load_builtin remains. panelEvents →
-// DashMap<pluginId, Vec<(panelId, event)>> (insertion-ordered, mirroring the TS
-// Map<panelId, event>), actionEvents → DashMap<pluginId, Vec<event>>, updated by a
-// tracking emit sink (kept off the LoadedPlugin entries to avoid a ctx↔sink Arc
-// cycle). The insertion-ordered Vec (not a HashMap) makes the legacy `.panel`
-// (= panels[0]) and `.panels[]` deterministic per launch. The listing routes
-// (GET / and GET /:id) + per-plugin `/<id>` nesting mirror the Express router
-// surface. TODO(port): external/on-disk plugin loading dropped in v1.
 
 #[cfg(test)]
 mod tests {

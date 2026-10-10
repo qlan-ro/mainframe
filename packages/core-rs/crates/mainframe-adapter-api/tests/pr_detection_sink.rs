@@ -1,8 +1,5 @@
 //! Live-detection specs for `PrDetectionSink`, the `SessionSink` decorator that
-//! runs PR scanning at the one seam every adapter crosses (todo #339, tasks
-//! 6-8). Red-phase until Group C lands `PrDetectionSink`
-//! (`pr_detection/sink.rs`): expect "cannot find type/function `PrDetectionSink`"
-//! until then — do not weaken these specs to make them compile early.
+//! runs PR scanning at the one seam every adapter crosses.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::collections::HashMap;
@@ -91,7 +88,7 @@ fn drive(tool_use_block: MessageContent, result_block: MessageContent) -> Vec<De
     inner.prs()
 }
 
-// --- Task 6: Claude-shaped input ---------------------------------------
+// --- Claude-shaped input -----------------------------------------------
 
 #[test]
 fn bash_pr_create_command_and_pr_url_result_yields_created_source() {
@@ -292,7 +289,7 @@ fn azure_pr_json_payload_result_yields_the_right_owner_repo_number() {
     );
 }
 
-// --- Task 7: Codex-shaped parity ----------------------------------------
+// --- Codex-shaped parity ------------------------------------------------
 
 /// Built the way `thread_item_render.rs::render_command_execution` builds it:
 /// one `Bash` tool_use carrying the raw shell command, then one tool_result
@@ -332,7 +329,7 @@ fn codex_shaped_input_produces_the_same_pr_as_claude_shaped_input_for_the_same_u
     );
 }
 
-// --- Task 8: tool-meta eviction ------------------------------------------
+// --- tool-meta eviction --------------------------------------------------
 
 #[test]
 fn tool_result_reusing_a_consumed_tool_use_id_emits_nothing_the_second_time() {

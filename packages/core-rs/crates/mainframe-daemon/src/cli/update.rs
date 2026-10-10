@@ -1,9 +1,8 @@
-//! Ported from `packages/core/src/cli/update.ts` — `mainframe update`.
+//! The `mainframe update` command.
 //!
 //! Self-updates a standalone install in place: picks a GitHub release, refuses
 //! a downgrade unless `--force`, downloads the matching platform tarball, and
-//! extracts it over the install root with a `tar` shell-out (matching the TS
-//! twin's `execFile('tar', ...)`). Release-picking/semver logic lives in
+//! extracts it over the install root with a `tar` shell-out. Release-picking/semver logic lives in
 //! `release` (pure, unit-tested); this module owns argv parsing, install-root
 //! resolution, and the network/process orchestration.
 
@@ -17,7 +16,7 @@ use serde::Deserialize;
 
 const REPO: &str = "qlan-ro/mainframe";
 
-/// Parsed `mainframe update` flags (`packages/core/src/cli/update.ts`'s `UpdateOptions`).
+/// Parsed `mainframe update` flags.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct UpdateOptions {
     pub version: Option<String>,
@@ -51,8 +50,8 @@ pub(crate) fn parse_update_args(argv: &[String]) -> Result<UpdateOptions, String
     Ok(opts)
 }
 
-/// `resolveInstallRoot()`. The standalone layout has no `lib/` anymore (T5.3
-/// drops the Node bundle), so the marker is the daemon binary itself:
+/// Resolve the install root. The standalone layout uses the daemon binary as
+/// its marker:
 /// `bin/mainframe-daemon` beside the `mainframe` wrapper.
 pub(crate) fn resolve_install_root(
     env: &HashMap<String, String>,
@@ -210,8 +209,8 @@ async fn download_tarball(url: &str, dest: &Path) -> Result<(), String> {
     Ok(())
 }
 
-// Extraction shells out to the system `tar` (matches the TS twin's
-// `execFile('tar', ...)`) rather than pulling in a Rust tar/gzip crate.
+// Extraction shells out to the system `tar` rather than pulling in a Rust
+// tar/gzip crate.
 async fn extract_over(tarball: &Path, root: &Path) -> Result<(), String> {
     let status = tokio::process::Command::new("tar")
         .arg("-xzf")

@@ -1,4 +1,4 @@
-//! Wiring-level regression coverage for #273: the daemon's production
+//! Wiring-level regression coverage: the daemon's production
 //! `ChatManagerDeps` (`DaemonChatDeps`, assembled by `build_chat_manager`) must
 //! feed `ChatManager` enrichment the tracker's real live-task set. Unlike
 //! `mainframe-chat`'s `background_activity` unit tests — which call the private

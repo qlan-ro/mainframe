@@ -1,8 +1,7 @@
-//! Todo #327 — the sub-agent-activity half of the collab card engine. Every
-//! function here mirrors a `collab_card`/`collab_resolve` hook one-to-one
-//! (task 6), so a tracker row can never open or close without its card doing
-//! the same. A `None` tracker (production default, every existing test state)
-//! makes every function a no-op.
+//! The sub-agent-activity half of the collab card engine. Every function here
+//! mirrors a `collab_card`/`collab_resolve` hook one-to-one, so a tracker row
+//! can never open or close without its card doing the same. A `None` tracker
+//! (the history/reload paths and test states) makes every function a no-op.
 
 use mainframe_background_tasks::tracker::{TaskSeed, TerminalUpdate};
 use mainframe_types::background_task::{
@@ -13,9 +12,9 @@ use nanoid::nanoid;
 use crate::session_state::CodexSessionState;
 
 /// Opens one `agent` row for `child_thread_id`, described by the card's own
-/// `title` (fact 8 — never a raw thread id) so the row and the card can never
-/// disagree. A no-op with no tracker, no chat id (P3), or a child already
-/// tracked (dedupe — AC 4).
+/// `title` (never a raw thread id) so the row and the card can never
+/// disagree. A no-op with no tracker, no chat id, or a child already
+/// tracked (dedupe).
 pub(crate) fn open_activity(
     child_thread_id: &str,
     card_id: &str,
@@ -52,7 +51,7 @@ pub(crate) fn open_activity(
 
 /// Ends `child_thread_id`'s row, if it has one. A no-op with no tracker or no
 /// tracked id — `BackgroundTaskTracker::end` is itself idempotent on an
-/// already-terminal or unknown id (fact 5), so a race between two closing
+/// already-terminal or unknown id, so a race between two closing
 /// routes can never emit a second `ended`.
 pub(crate) fn end_activity(child_thread_id: &str, state: &mut CodexSessionState) {
     let Some(task_id) = state.agent_task_ids.remove(child_thread_id) else {

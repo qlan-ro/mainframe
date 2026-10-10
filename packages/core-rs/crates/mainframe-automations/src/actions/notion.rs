@@ -1,9 +1,8 @@
-//! notion.add_row connector (T7.2, Node actions/notion.ts). No schema-lookup
-//! endpoint exists yet for per-column Notion property types (contract §9
-//! "under-built product surfaces"), so every non-databaseId param is sent as
-//! a rich_text property — the params record is already flat key/value
-//! ChipText output (dates like ⟨Today⟩ arrive pre-rendered), not a typed
-//! Notion schema.
+//! notion.add_row connector. No schema-lookup endpoint exists yet for
+//! per-column Notion property types (contract §9 "under-built product
+//! surfaces"), so every non-databaseId param is sent as a rich_text property —
+//! the params record is already flat key/value ChipText output (dates like
+//! ⟨Today⟩ arrive pre-rendered), not a typed Notion schema.
 
 use std::collections::BTreeMap;
 
@@ -21,8 +20,8 @@ use super::{Action, ActionCtx, ActionError, ActionOutputs, http_failure, parse_i
 const NOTION_API: &str = "https://api.notion.com";
 const NOTION_VERSION: &str = "2022-06-28";
 
-/// `databaseId` + a flat catchall of string column values (zod
-/// `.catchall(z.string())` parity — a non-string extra fails the parse).
+/// `databaseId` + a flat catchall of string column values (a non-string
+/// extra fails the parse).
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AddRowInput {
@@ -134,9 +133,3 @@ impl Action for NotionAddRowAction {
         })
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T7.2), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node actions/notion.ts (rich_text-only properties until a
-//        column-picker/schema endpoint exists — contract §9).

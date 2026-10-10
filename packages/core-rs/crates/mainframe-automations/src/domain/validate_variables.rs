@@ -1,6 +1,6 @@
 //! The `$name` half of validation — unresolved references and set-variable
 //! name collisions, checked against the namespace in scope at each step
-//! (Node parity: automation-domain/validate.ts).
+//! (the TypeScript copy is packages/types/src/automation-domain/validate.ts).
 
 use std::collections::HashSet;
 
@@ -167,8 +167,9 @@ pub(crate) fn variable_names_clashing_with(
     }
 }
 
-/// A set-variable step's own name: an identifier (Node's `VARIABLE_NAME` =
-/// `^[a-z_][a-z0-9_]*$`) that no other step in its naming regions claims.
+/// A set-variable step's own name: an identifier (`^[a-z_][a-z0-9_]*$`, the
+/// TypeScript copy's `VARIABLE_NAME`) that no other step in its naming
+/// regions claims.
 pub(crate) fn set_variable_name_issue(name: &str, claimed: &HashSet<String>) -> Option<String> {
     let trimmed = name.trim();
     if trimmed.is_empty() {
@@ -192,8 +193,3 @@ pub(crate) fn set_variable_name_issue(name: &str, claimed: &HashSet<String>) -> 
     }
     None
 }
-
-// PORT STATUS: TS port of packages/types/src/automation-domain/validate.ts (T6)
-// confidence: high
-// todos: 0
-// notes: split from validate.rs to keep both files inside the 300-line cap.

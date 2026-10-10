@@ -1,11 +1,8 @@
-//! Ported from `src/logger.ts`.
-//!
-//! The `tracing` equivalent of the pino setup: a daily-rotated file
+//! Daemon logging setup: a daily-rotated file
 //! `<configured dataDir>/logs/server.<YYYY-MM-DD>.log`, a 7-day purge on boot,
 //! `LOG_LEVEL`/`LOG_TO_STDOUT` env handling, stdout added off-production, and
-//! silence under tests. The pino *serialization format* is not a wire contract
-//! (logs are never consumed by clients), so the tracing text/field format is
-//! used; the level names, thresholds, and the "logger initialized" message match.
+//! silence under tests. The log line format is not a wire contract (logs are
+//! never consumed by clients), so the tracing text/field format is used.
 
 use std::fs;
 use std::path::PathBuf;
@@ -15,19 +12,20 @@ use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
 
-/// `RETENTION_DAYS` in `src/logger.ts`.
+/// Days a `server.*` log file is kept before the boot purge deletes it.
 const RETENTION_DAYS: u64 = 7;
 
-/// Level names accepted by `src/logger.ts`'s `VALID_LEVELS` set.
+/// Level names accepted from `LOG_LEVEL`.
 const VALID_LEVELS: [&str; 6] = ["trace", "debug", "info", "warn", "error", "fatal"];
 
-/// Mirrors the `rawLevel`/`VALID_LEVELS` fallback-to-`info` logic in `src/logger.ts`.
+/// Resolves a raw `LOG_LEVEL` value, falling back to `info` for anything outside
+/// `VALID_LEVELS`.
 ///
 /// Pure by construction (takes the raw env value as an argument) so it's testable
 /// without `std::env::set_var`, which edition 2024 makes `unsafe`.
 fn resolve_level_from(raw: Option<&str>) -> String {
     let raw = raw.unwrap_or_default().trim().to_lowercase();
-    // tracing has no "fatal" level; pino's "fatal" maps to tracing's ERROR.
+    // tracing has no "fatal" level, so "fatal" maps to tracing's ERROR.
     let normalized = if raw == "fatal" {
         "error"
     } else {
@@ -44,13 +42,13 @@ fn resolve_level() -> String {
     resolve_level_from(std::env::var("LOG_LEVEL").ok().as_deref())
 }
 
-/// The `purgeOldLogs()` decision, factored pure for testing: a `server.*` file
+/// The `purge_old_logs` decision, factored pure for testing: a `server.*` file
 /// whose mtime predates the cutoff is stale.
 fn is_stale_server_log(file_name: &str, modified: SystemTime, cutoff: SystemTime) -> bool {
     file_name.starts_with("server.") && modified < cutoff
 }
 
-/// Mirrors `purgeOldLogs()`: delete `server.*` files older than `RETENTION_DAYS`,
+/// Deletes `server.*` files older than `RETENTION_DAYS`,
 /// ignoring per-file and missing-dir errors.
 fn purge_old_logs(dir: &PathBuf) {
     let cutoff = SystemTime::now() - Duration::from_secs(RETENTION_DAYS * 86_400);
@@ -69,8 +67,7 @@ fn purge_old_logs(dir: &PathBuf) {
     }
 }
 
-/// `true` when running under Vitest/Node test env — mirrors `isTest` in
-/// `src/logger.ts` (silences all logging).
+/// `true` when `NODE_ENV=test` or `VITEST=true` is set (silences all logging).
 fn is_test_env() -> bool {
     std::env::var("NODE_ENV").as_deref() == Ok("test")
         || std::env::var("VITEST").as_deref() == Ok("true")
@@ -109,7 +106,7 @@ pub fn init(log_dir: &std::path::Path) -> Option<WorkerGuard> {
 
     let filter = EnvFilter::try_new(&level).unwrap_or_else(|_| EnvFilter::new("info"));
 
-    // pino's dailyDestination() -> `server.<date>.log`, append-only.
+    // Daily `server.<date>.log` files, append-only.
     let appender = RollingFileAppender::builder()
         .rotation(Rotation::DAILY)
         .filename_prefix("server")
@@ -128,7 +125,7 @@ pub fn init(log_dir: &std::path::Path) -> Option<WorkerGuard> {
 
     let (non_blocking, guard) = tracing_appender::non_blocking(appender);
 
-    // Node always writes to the file; stdout is added when not production, or
+    // Always write to the file; stdout is added when not production, or
     // when LOG_TO_STDOUT forces it.
     let file_layer = tracing_subscriber::fmt::layer()
         .with_ansi(false)
@@ -191,23 +188,7 @@ mod tests {
 
     #[test]
     fn purge_ignores_missing_dir() {
-        // Missing dir must not panic (mirrors the TS outer try/catch).
+        // Missing dir must not panic.
         purge_old_logs(&PathBuf::from("/nonexistent/mainframe/logs/xyz"));
     }
 }
-
-// PORT STATUS: src/logger.ts (87 lines)
-// confidence: medium
-// todos: 0
-// notes: full behavioral port — daily `server.<date>.log` via the appender
-// builder (filename_suffix "log"), 7-day purge on boot, LOG_LEVEL/LOG_TO_STDOUT,
-// stdout added off-production, silent under NODE_ENV=test/VITEST=true, and the
-// "logger initialized" info line. pino's JSON line format is NOT reproduced (logs
-// aren't a wire contract) — tracing's fmt layer is used; only level names/
-// thresholds/messages match. `createChildLogger` -> `ChildLogger` carrying a
-// `module` field on each tracing macro (structured context per call site is added
-// by consumers when their modules are ported). The purge test cannot set mtime
-// without the `filetime` crate (not in the allowlist), so it only asserts recent
-// server.* logs + non-server files survive; the stale-deletion branch is covered
-// by the read/starts-with/cutoff logic, verified against fresh files. sync fs at
-// boot mirrors pino's sync module-load (readdirSync/mkdirSync), not request I/O.

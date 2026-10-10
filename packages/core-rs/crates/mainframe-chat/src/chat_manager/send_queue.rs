@@ -1,8 +1,8 @@
-//! The queued-turn bookkeeping half of `send_plain_text` (todo #350, plan
-//! task 37, R2.13): whether this send is queued behind a running turn, the
-//! transient metadata that marks it as such, and the `QueuedMessageRef` that
-//! makes it visible to `_mainframe.dev/queue_state`. Split out of `send.rs`
-//! to keep that file under the 300-line cap.
+//! The queued-turn bookkeeping half of `send_plain_text`: whether this send is
+//! queued behind a running turn, the transient metadata that marks it as such,
+//! and the `QueuedMessageRef` that makes it visible to
+//! `_mainframe.dev/queue_state`. Split out of `send.rs` to keep that file under
+//! the 300-line cap.
 
 use super::*;
 
@@ -12,18 +12,17 @@ impl ChatManager {
     /// bookkeeping only).
     ///
     /// The uuid is now minted unconditionally, not just for a queued send:
-    /// history reconstruction's `id_or_nanoid` reads the transcript entry's
-    /// own `uuid` for a human-typed prompt (`history_converters.rs`), so an
+    /// history reconstruction's `id_or_nanoid` reads the transcript entry's own
+    /// `uuid` for a human-typed prompt (`history_converters.rs`), so an
     /// unforced send commits to a daemon-minted nanoid the CLI can never
-    /// reproduce on reload — the one causal gap `docs/specs/2026-09-25-todo-
-    /// 178-idle-whole-chat-offload.md` decision 10 requires closed at the
-    /// source rather than excepted in the golden test. Forcing the uuid here
-    /// reuses the exact mechanism the queued path already relies on for
-    /// "replay parity" (`build_user_payload`'s `uuid` field), just without
-    /// gating it on `is_queued`. Only the QUEUED bookkeeping (the `queued`/
-    /// `uuid` transient-metadata flags `on_queued_processed` matches on, and
-    /// `record_queued_ref`) stays conditional — an immediate send has no
-    /// queue entry to drain.
+    /// reproduce on reload, and live and cold-reloaded ids must match — a gap
+    /// closed at the source rather than excepted in the golden test. Forcing
+    /// the uuid here reuses the exact mechanism the queued path already relies
+    /// on for "replay parity" (`build_user_payload`'s `uuid` field), just
+    /// without gating it on `is_queued`. Only the QUEUED bookkeeping (the
+    /// `queued`/`uuid` transient-metadata flags `on_queued_processed` matches
+    /// on, and `record_queued_ref`) stays conditional — an immediate send has
+    /// no queue entry to drain.
     pub(super) fn queued_message_metadata(
         &self,
         post: &Arc<Mutex<ActiveChat>>,

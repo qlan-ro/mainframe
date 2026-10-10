@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/external-session-paths.ts`.
-//!
 //! Path helpers for discovering Claude's own external session JSONL files under
 //! `~/.claude/projects/<encoded>/`.
 
@@ -44,12 +42,10 @@ pub(crate) fn projects_root() -> String {
         .to_string()
 }
 
-/// Canonicalize like the CLI before encoding: resolve symlinks (realpath) and
-/// normalize Unicode (NFC). Falls back to the input if it can't be realpath'd.
+/// Resolve symlinks before encoding, falling back to the input if realpath fails.
 pub(crate) async fn canonicalize_project_path(p: &str) -> String {
-    // TODO(port): JS `p.normalize('NFC')` is skipped — no unicode-normalization
-    // crate on the allowlist. ASCII paths (the common case) are unaffected;
-    // non-ASCII paths with combining marks may encode differently than the CLI.
+    // Unicode NFC normalization is absent, so paths with combining marks may
+    // encode differently from the CLI. ASCII paths are unaffected.
     let nfc = p.to_string();
     match tokio::fs::canonicalize(&nfc).await {
         Ok(rp) => rp.to_string_lossy().to_string(),
@@ -120,12 +116,3 @@ mod tests {
         assert!(!cwd_belongs_to_project(None, "/a/proj"));
     }
 }
-
-// PORT STATUS: src/plugins/builtin/claude/external-session-paths.ts (58 lines)
-// confidence: high
-// todos: 1
-// notes: UUID_RE hand-rolled as 8-4-4-4-12 hex groups. encodePath replaces every
-// non-alphanumeric (incl. dashes) with '-' — distinct from history.ts's encoding
-// which keeps dashes. cwd path.sep → std::path::MAIN_SEPARATOR. realpath →
-// tokio::fs::canonicalize. The 1 TODO(port): NFC normalization skipped (no crate
-// on the allowlist; ASCII unaffected). All 4 TS path tests ported.

@@ -1,8 +1,8 @@
-//! Phase 4a — the concurrent branch driver. `walk_frame` used to return on
+//! The concurrent branch driver. `walk_frame` used to return on
 //! the first `Parked`, so starting N agents at once was impossible: agent 1
 //! parks and the walk stops before agent 2 ever starts. These tests pin that
 //! N branches now start together, wait-for-all failure, the branch marker's
-//! replay safety, and per-entry `wake_at` (Node parity: none — greenfield).
+//! replay safety, and per-entry `wake_at`.
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;

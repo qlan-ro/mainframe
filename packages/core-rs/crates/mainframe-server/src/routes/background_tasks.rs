@@ -1,12 +1,9 @@
-//! Ported from `src/server/routes/background-tasks.ts` — list / output / kill for
-//! a chat's background tasks.
+//! List / output / kill for a chat's background tasks.
 //!
-//! The TS route takes injectable deps (tracker, sessionForChat, validator,
-//! killImpl); the Rust port reads them off `AppCtx`: the tracker is
-//! `ctx.background_tasks`, `sessionForChat` bridges `ChatManager::get_session_for_chat`
-//! (an `Arc<dyn AdapterSession>`) into the `SessionLike` the kill helper expects,
-//! and the validator is the default platform spool-root validator. This file ports
-//! fully — no Phase-4 seams.
+//! The dependencies come off `AppCtx`: the tracker is `ctx.background_tasks`,
+//! `ChatManager::get_session_for_chat` (an `Arc<dyn AdapterSession>`) is bridged
+//! into the `SessionLike` the kill helper expects, and the validator is the
+//! default platform spool-root validator.
 
 use std::sync::Arc;
 
@@ -32,7 +29,7 @@ const MAX_READ_BYTES: u64 = 1024 * 1024;
 const DEFAULT_READ_BYTES: u64 = 8 * 1024;
 
 /// Bridges a live `Arc<dyn AdapterSession>` into the `SessionLike` the kill helper
-/// needs (the TS route's `sessionForChat` returned exactly this capability).
+/// needs.
 struct AdapterSessionLike(Arc<dyn AdapterSession>);
 
 impl SessionLike for AdapterSessionLike {
@@ -299,12 +296,3 @@ mod tests {
         assert_eq!(body["error"], "task not found");
     }
 }
-
-// PORT STATUS: src/server/routes/background-tasks.ts (3 endpoints, 143 lines)
-// confidence: high
-// todos: 0
-// notes: Full port — no seam. tracker = ctx.background_tasks; sessionForChat bridges
-// ChatManager::get_session_for_chat (Arc<dyn AdapterSession>) into SessionLike via
-// AdapterSessionLike; validator = default platform spool-root validator (getuid
-// None). readTail mirrors the TS stat+seek tail read; text/plain output. kill maps
-// KillResult::Ok→okEmpty, Err→502 with the error string (TS `502 result.error`).

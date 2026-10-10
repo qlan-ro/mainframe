@@ -83,9 +83,8 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         // Context size: prefer the adapter's explicit per-turn report
         // (`contextTokens`; None = "unknown this turn — keep the stored value").
         // Each adapter resolves the value at its source: claude sends the last
-        // parent assistant usage (or None when unknown), and codex resolves the TS
-        // sink's `undefined → fall back to usage` path at its boundary by sending
-        // this turn's raw input usage (event-handler.ts:366). So None always means
+        // parent assistant usage (or None when unknown), and Codex sends this
+        // turn's raw input usage. So None always means
         // "keep stored" here; a zero must never clobber a real stored size.
         let context_update: Option<i64> = data.context_tokens.filter(|&v| v > 0);
 

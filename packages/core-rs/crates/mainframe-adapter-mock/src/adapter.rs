@@ -27,11 +27,11 @@ pub struct MockCliAdapter {
     workflows: Option<Arc<ClaudeWorkflowStore>>,
     /// Reported by `capabilities().no_persistence`. Defaults to false; tests that
     /// need the no-persistence chat behavior opt in via `with_no_persistence`
-    /// (todo #346 — the mock adapter must be able to report either value).
+    /// (the mock adapter must be able to report either value).
     no_persistence: bool,
     /// Whether `capabilities().fork` reports `true` and `pin_fork_point` echoes
-    /// the source instead of returning `Unsupported` (todo #343). Tests opt in
-    /// via `with_fork_capable(true)`; default `false` mirrors Codex today.
+    /// the source instead of returning `Unsupported`. Tests opt in via
+    /// `with_fork_capable(true)`; the default is `false`.
     fork_capable: bool,
     /// The last `pin_fork_point` request, so tests can assert the cut the
     /// chat layer resolved.
@@ -60,14 +60,14 @@ impl MockCliAdapter {
     }
 
     /// Opt the mock adapter into reporting the no-persistence capability, so
-    /// integration tests can exercise both the on and off paths (todo #346).
+    /// integration tests can exercise both the on and off paths.
     #[cfg(test)]
     pub(crate) fn with_no_persistence(mut self, value: bool) -> Self {
         self.no_persistence = value;
         self
     }
 
-    /// Toggle the fork capability this adapter reports (todo #343 tests).
+    /// Toggle the fork capability this adapter reports (fork tests).
     pub fn with_fork_capable(mut self, fork_capable: bool) -> Self {
         self.fork_capable = fork_capable;
         self

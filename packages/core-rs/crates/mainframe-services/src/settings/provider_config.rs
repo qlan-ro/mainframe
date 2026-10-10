@@ -1,10 +1,7 @@
-//! Ported from `src/settings/provider-config.ts`.
-
 use mainframe_types::settings::ProviderConfig;
 use serde_json::{Map, Value};
 
-/// Mirrors the inline `SettingsReader` interface (`{ settings: { get(ns, key) } }`).
-/// A trait so both the real `DatabaseManager` and test fakes satisfy it.
+/// Reads provider settings through the real database or a test fake.
 pub trait SettingsReader {
     fn get(&self, ns: &str, key: &str) -> Option<String>;
 }
@@ -38,10 +35,8 @@ pub fn get_provider_config(db: &impl SettingsReader, adapter_id: &str) -> Provid
             cfg.insert(f.to_string(), Value::String(v));
         }
     }
-    // The TS builds a `Record<string,string>` and casts to ProviderConfig; the
-    // Rust struct is typed, so the raw-string map deserializes into it (enum
-    // fields resolve from their wire strings). An unparseable value falls back to
-    // an empty config (the TS cast is unchecked; only valid fixtures exercise it).
+    // Enum fields deserialize from their wire strings. An unparseable value
+    // falls back to an empty config.
     serde_json::from_value(Value::Object(cfg)).unwrap_or_default()
 }
 
@@ -90,13 +85,3 @@ mod tests {
         assert_eq!(get_provider_config(&db, "codex"), ProviderConfig::default());
     }
 }
-
-// PORT STATUS: src/settings/provider-config.ts (20 lines)
-// confidence: high
-// todos: 0
-// notes: FIELDS list preserved verbatim (camelCase keys). The TS "assemble a
-// string record then cast" becomes "assemble a serde_json::Map<String,String>
-// then from_value into the typed ProviderConfig" so enum fields (defaultEffort,
-// defaultFast, ...) resolve from their wire strings. Unparseable → default()
-// (TS cast is unchecked; noted deviation). SettingsReader trait mirrors the TS
-// interface; impl'd for DatabaseManager (settings.get error → None).

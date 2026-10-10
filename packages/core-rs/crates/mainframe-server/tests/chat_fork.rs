@@ -1,8 +1,8 @@
-//! `POST /api/chats/{id}/fork` (todo #343 Group 3, plan item 6) driven over a
-//! real HTTP server against the production stack (`build_chat_manager` +
-//! `build_app`), with `mainframe-adapter-mock`'s `MockCliAdapter` standing in
-//! for a real fork-capable CLI (`with_fork_capable`, todo #343's mock seam).
-//! `workflow_runs_history.rs`'s harness pattern.
+//! `POST /api/chats/{id}/fork` driven over a real HTTP server against the
+//! production stack (`build_chat_manager` + `build_app`), with
+//! `mainframe-adapter-mock`'s `MockCliAdapter` standing in for a real
+//! fork-capable CLI (`with_fork_capable`). Follows `workflow_runs_history.rs`'s
+//! harness pattern.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::collections::HashMap;

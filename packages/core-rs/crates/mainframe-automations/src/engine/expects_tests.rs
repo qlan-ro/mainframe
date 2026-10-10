@@ -1,5 +1,5 @@
-//! T4.4 (A2) — output contract text, correction message, and the
-//! parse/validate/coerce path over the agent's final message.
+//! A2 — output contract text, correction message, and the parse/validate/coerce
+//! path over the agent's final message.
 
 use serde_json::json;
 

@@ -1,6 +1,6 @@
-//! D9 — the disk backfill composer for the chat-history `workflowRuns` fold.
+//! The disk backfill composer for the chat-history `workflowRuns` fold.
 //!
-//! A5's bound: only the chat's *current* `claude_session_id` is scanned. Runs
+//! Only the chat's *current* `claude_session_id` is scanned. Runs
 //! recorded under a pre-resume session id (before the chat's last `--resume`)
 //! are invisible to this backfill and render `Unavailable` — widening the scan
 //! would need the chat's session lineage, which no current call site returns.

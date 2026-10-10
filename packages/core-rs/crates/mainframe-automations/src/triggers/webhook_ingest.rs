@@ -1,6 +1,6 @@
-//! Webhook ingest pipeline (T8.3): sequences the webhook.rs primitives into
+//! Webhook ingest pipeline: sequences the webhook.rs primitives into
 //! one HTTP-agnostic decision — signature → JSON → preset predicate → A7
-//! staleness → delivery-id replay dedup → in-memory sample → run. The T9.3
+//! staleness → delivery-id replay dedup → in-memory sample → run. The
 //! route maps decisions onto statuses: UnknownHook 404, InvalidSignature
 //! 401, InvalidJson/MissingDeliveryId 400, PresetMismatch/StaleDelivery 204,
 //! Duplicate/Accepted 200, StartFailed 500 (sender retries — A7).
@@ -291,9 +291,3 @@ fn screen(
             .rejected(hook_id, "no X-GitHub-Delivery header and no payload id")
     })
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T8.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node routes/automation-webhook.ts order (signature → JSON →
-//        preset → staleness → delivery id → sample → enabled → start).

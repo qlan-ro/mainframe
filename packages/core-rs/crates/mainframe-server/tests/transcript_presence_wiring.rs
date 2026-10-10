@@ -1,4 +1,4 @@
-//! Wiring-level regression coverage for #289: the daemon's production
+//! Wiring-level regression coverage: the daemon's production
 //! `ChatManagerDeps` (`DaemonChatDeps`, assembled by `build_chat_manager`) must
 //! delegate `locate_transcript` to the registry-resolved adapter, and the
 //! external-session sweep's `reconcile_transcript` callback must reach

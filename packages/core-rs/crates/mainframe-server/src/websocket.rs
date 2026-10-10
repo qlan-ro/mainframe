@@ -1,5 +1,5 @@
-//! Ported from `src/server/websocket.ts` (+ `ws-file-watch.ts` wiring and the
-//! `ws-schemas.ts` validation seam).
+//! The `/ws` WebSocket layer, with the `ws_file_watch` wiring and the
+//! `ws_schemas` validation seam.
 //!
 //! Upgrade auth (token query param unless loopback), `connection.ready` first
 //! frame, per-connection chat subscriptions (`subscribe`/`unsubscribe` +
@@ -7,14 +7,12 @@
 //! ack), per-connection file subscriptions wired to the `FileWatcherService`,
 //! and the broadcast fan-out with chatId-scoped vs connection-global gating.
 //!
-//! **Forced deviation from CONCURRENCY.tsv:** the tsv models each client as a
-//! separate *write task* fed by an mpsc, which requires splitting the axum
-//! `WebSocket` into Sink/Stream halves — that needs `futures_util::StreamExt`,
-//! which is outside the workspace allowlist. So each connection is a single task
-//! that `select!`s over `socket.recv()` and its own outbound mpsc (the write
-//! task folded in). The `Arc<DashMap<ClientId, ClientHandle>>` registry and the
-//! per-connection mpsc sink from the tsv are preserved; delivery still fans out
-//! through them.
+//! Each connection is a single task that `select!`s over `socket.recv()` and its
+//! own outbound mpsc (the write task folded in). A separate write task would
+//! need the axum `WebSocket` split into Sink/Stream halves, which needs
+//! `futures_util::StreamExt`, and that is outside the workspace allowlist.
+//! Delivery fans out through the `Arc<DashMap<ClientId, ClientHandle>>`
+//! registry and each connection's mpsc sink.
 
 use std::collections::HashSet;
 use std::net::SocketAddr;
@@ -50,7 +48,7 @@ use crate::ws_schemas::parse_client_event;
 // `chat.offloaded` carries a `chatId` (so a naive fan-out would restrict it to
 // that chat's subscribers), but the renderer must drop the chat's controller
 // even when no client has that chat's thread open — so it is connection-global
-// like the other two (todo #178).
+// like the other two.
 const CONNECTION_GLOBAL_EVENT_TYPES: [&str; 3] = [
     "chat.notification",
     "automation.notification",
@@ -64,7 +62,7 @@ pub struct ClientHandle {
     subscriptions: Arc<Mutex<HashSet<String>>>,
 }
 
-/// `Arc<DashMap<ClientId, ClientHandle>>` — the tsv's SHARED_MAP `clients`.
+/// `Arc<DashMap<ClientId, ClientHandle>>` — the shared live-client registry.
 pub type WsClients = Arc<DashMap<String, ClientHandle>>;
 
 /// `?token=` on the upgrade URL.
@@ -138,7 +136,7 @@ pub(crate) struct LspWsQuery {
     chat_id: Option<String>,
 }
 
-/// Read-only `ProjectStore` over the DB actor (parity with `db.projects.get`).
+/// Read-only `ProjectStore` over the DB actor (`db.projects.get`).
 struct DbProjectStore {
     db: Db,
 }
@@ -153,7 +151,7 @@ impl ProjectStore for DbProjectStore {
     }
 }
 
-/// Read-only `ChatStore` over the DB actor (parity with `chats.getChat`).
+/// Read-only `ChatStore` over the DB actor (`db.chats.get`).
 struct DbChatStore {
     db: Db,
 }
@@ -171,7 +169,6 @@ impl ChatStore for DbChatStore {
 /// The `/lsp/:projectId/:language` WS route handler. Self-authenticates (token
 /// query param unless loopback), validates + spawns the language server via the
 /// `LspConnectionHandler`, then bridges the accepted socket to the child process.
-/// Mirrors the `server.on('upgrade')` LSP branch in `websocket.ts`.
 pub(crate) async fn lsp_ws_handler(
     State(ctx): State<Arc<AppCtx>>,
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
@@ -219,10 +216,10 @@ fn reject_response(status_line: &str) -> Response {
     status.into_response()
 }
 
-/// Bridge an accepted LSP WebSocket to its spawned language-server child, mirroring
-/// `onConnection` in `lsp-connection.ts`: cancel the idle reaper, attach the client
-/// (first-connect capture vs reconnect replay), relay frames both ways, and on
-/// disconnect detach + restart the idle timer.
+/// Bridge an accepted LSP WebSocket to its spawned language-server child: cancel
+/// the idle reaper, attach the client (first-connect capture vs reconnect
+/// replay), relay frames both ways, and on disconnect detach + restart the idle
+/// timer.
 async fn drive_lsp_socket(
     mut socket: WebSocket,
     handle: Arc<LspServerHandle>,
@@ -374,7 +371,7 @@ async fn handle_socket(mut socket: WebSocket, ctx: Arc<AppCtx>) {
     }
 
     // File-watch state is touched only by this task (inbound handling + close),
-    // so it stays task-local — no lock needed (tsv PER_ENTITY, single-owner).
+    // so it stays task-local — no lock needed (single owner).
     let mut file_watch = WsFileWatch::default();
 
     loop {
@@ -504,8 +501,8 @@ async fn handle_subscribe_file(
     };
     let Some(base) = base else { return };
 
-    // Absolute paths are trusted as-is (no containment check — same as the TS
-    // fast-path); relative paths must validate inside the base.
+    // Absolute paths are trusted as-is (no containment check); relative paths
+    // must validate inside the base.
     let absolute = if path.starts_with('/') {
         base
     } else {
@@ -594,9 +591,9 @@ fn fanout(clients: &WsClients, event: &DaemonEvent) {
     }
 }
 
-/// Events replayed to a client the moment it connects (ported from
-/// `adapter-replay.ts`). Only probed catalogs carry a live model list worth
-/// replaying; a fallback/unprobed adapter is skipped.
+/// Events replayed to a client the moment it connects. Only probed catalogs
+/// carry a live model list worth replaying; a fallback/unprobed adapter is
+/// skipped unless it carries a fork signal (see below).
 fn build_connect_replay_events(
     snapshots: &[mainframe_types::adapter::AdapterInfo],
 ) -> Vec<DaemonEvent> {
@@ -604,10 +601,10 @@ fn build_connect_replay_events(
     snapshots
         .iter()
         .filter_map(|s| {
-            // Todo #368: a version-gated capability (Codex's `fork`) or its
-            // unavailable-reason can be worth replaying even for an adapter whose
-            // catalog never made it past the fallback seed — not only the
-            // previously-sole "catalog was probed" case.
+            // A version-gated capability (Codex's `fork`) or its
+            // unavailable-reason is worth replaying even for an adapter whose
+            // catalog never made it past the fallback seed, not only when the
+            // catalog was probed.
             let probed = matches!(s.catalog_source, Some(CatalogSource::Probed));
             let has_fork_signal = s.capabilities.fork || s.fork_unavailable_reason.is_some();
             if !probed && !has_fork_signal {
@@ -694,9 +691,9 @@ mod tests {
         }
     }
 
-    // Todo #368: an adapter whose catalog never left the fallback seed (so the
-    // old `catalog_source == Probed` gate would have skipped it) still needs
-    // its capabilities replayed to a reconnecting client once `fork` is true.
+    // An adapter whose catalog never left the fallback seed (so a
+    // `catalog_source == Probed` gate alone would skip it) still needs its
+    // capabilities replayed to a reconnecting client once `fork` is true.
     #[test]
     fn replays_fork_capability_for_a_fallback_catalog_adapter() {
         let caps = AdapterCapabilities {
@@ -720,9 +717,8 @@ mod tests {
         );
     }
 
-    // A fallback-catalog adapter with no fork signal (the common case for every
-    // adapter untouched by todo #368) still produces no replay, matching the
-    // pre-#368 behavior.
+    // A fallback-catalog adapter with no fork signal (the common case) still
+    // produces no replay.
     #[test]
     fn skips_replay_for_a_fallback_catalog_adapter_with_no_fork_signal() {
         let caps = AdapterCapabilities {
@@ -736,7 +732,7 @@ mod tests {
     }
 
     // A fallback-catalog adapter with a known fork-unavailable reason (e.g. an
-    // old Codex CLI, todo #368) also replays, so the UI's disabled-Fork reason
+    // old Codex CLI) also replays, so the UI's disabled-Fork reason
     // survives a reconnect even before the catalog probe ever succeeds.
     #[test]
     fn replays_fork_unavailable_reason_for_a_fallback_catalog_adapter() {
@@ -785,7 +781,7 @@ mod tests {
         );
     }
 
-    // AC10: `chat.offloaded` carries a `chatId` but must still reach a client
+    // `chat.offloaded` carries a `chatId` but must still reach a client
     // that never subscribed to that chat — the renderer needs to drop the
     // controller for a chat it isn't currently displaying.
     #[test]
@@ -808,9 +804,9 @@ mod tests {
         assert_eq!(value["chatId"], serde_json::json!("chat_1"));
     }
 
-    /// R2.7: the old WS first-hop rule trusted a FORGED leftmost
-    /// `x-forwarded-for` hop, so a client could claim loopback (and skip auth
-    /// entirely) by prepending `127.0.0.1` ahead of its real address.
+    /// A first-hop rule would trust a FORGED leftmost `x-forwarded-for` hop, so
+    /// a client could claim loopback (and skip auth entirely) by prepending
+    /// `127.0.0.1` ahead of its real address.
     /// `trust_proxy_client_ip` walks the chain from the right instead, so the
     /// real appended hop wins and a token is required.
     #[tokio::test]
@@ -830,26 +826,3 @@ mod tests {
         );
     }
 }
-
-// PORT STATUS: src/server/websocket.ts (+ ws-file-watch wiring, ws-schemas seam)
-// confidence: medium
-// todos: 1
-// notes: Single-task-per-connection select! (write task folded in) because
-// splitting axum's WebSocket needs futures_util (off-allowlist) — see the header.
-// Chat subscriptions = shared Mutex<HashSet> (read by fan-out, tsv PER_ENTITY);
-// file-watch state = task-local (single owner). Broadcast fan-out = one pump task
-// over broadcast::Receiver → per-client mpsc, with the exact chatId-scoped vs
-// connection-global gating. The legacy chat dialect's client frames
-// (message.send, permission.respond) and subscribe's message.queued.snapshot
-// died with spec decision 24 — chat sends and gates ride the /acp/{profile}
-// facade now; this socket keeps only the non-chat domains and rejects the
-// retired frames at the schema seam (ws_schemas.rs). Adapter-replay
-// (buildConnectReplayEvents over
-// the live registry snapshots) streams right after connection.ready so a
-// reconnecting client's catalog is authoritative. Task 5.5 added lsp_ws_handler:
-// the `/lsp/:projectId/:language` route self-authenticates, validates+spawns via
-// LspConnectionHandler (Db-backed ProjectStore/ChatStore), and drives the socket ↔
-// child bridge (first-connect capture via attach_client_with_capture; reconnect
-// replays the cached initialize + re-bridges). KNOWN GAP: the mainframe-lsp seam
-// consumes the child's stdout/stderr on first attach, so a reconnect after the
-// first bridge tore down cannot re-proxy (start_reattach_bridge warns) — flagged.

@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/chat/lifecycle-manager.ts`.
-
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
@@ -58,7 +56,7 @@ pub struct LifecycleChatUpdate {
     pub plan_mode: Option<bool>,
     pub title: Option<String>,
     pub status: Option<ChatStatus>,
-    /// Rule 7's flag write, persisted before every spawn.
+    /// The no-persistence flag write, persisted before every spawn.
     pub vendor_session_ephemeral: Option<bool>,
 }
 
@@ -74,7 +72,7 @@ pub enum LifecycleError {
     Adapter(#[from] AdapterError),
 }
 
-/// Injected dependency surface (mirrors the TS `LifecycleManagerDeps`).
+/// Injected dependency surface for the lifecycle manager.
 pub trait LifecycleManagerDeps: Send + Sync {
     // db ----------------------------------------------------------------------
     fn chats_get(&self, id: &str) -> Option<Chat>;
@@ -121,9 +119,10 @@ pub trait LifecycleManagerDeps: Send + Sync {
         project_id: &'a str,
         effective_path: &'a str,
     ) -> Option<BoxFuture<'a, ()>>;
-    /// Tear down the scope's port tunnels (#279). Separate from
-    /// `stop_launch_processes`, which no-ops for a scope that never ran a launch
-    /// config — the very scopes a localhost chip is most likely to have tunnelled.
+    /// Tear down the scope's port tunnels. Separate from
+    /// `stop_launch_processes`, which no-ops for a scope that never ran a
+    /// launch config — the very scopes a localhost chip is most likely to have
+    /// tunnelled.
     fn stop_scope_tunnels<'a>(
         &'a self,
         project_id: &'a str,
@@ -140,7 +139,7 @@ pub trait LifecycleManagerDeps: Send + Sync {
     /// Adapter-aware LLM title generation (`adapter.generateTitle`) — shells out;
     /// injected so tests skip it. The impl resolves `adapters.get(adapterId)` and
     /// returns `None` when that adapter has no `generateTitle` (deterministic title
-    /// stands). Main catch-up (#430): title gen moved onto the owning adapter.
+    /// stands).
     fn generate_title<'a>(
         &'a self,
         adapter_id: &'a str,
@@ -151,20 +150,20 @@ pub trait LifecycleManagerDeps: Send + Sync {
     fn is_working_tree_dirty<'a>(&'a self, project_path: &'a str) -> BoxFuture<'a, bool>;
     /// `existsSync(worktreePath)`.
     fn path_exists(&self, path: &str) -> bool;
-    /// Rule 7's per-spawn capability read, from the adapter registry — never
-    /// derived from the adapter id itself (AC 2).
+    /// The per-spawn no-persistence capability read, from the adapter registry
+    /// — never derived from the adapter id itself.
     fn adapter_supports_no_persistence(&self, adapter_id: &str) -> bool;
-    /// `fs.mkdir(scratchPath, { recursive: true })`, run before every spawn
-    /// (rule 6) so a non-project chat's scratch directory exists on first use
-    /// and is recreated if it was deleted since.
+    /// `fs.mkdir(scratchPath, { recursive: true })`, run before every spawn so
+    /// a non-project chat's scratch directory exists on first use and is
+    /// recreated if it was deleted since.
     fn ensure_dir<'a>(&'a self, path: &'a str) -> BoxFuture<'a, ()>;
-    /// Rule 7's context-loss write (`db.chats.markContextLost`).
+    /// The no-persistence context-loss write (`db.chats.markContextLost`).
     fn mark_context_lost(&self, chat_id: &str, context_lost_at: &str);
-    /// `db.chats.getPendingFork(chatId)` (todo #343): a fork's session builders
-    /// (`do_load_chat`/`do_start_chat`) resume from this when the chat has no own
-    /// session yet, or falls back to it when its own transcript went missing.
-    /// Defaulted to `None` — the correct answer for every chat this feature
-    /// doesn't touch.
+    /// `db.chats.getPendingFork(chatId)`: a fork's session builders
+    /// (`do_load_chat`/`do_start_chat`) resume from this when the chat has no
+    /// own session yet, or falls back to it when its own transcript went
+    /// missing. Defaulted to `None` — the correct answer for every chat this
+    /// feature doesn't touch.
     fn get_pending_fork(&self, chat_id: &str) -> Option<PendingForkState> {
         let _ = chat_id;
         None
@@ -188,35 +187,35 @@ enum Flight {
     Skip,
 }
 
-/// One in-flight single-flight guard (rule 9 — `Notify` in place of `futures::Shared`).
+/// One in-flight single-flight guard (a `Notify` per key rather than a shared future).
 #[derive(Default)]
 struct Guards {
     loading: HashMap<String, Arc<Notify>>,
     starting: HashMap<String, Arc<Notify>>,
     interrupting: HashMap<String, Arc<Notify>>,
-    /// In-flight idle offload per chat (todo #178, `flight_claims.rs`). An
-    /// offload claims this slot only when every other map below is empty for
-    /// the chat and no send is registered; `load_chat`/`start_chat`/
-    /// `get_messages`/`send_message` all wait it out before touching the
-    /// registry or cache.
+    /// In-flight idle offload per chat (`flight_claims.rs`). An offload claims
+    /// this slot only when every other map below is empty for the chat and no
+    /// send is registered;
+    /// `load_chat`/`start_chat`/`get_messages`/`send_message` all wait it out
+    /// before touching the registry or cache.
     offloading: HashMap<String, Arc<Notify>>,
-    /// In-flight `send_message` calls per chat (todo #178, `flight_claims.rs`).
+    /// In-flight `send_message` calls per chat (`flight_claims.rs`).
     /// A count, not a flag: nothing in this codebase serializes concurrent
     /// sends to the same chat today, so offload must treat any of them as busy.
     sending: HashMap<String, usize>,
-    /// In-flight on-disk transcript read behind `get_messages` per chat (todo
-    /// #178, `flight_claims.rs`) — single-flights the read the Established
-    /// facts call out as racy (two concurrent misses both hit disk).
+    /// In-flight on-disk transcript read behind `get_messages` per chat
+    /// (`flight_claims.rs`) — single-flights a read that would otherwise race
+    /// (two concurrent misses both hit disk).
     history: HashMap<String, Arc<Notify>>,
 }
 
 /// Join an in-flight single-flight `Notify` without a lost wakeup. `notify_waiters`
 /// stores no permit and only wakes waiters already registered at the call, so the
-/// naive `clone → drop lock → notified().await` races the owner's `remove +
-/// notify_waiters` and can hang forever (the TS twin awaited a level-triggered
-/// Promise). Register the waiter (`enable`) BEFORE re-reading the map, then await
-/// only while the SAME `Notify` is still in flight (`Arc::ptr_eq` guards against an
-/// ABA where a newer generation claimed the slot under the same key).
+/// naive `clone → drop lock → notified.await` races the owner's
+/// `remove + notify_waiters` and can hang forever. Register the waiter (`enable`)
+/// BEFORE re-reading the map, then await only while the SAME `Notify` is still in
+/// flight (`Arc::ptr_eq` guards against an ABA where a newer generation claimed the
+/// slot under the same key).
 async fn join_flight(
     guards: &Arc<Mutex<Guards>>,
     existing: Arc<Notify>,
@@ -290,13 +289,12 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         self.active_chats.get(chat_id).map(|e| e.value().clone())
     }
 
-    /// Bump `chat_id`'s in-memory "last used" clock (todo #381) to now, if its
-    /// registry cell exists; a no-op otherwise. Called on every path that
-    /// counts as use (`load_chat` — including its single-flight `Skip`
-    /// branch, `start_chat`, send begin/end, `release_history`, and a
-    /// claim-free config read) so an unspawned cell's idle clock
-    /// (`idle_scanner::idle_since`) tracks real activity rather than the
-    /// persisted chat's own age.
+    /// Bump `chat_id`'s in-memory "last used" clock to now, if its registry
+    /// cell exists; a no-op otherwise. Called on every path that counts as use
+    /// (`load_chat` — including its single-flight `Skip` branch, `start_chat`,
+    /// send begin/end, `release_history`, and a claim-free config read) so an
+    /// unspawned cell's idle clock (`idle_scanner::idle_since`) tracks real
+    /// activity rather than the persisted chat's own age.
     pub(crate) fn touch(&self, chat_id: &str) {
         if let Some(cell) = self.get_active(chat_id) {
             cell.lock().unwrap_or_else(|e| e.into_inner()).last_used_at = now_ms();
@@ -468,8 +466,8 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
                 return false;
             }
             // The cell already exists: no reload needed, but this is still a
-            // use (todo #381) — touch its clock so an unspawned cell left on
-            // screen doesn't look idle just because it was never reloaded.
+            // use — touch its clock so an unspawned cell left on screen doesn't
+            // look idle just because it was never reloaded.
             Flight::Skip => {
                 self.touch(chat_id);
                 return false;
@@ -521,7 +519,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         // See `load_chat`'s matching wait: a start racing an offload must not
         // read the registry mid-teardown.
         self.await_offload(chat_id).await;
-        // A start is a use (todo #381), whether or not it ends up spawning.
+        // A start is a use, whether or not it ends up spawning.
         self.touch(chat_id);
         if let Some(cell) = self.get_active(chat_id) {
             let (spawned, process) = {
@@ -832,7 +830,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             .await;
         // The `enableWorktree(newChatId, base, branch)` step is owned by
         // chat_manager (it holds the config_manager); it invokes this via the
-        // returned new chat id. Mirrors the TS `enableWorktreeFn` callback.
+        // returned new chat id.
         Ok(new_chat.id)
     }
 
@@ -907,7 +905,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
     }
 
-    /// Rule 7's context-loss transition. No-op unless
+    /// The no-persistence context-loss transition. No-op unless
     /// `no_persistence::context_was_lost` is true for `chat`'s current fields;
     /// otherwise persists the loss, clears the dead resume target on both the
     /// passed-in `chat` and the active cell (if any), and broadcasts the
@@ -930,15 +928,14 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
 
     /// Returns whether this call actually changed the message cache —
     /// `ChatManager::load_chat` uses it to decide whether an attached facade
-    /// session needs a `Resync` (todo #178: a chat left on screen through an
-    /// idle offload keeps its facade session, which offload deliberately
-    /// leaves un-notified — see `idle_offload.rs`'s step 4 — so the NEXT
-    /// `load_chat` is what rebuilds the cache under the transcript's own ids
-    /// and must tell that attached session to re-replay rather than diff
-    /// against the ids it cached live). An identical reload of an already-
-    /// warm cache — a cold chat's first send after `session/resume` — raises
-    /// no resync (finding 6): "no previous entry" counts as changed, an
-    /// unchanged list does not.
+    /// session needs a `Resync` (a chat left on screen through an idle offload
+    /// keeps its facade session, which offload deliberately leaves un-notified
+    /// — see `idle_offload.rs`'s step 4 — so the NEXT `load_chat` is what
+    /// rebuilds the cache under the transcript's own ids and must tell that
+    /// attached session to re-replay rather than diff against the ids it cached
+    /// live). An identical reload of an already-warm cache — a cold chat's
+    /// first send after `session/resume` — raises no resync: "no previous
+    /// entry" counts as changed, an unchanged list does not.
     async fn do_load_chat(&self, chat_id: &str) -> bool {
         let Some(mut chat) = self.deps.chats_get(chat_id) else {
             warn!(chat_id, "doLoadChat: chat not found");
@@ -953,9 +950,9 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             .unwrap_or_else(|e| e.into_inner())
             .pin(chat_id);
 
-        // Rule 7: before any resume target is read below, a dead ephemeral
-        // session's context loss must be marked (clears `claude_session_id`, so
-        // the early return just past it fires and no session is created).
+        // Before any resume target is read below, a dead ephemeral session's
+        // context loss must be marked (clears `claude_session_id`, so the early
+        // return just past it fires and no session is created).
         self.mark_context_lost_if_needed(chat_id, &mut chat);
 
         let project_path = self.deps.projects_get_path(&chat.project_id);
@@ -969,7 +966,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         // Before the early returns below: a chat with no session still needs a
         // baseline, and it must be re-seeded on every activation after a restart.
         // A non-project chat has no worktrees to baseline (`project_path` is
-        // `None` for the hidden scratch row, rule 1).
+        // `None` for the hidden scratch row).
         if let Some(project_path) = &project_path
             && let Some(fut) = self.deps.seed_worktree_baseline(chat_id, project_path)
         {
@@ -1060,21 +1057,18 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             cache_reloaded = previous.as_ref() != Some(&remapped);
         }
 
-        // Mention extraction + PR-URL scan + plan/skill-file extraction are all
-        // Claude-specific (`extractPrFromToolResult`, `session.extractPlanFiles`,
-        // `db.chats.addPlanFile`) and out of this crate's dep set, so the whole
-        // post-load scan is one injected seam that its owner (chat_manager /
-        // later phase) implements over the just-set message cache.
-        // TODO(port): thread the loaded `session` handle into the scan seam once
-        // the adapter-claude history scanner is wired.
+        // Mention extraction and the PR-URL scan are adapter-specific and out
+        // of this crate's dep set, so the whole post-load scan is one injected
+        // seam; `mainframe-server`'s `chat_deps.rs` implements it over the
+        // session's own history.
         self.deps.scan_loaded_history(chat_id).await;
         if cache_reloaded {
             // Notify here, not just from the public `load_chat` wrapper: a
             // resumed SEND also reaches this via `do_start_chat`'s own
             // `self.load_chat(chat_id)` call, a path `ChatManager::load_chat`
-            // never sees (todo #178 review finding — an on-screen chat that
-            // sends after an idle offload must resync through this branch
-            // too, not just an explicit reopen).
+            // never sees (an on-screen chat that sends after an idle offload
+            // must resync through this branch too, not just an explicit
+            // reopen).
             chat_surface::notify(
                 self.chat_surface.get(),
                 ChatSurfaceEvent::Resync {
@@ -1126,11 +1120,11 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         }
 
         let project_path = self.deps.projects_get_path(&chat.project_id);
-        // Rule 7: clear a dead resume target (and stamp the loss) before it is
-        // read into `SessionOptions.chat_id` below.
+        // Clear a dead resume target (and stamp the loss) before it is read
+        // into `SessionOptions.chat_id` below.
         self.mark_context_lost_if_needed(chat_id, &mut chat);
-        // Rule 6/7: the effective cwd (ensuring a non-project chat's scratch
-        // directory along the way) and the no-persistence decision.
+        // The effective cwd (ensuring a non-project chat's scratch directory
+        // along the way) and the no-persistence decision.
         let plan = self.resolve_spawn_plan(&chat, project_path).await?;
 
         // See `do_load_chat`'s comment: a fork's own id and its pending-fork
@@ -1176,9 +1170,9 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         let tuning = self.deps.resolve_tuning(chat_id).await;
         let default_model = self.default_model_for(&chat.adapter_id);
 
-        // Rule 7's flag write: persisted and mirrored into the active chat
-        // before the spawn, so `on_init`'s stored provider id lands with the
-        // right ephemeral flag already in place.
+        // The no-persistence flag write: persisted and mirrored into the active
+        // chat before the spawn, so `on_init`'s stored provider id lands with
+        // the right ephemeral flag already in place.
         self.apply_no_persistence_flag(&chat.id, &cell, plan.no_persistence);
 
         let process = session
@@ -1207,9 +1201,9 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
     }
 }
 
-/// Offload/send/history single-flight claims sharing the `Guards` above
-/// (todo #178). A child module so it can see the private `Guards`/`Flight`/
-/// `join_flight` without widening their visibility.
+/// Offload/send/history single-flight claims sharing the `Guards` above. A child
+/// module so it can see the private `Guards`/`Flight`/`join_flight` without
+/// widening their visibility.
 mod flight_claims;
 
 #[cfg(test)]
@@ -1225,8 +1219,8 @@ mod tests {
     use std::collections::HashSet;
 
     /// A `SessionSink` that drops every callback — enough to let a spawn
-    /// decision test (todo #346, G2b) reach `session.spawn()` without a real
-    /// event-handler wiring.
+    /// decision test reach `session.spawn` without a real event-handler
+    /// wiring.
     struct NoopSink;
     impl SessionSink for NoopSink {
         fn on_init(&self, _session_id: &str) {}
@@ -1271,7 +1265,7 @@ mod tests {
         c
     }
 
-    // ── isLastActiveChatForScope (lifecycle-archive-releases-scope.test.ts) ───
+    // ── is_last_active_chat_for_scope ─────────────────────────────────────────
     #[test]
     fn false_when_a_non_archived_sibling_shares_the_worktree_scope() {
         let chats = vec![
@@ -1347,7 +1341,7 @@ mod tests {
         /// `settings_get("provider", "<adapter>.defaultModel")` answer, for
         /// `default_model_for` coverage.
         saved_default_model: Mutex<Option<String>>,
-        /// `adapter_supports_no_persistence` answer (todo #346, G2b).
+        /// `adapter_supports_no_persistence` answer.
         adapter_no_persistence: Mutex<bool>,
         /// Every `ensure_dir` path, in order.
         pub(super) ensure_dir_calls: Mutex<Vec<String>>,
@@ -1355,8 +1349,8 @@ mod tests {
         pub(super) mark_context_lost_calls: Mutex<Vec<(String, String)>>,
         /// Every `vendor_session_ephemeral` value `chats_update` observed.
         pub(super) vendor_session_ephemeral_updates: Mutex<Vec<bool>>,
-        /// `get_pending_fork` answer (todo #343); `None` for every test outside
-        /// the fork-session-building coverage.
+        /// `get_pending_fork` answer; `None` for every test outside the
+        /// fork-session-building coverage.
         pending_fork: Mutex<Option<PendingForkState>>,
         /// When `Some`, `create_session` returns it instead of the default
         /// `None` every pre-existing test relies on.
@@ -1811,7 +1805,7 @@ mod tests {
         )));
     }
 
-    // ── rule 7: the no-persistence spawn decision (todo #346, G2b) ───────────
+    // ── the no-persistence spawn decision ─────────────────────────────────────
     #[tokio::test]
     async fn temporary_and_capable_writes_the_ephemeral_flag_before_spawning() {
         let mut chat = chat_over("c1", None, ChatStatus::Active);
@@ -1983,7 +1977,7 @@ mod tests {
         }
     }
 
-    // ── pending-fork session building (todo #343 Group 3, plan item 3) ───────
+    // ── pending-fork session building ─────────────────────────────────────────
     // An unsent fork has no `claude_session_id` yet, so `do_load_chat`/
     // `do_start_chat` must not bail out on that early guard alone — they resume
     // from `chats.pending_fork` instead. Exercised after a restart (the chat
@@ -2050,26 +2044,3 @@ mod tests {
         assert_eq!(last.fork_source, Some(pending_fork().fork_source));
     }
 }
-
-// PORT STATUS: src/chat/lifecycle-manager.ts (530 lines)
-// confidence: medium
-// notes: TS `LifecycleManagerDeps` DI bag → `LifecycleManagerDeps` trait; the
-// notes: activeChats registry is the shared `Arc<DashMap<_, Arc<Mutex<ActiveChat>>>>`,
-// notes: messages/permissions shared `Arc<Mutex<..>>`. loadingChats/startingChats/
-// notes: interruptingChats single-flight → per-chat `Notify` maps (rule 9; no
-// notes: futures::Shared in the workspace). Awaiters use `join_flight`: enable the
-// notes: Notified BEFORE re-reading the map (ptr_eq) so the owner's remove +
-// notes: notify_waiters is never lost (Notify stores no permit). The 50ms interrupt
-// notes: poll → a spawned tokio poll task that notify_waiters on exit/5s. killTasksForChat +
-// notes: removeWorktree are routed through deps seams so archive stays observable and
-// notes: decoupled from git/spool I/O (tests assert order). doLoadChat's
-// notes: Claude-specific mention/PR-URL history scan is relocated to the injected
-// notes: `scan_loaded_history` seam (adapter-claude is out of this crate's dep set).
-// notes: TODO(port): the plan/skill-file persist inside doLoadChat is owned by the
-// notes: scan seam; the enableWorktree fork callback is wired by chat_manager (holds
-// notes: config_manager). Ported: isLastActiveChatForScope (5), archive kills-tasks
-// notes: (1), archive releases-scope (3) test cases.
-// notes: Title gen is adapter-aware — `generate_title` gained an `adapter_id`
-// notes: arg so the deps seam resolves `adapters.get(adapterId).generateTitle` (deterministic
-// notes: title stands when the adapter has none).
-// todos: 1

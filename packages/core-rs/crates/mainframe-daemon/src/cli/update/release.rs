@@ -1,8 +1,7 @@
-//! Ported from the release-picking parts of `packages/core/src/cli/update.ts`.
+//! Release selection for `mainframe update`.
 //!
 //! Pure logic only — no I/O — so it can be unit-tested against hardcoded
-//! expectations without a network or filesystem (the parity oracle is
-//! `packages/core/src/cli/__tests__/update.test.ts`).
+//! expectations without a network or filesystem.
 
 use serde::Deserialize;
 
@@ -23,7 +22,7 @@ pub struct GhRelease {
     pub assets: Vec<GhAsset>,
 }
 
-/// `standaloneArtifactName()` — maps the running platform to the release
+/// Maps the running platform to the release
 /// artifact filename it should install.
 pub(crate) fn standalone_artifact_name(platform: &str, arch: &str) -> Result<String, String> {
     let os = match platform {
@@ -44,7 +43,7 @@ pub(crate) fn standalone_artifact_name(platform: &str, arch: &str) -> Result<Str
     }
 }
 
-/// `pickRelease()` — picks the release to install from a GitHub `/releases`
+/// Picks the release to install from a GitHub `/releases`
 /// list (newest first), honoring an explicit `version` or the newest
 /// stable/pre-release per `include_prerelease`.
 pub(crate) fn pick_release(
@@ -96,8 +95,8 @@ struct SemVer {
     prerelease: Vec<String>,
 }
 
-/// `parseSemver()`. Tolerates a leading `v`; non-numeric core segments parse
-/// as 0, matching the TS `Number(n) || 0`.
+/// Parse semver with an optional leading `v`; non-numeric core segments become
+/// 0.
 fn parse_semver(version: &str) -> SemVer {
     let version = version.trim_start_matches('v');
     let mut segments = version.split('-');
@@ -163,7 +162,7 @@ fn compare_prerelease(pa: &[String], pb: &[String]) -> i64 {
     0
 }
 
-/// `assertNotDowngrade()` — refuses to install a release that isn't newer
+/// Refuses to install a release that isn't newer
 /// than `current_version`, unless `force` is set.
 pub(crate) fn assert_not_downgrade(
     release: &GhRelease,

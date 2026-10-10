@@ -1,6 +1,6 @@
-//! Process plumbing for `run_command` (T6.3): shell resolution, capped
-//! stream capture, and the login-shell spawn. Kept apart from the action's
-//! input/cwd/A1 logic to hold both files under the 300-line rule.
+//! Process plumbing for `run_command`: shell resolution, capped stream capture,
+//! and the login-shell spawn. Kept apart from the action's input/cwd/A1 logic
+//! to hold both files under the 300-line rule.
 
 use std::process::Stdio;
 
@@ -9,7 +9,7 @@ use tokio::process::Command;
 
 use super::ActionError;
 
-/// Node's execFile maxBuffer (actions/run-command.ts MAX_OUTPUT_BYTES).
+/// Per-stream capture cap; exceeding it kills the child and fails the step.
 pub(crate) const MAX_OUTPUT_BYTES: usize = 8 * 1024 * 1024;
 
 pub(crate) async fn resolve_shell() -> String {
@@ -37,8 +37,7 @@ pub(crate) async fn spawn_script(
         // which drops this frame and the owned Child. Without kill_on_drop the
         // shell (and its build/test descendants) would be reparented to the init
         // process and keep running — a real leak the fakes-only conformance suite
-        // can't see. Node cancels cooperatively and kills the child; this is the
-        // Rust equivalent.
+        // can't see.
         .kill_on_drop(true)
         .spawn()
         .map_err(|err| ActionError(format!("run_command failed to spawn {shell}: {err}")))?;
@@ -50,7 +49,7 @@ pub(crate) async fn spawn_script(
     let (stderr, err_exceeded) = err.map_err(io_error)?;
 
     if out_exceeded || err_exceeded {
-        // Node parity: execFile kills the child when maxBuffer is exceeded.
+        // Exceeding the capture cap kills the child.
         let _ = child.start_kill();
         let _ = child.wait().await;
         return Err(ActionError(format!(
@@ -102,8 +101,3 @@ pub(crate) fn tail_chars(s: &str, n: usize) -> &str {
 fn io_error(err: std::io::Error) -> ActionError {
     ActionError(format!("run_command I/O failed: {err}"))
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T6.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: split out of run_command.rs (300-line rule); semantics unchanged.

@@ -1,7 +1,7 @@
 //! Route tests for `git.rs` — the 5 read endpoints, including the working-stat
-//! assertions from `git-review.test.ts` and the git-read soft-error envelopes
-//! (status/branch fall back to `success:true` on a non-git dir). Real git repos,
-//! real DB project rows, no mocks.
+//! assertions and the git-read soft-error envelopes (status/branch fall back to
+//! `success:true` on a non-git dir). Real git repos, real DB project rows, no
+//! mocks.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod support;

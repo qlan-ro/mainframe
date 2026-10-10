@@ -44,7 +44,7 @@ impl Enricher {
     /// state, and the agent outbox.
     pub(super) fn enrich(&self, chat: &mut Chat) {
         let has_pending = self.has_pending(&chat.id);
-        // Rule 9 (todo #344): the side chat's gate shows on its parent.
+        // The side chat's gate shows on its parent.
         let side_chat_waiting = chat.side_chat_id.as_deref().map(|id| self.has_pending(id));
         let live = self.deps.tracker_list_live(&chat.id);
         let project_path = self.deps.projects_get_path(&chat.project_id);

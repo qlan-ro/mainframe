@@ -1,11 +1,10 @@
-//! Ported from `src/server/routes/git-write.ts` — the 13 git write/read-write
-//! endpoints (branches, checkout, commit, branch, fetch, pull, push, merge,
-//! rebase, abort, rename-branch, delete-branch, update-all).
+//! The 13 git write/read-write endpoints (branches, checkout, commit, branch,
+//! fetch, pull, push, merge, rebase, abort, rename-branch, delete-branch,
+//! update-all).
 //!
 //! Every mutation goes through `GitService` (which owns the per-project write
-//! lock). The TS `gitRoute` combinator resolves the project FIRST (404), then
-//! validates the body (400), then runs the op (500 on failure, leaking the git
-//! error message). This port preserves that order and the leaked-message 500.
+//! lock). Each route resolves the project FIRST (404), then validates the body
+//! (400), then runs the op (500 on failure, leaking the git error message).
 
 use std::sync::Arc;
 
@@ -25,7 +24,7 @@ use crate::respond::{fail, ok, ok_empty};
 
 use super::git::{ChatIdQuery, get_effective_path, git_error_message, parse_json_body};
 
-// ── body schemas (schemas.ts git-write group; land with this route agent) ─────
+// ── body schemas ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
 struct CheckoutBody {
@@ -74,7 +73,7 @@ struct DeleteBranchBody {
     remote: Option<bool>,
 }
 
-/// `gitBranchName` — `^[a-zA-Z0-9][a-zA-Z0-9/_.-]*$` (schemas.ts).
+/// Branch-name rule: `^[a-zA-Z0-9][a-zA-Z0-9/_.-]*$`.
 fn is_valid_branch_name(s: &str) -> bool {
     let mut chars = s.chars();
     match chars.next() {
@@ -84,10 +83,10 @@ fn is_valid_branch_name(s: &str) -> bool {
     chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '/' | '_' | '.' | '-'))
 }
 
-// ── shared resolution (resolveProject + body Value) ──────────────────────────
+// ── shared resolution (project + body Value) ─────────────────────────────────
 
-/// `resolveProject(ctx, req)` — chatId from `?chatId` OR the request body, then
-/// `getEffectivePath`. Returns the project path plus the parsed body `Value`
+/// Project resolution: chatId from `?chatId` OR the request body, then
+/// `get_effective_path`. Returns the project path plus the parsed body `Value`
 /// (parsed once so the body `chatId` is available before schema validation).
 async fn resolve(
     ctx: &AppCtx,
@@ -108,15 +107,14 @@ async fn resolve(
     }
 }
 
-/// Deserialize the already-parsed body `Value` into a schema `T` (the
-/// `schema.safeParse(req.body)` step). `Err` carries the validation message the
-/// caller turns into a 400.
+/// Deserialize the already-parsed body `Value` into a schema `T`. `Err` carries
+/// the validation message the caller turns into a 400.
 fn body_of<T: DeserializeOwned>(body: Value) -> Result<T, String> {
     parse_json_body::<T>(body.to_string().as_bytes())
 }
 
 /// Map a git op `Result` to the write envelope: `Ok` → 200, `Err` → 500 with the
-/// leaked git error message (the TS `fail(res, 500, err.message)`).
+/// leaked git error message.
 fn git_result<T: serde::Serialize>(
     result: Result<T, mainframe_git::git_service::GitServiceError>,
     label: &str,
@@ -130,7 +128,7 @@ fn git_result<T: serde::Serialize>(
     }
 }
 
-/// Like [`git_result`] but for `Result<(), _>` ops → `okEmpty` on success.
+/// Like [`git_result`] but for `Result<(), _>` ops → `ok_empty` on success.
 fn git_empty(
     result: Result<(), mainframe_git::git_service::GitServiceError>,
     label: &str,
@@ -456,15 +454,3 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/api/projects/{id}/git/delete-branch", post(delete_branch))
         .route("/api/projects/{id}/git/update-all", post(update_all))
 }
-
-// PORT STATUS: src/server/routes/git-write.ts (13 endpoints)
-// confidence: high
-// todos: 0
-// notes: Order preserved (resolveProject 404 → body 400 → git op). Errors leak
-// the git message via fail(500, message) (NOT the opaque async_err handler) —
-// git-review.test.ts asserts the leaked "Nothing to commit". chatId is read from
-// `?chatId` OR the body (parsed once into a Value). Zod refinements ported
-// explicitly: gitBranchName regex (create/rename newName), min(1) on
-// branch/message/name; GitPullBody's localBranch-requires-branch refine.
-// `branch` (POST create) and `branch` (GET current) share the `/git/branch`
-// path by method, matching the Express router.

@@ -1,4 +1,4 @@
-//! Facade tests (T9.2): construction over a tempfile DB with fake ports,
+//! Facade tests: construction over a tempfile DB with fake ports,
 //! CRUD + validation, manual runs, and A8 delete-cancels-active-runs.
 
 use std::path::Path;
@@ -92,7 +92,7 @@ pub(super) async fn engine() -> (Arc<AutomationsEngine>, Arc<CollectingSink>, Te
 }
 
 /// Builds an engine over an explicit db/credentials path so a second engine
-/// can reconcile the SAME store after the first is dropped (restart parity).
+/// can reconcile the SAME store after the first is dropped (a restart).
 async fn build_engine(
     db_path: &Path,
     credentials_path: &Path,

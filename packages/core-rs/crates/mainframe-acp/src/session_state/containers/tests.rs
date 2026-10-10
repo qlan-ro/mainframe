@@ -1,7 +1,6 @@
-//! `SessionState::apply` equivalence (todo #376 G2 task 3): for a sequence
-//! of container snapshots, the updates `apply` produces from deltas must
-//! equal `diff` on the flattened snapshots, in order — while comparing
-//! only the affected containers' items.
+//! `SessionState::apply` equivalence: for a sequence of container snapshots,
+//! the updates `apply` produces from deltas must equal `diff` on the flattened
+//! snapshots, in order — while comparing only the affected containers' items.
 
 use mainframe_types::acp::tool_call::{ToolCallStatus, ToolKind};
 

@@ -1,5 +1,5 @@
 //! The `SessionSink` decorator that runs live PR scanning at the one seam
-//! every adapter crosses (todo #339, task 11). Wrapping the inner sink here —
+//! every adapter crosses. Wrapping the inner sink here —
 //! rather than inside an adapter's own event handlers — is what makes
 //! detection adapter-neutral: `build_sink` wraps once and every adapter
 //! inherits it.

@@ -105,9 +105,9 @@ fn a_non_append_change_is_a_full_revision_not_a_chunk() {
 
 #[test]
 fn a_meta_only_change_patches_meta_without_resending_content() {
-    // The live defect behind e2e criterion 3/7 failures: turn end attaches
-    // `turnDurationMs` to the item meta while content is unchanged — that
-    // must be a meta-only patch, never a full content re-send.
+    // Regression: turn end attaches `turnDurationMs` to the item meta while
+    // content is unchanged — that must be a meta-only patch, never a full
+    // content re-send.
     let mut state = SessionState::new();
     state.diff(&[msg("m1", "hello")]);
 
@@ -259,9 +259,9 @@ fn a_mid_list_divergence_is_a_full_multi_block_upsert() {
     );
 }
 
-/// Spec Decision 39: dropping `ItemMeta.streaming` needs no special-casing in
-/// the diff engine — it is just another meta change, so it rides whichever
-/// shape `content_revision` already picks: a meta-only patch when content is
+/// Dropping `ItemMeta.streaming` needs no special-casing in the diff engine —
+/// it is just another meta change, so it rides whichever shape
+/// `content_revision` already picks: a meta-only patch when content is
 /// unchanged, or the new meta on the first chunk when content also grew.
 #[test]
 fn a_streaming_drop_is_a_meta_patch_in_the_same_diff() {
@@ -317,10 +317,9 @@ fn a_streaming_drop_is_a_meta_patch_in_the_same_diff() {
     );
 }
 
-/// Spec Decision 37: a new item's complete first frame (live or replayed)
-/// carries `_meta["_mainframe.dev"].created: true`, and nothing else does —
-/// not a chunk, a meta-only patch, a full revision, a clear, or a tool-call
-/// patch.
+/// A new item's complete first frame (live or replayed) carries
+/// `_meta["_mainframe.dev"].created: true`, and nothing else does — not a
+/// chunk, a meta-only patch, a full revision, a clear, or a tool-call patch.
 #[test]
 fn only_creations_carry_the_created_marker() {
     fn tool(id: &str, status: ToolCallStatus) -> EncodedItem {
@@ -363,7 +362,7 @@ fn only_creations_carry_the_created_marker() {
         }
     }
 
-    // Chunk: a pure suffix growth on m1; t1 unchanged emits nothing for it.
+    // Chunk: a pure suffix growth on m1; unchanged emits nothing for it.
     let updates = state.diff(&[
         msg("m1", "hello world"),
         tool("t1", ToolCallStatus::Pending),
@@ -406,7 +405,7 @@ fn only_creations_carry_the_created_marker() {
         "a full revision never carries the marker"
     );
 
-    // Tool patch: t1's status changes; m1 unchanged emits nothing for it.
+    // Tool patch: status changes; m1 unchanged emits nothing for it.
     let updates = state.diff(&[
         msg("m1", "rewritten"),
         tool("t1", ToolCallStatus::InProgress),
@@ -420,7 +419,7 @@ fn only_creations_carry_the_created_marker() {
         "a tool patch never carries the marker"
     );
 
-    // Clear: m1 vanishes; t1 stays put, emits nothing.
+    // Clear: m1 vanishes; stays put, emits nothing.
     let updates = state.diff(&[tool("t1", ToolCallStatus::InProgress)]);
     assert_eq!(updates.len(), 1);
     let SessionUpdate::AgentMessage(upsert) = &updates[0] else {
@@ -434,4 +433,4 @@ fn only_creations_carry_the_created_marker() {
 }
 
 // a_tool_call_status_change_patches_only_the_changed_field moved to
-// tool_patch/tests.rs (todo #350, plan task 37, R2.13).
+// tool_patch/tests.rs.

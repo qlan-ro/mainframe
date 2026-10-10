@@ -1,4 +1,3 @@
-//! Ported from `packages/core/src/db/__tests__/schema.test.ts`.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use rusqlite::Connection;

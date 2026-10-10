@@ -1,10 +1,7 @@
-//! Seeded random sequence (todo #376, G1 task 2's closing scenario): a
-//! hand-rolled xorshift64 (the workspace has no `proptest`) drives a mixed
-//! sequence of every mutation kind, relying on `Harness::step`'s per-call
-//! equivalence assertion to catch any divergence from the full pipeline.
-//!
-//! Scoped down from the plan's "several hundred steps" to a smaller
-//! deterministic run — see the G1 decisions note on this reduction.
+//! Seeded random sequence: a hand-rolled xorshift64 (the workspace has no
+//! `proptest`) drives a mixed sequence of every mutation kind, relying on
+//! `Harness::step`'s per-call equivalence assertion to catch any divergence
+//! from the full pipeline.
 
 use mainframe_display::{RawChange, RawChanges};
 

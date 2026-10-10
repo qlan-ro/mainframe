@@ -1,11 +1,9 @@
-//! Ported from `src/server/routes/git.ts` — the 5 git-read endpoints
-//! (status/working-stat/branch/branch-diffs/diff).
+//! The 5 git-read endpoints (status/working-stat/branch/branch-diffs/diff).
 //!
 //! Also the crate-local home of the effective-path resolution helpers that
-//! `git_write` and `git_chat` share (the TS `getEffectivePath` /
-//! `ChatManager.getEffectivePath` seam). Phase 3 has no `ChatManager`, so those
-//! helpers reconstruct its behavior from the `mainframe-db` chats/projects repos
-//! plus `mainframe-services::workspace::is_worktree_present`.
+//! `git_write` and `git_chat` share. They resolve paths from the `mainframe-db`
+//! chats/projects repos plus `mainframe-services::workspace::is_worktree_present`,
+//! not through the `ChatManager`.
 
 use std::sync::Arc;
 
@@ -33,9 +31,8 @@ pub(crate) struct ChatIdQuery {
     pub(crate) chat_id: Option<String>,
 }
 
-/// `GitDiffQuery` — `src/server/routes/git.ts`. `source` is validated (rejects a
-/// non-`git` value with 400) but never branched on; the response hardcodes
-/// `source: "git"`.
+/// `source` is validated (rejects a non-`git` value with 400) but never branched
+/// on; the response hardcodes `source: "git"`.
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct GitDiffQuery {
@@ -48,25 +45,25 @@ struct GitDiffQuery {
 
 // ── shared helpers (crate-local; used by git_write + git_chat) ────────────────
 
-/// `isNotGitRepo(err)` over a `GitServiceError`: only a wrapped `execGit`
-/// rejection whose message names "not a git repository" qualifies.
+/// Whether a `GitServiceError` means "not a git repository": only a wrapped
+/// `exec_git` rejection whose message names "not a git repository" qualifies.
 pub(crate) fn is_not_git_repo_err(err: &GitServiceError) -> bool {
     matches!(err, GitServiceError::Exec(e) if is_not_git_repo(e))
 }
 
-/// `err instanceof Error ? err.message : String(err)` — the git error string the
-/// git-write/git-chat routes leak in their non-opaque failure envelopes.
+/// The git error string the git-write/git-chat routes leak in their non-opaque
+/// failure envelopes.
 pub(crate) fn git_error_message(err: &GitServiceError) -> String {
     err.to_string()
 }
 
-/// Parse a JSON request body into `T`. Mirrors `schema.safeParse(req.body)`'s
-/// failure path (an empty/malformed body becomes a validation error → 400).
+/// Parse a JSON request body into `T` (an empty/malformed body becomes a
+/// validation error → 400).
 pub(crate) fn parse_json_body<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, String> {
     serde_json::from_slice(bytes).map_err(|e| e.to_string())
 }
 
-/// `getEffectivePath(ctx, projectId, chatId?)` — the project-scoped resolver.
+/// The project-scoped effective-path resolver.
 /// `Ok(None)` covers project-not-found, the cross-project guard, and a deleted
 /// worktree (callers disambiguate via [`chat_worktree_missing`]).
 pub(crate) async fn get_effective_path(
@@ -95,9 +92,8 @@ pub(crate) async fn get_effective_path(
     Ok(Some(project.path))
 }
 
-/// `ChatManager.getEffectivePath(chatId)` — the chat-scoped resolver (no
-/// projectId, so no cross-project guard). `Ok(None)` = chat unknown, project
-/// unknown, or worktree deleted.
+/// The chat-scoped effective-path resolver (no projectId, so no cross-project
+/// guard). `Ok(None)` = chat unknown, project unknown, or worktree deleted.
 pub(crate) async fn resolve_chat_path(
     ctx: &AppCtx,
     chat_id: &str,
@@ -120,8 +116,8 @@ pub(crate) async fn resolve_chat_path(
         .map(|p| p.path))
 }
 
-/// `getChat(chatId)?.worktreeMissing ?? false` — the enrichment flag callers
-/// check to turn a `null` effective path into a 409 (vs a 404).
+/// Whether the chat's worktree is missing — the flag callers check to turn a
+/// `null` effective path into a 409 (vs a 404).
 pub(crate) async fn chat_worktree_missing(ctx: &AppCtx, chat_id: &str) -> Result<bool, DbError> {
     let cid = chat_id.to_string();
     let chat = ctx.db.call(move |db| db.chats.get(&cid)).await?;
@@ -131,8 +127,8 @@ pub(crate) async fn chat_worktree_missing(ctx: &AppCtx, chat_id: &str) -> Result
     }
 }
 
-/// `!isWorktreePresent(worktreePath)` — the filesystem check off the async
-/// runtime (PORTING forbids sync I/O in the daemon).
+/// Whether the worktree directory is gone. The filesystem check runs on the
+/// blocking pool so it never stalls an async executor thread.
 async fn worktree_missing(worktree_path: &str) -> bool {
     let wt = worktree_path.to_string();
     !tokio::task::spawn_blocking(move || mainframe_services::workspace::is_worktree_present(&wt))
@@ -312,7 +308,7 @@ async fn diff(
 }
 
 /// The 5 git-read routes. `git_write` / `git_chat` are mounted separately in
-/// `http.rs` (the TS `gitRoutes` re-`use`s them; the Rust app merges each).
+/// `http.rs`.
 pub fn router() -> Router<Arc<AppCtx>> {
     Router::new()
         .route("/api/projects/{id}/git/branch-diffs", get(branch_diffs))
@@ -321,14 +317,3 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/api/projects/{id}/git/branch", get(branch))
         .route("/api/projects/{id}/git/diff", get(diff))
 }
-
-// PORT STATUS: src/server/routes/git.ts (5 read endpoints)
-// confidence: high
-// todos: 0
-// notes: git-read soft errors stay `success:true` envelopes (status/branch/
-// branch-diffs/diff fall back to empty payloads; only working-stat 500s with the
-// leaked message). `isNotGitRepo` narrows to `GitServiceError::Exec` + the parse
-// helper. The effective-path helpers (get_effective_path / resolve_chat_path /
-// chat_worktree_missing) reconstruct the Phase-4 ChatManager seam from the db
-// repos + workspace::is_worktree_present and are shared with git_write/git_chat.
-// GitDiffQuery.source is validated (non-`git` → 400) but never branched on.

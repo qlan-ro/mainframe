@@ -1,5 +1,5 @@
-//! Tool-result image encoding cases (todo #363), split out of
-//! `result_content_tests.rs` to keep that file under the 300-line cap.
+//! Tool-result image encoding cases, split out of `result_content_tests.rs` to
+//! keep that file under the 300-line cap.
 
 use std::collections::HashMap;
 

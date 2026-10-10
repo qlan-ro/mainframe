@@ -1,5 +1,5 @@
 //! Integration tests for `routes/tunnel_ports.rs` — the per-port quick tunnels
-//! behind the localhost chips (#279). The harness drives a stub `cloudflared`
+//! behind the localhost chips. The harness drives a stub `cloudflared`
 //! that mints `https://abc-def<n>.trycloudflare.com` and logs every spawn, so
 //! "reused, not respawned" is asserted on the process count, not just the URL.
 #![allow(clippy::unwrap_used, clippy::expect_used)]

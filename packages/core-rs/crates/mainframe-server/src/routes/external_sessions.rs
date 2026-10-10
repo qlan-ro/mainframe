@@ -1,11 +1,9 @@
-//! Ported from `src/server/routes/external-sessions.ts` — list + import external
-//! CLI sessions.
+//! List and import external CLI sessions.
 //!
 //! Both endpoints go through `ChatManager::external_session_service()`, wired in
 //! `chat_deps::build_chat_manager` via `ExternalSessionDeps for DaemonChatDeps`.
 //! When no `ChatManager` is present (e.g. the route-unit test harness), they fall
-//! back to the "external session service unavailable" 500 the seam used before
-//! wiring.
+//! back to the "external session service unavailable" 500.
 
 use std::sync::Arc;
 
@@ -194,19 +192,3 @@ mod tests {
         assert_eq!(body["error"], SERVICE_UNAVAILABLE);
     }
 }
-
-// PORT STATUS: src/server/routes/external-sessions.ts (2 endpoints, 65 lines)
-// confidence: high
-// todos: 1
-// notes: Both endpoints now call ChatManager::external_session_service()
-// (wired in mainframe-server/src/chat_deps.rs). Query/body validation
-// (offset>=0, limit 0..=200, sessionId [a-zA-Z0-9-]+, adapterId min1) ports 1:1.
-// createdAt/modifiedAt/title are forwarded to importSession as plain optional
-// strings without Zod's `.datetime()`/max-500 checks — deliberately deferred,
-// since the underlying ExternalSessionService/DB layer does its own parsing and
-// a malformed value fails there instead of at this validation boundary. The
-// route-unit test harness (`AppCtx::test_ctx()`) has `chat_manager: None`, so
-// the "service unavailable" 500 path is what's exercised here; the real
-// scan/import behavior is covered by mainframe-chat's
-// chat_manager::tests::with_external_sessions_* tests against a fake
-// ExternalSessionDeps.

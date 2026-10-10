@@ -1,4 +1,4 @@
-//! Idle whole-chat offload (todo #178), AC1-7: a real `ChatManager` wires the
+//! Idle whole-chat offload, AC1-7: a real `ChatManager` wires the
 //! real `ChatOffload` end to end via `scan_idle_sessions` (which builds one
 //! from the manager's own shared state, matching production wiring), so these
 //! tests exercise the same registry/cache/event path production code takes.
@@ -19,7 +19,7 @@ use mainframe_types::content::LeafContent;
 
 /// Records every `ChatSurfaceEvent` an attached facade session would see —
 /// used to prove a reload after offload tells an on-screen chat's session to
-/// `Resync` (todo #178, the "chat on screen when offloaded" edge case).
+/// `Resync` (the "chat on screen when offloaded" edge case).
 #[derive(Default)]
 struct RecordingSurface {
     events: Mutex<Vec<ChatSurfaceEvent>>,
@@ -41,8 +41,8 @@ impl ChatSurface for RecordingSurface {
 }
 
 /// Builds a `ChatOffload` from `mgr`'s own shared collaborators — exactly how
-/// `ChatManager::scan_idle_sessions` builds one for the scanner (todo #178
-/// plan "Design"). Lets a test drive `IdleOffloader::offload` on a SPECIFIC,
+/// `ChatManager::scan_idle_sessions` builds one for the scanner. Lets a test
+/// drive `IdleOffloader::offload` on a specific,
 /// already-selected chat id directly, bypassing `scan_idle_sessions`'s own
 /// fresh `select_idle_candidates` pass — necessary for a race test where the
 /// state change happens strictly between selection and the offload itself:
@@ -199,7 +199,7 @@ async fn ac2_a_pending_permission_blocks_offload_even_at_8_hours_idle() {
 
 /// Three ineligible chats, in one test since each assertion block is
 /// identical: idle less than the threshold, an unspawned session on a cell
-/// whose `last_used_at` is still fresh (todo #381: `seed_active`'s
+/// whose `last_used_at` is still fresh (`seed_active`'s
 /// `ActiveChat::new` stamps "now" — this now proves `last_used_at`, not
 /// `is_spawned()`, is what keeps an unspawned cell live, not the old
 /// "no spawned process ⇒ never a candidate" rule), and a session that reports
@@ -476,7 +476,7 @@ async fn ac7_send_after_offload_reloads_prior_history_via_the_resume_path() {
 /// reload must tell the attached session to `Resync` so it re-replays
 /// against the reloaded graph instead of diffing old ids against new ones,
 /// which would clear every earlier item by id and push it to the end,
-/// scrambling the on-screen order (todo #178 review finding).
+/// scrambling the on-screen order ( review finding).
 #[tokio::test]
 async fn resend_from_an_attached_chat_after_offload_resyncs_instead_of_scrambling_order() {
     let (deps, mgr) =
@@ -514,7 +514,7 @@ async fn resend_from_an_attached_chat_after_offload_resyncs_instead_of_scramblin
     );
 }
 
-// ── todo #350 R1: offload guard, resync producers ──────────────────────────
+// ── R1: offload guard, resync producers ──────────────────────────
 
 /// Finding 4: `ChatOffload::recheck` must not kill the CLI of a turn whose
 /// tool is still running silently past the idle threshold — `is_spawned`/
@@ -604,7 +604,7 @@ async fn worktree_missing_error_keeps_the_loaded_history() {
     assert_eq!(messages[2].r#type, ChatMessageType::Error);
 }
 
-// ── todo #381: idle offload for unspawned registry cells ──────────────────
+// ──: idle offload for unspawned registry cells ──────────────────
 //
 // `ActiveChat::new` (every production insertion point) and `touch` (every use
 // path) stamp `last_used_at` with the real clock, so these tests — like the
@@ -766,7 +766,7 @@ async fn a_freshly_loaded_chat_is_not_offloaded_by_a_scan() {
     assert!(offloaded_events(&deps).is_empty());
 }
 
-// ── todo #381 races: selection vs. offload, on an unspawned cell ──────────
+// ── races: selection vs. offload, on an unspawned cell ──────────
 
 /// A send registered after selection (but before the offload's re-check)
 /// keeps an unspawned, backdated cell live — `try_claim_offload`'s busy check
@@ -831,7 +831,7 @@ async fn a_touch_injected_after_selection_keeps_an_unspawned_cell_live() {
     assert!(offloaded_events(&deps).is_empty());
 }
 
-// ── todo #381: pending/queued/Working still block an unspawned cell ───────
+// ──: pending/queued/Working still block an unspawned cell ───────
 
 #[tokio::test]
 async fn a_pending_permission_blocks_offload_of_an_unspawned_backdated_cell() {
@@ -892,7 +892,7 @@ async fn a_working_process_state_blocks_offload_of_an_unspawned_backdated_cell()
     assert!(offloaded_events(&deps).is_empty());
 }
 
-// ── todo #381: config entry points rebuild an offloaded cell ──────────────
+// ──: config entry points rebuild an offloaded cell ──────────────
 
 #[tokio::test]
 async fn update_chat_config_rebuilds_an_offloaded_cell_and_applies_the_new_model() {

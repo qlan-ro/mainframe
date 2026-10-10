@@ -1,5 +1,3 @@
-//! Ported from `packages/types/src/session-transcript.ts`.
-
 use serde::Serialize;
 
 /// Adapter-facing transcript lookup result. Not serialized directly — the

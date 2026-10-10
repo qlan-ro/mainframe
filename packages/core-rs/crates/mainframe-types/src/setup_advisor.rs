@@ -66,14 +66,16 @@ pub struct AutomationRecommendation {
     /// controlled for any cloned repo, and this string feeds a shell.
     pub command: String,
     /// Where the artifact lives once created, e.g. ".claude/settings.json".
-    /// Absent rather than null on the wire, matching the optional TS field.
+    /// Absent rather than null on the wire, matching the optional `targetPath?`
+    /// in `packages/types/src/setup-advisor.ts`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub target_path: Option<String>,
     /// Adapter ids this applies to; `["*"]` = any adapter.
     pub adapters: Vec<String>,
     pub provenance: RecommendationProvenance,
     /// Absent for `FirstParty` rules, which fetch nobody's repo. Absent rather
-    /// than null on the wire, matching the optional TS field.
+    /// than null on the wire, matching the optional `source?` in
+    /// `packages/types/src/setup-advisor.ts`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<RecommendationSource>,
 }

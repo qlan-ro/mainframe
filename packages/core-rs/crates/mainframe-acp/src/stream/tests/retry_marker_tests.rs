@@ -1,7 +1,6 @@
-//! Retry-marker attachment cases for `SessionStream` — meta carriage,
-//! namespace extension without clobbering the parent relation, the
-//! no-carrier wait, and the clearing-upsert/tool-call-patch skip — split
-//! out of `tests.rs` (todo #350, plan task 37, R2.13).
+//! Retry-marker attachment cases for `SessionStream` — meta carriage, namespace
+//! extension without clobbering the parent relation, the no-carrier wait, and
+//! the clearing-upsert/tool-call-patch skip — split out of `tests.rs`.
 
 use serde_json::json;
 

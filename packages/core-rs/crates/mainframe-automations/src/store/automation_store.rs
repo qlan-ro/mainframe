@@ -121,7 +121,7 @@ impl AutomationStore {
     }
 
     /// Runs and interactions cascade via the ON DELETE CASCADE FKs (db.rs).
-    /// Idempotent — deleting a missing automation is a no-op, like Node's.
+    /// Idempotent — deleting a missing automation is a no-op.
     pub async fn delete(&self, id: &str) -> Result<(), StoreError> {
         let id = id.to_string();
         self.db
@@ -208,9 +208,3 @@ fn scope_to_db(scope: AutomationScope) -> &'static str {
         AutomationScope::Project => "project",
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T2.2), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node's store/automation-store.ts CRUD surface; the webhook
-//        hookId scan lands with the trigger router (T8.3).

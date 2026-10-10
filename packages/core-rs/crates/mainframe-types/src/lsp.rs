@@ -1,5 +1,3 @@
-//! Ported from `packages/types/src/lsp.ts`.
-
 use serde::{Deserialize, Serialize};
 
 /// Configuration for an LSP server binary.
@@ -46,8 +44,3 @@ mod tests {
         assert_eq!(serde_json::to_string(&s).unwrap(), json);
     }
 }
-
-// PORT STATUS: packages/types/src/lsp.ts (21 lines)
-// confidence: high
-// todos: 0
-// notes: plain structs; no optionals, no numeric fields.

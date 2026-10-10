@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/codex/turn-config.ts`.
-
 use mainframe_types::chat::ResolvedTuning;
 use serde::{Deserialize, Serialize};
 
@@ -81,7 +79,7 @@ mod tests {
         }
     }
 
-    // --- turn-config.test.ts ---
+    // --- turn config ---
 
     #[test]
     fn puts_effort_in_settings_fast_as_service_tier_codex_extras_top_level() {
@@ -155,7 +153,7 @@ mod tests {
         assert_eq!(settings["developer_instructions"], serde_json::Value::Null);
     }
 
-    // --- collaboration-mode.test.ts ---
+    // --- collaboration mode ---
 
     #[test]
     fn sets_mode_plan_when_plan() {
@@ -204,16 +202,3 @@ mod tests {
         assert_eq!(cfg.collaboration_mode.settings.reasoning_effort, None);
     }
 }
-
-// PORT STATUS: src/plugins/builtin/codex/turn-config.ts (50 lines)
-// confidence: high
-// todos: 0
-// notes: #303 — model is now a resolved, non-optional &str; the caller (turn_model.rs's
-// notes: resolve_turn_model, via session.rs) decides which tier supplies it, so this
-// notes: function no longer treats an absent or empty id as "omit the key". The
-// notes: collaboration-mode `model` key is always present, matching the app-server's
-// notes: required, non-nullable Settings.model. reasoning_effort stays
-// notes: Option<EffortLevel> (serializes to the Codex effort string, or explicit null).
-// notes: Ports turn-config.test.ts + collaboration-mode.test.ts assertion-for-assertion,
-// notes: replacing the obsolete omit-model case with serializes_the_model_key_for_every_turn.
-// notes: `mode` is a &str ('plan'|'default').

@@ -1,8 +1,8 @@
-//! Adapter-supplied option lists for Codex `ControlRequest`s (T19, R3.2 and
-//! R3.5, blockers; D4): approvals offer accept/acceptForSession/decline;
-//! `requestUserInput` offers its own real question choices — no synthetic
-//! decline (D4 scopes decline to approvals only; a generic client declines a
-//! question via `session/cancel`, the ACP-mandated path).
+//! Adapter-supplied option lists for Codex `ControlRequest`s: approvals offer
+//! accept/acceptForSession/decline; `requestUserInput` offers its own real
+//! question choices — no synthetic decline (decline is scoped to approvals
+//! only; a generic client declines a question via `session/cancel`, the
+//! ACP-mandated path).
 
 use mainframe_types::acp::extensions::MAINFRAME_META_NAMESPACE;
 use mainframe_types::acp::permission::{PermissionOption, PermissionOptionKind};
@@ -36,7 +36,7 @@ pub(crate) fn approval_triad() -> Vec<PermissionOption> {
 
 /// `AskUserQuestion`'s options: one per flattened Codex choice that carries
 /// a label, all `AllowOnce` — selecting any offered choice picks an answer,
-/// never a decline (D4). Each option's meta carries `updatedInput.answers`
+/// never a decline. Each option's meta carries `updatedInput.answers`
 /// keyed by the question text, the same shape
 /// `extract_answer_from_updated_input` already reads off a rich
 /// `_mainframe.dev` answer.

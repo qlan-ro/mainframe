@@ -1,6 +1,5 @@
 //! What a `session/resume` whose spawned delivery never returned owes the
-//! client: a settled promise and a way back onto the stream (todo #350, PR
-//! #688 review).
+//! client: a settled promise and a way back onto the stream.
 
 use mainframe_acp::resume::{BoxFuture, ResumeSnapshot};
 use mainframe_types::acp::jsonrpc::RequestId;
@@ -119,7 +118,7 @@ async fn a_panicked_resume_settles_the_promise_and_asks_for_a_resync() {
 /// `reset_session` sends the success reply as it seeds, so a failure after
 /// that point — a panic in the replay closure, before `reset_session`'s own
 /// `replay_complete` send — owes the client a closing marker for the reply
-/// it already has (`aborted: true`, spec Decision 38) before the resync: the
+/// it already has (`aborted: true`) before the resync: the
 /// seeded stream is correct and the client is reading it, but its replay was
 /// never closed out. The slot is no evidence the reply went out, though:
 /// `session_detach` and `ChatEnded` drop it without the per-session lock, so
@@ -183,8 +182,8 @@ async fn a_delivery_that_already_completed_sends_no_second_marker() {
     );
 }
 
-/// Spec Decision 38: a normal close (no failure) carries no `aborted` key at
-/// all — only a delivery that failed after its reply sets it.
+/// A normal close (no failure) carries no `aborted` key at all — only a
+/// delivery that failed after its reply sets it.
 #[tokio::test]
 async fn a_normal_close_carries_no_aborted_key() {
     let ctx = AppCtx::test_ctx();
@@ -288,12 +287,12 @@ async fn a_resume_that_succeeds_clears_the_failure_count() {
     );
 }
 
-// End-to-end revision-cursor cases through `start_resume` (todo #377) live
+// End-to-end revision-cursor cases through `start_resume` live
 // in `revision_cursor_tests.rs`, split out to keep this file under 300
 // lines — it shares this file's fixtures via `use super::*`.
 mod revision_cursor_tests;
 
-// ── Compressed replay batches (spec Decision 42) ─────────────────────────────
+// ── Compressed replay batches ────────────────────────────────────────────────
 
 /// A chat with one settled assistant message, so a resume has something to replay.
 struct OneMessagePort;

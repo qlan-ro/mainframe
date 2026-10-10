@@ -204,13 +204,13 @@ pub struct RepeatBlock {
     /// The list token to iterate (wire name `items`, not `over`).
     pub items: TokenRef,
     /// Absent or `1`: today's exact sequential behavior. `2..=32`: up to that
-    /// many iterations run concurrently through the branch driver (Phase 4a).
+    /// many iterations run concurrently through the branch driver.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub concurrency: Option<u32>,
     pub steps: Vec<Step>,
 }
 
-/// Heterogeneous concurrent block (Phase 4b): unlike Repeat's concurrency,
+/// Heterogeneous concurrent block: unlike Repeat's concurrency,
 /// which runs the SAME body once per item, a branch here is authored
 /// directly — every branch starts before the block parks, and it settles
 /// wait-for-all exactly like a concurrent Repeat (`engine/blocks_concurrent.rs`
@@ -226,8 +226,7 @@ pub struct ParallelBlock {
 
 /// Recursively finds a step by id, descending into `if`'s then/otherwise,
 /// `repeat`/`loop`/`retry`'s inner steps, and every `parallel` branch — the
-/// same tree shape the walk traverses (Node parity:
-/// automation-domain/tokens.ts `findStepById`).
+/// same tree shape the token walk traverses.
 pub(crate) fn find_step_by_id<'a>(steps: &'a [Step], step_id: &str) -> Option<&'a Step> {
     for step in steps {
         if step.id() == step_id {
@@ -251,8 +250,3 @@ pub(crate) fn find_step_by_id<'a>(steps: &'a [Step], step_id: &str) -> Option<&'
     }
     None
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T1.1), not a TS port
-// confidence: high
-// todos: 0
-// notes: wire truth = packages/types/src/automation.ts; A9 attachments included.

@@ -1,8 +1,8 @@
-//! Task 5b — the daemon's `GitHubIssues` adapter over the automations
-//! engine's own client + credential store. Every case matters for AC1/AC3/
-//! AC6/AC8: a credential connected after construction must resolve without
-//! rebuilding the port, and a missing credential must fail with a readable
-//! reason rather than reaching the network with an empty token.
+//! The daemon's `GitHubIssues` adapter over the automations engine's own
+//! client + credential store. Every case matters: a credential connected
+//! after construction must resolve without rebuilding the port, and a missing
+//! credential must fail with a readable reason rather than reaching the network
+//! with an empty token.
 
 use std::sync::{Arc, Mutex};
 

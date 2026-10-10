@@ -1,5 +1,4 @@
-//! `ChatManager::sweep_unreferenced_fork_snapshots` (todo #343 Group 3, plan
-//! item 5) — the daemon-startup sweep that removes a snapshot directory no
+//! `ChatManager::sweep_unreferenced_fork_snapshots` removes a snapshot directory no
 //! chat's `pending_fork` references. A child module of `tests`, so it sees
 //! `tests`' private `StoreDeps`.
 

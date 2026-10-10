@@ -1,10 +1,8 @@
-//! Ported from `packages/core/src/plugins/attachment-context.ts`.
-//!
 //! Per-plugin, per-entity attachment storage under `<pluginDir>/attachments`.
 //! Each attachment is two files in the entity's directory: `<id>-<safeName>`
-//! (the bytes) and `<id>.json` (the metadata record). No `base64` crate is in
-//! the §8 allowlist, so encode/decode are hand-rolled to mirror
-//! `Buffer.from(data, 'base64')` / `buf.toString('base64')`.
+//! (the bytes) and `<id>.json` (the metadata record). This crate does not
+//! depend on `base64`, so encode/decode are hand-rolled: standard alphabet
+//! with padding, and a lenient decoder.
 
 use std::path::{Path, PathBuf};
 
@@ -194,8 +192,7 @@ async fn find_data_file(dir: &Path, id: &str) -> Option<PathBuf> {
     None
 }
 
-/// Lenient base64 decoder mirroring `Buffer.from(data, 'base64')` (skips invalid
-/// characters rather than throwing).
+/// Lenient base64 decoder (skips invalid characters rather than failing).
 fn decode_base64(input: &str) -> Vec<u8> {
     fn val(c: u8) -> Option<u8> {
         match c {
@@ -227,8 +224,7 @@ fn decode_base64(input: &str) -> Vec<u8> {
     out
 }
 
-/// Standard-alphabet base64 encoder with padding, mirroring
-/// `buf.toString('base64')`.
+/// Standard-alphabet base64 encoder with padding.
 fn encode_base64(bytes: &[u8]) -> String {
     const ALPHA: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::new();
@@ -317,12 +313,3 @@ mod tests {
         assert_eq!(sanitize("../../etc/passwd"), "passwd");
     }
 }
-
-// PORT STATUS: src/plugins/attachment-context.ts
-// confidence: high
-// todos: 0
-// notes: two-file layout (`<id>-<safeName>` + `<id>.json`) preserved; async
-// node:fs/promises → tokio::fs. sanitize mirrors the `[\w.\-() ]` allow-class +
-// `attachment.bin` fallback. base64 hand-rolled (no crate in §8) like the main
-// AttachmentStore. get/list/delete swallow missing-dir/malformed-file exactly as
-// the TS `catch` blocks (return None/[]/noop).

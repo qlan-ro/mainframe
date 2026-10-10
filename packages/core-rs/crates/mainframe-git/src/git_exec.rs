@@ -1,9 +1,7 @@
-//! Ported from `packages/core/src/git/git-exec.ts`.
-//!
 //! The single subprocess primitive: run a git command in `cwd` and return
 //! stdout. Array args (no shell), a 30s default timeout for the fast read/parse
 //! commands, and `timeout: 0` for genuinely long-running network ops (0 = no
-//! timeout, mirroring `execFile`). On a non-zero exit the error carries
+//! timeout). On a non-zero exit the error carries
 //! `stdout`/`stderr`/`code` so callers can classify failures.
 
 use std::process::Stdio;
@@ -13,23 +11,22 @@ use tokio::process::Command;
 
 /// The `timeout` option for [`exec_git`] (milliseconds; `0` = uncapped).
 ///
-/// Mirrors the TS `{ timeout?: number }` bag. When the whole value is absent the
-/// default 30s applies; a present `Some(0)` means no timeout.
+/// When the whole value is absent the default 30s applies; a present `Some(0)` means no timeout.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct GitExecOptions {
     pub timeout: Option<u64>,
 }
 
 /// The `code` an [`GitExecError`] carries — git exits with a numeric status, but
-/// timeouts/spawn failures surface as a string (`number | string` in TS).
+/// timeouts/spawn failures surface as a string.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GitExecCode {
     Number(i64),
     Text(String),
 }
 
-/// An `execFile` rejection, carrying the captured streams git wrote before
-/// exiting. Mirrors the TS `GitExecError` interface (`code`/`stdout`/`stderr`).
+/// A failed git run, carrying the captured streams git wrote before exiting
+/// (`code`/`stdout`/`stderr`).
 #[derive(Debug, Clone, thiserror::Error)]
 #[error("{message}")]
 pub struct GitExecError {
@@ -41,7 +38,7 @@ pub struct GitExecError {
 
 /// Runs a git command in `cwd` and returns stdout.
 ///
-/// Mirrors `server/routes/exec-git.ts`: array args (no shell), a 30s default
+/// Array args (no shell), a 30s default
 /// timeout suited to the fast read/parse commands most callers issue, and
 /// `timeout: 0` for genuinely long-running operations. On a non-zero exit the
 /// error carries `stdout`/`stderr`/`code` so callers can classify failures
@@ -85,8 +82,8 @@ pub async fn exec_git(
         {
             Ok(result) => result,
             Err(_elapsed) => {
-                // `execFile` kills the child and rejects with ETIMEDOUT; the
-                // dropped future kills the process via `kill_on_drop`.
+                // A timeout is reported as ETIMEDOUT; the dropped future kills the
+                // process via `kill_on_drop`.
                 return Err(GitExecError {
                     message: format!("Command failed: git {} timed out", args.join(" ")),
                     code: Some(GitExecCode::Text("ETIMEDOUT".to_string())),
@@ -111,7 +108,7 @@ pub async fn exec_git(
         Ok(stdout)
     } else {
         let code = output.status.code().map(|c| GitExecCode::Number(c as i64));
-        // Node's execFile error message embeds stderr; classification callers
+        // The error message embeds stderr; classification callers
         // (`.contains("non-fast-forward")`, `"not fully merged"`, …) rely on it.
         let message = format!("Command failed: git {}\n{}", args.join(" "), stderr);
         Err(GitExecError {
@@ -122,13 +119,3 @@ pub async fn exec_git(
         })
     }
 }
-
-// PORT STATUS: packages/core/src/git/git-exec.ts (34 lines)
-// confidence: medium
-// notes: `access(cwd)` -> tokio::fs::metadata; `execFile('git', ...)` ->
-// tokio::process::Command with kill_on_drop(true) (SIGKILL on drop vs Node's
-// SIGTERM-on-timeout — no test asserts the timeout signal). GitExecError models
-// the TS `code?: number | string` via GitExecCode enum; on non-zero exit the
-// message embeds stderr so downstream `.contains(...)` classification matches
-// Node's execFile error text (not asserted byte-for-byte). GitExecOptions.timeout
-// is ms; `Some(0)` = uncapped (network ops), absent = 30s default.

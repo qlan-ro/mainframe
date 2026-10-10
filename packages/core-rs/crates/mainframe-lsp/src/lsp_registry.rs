@@ -1,11 +1,6 @@
-//! Ported from `packages/core/src/lsp/lsp-registry.ts`.
-//!
 //! Language-server registry: the static `id -> LspServerConfig` table, the
-//! extension -> language map, and bring-your-own command resolution. The TS
-//! twin resolved `typescript-language-server`/`pyright` from `node_modules`
-//! bundled alongside the Node daemon (`require.resolve` + `process.execPath`);
-//! the Rust daemon ships no bundled servers, so every language (including
-//! `jdtls`, which was already PATH-only) resolves the same way: a project-local
+//! extension -> language map, and bring-your-own command resolution. The daemon
+//! ships no bundled servers, so every language resolves the same way: a project-local
 //! `node_modules/.bin`, then a Python venv, then a `command -v` probe on the
 //! resolved login-shell `PATH`. Fails soft — an unresolved server is `None`,
 //! never an error.
@@ -54,15 +49,14 @@ fn default_configs() -> Vec<LspServerConfig> {
 }
 
 /// The static language-server registry. Immutable after construction
-/// (CONCURRENCY.tsv: `configs`/`extensionMap` are `SINGLE_TASK`, read-only).
+/// (`configs`/`extension_map` are read-only).
 pub struct LspRegistry {
     configs: HashMap<String, LspServerConfig>,
-    /// Preserves declaration order for `get_all_language_ids` (parity with the
-    /// TS insertion-ordered `Map`).
+    /// Preserves declaration order for `get_all_language_ids`.
     order: Vec<String>,
     /// Boot-resolved login-shell `PATH`, applied to the `command -v` probe and the
     /// external-server spawn so packaged builds find CLIs outside the bare launchd
-    /// `PATH` (mirrors the TS `enrichPath` env mutation). `None` = inherit.
+    /// `PATH`. `None` = inherit.
     resolved_path: Option<String>,
 }
 
@@ -220,14 +214,3 @@ impl Default for LspRegistry {
 
 #[cfg(test)]
 mod tests;
-
-// PORT STATUS: packages/core/src/lsp/lsp-registry.ts (99 lines)
-// confidence: high (config table, extension map) / new (BYO resolution order)
-// todos: 0
-// notes: the TS twin resolved bundled servers via `require.resolve` against the
-//   Node daemon's own node_modules, which has no Rust analogue and no live
-//   deployment behavior worth preserving byte-for-byte (Rust ships no bundled
-//   servers). `resolve_command` instead does bring-your-own discovery for every
-//   language, config-driven rather than a `bundled: bool` branch: project-local
-//   `node_modules/.bin`, then a Python venv, then the `command -v` PATH probe
-//   `jdtls` already used. Unknown-language and PATH-probe branches are faithful.

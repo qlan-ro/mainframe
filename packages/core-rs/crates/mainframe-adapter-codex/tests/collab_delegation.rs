@@ -1,9 +1,9 @@
-//! Todo #247 — capture replay tests pinning the target Codex sub-agent
-//! delegation card shape (spec criteria 1-7). Replays the real captured
+//! Capture replay tests pinning the Codex sub-agent delegation card shape.
+//! Replays the real captured
 //! notification sequence from Codex 0.144.3, where the `wait` call's
 //! `receiverThreadIds` and `agentsStates` are both empty and the only signal
-//! naming the child is the `subAgentActivity` `started` ping (spec decision 1:
-//! the card id is that ping's own item id, the spawn call id).
+//! naming the child is the `subAgentActivity` `started` ping. The card id is
+//! that ping's own item id, the spawn call id.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod common;

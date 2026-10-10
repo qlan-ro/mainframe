@@ -1,5 +1,4 @@
-//! The production `VerbPorts` — the four real verbs wired together
-//! (Node service.buildPorts).
+//! The production `VerbPorts` — the four real verbs wired together.
 
 use std::sync::Arc;
 
@@ -49,8 +48,3 @@ impl VerbPorts for EngineVerbPorts {
         Box::pin(self.notify.execute(step, ctx))
     }
 }
-
-// PORT STATUS: packages/core/src/automations/service.ts buildPorts (25 lines)
-// confidence: high
-// todos: 0
-// notes: —

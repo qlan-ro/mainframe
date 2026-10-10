@@ -1,11 +1,9 @@
-//! Basic leaf/content ordering, purity/parity, and queued-turn cases
-//! for the canonical encoder. Tool-call/task-group cases moved to
-//! `tool_call_tests.rs`, diff/truncation cases to
-//! `result_content_tests.rs`, container/meta cases to `meta_tests.rs`,
-//! text/thought segmentation cases to `segment_tests.rs`, and
-//! no-split marker cases (compaction, skill-loaded, error) to
-//! `marker_tests.rs` (todo #350, plan task 37, R2.13) — all five share
-//! this file's fixture builders via `use super::*`.
+//! Basic leaf/content ordering, purity/parity, and queued-turn cases for the
+//! canonical encoder. Tool-call/task-group cases moved to `tool_call_tests.rs`,
+//! diff/truncation cases to `result_content_tests.rs`, container/meta cases to
+//! `meta_tests.rs`, text/thought segmentation cases to `segment_tests.rs`, and
+//! no-split marker cases (compaction, skill-loaded, error) to `marker_tests.rs`
+//! — all five share this file's fixture builders via `use super::*`.
 
 mod command_metadata_tests;
 mod container_tests;
@@ -59,8 +57,8 @@ fn image(data: &str, media_type: &str) -> DisplayContent {
     })
 }
 
-/// The uniform per-item meta every encoder item now carries (desktop-cutover
-/// pass): timestamp + container id under the namespace, plus any extras.
+/// The uniform per-item meta every encoder item carries: timestamp + container
+/// id under the namespace, plus any extras.
 fn base_meta(container: &str) -> Value {
     json!({ MAINFRAME_META_NAMESPACE: {
         "timestamp": "2026-08-28T00:00:00.000Z",
@@ -220,10 +218,9 @@ fn is_pure_same_input_produces_the_same_output() {
     assert_eq!(encode(&messages), encode(&messages));
 }
 
-/// Criterion 10/plan task 12: live streaming and history replay both produce
-/// `DisplayMessage[]` (group B made their ids agree) — the encoder over that
-/// shared type must yield identical items for identical input regardless of
-/// which pipeline produced it.
+/// Live streaming and history replay both produce `DisplayMessage[]` with
+/// matching ids — the encoder over that shared type must yield identical items
+/// for identical input regardless of which pipeline produced it.
 #[test]
 fn live_and_history_snapshots_with_matching_ids_encode_identically() {
     let live = vec![dmsg(

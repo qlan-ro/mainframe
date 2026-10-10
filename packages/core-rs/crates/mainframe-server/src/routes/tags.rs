@@ -1,12 +1,11 @@
-//! Ported from `src/server/routes/tags.ts` — tag CRUD + per-chat tag assignment.
+//! Tag CRUD and per-chat tag assignment.
 //!
-//! `TagColor` is the shared enum (`z.enum(TAG_PALETTE)` → serde parse; an
-//! out-of-palette color fails the body parse → 400). Mutating handlers wrap the
-//! repo call and surface any error as a 400 with the verbatim message (the TS
-//! `try/catch → String(err.message)`); the read handlers let an error fall
-//! through to the opaque 500 (the TS un-wrapped path). DELETE deviates from the
-//! rest of the API on purpose: it ends 204 with NO body, not the `{success}`
-//! envelope.
+//! `TagColor` is the shared palette enum (an out-of-palette color fails the body
+//! parse → 400). Mutating handlers wrap the repo call and surface any error as a
+//! 400 with the verbatim message; the read handlers let an error fall through to
+//! the opaque 500. DELETE deviates from the rest of the API on purpose: it ends
+//! 204 with NO body, not the `{success}` envelope (wire contract:
+//! `packages/ui/src/lib/api/tags.ts` sends it through `requestNoContent`).
 
 use std::sync::Arc;
 
@@ -145,8 +144,8 @@ async fn set_chat_tags(
         })
         .await;
     match result {
-        // ctx.chats?.syncChatTags is an optional Phase-4/5 ChatManager hook — a
-        // no-op when the manager is absent, so it is intentionally omitted here.
+        // `ChatManager::sync_chat_tags` (mirrors the tags onto the cached active
+        // chat) is not called here.
         Ok(persisted) => ok(persisted),
         Err(err) => bad_request(&err),
     }
@@ -208,15 +207,3 @@ mod tests {
         assert_eq!(body["error"], "cannot tag a temporary chat");
     }
 }
-
-// PORT STATUS: src/server/routes/tags.ts (6 endpoints, 98 lines)
-// confidence: high
-// todos: 0
-// notes: z.enum(TAG_PALETTE) → Option<TagColor> serde parse (out-of-palette →
-// body-parse fail → 400). PatchBody's `.refine(rename||color)` → explicit
-// both-None → 400 "rename or color required". Mutating handlers map DbError →
-// 400 with the verbatim message (TS try/catch → String(err.message), which also
-// carries the validate-tag-name reserved/short strings); read handlers → opaque
-// 500. rename+setColor+get run in ONE db.call so the read-back is atomic on the
-// DB thread. DELETE ends 204 with an empty body (the pinned deviation). The
-// optional ctx.chats.syncChatTags hook is a Phase-4/5 no-op and is omitted.

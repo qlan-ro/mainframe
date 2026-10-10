@@ -1,6 +1,5 @@
 //! Parses a `task_progress.workflow_progress` cumulative snapshot array into
-//! the phases/agents the store retains. See the wire contract's `snapshot.rs`
-//! section in the plan.
+//! the phases/agents the store retains.
 
 use mainframe_types::claude_workflow::{
     ClaudeWorkflowAgent, ClaudeWorkflowAgentState, ClaudeWorkflowPhase,

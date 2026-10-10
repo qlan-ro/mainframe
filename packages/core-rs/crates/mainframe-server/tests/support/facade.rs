@@ -1,9 +1,9 @@
 //! A `TestServer` with a REAL `ChatManager` wired as `ctx.chat_manager` and
-//! the facade hub as its chat surface (todo #350, plan group 1 step 0) — the
-//! fixture `acp_ws_integration.rs`'s live-wiring tests need, since the plain
-//! `spawn_test_server` harness runs with `chat_manager: None`. Mirrors
-//! `chat_background_activity.rs`'s harness, plus the facade hub and a
-//! pre-created project/chat so a test can prompt a real session immediately.
+//! the facade hub as its chat surface — the fixture the `acp_ws_*` live-wiring
+//! tests need, since the plain `spawn_test_server` harness runs with
+//! `chat_manager: None`. Mirrors `chat_background_activity.rs`'s harness, plus
+//! the facade hub and a pre-created project/chat so a test can prompt a real
+//! session immediately.
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -51,8 +51,8 @@ pub struct FacadeServer {
 }
 
 impl FacadeServer {
-    /// A second chat under the same project/adapter — T10's cold-start-vs-
-    /// cancel ordering test needs two independent sessions.
+    /// A second chat under the same project/adapter — `acp_ws_slow_prompt.rs`'s
+    /// cold-start-vs-cancel ordering test needs two independent sessions.
     pub async fn create_chat(&self) -> String {
         let project_id = self.project_id.clone();
         let profile = self.profile.clone();
@@ -72,15 +72,16 @@ impl FacadeServer {
     }
 }
 
-/// `adapter` is injected (not hardcoded to the mock) so T10's barrier
-/// adapter can reuse this fixture without a second harness.
+/// `adapter` is injected (not hardcoded to the mock) so the barrier adapter
+/// (`support/barrier_adapter.rs`) can reuse this fixture without a second
+/// harness.
 pub async fn spawn_facade_server(adapter: Arc<dyn Adapter>) -> FacadeServer {
     spawn_facade_server_with(adapter, mainframe_acp::DEFAULT_HEARTBEAT_INTERVAL_MS).await
 }
 
 /// `heartbeat_interval_ms` shrinks the cadence so a test can observe several
-/// ticks inside a bounded timeout (T10: proof the socket loop is not stuck
-/// on a blocked prompt).
+/// ticks inside a bounded timeout (proof the socket loop is not stuck on a
+/// blocked prompt).
 pub async fn spawn_facade_server_with(
     adapter: Arc<dyn Adapter>,
     heartbeat_interval_ms: u64,
@@ -201,7 +202,7 @@ pub async fn spawn_facade_server_with(
 /// One chat-surface revision for `chat_id`, pushed straight at the hub by the
 /// tests that check who is (and is not) subscribed to a session's fan-out.
 /// Wraps the single message in a `full` `DisplayDelta` over a fresh
-/// `DisplaySnapshot` (todo #376) — the shape `emit_display_for` now emits.
+/// `DisplaySnapshot` — the shape `emit_display_for` emits.
 pub fn revision_event(chat_id: &str, text: &str) -> mainframe_chat::chat_surface::ChatSurfaceEvent {
     let messages = vec![mainframe_types::display::DisplayMessage {
         id: "m1".to_string(),

@@ -1,5 +1,5 @@
-//! `POST /api/chats/{id}/discard` (#346 rule 5), and the temporary-chat
-//! refusal shared by the pin/tag/archive/unarchive guards (rule 4).
+//! `POST /api/chats/{id}/discard`, and the temporary-chat refusal shared by the
+//! pin/tag/archive/unarchive guards.
 
 use std::sync::Arc;
 
@@ -14,7 +14,7 @@ use mainframe_types::chat::Chat;
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok_empty};
 
-/// Rule 4: pin, tags, archive and unarchive all refuse a temporary chat with
+/// Pin, tags, archive and unarchive all refuse a temporary chat with
 /// the same `fail` (409) envelope and leave it unchanged. `action` names the
 /// refused verb for the message (e.g. "pin", "archive").
 pub(crate) fn refuse_if_temporary(chat: &Chat, action: &str) -> Option<Response> {
@@ -123,7 +123,7 @@ mod tests {
         assert!(refuse_if_temporary(&test_chat(true), "pin").is_some());
     }
 
-    // ── discard success (todo #346, AC 26 — needs a real ChatManager) ────────
+    // ── discard success (needs a real ChatManager) ───────────────────────────
 
     #[tokio::test]
     async fn discard_deletes_the_row_and_scratch_dir_and_404s_on_the_next_get() {
@@ -182,13 +182,3 @@ mod tests {
         assert_eq!(body["error"], "Chat not found");
     }
 }
-
-// PORT STATUS: new for #346 (no TS twin)
-// confidence: high
-// todos: 0
-// notes: discard's 404/fail split reads the chat once via ctx.db (matching the
-// chat_commands.rs chat_exists pattern) before handing off to
-// ChatManager::discard_chat for the live-state teardown, attachment delete,
-// scratch-dir removal and row delete (chat_manager/discard.rs). A discard whose
-// directory removal fails returns the deps error and leaves the row (and
-// `chat.temporary`) intact, so a retry through this same route stays possible.

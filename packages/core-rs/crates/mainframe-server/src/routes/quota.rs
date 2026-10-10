@@ -1,6 +1,6 @@
-//! Ported from `src/server/routes/quota.ts` — provider quota read + manual refresh.
+//! Provider quota read + manual refresh.
 //!
-//! The merged blob is account-wide (no chat scope); `okEmpty` means "no quota
+//! The merged blob is account-wide (no chat scope); `ok_empty` means "no quota
 //! known for this provider yet", not an error. `503` is reserved for the quota
 //! service being unwired.
 
@@ -88,7 +88,7 @@ mod tests {
         }
     }
 
-    /// A duck-typed `{ get, refresh }` stand-in mirroring the TS test's mock.
+    /// A `{ get, refresh }` stand-in for the quota service.
     struct FakeQuota {
         get_result: Option<ProviderQuota>,
         refresh_result: Option<ProviderQuota>,
@@ -235,12 +235,3 @@ mod tests {
         assert_eq!(body["success"], serde_json::json!(false));
     }
 }
-
-// PORT STATUS: src/server/routes/quota.ts (2 endpoints)
-// confidence: high
-// todos: 0
-// notes: GET reads ctx.quota.get(id) → ok(blob) / okEmpty; POST refresh awaits
-// ctx.quota.refresh(id) → ok(blob) / okEmpty, 503 when quota is unwired. id
-// validated against QuotaProviderParams `^[a-zA-Z0-9_-]+$` ("invalid provider id").
-// ctx.quota is Option<Arc<dyn QuotaService>> so the route-unit harness injects a
-// FakeQuota, mirroring the TS `{ get, refresh }` mock.

@@ -1,5 +1,5 @@
 //! Shared test support: a `SessionSink` that records the callbacks the codex
-//! event-mapper / approval-handler drive (mirrors the vitest `createSink()` mocks).
+//! event-mapper / approval-handler drive.
 #![allow(dead_code)] // each test binary uses a subset of Recorder's surface
 
 use std::fs;
@@ -31,12 +31,11 @@ pub struct Recorded {
     /// in emission order — `nested_blocks`/`top_level_blocks` read this.
     pub ordered_blocks: Vec<MessageContent>,
     pub cli_messages: Vec<String>,
-    /// `vendor_id`s from every `on_message`/`on_tool_result` call, in order —
-    /// todo #350 group B, stable-ids task 5.
+    /// `vendor_id`s from every `on_message`/`on_tool_result` call, in order.
     pub message_vendor_ids: Vec<Option<String>>,
     pub tool_result_vendor_ids: Vec<Option<String>>,
     pub context_usages: Vec<ContextUsage>,
-    /// Every `on_message_partial(id, content)` call, in order (todo #378).
+    /// Every `on_message_partial(id, content)` call, in order.
     pub partials: Vec<(String, Vec<MessageContent>)>,
 }
 
@@ -62,8 +61,8 @@ impl Recorder {
     pub fn results(&self) -> Vec<SessionResult> {
         self.0.lock().unwrap().results.clone()
     }
-    /// Every `on_init(session_id)` call, in order (todo #368: a fork's first
-    /// spawn reports the *new* thread id here, not the parent's).
+    /// Every `on_init(session_id)` call, in order: a fork's first
+    /// spawn reports the *new* thread id here, not the parent's.
     pub fn inits(&self) -> Vec<String> {
         self.0.lock().unwrap().inits.clone()
     }

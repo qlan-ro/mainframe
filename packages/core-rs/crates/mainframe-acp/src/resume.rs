@@ -1,7 +1,6 @@
-//! `session/resume` (todo #350, plan task 15): replay from a cursor over the
-//! stable item sequence the canonical encoder produces from history
-//! reconstruction — the same ids a live-streamed turn would have used
-//! (criterion 4's replay half) — plus redelivery of any still-open
+//! `session/resume`: replay from a cursor over the stable item sequence the
+//! canonical encoder produces from history reconstruction — the same ids a
+//! live-streamed turn would have used — plus redelivery of any still-open
 //! permission gate. `ResumePort` mirrors `prompt::PromptPort`'s narrow-seam
 //! rationale: `mainframe-chat` is this crate's prospective consumer, not a
 //! dependency, so the port stays a plain trait a hand-written fake can
@@ -35,13 +34,13 @@ mod revision;
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
-/// The cursor `ResumeSessionRequest.replayFrom` carries — an opaque `Value`
-/// on the vendored wire type (group A left the scheme to this task).
-/// `Start` always full-replays; `Item` resumes after the named stable item;
-/// `Revision` (todo #377) names a server-issued epoch/revision boundary,
-/// resolved against the chat's `RevisionLog` when the connection opted into
-/// revision cursors and the chat has one — otherwise treated the same as an
-/// unknown `Item` cursor (edge case 9: a full replay, not a request error).
+/// The cursor `ResumeSessionRequest.replayFrom` carries — an opaque `Value` on
+/// the vendored wire type, so the scheme is defined here. `Start` always
+/// full-replays; `Item` resumes after the named stable item; `Revision` names a
+/// server-issued epoch/revision boundary, resolved against the chat's
+/// `RevisionLog` when the connection opted into revision cursors and the chat
+/// has one — otherwise treated the same as an unknown `Item` cursor (a full
+/// replay, not a request error).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(
     tag = "type",
@@ -54,10 +53,10 @@ pub enum ReplayCursor {
     Revision { epoch: String, revision: u64 },
 }
 
-/// `ResumePort::resume_snapshot`'s result (todo #382): display history, the
-/// `StreamingLeafKind` of the in-flight partial overlay projected into it
-/// (if any — mirrors `mainframe_chat::chat_manager::ResumeSnapshot`, kept as
-/// a separate type since this crate depends only on `mainframe-types`, not
+/// `ResumePort::resume_snapshot`'s result: display history, the
+/// `StreamingLeafKind` of the in-flight partial overlay projected into it (if
+/// any — mirrors `mainframe_chat::chat_manager::ResumeSnapshot`, kept as a
+/// separate type since this crate depends only on `mainframe-types`, not
 /// `mainframe-chat`), and any still-open permission gate.
 pub struct ResumeSnapshot {
     pub messages: Vec<DisplayMessage>,
@@ -73,7 +72,7 @@ pub trait ResumePort: Send + Sync {
 
     /// Whether `session_id` has a turn in flight right now — read after the
     /// snapshot so a mid-turn reconnect's replay ends with the state the
-    /// client's own UI needs to keep streaming smoothly (R2.4).
+    /// client's own UI needs to keep streaming smoothly.
     fn is_running(&self, session_id: &str) -> bool;
 }
 
@@ -92,45 +91,41 @@ pub struct ResumeReplay {
     /// this so streaming after a resume deltas against what the client now
     /// holds.
     pub items: Vec<EncodedItem>,
-    /// `items`, grouped back into its per-container shape (todo #376 G2
-    /// task 5) — the same list `encoder::encode_containers` produced.
-    /// `items` stays the flat form `plan`/`itemCount` use; a container-
-    /// aware caller (a seeded `SessionStream`/`RevisionLog`, G4) seeds from
-    /// this instead of re-flattening.
+    /// `items`, grouped back into its per-container shape — the same list
+    /// `encoder::encode_containers` produced. `items` stays the flat form
+    /// `plan`/`itemCount` use; a container-aware caller (a seeded
+    /// `SessionStream`/`RevisionLog`) seeds from this instead of re-flattening.
     pub containers: Vec<Vec<EncodedItem>>,
-    /// The tool-call ids this replay sent as result previews (spec Decision
-    /// 41) — empty unless the connection opted in. The caller seeds its live
-    /// diff state with the same set so later revisions of those items stay
-    /// trimmed on this connection.
+    /// The tool-call ids this replay sent as result previews — empty unless the
+    /// connection opted in. The caller seeds its live diff state with the same
+    /// set so later revisions of those items stay trimmed on this connection.
     pub preview_ids: HashSet<String>,
 }
 
 /// Per-connection choices a `session/resume` honors.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ResumeOptions {
-    /// The connection opted into replay result previews (spec Decision 41):
-    /// a full replay sends tool results older than the newest
+    /// The connection opted into replay result previews: a full replay sends
+    /// tool results older than the newest
     /// [`replay_previews::FULL_RESULT_CONTAINERS`] containers as previews.
     pub result_previews: bool,
 }
 
-/// `session/resume` dispatch. Malformed params get the same structured
-/// error as every other facade method; a resolved cursor always yields a
-/// success response, since "unknown cursor" is itself a defined outcome
-/// (full replay with the [`MAINFRAME_META_NAMESPACE`] `fullReplay` marker),
-/// not an error (spec edge cases 9).
+/// `session/resume` dispatch. Malformed params get the same structured error as
+/// every other facade method; a resolved cursor always yields a success
+/// response, since "unknown cursor" is itself a defined outcome (full replay
+/// with the [`MAINFRAME_META_NAMESPACE`] `fullReplay` marker), not an error.
 ///
-/// `revision_log` (todo #377) is the chat's revision log paired with the
-/// boundary the caller captured BEFORE awaiting the snapshot (`None` for a
-/// connection that did not opt into revision cursors, which gets byte-
-/// identical legacy behavior with no `cursor` meta at all). The caller
-/// (`mainframe-server`'s hub, in `begin_resume`) owns the log's lifecycle
-/// and that capture; this function only locks the log, after its own
-/// snapshot read, to seed an unseeded log and plan against a revision
-/// cursor — but the reply's `cursor` always carries the caller's captured
-/// boundary, never a fresh `log.boundary()` read here, so it never
-/// acknowledges a change recorded in the gap between that capture and this
-/// snapshot (`revision::resolve`'s doc has the full race argument).
+/// `revision_log` is the chat's revision log paired with the boundary the
+/// caller captured BEFORE awaiting the snapshot (`None` for a connection that
+/// did not opt into revision cursors, which gets the item-cursor behaviour with
+/// no `cursor` meta at all). The caller (`mainframe-server`'s hub, in
+/// `begin_resume`) owns the log's lifecycle and that capture; this function
+/// only locks the log, after its own snapshot read, to seed an unseeded log and
+/// plan against a revision cursor — but the reply's `cursor` always carries the
+/// caller's captured boundary, never a fresh `log.boundary` read here, so it
+/// never acknowledges a change recorded in the gap between that capture and
+/// this snapshot (`revision::resolve`'s doc has the full race argument).
 pub async fn dispatch_resume(
     request: JsonRpcRequest,
     port: &dyn ResumePort,
@@ -154,16 +149,15 @@ pub async fn dispatch_resume_with(
 
     let snapshot = port.resume_snapshot(&resume.session_id).await;
     // `encode_containers`, not `encode`: a mid-stream snapshot carries the
-    // in-flight partial overlay's `StreamingLeafKind` (todo #382) — with
-    // `streaming: None` this is byte-identical to `encode`'s output (spec
-    // Decision 39). Flattened, it is `encode_revision`'s output (todo #376
-    // G2 task 1); `containers` keeps the per-container shape so
-    // `revision::resolve` can seed a log's container index too.
+    // in-flight partial overlay's `StreamingLeafKind` — with `streaming: None`
+    // this equals `encode`'s output. Flattened, it is `encode_revision`'s
+    // output; `containers` keeps the per-container shape so `revision::resolve`
+    // can seed a log's container index too.
     let containers = encoder::encode_containers(&snapshot.messages, snapshot.streaming);
     let items: Vec<EncodedItem> = containers.iter().flatten().cloned().collect();
-    // Spec Decision 41: only an opted-in connection previews old results,
-    // and the set is fixed here so the replay frames and the caller's seeded
-    // diff state trim exactly the same ids.
+    // Only an opted-in connection previews old results, and the set is fixed
+    // here so the replay frames and the caller's seeded diff state trim exactly
+    // the same ids.
     let preview_ids = if options.result_previews {
         replay_previews::preview_ids(&containers)
     } else {
@@ -265,9 +259,9 @@ fn success_response(
 /// apart from the "no history session yet" degenerate read and refuse the
 /// blanking re-seed (the legacy `refusesEmptyRefresh` guard, kept on the
 /// facade). `fullReplay` marks an unknown/pre-compaction cursor fallback.
-/// `cursor` (todo #377) is present only for a connection that opted into
-/// revision cursors — the new replay boundary this reply's updates converge
-/// a client to, regardless of which cursor shape the request itself used.
+/// `cursor` is present only for a connection that opted into revision cursors —
+/// the new replay boundary this reply's updates converge a client to,
+/// regardless of which cursor shape the request itself used.
 fn resume_meta(item_count: usize, full_replay: bool, cursor: Option<&WireRevisionCursor>) -> Value {
     let mut ns = serde_json::Map::new();
     ns.insert("itemCount".into(), serde_json::json!(item_count));
@@ -301,7 +295,7 @@ fn resolve_cursor(items: &[EncodedItem], replay_from: Option<&Value>) -> Resolve
         // A revision cursor with no log to resolve it against (the
         // connection never opted in, or `revision.rs` already tried and
         // found none) — treated the same as an unknown item cursor: a full
-        // replay, not a request error (edge case 9).
+        // replay, not a request error.
         Ok(ReplayCursor::Revision { .. }) | Err(_) => ResolvedCursor::Unknown,
     }
 }

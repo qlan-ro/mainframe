@@ -1,7 +1,7 @@
 //! Adapts `mainframe_automations::github_issues::GitHubIssuesClient` to the
-//! plugins-crate `GitHubIssues` port (task 4). This is the one place the two
-//! independent DTO sets meet — the plugins crate cannot depend on
-//! automations (fact 12), so the shapes are mirrored, not shared. The token
+//! plugins-crate `GitHubIssues` port. This is where their independent DTO sets
+//! meet: the plugins crate cannot depend on automations, so the shapes are
+//! converted here. The token
 //! is read from the credential store on every call, not cached at
 //! construction, so a token connected after boot (via the link dialog) works
 //! without a daemon restart.
@@ -201,13 +201,3 @@ fn map_error(err: gh::GitHubError) -> GitHubPortError {
         }
     }
 }
-
-// PORT STATUS: (new — production GitHubIssues wiring for the todos-plugin
-// sync engine, task 5b)
-// confidence: high
-// todos: 0
-// notes: the credential label is resolved per call via `CredentialStore::get`,
-// never cached, so a token connected after boot (link dialog → set_credential)
-// resolves without a restart. GitHubError -> GitHubPortError is a 1:1 mapping;
-// GitHubPortError::Unavailable is unreachable from this adapter (only the
-// plugins-crate guard constructs it).

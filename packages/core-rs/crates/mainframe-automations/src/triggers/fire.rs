@@ -1,9 +1,8 @@
-//! The one place a trigger actually starts a run (Node
-//! trigger-arming.ts fireRun) — shared by the schedule sweep, the event
-//! router, and chaining. Best-effort: a since-disabled or deleted
-//! automation and a dedup-key loss are silent no-ops, not errors — the
-//! webhook route (T9.3) bypasses this and calls the interpreter directly
-//! because it must tell a duplicate (200) from a start failure (500, A7).
+//! The one place a trigger actually starts a run — shared by the schedule
+//! sweep, the event router, and chaining. Best-effort: a since-disabled or
+//! deleted automation and a dedup-key loss are silent no-ops, not errors — the
+//! webhook route bypasses this and calls the interpreter directly because it
+//! must tell a duplicate (200) from a start failure (500, A7).
 
 use std::sync::Arc;
 
@@ -25,9 +24,9 @@ impl TriggerFirer {
     }
 
     /// Starts a run for a trigger fire and spawns its advance. `Ok(None)`
-    /// when the automation is gone, disabled (Decision 11: disabling disarms
-    /// triggers; manual runs stay allowed elsewhere), or the dedup key lost
-    /// the `uq_runs_dedup` insert race (Decision 13).
+    /// when the automation is gone, disabled (disabling disarms triggers;
+    /// manual runs stay allowed elsewhere), or the dedup key lost the
+    /// `uq_runs_dedup` insert race.
     pub(crate) async fn fire_run(
         &self,
         automation_id: &str,
@@ -61,9 +60,3 @@ impl TriggerFirer {
         Ok(Some(run))
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T8.2), not a TS port
-// confidence: high
-// todos: 0
-// notes: unlike Node's fireRun (fire-and-forget, swallows everything), this
-//        returns unexpected store errors so callers can log with context.

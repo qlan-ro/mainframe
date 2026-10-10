@@ -35,8 +35,3 @@ pub struct TokenRef {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub field: Option<String>,
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T1.1), not a TS port
-// confidence: high
-// todos: 0
-// notes: wire truth = packages/types/src/automation.ts TokenRef + contract §1.

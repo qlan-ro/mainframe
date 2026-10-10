@@ -1,6 +1,6 @@
 //! `GuardGitHub` — the GitHub port stand-in when `http:outbound` is
 //! undeclared, or when it is declared but the daemon's automations engine
-//! never started (D2). Fails every method with the reason it was built for —
+//! never started. Fails every method with the reason it was built for —
 //! never panics, never reaches the network. Split out of `context.rs`'s
 //! `guards` module to keep new code out of an already-oversized file.
 

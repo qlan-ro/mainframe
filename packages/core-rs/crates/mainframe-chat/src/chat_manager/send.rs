@@ -1,7 +1,7 @@
 //! The dispatch half of `send_message`: command vs plain text, and the
 //! first-message titling both share. The queued-turn bookkeeping
 //! (`queued_message_metadata`, `record_queued_ref`) lives in the sibling
-//! `send_queue.rs` (todo #350, plan task 37).
+//! `send_queue.rs`.
 
 use super::*;
 
@@ -16,12 +16,12 @@ struct Outgoing {
 
 impl ChatManager {
     /// First-message titling: the deterministic fallback, then LLM summarization.
-    /// No-op once the chat has a title — EXCEPT a fork's provisional title
-    /// (todo #343), which still triggers generation on the first send even
-    /// though it is non-empty: without this, a fork's `<title> (fork)` title
-    /// would never be replaced. A user rename before that first message (the
-    /// title no longer equals the stored provisional title) still wins, and so
-    /// does disabled generation (`do_generate_title`'s own no-op).
+    /// No-op once the chat has a title — EXCEPT a fork's provisional title, which
+    /// still triggers generation on the first send even though it is non-empty:
+    /// without this, a fork's `<title> (fork)` title would never be replaced. A
+    /// user rename before that first message (the title no longer equals the
+    /// stored provisional title) still wins, and so does disabled generation
+    /// (`do_generate_title`'s own no-op).
     fn assign_initial_title(&self, cell: &Arc<Mutex<ActiveChat>>, chat_id: &str, content: &str) {
         let current_title = cell
             .lock()
@@ -59,12 +59,11 @@ impl ChatManager {
             let chat = cell.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
             self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
         }
-        // TS fires `doGenerateTitle(...).catch(...)` WITHOUT awaiting: title
-        // generation shells out to the CLI, so awaiting it here would both stall
-        // the send and shift its `chat.updated` ahead of the turn's result/
-        // contextUsage events. Spawn it so the emission lands after the turn,
-        // matching Node's stream ordering. A fork's provisional title is left
-        // exactly as `create_fork` stored it until generation produces one.
+        // Title generation runs WITHOUT awaiting: it shells out to the CLI, so
+        // awaiting it here would both stall the send and shift its `chat.updated`
+        // ahead of the turn's result/contextUsage events. Spawn it so the emission
+        // lands after the turn. A fork's provisional title is left exactly as
+        // `create_fork` stored it until generation produces one.
         let lifecycle = self.lifecycle.clone();
         let chat_id_owned = chat_id.to_string();
         tokio::spawn(async move {
@@ -76,11 +75,10 @@ impl ChatManager {
 
     /// Both dispatch shapes store and emit the user's text, so they share this.
     ///
-    /// `vendor_id`, when given, becomes the stored message's own id in place
-    /// of a minted nanoid — the same uuid handed to `send_message` below, so
-    /// the CLI records this turn's transcript entry under the id the daemon
-    /// already committed to live (`docs/specs/2026-09-25-todo-178-idle-whole-
-    /// chat-offload.md` decision 10: live and cold-reloaded ids must match).
+    /// `vendor_id`, when given, becomes the stored message's own id in place of
+    /// a minted nanoid — the same uuid handed to `send_message` below, so the
+    /// CLI records this turn's transcript entry under the id the daemon already
+    /// committed to live (live and cold-reloaded ids must match).
     fn store_user_message(
         &self,
         chat_id: &str,
@@ -167,9 +165,9 @@ impl ChatManager {
         content: &str,
         handoff: Option<&str>,
     ) -> Result<(), SendError> {
-        // A command dispatched while another turn is already running (T17,
-        // R3.12) is not a turn start — a turn is already in progress. Only a
-        // command sent to a free chat opens one.
+        // A command dispatched while another turn is already running is not a
+        // turn start — a turn is already in progress. Only a command sent to a
+        // free chat opens one.
         let was_working = post
             .lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -331,8 +329,8 @@ impl ChatManager {
 
         if is_queued {
             self.record_queued_ref(chat_id, &message, message_uuid, content, attachment_ids);
-            // Queued: `TurnStarted` waits for the CLI to dequeue it
-            // (event_handler.rs's `on_queued_processed`).
+        // Queued: `TurnStarted` waits for the CLI to dequeue it
+        // (event_handler.rs's `on_queued_processed`).
         } else {
             self.event_handler.notify_chat_surface(
                 crate::chat_surface::ChatSurfaceEvent::TurnStarted {

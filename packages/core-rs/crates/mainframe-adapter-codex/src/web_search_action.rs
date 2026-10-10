@@ -1,13 +1,13 @@
 //! `webSearch` item + its `action` payload. Split out of `thread_item_variants.rs`
-//! (todo #356) to keep that file under the 300-line ceiling.
+//! to keep that file under the 300-line ceiling.
 
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
 /// `results` is deliberately not modeled: its element type is unnamed in codex's
-/// own binary and its content is unverified (todo #356 plan, "Established
-/// facts") — an unread field is tolerated crate-wide, so it is simply dropped.
+/// own binary and its content is unverified. An unread field is tolerated
+/// crate-wide, so it is simply dropped.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WebSearchItem {

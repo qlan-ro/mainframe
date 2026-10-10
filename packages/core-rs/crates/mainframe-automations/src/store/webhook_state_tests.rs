@@ -1,4 +1,4 @@
-//! T7 — webhook delivery state. The sample index is in-memory (R3); this row
+//! Webhook delivery state. The sample index is in-memory (R3); this row
 //! is the one webhook fact that has to outlive a daemon restart, because the
 //! editor's "last delivery" line is how a user tells a wired-up hook from a
 //! silent one.

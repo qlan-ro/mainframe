@@ -1,5 +1,5 @@
 //! `ChatsRepository::create_fork` and the `parent_chat_id` / `pending_fork`
-//! storage seams (todo #343, Group 1 — fork-contract).
+//! storage seams.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use rusqlite::Connection;

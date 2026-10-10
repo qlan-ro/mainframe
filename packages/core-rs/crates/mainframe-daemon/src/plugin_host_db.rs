@@ -1,7 +1,6 @@
 //! The daemon-side `PluginHostDb` — the `DatabaseManager` slice the plugin
 //! contexts read, bridged onto the async `Db` actor via `call_blocking` (the same
-//! SYNC-DB BRIDGE the `ChatManagerDeps` accessors use). In `index.ts` the
-//! `PluginManager` closes over the raw `db`; here the actor stands in.
+//! SYNC-DB BRIDGE the `ChatManagerDeps` accessors use).
 
 use mainframe_plugins::PluginHostDb;
 use mainframe_runtime::time::now_iso8601;
@@ -52,8 +51,7 @@ impl PluginHostDb for DaemonPluginHostDb {
         match self.db.call_blocking(move |d| d.chats.create(&new_chat)) {
             Ok(chat) => chat,
             Err(err) => {
-                // The trait is infallible (mirrors better-sqlite3's synchronous
-                // create); a DB failure has no error channel, so log + return an
+                // The trait is infallible; a DB failure has no error channel, so log + return an
                 // unpersisted stub rather than crash the plugin request.
                 tracing::error!(%err, project_id, adapter_id, "plugin chats.create failed");
                 fallback_chat(project_id, adapter_id, permission_mode)
@@ -151,12 +149,3 @@ fn fallback_id() -> String {
         .unwrap_or(0);
     format!("fallback-{nanos}")
 }
-
-// PORT STATUS: (new — production PluginHostDb wiring for plugins/manager.ts `db`)
-// confidence: high
-// todos: 0
-// notes: The one production PluginHostDb; every accessor bridges through the Db
-// actor's call_blocking (SYNC-DB BRIDGE), one WAL connection. chats_create is
-// infallible per the ported trait — a DB failure logs + returns an unpersisted stub.
-// notes: Main catch-up: the defensive stub gains the new Chat fields (lastContextTotalTokens/
-// lastContextMaxTokens/transcriptMissing/backgroundActivity), all None.

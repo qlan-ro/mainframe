@@ -1,7 +1,6 @@
-//! Task 42: the acceptance suite (todo #286) — one test per remaining spec
-//! criterion, driving the real `/todos/github` routes end-to-end against
-//! `FakeGitHub` and asserting on its recorded calls or the persisted state,
-//! never on internal call sequences.
+//! The acceptance suite — one test per remaining spec criterion, driving the
+//! real `/todos/github` routes end-to-end against `FakeGitHub` and asserting on
+//! its recorded calls or the persisted state, never on internal call sequences.
 //!
 //! AC9 (renumbering keeps the pair keyed on `todo_id`), AC23 (report
 //! retention), AC28 (the workflow-label list is declared once), AC30

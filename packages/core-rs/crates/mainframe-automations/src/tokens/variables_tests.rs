@@ -1,6 +1,6 @@
-//! T6 — `$name` scanning and namespace derivation. The reference
-//! implementation is packages/types/src/automation-domain/variables.ts; the
-//! shared cases live in fixtures/automations/variable-substitution.json.
+//! `$name` scanning and namespace derivation. The reference implementation is
+//! packages/types/src/automation-domain/variables.ts; the shared cases live in
+//! fixtures/automations/variable-substitution.json.
 
 use std::path::PathBuf;
 use std::sync::Arc;

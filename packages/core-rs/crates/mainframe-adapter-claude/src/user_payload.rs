@@ -1,8 +1,8 @@
 //! Builds the stdin `user` payload for `ClaudeSession::send_message`.
 //!
-//! Extracted from `session.rs` so the payload shape has its own test surface
-//! (todo #300 group C): a regression guard proving the new `ImageInput.path`
-//! field — added for Codex — never reaches Claude's stdin.
+//! Extracted from `session.rs` so the payload shape has its own test surface: a
+//! regression guard proving the `ImageInput.path` field — added for Codex —
+//! never reaches Claude's stdin.
 
 use mainframe_adapter_api::ImageInput;
 use serde_json::{Value, json};

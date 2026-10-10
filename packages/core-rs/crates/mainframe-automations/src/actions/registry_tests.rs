@@ -1,5 +1,5 @@
-//! T6.2 — flat-id action registry: catalog contents, output-type enum wire
-//! names, idempotent flag, duplicate/unknown id errors.
+//! Flat-id action registry: catalog contents, output-type enum wire names,
+//! idempotent flag, duplicate/unknown id errors.
 
 use std::collections::BTreeMap;
 
@@ -152,11 +152,11 @@ fn builtin_catalog_matches_the_contract_output_table() {
     }
 }
 
-/// T7.3/Part-0 — the wire `ActionCatalogEntry` shape (GET
-/// /api/automation-actions): camelCase keys, `credentialLabelHint` omitted
-/// when absent, `available` true for an action with no external
-/// prerequisite, and `fields`/`hasOutputAs`/`idempotent` now cross the wire
-/// (the bug this test used to assert away).
+/// The wire `ActionCatalogEntry` shape (GET /api/automation-actions): camelCase
+/// keys, `credentialLabelHint` omitted when absent, `available` true for an
+/// action with no external prerequisite, and
+/// `fields`/`hasOutputAs`/`idempotent` now cross the wire (the bug this test
+/// used to assert away).
 #[tokio::test]
 async fn wire_catalog_projects_manifests_to_the_contract_shape() {
     let mut registry = ActionRegistry::new();
@@ -226,9 +226,9 @@ async fn wire_catalog_projects_manifests_to_the_contract_shape() {
     assert_eq!(add_row["idempotent"], false);
 }
 
-/// T7.3 — the MCP catalog-entry seam: an `mcp:<server>:<tool>` id with
-/// output `{result: text}` round-trips through the wire shape. No MCP
-/// client, config source, or `actions/mcp.rs` ships at launch (R5).
+/// The MCP catalog-entry seam: an `mcp:<server>:<tool>` id with output
+/// `{result: text}` round-trips through the wire shape. No MCP client, config
+/// source, or `actions/mcp.rs` ships at launch (R5).
 #[test]
 fn mcp_catalog_entry_shape_round_trips() {
     let entry = super::registry::ActionCatalogEntry::mcp_seam("linear", "create_issue");
@@ -260,6 +260,6 @@ fn is_idempotent_reads_the_manifest_and_defaults_false() {
 
     assert!(registry.is_idempotent("safe.read"));
     assert!(!registry.is_idempotent("effectful.write"));
-    // Unregistered ids are treated as non-idempotent (Decision 12).
+    // Unregistered ids are treated as non-idempotent.
     assert!(!registry.is_idempotent("unknown.id"));
 }

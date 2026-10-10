@@ -1,4 +1,4 @@
-//! T6 — `$name` substitution end-to-end through the interpreter: the name
+//! `$name` substitution end-to-end through the interpreter: the name
 //! index a run resolves against is the scope walk's, so a repeat body's
 //! producers never shadow a later sibling's.
 

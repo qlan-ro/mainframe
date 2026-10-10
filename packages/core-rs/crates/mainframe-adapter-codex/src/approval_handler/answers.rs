@@ -40,7 +40,7 @@ pub(super) fn answer_user_input(entry: PendingApproval, response: &ControlRespon
 
 /// Answer an approval with the decision string Codex names.
 pub(super) fn answer_approval(entry: PendingApproval, response: &ControlResponse) {
-    // T19, R3.2: session-scoped allow reaches Codex's own "stop asking
+    // Session-scoped allow reaches Codex's own "stop asking
     // this session" decision, distinct from a one-off accept.
     let decision = match (response.behavior, response.scope) {
         (ControlBehavior::Allow, Some(PermissionScope::Session)) => "acceptForSession",
@@ -103,7 +103,7 @@ fn flat_labels(entry: &PendingApproval) -> Vec<String> {
 }
 
 /// The single answer string to deliver for a requestUserInput, or `None` when
-/// the response carries nothing this gate could say — a decline (T19, R3.5).
+/// the response carries nothing this gate could say — a decline.
 fn choose_request_user_input_answer(
     entry: &PendingApproval,
     response: &ControlResponse,

@@ -1,4 +1,4 @@
-//! Ported from `src/quota/merge.ts` — the sparse rolling merge.
+//! Merge sparse quota updates into the current snapshot.
 
 use mainframe_types::adapter::{ProviderQuota, ProviderQuotaStatus, QuotaWindow};
 

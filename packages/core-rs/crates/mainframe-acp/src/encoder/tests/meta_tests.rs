@@ -1,6 +1,5 @@
-//! Container/item meta cases — system/error markers, per-item display
-//! metadata, and the ask-user-question result shape — split out of
-//! `tests.rs` (todo #350, plan task 37, R2.13).
+//! Container/item meta cases — system/error markers, per-item display metadata,
+//! and the ask-user-question result shape — split out of `tests.rs`.
 
 use std::collections::HashMap;
 

@@ -1,5 +1,4 @@
-//! The per-chat, per-task workflow-run store. See the plan's *The store
-//! contract* for the full method-by-method behavior.
+//! The per-chat, per-task workflow-run store.
 //!
 //! `DashMap` guards are always dropped before `sender.send(...)` — never hold
 //! a shard lock across a broadcast send.
@@ -90,10 +89,10 @@ impl ClaudeWorkflowStore {
     }
 
     /// `task_progress`. Cumulative totals always take `max(current, incoming)`.
-    /// `snapshot: None` updates totals only and never clears structure
-    /// (AC 12); a snapshot only replaces the retained structure when its
-    /// revision is at least as fresh as the one already held and the run has
-    /// not settled (terminal, or already record-sourced).
+    /// `snapshot: None` updates totals only and never clears structure; a
+    /// snapshot only replaces the retained structure when its revision is at
+    /// least as fresh as the one already held and the run has not settled
+    /// (terminal, or already record-sourced).
     pub fn apply_progress(
         &self,
         chat_id: &str,
@@ -112,7 +111,7 @@ impl ClaudeWorkflowStore {
         run.duration_ms = run.duration_ms.max(usage.duration_ms);
 
         if let Some(entries) = snapshot {
-            // D8: a settled run's structure is final, so a trailing snapshot
+            // A settled run's structure is final, so a trailing snapshot
             // racing terminal reconciliation cannot blank it.
             let settled = run.status.is_terminal() || run.source == ClaudeWorkflowRunSource::Record;
             let retained_revision = run.structure_revision.unwrap_or(i64::MIN);
@@ -153,9 +152,9 @@ impl ClaudeWorkflowStore {
         self.emit(chat_id, updated);
     }
 
-    /// Terminal reconciliation (D7): a record-sourced run supersedes the
+    /// Terminal reconciliation: a record-sourced run supersedes the
     /// retained snapshot regardless of `structure_revision`. The disk backfill
-    /// (D9) does *not* use this — it merges outside the store via
+    /// does *not* use this — it merges outside the store via
     /// `merge::merge_runs`.
     pub fn apply_record(&self, chat_id: &str, incoming: ClaudeWorkflowRun) {
         let mut chat = self.runs.entry(chat_id.to_string()).or_default();
@@ -175,7 +174,7 @@ impl ClaudeWorkflowStore {
         self.emit(chat_id, resolved);
     }
 
-    /// D5 — the CLI-exit sweep's workflow counterpart. Only running runs are
+    /// The CLI-exit sweep's workflow counterpart. Only running runs are
     /// stamped; a run already terminal, or paused, is left alone.
     pub fn stop_all_running(&self, chat_id: &str) {
         let Some(mut chat) = self.runs.get_mut(chat_id) else {
@@ -195,7 +194,7 @@ impl ClaudeWorkflowStore {
         }
     }
 
-    /// Sorted per *Merge precedence* rule 5:
+    /// Sorted per merge precedence rule 5 (see `merge`):
     /// `structure_revision.or(terminal_at).unwrap_or(0)` ascending, then
     /// `task_id`.
     pub fn runs_for_chat(&self, chat_id: &str) -> Vec<ClaudeWorkflowRun> {

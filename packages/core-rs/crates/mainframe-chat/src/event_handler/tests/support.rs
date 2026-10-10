@@ -9,7 +9,7 @@ pub(super) struct FakeDeps {
     refs: Mutex<Vec<QueuedMessageRef>>,
     updates: Mutex<Vec<EventChatUpdate>>,
     quota: Option<Arc<QuotaManager>>,
-    /// `db.chats.pendingFork` for "c1" (todo #343); `None` for every test
+    /// `db.chats.pendingFork` for "c1"; `None` for every test
     /// outside the retire-on-result coverage.
     pending_fork: Mutex<Option<PendingForkState>>,
     project_path: Mutex<Option<String>>,
@@ -177,7 +177,7 @@ fn ids(messages: &Arc<Mutex<MessageCache>>) -> Vec<String> {
         .unwrap_or_default()
 }
 
-// ── event-handler-session-path.test.ts ──────────────────────────────────
+// ── Session path ──────────────────────────────────
 
 #[derive(Default)]
 struct QueueSurface {
@@ -198,7 +198,7 @@ impl ChatSurface for QueueSurface {
     }
 }
 
-// ── event-handler-move-on-process.test.ts (ack path) ─────────────────────
+// ── Move-on-process acknowledgement ─────────────────────
 
 // ── session-pushed provider quota (Codex account/rateLimits/updated) ──────
 // Seam-3: a `sink.on_provider_quota` emission from a live session event must
@@ -207,7 +207,7 @@ impl ChatSurface for QueueSurface {
 
 // ── onResult orphan-reconcile path ───────────────────────────────────────
 
-// ── retire-on-result (todo #343 Group 3, plan item 5) ────────────────────
+// ── Retire pending forks on result ────────────────────
 fn result(subtype: &str, is_error: Option<bool>) -> SessionResult {
     SessionResult {
         total_cost_usd: Some(0.0),
@@ -219,9 +219,9 @@ fn result(subtype: &str, is_error: Option<bool>) -> SessionResult {
     }
 }
 
-// ── event-handler-turn-timing.test.ts ────────────────────────────────────
+// ── Turn timing ────────────────────────────────────
 
-// ── event-handler-background-activity.test.ts ────────────────────────────
+// ── Background activity ────────────────────────────
 
 include!("paths.rs");
 include!("queues.rs");

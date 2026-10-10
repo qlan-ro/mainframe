@@ -101,7 +101,7 @@ async fn create_rejects_neither_project_nor_no_project_400() {
     assert_eq!(read(resp).await.0, StatusCode::BAD_REQUEST);
 }
 
-// ── success paths (todo #346, AC 26 — need a real ChatManager) ───────────
+// ── success paths (need a real ChatManager) ──────────────────────────────
 
 #[tokio::test]
 async fn create_succeeds_with_a_project() {

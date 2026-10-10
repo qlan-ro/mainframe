@@ -1,9 +1,6 @@
-//! Ported from `packages/core/src/messages/message-parsing.ts`.
-//!
 //! Claude-specific slash-command / attached-file / mainframe-command tag
-//! parsing. The TS source leans on regexes; the `regex` crate is not on the
-//! port allowlist (see task-progress.rs), so each pattern is matched by hand
-//! below with the same semantics.
+//! parsing. The `regex` crate is not on the allowlist, so each pattern is
+//! matched by hand below.
 
 // ── hand-rolled tag helpers ─────────────────────────────────────────────────
 
@@ -146,8 +143,7 @@ pub(crate) fn parse_attached_file_path_tags(text: &str) -> AttachedFilePaths {
     AttachedFilePaths { files, clean_text }
 }
 
-/// IMAGE_COORDINATE_NOTE_RE — a fixed-template note the CLI injects. Marked for
-/// removal in the TS source ("should not be used"); replicated for fidelity.
+/// IMAGE_COORDINATE_NOTE_RE — a fixed-template note the CLI injects.
 /// Pattern: `\[Image:\s*original\s+\d+x\d+,\s*displayed at\s+\d+x\d+\.\s*Multiply
 /// coordinates by\s+[0-9.]+\s+to map to original image\.\]`
 fn strip_image_coordinate_note(text: &str) -> String {
@@ -273,7 +269,7 @@ fn capture_mainframe_response(text: &str) -> Option<String> {
     Some(text[content_start..content_start + close_rel].to_string())
 }
 
-/// Streaming-safe (T14, R3.9): an open `<mainframe-command...>` with no
+/// Streaming-safe: an open `<mainframe-command...>` with no
 /// close tag yet — whether the open tag itself is still incomplete or the
 /// body just hasn't closed — is a wrapper mid-stream, not absent text. Both
 /// cases drop from `tag_start` to the end of input rather than passing the
@@ -378,17 +374,3 @@ mod tests {
         assert_eq!(out.clean_text, "keep  tail");
     }
 }
-
-// PORT STATUS: src/messages/message-parsing.ts (99 lines)
-// confidence: medium
-// todos: 0
-// notes: `regex` is not on the allowlist, so every RE is hand-rolled with the
-// same semantics: COMMAND_NAME_RE / command tag replaces (`<t>[^<]*</t>`),
-// ATTACHED_FILE_PATH_RE (`<attached_file_path\s+([^>]+?)\/?>`), the
-// IMAGE_COORDINATE_NOTE_RE fixed template, and the mainframe-command response/
-// wrapper patterns. parseRawCommand's `Array<{name}>` param is taken as the
-// command names (`&[String]`); only `.name` was read. Math.round → floor(x+0.5)
-// (positive-only path); `.toFixed(1)` → `{:.1}` (round-half-to-even may differ
-// from JS on exact .05 boundaries in 1.0..10.0 — untested edge). Only
-// stripMainframeCommandTags is covered by a ported TS test; the rest carry
-// sanity tests. IMAGE note matcher confidence medium — no TS test exercises it.

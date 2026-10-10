@@ -1,4 +1,4 @@
-//! `RevisionRegistry` and the `FacadeHub` methods built on it (todo #377).
+//! `RevisionRegistry` and the `FacadeHub` methods built on it.
 //! End-to-end hub-level cases (recording with nobody attached, epoch resets
 //! from chat-surface events, registry eviction through a resume) live in
 //! `hub/tests/revision_cursor_tests.rs`; these are the narrower
@@ -27,11 +27,10 @@ fn hub() -> FacadeHub {
 }
 
 /// A `full` `EncodedDelta` over one container holding `items` — the shape
-/// `record_display_delta` expects, standing in for these tests' old flat
-/// `record(items)` calls (todo #376 G4). `record_full`'s outcomes,
-/// boundary bumps, and tombstones match `record`'s exactly for this shape;
-/// `full`'s own fallback closure is never called for a `full` delta, so
-/// every call site below hands it an unreachable stub.
+/// `record_display_delta` expects, standing in for a flat `record(items)` call.
+/// `record_full`'s outcomes, boundary bumps, and tombstones match `record`'s
+/// exactly for this shape; `full`'s own fallback closure is never called for a
+/// `full` delta, so every call site below hands it an unreachable stub.
 fn full(items: Vec<EncodedItem>) -> EncodedDelta {
     EncodedDelta::full(vec![items])
 }

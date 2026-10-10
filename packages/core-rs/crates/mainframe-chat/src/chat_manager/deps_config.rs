@@ -12,9 +12,9 @@ pub(super) struct CmDeps {
 
 impl ConfigManagerDeps for CmDeps {
     /// Config edits take no lifecycle claim (see `config_api.rs`'s `load_chat`
-    /// rebuild), so this read doubles as a use (todo #381): it touches the
-    /// cell's clock, protecting it from the idle scanner for the rest of the
-    /// edit even though no claim is held across the `.await`s that follow.
+    /// rebuild), so this read doubles as a use: it touches the cell's clock,
+    /// protecting it from the idle scanner for the rest of the edit even though
+    /// no claim is held across the `.await`s that follow.
     fn get_active_chat(&self, chat_id: &str) -> Option<Arc<Mutex<ActiveChat>>> {
         let cell = self.active_chats.get(chat_id).map(|e| e.value().clone())?;
         self.lifecycle.touch(chat_id);
@@ -72,8 +72,7 @@ impl ConfigManagerDeps for CmDeps {
     }
     fn take_starting_chat<'a>(&'a self, chat_id: &'a str) -> Option<BoxFuture<'a, ()>> {
         // `await_starting` waits out an in-flight spawn and no-ops when none is
-        // running, so returning it unconditionally mirrors the TS `startingChats.get`
-        // guard (a `resolve()`-then-await for the miss case).
+        // running, so returning it unconditionally is safe for the miss case.
         Some(Box::pin(async move {
             self.lifecycle.await_starting(chat_id).await;
         }))

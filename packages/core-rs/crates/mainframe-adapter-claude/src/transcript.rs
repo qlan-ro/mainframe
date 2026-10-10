@@ -1,8 +1,5 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/transcript.ts`.
-//!
 //! The canonical `~/.claude/projects/<encoded>/<sessionId>.jsonl` path helper
-//! (moved here out of `history.ts` to dedup) plus the transcript-presence probe
-//! used by degraded-chat recovery.
+//! plus the transcript-presence probe used by degraded-chat recovery.
 
 use std::path::{Path, PathBuf};
 
@@ -69,8 +66,8 @@ pub async fn locate_claude_transcript(
         .filter(|p| !p.is_empty())
         .collect();
     for candidate in candidates {
-        // TS `access(candidate, constants.R_OK)`; a readable file's `metadata`
-        // succeeds, a missing one errors — same signal for the .jsonl transcripts.
+        // A readable file's `metadata` succeeds, a missing one errors — the
+        // presence signal for the .jsonl transcripts.
         if fs::metadata(&candidate).await.is_ok() {
             return Some(TranscriptLocation::Present(candidate));
         }
@@ -144,8 +141,6 @@ mod tests {
         // existing dashes are preserved
         assert_eq!(encode_project_path("a-b/c"), "a-b-c");
     }
-
-    // Translated assertion-for-assertion from claude/__tests__/transcript.test.ts.
 
     #[tokio::test]
     async fn returns_true_when_the_stored_session_file_path_exists() {
@@ -283,13 +278,3 @@ mod tests {
         );
     }
 }
-
-// PORT STATUS: src/plugins/builtin/claude/transcript.ts (34 lines)
-// confidence: high
-// todos: 0
-// notes: Main catch-up (#424). getSessionJsonlPath moved here from history.ts
-// notes: (history.rs now imports it — its private session_jsonl_path/encode_project_path
-// notes: are removed and the encode_project_path test relocated here).
-// notes: is_claude_transcript_present maps `access(_, R_OK)` to tokio::fs::metadata
-// notes: (same present/missing signal for readable .jsonl files). Returns bool (never
-// notes: null) — the adapter wraps it as Ok(Some(bool)). transcript.test.ts translated.

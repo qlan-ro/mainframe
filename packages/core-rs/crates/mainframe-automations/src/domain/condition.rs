@@ -54,8 +54,3 @@ pub struct ConditionRow {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub value: Option<ConditionValue>,
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T1.1), not a TS port
-// confidence: high
-// todos: 0
-// notes: comparator wire names are exactly contract §1's snake_case list.

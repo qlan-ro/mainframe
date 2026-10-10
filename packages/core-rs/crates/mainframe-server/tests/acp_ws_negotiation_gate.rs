@@ -1,8 +1,8 @@
-//! `initialize` is mandatory before any session method (spec decision 32),
-//! and the refusal must leave no trace: a peer that never negotiated — or
-//! negotiated an unsupported version — must not end up attached to the
-//! session it named, or it would keep receiving that chat's `session/update`
-//! fan-out for the rest of the connection (todo #350, PR #688 review).
+//! `initialize` is mandatory before any session method, and the refusal must
+//! leave no trace: a peer that never negotiated — or negotiated an unsupported
+//! version — must not end up attached to the session it named, or it would
+//! keep receiving that chat's `session/update` fan-out for the rest of the
+//! connection.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod support;

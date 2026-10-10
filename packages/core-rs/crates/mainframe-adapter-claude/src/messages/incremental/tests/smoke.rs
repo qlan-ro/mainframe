@@ -65,7 +65,7 @@ fn appending_text_into_the_active_assistant_turn_merges_into_its_container() {
 
 #[test]
 fn appending_after_an_empty_seed_folds_the_new_message() {
-    // todo #376 follow-up regression: `session/resume` reaches
+    // Regression: `session/resume` reaches
     // `display_snapshot` before the chat's first prompt, so the projector's
     // very first call is a `full_rebuild` on an empty `raw` slice, leaving
     // `groups == []`. The next call — the first real append — must not

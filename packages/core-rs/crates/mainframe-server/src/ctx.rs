@@ -1,7 +1,5 @@
 //! `AppCtx` — the Arc-shared application context every route module and the WS
-//! layer read. Mirrors the `ctx` object assembled in `src/server/http.ts` plus
-//! the `HttpServerDeps` / WebSocketManager collaborators, narrowed to the
-//! Phase-3 surface (chat/adapter/launch/plugin/workflow managers are Phase 4/5).
+//! layer read.
 
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
@@ -27,14 +25,13 @@ use crate::acp_ws::FacadeHub;
 use crate::db::Db;
 use crate::websocket::WsClients;
 
-/// The `defaultRun` process runner, as the `Runner` trait resolve-executable
-/// injects. `resolveAdapterExecutable` (the settings `resolvedExecutable`
+/// The default process runner, as the `Runner` trait resolve-executable
+/// injects. `resolve_adapter_executable` (the settings `resolvedExecutable`
 /// enrichment and the daemon's refresh deps) takes `&dyn Runner`; this is the
-/// single production impl over `default_run` (`execFile` + 5s timeout).
+/// single production impl over `default_run` (spawn + 5s default timeout).
 ///
 /// Carries the boot-resolved login-shell `PATH` so `which`/`where` detection and
-/// version probes find CLIs outside the packaged app's bare `PATH` (the TS twin
-/// relied on `enrichPath` mutating `process.env.PATH`).
+/// version probes find CLIs outside the packaged app's bare `PATH`.
 #[derive(Default)]
 pub struct DefaultRunner {
     pub path: Option<ResolvedPath>,
@@ -75,14 +72,14 @@ impl mainframe_adapter_api::resolve_executable::Runner for DefaultRunner {
 pub struct GitFactory;
 
 impl GitFactory {
-    /// Build a `GitService` scoped to `project_path`. Mirrors the TS
-    /// `new GitService(projectPath)` call route handlers make per request.
+    /// Build a `GitService` scoped to `project_path`; route handlers call this
+    /// per request.
     pub fn for_project(&self, project_path: impl Into<String>) -> mainframe_git::GitService {
         mainframe_git::GitService::for_project(project_path)
     }
 }
 
-/// The cross-cutting daemon service handles (§2.4). `commands` and
+/// The cross-cutting daemon service handles. `commands` and
 /// `provider-config` are free functions over the db, not stored handles, so they
 /// have no field here — route modules call them with `ctx.db`.
 #[derive(Clone)]
@@ -101,14 +98,14 @@ pub struct AppCtx {
     pub git: GitFactory,
     pub services: Services,
     /// Event fan-out. Route handlers and the file watcher publish here; the WS
-    /// layer subscribes and applies per-chat gating (§ws-events broadcastScoping).
+    /// layer subscribes and applies per-chat gating.
     pub broadcast: broadcast::Sender<DaemonEvent>,
-    /// The live WS client registry (tsv SHARED_MAP `clients`), consulted by the
-    /// broadcast fan-out and populated per connection.
+    /// The live WS client registry, consulted by the broadcast fan-out and
+    /// populated per connection.
     pub ws_clients: WsClients,
-    /// The ACP facade hub (todo #350): the `/acp/{profile}` connection
-    /// registry plus the `ChatSurface` fan-out that streams chat-surface
-    /// events to attached facade sessions. The same `Arc` is attached to the
+    /// The ACP facade hub: the `/acp/{profile}` connection registry plus the
+    /// `ChatSurface` fan-out that streams chat-surface events to attached
+    /// facade sessions. The same `Arc` is attached to the
     /// `ChatManager` at boot (`build_chat_manager`).
     pub facade_hub: Arc<FacadeHub>,
     /// Heartbeat cadence advertised in `initialize`'s `_meta` and used by the
@@ -119,7 +116,7 @@ pub struct AppCtx {
     /// The `AdapterRegistry` (contract `adapters` handle). Backs `GET /api/adapters`
     /// (`list()` with installed/version probing) and the agents/skills routes'
     /// existence check. Cheap to construct (`AdapterRegistry::new()`), so it is a
-    /// concrete handle rather than a Phase-4 `Option` seam.
+    /// concrete handle rather than an `Option`.
     pub adapter_registry: Arc<AdapterRegistry>,
     /// The `BackgroundTaskTracker` (contract `backgroundTasks` handle). Backs the
     /// `/api/chats/:chatId/background-tasks*` routes. Cheap to construct, so concrete.
@@ -127,11 +124,10 @@ pub struct AppCtx {
     /// The `ClaudeWorkflowStore` (retained in-memory Claude workflow runs). Backs
     /// the chat-history `workflowRuns` fold. Cheap to construct, so concrete.
     pub claude_workflows: Arc<ClaudeWorkflowStore>,
-    /// The `ChatManager` (contract `chats` handle). `None` until the daemon boot
-    /// (the next task) wires construction — `ChatManager::new` needs a full
-    /// `ChatManagerDeps` impl, so the Phase-3 test harness cannot build one. Chat
-    /// route handlers gate on `Some` and fall back to the TS failure-path envelope
-    /// when absent (mirrors the `projects::remove` Phase-4 seam).
+    /// The `ChatManager` (contract `chats` handle). `Some` in the daemon boot
+    /// (`build_chat_manager`) and in `test_ctx_with_chat_manager`; `None` in the
+    /// plain route-unit harness (`test_ctx`). Chat route handlers gate on `Some`
+    /// and fall back to the failure-path envelope when absent.
     pub chat_manager: Option<Arc<ChatManager>>,
     /// The per-project `LaunchRegistry` (contract `launchRegistry` handle). Backs
     /// the `/api/projects/:id/launch/*` routes. `None` in the route-unit harness.
@@ -139,7 +135,7 @@ pub struct AppCtx {
     /// The cloudflared `TunnelManager` (contract `tunnelManager` handle). Backs the
     /// `/api/tunnel/*` routes. `None` in the route-unit harness.
     pub tunnel_manager: Option<Arc<TunnelManager>>,
-    /// Per-port quick tunnels for the localhost chips (#279), sharing the
+    /// Per-port quick tunnels for the localhost chips, sharing the
     /// `TunnelManager` above. `Some` whenever `tunnel_manager` is.
     pub port_tunnels: Option<Arc<PortTunnelRegistry>>,
     /// The `LspManager` (contract `lspManager` handle). Backs `GET
@@ -149,9 +145,9 @@ pub struct AppCtx {
     /// The `PluginManager` (contract `pluginManager` handle). Its router is nested
     /// under `/api/plugins` by `build_app`. `None` in the route-unit harness.
     pub plugin_manager: Option<Arc<PluginManager>>,
-    /// The Automations v2 engine (T9.2). `Some` in the daemon boot; `None` in
-    /// the route-unit harness — automation routes answer 503 while absent
-    /// (Node parity: "automation service not available").
+    /// The Automations v2 engine. `Some` in the daemon boot; `None` in the
+    /// route-unit harness — automation routes answer 503 with
+    /// "automation service not available" while absent.
     pub automations: Option<Arc<AutomationsEngine>>,
     /// The orchestration MCP server behind `POST /mcp`. `Some` in the daemon
     /// boot; `None` in harnesses that do not exercise it (the route answers
@@ -171,16 +167,15 @@ pub struct AppCtx {
     pub auth_secret: Option<String>,
     /// The boot-resolved login-shell `PATH` (see `mainframe_runtime::ResolvedPath`).
     /// Threaded into on-demand executable resolution (settings route) and any
-    /// route that spawns a CLI, mirroring the TS `enrichPath` env mutation.
+    /// route that spawns a CLI.
     pub resolved_path: ResolvedPath,
     /// `/health`'s `tunnelUrl`. Interior-mutable so the tunnel routes' `setTunnelUrl`
-    /// and the boot-time daemon-tunnel start can update what `/health` reports —
-    /// mirrors the mutated `ctx.tunnelUrl` closure in `http.ts`.
+    /// and the boot-time daemon-tunnel start can update what `/health` reports.
     pub tunnel_url: Arc<RwLock<Option<String>>>,
 }
 
 impl AppCtx {
-    /// Read the current `/health` tunnel URL (`ctx.tunnelUrl ?? getTunnelUrl?.()`).
+    /// Read the current `/health` tunnel URL.
     pub fn tunnel_url(&self) -> Option<String> {
         self.tunnel_url
             .read()
@@ -188,14 +183,13 @@ impl AppCtx {
             .clone()
     }
 
-    /// `setTunnelUrl(url)` — the mutator the tunnel routes call after start/stop.
+    /// The mutator the tunnel routes call after start/stop.
     pub fn set_tunnel_url(&self, url: Option<String>) {
         *self.tunnel_url.write().unwrap_or_else(|e| e.into_inner()) = url;
     }
 
-    /// Worktree-aware effective path (`getEffectivePath(ctx, projectId, chatId)`
-    /// from `routes/types.ts`): the chat's worktree when the chatId points to a
-    /// live worktree of this project; the project root otherwise. `None` on an
+    /// Worktree-aware effective path: the chat's worktree when the chatId points
+    /// to a live worktree of this project; the project root otherwise. `None` on an
     /// unknown project, a cross-project chat, or a missing worktree.
     pub async fn effective_path(&self, project_id: &str, chat_id: Option<&str>) -> Option<String> {
         let pid = project_id.to_string();
@@ -234,8 +228,7 @@ impl AppCtx {
     /// Build a fully-real `Arc<AppCtx>` for route unit tests over an in-memory DB
     /// and real service collaborators (no mocks), with `chat_manager: None` — the
     /// same surface the integration harness assembles. Route tests seed via
-    /// `ctx.db` and call handlers directly (the route modules are mounted by the
-    /// next task, so `build_app` does not yet include them).
+    /// `ctx.db` and call handlers directly.
     pub(crate) fn test_ctx() -> Arc<AppCtx> {
         crate::chat_test_support::test_ctx()
     }
@@ -244,7 +237,7 @@ impl AppCtx {
     /// `build_chat_manager`, same production `DaemonChatDeps` the daemon boot
     /// wires) so route tests can reach the create/discard/archive/unarchive/
     /// remove-project success paths those routes gate on `chat_manager` being
-    /// `Some` (todo #346, AC 26) — `Self::test_ctx`'s `chat_manager: None` can
+    /// `Some` — `Self::test_ctx`'s `chat_manager: None` can
     /// only reach each route's "unavailable" fallback. Register an adapter on
     /// the returned ctx's `adapter_registry` before creating a chat under its
     /// id (see `chat_test_support::StubAdapter`).
@@ -282,19 +275,3 @@ mod poisoned_lock_tests {
         assert_eq!(ctx.tunnel_url().as_deref(), Some("https://example.test"));
     }
 }
-
-// PORT STATUS: src/server/http.ts (ctx assembly) + WebSocketManager deps
-// confidence: medium
-// todos: 1
-// notes: Narrowed to Phase-3 collaborators, extended in Task 4.6a with the
-// chat-facing handles: `adapter_registry` (AdapterRegistry) + `background_tasks`
-// (BackgroundTaskTracker) are concrete Arcs (cheap ::new); `chat_manager` is
-// Option<Arc<ChatManager>> because ChatManager::new needs a full ChatManagerDeps
-// impl the test harness cannot build — the daemon boot (next task) sets Some(..).
-// Task 5.5 wired the remaining managers: launch_registry, tunnel_manager,
-// lsp_manager, plugin_manager are Option<Arc<..>> (Some in the daemon boot, None in
-// the route-unit harness). `port` backs the tunnel start route; `tunnel_url` is now
-// interior-mutable (Arc<RwLock<..>>) so setTunnelUrl + the boot tunnel start update
-// what /health reports. `effective_path` ports getEffectivePath over the Db actor.
-// workflows stays deliberately unported (SCOPE DECISION 2026-07-10). `Services`
-// bundles the §2.4 handles that routes/WS need (attachments, push, file watcher).

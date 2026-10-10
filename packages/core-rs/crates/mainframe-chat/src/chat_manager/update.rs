@@ -1,8 +1,7 @@
 //! Shared update types: `ProcessedAttachments` and the unified `ChatUpdate` patch.
 use super::*;
 
-/// Result of `processAttachments` (attachment-processor.ts is a separate port
-/// target; the shape is mirrored here for the sendMessage seam).
+/// Attachments prepared for a chat send.
 #[derive(Debug, Clone, Default)]
 pub struct ProcessedAttachments {
     pub images: Vec<ImageInput>,

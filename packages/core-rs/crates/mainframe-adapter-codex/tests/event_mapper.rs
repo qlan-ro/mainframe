@@ -1,5 +1,4 @@
-//! Ports `__tests__/collab-agent-spawn.test.ts` + `__tests__/plan-item-capture.test.ts`
-//! assertion-for-assertion.
+//! Codex collaboration spawn and plan item event mapping tests.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod common;
@@ -143,7 +142,7 @@ fn wait_completed_emits_tool_result_with_sub_agent_message_and_resolves_card() {
         to_values(&results[0]),
         json!([{ "type": "tool_result", "toolUseId": "wait_item_1", "content": "Found 3 files", "isError": false }])
     );
-    // Design decision 4: a resolved card keeps its child-thread registration so a
+    // A resolved card keeps its child-thread registration so a
     // late-arriving child item still nests, instead of leaking to the parent.
     assert!(!state.open_card_ids().contains(&"wait_item_1".to_string()));
     assert!(state.card_for_thread("child_thread_1").is_some());
@@ -515,11 +514,8 @@ fn dynamic_tool_call_renders_a_tool_use_block_namespaced_by_the_tool_source() {
     assert!(rec.tool_results().is_empty());
 }
 
-/// R3.17/T35: the original name claimed history-reload parity that this
-/// test never checked — it drives only the live path. That comparison now
-/// has its own test,
-/// `live_vs_history_id_parity.rs::dynamic_tool_call_reload_matches_the_live_tool_use_id_and_name`
-/// (T22, fixed); this one is renamed to say what it actually asserts.
+/// Checks the live path; reload is covered by
+/// `live_vs_history_id_parity.rs::dynamic_tool_call_reload_matches_the_live_tool_use_id_and_name`.
 #[test]
 fn dynamic_tool_call_completion_uses_the_item_id_as_its_vendor_id() {
     let rec = Recorder::new();
@@ -594,8 +590,7 @@ fn web_search_renders_a_tool_use_and_tool_result_pair_named_web_search() {
         }])
     );
     // Matches `web_search_history.rs`'s `make_message(&w.id, ..)` /
-    // `make_message(&format!("{}:result", w.id), ..)` id scheme (todo #350
-    // group B, stable-ids task 5).
+    // `make_message(&format!("{}:result", w.id), ..)` id scheme.
     assert_eq!(rec.message_vendor_ids(), vec![Some("ws_1".to_string())]);
     assert_eq!(
         rec.tool_result_vendor_ids(),
@@ -603,9 +598,8 @@ fn web_search_renders_a_tool_use_and_tool_result_pair_named_web_search() {
     );
 }
 
-/// Gate 1 (todo #356): an `openPage` action renders `WebFetch{url}`, with the
-/// paired tool_result content pinned exactly `""` — amended AC1's empty body
-/// is intentional, not an oversight (see the plan's "Established facts").
+/// An `openPage` action renders `WebFetch{url}`, with the
+/// paired tool_result content pinned exactly `""`; the empty body is intentional.
 #[test]
 fn web_search_open_page_action_renders_a_web_fetch_tool_use_with_an_empty_result() {
     let rec = Recorder::new();
@@ -776,12 +770,7 @@ fn collab_card_count(rec: &Recorder) -> usize {
         .count()
 }
 
-// NOTE (deviation from the plan, task 13): `sub_agent_activity_interrupted_emits_error_result_and_keeps_card_open`
-// asserted the interrupted card stayed open. Task 15's `resolve_card` sets
-// `open = false` on every resolution, error included — "keeps card open" is
-// stale under the target design, not just a renamed field, so it is folded
-// into `sub_agent_activity_kinds_each_have_their_documented_effect` below
-// instead of being fixed in place.
+// `resolve_card` closes a card on every resolution, including errors.
 #[test]
 fn sub_agent_activity_kinds_each_have_their_documented_effect() {
     // `started` registers the child thread and opens a card for it.
@@ -838,7 +827,7 @@ fn sub_agent_activity_unknown_thread_is_noop() {
     assert!(rec.tool_results().is_empty());
 }
 
-// --- Task 13 (todo #247): the 9 red-phase tests the plan names for group 2 ---
+// Sub-agent activity cases
 
 #[test]
 fn receiver_list_route_still_produces_one_card_with_registry_title_and_state_map_result() {

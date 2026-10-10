@@ -79,7 +79,7 @@ pub(crate) async fn latest_run(
 }
 
 /// Deletes every run past the most recent `keep`, cascading to its report
-/// rows first (no FK — the app layer owns the order, same as fact 5's cascade).
+/// rows first because the app layer owns cascade order without a foreign key.
 pub(crate) async fn prune_runs(
     ctx: &PluginContext,
     project_id: &str,

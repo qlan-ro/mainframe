@@ -1,5 +1,5 @@
-//! One container's settled state inside the [`super::IncrementalProjector`]
-//! (todo #376). Groups partition the raw slice with no gaps: group `i`'s
+//! One container's settled state inside the [`super::IncrementalProjector`].
+//! Groups partition the raw slice with no gaps: group `i`'s
 //! range ends exactly where group `i + 1`'s begins, which lets
 //! [`group_at_raw_index`] binary-search a raw index to its owning group in
 //! `O(log groups)` instead of a linear scan over settled history.
@@ -58,8 +58,8 @@ pub(crate) fn group_at_raw_index(groups: &[Group], idx: usize) -> usize {
 
 /// An `O(1)`-seeded membership check for "is this id claimed by a frozen
 /// (settled, not-being-refolded) group" — replaces building a fresh
-/// `HashSet` over `groups[..r]` on every call (todo #376 follow-up: that
-/// scan made a partial's cost grow with settled history length).
+/// `HashSet` over `groups[..r]` on every call (that scan made a partial's
+/// cost grow with settled history length).
 ///
 /// Backed by a persistent id -> owning-group-index map (`tool_owner` or
 /// `display_owner`, kept up to date by the projector across rewinds) plus a

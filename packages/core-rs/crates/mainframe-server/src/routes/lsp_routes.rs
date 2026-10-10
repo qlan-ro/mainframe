@@ -1,8 +1,8 @@
-//! Ported from `src/server/routes/lsp-routes.ts` — `GET /api/lsp/languages`.
+//! `GET /api/lsp/languages`.
 //!
 //! Reports, per registered language, whether its server binary resolves on this
 //! machine (`installed`) and whether a live process is running for the project
-//! (`active`). The `LspManager` is a Phase-5 handle on `AppCtx`; when it is unwired
+//! (`active`). The `LspManager` is an optional handle on `AppCtx`; when it is unwired
 //! (route-unit harness) the endpoint reports an empty language list.
 
 use std::sync::Arc;
@@ -17,11 +17,11 @@ use serde::Deserialize;
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok};
 
-/// `GET /api/lsp/languages`. Mirrors `lspRoutes(manager)`.
+/// `GET /api/lsp/languages`.
 async fn get_languages(State(ctx): State<Arc<AppCtx>>, Query(raw): Query<RawQuery>) -> Response {
-    // Zod `projectId: z.string().min(1)` — reproduce the first-issue message
-    // verbatim: a missing param is `expected string, received undefined`; a
-    // present-but-empty param trips the `.min(1)` "Too small" issue.
+    // `projectId` is a required non-empty string. Reproduce the Zod-style
+    // first-issue message verbatim: a missing param is `expected string,
+    // received undefined`; a present-but-empty param gets the "Too small" issue.
     let project_id = match raw.project_id {
         None => {
             return fail(
@@ -39,8 +39,8 @@ async fn get_languages(State(ctx): State<Arc<AppCtx>>, Query(raw): Query<RawQuer
     };
 
     let Some(manager) = ctx.lsp_manager.as_ref() else {
-        // No LSP manager wired — no languages to report (faithful "none active,
-        // none installed" for the route-unit harness / a daemon without LSP).
+        // No LSP manager wired — no languages to report ("none active, none
+        // installed" for the route-unit harness / a daemon without LSP).
         return ok(serde_json::json!({ "languages": Vec::<LspLanguageStatus>::new() }));
     };
 
@@ -77,15 +77,3 @@ struct RawQuery {
 pub fn router() -> Router<Arc<AppCtx>> {
     Router::new().route("/api/lsp/languages", get(get_languages))
 }
-
-// PORT STATUS: src/server/routes/lsp-routes.ts (44 lines)
-// confidence: high
-// todos: 0
-// notes: `LspLanguagesQuerySchema.safeParse` → a required non-empty `projectId`.
-// The 400 body reproduces Zod's first-issue message verbatim: missing param →
-// "Invalid input: expected string, received undefined"; empty param → the
-// `.min(1)` "Too small: expected string to have >=1 characters".
-// Reads active languages from the manager + the registry's language ids, resolving
-// each server binary (`resolveCommand`) for `installed`. `active` = the project's
-// live processes. The `LspManager` is an Option on AppCtx (Some in the daemon boot);
-// when None the endpoint returns an empty language list.

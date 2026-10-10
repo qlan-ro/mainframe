@@ -1,7 +1,7 @@
-//! JSON-RPC 2.0 framing for the ACP facade connection (todo #350, plan task
-//! 7): classify one inbound WS text frame as a request, a notification, or a
-//! response to a daemon-initiated call, and build the structured errors a
-//! malformed or unroutable frame gets back.
+//! JSON-RPC 2.0 framing for the ACP facade connection: classify one inbound WS
+//! text frame as a request, a notification, or a response to a daemon-initiated
+//! call, and build the structured errors a malformed or unroutable frame gets
+//! back.
 //!
 //! Classification reads the raw `serde_json::Value` first rather than trying
 //! `JsonRpcRequest` then falling back to `JsonRpcNotification`: both types
@@ -22,9 +22,9 @@ use serde_json::Value;
 pub enum InboundFrame {
     Request(JsonRpcRequest),
     Notification(JsonRpcNotification),
-    /// A reply to a request the daemon itself sent (e.g. a future
-    /// `session/request_permission` answer) — parsed and handed to the
-    /// caller; group C has nothing outstanding to match it against yet.
+    /// A reply to a request the daemon itself sent (a
+    /// `session/request_permission` answer) — parsed and handed to the caller;
+    /// `mainframe-server`'s `acp_ws` matches it to the pending gate.
     Response(JsonRpcResponse),
 }
 

@@ -1,5 +1,4 @@
-//! Ported from `src/server/suggestions/*` — pure suggestion-building logic
-//! consumed by `routes::suggestions`.
+//! Pure suggestion-building logic consumed by `routes::suggestions`.
 
 pub mod build_suggestions;
 

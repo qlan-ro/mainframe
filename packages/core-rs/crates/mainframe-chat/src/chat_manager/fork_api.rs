@@ -1,9 +1,7 @@
-//! `ChatManager::fork_chat` (todo #343 Group 3, extended by fork-from-message)
-//! — the daemon-side orchestration of the Fork action: the ordered eligibility
-//! checks from the spec's Behavior list, resolving a from-message cut, pinning
-//! the fork point through the parent's adapter, and the single INSERT that
-//! creates the fork. See `docs/plans/2026-09-24-todo-343-fork-thread.md`
-//! "Group 3 — daemon-fork" and `docs/specs/2026-10-06-fork-from-message.md`.
+//! `ChatManager::fork_chat` — the daemon-side orchestration of the Fork action
+//! (whole chat or from a message): the ordered eligibility checks, resolving a
+//! from-message cut, pinning the fork point through the parent's adapter, and
+//! the single INSERT that creates the fork.
 use mainframe_adapter_api::ForkCut;
 
 use mainframe_types::segment::ForkPlan;
@@ -84,7 +82,7 @@ impl ChatManager {
             });
         }
         // A temporary chat never wrote a vendor transcript to branch from, and a
-        // no-project chat has no checkout for the fork to run in (todo #346).
+        // no-project chat has no checkout for the fork to run in.
         if parent.temporary {
             return Err(ForkChatError::Temporary);
         }

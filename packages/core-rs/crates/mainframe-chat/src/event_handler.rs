@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/chat/event-handler.ts`.
-
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
@@ -102,11 +100,11 @@ pub struct EventHandler<D: EventHandlerDeps + 'static> {
     permissions: Arc<Mutex<PermissionManager>>,
     partial_overlays: PartialOverlays,
     deps: Arc<D>,
-    /// Survives a session resume (plan decision P3) — kept on the handler,
+    /// Survives a session resume because it is kept on the handler,
     /// not the per-session sink `build_sink` recreates.
     attention_dedupe: Arc<Mutex<AttentionDedupe>>,
-    /// The chat-surface observer (todo #350 plan task 10), attached after
-    /// construction via [`EventHandler::set_chat_surface`] — mirrors
+    /// The chat-surface observer, attached after construction via
+    /// [`EventHandler::set_chat_surface`] — mirrors
     /// `ChatManager::attach_self`'s `OnceLock` pattern so a handler built with
     /// no surface attached (most tests) is a silent no-op, not a construction
     /// error.
@@ -143,9 +141,9 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
         chat_surface::notify(self.chat_surface.get(), event);
     }
 
-    /// `buildSink(chatId, sessionId, respondToPermission)`. The TS sink never calls
-    /// `respondToPermission` (it is `_respondToPermission`), so the Rust sink drops
-    /// it; chat_manager retains the callback separately.
+    /// Build the session sink for `chat_id`. The sink never answers permissions
+    /// itself, so it takes no responder; chat_manager retains that callback
+    /// separately.
     pub fn build_sink(
         &self,
         chat_id: &str,
@@ -165,9 +163,9 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
             attention_dedupe: self.attention_dedupe.clone(),
             chat_surface: self.chat_surface.clone(),
         });
-        // PR detection is adapter-neutral (todo #339): wrapping here, the one
-        // construction point every session's sink comes from, is what makes
-        // every adapter inherit it — none needs its own scanning code.
+        // PR detection is adapter-neutral: wrapping here, the one construction
+        // point every session's sink comes from, is what makes every adapter
+        // inherit it — none needs its own scanning code.
         Arc::new(PrDetectionSink::new(inner))
     }
 
@@ -190,20 +188,18 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
         self.partial_overlays.remove_chat(chat_id);
     }
 
-    /// The chat's current in-flight overlay message, for `ChatManager`'s
-    /// resume snapshot (todo #382) — the same read `emit_display_for` uses
-    /// for live revisions, so a snapshot taken mid-stream can project it
-    /// through the identical step.
+    /// The chat's current in-flight overlay message, for `ChatManager`'s resume
+    /// snapshot — the same read `emit_display_for` uses for live revisions, so
+    /// a snapshot taken mid-stream can project it through the identical step.
     pub fn current_overlay_message(&self, chat_id: &str) -> Option<ChatMessage> {
         self.partial_overlays.message_for(chat_id)
     }
 
-    /// The resume-snapshot read (todo #382, #376): bring the chat's
-    /// projection current the same way a live emission does, but without
-    /// notifying — any non-empty delta this produces is stashed as the
-    /// slot's pending delta and merged into the next live emission
-    /// (`MessageCache::display_snapshot`). Returns the materialized
-    /// container list and the overlay's streaming kind, if any.
+    /// The resume-snapshot read: bring the chat's projection current the same
+    /// way a live emission does, but without notifying — any non-empty delta
+    /// this produces is stashed as the slot's pending delta and merged into the
+    /// next live emission (`MessageCache::display_snapshot`). Returns the
+    /// materialized container list and the overlay's streaming kind, if any.
     ///
     /// `raw` is the caller's own freshly-read history (`ChatManager::get_messages`'s
     /// return), not re-derived from the cache: a cold load past `MAX_CHATS`

@@ -1,5 +1,3 @@
-//! Ported from `packages/types/src/background-task.ts`.
-
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
@@ -218,8 +216,6 @@ mod tests {
         assert_eq!(serde_json::to_string(&task).unwrap(), json);
     }
 
-    // Translated from packages/types/src/__tests__/background-activity.test.ts.
-
     #[test]
     fn background_work_kind_accepts_four_kinds() {
         for (raw, kind) in [
@@ -326,22 +322,3 @@ mod tests {
         assert_eq!(back, activity);
     }
 }
-
-// PORT STATUS: packages/types/src/background-task.ts (101 lines)
-// confidence: high
-// todos: 0
-// notes: Main catch-up (#425): BackgroundWorkKind enum (rename_all=lowercase,
-// Hash+Eq so it keys byKind); required BackgroundTask.kind (right after id, per TS
-// field order — the fixture round-trips reflect the new key); BackgroundActivityTask
-// / BackgroundActivity (byKind = HashMap<BackgroundWorkKind,u32>, positive-only) and
-// the toActivityTask / deriveBackgroundActivity helpers. deriveBackgroundActivity
-// takes &[BackgroundActivityTask] (NOT BackgroundTask) — matches the TS signature +
-// its test. total/byKind counts are u32. background-activity.test.ts translated in
-// the tests module (the zod-schema assertion → a serde round-trip).
-// notes(orig): startedAt/endedAt (epoch ms) and usage counters are i64 — the fixture
-// shows bare integers and serde_json emits `.0` for f64, which would break the
-// byte-stable round-trip (so the PORTING.md "ms → f64" default is overridden here;
-// fixtures win per §4). `string | null` fields (outputPath/lastOutputLine/summary)
-// and `number | null` (endedAt) and `usage | null` are required-nullable → Option
-// WITHOUT skip (serialize null). Only `recovered?: true` is skip-when-absent. The
-// three *Event interfaces collapse into one tagged BackgroundTaskEvent enum.

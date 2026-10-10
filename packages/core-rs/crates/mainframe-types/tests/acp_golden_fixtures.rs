@@ -1,6 +1,6 @@
 //! Golden round-trip harness over every fixture in
-//! `tests/fixtures/acp/` — the vendored ACP v2 chat-facade grammar (todo
-//! #350, plan task 1/2). Mirrors `golden_fixtures.rs`'s pattern: dispatch each
+//! `tests/fixtures/acp/` — the vendored ACP v2 chat-facade grammar.
+//! Mirrors `golden_fixtures.rs`'s pattern: dispatch each
 //! fixture file to its `mainframe_types::acp` type by filename prefix,
 //! deserialize, re-serialize, and assert semantic equality after stripping
 //! the fixture-only `_provenance` key. Failures aggregate across all
@@ -88,7 +88,7 @@ fn read_fixture(path: &Path) -> Value {
         .unwrap()
 }
 
-/// Filename prefix → vendored type. One arm per frame kind from plan task 1;
+/// Filename prefix → vendored type. One arm per frame kind;
 /// order matters where one prefix is a substring of another (`session-new.`
 /// vs `session-update.`), so longer/more-specific prefixes are checked first.
 fn roundtrip_by_name(name: &str, body: &Value) -> Result<(), String> {

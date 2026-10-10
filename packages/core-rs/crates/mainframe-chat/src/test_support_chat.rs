@@ -1,7 +1,5 @@
-//! `test_chat` split out of `test_support.rs` (kept under the 300-line cap when
-//! the history-cache test fields landed in `FakeSession`) — re-exported from
-//! there so every existing `crate::test_support::test_chat` call site keeps
-//! working unchanged.
+//! `test_chat` is re-exported from `test_support.rs` so callers can use
+//! `crate::test_support::test_chat`.
 
 use mainframe_types::chat::{Chat, ChatStatus};
 use mainframe_types::settings::ExecutionMode;
@@ -60,5 +58,3 @@ pub fn test_chat(id: &str) -> Chat {
         orchestration: Default::default(),
     }
 }
-
-// Not a port; test scaffolding only. No PORT STATUS trailer.

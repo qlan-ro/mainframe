@@ -71,7 +71,7 @@ async fn an_immediate_prompt_accepts_with_no_meta_no_queue_frame_family() {
     let JsonRpcOutcome::Result { result } = response.outcome else {
         panic!("expected a result, got {:?}", response.outcome);
     };
-    // Criterion 5: no `queue.*` frame family — acceptance is this same
+    // No `queue.*` frame family — acceptance is this same
     // PromptResponse shape, undecorated when the turn starts immediately.
     assert_eq!(result, json!({}));
     assert_eq!(
@@ -216,7 +216,7 @@ async fn handle_frame_with_prompt_still_serves_initialize_synchronously() {
     let text =
         include_str!("../../../mainframe-types/tests/fixtures/acp/jsonrpc-request.initialize.json");
 
-    // Not yet negotiated: initialize is exempt from the gate (R3.21).
+    // Not yet negotiated: initialize is exempt from the gate.
     let reply = handle_frame_with_prompt(text, &daemon(), &port, false)
         .await
         .expect("initialize must still reply");

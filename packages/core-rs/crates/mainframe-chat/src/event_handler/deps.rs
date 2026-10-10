@@ -29,8 +29,8 @@ pub struct EventChatUpdate {
     pub updated_at: Option<String>,
 }
 
-/// The injected dependency surface (mirrors the TS `EventHandler` constructor
-/// callbacks + `db`). Claude-specific pieces (`stripMainframeCommandTags`, the
+/// Injected dependencies for the event handler. Claude-specific pieces
+/// (`stripMainframeCommandTags`, the
 /// display pipeline) and the not-Send db repos are narrowed to trait methods so
 /// this crate needs no adapter-claude/db dependency.
 pub trait EventHandlerDeps: Send + Sync {
@@ -89,7 +89,7 @@ pub trait EventHandlerDeps: Send + Sync {
 
     /// `onProviderQuota(adapterId, quota)` — an account-wide provider-plan quota
     /// escalation pushed from a session event (Codex `account/rateLimits/updated`,
-    /// Claude `rate_limit_event`). Default no-op mirrors the TS optional callback: a
+    /// Claude `rate_limit_event`). The default is a no-op: a
     /// ChatManager built without a QuotaManager simply drops it.
     fn on_provider_quota(&self, _adapter_id: &str, _quota: ProviderQuota) {}
 
@@ -102,7 +102,7 @@ pub trait EventHandlerDeps: Send + Sync {
     /// just moved the transcript into the new working directory's project dir.
     fn on_transcript_moved(&self, _chat_id: &str) {}
 
-    /// `db.chats.getPendingFork(chatId)` (todo #343) — `on_result` retires it
+    /// `db.chats.getPendingFork(chatId)` — `on_result` retires it
     /// once the fork's first turn produces a result. Defaulted to `None`: the
     /// correct answer for every chat this feature doesn't touch.
     fn get_pending_fork(&self, chat_id: &str) -> Option<PendingForkState> {

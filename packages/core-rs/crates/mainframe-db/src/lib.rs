@@ -1,9 +1,8 @@
-//! Ported from `packages/core/src/db/*` — the `DatabaseManager` handle,
-//! migration runner, schema, and the six repositories.
+//! The `DatabaseManager` handle, migration runner, schema, and the
+//! repositories.
 //!
-//! `better-sqlite3` is synchronous; this port keeps the synchronous API
-//! (rusqlite, a single shared connection). Async wrapping (`spawn_blocking`,
-//! `Db` handle) is a later phase and intentionally NOT added here.
+//! The API is synchronous (rusqlite, a single shared connection). Async
+//! wrapping (`spawn_blocking`, the `Db` handle) lives in `mainframe-server::db`.
 #![forbid(unsafe_code)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
@@ -44,8 +43,8 @@ pub use settings::SettingsRepository;
 pub use tags::TagsRepository;
 
 /// Fallible-operation error for the whole DB layer. `Message` carries a verbatim
-/// human string so `throw new Error(msg)` sites round-trip their exact text
-/// (several are asserted by regex in the ported tests and cross the wire later).
+/// human string whose exact text is preserved (several are asserted by regex in
+/// tests and cross the wire).
 #[derive(Debug, thiserror::Error)]
 pub enum DbError {
     #[error(transparent)]
@@ -59,7 +58,7 @@ pub enum DbError {
 }
 
 /// Serialize a serde enum to its wire/DB string (e.g. `ChatStatus::Active` →
-/// `"active"`). Mirrors the implicit string cast the TS repositories rely on.
+/// `"active"`).
 pub(crate) fn enum_to_db_string<T: serde::Serialize>(value: &T) -> Result<String, DbError> {
     match serde_json::to_value(value)? {
         serde_json::Value::String(s) => Ok(s),
@@ -69,10 +68,9 @@ pub(crate) fn enum_to_db_string<T: serde::Serialize>(value: &T) -> Result<String
     }
 }
 
-/// Owns the single SQLite connection and exposes the repositories, mirroring the
-/// TS `DatabaseManager`. The connection is shared with each repository via
-/// `Rc<Connection>` (single-threaded, synchronous — one shared handle, exactly
-/// like `better-sqlite3`).
+/// Owns the single SQLite connection and exposes the repositories. The
+/// connection is shared with each repository via `Rc<Connection>`
+/// (single-threaded, synchronous — one shared handle).
 pub struct DatabaseManager {
     db: Rc<Connection>,
     pub projects: ProjectsRepository,
@@ -132,9 +130,8 @@ impl DatabaseManager {
         })
     }
 
-    /// Closes the connection. `better-sqlite3`'s `close()` is explicit; in Rust
-    /// the connection drops when the last `Rc` is released, so this consumes
-    /// `self` to make the intent visible.
+    /// Closes the connection. It drops when the last `Rc` is released, so this
+    /// consumes `self` to make the intent visible.
     pub fn close(self) {
         drop(self);
     }
@@ -144,16 +141,6 @@ impl DatabaseManager {
         &self.db
     }
 }
-
-// PORT STATUS: src/db/index.ts (49 lines)
-// confidence: medium
-// notes: `DatabaseManager` mirrors the TS class (pub repo fields, WAL +
-// foreign_keys pragmas, initializeSchema). Repositories share one Rc<Connection> (single-threaded,
-// synchronous) — Phase B replaces this with the async Db handle / spawn_blocking.
-// close() consumes self (Rust drops the connection when the last Rc is released).
-// DbError + enum_to_db_string are crate-wide helpers with no TS counterpart.
-// todos: 0
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,25 +1,13 @@
-//! Ported from `packages/core/src/messages/message-grouping.ts`.
-//!
 //! Merges consecutive assistant/tool_use messages into a single turn and
 //! attaches tool_result data so assistant-ui can show both invocation and
 //! result.
-//!
-//! CRATE-SPLIT NOTE (PORTING §2.5): this module operates only on the neutral
-//! `ChatMessage`/`MessageContent` types — it references no Claude JSONL/event
-//! shapes — yet the crate map (§2.7) places it in `adapter-claude::messages`.
-//! Its sole consumer is `mainframe-display::display_pipeline`, which lives in a
-//! crate `adapter-claude` depends on. Importing `GroupedMessage`/`group_messages`
-//! from there would create a dependency cycle. The Phase-B reviewer / the
-//! display_pipeline porter must resolve this (most likely by re-homing this file
-//! into `mainframe-display`, per the §2.5 "operates on the neutral pipeline"
-//! test). Ported here as the scaffold assigned it; flagged for that decision.
 
 use std::collections::{HashMap, HashSet};
 
 use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent, MessageContentNode};
 
 /// A `ChatMessage` plus the tool_result blocks attached during grouping, keyed
-/// by `toolUseId`. Mirrors the TS `GroupedMessage` (`_toolResults`).
+/// by `toolUseId`.
 #[derive(Debug, Clone)]
 pub struct GroupedMessage {
     pub base: ChatMessage,
@@ -39,7 +27,7 @@ fn turn_duration(msg: &ChatMessage) -> Option<serde_json::Value> {
         .cloned()
 }
 
-/// The per-message grouping decision (todo #376): shared so `group_messages`
+/// The per-message grouping decision: shared so `group_messages`
 /// and the incremental projector's chunked fold apply one definition instead
 /// of two copies that can drift. `prev_mergeable` is whether the group
 /// currently being built is an assistant/tool_use run that can still absorb
@@ -129,7 +117,7 @@ fn attach_tool_result(prev: Option<&mut GroupedMessage>, msg: &ChatMessage) {
 
 /// Deduplicate tool_use blocks by id across all messages — a global
 /// first-wins post-pass over groups in order. Presentation sources are
-/// pruned and re-indexed alongside the dropped blocks (todo #384), so a
+/// pruned and re-indexed alongside the dropped blocks, so a
 /// source path never points past the deduped content.
 fn dedupe_tool_use_ids(result: &mut [GroupedMessage]) {
     let mut seen_tool_use_ids: HashSet<String> = HashSet::new();
@@ -242,13 +230,3 @@ mod tests {
         );
     }
 }
-
-// PORT STATUS: src/messages/message-grouping.ts (73 lines)
-// confidence: high
-// todos: 0
-// notes: GroupedMessage models the TS `extends ChatMessage { _toolResults? }` as
-// a { base, tool_results } struct (the `_`-prefixed field is transient, never
-// serialized). CRATE-SPLIT: see the module-doc note — this neutral-pipeline file
-// likely belongs in mainframe-display (§2.5) but was scaffolded here; a cycle
-// blocks display_pipeline from importing it. No dedicated TS test exists; sanity
-// tests cover merge/attach/dedupe/turn-duration.

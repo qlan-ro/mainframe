@@ -2,9 +2,7 @@
 //! deps traits, and their `ChatManager` accessors.
 use super::*;
 
-/// Shared-internals wrapper implementing the degraded-recovery deps trait (the
-/// Rust analogue of the TS closures over `this` that build `recoveryDeps`).
-/// Constructed on demand.
+/// Shared-internals wrapper for degraded recovery, constructed on demand.
 pub(super) struct RecoveryWrapper {
     deps: Arc<dyn ChatManagerDeps>,
     active_chats: Registry,

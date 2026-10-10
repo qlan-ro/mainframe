@@ -1,21 +1,21 @@
-//! `ensure_thread`'s `thread/start` vs `thread/resume` decision (todo #346, AC 3),
-//! split out of `session.rs` so that file's `ensure_thread` stays a single call
-//! plus a match instead of carrying this pure decision + its params builder and
-//! tests inline.
+//! `ensure_thread`'s `thread/start` vs `thread/resume` decision, split out of
+//! `session.rs` so that file's `ensure_thread` stays a single call plus a match
+//! instead of carrying this pure decision + its params builder and tests
+//! inline.
 
 use serde_json::{Map, Value, json};
 
 use crate::fork::ThreadTarget;
 
 /// The JSON-RPC method + params `ensure_thread` should send, decided purely
-/// from whether a resume target exists and whether the spawn is no-persistence
-/// (todo #346, AC 3). A no-persistence spawn always starts fresh with
-/// `ephemeral: true` and never resumes, even when `resume_thread_id` is
-/// `Some` — the caller must not be able to leak a resume target into it.
+/// from whether a resume target exists and whether the spawn is no-persistence.
+/// A no-persistence spawn always starts fresh with `ephemeral: true` and never
+/// resumes, even when `resume_thread_id` is `Some` — the caller must not be
+/// able to leak a resume target into it.
 pub(crate) enum ThreadRequest {
     Resume(Map<String, Value>),
     Start(Map<String, Value>),
-    /// `thread/fork` (todo #368) — the fork's first spawn when the resolver
+    /// `thread/fork` — the fork's first spawn when the resolver
     /// picks `ThreadTarget::Fork`. Answers with the same `{ thread: { id },
     /// model }` shape plus an optional `thread.forkedFromId`.
     Fork(Map<String, Value>),
@@ -23,10 +23,10 @@ pub(crate) enum ThreadRequest {
 
 impl ThreadRequest {
     /// The JSON-RPC method this request sends. `ensure_thread` uses this plus
-    /// [`Self::into_params`] to make a single `client.request(..)` call
-    /// instead of matching per variant (todo #346 review fix) —
-    /// `thread/start`, `thread/resume` and `thread/fork` all answer with the
-    /// same `{ thread: { id }, model }` shape (`ThreadStartResult`).
+    /// [`Self::into_params`] to make a single `client.request(..)` call instead
+    /// of matching per variant — `thread/start`, `thread/resume` and
+    /// `thread/fork` all answer with the same `{ thread: { id }, model }` shape
+    /// (`ThreadStartResult`).
     pub(crate) fn method(&self) -> &'static str {
         match self {
             ThreadRequest::Resume(_) => "thread/resume",
@@ -43,11 +43,10 @@ impl ThreadRequest {
     }
 }
 
-/// `thread/fork` params (todo #368, Established facts + Gate 0): only
-/// `threadId` is required; `lastTurnId` forks "through, inclusive" when
-/// present. Every override field (`cwd`, `model`, `sandbox`,
-/// `approvalPolicy`…) is deliberately omitted so the fork inherits the
-/// parent's — Gate 0 confirmed omission reads as inherit, not reset, and
+/// `thread/fork` params: only `threadId` is required; `lastTurnId` forks
+/// "through, inclusive" when present. Every override field (`cwd`, `model`,
+/// `sandbox`, `approvalPolicy`…) is deliberately omitted so the fork inherits
+/// the parent's — omission reads as inherit, not reset (verified live), and
 /// `turn/start` re-supplies policy and model on every turn anyway
 /// (CONSUMED-SURFACE CODEX-RPC-03). No `ephemeral`, no `excludeTurns`.
 pub(crate) fn build_fork_request(
@@ -65,9 +64,9 @@ pub(crate) fn build_fork_request(
 }
 
 /// Builds `ensure_thread`'s request for a resolved `ThreadTarget`, plus the
-/// fork source id to verify the response's `forkedFromId` against (`None` for
-/// a non-fork target) — todo #368. Keeps `session.rs`'s `ensure_thread` to a
-/// single call site instead of matching on `ThreadTarget` inline.
+/// fork source id to verify the response's `forkedFromId` against (`None` for a
+/// non-fork target). Keeps `session.rs`'s `ensure_thread` to a single call site
+/// instead of matching on `ThreadTarget` inline.
 pub(crate) fn thread_request_for(
     target: ThreadTarget,
     no_persistence: bool,
@@ -95,8 +94,8 @@ pub(crate) fn thread_request_for(
 }
 
 /// Pure decision + params builder shared by `ensure_thread`'s `thread/start`
-/// and `thread/resume` calls (todo #346, AC 3). `base` is the shared
-/// cwd/persist-history/model map from `CodexSession::thread_params_base`.
+/// and `thread/resume` calls. `base` is the shared cwd/persist-history/model
+/// map from `CodexSession::thread_params_base`.
 pub(crate) fn build_thread_request(
     resume_thread_id: Option<&str>,
     no_persistence: bool,
@@ -114,8 +113,8 @@ pub(crate) fn build_thread_request(
     p.insert("sandbox".into(), sandbox);
     p.insert("experimentalRawEvents".into(), json!(true));
     if no_persistence {
-        // Codex's native no-vendor-transcript mechanism (todo #346 spike, verified
-        // interactively on 0.155.1 alongside persistExtendedHistory/persistFullHistory).
+        // Codex's native no-vendor-transcript mechanism (verified interactively on
+        // 0.155.1 alongside persistExtendedHistory/persistFullHistory).
         p.insert("ephemeral".into(), json!(true));
     }
     ThreadRequest::Start(p)
@@ -213,7 +212,7 @@ mod tests {
         assert_eq!(p["persistFullHistory"], json!(true));
     }
 
-    // ---- build_fork_request (todo #368) ----
+    // ---- build_fork_request ----
 
     #[test]
     fn fork_request_sends_the_source_thread_id_and_persist_flags_with_no_last_turn_id() {
@@ -248,9 +247,3 @@ mod tests {
         }
     }
 }
-
-// PORT STATUS: NEW module, split out of session.rs (todo #346 review fix)
-// confidence: high
-// todos: 0
-// notes: pure split, no behavior change — `ensure_thread` calls
-// `build_thread_request` exactly as before; only the enum/fn/tests moved.

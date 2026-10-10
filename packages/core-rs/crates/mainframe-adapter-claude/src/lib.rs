@@ -1,15 +1,10 @@
 //! `mainframe-adapter-claude` — the Claude CLI integration (stream-json).
 //!
-//! Ported from `packages/core/src/plugins/builtin/claude/*` plus the
-//! Claude-specific slice of `packages/core/src/messages/*` (crate map §2.7;
-//! `index.ts` re-exports collapse into this `lib.rs`). The stream-json event
-//! shapes, spawn args, stdin `control_request` envelopes, SIGTERM→SIGKILL + 10s
-//! SIGINT interrupt semantics, and JSONL history formats are copied exactly from
-//! the TS source and its tests; unknown inbound event types are logged at debug
-//! on every occurrence and skipped — never a hard error.
-//!
-//! Task 4.1 pre-created these module files so parallel port agents never touch a
-//! shared `lib.rs`. Each module is an empty skeleton pending its per-file port.
+//! Covers the Claude CLI integration plus the Claude-specific slice of the
+//! message pipeline. This crate owns the stream-json event shapes, spawn args,
+//! stdin `control_request` envelopes, SIGTERM→SIGKILL + 10s SIGINT interrupt
+//! semantics, and JSONL history formats; unknown inbound event types are logged
+//! at debug on every occurrence and skipped — never a hard error.
 #![forbid(unsafe_code)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
@@ -55,14 +50,6 @@ pub mod tuning;
 pub mod user_event;
 pub(crate) mod user_payload;
 pub mod workflow_events;
-
-// PORT STATUS: src/plugins/builtin/claude/* + messages/* (claude slice) — skeleton only (Task 4.1)
-// confidence: low
-// todos: 0
-// notes: module stubs pre-created for parallel ports; no logic yet. Implements the
-// notes: mainframe-adapter-api Adapter/AdapterSession/SessionSink traits when ported.
-// notes: `messages` holds the Claude-specific message files (§2.5 split); the
-// notes: adapter-agnostic pieces live in mainframe-display.
 
 #[cfg(test)]
 mod presentation_history;

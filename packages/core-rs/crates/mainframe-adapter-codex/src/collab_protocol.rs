@@ -1,6 +1,6 @@
-//! Todo #247 (CollabAgent sub-agent delegation): string→enum classifiers for the
-//! three vocabularies the collab protocol uses. Pure, no I/O — shared by the live
-//! path (`collab_card.rs`, task 15) and the reload path.
+//! CollabAgent sub-agent delegation: string→enum classifiers for the three
+//! vocabularies the collab protocol uses. Pure, no I/O — shared by the live path
+//! (`collab_card.rs`) and the reload path.
 
 /// The `tool` field on a `collabAgentToolCall` item.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

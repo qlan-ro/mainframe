@@ -96,8 +96,8 @@ fn apply_root_entries(fp: &mut ProjectFingerprint, entries: &[(String, bool)]) {
 
 /// Fingerprints the project rooted at `root`.
 ///
-/// Takes only a root so todo #192 can import it standalone; it knows nothing
-/// about recommendations. Read-only: no writes, no subprocesses.
+/// Takes only a root so other callers can import it standalone; it knows
+/// nothing about recommendations. Read-only: no writes, no subprocesses.
 pub async fn fingerprint(root: &Path) -> ProjectFingerprint {
     let mut fp = ProjectFingerprint::default();
     // Canonicalize once at the entry point: every containment check below

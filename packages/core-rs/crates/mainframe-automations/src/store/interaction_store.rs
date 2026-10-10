@@ -171,8 +171,8 @@ impl InteractionStore {
     }
 }
 
-/// Mirrors Node's `applyAnswers` — the parked ask_me entry becomes
-/// `succeeded` with the answers as its named outputs.
+/// The parked ask_me entry becomes `succeeded` with the answers as its named
+/// outputs.
 fn apply_answers(
     checkpoint: &mut AutomationCheckpoint,
     step_ref: &str,
@@ -266,10 +266,3 @@ fn require(conn: &Connection, id: &str) -> Result<InteractionRecord, StoreError>
         id: id.to_string(),
     })
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T2.2), not a TS port
-// confidence: high
-// todos: 0
-// notes: resolve mirrors Node's InteractionStore.resolveInOneTx +
-//        ask-me.ts applyAnswers; run-cancel's bulk cancel lives in
-//        RunStore::finalize (same-transaction requirement).

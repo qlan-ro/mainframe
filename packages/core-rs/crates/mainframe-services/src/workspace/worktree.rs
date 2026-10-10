@@ -1,5 +1,3 @@
-//! Ported from `src/workspace/worktree.ts`.
-
 use std::collections::HashMap;
 use std::path::Path;
 use std::time::Duration;
@@ -19,13 +17,9 @@ pub enum WorktreeError {
     Io(#[from] std::io::Error),
 }
 
-/// Local faithful port of `src/server/routes/exec-git.ts` (`execGit`).
-///
-// TODO(port): replace with `mainframe_git::exec_git` once §2.4 lands — that
-// crate is still an empty placeholder, so worktree.ts's git callers use this
-// duplicate helper for now.
+/// Runs git for worktree operations with this module's timeout and error mapping.
 async fn exec_git(args: &[&str], cwd: &str, timeout_ms: u64) -> Result<String, WorktreeError> {
-    // Mirror `await access(cwd)` → throw `Directory not accessible: ${cwd}`.
+    // Keep the directory error distinct from a git subprocess failure.
     if tokio::fs::metadata(cwd).await.is_err() {
         return Err(WorktreeError::Git(format!(
             "Directory not accessible: {cwd}"
@@ -44,7 +38,7 @@ async fn exec_git(args: &[&str], cwd: &str, timeout_ms: u64) -> Result<String, W
     };
 
     if !output.status.success() {
-        // execFileAsync rejects on a non-zero exit.
+        // Preserve git's stderr on a non-zero exit.
         return Err(WorktreeError::Git(
             String::from_utf8_lossy(&output.stderr).into_owned(),
         ));
@@ -55,7 +49,7 @@ async fn exec_git(args: &[&str], cwd: &str, timeout_ms: u64) -> Result<String, W
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorktreeEntry {
     pub path: String,
-    // `branch: string | null` — serialize null (not omitted) to mirror the TS shape.
+    // Wire contract: serialize an absent branch as null, not an omitted key.
     pub branch: Option<String>,
 }
 
@@ -441,19 +435,3 @@ mod tests {
         assert!(!branch_exists(repo, "does-not-exist").await);
     }
 }
-
-// PORT STATUS: src/workspace/worktree.ts (150 lines, incl. #424 recovery helpers)
-// confidence: medium
-// todos: 1
-// notes: parseWorktreeList / isWorktreePresent are exact ports (isWorktreePresent
-// keeps the intentional sync existsSync via Path::exists). exec_git is a LOCAL
-// faithful port of exec-git.ts (mainframe_git::exec_git §2.4 not yet ported —
-// TODO(port) marks the swap). backfill takes &ProjectsRepository (mainframe-db,
-// Rc<Connection> → !Send): the future is !Send, fine while un-spawned; a later
-// phase wraps the DB in a Send handle. has_parent mirrors the JS truthy check on
-// parentProjectId (non-null, non-empty). remove_worktree returns () (all steps
-// best-effort, swallowed like the TS). #424 degraded-recovery helpers added:
-// branch_exists (rev-parse --verify --quiet refs/heads/<b>, Err→false) and
-// add_worktree_for_branch (best-effort `worktree prune` then `worktree add path
-// branch`, no timeout). Tests ported from worktree.test.ts + a real-git
-// branch_exists check.

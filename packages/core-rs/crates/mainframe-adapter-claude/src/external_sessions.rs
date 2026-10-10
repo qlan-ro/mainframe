@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/external-sessions.ts`.
-//!
 //! Lists importable external (Claude-native) sessions for a project: a stat-only
 //! candidate scan across matching `~/.claude/projects` dirs, then bounded-
 //! concurrency enrichment with a process-lifetime cache.
@@ -166,8 +164,7 @@ pub async fn list_external_sessions(
     let limit = opts.and_then(|o| o.limit).unwrap_or(DEFAULT_LIMIT);
 
     // scan_lite_candidates is infallible here (all fallible steps are handled
-    // internally), so the TS try/catch (`external-session lite scan failed`) is
-    // unreachable in the port; kept as a note rather than a dead Result branch.
+    // internally), so there is no lite-scan error branch to handle.
     let exclude_set: HashSet<String> = exclude_session_ids.iter().cloned().collect();
     let candidates = scan_lite_candidates(project_path, &exclude_set).await;
 
@@ -229,16 +226,3 @@ mod tests {
         assert_eq!(page.next_offset, None);
     }
 }
-
-// PORT STATUS: src/plugins/builtin/claude/external-sessions.ts (105 lines)
-// confidence: high
-// todos: 0
-// notes: getCached/setCached now take the injected cache (CONCURRENCY.tsv
-// SHARED_MAP) so listExternalSessions/enrichWindow gained a `cache` param owned
-// by the adapter. Bounded concurrency (ENRICH_CONCURRENCY=8) reproduced with a
-// shared AtomicUsize cursor + N tokio tasks writing index-ordered slots (the
-// `futures` crate is deferred/unavailable). The sort comparator matches
-// `b.mtimeMs - a.mtimeMs || (a.sessionId < b.sessionId ? 1 : -1)`. mtimeMs from
-// SystemTime → ms f64. scan_lite_candidates is infallible so the TS lite-scan
-// try/catch is unreachable (noted). No TS __tests__ file — sanity tests cover the
-// empty-project + limit<=0 paths.

@@ -1,4 +1,4 @@
-//! Admin route tests (T9.3): interactions respond flow, action catalog,
+//! Admin route tests: interactions respond flow, action catalog,
 //! credential CRUD (labels/kind only — never secret material).
 
 use std::time::Duration;

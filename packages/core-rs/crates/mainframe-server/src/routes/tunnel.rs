@@ -1,4 +1,4 @@
-//! Ported from `src/server/routes/tunnel.ts` — the cloudflared tunnel routes.
+//! The cloudflared tunnel routes.
 //!
 //! Four endpoints under `/api/tunnel`: `status`, `config`, `start`, `stop`. `start`
 //! and `stop` drive `ctx.tunnel_manager`, update the `/health` tunnel URL via
@@ -114,12 +114,10 @@ async fn stop(State(ctx): State<Arc<AppCtx>>, body: Option<Json<Value>>) -> Resp
     manager.stop("daemon");
     ctx.set_tunnel_url(None);
 
-    // TODO(port): the TS clears the persisted token/url on clearConfig
-    // (`saveConfig({ tunnel: false, tunnelToken: undefined, tunnelUrl: undefined })`).
-    // The ported `save_config` merges a `PartialMainframeConfig` where `None` means
-    // "leave unchanged", so it cannot force-clear a field without a change to the
-    // (done, off-limits) `mainframe-runtime::config`. The tunnel is still disabled
-    // (`tunnel: false`), but stale credentials persist. Flagged as a blocker.
+    // TODO: `clearConfig` should also clear the persisted token/url. `save_config`
+    // merges a `PartialMainframeConfig` where `None` means "leave unchanged", so
+    // it cannot force-clear a field without a change to `mainframe-runtime::config`.
+    // The tunnel is still disabled (`tunnel: false`), but stale credentials persist.
     let partial = PartialMainframeConfig {
         tunnel: Some(false),
         ..PartialMainframeConfig::default()
@@ -131,7 +129,7 @@ async fn stop(State(ctx): State<Arc<AppCtx>>, body: Option<Json<Value>>) -> Resp
     ok_empty()
 }
 
-/// `TunnelStartBody` — `{ token?: string.min(1), url?: url() }`.
+/// Start body: an optional non-empty `token` and an optional URL `url`.
 fn parse_start_body(body: &Value) -> Result<(Option<String>, Option<String>), String> {
     let token = match body.get("token") {
         None | Some(Value::Null) => None,
@@ -146,7 +144,7 @@ fn parse_start_body(body: &Value) -> Result<(Option<String>, Option<String>), St
     Ok((token, url))
 }
 
-/// `TunnelStopBody` — `{ clearConfig?: boolean }`.
+/// Stop body: an optional boolean `clearConfig`.
 fn parse_stop_body(body: &Value) -> Result<bool, String> {
     match body.get("clearConfig") {
         None | Some(Value::Null) => Ok(false),
@@ -155,7 +153,7 @@ fn parse_stop_body(body: &Value) -> Result<bool, String> {
     }
 }
 
-/// Minimal `z.url()` stand-in: a scheme + `://` + non-empty authority.
+/// Minimal URL check: a scheme + `://` + non-empty authority.
 fn is_url(s: &str) -> bool {
     match s.split_once("://") {
         Some((scheme, rest)) => !scheme.is_empty() && !rest.is_empty(),
@@ -170,18 +168,6 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/api/tunnel/start", post(start))
         .route("/api/tunnel/stop", post(stop))
 }
-
-// PORT STATUS: src/server/routes/tunnel.ts (108 lines)
-// confidence: medium
-// todos: 1
-// notes: status = getUrl('daemon') + verify (cached /health probe); config reads
-// getConfig hasToken/url. start gates on tunnel_manager + a non-zero port, validates
-// the body (token min(1), url()), falls back to the persisted token/url, short-
-// circuits an already-running tunnel when no new token is given, then start →
-// set_tunnel_url → save_config (credentials only when both were provided). stop
-// stops + set_tunnel_url(None) + save_config({tunnel:false}). KNOWN GAP: clearConfig
-// cannot clear the persisted token/url because save_config's None means "keep"
-// (mainframe-runtime is a done, off-limits crate) — see the TODO(port) above.
 
 #[cfg(test)]
 mod tests {

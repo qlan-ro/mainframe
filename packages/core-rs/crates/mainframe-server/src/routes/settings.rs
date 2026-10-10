@@ -1,11 +1,11 @@
-//! Ported from `src/server/routes/settings.ts` — general + provider settings.
+//! General and provider settings.
 //!
-//! General GET/PUT and provider PUT port 1:1 over `ctx.db.settings`. GET
+//! General GET/PUT and provider PUT read and write `ctx.db.settings`. GET
 //! providers assembles the DB-stored provider settings (skipPermissions→yolo,
 //! strip skipPermissions), unions `ctx.adapter_registry.get_all()` ids, and
 //! attaches a `resolvedExecutable` per adapter via `resolve_adapter_executable`.
 //! The config-conflicts route reads the Claude settings file (needs no adapter
-//! layer), so it ports fully.
+//! layer).
 
 use std::sync::Arc;
 
@@ -33,7 +33,7 @@ use crate::ctx::{AppCtx, DefaultRunner};
 use crate::respond::{fail, ok, ok_empty};
 use crate::routes::projects::parse_body;
 
-// ── notification config parse / merge (mirrors the TS salvage helpers) ─────────
+// ── notification config parse / merge ──────────────────────────────────────────
 
 #[derive(Deserialize, Default)]
 struct ChatPartial {
@@ -68,8 +68,7 @@ struct NotificationPatch {
 }
 
 /// Salvage a per-group partial: an absent or ill-typed group parses to the
-/// all-`None` default (→ no overlay → the group stays at its default), matching
-/// the TS `salvage()` returning `undefined` on a failed `safeParse`.
+/// all-`None` default (→ no overlay → the group stays at its default).
 fn salvage<T: DeserializeOwned + Default>(root: &Value, key: &str) -> T {
     root.get(key)
         .and_then(|v| serde_json::from_value::<T>(v.clone()).ok())
@@ -185,9 +184,9 @@ async fn get_general(State(ctx): State<Arc<AppCtx>>) -> Response {
         "updateChannel".to_string(),
         Value::String("stable".to_string()),
     );
-    // Explicit `null` (not an omitted key) — mirrors the TS route's
-    // `{ ...GENERAL_DEFAULTS, ...scalars }` spread, where GENERAL_DEFAULTS carries
-    // `defaultAdapterId: null`.
+    // Explicit `null` (not an omitted key). Wire contract: `GeneralSettings` in
+    // `packages/types/src/settings.ts` types it `string | null` with a `null`
+    // default; a stored value below overrides it.
     data.insert("defaultAdapterId".to_string(), Value::Null);
     for (k, v) in &raw {
         if k != "notifications" {
@@ -246,10 +245,10 @@ async fn put_general(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
     let Some(patch): Option<GeneralPatch> = parse_body(&body) else {
         return fail(StatusCode::BAD_REQUEST, "Invalid request body");
     };
-    // worktreeDir: z.string().min(1).regex(/^[a-zA-Z0-9._-]+$/, 'Must be a simple
-    // directory name'). validate() joins every failing issue's message with ", ".
-    // An empty string trips BOTH min(1) and the regex; a non-empty bad value only
-    // the regex — reproduce each joined form exactly (no field prefix).
+    // worktreeDir must be non-empty and match `^[a-zA-Z0-9._-]+$` ('Must be a
+    // simple directory name'); every failing check's message is joined with ", ".
+    // An empty string trips BOTH the length check and the regex; a non-empty bad
+    // value only the regex — reproduce each joined form exactly (no field prefix).
     if let Some(ref wd) = patch.worktree_dir {
         if wd.is_empty() {
             return fail(
@@ -372,8 +371,7 @@ async fn get_providers(State(ctx): State<Arc<AppCtx>>) -> Response {
     }
     normalize_provider_default_models(&mut providers);
     // Union the stored-provider ids with every registered adapter id, then attach
-    // a `resolvedExecutable` per id (TS: `ctx.adapters.getAll()` ids +
-    // `resolveAdapterExecutableCached`). resolveAdapterExecutable reads only the
+    // a `resolvedExecutable` per id. `resolve_adapter_executable` reads only the
     // `provider.<id>.executablePath` setting, so the already-fetched `raw` map
     // backs a read-only SettingsWriter — no second db round-trip.
     let mut ids: Vec<String> = providers.keys().cloned().collect();
@@ -405,9 +403,8 @@ async fn get_providers(State(ctx): State<Arc<AppCtx>>) -> Response {
         );
         out.insert(id, Value::Object(entry));
     }
-    // PERF(port): the TS memoizes resolution for 5s (`resolveAdapterExecutableCached`)
-    // to throttle a polled endpoint; this port resolves live per request (a `which`
-    // spawn per unconfigured adapter). Behavior is identical; only the memo is dropped.
+    // PERF: resolution runs live per request (a `which` spawn per unconfigured
+    // adapter) with no memo, on an endpoint the UI polls.
     ok(Value::Object(out))
 }
 
@@ -456,7 +453,7 @@ struct ProviderPatch {
     cliproxy_small_fast_model: Option<String>,
 }
 
-/// `true` when a present value satisfies its Zod enum. `None` (absent) is always
+/// `true` when a present value satisfies its enum. `None` (absent) is always
 /// valid; the free-text fields (model/path/prompt) have no enum.
 fn in_enum(value: &Option<String>, allowed: &[&str]) -> bool {
     match value {
@@ -500,8 +497,8 @@ fn validate_provider_patch(p: &ProviderPatch) -> bool {
         )
 }
 
-/// `set` when the value is truthy (non-empty), else `delete` — the TS
-/// `if (value) set; else delete` on every provider field.
+/// `set` when the value is truthy (non-empty), else `delete`; applied to every
+/// provider field.
 fn set_or_delete(
     settings: &mainframe_db::SettingsRepository,
     adapter_id: &str,
@@ -628,25 +625,3 @@ pub fn router() -> Router<Arc<AppCtx>> {
             get(config_conflicts),
         )
 }
-
-// PORT STATUS: src/server/routes/settings.ts (5 endpoints, 235 lines)
-// confidence: medium
-// todos: 0
-// notes: general GET/PUT (incl. the per-group notification salvage/merge) and
-// provider PUT port 1:1 over ctx.db.settings. UpdateProviderSettingsBody's enums
-// (each with the '' clear sentinel) validate via explicit allowed-set checks
-// (serde loose Option<String> body → in_enum); truthy→set / falsy→delete;
-// defaultMode also deletes skipPermissions. GET providers ports the DB grouping
-// (skipPermissions→yolo, strip skipPermissions), unions ctx.adapter_registry ids,
-// and attaches resolvedExecutable per adapter via resolve_adapter_executable over
-// a read-only SettingsWriter backed by the fetched provider map (no 2nd db call).
-// PERF(port): the 5s resolve memo (resolveAdapterExecutableCached) is dropped —
-// each request resolves live. config-conflicts reads ~/.claude/settings.json via
-// async tokio::fs (no sync I/O) and matches JS truthiness for allow/deny. Main
-// catch-up (#236): general GET/PUT carries `defaultAdapterId: string | null`
-// (which adapter seeds a new chat). GET always emits the key (explicit `null`
-// default, not omitted). PUT distinguishes an absent key (no change) from an
-// explicit `null` (clear to default) via a hand-rolled double-Option
-// deserializer (`deserialize_present`), since serde's `Option<Option<T>>`
-// collapses both cases to `None` otherwise; a present string is validated
-// against the same `^[a-zA-Z0-9_-]+$` id charset as the TS zod schema.

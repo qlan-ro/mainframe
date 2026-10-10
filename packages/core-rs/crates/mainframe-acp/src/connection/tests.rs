@@ -39,8 +39,8 @@ async fn handle(text: &str, negotiated: bool) -> Option<String> {
 async fn initialize_at_the_pinned_version_returns_a_result_with_capabilities_meta() {
     let text =
         include_str!("../../../mainframe-types/tests/fixtures/acp/jsonrpc-request.initialize.json");
-    // Not yet negotiated: `initialize` is the one method exempt from the
-    // gate (R3.21) — it is how negotiation happens.
+    // Not yet negotiated: `initialize` is the one method exempt from the gate —
+    // it is how negotiation happens.
     let reply = handle(text, false).await.expect("initialize must reply");
     let value: Value = serde_json::from_str(&reply).unwrap();
 
@@ -128,7 +128,7 @@ async fn a_notification_before_initialize_gets_no_reply() {
 
 /// The dispatcher is the only place that knows whether an `initialize`
 /// succeeded; the socket shell reads that off the outcome rather than
-/// re-parsing the reply (todo #350, PR #688 review).
+/// re-parsing the reply.
 async fn dispatch(text: &str, negotiated: bool) -> DispatchOutcome {
     let frame = rpc::parse_frame(text).expect("fixture frames parse");
     dispatch_with_prompt(frame, &daemon(), &UnusedPort, negotiated).await

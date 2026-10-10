@@ -1,6 +1,7 @@
-//! Offload/send/history single-flight claims (todo #178). A child module of
-//! `lifecycle_manager` so it can reach the private `Guards`/`Flight`/
-//! `join_flight` machinery without making any of it crate-visible.
+//! Offload/send/history single-flight claims. A child module of
+//! `lifecycle_manager` so it can reach the private
+//! `Guards`/`Flight`/`join_flight` machinery without making any of it
+//! crate-visible.
 //!
 //! Every method here is `pub(crate)`: only `chat_manager` (this crate's other
 //! module) and `idle_offload` call them. `SendGuard`'s return type must match
@@ -80,7 +81,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             match waiting {
                 Some(n) => join_flight(&self.guards, n, |g| g.offloading.get(chat_id)).await,
                 None => {
-                    // Registering a send is a use (todo #381).
+                    // Registering a send is a use.
                     self.touch(chat_id);
                     return SendGuard {
                         lifecycle: self.clone(),
@@ -92,9 +93,9 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
     }
 
     fn end_send(&self, chat_id: &str) {
-        // A send ending is also a use (todo #381): without this, a long turn
-        // whose `begin_send` registration predates the idle threshold would
-        // look idle the instant the guard drops.
+        // A send ending is also a use: without this, a long turn whose
+        // `begin_send` registration predates the idle threshold would look idle
+        // the instant the guard drops.
         self.touch(chat_id);
         let mut g = self.guards.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(count) = g.sending.get_mut(chat_id) {
@@ -133,7 +134,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
     }
 
     pub(crate) fn release_history(&self, chat_id: &str) {
-        // A finished history read is a use (todo #381).
+        // A finished history read is a use.
         self.touch(chat_id);
         let notify = self
             .guards

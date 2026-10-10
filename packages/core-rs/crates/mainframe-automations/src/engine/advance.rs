@@ -1,7 +1,7 @@
-//! Serialized per-run advance loop (Node engine/interpreter.ts, contract §2
-//! Decision 12 + A8). `advance()` is safe to call repeatedly (wake, boot
-//! reconcile, retry); concurrent calls for one run serialize on a per-run
-//! lock so a step never executes twice from a race.
+//! Serialized per-run advance loop (contract §2 restart-mid-action policy +
+//! A8). `advance()` is safe to call repeatedly (wake, boot reconcile, retry);
+//! concurrent calls for one run serialize on a per-run lock so a step never
+//! executes twice from a race.
 
 use std::sync::Arc;
 
@@ -18,13 +18,13 @@ use super::{BoxFuture, RunAdvancer, RunFinalizedHook, VerbPorts, WalkResult};
 
 const RESTART_MID_ACTION_ERROR: &str = "engine restarted mid-action; effect unknown";
 
-/// Narrow view of the (T4.3) agent-wait registry — cancel only needs to purge
+/// Narrow view of the agent-wait registry — cancel only needs to purge
 /// a run's registrations so a chat that finishes later cannot resurrect it.
 pub trait AgentWaitRegistry: Send + Sync {
     fn clear_for_run(&self, run_id: &str);
 }
 
-/// Decision 12 restart policy hook: true only for run_action steps safe to
+/// Restart-mid-action policy hook: true only for run_action steps safe to
 /// blindly re-invoke after an unknown-effect restart.
 pub type IdempotencyHook = Arc<dyn Fn(&RunActionStep) -> bool + Send + Sync>;
 
@@ -37,7 +37,7 @@ pub struct InterpreterDeps {
     /// regardless of this hook.
     pub is_idempotent: Option<IdempotencyHook>,
     pub agent_waits: Option<Arc<dyn AgentWaitRegistry>>,
-    /// T8.3 chaining (Node onRunFinalized): observes terminal runs.
+    /// Trigger chaining: observes terminal runs.
     pub on_finalized: Option<Arc<dyn RunFinalizedHook>>,
 }
 
@@ -189,10 +189,11 @@ impl Interpreter {
         }
     }
 
-    /// Decision 12: a `running` entry found before this advance means a
-    /// previous engine died mid-action. Idempotent run_action steps are left
-    /// as-is (the walk re-executes them); everything else fails with "effect
-    /// unknown", and without `keepGoing` the whole run fails right here.
+    /// Restart-mid-action policy: a `running` entry found before this advance
+    /// means a previous engine died mid-action. Idempotent run_action steps are
+    /// left as-is (the walk re-executes them); everything else fails with
+    /// "effect unknown", and without `keepGoing` the whole run fails right
+    /// here.
     async fn resolve_stale_running(&self, run: &RunRecord) -> Result<Option<String>, StoreError> {
         for (step_ref, entry) in &run.checkpoint.steps {
             if entry.status != StepStatus::Running {
@@ -286,11 +287,3 @@ impl RunAdvancer for Interpreter {
         })
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T4.1, A8), not a TS port
-// confidence: high
-// todos: 0
-// notes: cancellation aborts the walk structurally (future drop via select!)
-//        instead of Node's cooperative AbortSignal; the A8 store guard
-//        rejects any straggler commit. sweep_deadlines/fail_step land with
-//        the agent phase (T4.3+).

@@ -1,7 +1,5 @@
-//! Moved verbatim from `mainframe-server::chat_deps`'s
-//! `scan_loaded_history_tests` module (todo #339 task 4) — the cold-load scan now
-//! lives in the adapter-neutral crate. Fixture builders are copied (not moved):
-//! `mainframe-server` still needs its own copies for the tests left behind.
+//! Cold-load PR scan tests for `pr_detection::scan_history_for_prs`. The fixture
+//! builders are local copies; `mainframe-server` keeps its own for its tests.
 
 use std::collections::HashMap;
 

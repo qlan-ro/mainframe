@@ -2,11 +2,10 @@
 //!
 //! `mainframe_db::DatabaseManager` owns an `Rc<rusqlite::Connection>` and is
 //! therefore `!Send` — it cannot live behind the `Arc<AppCtx>` that axum shares
-//! across worker tasks. Per CONCURRENCY.tsv (`db/index.ts` → class `DB`:
-//! "single rusqlite Connection, WAL, all queries via spawn_blocking; repositories
-//! borrow the shared handle") the connection is confined to one dedicated thread
-//! and every query is serialized onto it. The db crate deferred this wrapper
-//! ("Async wrapping is a later phase"); it lands here, in its sole consumer.
+//! across worker tasks. So the single WAL-mode rusqlite connection, which every
+//! repository borrows, is confined to one dedicated thread and every query is
+//! serialized onto it. The wrapper lives here, in its sole consumer, rather than
+//! in the db crate.
 //!
 //! The handle (`Db`) holds a `tokio::mpsc::UnboundedSender<Job>`, which is
 //! `Send + Sync + Clone`; the `DatabaseManager` is constructed on, and never
@@ -103,9 +102,7 @@ impl Db {
     /// the actor makes progress independently and unblocks us. This must **never**
     /// be called from within a closure already running on the DB thread (that
     /// would wait on the thread for itself); every `ChatManagerDeps` caller runs
-    /// on a tokio task, so that invariant holds. The TS daemon blocks its single
-    /// event loop for the whole synchronous DB call, so briefly blocking one of N
-    /// tokio workers is strictly cheaper and behaviourally faithful.
+    /// on a tokio task, so that invariant holds.
     pub fn call_blocking<F, R>(&self, f: F) -> Result<R, DbError>
     where
         F: FnOnce(&DatabaseManager) -> Result<R, DbError> + Send + 'static,
@@ -175,16 +172,3 @@ mod tests {
         assert!(result.is_err());
     }
 }
-
-// PORT STATUS: (new — realizes CONCURRENCY.tsv class DB for db/index.ts)
-// confidence: high
-// todos: 0
-// notes: DatabaseManager is !Send (Rc<Connection>); this actor confines it to a
-// dedicated thread and serializes access, matching better-sqlite3's
-// single-threaded semantics and the tsv's "single connection / spawn_blocking"
-// directive. `mpsc::UnboundedSender` is Send+Sync+Clone so `Db` (and therefore
-// AppCtx) is Send+Sync. Worker-death folds into DbError so route handlers keep a
-// single `?`. Open errors surface synchronously via a std oneshot. Task 4.6c adds
-// `call_blocking` (the SYNC-DB BRIDGE): the synchronous ChatManagerDeps accessors
-// dispatch onto this same actor thread and block on a std::sync::mpsc — one WAL
-// connection, no second writer, faithful to better-sqlite3's blocking semantics.

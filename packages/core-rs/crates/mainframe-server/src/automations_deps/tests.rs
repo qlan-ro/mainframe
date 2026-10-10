@@ -1,4 +1,4 @@
-//! T9.2 unit tests: agent port over a fake chat seam, bridge mappings, and
+//! Unit tests: agent port over a fake chat seam, bridge mappings, and
 //! the event-source projection — all against the real broadcast bus.
 
 use std::sync::{Arc, Mutex as StdMutex};

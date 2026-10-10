@@ -1,4 +1,4 @@
-//! T1.3 — plain-language validation: duplicate ids, forward refs, `current`
+//! Plain-language validation: duplicate ids, forward refs, `current`
 //! outside Repeat, comparator/type mismatches, block scoping, fixture cleanliness.
 
 use serde_json::{Value, json};
@@ -394,8 +394,3 @@ fn all_canonical_fixtures_validate_clean() {
         assert_eq!(errors, vec![], "fixture {name} must produce zero errors");
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T1.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: message texts mirror Node's plain-language validate (packages/types/src/automation-domain/validate.ts).

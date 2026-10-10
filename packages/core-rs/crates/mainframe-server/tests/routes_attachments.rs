@@ -1,10 +1,8 @@
-//! Route tests for `attachments.rs` — translated assertion-for-assertion from
-//! `src/server/routes/__tests__/attachments.test.ts`, against a real spawned app
-//! with a real `AttachmentStore` (no mocks).
+//! Route tests for `attachments.rs`, against a real spawned app with a real
+//! `AttachmentStore` (no mocks).
 //!
-//! The two TS "attachment store not configured" 500 cases are omitted: the Rust
-//! `AppCtx` always carries an `Arc<AttachmentStore>`, so that branch is
-//! structurally unreachable.
+//! There is no "attachment store not configured" case: `AppCtx` always carries
+//! an `Arc<AttachmentStore>`, so that branch is structurally unreachable.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod support;
@@ -13,7 +11,7 @@ use reqwest::StatusCode;
 use serde_json::{Value, json};
 use support::spawn_test_server;
 
-/// base64("hello") — the TS `smallImage.data`.
+/// base64("hello").
 const SMALL_IMAGE_DATA: &str = "aGVsbG8=";
 
 fn small_image() -> Value {

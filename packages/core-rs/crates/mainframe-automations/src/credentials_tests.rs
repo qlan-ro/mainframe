@@ -1,4 +1,4 @@
-//! T6.1 — FileCredentialStore: set/get/delete/labels, 0600 perms, atomic
+//! FileCredentialStore: set/get/delete/labels, 0600 perms, atomic
 //! temp+rename persistence, unreadable-file fallback, Debug redaction.
 
 use std::collections::BTreeMap;
@@ -62,8 +62,8 @@ async fn persists_across_reload_in_node_compatible_shape() {
     store.set("ado", creds.clone()).await.unwrap();
     drop(store);
 
-    // Node's FileCredentialStore reads the same file: a label→Credentials
-    // record with kind:"token" (both daemons share <dataDir>).
+    // The on-disk format is a label→Credentials record with kind:"token";
+    // existing credential files under <dataDir> must keep loading.
     let raw: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
     assert_eq!(raw["ado"]["kind"], "token");

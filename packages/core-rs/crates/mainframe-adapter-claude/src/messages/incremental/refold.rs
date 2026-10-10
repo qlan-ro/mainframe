@@ -1,4 +1,4 @@
-//! The sequential driver (todo #376): walks one raw slice left to right,
+//! The sequential driver: walks one raw slice left to right,
 //! opening/closing merge-group accumulators via the shared
 //! [`classify_message`] decision and appending finished [`Group`]s. A
 //! duration marker may target a group this call already finished, or a

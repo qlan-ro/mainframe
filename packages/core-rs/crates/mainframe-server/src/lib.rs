@@ -1,5 +1,5 @@
-//! Ported from `src/server/*` (packages/core) — the axum HTTP app, the WebSocket
-//! layer, the response envelope, and path validation.
+//! The axum HTTP app, the WebSocket layer, the response envelope, and path
+//! validation.
 #![forbid(unsafe_code)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 // A route helper that fails returns the `Response` it wants sent — that IS the
@@ -54,15 +54,12 @@ use std::net::SocketAddr;
 use axum::Router;
 use tokio::net::TcpListener;
 
-/// Bind the daemon's HTTP listener and serve the app. Ported from
-/// `ServerManager.start` in `src/server/index.ts`.
+/// Bind the daemon's HTTP listener and serve the app.
 ///
 /// The bind runs first: a bind failure (`EADDRINUSE` from a duplicate/stale
-/// daemon) is returned as an `Err` for the caller to reject on — never an
-/// unhandled `error` event that silently kills the process (the TS
-/// `httpServer.once('error', onBindError)` → `reject(err)`). Once listening,
-/// `axum::serve` runs; a later serve error is returned for the caller to log,
-/// mirroring the post-listen `httpServer.on('error', …)` late error handler.
+/// daemon) is returned as an `Err` for the caller to reject on — never a
+/// failure that silently kills the process. Once listening, `axum::serve` runs;
+/// a later serve error is returned for the caller to log.
 pub async fn start(app: Router, addr: SocketAddr) -> std::io::Result<()> {
     let listener = TcpListener::bind(addr).await?;
     let service = app.into_make_service_with_connect_info::<SocketAddr>();
@@ -73,8 +70,8 @@ pub async fn start(app: Router, addr: SocketAddr) -> std::io::Result<()> {
 mod start_tests {
     use super::*;
 
-    // Mirrors server-start-error.test.ts: a bind onto an already-bound port must
-    // reject with EADDRINUSE, not crash the process.
+    // A bind onto an already-bound port must reject with EADDRINUSE, not crash
+    // the process.
     #[tokio::test]
     async fn start_rejects_when_the_port_is_already_bound() {
         let blocker = TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], 0)))
@@ -88,14 +85,3 @@ mod start_tests {
         drop(blocker);
     }
 }
-
-// PORT STATUS: src/server/* (Phase 3 — server core, WS, envelope, path utils)
-// confidence: medium
-// todos: 1
-// notes: Task 3.1 lands http.rs, websocket.rs, respond.rs, path_utils.rs,
-// async_err.rs, the auth middleware, ws_schemas, ws_file_watch, the AppCtx + Db
-// actor handle, and the 12 EMPTY route stubs (filled by the route agents). The
-// route bodies, plugin router mount, LSP upgrade route, and the chat WS handlers
-// (message.send / permission.respond) are Phase 4/5 seams (see per-file PORT
-// STATUS). fs-utils.ts, ripgrep.ts, adapter-replay.ts, suggestions/, and
-// routes/schemas.ts|types.ts land with their consuming route agents.

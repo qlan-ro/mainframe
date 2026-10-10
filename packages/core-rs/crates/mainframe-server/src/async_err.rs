@@ -1,22 +1,16 @@
-//! Ported from `src/server/routes/async-handler.ts` + the global error handler
-//! in `src/server/http.ts`.
-//!
-//! Express wraps async handlers so a rejected promise reaches the terminal error
-//! middleware, which logs the error and emits `500 {success:false,error:"Internal
-//! server error"}` — never leaking the underlying message. Rust handlers return
-//! `Result`/`Response` directly (no thrown-exception path), so this module gives
-//! route modules the one shared "unexpected error → logged 500 envelope" helper
-//! to use in their catch-all arm.
+//! The shared "unexpected error → logged 500 envelope" helper route modules use
+//! in their catch-all arm. It logs the error and emits
+//! `500 {success:false,error:"Internal server error"}` — never leaking the
+//! underlying message to the client.
 
 use axum::http::StatusCode;
 use axum::response::Response;
 
 use crate::respond::fail;
 
-/// Log `err` under `context` (via `tracing`, mirroring the pino `log.error`) and
-/// return the opaque `500` envelope. The caller's error is never sent to the
-/// client — only a fixed "Internal server error" string, matching the TS global
-/// handler byte-for-byte.
+/// Log `err` under `context` (via `tracing`) and return the opaque `500`
+/// envelope. The caller's error is never sent to the client — only a fixed
+/// "Internal server error" string.
 pub fn internal_error(context: &str, err: &dyn std::fmt::Display) -> Response {
     tracing::error!(error = %err, "{context}");
     fail(StatusCode::INTERNAL_SERVER_ERROR, "Internal server error")
@@ -43,11 +37,3 @@ mod tests {
         assert!(!String::from_utf8_lossy(&bytes).contains("devices"));
     }
 }
-
-// PORT STATUS: src/server/routes/async-handler.ts + http.ts global error handler
-// confidence: high
-// todos: 0
-// notes: Rust has no thrown-exception path, so `asyncHandler`'s promise-catch is
-// not a 1:1 wrapper; its EFFECT (log + opaque 500, no internal leak) is provided
-// as `internal_error` for route catch-all arms. Expected 400/404 mappings stay
-// route-local (they were explicit `fail(res, 4xx, ...)` calls in the TS too).

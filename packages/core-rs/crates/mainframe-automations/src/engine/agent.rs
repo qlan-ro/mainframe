@@ -1,9 +1,8 @@
-//! ask_agent verb + durable agent wait (T4.3, Node verbs/ask-agent.ts +
-//! verbs/agent-waits.ts). The verb starts a chat, parks the step `waiting`
-//! with its chatId stamped on the checkpoint entry, and spawns a watch task;
-//! the settle path (agent_settle.rs) writes the outcome and re-advances.
-//! Unlike Node there is no agent_waits table: the checkpoint entry IS the
-//! durable record, and `resume_run_watches` re-attaches after a restart.
+//! ask_agent verb + durable agent wait. The verb starts a chat, parks the
+//! step `waiting` with its chatId stamped on the checkpoint entry, and
+//! spawns a watch task; the settle path (agent_settle.rs) writes the outcome
+//! and re-advances. There is no agent_waits table: the checkpoint entry IS
+//! the durable record, and `resume_run_watches` re-attaches after a restart.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex as StdMutex, MutexGuard, OnceLock};
@@ -56,8 +55,8 @@ impl AgentVerb {
         step: &AskAgentStep,
         ctx: VerbContext<'_>,
     ) -> StepOutcome {
-        // Re-entry while a wait is already registered (Node findByRunStep
-        // guard): keep waiting, never start a second chat.
+        // Re-entry while a wait is already registered: keep waiting, never
+        // start a second chat.
         if self.find_chat(ctx.run_id, ctx.step_ref).is_some() {
             return StepOutcome::Wait { wake_at: None };
         }
@@ -221,7 +220,7 @@ fn build_request(step: &AskAgentStep, ctx: &VerbContext<'_>) -> AgentRequest {
     let expects = step.expects.clone().unwrap_or_default();
     let mut prompt = render(&step.prompt, ctx.scope, ctx.names);
     if !expects.is_empty() {
-        // A2: the output contract rides the first prompt (Node ask-agent.ts).
+        // A2: the output contract rides the first prompt.
         prompt.push_str(&build_output_contract(&expects));
     }
     AgentRequest {
@@ -244,10 +243,3 @@ fn build_request(step: &AskAgentStep, ctx: &VerbContext<'_>) -> AgentRequest {
         attachments: step.attachments.clone().unwrap_or_default(),
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T4.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: no agent_waits table (contract §3: engine-internal caches are not
-//        contract) — the checkpoint entry's chatId is the durable record;
-//        settle/judge live in agent_settle.rs (300-line file cap).

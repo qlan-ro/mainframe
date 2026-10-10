@@ -36,8 +36,8 @@ pub struct TestAdapter {
     pub spawn_ids: Arc<Mutex<Vec<String>>>,
     pub project_paths: Arc<Mutex<Vec<String>>>,
     /// Every `SessionSpawnOptions.no_persistence` a `TestSession::spawn` call
-    /// actually received, in order (todo #344 Task 4: proves the spawn seam
-    /// carries the flag exactly when the capability is on).
+    /// actually received, in order (proves the spawn seam carries the flag
+    /// exactly when the capability is on).
     pub spawn_no_persistence: Arc<Mutex<Vec<Option<bool>>>>,
 }
 
@@ -99,11 +99,10 @@ impl Adapter for TestAdapter {
 struct TestSession {
     id: String,
     project_path: String,
-    /// Tracks the real spawn/kill lifecycle (a fresh instance always starts
-    /// unspawned — every restart scenario here re-derives its manager rather
-    /// than reusing a live session, so that part of the old always-`false`
-    /// comment still holds) — but a `send_message`-driven respawn within the
-    /// SAME manager (AC 12's "next send after a CLI exit" path) needs a session
+    /// Tracks the real spawn/kill lifecycle. A fresh instance always starts
+    /// unspawned (every restart scenario here re-derives its manager rather
+    /// than reusing a live session), but a `send_message`-driven respawn within
+    /// the SAME manager (the "next send after a CLI exit" path) needs a session
     /// that actually reports spawned once `spawn()` has run.
     spawned: std::sync::atomic::AtomicBool,
     /// Shared with the owning `TestAdapter` — `spawn` records into it.
@@ -159,7 +158,7 @@ impl AdapterSession for TestSession {
     fn interrupt(&self) -> BoxFuture<'_, Result<(), AdapterError>> {
         // A real CLI exits on SIGINT; model the same "session gone, chat
         // untouched" shape an unexpected exit leaves for `send_message`'s
-        // `!session_is_spawned` respawn guard (AC 12, todo #346).
+        // `!session_is_spawned` respawn guard.
         self.spawned.store(false, Ordering::SeqCst);
         ok()
     }

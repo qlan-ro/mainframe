@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/codex/thread-registry.ts`.
-//!
 //! Reads `~/.codex/state_5.sqlite` (Codex's own thread registry, read-only) to
 //! look up sub-agent metadata not exposed via app-server JSON-RPC:
 //!   - `agent_nickname` (e.g. "Maxwell")
@@ -156,12 +154,3 @@ mod tests {
         assert!(result.is_empty());
     }
 }
-
-// PORT STATUS: src/plugins/builtin/codex/thread-registry.ts (72 lines)
-// confidence: high
-// todos: 0
-// notes: better-sqlite3 (sync, read-only) -> rusqlite Connection::open_with_flags
-// notes: (READ_ONLY). Kept SYNCHRONOUS to mirror the TS (called from the sync
-// notes: event-mapper path); it is a one-shot read of an EXTERNAL Codex DB, not the
-// notes: daemon's own store, so it does not route through mainframe-db's Db actor.
-// notes: describe_agent/agent_title return Option<String> (TS `string | null`).

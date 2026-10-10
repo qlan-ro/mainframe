@@ -1,7 +1,6 @@
-//! End-to-end `dispatch_resume` revision-cursor cases (todo #377), split out
-//! of `tests.rs` to keep it under 300 lines — it shares that file's
-//! fixtures (`dmsg`, `text`, `FakePort`, `resume_request`) via `use
-//! super::*`.
+//! End-to-end `dispatch_resume` revision-cursor cases, split out of `tests.rs`
+//! to keep it under 300 lines — it shares that file's fixtures (`dmsg`, `text`,
+//! `FakePort`, `resume_request`) via `use super::*`.
 
 use std::sync::Mutex;
 
@@ -178,7 +177,7 @@ impl ResumePort for RacingPort<'_> {
 /// await, never a fresh `log.boundary()` read after it — otherwise it
 /// acknowledges a change the snapshot (and therefore this reply) never
 /// actually sent, and a later resume with that cursor would skip the
-/// change for good (must-fix #1/#3, todo #377 review).
+/// change for good.
 #[tokio::test]
 async fn a_resume_never_acknowledges_a_revision_recorded_during_its_own_snapshot_await() {
     let log = Mutex::new(RevisionLog::new("ep_1".to_string()));

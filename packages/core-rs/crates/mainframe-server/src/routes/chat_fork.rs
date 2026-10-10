@@ -1,6 +1,5 @@
-//! `POST /api/chats/{id}/fork` (todo #343; from-message forks per
-//! `docs/specs/2026-10-06-fork-from-message.md`). Moved out of
-//! `chat_commands.rs`, which was already over the 300-line ceiling.
+//! `POST /api/chats/{id}/fork` (from-message forks per
+//! `docs/specs/2026-10-06-fork-from-message.md`).
 //!
 //! `ChatManager::fork_chat` runs every eligibility check and maps its own
 //! failures to the Daemon contract table's statuses; this handler owns request
@@ -29,7 +28,7 @@ use crate::routes::projects::parse_body;
 /// uuids, far below this; the cap only bounds what a client can send.
 const MAX_MESSAGE_ID_LEN: usize = 128;
 
-/// No body, `{}`, or `{"fromMessageId": null}` is #343's whole-chat fork.
+/// No body, `{}`, or `{"fromMessageId": null}` is a whole-chat fork.
 /// `deny_unknown_fields` 400s any other key instead of silently ignoring it.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

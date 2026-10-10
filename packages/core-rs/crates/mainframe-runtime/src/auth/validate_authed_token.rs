@@ -1,22 +1,19 @@
-//! Ported from `src/auth/validate-authed-token.ts`.
-//!
-//! The TS function takes a concrete `DevicesRepository` (from `../db/devices`).
-//! That repository lives in `mainframe-db`, which depends on this crate — so to
-//! avoid a dependency cycle the lookup is abstracted behind the `DeviceLookup`
-//! trait. `mainframe-db`'s `DevicesRepository` will implement it; tests use an
-//! in-memory fake (real-collaborator substitute for the vitest in-memory SQLite,
-//! keeping the same assertions).
+//! The device lookup needs `DevicesRepository`, which lives in `mainframe-db`,
+//! which depends on this crate — so to avoid a dependency cycle the lookup is
+//! abstracted behind the `DeviceLookup` trait. `mainframe-server` implements it
+//! over `DevicesRepository` (`middleware/auth.rs`); tests use an in-memory fake.
 
 use super::token::{TokenPayload, validate_token};
 use mainframe_types::device::DeviceRow;
 
-/// The single method `validateAuthedToken` needs from `DevicesRepository`:
-/// `findByDeviceId(deviceId): DeviceRow | null`.
+/// The single method `validate_authed_token` needs from `DevicesRepository`:
+/// look up a device row by id.
 pub trait DeviceLookup {
     fn find_by_device_id(&self, device_id: &str) -> Option<DeviceRow>;
 }
 
-/// Mirrors `validateAuthedToken(secret, token, devicesRepo)`.
+/// Validates `token` and checks its epoch against the device's current
+/// `auth_epoch` (a token without an epoch only matches epoch `-1`).
 pub fn validate_authed_token<D: DeviceLookup + ?Sized>(
     secret: &str,
     token: &str,
@@ -43,8 +40,8 @@ mod tests {
 
     const SECRET: &str = "test-secret";
 
-    /// In-memory stand-in for `DevicesRepository`, mirroring the `add` +
-    /// `incrementAuthEpoch` + `findByDeviceId` surface the vitest test exercised.
+    /// In-memory stand-in for `DevicesRepository` with the `add` +
+    /// `incrementAuthEpoch` + `findByDeviceId` surface these tests need.
     #[derive(Default)]
     struct FakeDevices {
         rows: HashMap<String, DeviceRow>,
@@ -127,13 +124,3 @@ mod tests {
         assert!(validate_authed_token(SECRET, &token, &devices).is_none());
     }
 }
-
-// PORT STATUS: src/auth/validate-authed-token.ts (19 lines)
-// confidence: high
-// todos: 0
-// notes: `DevicesRepository` argument abstracted behind the `DeviceLookup` trait
-// to avoid a mainframe-db -> mainframe-runtime dependency cycle (mainframe-db
-// implements the trait). Tests substitute a HashMap-backed `FakeDevices` for the
-// vitest in-memory SQLite `DevicesRepository`, keeping every assertion identical
-// (add / incrementAuthEpoch / findByDeviceId behavior preserved). `epoch ?? -1`
-// -> `payload.epoch.unwrap_or(-1)`.

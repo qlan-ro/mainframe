@@ -1,6 +1,7 @@
 //! Merges the store's in-memory runs with disk-backfilled records for the
-//! REST history path (D9). See the plan's *Merge precedence* rules — a
-//! pairwise identity predicate, not a per-run fallback key.
+//! REST history path. The precedence rules (one test each in
+//! `tests/merge_precedence.rs`) use a pairwise identity predicate, not a
+//! per-run fallback key.
 
 use mainframe_types::claude_workflow::{ClaudeWorkflowRun, ClaudeWorkflowRunSource};
 
@@ -89,7 +90,7 @@ fn wins(candidate: &ClaudeWorkflowRun, incumbent: &ClaudeWorkflowRun) -> bool {
 }
 
 /// Copies a learned `run_id`/`workflow_name` from `loser` onto `winner` when
-/// `winner` lacks it — the asymmetric-identity case (A1).
+/// `winner` lacks it — the asymmetric-identity case.
 fn carry_missing_identity(
     mut winner: ClaudeWorkflowRun,
     loser: &ClaudeWorkflowRun,

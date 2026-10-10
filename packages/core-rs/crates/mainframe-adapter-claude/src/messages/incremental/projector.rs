@@ -1,6 +1,5 @@
-//! `IncrementalProjector` (todo #376): the production [`DisplayProjector`]
-//! for `mainframe-adapter-claude`. See the module doc
-//! (`messages/incremental/mod.rs`) and the plan for the overall design; this
+//! `IncrementalProjector`: the production [`DisplayProjector`]. See the
+//! module doc (`messages/incremental/mod.rs`) for the overall design; this
 //! file only wires the pieces in `group`, `fold`, `refold`, `patches`,
 //! `rewind`, `ordinals`, and `post_process` together.
 
@@ -30,7 +29,7 @@ pub struct IncrementalProjector {
     groups: Vec<Group>,
     tool_owner: HashMap<String, usize>,
     /// Display-id -> owning-group-index index, the `display_owner`
-    /// counterpart of `tool_owner` (todo #376 follow-up): lets a dedupe
+    /// counterpart of `tool_owner`: lets a dedupe
     /// check against the frozen prefix be an `O(1)` lookup instead of a
     /// fresh `HashSet` built over `groups[..r]` on every call.
     display_owner: HashMap<String, usize>,
@@ -186,7 +185,7 @@ impl IncrementalProjector {
     ///
     /// `O(1)` setup: a cheap clone of a cached `scope_before` checkpoint
     /// plus two index-backed `FrozenTracker`s, never a rescan of
-    /// `groups[..r]` (todo #376 follow-up).
+    /// `groups[..r]`.
     fn refold_and_postprocess(
         &mut self,
         raw: &[ChatMessage],

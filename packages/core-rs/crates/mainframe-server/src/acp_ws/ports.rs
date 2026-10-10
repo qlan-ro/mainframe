@@ -1,8 +1,8 @@
-//! Production `PromptPort`/`ResumePort` over the live `ChatManager` (todo
-//! #350, live-wiring pass) — the impls the port traits' docs in
-//! `mainframe-acp` promise: `send_prompt` → `ChatManager::send_message`,
-//! `cancel` → `interrupt_chat` (which ends the turn cancelled and clears open
-//! gates), `resume_snapshot` → `get_resume_snapshot`.
+//! Production `PromptPort`/`ResumePort` over the live `ChatManager` — the impls
+//! the port traits' docs in `mainframe-acp` promise: `send_prompt` →
+//! `ChatManager::send_message`, `cancel` → `interrupt_chat` (which ends the
+//! turn cancelled and clears open gates), `resume_snapshot` →
+//! `get_resume_snapshot`.
 
 use std::sync::Arc;
 
@@ -56,11 +56,11 @@ impl PromptPort for ManagerPorts {
                 .map_err(|err| PromptError {
                     message: err.to_string(),
                 })?;
-            // A command bypasses the queue and always dispatches immediately
-            // (T17, R3.12) — it never adds itself to `queued_message_count`,
-            // so that count (when non-zero) belongs entirely to OTHER,
-            // unrelated queued prompts and must not be reported as this
-            // command's own queue position.
+            // A command bypasses the queue and always dispatches immediately —
+            // it never adds itself to `queued_message_count`, so that count
+            // (when non-zero) belongs entirely to OTHER, unrelated queued
+            // prompts and must not be reported as this command's own queue
+            // position.
             let queued = if is_command {
                 0
             } else {
@@ -113,7 +113,7 @@ impl ResumePort for ManagerPorts {
 
 /// The gate-apply seam: kept a plain trait, not a direct `ChatManager` call,
 /// so `apply_gate_answer` can be driven by a failing double in tests without
-/// spinning up a real session (T3).
+/// spinning up a real session.
 pub trait GatePort: Send + Sync {
     fn respond_to_permission<'a>(
         &'a self,

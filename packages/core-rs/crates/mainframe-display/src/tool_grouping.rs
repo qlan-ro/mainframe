@@ -1,6 +1,4 @@
-//! Ported from `packages/core/src/messages/tool-grouping.ts`.
-//!
-//! Adapter-agnostic (§2.5 display side): post-processes a flat `PartEntry` list
+//! Adapter-agnostic: post-processes a flat `PartEntry` list
 //! into virtual group wrappers — explore runs collapse into `_tool_group`,
 //! hidden tools are dropped, task-progress tools accumulate into one
 //! `_task_progress` per parent, and subagent children nest under a `_task_group`.
@@ -43,7 +41,7 @@ pub struct TaskProgressItem {
 pub struct ToolGroupEntry {
     pub tool_call_id: String,
     pub items: Vec<ToolGroupItem>,
-    /// Always `"grouped"` (the TS `result: 'grouped'` literal); never read.
+    /// Always `"grouped"`; never read.
     pub result: &'static str,
     pub parent_tool_use_id: Option<String>,
 }
@@ -64,7 +62,7 @@ pub struct TaskGroupEntry {
 pub struct TaskProgressEntry {
     pub tool_call_id: String,
     pub items: Vec<TaskProgressItem>,
-    /// Always `"accumulated"` (the TS `result: 'accumulated'` literal); never read.
+    /// Always `"accumulated"`; never read.
     pub result: &'static str,
     pub parent_tool_use_id: Option<String>,
 }
@@ -148,8 +146,8 @@ impl PartEntry {
     }
 }
 
-/// Mirrors the TS `tc.parentToolUseId && { parentToolUseId }` truthy check —
-/// `undefined` and `""` both collapse to `None`.
+/// A parent tool-use id counts only when non-empty: `None` and `""` both
+/// collapse to `None`.
 fn truthy(value: &Option<String>) -> Option<String> {
     match value {
         Some(v) if !v.is_empty() => Some(v.clone()),
@@ -157,7 +155,7 @@ fn truthy(value: &Option<String>) -> Option<String> {
     }
 }
 
-/// Mirrors the TS truthy guard on a borrowed id — `None` and `""` → `None`.
+/// Borrowed form of [`truthy`]: `None` and `""` → `None`.
 fn truthy_str(value: Option<&str>) -> Option<&str> {
     match value {
         Some(v) if !v.is_empty() => Some(v),
@@ -187,7 +185,7 @@ struct ProgressBucket {
 
 /// Accumulate a progress tool into its parent's bucket, anchoring the bucket's
 /// insert position at the first one seen. Shared by the main loop and the
-/// explore look-ahead (mirroring the TS `collectTaskItem` closure).
+/// explore look-ahead.
 fn collect_task_item(buckets: &mut Vec<ProgressBucket>, result_len: usize, tc: &ToolCallRef<'_>) {
     let key = tc.parent_tool_use_id.clone();
     let pos = match buckets.iter().position(|b| b.key == key) {
@@ -216,7 +214,7 @@ fn collect_task_item(buckets: &mut Vec<ProgressBucket>, result_len: usize, tc: &
 /// parent. Categories are adapter-declared — pass the adapter's `ToolCategories`.
 ///
 /// A dropped hidden tool call still leaves a paragraph boundary for the text
-/// that follows it (todo #383, `hidden_boundary.rs`) — the encoder itself is
+/// that follows it (`hidden_boundary.rs`) — the encoder itself is
 /// unchanged and still concatenates adjacent text leaves with no separator.
 pub fn group_tool_call_parts(parts: &[PartEntry], categories: &ToolCategories) -> Vec<PartEntry> {
     let mut result: Vec<PartEntry> = Vec::new();
@@ -399,7 +397,7 @@ fn collect_explore_run(
 /// the position where that parent's first progress tool was seen. Ascending
 /// insert order with an offset keeps every recorded index valid as earlier
 /// splices shift the vec. `sort_by` is stable, so buckets sharing an insert
-/// index keep their first-seen order (matching JS `Map` iteration + stable sort).
+/// index keep their first-seen order.
 fn splice_progress_entries(result: &mut Vec<PartEntry>, mut buckets: Vec<ProgressBucket>) {
     buckets.sort_by_key(|b| b.insert_index);
     let mut offset = 0usize;
@@ -496,7 +494,7 @@ mod tests {
     use mainframe_types::content::LeafContent;
     use std::collections::HashSet;
 
-    /// Mirrors `ClaudeAdapter.getToolCategories()`: the V2 task tools are BOTH
+    /// The V2 task tools are both
     /// hidden (never rendered as raw cards) AND progress (surfaced as
     /// `_task_progress`); progress takes precedence over hidden in grouping.
     fn claude_cats() -> ToolCategories {
@@ -532,8 +530,8 @@ mod tests {
         HashMap::from([("some".to_string(), Value::String("arg".to_string()))])
     }
 
-    /// `tc(toolName, id?, result?, isError?)` from the TS fixtures; `id` defaults
-    /// to `call-${toolName}` and `args` is always `{ some: 'arg' }`.
+    /// A tool-call part fixture: `id` defaults to `call-<tool_name>` and `args`
+    /// is always `{ "some": "arg" }`.
     fn tc(
         tool_name: &str,
         id: Option<&str>,
@@ -553,7 +551,7 @@ mod tests {
         }
     }
 
-    /// `tcTagged(toolName, id, parentToolUseId, result?)` from the TS fixtures.
+    /// A tool-call part fixture tagged with a parent tool-use id.
     fn tc_tagged(tool_name: &str, id: &str, parent: &str, result: Option<Value>) -> PartEntry {
         PartEntry::ToolCall {
             tool_call_id: id.to_string(),
@@ -609,7 +607,7 @@ mod tests {
         }
     }
 
-    /// Compact per-part label matching the TS `names` mappers.
+    /// Compact per-part label for asserting a grouped sequence.
     fn label(p: &PartEntry) -> String {
         match p {
             PartEntry::Text { text, .. } => format!("text:{text}"),
@@ -1281,7 +1279,7 @@ mod tests {
         }
     }
 
-    /* ── AskUserQuestion (ported from tool-grouping-askuserquestion.test.ts) ── */
+    /* ── AskUserQuestion ───────────────────────────────────────────────── */
 
     fn auq_cats() -> ToolCategories {
         ToolCategories {
@@ -1328,7 +1326,7 @@ mod tests {
         )));
     }
 
-    /* ── hidden-call paragraph boundary (todo #383) ──────────────────── */
+    /* ── hidden-call paragraph boundary ──────────────────────────────── */
 
     fn text_tagged(t: &str, parent: &str) -> PartEntry {
         PartEntry::Text {
@@ -1541,25 +1539,3 @@ mod tests {
         }
     }
 }
-
-// PORT STATUS: src/messages/tool-grouping.ts (269 lines)
-// confidence: high
-// todos: 0
-// notes: §2.5 display side — pure grouping over neutral DisplayContent/
-// notes: ToolCategories; no Claude event/JSONL shapes. Reconciled to origin/main
-// notes: #419 (84a37888): progress accumulates per parentToolUseId into a Vec of
-// notes: ProgressBucket (insertion-ordered so a stable sort_by(insert_index)
-// notes: reproduces JS Map iteration + stable Array.sort); collect_explore_run
-// notes: ends the run on a parent mismatch; sharedParentToolUseId dropped.
-// notes: group_task_children is a two-pass partition — index Tasks, then nest any
-// notes: part by parentToolUseId regardless of position (parallel/interleaved),
-// notes: untagged stay top-level, unknown-parent tags dropped, a childless Task
-// notes: falls back to its bare tool-call. The `'grouped'`/`'accumulated'` markers
-// notes: stay &'static str (never read). parentToolUseId truthy check (undefined
-// notes: AND "" → omit) preserved via `truthy`/`truthy_str`; the bucket key keeps
-// notes: the raw Option so None (main agent) stays distinct from Some("").
-// notes: Oracle: __tests__/messages/tool-grouping.test.ts ported assertion-for-
-// notes: assertion (+ the AskUserQuestion cases from tool-grouping-askuserquestion).
-// notes: display-pipeline.test.ts exercises prepare_messages_for_client, which the
-// notes: crate-layering split homes in mainframe-adapter-claude::messages::
-// notes: display_pipeline (outside this crate) — ported there, not here.

@@ -1,8 +1,6 @@
-//! T4.1/A8 — cancellation is authoritative: one-transaction finalize +
+//! A8 — cancellation is authoritative: one-transaction finalize +
 //! interaction cancel, agent-wait cleanup, aborted in-flight walk, and no
-//! resurrection by a late agent completion (Node parity:
-//! engine-cancel.test.ts, written against a stubbed wait registry until the
-//! agent port lands in T4.3).
+//! resurrection by a late agent completion.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -263,7 +261,7 @@ async fn a_commit_after_cancellation_is_rejected_and_never_clobbers_the_run() {
     assert!(notify_calls.lock().unwrap().is_empty());
 }
 
-/// A8 over the REAL agent flow (T4.3): cancelling a run parked on an
+/// A8 over the REAL agent flow: cancelling a run parked on an
 /// AgentPort wait clears the registration, cancels the chat, and a
 /// completion that arrives afterwards cannot resurrect the run.
 #[tokio::test]

@@ -1,8 +1,7 @@
-//! Marker cases — `Compaction`, `SkillLoaded`, and `Error` contributions
-//! that carry no content of their own (`Accum::claim_marker`) or that do
-//! but must still keep the container's ordering rule (`Error`, which stays
-//! on `Accum::claim`) — split out of `segment_tests.rs` (todo #350, plan
-//! task 37, R2.13).
+//! Marker cases — `Compaction`, `SkillLoaded`, and `Error` contributions that
+//! carry no content of their own (`Accum::claim_marker`) or that do but must
+//! still keep the container's ordering rule (`Error`, which stays on
+//! `Accum::claim`) — split out of `segment_tests.rs`.
 
 use mainframe_types::display::{DisplayContent, DisplayMessageType, DisplayNode, ToolCategory};
 
@@ -145,8 +144,8 @@ fn text_then_tool_then_error_segments_and_carries_error_text_on_the_later_segmen
     // empty text (display_pipeline.rs), never a tool call — so this pins
     // real encoder behaviour on an input the adapter can't currently emit,
     // not a live bug. The client no longer assumes segment 0 either way:
-    // `errorContainer` (convert-acp-item.ts) scans every message segment in
-    // the container for `errorText`, so a later-segment marker still renders.
+    // The client scans every message segment for `errorText`, so a
+    // later-segment marker still renders.
     assert_eq!(
         encode(&messages),
         vec![

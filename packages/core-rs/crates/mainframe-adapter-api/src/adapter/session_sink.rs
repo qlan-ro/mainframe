@@ -1,9 +1,8 @@
 use super::*;
 
-/// The callback surface a live session drives (mirrors the TS `SessionSink`).
-/// Every method is synchronous `void` in TS; kept synchronous here (see the
-/// module doc). `Send + Sync` so the session's stdout reader task can own an
-/// `Arc<dyn SessionSink>`.
+/// The callback surface a live session drives. Every method is synchronous
+/// (see the module doc). `Send + Sync` so the session's stdout reader task can
+/// own an `Arc<dyn SessionSink>`.
 pub trait SessionSink: Send + Sync {
     fn on_message_with_presentation(
         &self,
@@ -33,7 +32,7 @@ pub trait SessionSink: Send + Sync {
     fn on_message(&self, content: Vec<MessageContent>, metadata: Option<MessageMetadata>);
     /// `vendor_id` mirrors `on_message`'s `MessageMetadata::vendor_id` — the
     /// adapter's own stable id for this tool-result entry, used as the
-    /// `ChatMessage.id` in place of a minted nanoid (todo #350 group B).
+    /// `ChatMessage.id` in place of a minted nanoid.
     fn on_tool_result(&self, content: Vec<MessageContent>, vendor_id: Option<String>);
     fn on_permission(&self, request: ControlRequest);
     /// The CLI withdrew a control request it already sent
@@ -48,7 +47,7 @@ pub trait SessionSink: Send + Sync {
     /// entry (Claude's JSONL `uuid`, Codex's `contextCompaction` item id) —
     /// `None` only for a path with no id available (Codex's deprecated
     /// `thread/compacted` notification). Threaded through so the pill's live
-    /// id matches what history reconstruction would assign it (T15, R3.14).
+    /// id matches what history reconstruction would assign it.
     fn on_compact(&self, vendor_id: Option<&str>);
     fn on_compact_start(&self);
     fn on_context_usage(&self, usage: ContextUsage);
@@ -65,26 +64,25 @@ pub trait SessionSink: Send + Sync {
     /// `parentToolUseId` must already equal `parent_tool_use_id`. Implementations
     /// no-op silently if it matches no known tool_use block.
     fn on_subagent_child(&self, parent_tool_use_id: &str, blocks: Vec<MessageContent>);
-    /// Non-fatal advisory (`onTrustRequired?`) — optional in TS, default no-op.
+    /// Non-fatal advisory — optional, default no-op.
     fn on_trust_required(&self, _project_path: &str) {}
-    /// Account-wide provider plan quota (`onProviderQuota?`) — optional in TS,
-    /// default no-op; no chatId, mirrors `on_context_usage`.
+    /// Account-wide provider plan quota — optional, default no-op; carries no
+    /// chatId, like `on_context_usage`.
     fn on_provider_quota(&self, _adapter_id: &str, _quota: ProviderQuota) {}
     /// Claude's `PushNotification` tool call, forwarded raw; the sink owns
-    /// trimming, truncation and dedupe (todo #293). Default no-op: adapters
+    /// trimming, truncation and dedupe. Default no-op: adapters
     /// with no such tool need not implement it.
     fn on_attention_request(&self, _message: &str) {}
     /// The CLI retried an API call after a transient error (Claude's
     /// `system`/`api_error` transcript entry — see
     /// `docs/research/adapters/claude/CLAUDE-JSONL-SCHEMA.md`'s `api_error`
-    /// section; todo #350 group D task 11). `reason` is the adapter's raw
-    /// error text, not a categorized taxonomy. Default no-op: adapters with
-    /// no retry-reporting event need not implement it, and today's daemon
-    /// drops it exactly as before (fact 1) until a sink overrides this.
+    /// section). `reason` is the adapter's raw error text, not a categorized
+    /// taxonomy. Default no-op: adapters with no retry-reporting event need not
+    /// implement it.
     fn on_api_retry(&self, _attempt: i64, _reason: Option<String>) {}
     /// The in-flight assistant message's partial content, re-sent accumulated
-    /// on every call (Claude's `--include-partial-messages` stream deltas,
-    /// todo #350: AGENT-SDK-PARITY B4). `api_message_id` is the provider
+    /// on every call (Claude's `--include-partial-messages` stream deltas).
+    /// `api_message_id` is the provider
     /// message id (`message_start`'s `message.id`) — the one vendor identifier
     /// known before the block completes, and the id `on_message` will carry as
     /// `vendor_id` for that message's first completed block, so a sink can

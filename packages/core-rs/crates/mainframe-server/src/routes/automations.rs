@@ -1,6 +1,6 @@
-//! Automations v2 CRUD + runs routes (contract §4; Node
-//! routes/automations.ts): WS4 envelope, 202 on a started manual run,
-//! timeline projection with 32 KB output-preview truncation.
+//! Automations v2 CRUD + runs routes (contract §4): WS4 envelope, 202 on a
+//! started manual run, timeline projection with 32 KB output-preview
+//! truncation.
 
 use std::sync::Arc;
 
@@ -26,7 +26,7 @@ use crate::routes::projects::parse_body;
 
 const OUTPUT_PREVIEW_MAX_BYTES: usize = 32 * 1024;
 
-/// Every handler self-gates on the engine (Node: `if (!service) 503`).
+/// Every handler self-gates on the engine (503 when it is absent).
 pub(crate) fn engine(ctx: &AppCtx) -> Option<&Arc<AutomationsEngine>> {
     ctx.automations.as_ref()
 }
@@ -146,7 +146,7 @@ struct EnabledBody {
     enabled: bool,
 }
 
-/// A4 — the library toggle's route.
+/// The library toggle's route.
 async fn set_enabled(
     State(ctx): State<Arc<AppCtx>>,
     Path(id): Path<String>,
@@ -237,8 +237,8 @@ fn project_timeline(run: &RunRecord) -> Vec<AutomationTimelineEntry> {
         .collect()
 }
 
-/// Node routes/automations.ts outputPreview: whole-JSON preview or a loud
-/// truncation marker — never a partial JSON document.
+/// Whole-JSON preview or a loud truncation marker — never a partial JSON
+/// document.
 fn output_preview(outputs: Option<&serde_json::Map<String, serde_json::Value>>) -> Option<String> {
     let outputs = outputs?;
     let rendered = serde_json::Value::Object(outputs.clone()).to_string();
@@ -275,9 +275,3 @@ mod registration;
 mod automations_tests;
 #[cfg(test)]
 mod registration_tests;
-
-// PORT STATUS: src/server/routes/automations.ts (9 endpoints, 177 lines)
-// confidence: high
-// todos: 0
-// notes: unused `delete`/`put` route fns are used via the builder chain; the
-//        timeline `error` stays `T | null` (Node parity), other optionals omit.

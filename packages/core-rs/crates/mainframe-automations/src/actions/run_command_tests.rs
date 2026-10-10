@@ -1,5 +1,5 @@
-//! T6.3 — run_command: A1 env-injection (hostile chips are inert data),
-//! cwd containment, outputAs lines, non-zero exit, output cap.
+//! run_command: A1 env-injection (hostile chips are inert data), cwd
+//! containment, outputAs lines, non-zero exit, output cap.
 
 use serde_json::json;
 
@@ -224,14 +224,14 @@ async fn invalid_inputs_fail_before_spawning() {
         .unwrap_err();
     assert_eq!(err.0, "run_command runIn 'custom' requires customPath");
 
-    // empty script (zod .min(1) parity).
+    // empty script.
     let err = action
         .execute(&json!({"script": [], "runIn": "project root"}), &ctx(&root))
         .await
         .unwrap_err();
     assert!(err.0.contains("invalid input for 'run_command'"));
 
-    // unknown fields rejected (zod .strict() parity).
+    // unknown fields rejected.
     let err = action
         .execute(
             &json!({"script": [{"literal": "true"}], "runIn": "project root", "nope": 1}),

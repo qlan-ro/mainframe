@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/chat/resolve-tuning-for-chat.ts`.
-
 use mainframe_adapter_api::BoxFuture;
 use mainframe_services::settings::provider_config::{SettingsReader, get_provider_config};
 use mainframe_types::adapter::AdapterModel;
@@ -7,12 +5,12 @@ use mainframe_types::chat::{Chat, ResolvedTuning, SessionTuning};
 
 use crate::resolve_tuning::{ProviderTuningDefaults, resolve_tuning};
 
-/// The injected dependency surface (mirrors the TS structural `ResolveDeps`):
-/// `db.chats.get`, `db.settings.get`, and `adapters.get(id)?.listModels()`.
+/// The injected dependency surface: chat lookup, settings reads, and the
+/// adapter's model list.
 ///
-/// `SettingsReader` (super-trait) fulfils `db.settings.get`, so `get_provider_config`
-/// consumes the deps object directly. `list_models` returns `[]` when the adapter
-/// is absent, mirroring `adapter ? await adapter.listModels() : []`.
+/// `SettingsReader` (super-trait) fulfils the settings reads, so
+/// `get_provider_config` consumes the deps object directly. `list_models`
+/// returns `[]` when the adapter is absent.
 pub trait ResolveTuningDeps: SettingsReader + Sync {
     fn get_chat(&self, id: &str) -> Option<Chat>;
     fn list_models<'a>(&'a self, adapter_id: &'a str) -> BoxFuture<'a, Vec<AdapterModel>>;
@@ -204,13 +202,3 @@ mod tests {
         assert_eq!(t.map(|t| t.effort), Some(Some(EffortLevel::High)));
     }
 }
-
-// PORT STATUS: src/chat/resolve-tuning-for-chat.ts (30 lines)
-// confidence: high
-// todos: 0
-// notes: TS structural `ResolveDeps` → `ResolveTuningDeps` trait (super-trait
-// notes: `SettingsReader` so `get_provider_config` reads `db.settings.get`); the
-// notes: not-Send `mainframe-db` sync repos and the async Db actor (mainframe-server)
-// notes: are both out of this crate's dep set, so the injected trait is the faithful
-// notes: analogue of the TS DI object. `adapters.get(id)?.listModels()` folds into
-// notes: `list_models` (empty when adapter absent). Both catalog test cases ported.

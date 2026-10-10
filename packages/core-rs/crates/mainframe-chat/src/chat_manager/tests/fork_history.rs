@@ -1,5 +1,5 @@
-//! `build_history_session` learns the pending fork (todo #343 Group 3, plan
-//! item 3) — AC 1's "history before the first message" path: a freshly forked
+//! `build_history_session` learns the pending fork before the first message:
+//! a freshly forked
 //! chat has no `claude_session_id` yet, so its history load must resume from
 //! `chats.pending_fork` instead of bailing out early. A child module of
 //! `tests`, so it sees `tests`' private `StoreDeps`.

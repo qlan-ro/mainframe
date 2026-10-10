@@ -1,5 +1,3 @@
-//! Ported from `src/server/routes/files.ts`.
-//!
 //! Eight endpoints over project files and the filesystem: directory tree,
 //! file-name search, flat file listing, GET/PUT file content, path resolution,
 //! external absolute-path read, and filesystem browse. Every project-scoped path
@@ -41,11 +39,11 @@ struct FsEntry {
 
 // ── effective-path resolution ────────────────────────────────────────────────
 
-/// Sync `getEffectivePath` (runs on the DB thread). Mirrors `types.ts`: project
-/// not found → `None`; a `chatId` from a different project → `None`; a live
-/// worktree wins over the project root. `worktreeMissing` is a ChatManager
-/// runtime field absent from the DB (always `None` here) → the missing-worktree
-/// short-circuit is a Phase-4/5 seam.
+/// Sync effective-path resolution (runs on the DB thread): project not found →
+/// `None`; a `chatId` from a different project → `None`; a live worktree wins
+/// over the project root. `worktreeMissing` is a ChatManager runtime field
+/// absent from the DB (always `None` here), so the missing-worktree
+/// short-circuit is inert.
 pub(crate) fn effective_path_sync(
     db: &DatabaseManager,
     project_id: &str,
@@ -61,7 +59,7 @@ pub(crate) fn effective_path_sync(
             return Ok(None);
         }
         if let Some(worktree) = chat.worktree_path {
-            // TODO(port-phase4/5): honor ChatManager's runtime worktreeMissing.
+            // TODO: honor ChatManager's runtime worktreeMissing.
             if chat.worktree_missing == Some(true) {
                 return Ok(None);
             }
@@ -368,8 +366,8 @@ async fn write_file(
         Ok(p) => p,
         Err(msg) => return fail(StatusCode::BAD_REQUEST, msg),
     };
-    // WriteFileBody.content = z.string() (no `.min(1)`, so an empty string is
-    // valid). Missing/non-string reproduces the Zod v4 type-mismatch prose.
+    // `content` must be a string (an empty string is valid). Missing/non-string
+    // returns the Zod v4 type-mismatch message.
     let content = match parsed.get("content") {
         None => {
             return fail(
@@ -434,8 +432,8 @@ async fn resolve_path(
     let Some(project) = project else {
         return fail(StatusCode::NOT_FOUND, "Project not found");
     };
-    // Phase-4/5 seam: worktreeMissing is a ChatManager runtime field (always
-    // None from the DB) — the 409 branch is structurally present but inert here.
+    // worktreeMissing is a ChatManager runtime field (always None from the DB) —
+    // the 409 branch is structurally present but inert here.
     if let Some(chat) = &chat
         && chat.worktree_missing == Some(true)
     {
@@ -541,7 +539,7 @@ async fn external_file_content(Query(q): Query<HashMap<String, String>>) -> Resp
             );
         }
     };
-    // encoding: z.enum(['base64']).optional() — absent, or exactly "base64".
+    // `encoding` is absent, or exactly "base64".
     let encoding = qget(&q, "encoding");
     if let Some(enc) = encoding
         && enc != "base64"
@@ -704,7 +702,7 @@ fn parse_booleanish(raw: Option<&str>) -> Result<bool, ()> {
 }
 
 /// Zod v4 message for `z.string()` receiving a non-string value: the `received`
-/// suffix is the JSON typeof (`Buffer.toString('base64')`-style prose parity).
+/// suffix is the JSON typeof.
 fn zod_type_mismatch(v: &serde_json::Value) -> String {
     let received = match v {
         serde_json::Value::Null => "null",
@@ -730,7 +728,7 @@ fn require_nonempty_string<'a>(v: &'a serde_json::Value, key: &str) -> Result<&'
 
 const B64: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-/// Standard base64 with padding — matches Node `Buffer.toString('base64')`.
+/// Standard base64 with padding.
 fn base64_encode(input: &[u8]) -> String {
     let mut out = String::with_capacity(input.len().div_ceil(3) * 4);
     for chunk in input.chunks(3) {
@@ -811,22 +809,3 @@ mod tests {
         assert!(!is_blocked_external("/home/u/project/file.txt"));
     }
 }
-
-// PORT STATUS: src/server/routes/files.ts (8 endpoints) + types.ts getEffectivePath
-// confidence: high
-// todos: 2
-// notes: getEffectivePath (from types.ts) lives here as effective_path_sync until
-// a shared routes-helpers module exists — TODO(port): consolidate once all
-// Phase-3 route files land (git.rs et al. need it too). worktreeMissing is a
-// ChatManager runtime field absent from the DB, so the missing-worktree
-// short-circuit (null / 409) is a Phase-4/5 seam (always inert here). Zod v4
-// `validate()` 400 bodies reproduced byte-for-byte ("Invalid input: expected
-// string, received undefined", "Too small: expected string to have >=1
-// characters", the type-mismatch prose) + the booleanish union's "Invalid
-// input". `path.relative`/`path.resolve` via fs_utils shims;
-// realpathSync → tokio canonicalize. Tree/browse sort uses byte Ord (not JS
-// localeCompare) — ordering is unasserted. base64 hand-rolled (no crate in the
-// allowlist), verified against Node Buffer vectors. Main catch-up (#436): the
-// external-file route accepts `encoding=base64` (10MB cap, base64 body +
-// `encoding:'base64'`; else 2MB utf-8) and the blocklist adds `.aws/credentials`,
-// `.netrc`, and `.gnupg/`.

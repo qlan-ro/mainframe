@@ -1,6 +1,6 @@
 //! One attached `/acp/{profile}` connection: the outbound frame channel its
 //! socket loop drains, per-session stream state, and gates delivered but not
-//! yet answered (todo #350, live-wiring pass).
+//! yet answered.
 
 use std::collections::HashMap;
 use std::future::Future;
@@ -24,33 +24,32 @@ pub struct FacadeConnection {
     sessions: Mutex<HashMap<String, SessionSlot>>,
     pending_gates: Mutex<HashMap<String, PendingGate>>,
     /// Set once a successful `initialize` negotiates the pinned protocol
-    /// version (R3.21) — read from the socket-loop task on every inbound
-    /// frame, so an `Atomic` rather than a `Mutex` (no critical section to
-    /// hold, just a flag).
+    /// version — read from the socket-loop task on every inbound frame, so an
+    /// `Atomic` rather than a `Mutex` (no critical section to hold, just a
+    /// flag).
     negotiated: AtomicBool,
-    /// Set once a successful `initialize` also opted into revision-
-    /// versioned resume cursors (todo #377, spec
-    /// `REVISION_CURSORS_OPT_IN_KEY`). Gates every `cursor` reply meta,
-    /// `_mainframe.dev/cursor` notification, and the hub's decision to
-    /// create this chat's `RevisionLog` on this connection's resume — a
+    /// Set once a successful `initialize` also opted into revision-versioned
+    /// resume cursors (`REVISION_CURSORS_OPT_IN_KEY`). Gates every `cursor`
+    /// reply meta, `_mainframe.dev/cursor` notification, and the hub's decision
+    /// to create this chat's `RevisionLog` on this connection's resume — a
     /// connection that never sets this gets byte-identical legacy behavior.
     revision_cursors_opted_in: AtomicBool,
     /// Set once a successful `initialize` opted into replay result previews
-    /// (spec Decision 41, `REPLAY_RESULT_PREVIEWS_OPT_IN_KEY`): this
+    /// (`REPLAY_RESULT_PREVIEWS_OPT_IN_KEY`): this
     /// connection's full resume replays send old tool results as previews
     /// and its seeded streams keep trimming those ids. Never set means every
     /// replayed result stays full, byte-identical to before.
     replay_result_previews_opted_in: AtomicBool,
     /// Set once a successful `initialize` opted into compressed replay
-    /// batches (spec Decision 42, `COMPRESSED_REPLAY_OPT_IN_KEY`): this
+    /// batches (`COMPRESSED_REPLAY_OPT_IN_KEY`): this
     /// connection's resume replays travel as `_mainframe.dev/replay_batch`
     /// frames instead of one `session/update` per item.
     compressed_replay_opted_in: AtomicBool,
-    /// One `tokio::sync::Mutex` per session, held for the duration of a
-    /// spawned `session/prompt` (T10). Serializes concurrent prompts for the
-    /// SAME session — queue position and D1's tail ordering both depend on
-    /// which of two concurrent prompts enqueues first — while leaving
-    /// different sessions free to run their prompts in parallel.
+    /// One `tokio::sync::Mutex` per session, held for the duration of a spawned
+    /// `session/prompt`. Serializes concurrent prompts for the SAME session —
+    /// queue position and the queue's tail ordering both depend on which of two
+    /// concurrent prompts enqueues first — while leaving different sessions
+    /// free to run their prompts in parallel.
     prompt_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
     /// Consecutive failed `session/resume` deliveries per session. NOT
     /// reclaimed by `forget_chat`: the failure path detaches the session
@@ -190,7 +189,7 @@ impl FacadeConnection {
 
     /// Re-register a gate under its original id after a failed apply — the
     /// answer path already removed it, and a client retry must find the same
-    /// rpc_id answerable again (T3). No frame is sent; the client already
+    /// rpc_id answerable again. No frame is sent; the client already
     /// has the request.
     pub(crate) fn restore_gate(&self, rpc_id: &str, pending: PendingGate) {
         self.locked_gates().insert(rpc_id.to_string(), pending);
@@ -253,8 +252,8 @@ impl FacadeConnection {
     }
 
     /// Dispatch one throttle-drained frame: an update through the normal
-    /// `session/update` envelope, a raw frame as-is (T6), or a revision-
-    /// cursor boundary (todo #377) as `_mainframe.dev/cursor` — only for a
+    /// `session/update` envelope, a raw frame as-is, or a revision-
+    /// cursor boundary as `_mainframe.dev/cursor` — only for a
     /// connection that opted in. The run-op layer already filters a cursor
     /// out before it ever reaches a non-opted connection's throttle FIFO
     /// (`fanout.rs::run_op`); this check is the second, defensive gate, so

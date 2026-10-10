@@ -1,13 +1,8 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/skill-path.ts`.
-//!
 //! Resolves a skill name to its `SKILL.md` by probing the locations the Claude
-//! CLI supports (project → user → plugin). Kept **synchronous** (std::fs), like
-//! the TS source: it uses `readdirSync`/`readFileSync`/`accessSync` deliberately
-//! (no logger dep — the TS comment notes this avoids a module-init cycle that
-//! would fire `homedir()` during logger bootstrap). Probes are bounded + cached,
-//! and callers (history) invoke it inside their async loop exactly as the TS
-//! does. Reviewer: a spawn_blocking wrap is a possible Phase-B change; the sync
-//! form preserves the TS control flow and the `cache: &mut HashMap` signature.
+//! CLI supports (project → user → plugin). Kept **synchronous** (std::fs) and
+//! logger-free. Probes are bounded + cached, and callers (history) invoke it
+//! inside their async loop. A spawn_blocking wrap is a possible later change;
+//! the sync form keeps the `cache: &mut HashMap` signature.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -296,13 +291,3 @@ mod tests {
         assert_eq!(cache.get("definitely-not-a-real-skill-xyz"), Some(&out));
     }
 }
-
-// PORT STATUS: src/plugins/builtin/claude/skill-path.ts (149 lines)
-// confidence: high
-// todos: 0
-// notes: kept synchronous (std::fs) to match the deliberately-sync TS (no-logger,
-// no init cycle) — see module doc; flagged for a possible spawn_blocking Phase-B
-// change. VALID_SKILL_NAME_RE hand-rolled as split(':') ≤2 non-empty [A-Za-z0-9_-]
-// segments. readSkillContent's `^---…---` frontmatter strip hand-rolled
-// (anchored, first closing fence). homedir() → dirs::home_dir(); accessSync →
-// std::fs::metadata. No TS __tests__ file — sanity tests added.

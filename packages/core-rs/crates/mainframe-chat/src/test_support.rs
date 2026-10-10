@@ -1,8 +1,7 @@
 //! Test-only doubles shared by the chat leaf-manager unit tests.
 //!
-//! Not a port of any TS file: the TS tests build `Partial<AdapterSession>` inline
-//! (structural typing). Rust needs a concrete `dyn AdapterSession` double, so the
-//! shared `FakeSession` lives here to avoid re-stubbing ~20 trait methods per test.
+//! Tests need a concrete `dyn AdapterSession` double, so the shared `FakeSession`
+//! lives here to avoid re-stubbing ~20 trait methods per test.
 
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -257,5 +256,3 @@ pub use crate::test_support_chat::test_chat;
 /// already, so the tracing capture helper lives there and is re-exported here
 /// for the crate's existing `crate::test_support::LogCapture` call sites.
 pub use mainframe_runtime::log_capture::LogCapture;
-
-// Not a port; test scaffolding only. No PORT STATUS trailer.

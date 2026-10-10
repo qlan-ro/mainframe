@@ -1,8 +1,7 @@
-//! Pure schedule computation (T8.1, Node triggers/schedule.ts +
-//! cron-parser). A plain-language `SchedulePattern` compiles to a cron
-//! string evaluated in the caller's timezone (contract §1: all schedules
-//! run in local time — cron never crosses the API); croner does the
-//! occurrence math. The 30 s sweep (T8.2) lives in `triggers::sweep`.
+//! Pure schedule computation. A plain-language `SchedulePattern` compiles
+//! to a cron string evaluated in the caller's timezone (contract §1: all
+//! schedules run in local time — cron never crosses the API); croner does
+//! the occurrence math. The 30 s sweep lives in `triggers::sweep`.
 
 use std::str::FromStr;
 
@@ -16,7 +15,7 @@ use crate::domain::SchedulePattern;
 pub enum ScheduleError {
     /// `0 */n * * *` resets at midnight, so a non-divisor n would fire at
     /// uneven gaps — the picker offers only divisors and this defends any
-    /// caller that bypasses schema validation (Node compileSchedule parity).
+    /// caller that bypasses schema validation.
     #[error("every_n_hours 'n' ({0}) must evenly divide 24")]
     NotADivisorOf24(u32),
 
@@ -145,10 +144,3 @@ pub(crate) fn scheduled_for_string<Tz: TimeZone>(occurrence: &DateTime<Tz>) -> S
 fn parse_cron(pattern: &SchedulePattern) -> Result<Cron, ScheduleError> {
     Ok(Cron::from_str(&compile_schedule(pattern)?)?)
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T8.1), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node triggers/schedule.ts compileSchedule + cron-parser
-//        local-time evaluation; croner replaces cron-parser, and
-//        find_previous_occurrence replaces Node's stored next_fire_at rows.

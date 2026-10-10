@@ -1,5 +1,5 @@
-//! AC 6 (mandatory): the injected fingerprint must still recommend something
-//! real, and the payload must never reach a `command`.
+//! The injected fingerprint must still recommend something real, and the
+//! payload must never reach a `command`.
 
 use mainframe_types::setup_advisor::ProjectFingerprint;
 
@@ -42,10 +42,10 @@ fn a_malicious_dependency_name_never_reaches_a_command() {
     }
 }
 
-/// Second half of AC 6: evaluate the full dataset against both a benign and a
-/// malicious fingerprint and confirm every fired rule's `command` is byte-
-/// identical to the dataset's own constant — the sanitizer must never touch
-/// `command`, only `signal`.
+/// Second half of the injection check: evaluate the full dataset against both a
+/// benign and a malicious fingerprint and confirm every fired rule's `command`
+/// is byte-identical to the dataset's own constant — the sanitizer must never
+/// touch `command`, only `signal`.
 #[test]
 fn every_fired_commands_bytes_match_its_declared_constant_benign_and_malicious() {
     let benign = ProjectFingerprint {

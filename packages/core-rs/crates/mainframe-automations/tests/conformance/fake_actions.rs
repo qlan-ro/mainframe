@@ -1,9 +1,9 @@
-//! Recording action registry for the conformance harness (T10.2). The engine
+//! Recording action registry for the conformance harness. The engine
 //! runs its REAL run_action verb; only the actions themselves are faked, so a
 //! run never hits real GitHub/Notion HTTP or the user's home directory. Each
 //! fake records the rendered params it received (so a scenario asserts token
 //! wiring precisely) and can be `hold()`-gated mid-effect to model a crash /
-//! cancel while a step is `running` (T10.3). Idempotent flags mirror the real
+//! cancel while a step is `running`. Idempotent flags match the real
 //! catalog so the restart policy behaves identically.
 #![allow(dead_code)]
 

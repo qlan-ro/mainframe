@@ -1,7 +1,7 @@
-//! Linear step walker (Node walk.ts): skip committed steps, park on
-//! `waiting`, execute the first live leaf, commit, continue. If/Repeat never
-//! write an entry under their own id — only leaf verbs do — so re-entering a
-//! block on resume is always safe.
+//! Linear step walker: skip committed steps, park on `waiting`, execute the
+//! first live leaf, commit, continue. If/Repeat never write an entry under
+//! their own id — only leaf verbs do — so re-entering a block on resume is
+//! always safe.
 
 use std::sync::Arc;
 
@@ -110,8 +110,8 @@ async fn run_leaf(
     ctx: &WalkCtx<'_>,
     frame: &WalkFrame,
 ) -> Result<StepsResult, StoreError> {
-    // Decision 12: commit a pre-effect `running` marker for verbs whose side
-    // effects cannot be blindly re-run after a crash.
+    // Restart-mid-action policy: commit a pre-effect `running` marker for verbs
+    // whose side effects cannot be blindly re-run after a crash.
     let non_idempotent = matches!(step, Step::RunAction(_) | Step::AskAgent(_));
     let current = if non_idempotent {
         commit(ctx, step, step_ref, StepStatus::Running, None, None)
@@ -248,9 +248,3 @@ async fn dispatch(step: &Step, ports: &dyn VerbPorts, ctx: VerbContext<'_>) -> S
         },
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T4.1), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node engine/walk.ts (walkFrame/runLeaf); commits funnel
-//        through RunStore::patch_checkpoint (one-tx read-modify-write).

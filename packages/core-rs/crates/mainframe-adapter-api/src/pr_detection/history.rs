@@ -1,8 +1,6 @@
 //! Adapter-neutral cold-load rescan: walk a chat's loaded history and classify
-//! PR-create commands and their results. Moved verbatim from
-//! `mainframe-server::chat_deps::scan_history_for_prs` (todo #339 task 4) — every
-//! adapter's `load_scan_records()` / `load_history()` produces the same canonical
-//! `ChatMessage` shape this reads.
+//! PR-create commands and their results. Every adapter's `load_scan_records()` /
+//! `load_history()` produces the same canonical `ChatMessage` shape this reads.
 
 use std::collections::HashSet;
 

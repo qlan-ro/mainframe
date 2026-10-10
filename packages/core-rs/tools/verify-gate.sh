@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Greps crates/ for the forbidden patterns from PORTING.md rule 4:
+# Greps crates/ for forbidden patterns:
 #   unsafe, todo!(, unimplemented!(, panic!(, static mut, lazy_static,
 #   std::thread::spawn, anyhow, and .unwrap()/.expect() (the last two are
 #   exempted inside #[cfg(test)] modules and mainframe-daemon/src/main.rs

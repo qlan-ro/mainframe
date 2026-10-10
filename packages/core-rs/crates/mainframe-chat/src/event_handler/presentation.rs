@@ -18,7 +18,7 @@ pub(super) fn apply_update(current: &mut TranscriptPresentation, update: &Transc
 
 /// Apply `update` to one cached message's presentation context. Returns
 /// whether the stored value actually changed, so `MessageCache::update_in_place`
-/// journals only real edits for the display projector (todo #376).
+/// journals only real edits for the display projector.
 fn update_message_presentation(message: &mut ChatMessage, update: &PresentationUpdate) -> bool {
     let presentation = &update.presentation;
     if update

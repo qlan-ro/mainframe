@@ -1,9 +1,8 @@
-//! GitHub App device flow (2026-08-19 provider-connections plan, Deliverable
-//! 3; reversed from OAuth App to GitHub App for token refresh — 2026-08-19
-//! GitHub-App-with-refresh plan). Device flow's token exchange needs only
-//! `client_id`, `device_code`, and `grant_type`; GitHub's docs state the
-//! client secret is "not needed for the device flow". No redirect URI, no
-//! PKCE, no `state` — none of that applies to a flow that never redirects.
+//! GitHub App device flow (a GitHub App rather than an OAuth App, so tokens can
+//! be refreshed). Device flow's token exchange needs only `client_id`,
+//! `device_code`, and `grant_type`; GitHub's docs state the client secret is
+//! "not needed for the device flow". No redirect URI, no PKCE, no `state` —
+//! none of that applies to a flow that never redirects.
 //!
 //! **Load-bearing fact:** GitHub's refresh-token docs list `client_secret`
 //! as "Required unless the user access token was generated using the device
@@ -219,11 +218,3 @@ fn parse_poll_response(body: &str) -> Result<PollOutcome, DeviceFlowError> {
         None => PollOutcome::Other("unknown response".to_string()),
     })
 }
-
-// PORT STATUS: greenfield (2026-08-19 automations-provider-connections plan, Deliverable 3)
-// confidence: high
-// todos: 1 (GITHUB_OAUTH_CLIENT_ID left empty until the OAuth App is registered)
-// notes: verified live against api.github.com and GitHub's device-flow docs
-//        on 2026-08-19 — the error-code table above (authorization_pending,
-//        slow_down +5s, expired_token, access_denied) matches the docs
-//        verbatim.

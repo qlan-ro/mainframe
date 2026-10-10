@@ -1,5 +1,5 @@
-//! CRUD + runs route tests (T9.3): WS4 envelope, A4 enabled toggle, 202 on
-//! manual run, timeline + 32 KB truncation, A8 delete.
+//! CRUD + runs route tests: WS4 envelope, enabled toggle, 202 on manual run,
+//! timeline + 32 KB truncation, delete.
 
 use std::collections::HashMap;
 use std::time::Duration;

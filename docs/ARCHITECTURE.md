@@ -83,18 +83,13 @@ graph TB
 ## The Rust daemon (`packages/core-rs`)
 
 The daemon is a Cargo workspace of 21 crates. `mainframe-daemon` is the only
-binary; everything else is a library crate. The workspace is largely a
-line-for-line Rust port of an earlier Node.js daemon that lived at
-`packages/core` (see [History](#history-why-this-doc-changed) for that
-package's current status) — most crate doc comments still say "ported from
-`packages/core/src/...`", which is the most reliable source for what each
-crate is responsible for.
+binary; everything else is a library crate. Each crate's module documentation
+and manifest describe its current responsibility.
 
 ### Layering
 
 The crate graph has no cycles (verified from every crate's `Cargo.toml`).
-Grouped into tiers by dependency depth — a tier only depends on tiers above
-it, but not every crate in a tier depends on every crate in the tier above:
+The tiers group crates by role; crates within a tier can depend on one another:
 
 ```
 Tier 0  mainframe-types                        foundation: serde structs/enums, zero internal deps
@@ -120,8 +115,12 @@ Tier 2  mainframe-services   workspace/attachment/push/todos/commands/notificati
         mainframe-adapter-claude   Claude CLI: stream-json over stdio
         mainframe-adapter-codex    Codex CLI: app-server JSON-RPC
         mainframe-adapter-mock     fixture-replay adapter for tests/demos
-                             (each adapter crate depends on adapter-api + display +
-                              background-tasks, not on each other)
+                             Claude deps: types, runtime, adapter-api, display,
+                               background-tasks, claude-workflows, services, orchestration
+                             Codex deps: types, runtime, adapter-api,
+                               background-tasks, orchestration
+                             Mock deps: types, adapter-api, background-tasks,
+                               claude-workflows
 
 Tier 3  mainframe-chat       ChatManager: per-chat session orchestration
                              (depends on adapter-api, not the concrete adapter crates)
@@ -335,8 +334,8 @@ never in a normal boot.
 state machine per chat, tying a live `AdapterSession` to the cached display
 messages, the FIFO permission queue, and session config. Display messages are
 NOT recomputed from scratch on every partial: each chat keeps a stateful
-`DisplayProjector` (`mainframe-display`; `IncrementalProjector` in
-`mainframe-adapter-claude` for Claude chats) that turns a raw-cache mutation
+`DisplayProjector` (`mainframe-display`; the daemon wires
+`IncrementalProjector` for every adapter) that turns a raw-cache mutation
 plus the live streaming overlay into a container-level `DisplayDelta` —
 touching only the containers a mutation actually affected. `mainframe-server`'s
 ACP facade hub encodes and diffs only those changed containers

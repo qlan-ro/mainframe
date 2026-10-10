@@ -1,4 +1,4 @@
-//! Per-field local-recency touch map (todo #286, D3): records only whether
+//! Per-field local-recency touch map: records only whether
 //! `title`/`body`/`state` changed locally, never the row's own `updated_at`.
 //! Every other write — labels, priority, milestone, assignees, and moves that
 //! don't cross the `done` boundary — is deliberately invisible here, so a
@@ -75,7 +75,7 @@ pub(crate) async fn stamp_patch(
     Ok(())
 }
 
-/// `move_todo`'s status write is projection-aware the same way (D3):
+/// `move_todo`'s status write is projection-aware the same way:
 /// open↔in_progress never stamps; crossing the `done` boundary in either
 /// direction stamps `state`.
 pub(crate) async fn stamp_move(

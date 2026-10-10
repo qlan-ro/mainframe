@@ -1,4 +1,4 @@
-//! T5.2 — notify verb: rendered message + links (runId, chatIds from the
+//! notify verb: rendered message + links (runId, chatIds from the
 //! checkpoint's agent steps) reach the Notifier; notifier failure is
 //! best-effort (logs, step still succeeds).
 

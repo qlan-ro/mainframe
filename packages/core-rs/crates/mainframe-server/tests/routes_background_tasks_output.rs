@@ -1,6 +1,6 @@
-//! Red-phase (todo #338, Task 3): the background-task output-tail route must
-//! succeed for a spool file the daemon actually resolves to (the daemon's real
-//! uid), and must keep rejecting a path outside the spool root.
+//! The background-task output-tail route must succeed for a spool file the
+//! daemon actually resolves to (the daemon's real uid), and must keep rejecting
+//! a path outside the spool root.
 #![cfg(unix)]
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 

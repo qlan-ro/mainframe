@@ -1,9 +1,7 @@
-//! Ported from `src/server/ws-file-watch.ts`.
-//!
-//! Per-connection file-watch bookkeeping (PER_ENTITY per CONCURRENCY.tsv — lives
-//! inside the connection's own state, guarded by that connection's mutex) plus
-//! `resolveSubscribePath`: resolving a client-supplied path to an absolute,
-//! containment-validated path, with the chat→project ownership check.
+//! Per-connection file-watch bookkeeping (lives inside the connection's own
+//! state, guarded by that connection's mutex) plus subscribe-path resolution:
+//! resolving a client-supplied path to an absolute, containment-validated path,
+//! with the chat→project ownership check.
 
 use std::collections::{HashMap, HashSet};
 
@@ -39,7 +37,7 @@ impl WsFileWatch {
     /// Realpath + is-file check, then register the watch (once per resolved path)
     /// and record the composite mapping. Returns `(requestedPath, resolvedPath)`
     /// for the `subscribe:file:ack`, or `None` if the file is missing / not a
-    /// regular file (the TS logs a warn and returns without acking).
+    /// regular file (logged as a warning; no ack is sent).
     pub async fn subscribe(
         &mut self,
         requested_path: &str,
@@ -111,9 +109,9 @@ impl WsFileWatch {
 
 /// The base directory for a *relative* `subscribe:file`, with the chat→project
 /// ownership check. Runs on the DB thread (sync repo access) — the caller then
-/// containment-validates the requested path against this base. Mirrors the
-/// non-absolute branch of `resolveSubscribePath`; returns `None` (reject) on a
-/// missing projectId, an ownership mismatch, or an unresolvable base.
+/// containment-validates the requested path against this base. This is the
+/// relative-path branch; returns `None` (reject) on a missing projectId, an
+/// ownership mismatch, or an unresolvable base.
 ///
 /// Absolute paths are handled by the caller (returned as-is, no base) exactly as
 /// the TS `if (requestedPath.startsWith('/')) return requestedPath;` fast-path.
@@ -123,8 +121,7 @@ pub(crate) fn resolve_subscribe_base(
     chat_id: Option<&str>,
 ) -> Option<String> {
     if let Some(cid) = chat_id {
-        // Only reject when the chat exists AND belongs to a different project
-        // (TS: `chatProjectId !== null && chatProjectId !== projectId`).
+        // Only reject when the chat exists AND belongs to a different project.
         if let Ok(Some(chat)) = db.chats.get(cid)
             && chat.project_id != project_id
         {
@@ -158,14 +155,3 @@ fn project_path(db: &DatabaseManager, project_id: &str) -> Option<String> {
 pub(crate) async fn validate_relative(base: &str, requested_path: &str) -> Option<String> {
     resolve_and_validate_path(base, requested_path).await
 }
-
-// PORT STATUS: src/server/ws-file-watch.ts (WsFileWatch + resolveSubscribePath)
-// confidence: medium
-// todos: 1
-// notes: WsFileWatch is per-connection PER_ENTITY state (guarded by the
-// connection mutex in websocket.rs). `resolveSubscribePath` is split: the
-// db-dependent base resolution + ownership check (`resolve_subscribe_base`) runs
-// on the DB thread; the async realpath containment check (`validate_relative`)
-// runs on the caller task. TODO(port-phase4): `effective_path` approximates
-// ChatManager.getEffectivePath by reading the chat's stored `worktree_path`; the
-// full live-worktree validation lands with the ChatManager port.

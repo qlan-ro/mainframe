@@ -1,19 +1,8 @@
-//! Ported from `packages/core/src/messages/task-subject-backfill.ts`.
-//!
 //! Cross-message pass that gives every task_progress item a resolvable subject.
 //! The CLI's TaskUpdate carries only { taskId, status }; the subject lives on the
 //! TaskCreate (possibly in an earlier grouped message). This walks the display
 //! list in order, records taskId → subject from TaskCreates, and injects
 //! `subject` into later TaskUpdate inputs that lack one.
-//!
-//! CRATE-SPLIT NOTE (PORTING §2.5): like message_grouping, this file operates on
-//! the neutral `DisplayMessage`/`DisplayContent` pipeline (no Claude JSONL/event
-//! shapes) yet was scaffolded into `adapter-claude::messages`; its consumer
-//! `display_pipeline` lives in `mainframe-display`. The Phase-B reviewer decides
-//! its final home. The TS test's `prepareMessagesForClient` integration block is
-//! NOT ported here (it belongs to display_pipeline, which is unported and on the
-//! other side of the dependency edge); only the `backfillTaskSubjects` unit
-//! assertions are ported.
 
 use std::collections::HashMap;
 
@@ -24,7 +13,7 @@ use mainframe_types::task_progress::extract_task_id;
 use serde_json::Value;
 
 /// Mutable walk state for one task-id namespace. `pub(crate)` so the
-/// incremental projector (todo #376) can carry a scope across a rewind: it
+/// incremental projector can carry a scope across a rewind: it
 /// computes the scope *before* the rewind point by folding
 /// [`scope_after`] over the settled prefix, then continues the same fold
 /// via [`backfill_from`] over the refolded suffix, so a resumed fold
@@ -76,7 +65,7 @@ pub(crate) fn backfill_from(
 /// a resumed fold over a later suffix without re-walking from index 0.
 /// `pub(crate)` for its unit test below only; production code gets this
 /// from the incremental projector's cached `scope_before` checkpoints
-/// instead (todo #376 follow-up — see `messages/incremental/rewind.rs`).
+/// instead (see `messages/incremental/rewind.rs`).
 #[cfg(test)]
 pub(crate) fn scope_after(messages: &[DisplayMessage]) -> SubjectScope {
     let mut scope = SubjectScope::new();
@@ -84,7 +73,7 @@ pub(crate) fn scope_after(messages: &[DisplayMessage]) -> SubjectScope {
     scope
 }
 
-/// Returns `None` when nothing changed (mirrors the TS same-reference return).
+/// Returns `None` when nothing changed.
 fn backfill_blocks(
     blocks: &[DisplayContent],
     scope: &mut SubjectScope,
@@ -524,15 +513,3 @@ mod tests {
         assert_eq!(out[0], user);
     }
 }
-
-// PORT STATUS: src/messages/task-subject-backfill.ts (88 lines)
-// confidence: high
-// todos: 0
-// notes: backfill_blocks returns Option<Vec> (Some=changed) to mirror the TS
-// same-reference optimization; non-mutation of inputs is guaranteed by taking
-// &[DisplayMessage]. item.result (Option<ToolCallResult>) is serialized to a
-// Value for extract_task_id (types crate). js_string_coerce reproduces
-// String(taskId ?? ''). 9 backfillTaskSubjects unit assertions ported; the TS
-// prepareMessagesForClient integration block is intentionally NOT ported here —
-// it exercises display_pipeline (mainframe-display) across the dependency edge.
-// CRATE-SPLIT flagged (see module doc) — likely re-homes to mainframe-display.

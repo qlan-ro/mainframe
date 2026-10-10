@@ -1,4 +1,4 @@
-//! `Adapter::pin_fork_point` for Codex (todo #368) — split out of `fork.rs` to
+//! `Adapter::pin_fork_point` for Codex — split out of `fork.rs` to
 //! keep that file's pure resolver/version-gate logic under the 300-line
 //! ceiling. Unlike Claude's snapshot-copy pin (`mainframe_adapter_claude::
 //! fork::pin_fork_point`), Codex's `thread/fork` needs no on-disk write at pin
@@ -13,14 +13,13 @@ use crate::session::spawn_temp_app_server;
 use crate::types::{ThreadReadResult, ThreadReadTurn};
 
 /// The last turn id `thread/fork`'s `lastTurnId` can legally pin to — the
-/// schema's own docstring says the referenced turn "cannot be in progress",
-/// and live verification (todo #368 live acceptance, task 5, real codex-cli
-/// 0.155.1) confirmed the app-server rejects an in-progress id outright
-/// ("-32600 lastTurnId '<id>' identifies an in-progress turn") rather than
-/// pinning past it. Skips trailing in-progress turns rather than failing the
-/// whole pin — a turn still streaming when the fork button is clicked simply
-/// isn't inherited, which matches "fork at the current end of the
-/// conversation" for whatever end had actually settled.
+/// schema's own docstring says the referenced turn "cannot be in progress", and
+/// live verification (real codex-cli 0.155.1) confirmed the app-server rejects
+/// an in-progress id outright ("-32600 lastTurnId '<id>' identifies an
+/// in-progress turn") rather than pinning past it. Skips trailing in-progress
+/// turns rather than failing the whole pin — a turn still streaming when the
+/// fork button is clicked simply isn't inherited, which matches "fork at the
+/// current end of the conversation" for whatever end had actually settled.
 fn last_completed_turn_id(turns: &[ThreadReadTurn]) -> Option<String> {
     turns
         .iter()
@@ -91,7 +90,7 @@ fn map_pin_error(message: &str) -> ForkPinError {
     }
 }
 
-/// Pin a fork's starting point (todo #368): spawn a temp app-server in the
+/// Pin a fork's starting point: spawn a temp app-server in the
 /// parent's cwd, read the parent thread, and pin its last turn id (or, with a
 /// cut, the turn before the cut message's turn) — the point
 /// `thread/fork`'s `lastTurnId` will fork through, inclusive. Writes nothing to

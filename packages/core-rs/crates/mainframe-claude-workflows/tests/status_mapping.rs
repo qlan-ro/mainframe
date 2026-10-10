@@ -1,5 +1,4 @@
-//! Red-phase (Task 7): the CLI `patch.status` -> tracker action / run status
-//! table from the plan's *Status mapping tables*. Turned green by Task 13.
+//! The CLI `patch.status` -> tracker action / run status mapping table.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use mainframe_claude_workflows::status::{

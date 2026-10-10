@@ -22,7 +22,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
     /// Remove THIS session's overlay entry; reports whether one was present
     /// so abort paths (retry, result, exit) only re-emit when content
     /// vanishes. Never touches a different session's overlay for the same
-    /// chat (T13, R3.19).
+    /// chat.
     pub(super) fn take_partial_overlay(&self) -> bool {
         self.partial_overlays
             .take(&self.chat_id, self.session_key())
@@ -50,7 +50,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
     }
 
     /// `transient`, with an adapter-supplied id in place of a minted nanoid
-    /// (todo #350 group B, stable-ids task 5).
+    /// so live and replayed messages share the same id.
     pub(super) fn transient_with_id(
         &self,
         r#type: ChatMessageType,

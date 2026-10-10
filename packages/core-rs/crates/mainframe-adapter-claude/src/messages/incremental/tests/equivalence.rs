@@ -1,8 +1,7 @@
-//! Equivalence suite (todo #376, G1 task 2): after every step, the
-//! projector's snapshot and the delta-replayed mirror must equal a fresh
-//! `prepare_messages_for_client` call. `Harness::step` asserts this on every
-//! call, so each scenario below is really just "drive this sequence without
-//! panicking".
+//! Equivalence suite: after every step, the projector's snapshot and the
+//! delta-replayed mirror must equal a fresh `prepare_messages_for_client` call.
+//! `Harness::step` asserts this on every call, so each scenario below is really
+//! just "drive this sequence without panicking".
 
 use std::collections::HashMap;
 
@@ -35,7 +34,7 @@ fn text_partials_grow_via_overlay_then_an_interrupted_overlay_is_removed() {
 
 #[test]
 fn appends_after_an_empty_seed_stay_equivalent_to_the_full_pipeline() {
-    // todo #376 follow-up regression: the projector's first call can be a
+    // Regression: the projector's first call can be a
     // `full_rebuild` on an empty `raw` slice (a `session/resume` that
     // reaches `display_snapshot` before the first prompt). Every later
     // incremental call must still agree with a fresh full-pipeline run.

@@ -1,6 +1,5 @@
-//! WebSocket integration tests — translated from `websocket-auth.test.ts`,
-//! `ws-file-subscribe.test.ts`, and `websocket-broadcast-gating.test.ts`, plus
-//! the connect/ready/subscribe/ack/file:changed flow the task pins. Real app,
+//! WebSocket integration tests — auth, file subscriptions, and broadcast
+//! gating, plus the connect/ready/subscribe/ack/file:changed flow. Real app,
 //! real FileWatcherService, real in-memory DB (no mocks).
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 

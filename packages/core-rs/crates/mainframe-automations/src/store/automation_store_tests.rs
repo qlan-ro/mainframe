@@ -1,4 +1,4 @@
-//! T2.2 — `automations` table CRUD round-trips.
+//! `automations` table CRUD round-trips.
 
 use crate::domain::AutomationScope;
 use crate::error::StoreError;

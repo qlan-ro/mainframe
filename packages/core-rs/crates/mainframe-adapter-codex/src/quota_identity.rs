@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/codex/quota-identity.ts`.
-//!
 //! Resolves the logged-in Codex account identity: `account/read`'s email first,
 //! then `~/.codex/auth.json`'s `tokens.account_id`, then a synthetic
 //! `apiKey`/`bedrock` bucket for keyless auth. A transient RPC or file-read
@@ -251,12 +249,3 @@ mod tests {
         assert_eq!(identity, CODEX_IDENTITY_TRANSIENT);
     }
 }
-
-// PORT STATUS: src/plugins/builtin/codex/quota-identity.ts (75 lines)
-// confidence: high
-// todos: 0
-// notes: readAccount/readAuthFile are injected as boxed async closures returning
-// notes: Result (Rust has no bare try/catch, so the TS try/catch-to-transient-
-// notes: sentinel branches become Err arms) mirroring quota_pull's deps seam.
-// notes: CodexAuthFile/AuthTokens stay module-private, matching the TS file's
-// notes: locally-scoped interface (not exported via types.ts).

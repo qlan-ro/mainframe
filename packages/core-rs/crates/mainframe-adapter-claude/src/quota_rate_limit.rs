@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/quota-rate-limit.ts`.
-//!
 //! Normalizes a stream-json `rate_limit_event`'s `rate_limit_info` into a partial
 //! `ProviderQuota` escalation. Returns `None` when it carries no usable percent —
 //! `utilization` is only populated in warning/rejected states, so a healthy event
@@ -149,10 +147,3 @@ mod tests {
         assert!(normalize_rate_limit_event(None, NOW).is_none());
     }
 }
-
-// PORT STATUS: src/plugins/builtin/claude/quota-rate-limit.ts (43 lines)
-// confidence: high
-// todos: 0
-// notes: table cases ported verbatim with hardcoded expected values; wired at the
-// notes: `rate_limit_event` arm in events.rs (previously unhandled — no match arm
-// notes: existed for this event type before this port).

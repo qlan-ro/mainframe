@@ -21,11 +21,11 @@ async fn on_result_retires_a_pending_fork_and_removes_its_snapshot_dir() {
 
     sink.on_result(result("success", Some(false)));
 
-    // The DB column clears synchronously, inside `on_result` itself.
+ // The DB column clears synchronously, inside `on_result` itself.
     assert!(deps.get_pending_fork("c1").is_none());
 
-    // The directory removal is spawned fire-and-forget; poll for it rather
-    // than assume a fixed delay.
+ // The directory removal is spawned fire-and-forget; poll for it rather
+ // than assume a fixed delay.
     for _ in 0..200 {
         if !std::path::Path::new(&snapshot_dir).exists() {
             break;
@@ -94,7 +94,7 @@ fn emits_a_transient_system_message_carrying_turn_duration_ms() {
                 .and_then(|md| md.get("turnDurationMs"))
                 .and_then(|v| v.as_i64())
         });
-    // measured from turnStartedAt (now - 1500) → ~1500ms; allow slack for wall time.
+ // measured from turnStartedAt (now - 1500) → ~1500ms; allow slack for wall time.
     let ms = timing.expect("turn timing message");
     assert!((1500..1700).contains(&ms), "turnDurationMs was {ms}");
 }

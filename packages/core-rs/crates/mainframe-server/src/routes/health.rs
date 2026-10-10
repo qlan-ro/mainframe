@@ -1,8 +1,9 @@
-//! Ported from `GET /health` in `src/server/http.ts`.
+//! `GET /health`.
 //!
-//! Bare-JSON response (not the `{success,data}` envelope) per
-//! the frozen wire-contract snapshot from the Node daemon (retired — see git history around the 2026-07-24 Rust cutover) `/health` entry, and always public
-//! (the auth middleware skips it).
+//! Bare-JSON response (not the `{success,data}` envelope). Wire contract: the UI
+//! reads `version` from the top level of the body
+//! (`packages/ui/src/features/daemon/pair-daemon.ts`). Always public (the auth
+//! middleware skips it).
 
 use std::sync::Arc;
 
@@ -31,19 +32,8 @@ pub(crate) async fn get_health(State(ctx): State<Arc<AppCtx>>) -> Json<HealthRes
         version: ctx.version.clone(),
         pid: std::process::id(),
         timestamp: mainframe_runtime::time::now_iso8601(),
-        // ctx.tunnelUrl ?? getTunnelUrl?.() ?? null — interior-mutable, so this
-        // reflects the daemon-tunnel boot start and the tunnel routes' setTunnelUrl.
+        // The tunnel URL is interior-mutable, so this reflects the daemon-tunnel
+        // boot start and the tunnel routes' `set_tunnel_url`.
         tunnel_url: ctx.tunnel_url(),
     })
 }
-
-// PORT STATUS: src/server/http.ts (GET /health handler)
-// confidence: high
-// todos: 0
-// notes: Main catch-up (#442): the body gains `pid: process.pid`
-// (std::process::id()) so a single curl identifies the port's owner. `tunnelUrl`
-// serializes as `null` (not omitted) to match the fixture, so no
-// `skip_serializing_if`. `timestamp` uses now_iso8601() (millis + `Z`, matching
-// Node's Date.toISOString()), NOT chrono's to_rfc3339(). Byte shape verified in
-// packages/core-rs/crates/mainframe-types/tests/fixtures/route.health.json (the scaffold's assertions moved to
-// the http integration tests).

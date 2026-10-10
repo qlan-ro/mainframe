@@ -1,8 +1,7 @@
-//! `encode_revision`'s streaming mark (spec Decision 39, todo #350 R2): only
-//! the accumulator segment still open at `finish`, for the leaf kind the
-//! partial-message overlay backs, carries `ItemMeta.streaming: true`. Split
-//! out of `tests.rs` (plan task 37, R2.13) — shares its fixture builders via
-//! `use super::*`.
+//! `encode_revision`'s streaming mark: only the accumulator segment still open
+//! at `finish`, for the leaf kind the partial-message overlay backs, carries
+//! `ItemMeta.streaming: true`. Split out of `tests.rs` — shares its fixture
+//! builders via `use super::*`.
 
 use mainframe_types::display::{DisplayMessageType, StreamingLeafKind, ToolCategory};
 
@@ -172,8 +171,8 @@ fn ids(items: &[EncodedItem]) -> Vec<&str> {
 }
 
 /// Live streaming and history replay must agree on ids/content/non-streaming
-/// meta by construction (criterion 10) — `streaming` is the one field a
-/// resume snapshot, which has no overlay, can never carry.
+/// meta by construction — `streaming` is the one field a resume snapshot, which
+/// has no overlay, can never carry.
 #[test]
 fn streaming_ids_match_history() {
     let live = vec![dmsg(

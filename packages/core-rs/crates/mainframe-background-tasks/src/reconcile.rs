@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/background-tasks/reconcile.ts`.
-
 use std::collections::HashMap;
 use std::fs::Metadata;
 use std::sync::Arc;
@@ -16,8 +14,7 @@ use crate::spool_validator::{Platform, SpoolValidator, SpoolValidatorDeps, make_
 use crate::spool_walker::{WalkOpts, walk_spool_tasks};
 use crate::tracker::{AdoptOptions, BackgroundTaskTracker};
 
-/// The DB surface reconcile reads — mirrors the structural TS dep
-/// `{ chats: { listAll }, projects: { get } }`.
+/// The DB surface reconcile reads: every chat, and a project's path by id.
 pub trait ReconcileDb: Send + Sync {
     fn chats_list_all(&self) -> Vec<Chat>;
     /// `projects.get(id)?.path`.
@@ -380,7 +377,7 @@ mod tests {
         assert_eq!(t.recovered, Some(true));
         assert_eq!(t.output_path.as_deref(), Some(fp.as_str()));
         assert_eq!(t.ended_at, None);
-        // startedAt == the file's real ctime (TS asserts the mocked 1000).
+        // startedAt == the file's real ctime.
         let md = std::fs::metadata(&fp).unwrap();
         assert_eq!(t.started_at, ctime_ms(&md));
         assert_eq!(tracker.get_pid("chat-sess1", "tkid01"), Some(777));
@@ -435,7 +432,7 @@ mod tests {
         })
         .await;
         // Walk/readdir order is not deterministic across platforms, so assert as a
-        // set (TS relies on an ordered readdir mock).
+        // set.
         let mut events = drain(&mut rx);
         events.sort();
         assert_eq!(
@@ -569,16 +566,3 @@ mod tests {
         assert!(tracker.list("chat-sess1").is_empty());
     }
 }
-
-// PORT STATUS: src/background-tasks/reconcile.ts (103 lines)
-// confidence: high
-// todos: 0
-// notes: recovered snapshot stamps kind:'bash' (only bash spools to disk).
-// `deps.db` structural type → ReconcileDb trait (chats_list_all /
-// project_path) so this crate stays decoupled from mainframe-db. The TS outer
-// try/catch guarded against unexpected throws; every fallible step here is handled
-// inline (Option/Result → skip), so the 'reconcileBackgroundTasks aborted' warn is
-// unreachable and omitted. st.ctimeMs/mtimeMs → MetadataExt ctime/mtime (unix) with
-// a SystemTime fallback. vitest fs mocks → real temp spool + real project dir
-// (canonicalize must succeed, so a real project path is required); the events test
-// asserts a SET (real readdir order is nondeterministic vs TS's ordered mock).

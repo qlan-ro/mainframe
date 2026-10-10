@@ -1,9 +1,6 @@
-//! Ported from `packages/core/src/adapters/__tests__/registry.test.ts`.
-//!
 //! Integration test (exercises only the public `AdapterRegistry` surface + the
-//! `Adapter` / `AdapterSession` / `RefreshDeps` traits) so `lib.rs` stays a clean
-//! port of `index.ts`. The five `AdapterRegistry catalog materialization`
-//! assertions are ported one-for-one.
+//! `Adapter` / `AdapterSession` / `RefreshDeps` traits) so `lib.rs` stays
+//! focused on the registry.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::collections::VecDeque;
@@ -136,7 +133,7 @@ impl AdapterSession for StubSession {
     }
 }
 
-// ─── the configurable fake Adapter (mirrors the TS `fakeAdapter`) ───────────────
+// ─── the configurable fake Adapter ───────────────────────────────────────────────
 struct FakeAdapter {
     id: String,
     name: String,
@@ -152,7 +149,7 @@ struct FakeAdapter {
     list_models_calls: AtomicUsize,
     probe_calls: AtomicUsize,
     probe_args: Mutex<Vec<Option<String>>>,
-    /// Todo #368: when `true`, `capabilities().fork` and
+    /// When `true`, `capabilities().fork` and
     /// `fork_unavailable_reason()` depend on whatever `observe_cli_version` last
     /// reported, instead of the fixed `fork: false` every other test relies on.
     fork_version_gated: bool,
@@ -266,7 +263,7 @@ impl Adapter for FakeAdapter {
     fn kill_all(&self) {}
 }
 
-// ─── the injected RefreshDeps fake (mirrors the TS `deps(emit, path)`) ──────────
+// ─── the injected RefreshDeps fake ───────────────────────────────────────────────
 struct FakeDeps {
     resolve_path: Option<String>,
     run_result: RunResult,
@@ -368,7 +365,7 @@ async fn bumps_revision_flips_catalog_source_and_emits_after_allow_refresh() {
                 installed: Some(true),
                 // FakeAdapter's capabilities/reason never depend on version in
                 // this test, but the event still carries the current values
-                // whenever it fires (todo #368), same as `installed` above.
+                // whenever it fires, same as `installed` above.
                 capabilities: Some(a.capabilities()),
                 fork_unavailable_reason: a.fork_unavailable_reason(),
             })
@@ -449,7 +446,7 @@ async fn default_generate_title_returns_no_title_for_an_adapter_without_a_title_
     assert_eq!(result.unwrap(), None);
 }
 
-// Todo #368: a version-gated adapter's capability flips after `run_refresh`
+// A version-gated adapter's capability flips after `run_refresh`
 // calls `observe_cli_version`, and the snapshot + emitted event carry the new
 // capabilities and reason even when the catalog itself never changes (no live
 // model list this refresh) — the registry must not gate the event on

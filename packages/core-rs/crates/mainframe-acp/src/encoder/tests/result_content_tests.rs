@@ -1,5 +1,4 @@
-//! Diff and truncation result-content cases, split out of `tests.rs`
-//! (todo #350, plan task 37, R2.13).
+//! Diff and truncation result-content cases, split out of `tests.rs`.
 
 use std::collections::HashMap;
 

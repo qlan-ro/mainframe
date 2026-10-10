@@ -60,8 +60,7 @@ pub(crate) fn render_completed_item(
 }
 
 /// A child's own `agentMessage` also feeds the card engine, so its text becomes
-/// the card's closing content if nothing else resolves the card first (spec
-/// decision 5).
+/// the card's closing content if nothing else resolves the card first.
 fn render_agent_message(
     id: &str,
     text: &str,
@@ -69,7 +68,7 @@ fn render_agent_message(
     sink: &Arc<dyn SessionSink>,
     state: &mut CodexSessionState,
 ) {
-    // Todo #378: completion is authoritative — mark the item completed (so a
+    // Completion is authoritative — mark the item completed (so a
     // late/duplicate delta for it is dropped) and drop any in-flight overlay
     // text under this id before the completed message lands, so the two
     // never both render.
@@ -90,8 +89,8 @@ fn skip_item(name: &str) {
     );
 }
 
-/// `pub(crate)`: shared with `history_convert.rs`'s reload-path rendering
-/// (T22, R3.17) so the two paths cannot drift on the naming rule.
+/// `pub(crate)`: shared with `history_convert.rs`'s reload-path rendering so
+/// the two paths cannot drift on the naming rule.
 pub(crate) fn dynamic_tool_call_name(d: &DynamicToolCallItem) -> String {
     match d.namespace.as_deref().filter(|ns| !ns.is_empty()) {
         Some(ns) => format!("{ns}__{}", d.tool),

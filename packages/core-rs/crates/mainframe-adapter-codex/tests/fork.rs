@@ -1,7 +1,7 @@
-//! Todo #368 — integration tests for the Codex adapter's `thread/fork` wiring,
+//! Integration tests for the Codex adapter's `thread/fork` wiring,
 //! driven against a fake `codex app-server` (the `tests/turn_start_model.rs`
 //! pattern: a shell script dispatching on JSON-RPC `method`, teeing every
-//! request line to a capture file). Covers task 3's four scenarios:
+//! request line to a capture file). Covers four scenarios:
 //! successful fork, a parent the fake server never "loaded" first, history
 //! truncation on both sides of a fork, and the version-gated capability.
 #![cfg(unix)]
@@ -24,7 +24,7 @@ use serde_json::Value;
 use std::sync::Arc;
 use tempfile::tempdir;
 
-// ---- Successful fork (task 3, bullet 1) ----
+// Successful fork
 
 #[tokio::test]
 async fn a_forks_first_message_sends_thread_fork_and_the_new_id_flows_through() {

@@ -1,4 +1,4 @@
-//! T8.2 — the 30 s sweep with derived scheduler state: fresh fires carry
+//! The 30 s sweep with derived scheduler state: fresh fires carry
 //! `trigger:{kind:schedule,triggerId,scheduledFor}` + the dedup key; a
 //! duplicate fire loses the `uq_runs_dedup` insert race silently; after a
 //! 3-day sleep `run_once` fires exactly one make-up and `skip` none;
@@ -240,7 +240,7 @@ async fn exactly_five_minutes_late_is_still_fresh_beyond_is_stale() {
     let h = harness().await;
     let id = create(&h, "a", daily_definition("t1", "21:00", OnMissed::Skip)).await;
 
-    // 5:00 late — not yet stale (Node: stale is strictly > the window).
+    // 5:00 late — not yet stale (stale is strictly > the window).
     h.sweeper.sweep(at("2026-07-12T21:05:00+02:00")).await;
     assert_eq!(h.runs.list_runs(&id, 10).await.unwrap().len(), 1);
 

@@ -1,13 +1,12 @@
-//! Ported from `src/server/routes/worktree.ts` — worktree enable/disable/fork/
-//! attach, list, and delete.
+//! Worktree enable/disable/fork/attach, list, and delete.
 //!
-//! `GET /api/projects/:id/git/worktrees` ports fully (db project lookup +
-//! `mainframe_services::workspace::get_worktrees`). The five mutating endpoints go
+//! `GET /api/projects/:id/git/worktrees` does a db project lookup plus
+//! `mainframe_services::workspace::get_worktrees`. The five mutating endpoints go
 //! through real ChatManager facade methods (enable/attach/disable on the config
-//! manager, forkToWorktree = lifecycle + config, delete via the ported
-//! `validateAndDeleteWorktree` + notifyWorktreeDeleted). When the ChatManager is
-//! unwired (Phase-3 harness) they fall back to the failure-path envelope after
-//! validating inputs 1:1.
+//! manager, `fork_to_worktree` = lifecycle + config, delete via
+//! `validate_and_delete_worktree` + `notify_worktree_deleted`). When the
+//! ChatManager is unwired (the test harness) they fall back to the failure-path
+//! envelope after validating inputs.
 
 use std::sync::Arc;
 
@@ -51,7 +50,7 @@ struct WorktreeBody {
 }
 
 // Parse + validate the enable/fork body, returning the (baseBranch, branchName)
-// pair. Mirrors `EnableWorktreeBody`/`ForkWorktreeBody` (first failing issue wins).
+// pair. The first failing check wins.
 #[allow(clippy::result_large_err)]
 fn validate_enable_fork(body: &Bytes) -> Result<(String, String), Response> {
     let Some(b) = parse_body::<WorktreeBody>(body) else {
@@ -163,8 +162,8 @@ async fn attach_worktree(
     Path(id): Path<String>,
     body: Bytes,
 ) -> Response {
-    // `AttachWorktreeBody`: worktreePath.min(1) then branchName.min(1) — first
-    // failing issue wins.
+    // Attach body: non-empty worktreePath, then non-empty branchName — the first
+    // failing check wins.
     let b = parse_body::<AttachBody>(&body).unwrap_or(AttachBody {
         worktree_path: None,
         branch_name: None,
@@ -228,10 +227,10 @@ async fn delete_worktree(
     }
 }
 
-/// Port of `validateAndDeleteWorktree`: canonicalize + registry-validate the
-/// worktree, kill each affected chat's background tasks, remove the worktree, then
-/// re-broadcast `chat.updated` for chats that pointed at it. `Err` carries the exact
-/// TS `throw new Error(...)` message the route surfaces as a 400.
+/// Canonicalize + registry-validate the worktree, kill each affected chat's
+/// background tasks, remove the worktree, then re-broadcast `chat.updated` for
+/// chats that pointed at it. `Err` carries the message the route surfaces as a
+/// 400.
 async fn validate_and_delete_worktree(
     ctx: &Arc<AppCtx>,
     project_id: &str,
@@ -405,15 +404,3 @@ mod tests {
         assert!(!branch_name_ok(""));
     }
 }
-
-// PORT STATUS: src/server/routes/worktree.ts (6 endpoints, 224 lines)
-// confidence: medium
-// todos: 0
-// notes: GET /api/projects/:id/git/worktrees ports fully over db.projects +
-// mainframe_services::workspace::get_worktrees (filtering the main worktree).
-// enable/disable/attach/fork call the real ChatManager facade (config manager +
-// lifecycle+config for fork; fork maps DirtyWorkingTree → 409 via ForkError::status_code).
-// delete-worktree ports `validateAndDeleteWorktree` whole: canonicalize + registry
-// validation, per-affected-chat killTasksForChat (SessionKillBridge → SessionLike),
-// removeWorktree, then cm.notifyWorktreeDeleted. Unwired (Phase-3 harness) → the TS
-// failure-path envelope after input validation.

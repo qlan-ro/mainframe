@@ -1,5 +1,3 @@
-//! Ported from `packages/types/src/command.ts`.
-
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -42,8 +40,3 @@ mod tests {
         assert_eq!(serde_json::to_string(&cmd).unwrap(), json);
     }
 }
-
-// PORT STATUS: packages/types/src/command.ts (11 lines)
-// confidence: high
-// todos: 0
-// notes: `promptTemplate?` is optional → Option + skip_serializing_if.

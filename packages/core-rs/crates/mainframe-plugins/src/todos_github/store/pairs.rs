@@ -1,5 +1,5 @@
 //! `github_pairs` — one row per todo↔issue pairing, keyed on `todo_id` (never
-//! `number`, which the board reuses after a delete — fact 5). Carries the
+//! `number`, which the board reuses after a delete). Carries the
 //! 3-way-diff baseline (`base_*`) and the `pair_state` shown in the UI.
 
 use crate::PluginError;
@@ -159,7 +159,7 @@ pub(crate) async fn set_pair_state(
 }
 
 /// The delete-todo cascade's store half (AC24) — the dispatch that calls this
-/// on todo deletion lives in `todos::delete_todo` (task 11).
+/// on todo deletion lives in `todos::delete_todo`.
 pub(crate) async fn delete_pair(ctx: &PluginContext, todo_id: &str) -> Result<(), PluginError> {
     ctx.db
         .execute(

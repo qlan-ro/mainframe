@@ -1,4 +1,4 @@
-//! Explicit todo↔issue pairing (todo #286): `list_remote_issues` lists open
+//! Explicit todo↔issue pairing: `list_remote_issues` lists open
 //! issues annotated with their local pairing, `import_issues` creates one
 //! task per selected issue, and `publish_task` creates an issue from an
 //! existing task. Neither stamps the touch map (`touch::stamp_*`) — the

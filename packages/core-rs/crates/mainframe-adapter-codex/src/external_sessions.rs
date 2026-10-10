@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/codex/external-sessions.ts`.
-//!
 //! Discover importable Codex sessions by scanning the rollout JSONL files Codex
 //! writes to `~/.codex/sessions/YYYY/MM/DD/rollout-<timestamp>-<threadId>.jsonl`.
 //! We scan the files directly (not Codex's state DB) so sessions started outside
@@ -426,17 +424,3 @@ mod tests {
         assert!(!cwd_belongs_to_project(None, "/a/b"));
     }
 }
-
-// PORT STATUS: src/plugins/builtin/codex/external-sessions.ts (208 lines)
-// confidence: high
-// todos: 0
-// notes: NEW (#430). metaCache/promptCache are module-global Map<sessionId,…> in TS →
-// notes: static OnceLock<Mutex<HashMap>> here (brief non-await critical sections; the
-// notes: guard is always dropped before any await — no await_holding_lock). mtimeMs is
-// notes: f64 (Node fs mtimeMs); cache equality compares .to_bits() to avoid float_cmp.
-// notes: ROLLOUT_RE is hand-rolled (parse_rollout_uuid + is_uuid) — no `regex` crate.
-// notes: PERF(port): the SCAN_CONCURRENCY=8 bounded pool collapses to sequential awaits
-// notes: (order + caching + results identical; only throughput differs). walk depth-4
-// notes: recursion is a boxed future. read_head reads min(bytes,size) from offset 0.
-// notes: New ExternalSession drops summary/messageCount/model (thread/list is gone).
-// notes: external-sessions.test.ts (11 cases) ported in tests/external_sessions.rs.

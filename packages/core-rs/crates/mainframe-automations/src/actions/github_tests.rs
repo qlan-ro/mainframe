@@ -1,9 +1,8 @@
-//! T7.1 — github connector over wiremock (moved off the `gh` CLI by the
-//! 2026-08-19 provider-connections plan): create_pr → `{prUrl, prNumber}`,
-//! list_prs → `{prs: List<Record{url,title,number,author}>}` (contract §5
-//! camelCase) via `/search/issues`, bearer auth from the stored `github`
-//! credential, and the strict-input/repo-validation/401-naming behavior
-//! ado.rs and notion.rs already cover for their own connectors.
+//! github connector over wiremock: create_pr → `{prUrl, prNumber}`, list_prs →
+//! `{prs: List<Record{url,title,number,author}>}` (contract §5 camelCase) via
+//! `/search/issues`, bearer auth from the stored `github` credential, and the
+//! strict-input/repo-validation/401-naming behavior ado.rs and notion.rs
+//! already cover for their own connectors.
 
 use std::collections::BTreeMap;
 

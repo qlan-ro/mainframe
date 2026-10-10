@@ -1,7 +1,7 @@
-//! Todo #346 (G2b) — wiring-level tests for the scratch cwd, the no-persistence
-//! spawn decision, context loss, and reconciliation, built on a real
-//! `ChatManager` (`build_chat_manager`) rather than a hand-built deps fake, per
-//! the `transcript_presence_wiring.rs` template.
+//! Wiring-level tests for the scratch cwd, the no-persistence spawn decision,
+//! context loss, and reconciliation, built on a real `ChatManager`
+//! (`build_chat_manager`) rather than a hand-built deps fake, per the
+//! `transcript_presence_wiring.rs` template.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod temporary_chat_lifecycle_support;
@@ -76,7 +76,7 @@ async fn restart_survival_resumes_the_same_id_without_the_capability() {
     );
 }
 
-/// Rule 7's reconciliation early-return, exercised through the same
+/// The no-persistence reconciliation early-return, exercised through the same
 /// `ChatManager::reconcile_transcript` wiring the history route uses (real
 /// `DaemonChatDeps`, not the pure-function fake in `mainframe-chat`).
 #[tokio::test]
@@ -92,8 +92,8 @@ async fn reconciliation_skips_a_vendor_ephemeral_chat() {
     let before = loaded.transcript_missing;
     let missing = manager.reconcile_transcript(&mut loaded).await;
     assert!(!missing);
-    // Rule 7's early return: the persisted flag is left exactly as it was,
-    // not (re)computed from a transcript-presence check.
+    // The no-persistence early return: the persisted flag is left exactly as it
+    // was, not (re)computed from a transcript-presence check.
     let after = support::get_chat(&h, &chat.id);
     assert_eq!(after.transcript_missing, before);
 }
@@ -147,8 +147,8 @@ async fn non_project_scratch_cwd_is_lazy_stable_and_recreated_when_deleted() {
     );
 }
 
-// ── AC 12: mid-life respawn paths (config respawn, degraded-recovery rebind,
-// next send after a CLI exit), each with the capability on and off ──────────
+// ── mid-life respawn paths (config respawn, degraded-recovery rebind, next
+// send after a CLI exit), each with the capability on and off ───────────────
 
 /// Sets a worktree on `chat_id`, backed by a real directory (`continue_here`'s
 /// caller `do_start_chat` requires it to exist to spawn).

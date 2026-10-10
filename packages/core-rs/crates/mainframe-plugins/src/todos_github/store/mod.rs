@@ -1,4 +1,4 @@
-//! CRUD for the GitHub sync tables (todo #286): the project↔repo link, the
+//! CRUD for the GitHub sync tables: the project↔repo link, the
 //! todo↔issue pairs (with their 3-way-diff baseline), and sync-run history.
 //! Split per table to stay under 300 lines each; the row column-reading
 //! helpers below are shared by all three.

@@ -1,5 +1,3 @@
-//! Ported from `src/workspace/session-files.ts`.
-
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
@@ -427,18 +425,3 @@ mod tests {
         assert!(content.contains("abc-123"));
     }
 }
-
-// PORT STATUS: src/workspace/session-files.ts (72 lines)
-// confidence: high
-// todos: 0
-// notes: async fs via tokio::fs; readline via tokio BufReader::lines. The regex
-// /[^a-zA-Z0-9-]/g → char map. moveFile falls back to copy_recursive + remove on
-// EXDEV (raw_os_error == 18, same on macOS/Linux). copy_recursive is Box::pin'd
-// async recursion (Node `cp {recursive:true}`). The session-dir move and the
-// sidechain readdir/move loop swallow errors exactly like the TS try/catch blocks.
-// isSidechainOf reads only the first non-empty line and compares `sessionId`.
-// INTENTIONAL DIVERGENCE: a missing main JSONL is warned about, not thrown — the
-// TS version hard-failed the whole rebind whenever the CLI had already relocated
-// the transcript itself. moveFile also refuses to overwrite an existing
-// destination; the TS `rename` clobbered an already-relocated transcript with
-// whatever stub was left behind in the source dir.

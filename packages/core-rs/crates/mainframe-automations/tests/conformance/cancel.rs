@@ -1,4 +1,4 @@
-//! T10.3 cancel matrix: cancelling during an agent wait, mid-Repeat, and
+//! Cancel matrix: cancelling during an agent wait, mid-Repeat, and
 //! before finalize (mid-`running`) all finalize the run `cancelled`, and a
 //! late agent completion for a cancelled run is a NO-OP (A8 — no resurrection).
 //! Single-engine (no boot sweep), so the only run is the one under test.

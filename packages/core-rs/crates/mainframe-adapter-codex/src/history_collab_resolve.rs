@@ -1,7 +1,7 @@
-//! Reload-path card bookkeeping (todo #247 task 19) — the single-pass
-//! counterpart to the live path's `collab_card.rs`/`collab_resolve.rs` split,
-//! carved out of `history_convert.rs` to keep that file under the 300-line
-//! ceiling. `history_convert::convert_thread_items` dispatches
+//! Reload-path card bookkeeping — the single-pass counterpart to the live
+//! path's `collab_card.rs`/`collab_resolve.rs` split, carved out of
+//! `history_convert.rs` to keep that file under the 300-line ceiling.
+//! `history_convert::convert_thread_items` dispatches
 //! `SubAgentActivity`/`CollabAgentToolCall` items here; rendering itself lives
 //! in `history_collab.rs`.
 
@@ -40,7 +40,7 @@ pub(crate) type CardMap = HashMap<String, TrackedCard>;
 
 /// `Started` registers the child and opens its card (a no-op if already
 /// registered, so the activity route and a legacy `wait` naming the same child
-/// produce exactly one card — spec decision 1); `Interrupted` resolves it as an
+/// produce exactly one card); `Interrupted` resolves it as an
 /// error; `Interacted`/`Unknown` have no card effect.
 pub(crate) fn handle_sub_agent_activity(
     a: &SubAgentActivityItem,
@@ -95,10 +95,9 @@ pub(crate) fn handle_collab_tool_call(
 }
 
 /// A `wait` naming receivers resolves each of them (opening a card first when
-/// none names it yet — the legacy route, design decision 1). A `wait` with an
-/// empty receiver list can only fail every still-open card, never complete one
-/// (design decision 2: an empty/unknown status is indistinguishable from a
-/// timed-out wait).
+/// none names it yet — the legacy route). A `wait` with an empty receiver list
+/// can only fail every still-open card, never complete one (an empty/unknown
+/// status is indistinguishable from a timed-out wait).
 fn on_wait(
     item: &CollabAgentToolCallItem,
     messages: &mut Vec<ChatMessage>,

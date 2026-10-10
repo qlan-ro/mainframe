@@ -1,4 +1,4 @@
-//! T7 — the webhook registration route. Registering arms the hook and hands
+//! The webhook registration route. Registering arms the hook and hands
 //! back the URL a user pastes into GitHub; the same registration then rides
 //! along on every read of the automation.
 

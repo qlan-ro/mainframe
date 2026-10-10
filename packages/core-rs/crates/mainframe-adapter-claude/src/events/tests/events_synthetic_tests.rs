@@ -1,4 +1,4 @@
-//! Synthetic user-event suppression cases (todo #363): the CLI's own
+//! Synthetic user-event suppression cases: the CLI's own
 //! coordinate note (`isSynthetic: true`, no `isMeta`) must never surface as a
 //! CLI-feedback System marker, at top level or inside a subagent. Nested as a
 //! child of `events.rs`'s `mod tests` via `#[path]` (see the `mod

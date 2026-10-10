@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/db/tags.ts`.
-
 use std::rc::Rc;
 
 use mainframe_runtime::time::now_iso8601;
@@ -136,15 +134,3 @@ impl TagsRepository {
         Ok(())
     }
 }
-
-// PORT STATUS: src/db/tags.ts (80 lines)
-// confidence: high
-// notes: validate_tag_name / hash_tag_color are imported from the sibling
-// modules relocated into this crate (§2.15). `throw new Error(v.error)` /
-// "Tag not found: X" become DbError::Message with byte-identical strings (the
-// ported tests assert /reserved/i and /not found/i). rename()/remove() use
-// unchecked_transaction() (Rc<Connection>); on the "Tag not found" early return
-// the tx drops → ROLLBACK, matching the TS transaction that never commits. Tag
-// color is stored as its serde string and parsed back via serde. Tests in
-// tests/tags.rs.
-// todos: 0

@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/codex/external-session-parse.ts`.
-//!
 //! Parsing for Codex rollout JSONL heads: session_meta facts and the first real
 //! user prompt. Kept separate from the filesystem scan so both stay small.
 //!
@@ -329,14 +327,3 @@ mod tests {
         );
     }
 }
-
-// PORT STATUS: src/plugins/builtin/codex/external-session-parse.ts (91 lines)
-// confidence: high
-// todos: 0
-// notes: NEW (#430). RolloutLine/payload/content deserialize with serde (unknown
-// notes: fields tolerated). The three JS regexes are hand-rolled scanners (no `regex`
-// notes: crate on the allowlist): strip_tag_pairs = /<[^>]+>[^<]*<\/[^>]+>/g,
-// notes: strip_tags = /<[^>]+>/g, collapse_whitespace = /\s+/g→' ', cwd_regex =
-// notes: /"cwd"\s*:\s*"((?:[^"\\]|\\.)*)"/ (raw capture, escapes intact). is_preamble
-// notes: mirrors the prefix list + first-200-char <INSTRUCTIONS> probe. extract_meta's
-// notes: git branch `|| undefined` maps to filter(non-empty).

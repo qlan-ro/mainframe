@@ -1,5 +1,4 @@
-//! Shared quota-lifecycle engine, ported 1:1 from `src/quota/` (TypeScript is
-//! canonical). Pure derivation lives in the leaf modules; `manager` holds the
+//! Shared quota lifecycle. Pure derivation lives in the leaf modules; `manager` holds the
 //! daemon's in-memory state and `scheduler` drives Claude's pull cadence.
 
 mod backoff;

@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/probe-models.ts`.
-
 use std::process::Stdio;
 use std::time::Duration;
 
@@ -55,8 +53,8 @@ fn strip_with_tail(identity: &str) -> String {
     identity.trim().to_string()
 }
 
-/// Reads the raw CLI model entry (`CliModelInfo`) from JSON exactly like the TS
-/// property access (undefined-tolerant), producing an `AdapterModel`.
+/// Reads the raw CLI model entry (`CliModelInfo`) from JSON, tolerating absent
+/// fields, producing an `AdapterModel`.
 pub fn map_model_info(info: &Value) -> AdapterModel {
     let value = info.get("value").and_then(Value::as_str).unwrap_or("");
     let display_name = info
@@ -229,7 +227,7 @@ pub async fn probe_models(executable: &str, path: &str) -> Option<ProbeResult> {
         }
     };
 
-    // Drain stderr so a full pipe never blocks the child (TS: `child.stderr?.resume()`).
+    // Drain stderr so a full pipe never blocks the child.
     if let Some(mut stderr) = child.stderr.take() {
         tokio::spawn(async move {
             let mut sink = Vec::new();

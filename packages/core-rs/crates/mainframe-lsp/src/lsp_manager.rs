@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/lsp/lsp-manager.ts`.
-//!
 //! Per-`(projectId, language)` LSP child lifecycle: single-flight spawn, the
 //! idle-timeout reaper, and the graceful shutdown handshake (shutdown request ->
 //! exit notification -> SIGTERM fallback).
@@ -34,8 +32,7 @@ pub enum LspError {
 }
 
 /// Resolves a language id to a spawnable command. Implemented by [`LspRegistry`];
-/// the trait exists so tests can inject a fake resolver (the parity of the TS
-/// `vi.spyOn(registry, 'resolveCommand')`).
+/// the trait exists so tests can inject a fake resolver.
 pub trait CommandResolver: Send + Sync {
     fn resolve_command<'a>(
         &'a self,
@@ -54,8 +51,8 @@ impl CommandResolver for LspRegistry {
     }
 }
 
-/// A live WS client attached to a handle. The concrete axum socket lives in the
-/// deferred server layer; this is the seam the server drives.
+/// A live WS client attached to a handle. The concrete axum socket lives in
+/// `mainframe-server::websocket`; this is the seam the server drives.
 pub struct ClientRef {
     open: Arc<AtomicBool>,
     close_tx: mpsc::UnboundedSender<(u16, String)>,
@@ -71,14 +68,14 @@ impl ClientRef {
         self.open.load(Ordering::SeqCst)
     }
 
-    /// Parity with `client.close(code, reason)`.
+    /// Close the client socket with `code` and `reason`.
     pub fn close(&self, code: u16, reason: &str) {
         self.open.store(false, Ordering::SeqCst);
         let _ = self.close_tx.send((code, reason.to_string()));
     }
 }
 
-/// Per-handle mutable fields (CONCURRENCY.tsv: PER_ENTITY, one connection task owns them).
+/// Per-handle mutable fields (per entity; one connection task owns them).
 #[derive(Default)]
 struct HandleInner {
     client: Option<ClientRef>,
@@ -162,9 +159,9 @@ fn key(project_id: &str, language: &str) -> String {
     format!("{project_id}:{language}")
 }
 
-/// Send SIGTERM to `pid`. Parity with `proc.kill('SIGTERM')`.
+/// Send SIGTERM to `pid`.
 // NOTE: shells out to `kill -TERM` (unix) — tokio's `Child::kill` sends SIGKILL,
-// which would diverge from the TS graceful SIGTERM. Windows has no `kill`;
+// which would skip the server's graceful SIGTERM shutdown. Windows has no `kill`;
 // platform-sensitive, flagged for the Windows packaging pass.
 async fn send_sigterm(pid: u32) {
     let _ = Command::new("kill")
@@ -178,7 +175,7 @@ struct ManagerState {
     handles: DashMap<String, Arc<LspServerHandle>>,
     resolver: Arc<dyn CommandResolver>,
     registry: Arc<LspRegistry>,
-    /// Single-flight spawn guards (CONCURRENCY.tsv rule 9 — `Notify` for `futures::Shared`).
+    /// Single-flight spawn guards (`Notify` instead of `futures::Shared`).
     guards: Mutex<HashMap<String, Arc<Notify>>>,
     idle_timeout: Duration,
     shutdown_request_timeout: Duration,
@@ -281,7 +278,7 @@ impl ManagerState {
         let pid = child.id().unwrap_or(0);
 
         // Single stdin writer task fed by the framed `stdin_tx` (both the bridge
-        // and graceful shutdown write through it, mirroring the shared `proc.stdin`).
+        // and graceful shutdown write through it).
         let (stdin_tx, mut stdin_rx) = mpsc::unbounded_channel::<Vec<u8>>();
         if let Some(mut stdin) = child.stdin.take() {
             tokio::spawn(async move {
@@ -312,8 +309,8 @@ impl ManagerState {
             inner: Mutex::new(HandleInner::default()),
         });
 
-        // Monitor: owns the child, awaits exit, then removes the handle. Parity
-        // with `child.on('exit')` + `child.on('error')` -> removeHandle.
+        // Monitor: owns the child, awaits exit (or a wait error), then removes the
+        // handle.
         let state = Arc::clone(self);
         let key_owned = k.to_string();
         let language_owned = language.to_string();
@@ -346,9 +343,8 @@ impl ManagerState {
         Ok(handle)
     }
 
-    /// Parity with `removeHandle`. Guards on identity so a dying old child never
-    /// evicts a freshly respawned handle under the same key (the TS twin relied
-    /// on JS single-threadedness for this).
+    /// Removes a handle. Guards on identity so a dying old child never
+    /// evicts a freshly respawned handle under the same key.
     fn remove_handle(&self, k: &str, handle: &Arc<LspServerHandle>) {
         self.cancel_idle_timer(handle);
         handle.set_cleanup(None);
@@ -454,8 +450,7 @@ impl ManagerState {
 }
 
 /// Split a `"projectId:language"` key. The language never contains a `:`, so the
-/// LAST `:` separates the (uuid) projectId from the language — parity with the
-/// TS `key.split(':')` destructure where the array shape is `[projectId, language]`.
+/// LAST `:` separates the (uuid) projectId from the language.
 fn split_key(k: &str) -> (String, String) {
     match k.rsplit_once(':') {
         Some((project_id, language)) => (project_id.to_string(), language.to_string()),
@@ -493,7 +488,7 @@ impl LspManager {
         }
     }
 
-    /// The backing registry (parity with the TS `get registry()`).
+    /// The backing registry.
     pub fn registry(&self) -> &Arc<LspRegistry> {
         &self.state.registry
     }
@@ -561,13 +556,3 @@ impl LspManager {
 
 #[cfg(test)]
 mod tests;
-
-// PORT STATUS: packages/core/src/lsp/lsp-manager.ts (202 lines)
-// confidence: high (single-flight, idle reaper, graceful-shutdown handshake)
-// todos: 0
-// notes: `spawning` Map<Promise> -> single-flight `Notify` (rule 9); `handles` ->
-//   DashMap. child.on('exit'/'error') -> a monitor task awaiting `child.wait()`.
-//   `proc.stdin` shared write -> a single stdin-writer task fed by `stdin_tx`.
-//   `proc.kill('SIGTERM')` -> `kill -TERM <pid>` (tokio kills with SIGKILL; unix
-//   only — flagged platform-sensitive). removeHandle guards on Arc identity to
-//   avoid evicting a respawned handle (TS relied on JS single-threadedness).

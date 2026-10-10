@@ -1,19 +1,17 @@
-//! Ported from `src/process/child-registry.ts`.
-//!
 //! A persistent pidfile of daemon-spawned children (tunnels + launch configs),
 //! written at spawn and pruned on stop. It survives daemon crashes so the next
 //! startup sweep (`process::sweep`) can reap children this daemon leaked. Writes
-//! are serialized (a `tokio::sync::Mutex` stands in for the TS mutating tail
-//! promise) and atomic (temp file + rename) so concurrent spawns across the
+//! are serialized (a `tokio::sync::Mutex`) and atomic (temp file + rename)
+//! so concurrent spawns across the
 //! tunnel and launch managers never interleave. Records that fail validation (a
 //! corrupt file, or a stale pre-generalization cloudflared entry) are dropped on
 //! read rather than crashing the daemon.
 //!
 //! `ChildRegistryPort` is object-safe via manually boxed futures (`BoxFuture`) so
 //! the tunnel/launch managers can hold an `Arc<dyn ChildRegistryPort>` without an
-//! `async-trait` dependency. The methods are infallible (no `Result`): the TS
-//! callers all `.catch()`-and-log, and `read`/`write` failures are logged inside
-//! `FileChildRegistry` and swallowed — the same effect.
+//! `async-trait` dependency. The methods are infallible (no `Result`): callers
+//! could only log a failure, so `read`/`write` failures are logged inside
+//! `FileChildRegistry` and swallowed.
 
 use std::future::Future;
 use std::path::Path;
@@ -26,7 +24,7 @@ use tokio::sync::Mutex;
 /// Boxed future returned by the object-safe `ChildRegistryPort` methods.
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
-/// Epoch milliseconds, matching JS `Date.now()`.
+/// Epoch milliseconds.
 pub fn now_ms() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -99,7 +97,7 @@ impl ChildRegistryPort for NoopChildRegistry {
 }
 
 /// Pidfile-backed registry. Every operation takes the serialization `Mutex`
-/// (mirroring the TS tail-promise) so concurrent tunnel/launch spawns never
+/// so concurrent tunnel/launch spawns never
 /// interleave a read-modify-write.
 pub struct FileChildRegistry {
     file: String,
@@ -405,16 +403,3 @@ mod tests {
         );
     }
 }
-
-// PORT STATUS: src/process/child-registry.ts (147 lines)
-// confidence: high
-// todos: 0
-// notes: ManagedChildEntry/ManagedChildKind serde structs (camelCase; kind
-// lowercase; cwd serialized as explicit null per the round-trip test). The TS
-// tail-promise serialization becomes a tokio::sync::Mutex held across each
-// read-modify-write; atomic write = tmp (pid-suffixed) + rename via tokio::fs.
-// Drop-on-read of malformed/stale entries = per-element serde_json::from_value
-// (missing required non-Option fields → dropped). ChildRegistryPort is
-// object-safe via manually boxed BoxFuture (no async-trait dep); methods are
-// infallible — FileChildRegistry logs+swallows read/write errors (the TS callers
-// all .catch()-and-log, same effect). All child-registry.test.ts cases ported.

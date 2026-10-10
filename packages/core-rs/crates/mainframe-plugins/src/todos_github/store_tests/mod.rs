@@ -1,7 +1,6 @@
-//! Store-level tests for the todos-github plugin (todo #286): schema
-//! migrations, and the `Link`/`Pair`/`Run` CRUD surfaces. Split by table
-//! group to stay under the 300-line file cap (finding #13); this module
-//! holds the shared harness/fixture helpers.
+//! Store-level tests for the todos-github plugin: schema migrations, and the
+//! `Link`/`Pair`/`Run` CRUD surfaces. Split by table group to stay under the
+//! 300-line file cap; this module holds the shared harness/fixture helpers.
 
 mod link;
 mod migrations;

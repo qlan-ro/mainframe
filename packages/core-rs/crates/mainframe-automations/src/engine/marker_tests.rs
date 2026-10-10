@@ -1,5 +1,5 @@
-//! T4.1 — Decision-12 pre-effect `running` marker + per-run advance
-//! serialization (Node parity: engine-linear.test.ts marker/serialize cases).
+//! Pre-effect `running` marker (restart-mid-action policy) + per-run advance
+//! serialization.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};

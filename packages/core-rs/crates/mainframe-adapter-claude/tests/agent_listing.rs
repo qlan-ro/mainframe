@@ -1,4 +1,4 @@
-//! RED-phase coverage for todo #317 (agent descriptions render as `---`).
+//! Coverage for agent descriptions (a fenced agent file must not render as `---`).
 //!
 //! Drives `skills::list_agents`/`list_skills`/`create_agent`/`update_agent` against real
 //! temp-directory fixtures. `list_agents` also scans the developer's real `~/.claude/agents`,

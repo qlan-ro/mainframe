@@ -1,7 +1,7 @@
-//! Retry (Part 3 Phase 3). The load-bearing detail is that attempts cannot be
-//! inferred by replaying the walk — `walk_frame` skips an already-`failed`
-//! entry — so each attempt gets its own frame plus a marker recording its
-//! outcome. These tests pin both halves.
+//! Retry. The load-bearing detail is that attempts cannot be inferred by
+//! replaying the walk — `walk_frame` skips an already-`failed` entry — so each
+//! attempt gets its own frame plus a marker recording its outcome. These tests
+//! pin both halves.
 
 use std::sync::{Arc, Mutex};
 

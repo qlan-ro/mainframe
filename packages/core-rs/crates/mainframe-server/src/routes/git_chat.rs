@@ -1,12 +1,10 @@
-//! Ported from `src/server/routes/git-chat.ts` — the 6 chat-scoped git endpoints
-//! (status/stage/unstage/commit/push over `/api/git/*`, plus
-//! `/api/projects/:id/git/diff-since-main`).
+//! The 6 chat-scoped git endpoints (status/stage/unstage/commit/push over
+//! `/api/git/*`, plus `/api/projects/:id/git/diff-since-main`).
 //!
 //! These resolve the working directory through the chat (worktree or project
-//! root). Phase 3 has no `ChatManager`, so resolution goes through the shared
-//! `git::resolve_chat_path` / `git::get_effective_path` helpers (db repos +
-//! `workspace::is_worktree_present`). `chatRoute` failures map to 400 with the
-//! leaked git error message (NOT the opaque async_err handler).
+//! root) with the shared `git::resolve_chat_path` / `git::get_effective_path`
+//! helpers (db repos + `workspace::is_worktree_present`). Git failures map to 400
+//! with the leaked git error message (NOT the opaque async_err handler).
 
 use std::sync::Arc;
 
@@ -91,7 +89,8 @@ async fn resolve_chat_ctx(
     Ok((ctx.git.for_project(work_dir.clone()), work_dir))
 }
 
-/// `chatRoute`'s catch arm: `if (!isNotGitRepo) log`; `fail(400, message)`.
+/// Git failure arm: log unless the error is "not a git repository", then
+/// `fail(400, message)`.
 fn chat_git_fail(err: &GitServiceError, label: &str) -> Response {
     if !is_not_git_repo_err(err) {
         tracing::error!(error = %err, "{label} failed");
@@ -275,13 +274,3 @@ pub fn router() -> Router<Arc<AppCtx>> {
             post(diff_since_main),
         )
 }
-
-// PORT STATUS: src/server/routes/git-chat.ts (6 endpoints)
-// confidence: high
-// todos: 0
-// notes: chatRoute failures → 400 with the leaked git message; worktree-missing
-// → 409, unknown chat → 404 "Chat not found". Empty `files` short-circuits to
-// okEmpty (no git call). commit stages then commits; push maps Rejected → 400.
-// diff-since-main uses the project-scoped resolver (409 vs 404 "Project not
-// found"). Chat/project resolution runs through the shared git.rs helpers (the
-// Phase-4 ChatManager seam) — no ChatManager dependency.

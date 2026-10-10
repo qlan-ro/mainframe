@@ -1,8 +1,7 @@
 //! Session-teardown and retry-ordering cases for the partial-message
 //! overlay — a superseded session's overlay dropping cleanly, the retry
 //! notification preceding its own clearing revision, and a dangling
-//! partial clearing on result/exit — split out of `tests.rs` (todo #350,
-//! plan task 37, R2.13).
+//! partial clearing on result/exit.
 
 use super::*;
 use crate::chat_surface::ChatSurfaceEvent;

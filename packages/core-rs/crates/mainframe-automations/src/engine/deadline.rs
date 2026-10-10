@@ -1,10 +1,9 @@
-//! Due-sweep + out-of-band step failure (T4.3, Node interpreter.ts
-//! sweepDeadlines/failStep). One `wakeAt` carries two meanings, discriminated
-//! by the parked step's kind:
+//! Due-sweep + out-of-band step failure. One `wakeAt` carries two meanings,
+//! discriminated by the parked step's kind:
 //!
 //! - `ask_agent` — a deadline. The step fails with the deadline error and
 //!   `keepGoing` decides whether the run continues. The chat itself is NOT
-//!   told to stop (Node parity — only the automation stops waiting); its
+//!   told to stop (only the automation stops waiting); its
 //!   eventual completion finds a non-waiting entry and is dropped by the
 //!   settle guard.
 //! - `wait` — a resume. The step succeeds and the run advances.
@@ -30,7 +29,7 @@ const AGENT_DEADLINE_ERROR: &str = "agent step deadline exceeded";
 pub const DUE_SWEEP_INTERVAL: Duration = Duration::from_secs(30);
 
 impl Interpreter {
-    /// Driven by the 30 s sweep (T8/T10): resolve every live run whose wakeAt
+    /// Driven by the 30 s sweep: resolve every live run whose wakeAt
     /// has passed. ask_me waits carry `wakeAt: null` by design and are never
     /// swept (no expiry — contract §9).
     ///
@@ -101,8 +100,8 @@ impl Interpreter {
         }
     }
 
-    /// Every waiting entry whose OWN deadline is due (Phase 4a: N branches can
-    /// now be parked at once, each with an independent deadline).
+    /// Every waiting entry whose OWN deadline is due (N branches can be
+    /// parked at once, each with an independent deadline).
     async fn resolve_due_step(
         self: &Arc<Self>,
         run: &RunRecord,
@@ -197,7 +196,7 @@ fn due_waiting_entries(checkpoint: &AutomationCheckpoint, now: i64) -> Vec<(Stri
         .map(|(step_ref, entry)| (step_ref.clone(), entry.kind.clone()))
         .collect();
     // Migration: a checkpoint parked before per-entry wake_at existed carries
-    // its deadline only at the run level. Fall back to the pre-Phase-4a
+    // its deadline only at the run level. Fall back to the run-level
     // single-park resolution so an in-flight run from before the upgrade
     // does not wedge — this run-level field can only be due here for an
     // entry that predates the per-entry one, since every write path since
@@ -213,9 +212,3 @@ fn due_waiting_entries(checkpoint: &AutomationCheckpoint, now: i64) -> Vec<(Stri
     }
     due
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T4.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: error string mirrors Node's AGENT_DEADLINE_ERROR; fail_step doubles
-//        as the boot reconciler's out-of-band failure hook (T10.1).

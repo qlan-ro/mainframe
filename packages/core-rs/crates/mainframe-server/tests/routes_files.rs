@@ -1,8 +1,6 @@
-//! Integration tests for `routes/files.rs`, translated assertion-for-assertion
-//! from `server/routes/__tests__/files.test.ts`. Real spawned app + real
-//! in-memory DB + real tempdir project (no mocks); the TS `db.projects.get`
-//! stub becomes a real project row, its `chats.getChat → null` stub is the
-//! absence of any chat.
+//! Integration tests for `routes/files.rs`. Real spawned app + real in-memory
+//! DB + real tempdir project (no mocks); the project is a real row, and no chat
+//! exists.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod support;

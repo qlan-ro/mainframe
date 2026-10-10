@@ -1,17 +1,17 @@
-//! Mirror of `packages/ui/src/features/chat/markers/message-markers.ts` — the
-//! blocks a message body carries for something other than the reader.
+//! Parses message blocks used by the composer but hidden from the reader.
 //!
 //! The daemon only needs the *fenced* ones, and only to title a chat: a session
 //! title must read like the message did, not like the composer's plumbing. Both
 //! title paths (deterministic fallback and LLM) run [`visible_message_text`].
 //!
 //! Whole-message forms (the review-comment card, the plan preamble) never reach a
-//! title path, so they have no mirror here — except the agent-message marker,
-//! which is a chat's first message when an agent launches it. Adding a fenced marker on the TS side
-//! means adding it here too — otherwise it surfaces verbatim in the sidebar.
+//! title path, so they are excluded here — except the agent-message marker,
+//! which is a chat's first message when an agent launches it. New fenced markers
+//! in the UI parser also need handling here or they surface verbatim
+//! in the sidebar.
 //!
 //! The `regex` crate is not a dependency of this crate; both matchers are
-//! hand-rolled against the TS patterns.
+//! hand-rolled against the UI's patterns.
 
 // ── Sandbox captures ────────────────────────────────────────────────────────
 
@@ -19,7 +19,7 @@ const SANDBOX_CAPTURE_SENTINEL: &str = "\0__MF_SANDBOX_CAPTURE__";
 const CAPTURE_HEADER_LINE: &str = "> **Preview captures**";
 
 /// `CAPTURE_ROW_RE`: ``> - `label` — selector `sel` — "annotation"``, the last two
-/// optional. Anchored at both ends, like the TS regex.
+/// optional. Anchored at both ends, like the UI's regex.
 fn is_capture_row(line: &str) -> bool {
     let Some(rest) = line.strip_prefix("> - `") else {
         return false;
@@ -73,7 +73,7 @@ pub(crate) fn strip_sandbox_capture_block(text: &str) -> String {
     lines[i..].join("\n").trim().to_string()
 }
 
-// ── Session references (#240) ───────────────────────────────────────────────
+// ── Session references ──────────────────────────────────────────────────────
 
 /// `SESSION_REFERENCE_LINE_RE`: `Referenced session @session[label]: <path>`.
 fn is_reference_line(line: &str) -> bool {
@@ -91,8 +91,7 @@ fn is_reference_line(line: &str) -> bool {
 }
 
 /// Strips every block-initial run of reference lines (a run starting at line 0 or
-/// preceded by a blank line) plus one adjacent blank line, mirroring the TS
-/// `stripReferenceLines` byte-for-byte.
+/// preceded by a blank line) plus one adjacent blank line.
 pub(crate) fn strip_reference_lines(text: &str) -> String {
     let source: Vec<&str> = text.split('\n').collect();
     let mut kept: Vec<&str> = Vec::new();
@@ -142,8 +141,8 @@ const AGENT_MESSAGE_CLOSE: &str = "</mainframe-agent-message>";
 
 /// The body of a whole-message agent marker (`chat_launch` and `chat_send`
 /// prompts from the orchestration MCP server), so a chat an agent launched is
-/// titled after the prompt, not the marker. Mirrors the TS
-/// `parseAgentMessage`; anything else passes through unchanged.
+/// titled after the prompt, not the marker. Anything else passes through
+/// unchanged.
 pub(crate) fn unwrap_agent_message(text: &str) -> String {
     let trimmed = text.trim();
     let Some(rest) = trimmed.strip_prefix(AGENT_MESSAGE_OPEN) else {

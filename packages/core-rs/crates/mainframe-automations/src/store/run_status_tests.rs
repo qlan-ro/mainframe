@@ -1,4 +1,4 @@
-//! T2.2 — run status: A5 derivation (waiting from wakeAt OR any waiting
+//! Run status: A5 derivation (waiting from wakeAt OR any waiting
 //! step), A8 terminal immutability, finalize semantics, and the 4 MB
 //! per-step outputs cap.
 

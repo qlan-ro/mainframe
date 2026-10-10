@@ -1,8 +1,8 @@
-//! Todo #247 task 20 — reload-path rendering for a sub-agent card, rewritten
-//! around the child thread id (`history_convert.rs`'s `open_card`/`resolve_card`
-//! own *when* a card opens or closes; this module only renders). Mirrors what
-//! the live path's `collab_card::open_card` / `collab_resolve::resolve_card`
-//! emit incrementally, but in one pass over the already-loaded child items.
+//! Reload-path rendering for a sub-agent card, keyed on the child thread id
+//! (`history_convert.rs`'s `open_card`/`resolve_card` own *when* a card opens
+//! or closes; this module only renders). Mirrors what the live path's
+//! `collab_card::open_card` / `collab_resolve::resolve_card` emit
+//! incrementally, but in one pass over the already-loaded child items.
 
 use std::collections::HashMap;
 
@@ -97,7 +97,7 @@ pub(crate) fn emit_sub_agent_result(
 }
 
 /// The child thread's last non-empty `agentMessage` text — the reload-path
-/// counterpart to the live path's `last_message` (spec decision 5), used when
+/// counterpart to the live path's `last_message`, used when
 /// `agentsStates` carries no message for this child.
 pub(crate) fn child_last_message(items: Option<&Vec<ThreadItem>>) -> Option<String> {
     items?.iter().rev().find_map(|item| match item {

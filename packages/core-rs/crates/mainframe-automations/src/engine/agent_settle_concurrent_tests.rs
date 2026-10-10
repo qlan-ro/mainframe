@@ -308,7 +308,7 @@ async fn keep_going_false_out_of_band_interrupt_marks_the_branch_failed() {
 }
 
 /// Nothing else exercises `timeoutMinutes` together with `concurrency` —
-/// the combination per-entry `wake_at` (Phase 4a) exists for. Both branches
+/// the combination per-entry `wake_at` exists for. Both branches
 /// share one `timeoutMinutes`, so both come due in the same sweep; the
 /// assertion that matters is that EACH gets its OWN branch marker (not one
 /// shared verdict) via the SAME out-of-band path as the settle tests above.

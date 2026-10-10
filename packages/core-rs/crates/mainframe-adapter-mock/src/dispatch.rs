@@ -73,10 +73,9 @@ fn dispatch(sink: &Arc<dyn SessionSink>, event: &RecordedEvent) -> Result<(), St
         "onProviderQuota" => {
             sink.on_provider_quota(&arg::<String>(event, 0)?, arg::<ProviderQuota>(event, 1)?)
         }
-        // todo #350 group D task 11: extends the fixture vocabulary so a
-        // captured `api_error` retry can be replayed through the sink.
+        // Lets a captured `api_error` retry be replayed through the sink.
         "onApiRetry" => sink.on_api_retry(arg::<i64>(event, 0)?, arg::<Option<String>>(event, 1)?),
-        // todo #350: a recording can now emit a partial for message A, then
+        // A recording can emit a partial for message A, then
         // `onApiRetry`, then the completed message B — the sequence the
         // no-ghost-bubble e2e scenario asserts against.
         "onMessagePartial" => sink.on_message_partial(

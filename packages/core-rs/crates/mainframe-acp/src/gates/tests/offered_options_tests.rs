@@ -1,5 +1,5 @@
 //! What the daemon offers on a gate: Claude's derived triad, an adapter's own
-//! list, and the empty list that is neither (todo #350, PR #688 review).
+//! list, and the empty list that is neither.
 //! Answer-parsing cases live in the parent module; both share its fixtures.
 
 use super::*;

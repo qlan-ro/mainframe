@@ -1,10 +1,6 @@
-//! Route-level tests for the not-yet-mounted `/api/projects/{id}/skills-cli/…`
-//! routes (todo #243, plan Group A — `rust-cli-tests`, task A4; spec AC 9, 10,
-//! 14; Decision 2). RED until Group B (`rust-cli-service`) mounts
-//! `routes::skills_cli::router()` in `http.rs`. These exercise only paths
-//! that never spawn a process: unknown-project 404s and input-validation
-//! 400s. Do not stub the routes to make this pass — a router this file
-//! can't reach proves nothing about Group B's behavior.
+//! Route-level tests for the `/api/projects/{id}/skills-cli/…` routes. These
+//! exercise only paths that never spawn a process: unknown-project 404s and
+//! input-validation 400s.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod support;

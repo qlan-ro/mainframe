@@ -1,8 +1,8 @@
-//! End-to-end `FacadeHub` revision-cursor cases (todo #377): recording with
-//! nobody attached, the `_mainframe.dev/cursor` notification an opted-in
-//! connection gets (and a non-opted one does not), epoch resets from
-//! chat-surface events, and `ChatEnded` dropping the log. Shares
-//! `tests.rs`'s fixtures via `use super::*`.
+//! End-to-end `FacadeHub` revision-cursor cases: recording with nobody
+//! attached, the `_mainframe.dev/cursor` notification an opted-in connection
+//! gets (and a non-opted one does not), epoch resets from chat-surface events,
+//! and `ChatEnded` dropping the log. Shares `tests.rs`'s fixtures via
+//! `use super::*`.
 
 use mainframe_chat::chat_surface::CompactionPhase;
 
@@ -104,12 +104,11 @@ async fn a_revision_racing_the_resume_window_arrives_as_catch_up_with_its_cursor
 
 /// The companion to the test above, at the reply itself rather than
 /// `revision_boundary()`: the `reply`'s own `cursor` meta — the boundary
-/// `begin_resume` returns alongside the log, which `dispatch_resume` must
-/// carry untouched into the reply (todo #377 review, must-fix #1/#3) — has
-/// to stay strictly below the catch-up frame's cursor, never the log's
-/// post-race boundary. A reply built from a fresh `log.boundary()` read
-/// after the race (the bug) would equal the catch-up cursor instead of
-/// being behind it.
+/// `begin_resume` returns alongside the log, which `dispatch_resume` must carry
+/// untouched into the reply — has to stay strictly below the catch-up frame's
+/// cursor, never the log's post-race boundary. A reply built from a fresh
+/// `log.boundary()` read after the race (the bug) would equal the catch-up
+/// cursor instead of being behind it.
 #[tokio::test]
 async fn the_reply_cursor_itself_never_catches_up_to_a_revision_racing_the_resume_window() {
     let hub = hub();

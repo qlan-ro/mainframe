@@ -1,8 +1,6 @@
-//! Idle whole-chat offload (todo #178): the full release sequence the scanner
-//! (`idle_scanner.rs`) drives per candidate. Not a port of any TS file — the
-//! old scanner only killed the CLI process; this extends that into "release
-//! the chat as one unit" (plan
-//! `docs/plans/2026-09-25-todo-178-idle-whole-chat-offload.md`, "Design").
+//! Idle whole-chat offload: the full release sequence the scanner
+//! (`idle_scanner.rs`) drives per candidate. Rather than only killing the CLI
+//! process, it releases the chat as one unit.
 //!
 //! "Offloaded" stores no new state: after step 4 the chat has no registry
 //! cell and no cache entry, so the next `load_chat` reloads its transcript
@@ -22,7 +20,7 @@ use crate::idle_scanner::{ActiveChatRegistry, IDLE_THRESHOLD_MS, IdleOffloader, 
 use crate::lifecycle_manager::{ChatLifecycleManager, LifecycleManagerDeps};
 use crate::permission_manager::PermissionManager;
 
-/// The offload sequence for one `ChatManager` (Design steps 1-6), built once
+/// The offload sequence for one `ChatManager`, built once
 /// from the same shared `Arc`s the manager already holds (registry, cache,
 /// permissions, queued refs, lifecycle, event handler) and stored as a trait
 /// object so `IdleSessionScanner`'s periodic task needs no `Weak<ChatManager>`.
@@ -82,12 +80,11 @@ impl<L: LifecycleManagerDeps + 'static, E: EventHandlerDeps + 'static> ChatOfflo
             return;
         }
 
-        // Step 2: re-check everything now that the slot is claimed (AC4: a
-        // race between candidate selection and this claim must resolve in
-        // favor of staying live). `session_handle` is itself an `Option`
-        // (todo #381): a session-less, never-spawned, or already-exited
-        // handle is a valid, eligible offload — only the OUTER `None` means
-        // "skip".
+        // Step 2: re-check everything now that the slot is claimed (a race
+        // between candidate selection and this claim must resolve in favor of
+        // staying live). `session_handle` is itself an `Option`: a
+        // session-less, never-spawned, or already-exited handle is a valid,
+        // eligible offload — only the OUTER `None` means "skip".
         let Some(session_handle) = self.recheck(chat_id) else {
             self.lifecycle.release_offload(chat_id);
             return;
@@ -119,14 +116,14 @@ impl<L: LifecycleManagerDeps + 'static, E: EventHandlerDeps + 'static> ChatOfflo
         });
     }
 
-    /// Step 2's re-check (todo #381: extended to session-less/unspawned
-    /// cells). The OUTER `Option` is the skip signal: `None` means some
-    /// condition still blocks offload, and the caller has already claimed
-    /// the offload slot and must release it itself. `Some(handle)` means
-    /// every condition holds (idle past the threshold per `idle_since`, not
-    /// Working, no pending permission, no queued message); `handle` itself
-    /// is `None` for a cell with no session (or one that never spawned) —
-    /// that is a valid, eligible offload, not a skip.
+    /// Step 2's re-check, covering session-less/unspawned cells too. The OUTER
+    /// `Option` is the skip signal: `None` means some condition still blocks
+    /// offload, and the caller has already claimed the offload slot and must
+    /// release it itself. `Some(handle)` means every condition holds (idle past
+    /// the threshold per `idle_since`, not Working, no pending permission, no
+    /// queued message); `handle` itself is `None` for a cell with no session
+    /// (or one that never spawned) — that is a valid, eligible offload, not a
+    /// skip.
     fn recheck(&self, chat_id: &str) -> Option<Option<Arc<dyn AdapterSession>>> {
         let cell = self.active_chats.get(chat_id)?.value().clone();
         let (session, last_used_at, process_state) = {

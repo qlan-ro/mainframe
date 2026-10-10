@@ -1,4 +1,4 @@
-//! T8.3 — event router + chaining: `session.finished` starts matching
+//! Event router + chaining: `session.finished` starts matching
 //! automations with trigger tokens (agent-owned chats excluded); run
 //! finalize emits `automation.completed{status}` and the
 //! `automation.finished`/`automation.failed` selectors filter it by status

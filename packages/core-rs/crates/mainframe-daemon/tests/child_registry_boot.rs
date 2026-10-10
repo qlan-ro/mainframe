@@ -28,7 +28,7 @@ async fn boot_shares_one_child_registry_and_sweeps_stray_orphans() {
     let data_dir = tempfile::tempdir().unwrap();
     let pidfile = data_dir.path().join("managed-children.json");
 
-    // Boot construction (index.ts): one registry, shared by both managers.
+    // Boot construction: one registry, shared by both managers.
     let child_registry: Arc<dyn ChildRegistryPort> = Arc::new(FileChildRegistry::new(
         pidfile.to_string_lossy().into_owned(),
     ));

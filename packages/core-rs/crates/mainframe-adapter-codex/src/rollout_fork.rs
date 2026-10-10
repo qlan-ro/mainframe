@@ -1,5 +1,5 @@
-//! Detects a forked child rollout's parent-history prefix (todo #247 QA
-//! defect): `spawn_agent(fork_turns: "all")` seeds the child's rollout with a
+//! Detects a forked child rollout's parent-history prefix:
+//! `spawn_agent(fork_turns: "all")` seeds the child's rollout with a
 //! copy of the parent's own history, so `rollout_reader::read_rollout_items`
 //! would otherwise nest the parent's own commentary inside the child's
 //! sub-agent card. Split out of `rollout_reader.rs` to keep that file under

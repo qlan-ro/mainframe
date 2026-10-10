@@ -1,5 +1,3 @@
-//! Ported from `packages/types/src/device.ts`.
-
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -42,11 +40,3 @@ mod tests {
         assert_eq!(serde_json::to_string(&row).unwrap(), json);
     }
 }
-
-// PORT STATUS: packages/types/src/device.ts (10 lines)
-// confidence: high
-// todos: 0
-// notes: `lastSeen: string | null` is a required nullable field → Option<String>
-// WITHOUT skip_serializing_if (serializes explicit null). DeviceRow uses
-// #[serde(flatten)] for the TS `extends`; the flattened field order matches the
-// declaration order.

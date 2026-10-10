@@ -1,8 +1,8 @@
 //! `POST /api/automation-webhooks/:hookId` — auth-exempt by path
 //! (middleware/auth.rs). HMAC is computed over the exact request bytes, so
-//! the handler takes `Bytes`, never a parsed JSON extractor. Status mapping
-//! is A7: duplicate 200 no-op, preset non-match / stale 204, start failure
-//! 500 (the sender retries).
+//! the handler takes `Bytes`, never a parsed JSON extractor. Status mapping:
+//! duplicate 200 no-op, preset non-match / stale 204, start failure 500 (the
+//! sender retries).
 
 use std::sync::Arc;
 
@@ -72,9 +72,3 @@ pub fn router() -> Router<Arc<AppCtx>> {
 
 #[cfg(test)]
 mod automation_webhook_tests;
-
-// PORT STATUS: src/server/routes/automation-webhook.ts (124 lines)
-// confidence: high
-// todos: 0
-// notes: decision→status table mirrors triggers/webhook_ingest.rs's module
-//        doc exactly; the ingest pipeline itself is engine-side (T8.3).

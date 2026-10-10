@@ -1,4 +1,5 @@
-//! Ported from `src/config.ts`, `src/logger.ts`, `src/auth/*` (packages/core).
+//! Daemon runtime foundations: config, logging, device-token auth, spawn `PATH`, and
+//! wire timestamps.
 #![forbid(unsafe_code)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 

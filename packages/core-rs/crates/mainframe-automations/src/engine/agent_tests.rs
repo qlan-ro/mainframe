@@ -1,4 +1,4 @@
-//! T4.3 — ask_agent verb over AgentPort: park with chatId, durable wait,
+//! ask_agent verb over AgentPort: park with chatId, durable wait,
 //! completion resume, error policy, restart re-watch, deadline sweep.
 
 use std::sync::{Arc, Mutex};
@@ -394,7 +394,7 @@ async fn a_late_watch_error_after_success_is_dropped() {
     );
 }
 
-// --- T4.4 (A2): structured agent outputs -------------------------------
+// --- A2: structured agent outputs ---------------------------------------
 
 fn agent_expecting_scope(id: &str) -> Step {
     use crate::domain::{ExpectedOutput, ExpectedOutputType};
