@@ -1,46 +1,37 @@
-//! Contract §5 — the authoritative action id → named outputs table, plus the
-//! friendly output labels used in error messages. Frozen; the action
-//! manifests must match it.
+//! The validator's view of action outputs, read from the launch action
+//! manifests, plus the friendly output labels used in error messages.
+
+use crate::actions::{ActionOutputType, known_manifest};
 
 use super::scope::TokenType;
 
-const ACTION_OUTPUTS: &[(&str, &[(&str, TokenType)])] = &[
-    (
-        "run_command",
-        &[("output", TokenType::Text), ("exitCode", TokenType::Number)],
-    ),
-    ("files.append", &[]),
-    ("files.write", &[]),
-    ("files.read", &[("content", TokenType::Text)]),
-    (
-        "http.request",
-        &[("status", TokenType::Number), ("body", TokenType::Text)],
-    ),
-    (
-        "github.create_pr",
-        &[("prUrl", TokenType::Text), ("prNumber", TokenType::Number)],
-    ),
-    ("github.list_prs", &[("prs", TokenType::List)]),
-    ("notion.add_row", &[("pageUrl", TokenType::Text)]),
-    (
-        "ado.create_item",
-        &[("workItemId", TokenType::Number), ("url", TokenType::Text)],
-    ),
-];
-
-const MCP_OUTPUTS: &[(&str, TokenType)] = &[("result", TokenType::Text)];
-
-/// Named outputs for an action id; unknown ids produce nothing (the ref
-/// checker then reports their tokens as unavailable).
-pub(crate) fn action_outputs(action_id: &str) -> &'static [(&'static str, TokenType)] {
-    if action_id.starts_with("mcp:") {
-        return MCP_OUTPUTS;
+impl From<ActionOutputType> for TokenType {
+    fn from(output_type: ActionOutputType) -> Self {
+        match output_type {
+            ActionOutputType::Text => TokenType::Text,
+            ActionOutputType::Number => TokenType::Number,
+            ActionOutputType::List => TokenType::List,
+            ActionOutputType::Record => TokenType::Object,
+        }
     }
-    ACTION_OUTPUTS
-        .iter()
-        .find(|(id, _)| *id == action_id)
-        .map(|(_, outputs)| *outputs)
-        .unwrap_or(&[])
+}
+
+/// Named outputs for an action id: an `mcp:*` tool yields `{result: text}`
+/// (contract §5); unknown ids produce nothing, so the ref checker reports
+/// their tokens as unavailable.
+pub(crate) fn action_outputs(action_id: &str) -> Vec<(String, TokenType)> {
+    if action_id.starts_with("mcp:") {
+        return vec![("result".to_string(), TokenType::Text)];
+    }
+    known_manifest(action_id)
+        .map(|manifest| {
+            manifest
+                .outputs
+                .iter()
+                .map(|output| (output.name.clone(), output.output_type.into()))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// camelCase output name → friendly label for error messages (same table as

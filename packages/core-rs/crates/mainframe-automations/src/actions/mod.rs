@@ -3,19 +3,22 @@
 //! params, resolves the credential label, and hands this layer a JSON input
 //! object.
 
-pub mod ado;
-pub mod files;
-pub mod github;
-pub mod http_action;
-pub mod manifest;
-pub mod notion;
-pub mod registry;
-pub mod run_command;
+pub(crate) mod ado;
+pub(crate) mod files;
+pub(crate) mod github;
+pub(crate) mod http;
+pub(crate) mod http_action;
+pub(crate) mod manifest;
+pub(crate) mod notion;
+pub(crate) mod registry;
+pub(crate) mod run_command;
 mod shell;
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::sync::OnceLock;
 
+use mainframe_types::BoxFuture;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
@@ -23,7 +26,6 @@ pub use manifest::{ActionAuth, ActionGroup, ActionManifest, ActionOutput, Action
 pub use registry::{ActionCatalogEntry, ActionRegistry};
 
 use crate::credentials::Credentials;
-use crate::engine::BoxFuture;
 use crate::tokens::TokenValue;
 
 /// What an action sees at execution time. Cancellation is structural — the
@@ -77,25 +79,6 @@ pub trait Action: Send + Sync {
     }
 }
 
-pub(crate) use crate::USER_AGENT;
-
-const ERROR_BODY_SNIPPET_CHARS: usize = 500;
-
-/// Connector HTTP failure (`<op> failed (<status>): <500-char body>`); an
-/// auth rejection also names the credential label the step used so the
-/// failure is actionable from the run timeline.
-pub(crate) fn http_failure(op: &str, status: u16, ctx: &ActionCtx, body: &str) -> ActionError {
-    let snippet: String = body.chars().take(ERROR_BODY_SNIPPET_CHARS).collect();
-    if status == 401 || status == 403 {
-        let cred = match &ctx.credential_label {
-            Some(label) => format!("credential '{label}'"),
-            None => "no credential configured".to_string(),
-        };
-        return ActionError(format!("{op} failed ({status}, {cred}): {snippet}"));
-    }
-    ActionError(format!("{op} failed ({status}): {snippet}"))
-}
-
 /// Strict input parse — unknown fields rejected, with the error text
 /// `invalid input for '<id>': …`.
 pub(crate) fn parse_input<T: DeserializeOwned>(
@@ -125,36 +108,66 @@ pub(crate) fn expand_user_path(path: &str) -> PathBuf {
     }
 }
 
-/// Registers every launch built-in (Node actions/register-all.ts). MCP stays
-/// a catalog seam (contract §9) — nothing registers an `mcp:*` action here.
+/// The launch built-ins, in catalog order. MCP stays a catalog seam
+/// (contract §9): nothing registers an `mcp:*` action here.
+fn builtin_actions() -> Vec<Box<dyn Action>> {
+    vec![
+        Box::new(run_command::RunCommandAction),
+        Box::new(files::FilesAppendAction),
+        Box::new(files::FilesWriteAction),
+        Box::new(files::FilesReadAction),
+        Box::new(http_action::HttpRequestAction::new()),
+    ]
+}
+
+/// Curated connectors, in catalog order.
+fn curated_actions() -> Vec<Box<dyn Action>> {
+    vec![
+        Box::new(github::GithubCreatePrAction::new()),
+        Box::new(github::GithubListPrsAction::new()),
+        Box::new(notion::NotionAddRowAction::new()),
+        Box::new(ado::AdoCreateItemAction::new()),
+    ]
+}
+
+/// The built-ins alone, for tests that pin the builtin catalog.
+#[cfg(test)]
 pub(crate) fn register_builtin_actions(registry: &mut ActionRegistry) -> Result<(), ActionError> {
-    registry.register(Box::new(run_command::RunCommandAction))?;
-    registry.register(Box::new(files::FilesAppendAction))?;
-    registry.register(Box::new(files::FilesWriteAction))?;
-    registry.register(Box::new(files::FilesReadAction))?;
-    registry.register(Box::new(http_action::HttpRequestAction::new()))?;
-    Ok(())
+    builtin_actions()
+        .into_iter()
+        .try_for_each(|action| registry.register(action))
 }
 
-/// Curated connectors.
-pub(crate) fn register_curated_actions(registry: &mut ActionRegistry) -> Result<(), ActionError> {
-    registry.register(Box::new(github::GithubCreatePrAction::new()))?;
-    registry.register(Box::new(github::GithubListPrsAction::new()))?;
-    registry.register(Box::new(notion::NotionAddRowAction::new()))?;
-    registry.register(Box::new(ado::AdoCreateItemAction::new()))?;
-    Ok(())
-}
-
-/// The launch catalog: built-ins + curated connectors, in Node's
-/// register-all.ts order.
+/// The launch catalog: built-ins, then curated connectors.
 pub(crate) fn register_all_actions(registry: &mut ActionRegistry) -> Result<(), ActionError> {
-    register_builtin_actions(registry)?;
-    register_curated_actions(registry)?;
-    Ok(())
+    builtin_actions()
+        .into_iter()
+        .chain(curated_actions())
+        .try_for_each(|action| registry.register(action))
+}
+
+/// The manifest of a launch action by id, for code that needs an action's
+/// declared shape without a registry at hand (the validator's output table,
+/// the `outputAs` lookup). Unknown and `mcp:*` ids return `None`.
+pub(crate) fn known_manifest(action_id: &str) -> Option<&'static ActionManifest> {
+    static MANIFESTS: OnceLock<Vec<ActionManifest>> = OnceLock::new();
+    MANIFESTS
+        .get_or_init(|| {
+            builtin_actions()
+                .into_iter()
+                .chain(curated_actions())
+                .map(|action| action.manifest())
+                .collect()
+        })
+        .iter()
+        .find(|manifest| manifest.id == action_id)
 }
 
 #[cfg(test)]
 mod files_tests;
+
+#[cfg(test)]
+mod manifest_schema_tests;
 
 #[cfg(test)]
 mod github_tests;
