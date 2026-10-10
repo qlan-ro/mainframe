@@ -12,6 +12,7 @@ pub(super) struct FakeDeps {
     /// `db.chats.pendingFork` for "c1" (todo #343); `None` for every test
     /// outside the retire-on-result coverage.
     pending_fork: Mutex<Option<PendingForkState>>,
+    project_path: Mutex<Option<String>>,
 }
 
 impl FakeDeps {
@@ -23,6 +24,7 @@ impl FakeDeps {
             updates: Mutex::new(Vec::new()),
             quota: None,
             pending_fork: Mutex::new(None),
+            project_path: Mutex::new(None),
         })
     }
     fn with_quota(cell: Arc<Mutex<ActiveChat>>, quota: Arc<QuotaManager>) -> Arc<Self> {
@@ -33,6 +35,7 @@ impl FakeDeps {
             updates: Mutex::new(Vec::new()),
             quota: Some(quota),
             pending_fork: Mutex::new(None),
+            project_path: Mutex::new(None),
         })
     }
     fn set_pending_fork(&self, pending: PendingForkState) {
@@ -69,7 +72,15 @@ impl EventHandlerDeps for FakeDeps {
         self.updates.lock().unwrap().push(patch.clone());
     }
     fn projects_get_path(&self, _project_id: &str) -> Option<String> {
-        None
+        self.project_path.lock().unwrap().clone()
+    }
+    fn initial_transcript_path(
+        &self,
+        adapter_id: &str,
+        session_id: &str,
+        cwd: &str,
+    ) -> Option<String> {
+        (adapter_id == "claude").then(|| compute_session_file_path(cwd, session_id))
     }
     fn add_plan_file(&self, _chat_id: &str, _file_path: &str) -> bool {
         false

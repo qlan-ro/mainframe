@@ -501,6 +501,16 @@ impl ChatManagerDeps for DaemonChatDeps {
             .flatten()
             .map(|p| p.path)
     }
+    fn initial_transcript_path(
+        &self,
+        adapter_id: &str,
+        session_id: &str,
+        cwd: &str,
+    ) -> Option<String> {
+        self.adapters
+            .get(adapter_id)?
+            .initial_transcript_path(session_id, cwd)
+    }
 
     fn projects_remove(&self, project_id: &str) -> Result<(), String> {
         let pid = project_id.to_string();

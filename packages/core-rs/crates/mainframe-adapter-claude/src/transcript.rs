@@ -132,7 +132,21 @@ pub async fn is_claude_transcript_present(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mainframe_adapter_api::Adapter;
     use std::io::Write;
+
+    #[test]
+    fn claude_adapter_reports_the_initial_transcript_path() {
+        let expected = home_dir()
+            .unwrap()
+            .join(".claude/projects/-proj/session-id.jsonl")
+            .to_string_lossy()
+            .into_owned();
+        assert_eq!(
+            crate::adapter::ClaudeAdapter::default().initial_transcript_path("session-id", "/proj"),
+            Some(expected)
+        );
+    }
 
     #[test]
     fn encode_keeps_dashes_replaces_other_metachars() {

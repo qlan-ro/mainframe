@@ -52,6 +52,14 @@ pub trait ChatManagerDeps: Send + Sync {
     /// returns is unused by `addMention` (it always emits `context.updated`).
     fn chats_add_mention(&self, chat_id: &str, mention: &SessionMention);
     fn projects_get_path(&self, project_id: &str) -> Option<String>;
+    fn initial_transcript_path(
+        &self,
+        _adapter_id: &str,
+        _session_id: &str,
+        _cwd: &str,
+    ) -> Option<String> {
+        None
+    }
     fn projects_remove(&self, project_id: &str) -> Result<(), String>;
     /// `writeWorkspaceTrust(projectPath)` — persists workspace trust to the
     /// Claude CLI's `~/.claude.json` (injected so this crate does not depend on

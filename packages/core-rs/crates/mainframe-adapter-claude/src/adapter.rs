@@ -21,7 +21,7 @@ use crate::models::{claude_models, enrich_with_context_window, merge_older_model
 use crate::plan_mode_handler::ClaudePlanModeHandler;
 use crate::session::ClaudeSession;
 use crate::title_generator::generate_claude_title;
-use crate::transcript::locate_claude_transcript;
+use crate::transcript::{get_session_jsonl_path, locate_claude_transcript};
 
 /// The manifest `name` (the TS adapter imports `manifest.json`; the Rust port has
 /// no manifest asset, so the string is inlined).
@@ -117,6 +117,19 @@ impl Default for ClaudeAdapter {
 }
 
 impl Adapter for ClaudeAdapter {
+    fn initial_transcript_path(&self, session_id: &str, cwd: &str) -> Option<String> {
+        let safe_session: String = session_id
+            .chars()
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '-' {
+                    c
+                } else {
+                    '-'
+                }
+            })
+            .collect();
+        Some(get_session_jsonl_path(&safe_session, cwd).jsonl_path)
+    }
     fn id(&self) -> &str {
         "claude"
     }
