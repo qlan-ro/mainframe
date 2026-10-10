@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::path::Path;
-use std::time::Duration;
 
 use mainframe_git::git_parse::{WorktreeEntry, parse_worktree_list};
 use mainframe_types::chat::Project;
@@ -17,33 +16,35 @@ pub enum WorktreeError {
     Io(#[from] std::io::Error),
 }
 
-/// Runs git for worktree operations with this module's timeout and error mapping.
-async fn exec_git(args: &[&str], cwd: &str, timeout_ms: u64) -> Result<String, WorktreeError> {
-    // Keep the directory error distinct from a git subprocess failure.
-    if tokio::fs::metadata(cwd).await.is_err() {
-        return Err(WorktreeError::Git(format!(
-            "Directory not accessible: {cwd}"
-        )));
-    }
-    let mut cmd = tokio::process::Command::new("git");
-    cmd.args(args).current_dir(cwd).kill_on_drop(true);
-
-    let output = if timeout_ms == 0 {
-        cmd.output().await?
-    } else {
-        match tokio::time::timeout(Duration::from_millis(timeout_ms), cmd.output()).await {
-            Ok(result) => result?,
-            Err(_) => return Err(WorktreeError::Git("git command timed out".to_string())),
+async fn run_worktree_git(
+    args: &[&str],
+    cwd: &str,
+    timeout_ms: u64,
+) -> Result<String, WorktreeError> {
+    use mainframe_git::git_exec::{GitExecCode, GitExecOptions, exec_git};
+    let args = args
+        .iter()
+        .map(|value| (*value).to_string())
+        .collect::<Vec<_>>();
+    exec_git(
+        &args,
+        cwd,
+        Some(GitExecOptions {
+            timeout: Some(timeout_ms),
+        }),
+    )
+    .await
+    .map_err(|error| {
+        if error.code == Some(GitExecCode::Text("ETIMEDOUT".to_string())) {
+            WorktreeError::Git("git command timed out".to_string())
+        } else if let Some(stderr) = error.stderr {
+            WorktreeError::Git(stderr)
+        } else if error.code.is_none() {
+            WorktreeError::Io(std::io::Error::other(error.message))
+        } else {
+            WorktreeError::Git(error.message)
         }
-    };
-
-    if !output.status.success() {
-        // Preserve git's stderr on a non-zero exit.
-        return Err(WorktreeError::Git(
-            String::from_utf8_lossy(&output.stderr).into_owned(),
-        ));
-    }
-    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+    })
 }
 
 /// True when `worktreePath` is a usable git worktree: the directory exists AND
@@ -70,7 +71,7 @@ pub fn short_branch(git_ref: &str) -> &str {
 }
 
 pub async fn get_worktrees(project_path: &str) -> Vec<WorktreeEntry> {
-    match exec_git(
+    match run_worktree_git(
         &["worktree", "list", "--porcelain"],
         project_path,
         DEFAULT_GIT_TIMEOUT_MS,
@@ -102,7 +103,7 @@ pub async fn create_worktree(
 
     tokio::fs::create_dir_all(&worktree_dir).await?;
     // No timeout: `worktree add` can clone/checkout a large tree and run hooks.
-    exec_git(
+    run_worktree_git(
         &[
             "worktree",
             "add",
@@ -161,7 +162,7 @@ fn has_parent(project: &Project) -> bool {
 
 pub async fn branch_exists(project_path: &str, branch_name: &str) -> bool {
     let ref_arg = format!("refs/heads/{branch_name}");
-    exec_git(
+    run_worktree_git(
         &["rev-parse", "--verify", "--quiet", &ref_arg],
         project_path,
         DEFAULT_GIT_TIMEOUT_MS,
@@ -180,9 +181,9 @@ pub async fn add_worktree_for_branch(
 ) -> Result<(), WorktreeError> {
     // Drop the stale registration git still holds for the deleted directory.
     // best-effort
-    let _ = exec_git(&["worktree", "prune"], project_path, DEFAULT_GIT_TIMEOUT_MS).await;
+    let _ = run_worktree_git(&["worktree", "prune"], project_path, DEFAULT_GIT_TIMEOUT_MS).await;
     // No timeout: checkout of a large tree can exceed the default cap (see create_worktree).
-    exec_git(
+    run_worktree_git(
         &["worktree", "add", worktree_path, branch_name],
         project_path,
         0,
@@ -192,7 +193,7 @@ pub async fn add_worktree_for_branch(
 }
 
 pub async fn remove_worktree(project_path: &str, worktree_path: &str, branch_name: &str) {
-    if exec_git(
+    if run_worktree_git(
         &["worktree", "remove", worktree_path, "--force"],
         project_path,
         DEFAULT_GIT_TIMEOUT_MS,
@@ -203,10 +204,11 @@ pub async fn remove_worktree(project_path: &str, worktree_path: &str, branch_nam
         // best-effort: worktree dir may already be gone
         let _ = tokio::fs::remove_dir_all(worktree_path).await;
         // best-effort
-        let _ = exec_git(&["worktree", "prune"], project_path, DEFAULT_GIT_TIMEOUT_MS).await;
+        let _ =
+            run_worktree_git(&["worktree", "prune"], project_path, DEFAULT_GIT_TIMEOUT_MS).await;
     }
     // best-effort: branch may not exist or may still be checked out elsewhere
-    let _ = exec_git(
+    let _ = run_worktree_git(
         &["branch", "-D", branch_name],
         project_path,
         DEFAULT_GIT_TIMEOUT_MS,
