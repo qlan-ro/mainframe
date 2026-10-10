@@ -106,7 +106,7 @@ async fn shutdown_all_clears_all_handles() {
     assert!(m.get_active_languages("proj2").is_empty());
 }
 
-type SignalLog = Arc<Mutex<Vec<(u32, &'static str)>>>;
+type SignalLog = Arc<Mutex<Vec<(u32, Signal)>>>;
 
 /// A manager whose servers run `script` under `/bin/sh` and ignore the LSP
 /// shutdown handshake, with a signal seam that records each delivery before
@@ -127,9 +127,9 @@ fn signal_manager(script: &str, sigterm_grace: Duration) -> (LspManager, SignalL
     let log: SignalLog = Arc::new(Mutex::new(Vec::new()));
     let sink = log.clone();
     let deliver = kill_signal();
-    manager.set_test_signal(Arc::new(move |pid, flag| {
-        sink.lock().unwrap().push((pid, flag));
-        deliver(pid, flag)
+    manager.set_test_signal(Arc::new(move |pid, kind| {
+        sink.lock().unwrap().push((pid, kind));
+        deliver(pid, kind)
     }));
     (manager, log)
 }
@@ -161,7 +161,7 @@ async fn shutdown_sends_only_sigterm_to_a_server_that_exits_on_it() {
 
     manager.shutdown("proj1", "typescript").await;
 
-    assert_eq!(*signals.lock().unwrap(), vec![(handle.pid, "-TERM")]);
+    assert_eq!(*signals.lock().unwrap(), vec![(handle.pid, Signal::Term)]);
     assert!(handle.exited.load(Ordering::SeqCst));
     assert_pid_gone(handle.pid).await;
     assert!(manager.get_handle("proj1", "typescript").is_none());
@@ -182,7 +182,7 @@ async fn shutdown_escalates_to_sigkill_and_waits_for_exit() {
 
     assert_eq!(
         *signals.lock().unwrap(),
-        vec![(handle.pid, "-TERM"), (handle.pid, "-KILL")]
+        vec![(handle.pid, Signal::Term), (handle.pid, Signal::Kill)]
     );
     assert!(handle.exited.load(Ordering::SeqCst));
     assert_pid_gone(handle.pid).await;
@@ -216,14 +216,14 @@ async fn shutdown_all_signals_every_server_before_escalating_any() {
 
     // Shut down one after another, the first server's SIGKILL would come
     // before the second server's SIGTERM.
-    let mut flags: Vec<(u32, &str)> = signals.lock().unwrap().clone();
+    let mut flags: Vec<(u32, Signal)> = signals.lock().unwrap().clone();
     let (terms, kills) = flags.split_at_mut(2);
     terms.sort_unstable();
     kills.sort_unstable();
     let mut pids = [first.pid, second.pid];
     pids.sort_unstable();
-    assert_eq!(terms, [(pids[0], "-TERM"), (pids[1], "-TERM")]);
-    assert_eq!(kills, [(pids[0], "-KILL"), (pids[1], "-KILL")]);
+    assert_eq!(terms, [(pids[0], Signal::Term), (pids[1], Signal::Term)]);
+    assert_eq!(kills, [(pids[0], Signal::Kill), (pids[1], Signal::Kill)]);
     assert!(first.exited.load(Ordering::SeqCst));
     assert!(second.exited.load(Ordering::SeqCst));
     assert_pid_gone(first.pid).await;
@@ -273,17 +273,7 @@ async fn idle_timer_fires_and_shuts_down_server_after_timeout() {
 
 async fn assert_pid_gone(pid: u32) {
     tokio::time::timeout(Duration::from_secs(2), async {
-        loop {
-            let status = Command::new("kill")
-                .arg("-0")
-                .arg(pid.to_string())
-                .stderr(std::process::Stdio::null())
-                .status()
-                .await
-                .unwrap();
-            if !status.success() {
-                break;
-            }
+        while mainframe_runtime::process::is_alive(pid) {
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
     })

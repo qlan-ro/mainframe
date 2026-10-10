@@ -40,7 +40,7 @@ impl TunnelManager {
     /// `mainframe_runtime::ResolvedPath`) applied to the `cloudflared` spawn.
     #[must_use]
     pub fn with_resolved_path(mut self, path: impl Into<String>) -> Self {
-        self.resolved_path = Some(path.into());
+        self.resolved_path = Some(mainframe_runtime::ResolvedPath::from_value(path.into()));
         self
     }
 

@@ -1,5 +1,27 @@
 use std::cmp::Ordering;
 use std::fmt;
+use std::time::Duration;
+
+use mainframe_runtime::ResolvedPath;
+
+/// How long a `--version` probe may take before the CLI is treated as absent.
+pub const VERSION_PROBE_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Run `<executable> --version` on `path`; the stdout when it exits 0, `None`
+/// when it cannot be spawned, fails, or outlives [`VERSION_PROBE_TIMEOUT`]
+/// (the child is killed and reaped on the way out).
+pub async fn version_stdout(executable: &str, path: &ResolvedPath) -> Option<String> {
+    let mut command = tokio::process::Command::new(executable);
+    command.arg("--version");
+    path.apply(&mut command);
+    let output = mainframe_runtime::process::run_captured(command, Some(VERSION_PROBE_TIMEOUT))
+        .await
+        .ok()?;
+    output
+        .status
+        .success()
+        .then(|| String::from_utf8_lossy(&output.stdout).into_owned())
+}
 
 /// A CLI version triple, retaining its original spelling for wire display.
 #[derive(Debug, Clone)]

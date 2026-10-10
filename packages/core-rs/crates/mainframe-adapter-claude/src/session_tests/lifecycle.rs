@@ -3,7 +3,7 @@ use super::*;
 async fn stop_background_task_returns_unavailable_when_stdin_destroyed() {
     let s = session();
     s.set_child_for_test(dummy_child());
-    let (tx, rx) = mpsc::unbounded_channel();
+    let (tx, rx) = StdinTx::channel(8);
     drop(rx); // receiver gone => tx.is_closed() == destroyed
     s.set_stdin_for_test(Some(tx));
     let r = s.stop_background_task("task-2".to_string()).await.unwrap();

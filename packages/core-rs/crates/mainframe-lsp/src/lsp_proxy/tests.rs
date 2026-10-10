@@ -57,7 +57,7 @@ fn frame_parser_discards_malformed_header() {
 async fn forwards_ws_message_to_stdin_with_content_length_framing() {
     let (incoming_tx, incoming_rx) = mpsc::unbounded_channel::<String>();
     let (outgoing_tx, _outgoing_rx) = mpsc::unbounded_channel::<String>();
-    let (stdin_tx, mut stdin_rx) = mpsc::unbounded_channel::<Vec<u8>>();
+    let (stdin_tx, mut stdin_rx) = mainframe_runtime::process::StdinWriter::channel(8);
     let (_so_w, so_r) = tokio::io::duplex(1024);
     let (_se_w, se_r) = tokio::io::duplex(1024);
 
@@ -76,7 +76,7 @@ async fn forwards_ws_message_to_stdin_with_content_length_framing() {
 async fn forwards_stdout_content_length_messages_to_ws() {
     let (_incoming_tx, incoming_rx) = mpsc::unbounded_channel::<String>();
     let (outgoing_tx, mut outgoing_rx) = mpsc::unbounded_channel::<String>();
-    let (stdin_tx, _stdin_rx) = mpsc::unbounded_channel::<Vec<u8>>();
+    let (stdin_tx, _stdin_rx) = mainframe_runtime::process::StdinWriter::channel(8);
     let (mut so_w, so_r) = tokio::io::duplex(1024);
     let (_se_w, se_r) = tokio::io::duplex(1024);
 
@@ -95,7 +95,7 @@ async fn forwards_stdout_content_length_messages_to_ws() {
 async fn cleanup_aborts_the_pump_tasks() {
     let (incoming_tx, incoming_rx) = mpsc::unbounded_channel::<String>();
     let (outgoing_tx, _outgoing_rx) = mpsc::unbounded_channel::<String>();
-    let (stdin_tx, mut stdin_rx) = mpsc::unbounded_channel::<Vec<u8>>();
+    let (stdin_tx, mut stdin_rx) = mainframe_runtime::process::StdinWriter::channel(8);
     let (_so_w, so_r) = tokio::io::duplex(1024);
     let (_se_w, se_r) = tokio::io::duplex(1024);
 

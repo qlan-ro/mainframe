@@ -39,7 +39,7 @@ async fn held_start_exits_before_shell_deadline(registered: bool) {
         .expect("cleanup must beat the shell's 10-second deadline")
         .unwrap()
         .unwrap();
-    fixture::assert_pid_gone(pid).await;
+    fixture::assert_pid_gone(pid);
     assert_eq!(
         tunnels.start(31415, "late", None).await.unwrap_err(),
         "Daemon is shutting down"
@@ -78,6 +78,6 @@ async fn server_error_still_runs_cleanup() {
     .await
     .unwrap();
     assert_eq!(result.unwrap_err().to_string(), "listener failed");
-    fixture::assert_pid_gone(pid).await;
+    fixture::assert_pid_gone(pid);
     assert!(start.await.unwrap().is_err());
 }

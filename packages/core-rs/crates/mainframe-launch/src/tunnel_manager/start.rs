@@ -150,7 +150,7 @@ impl TunnelManager {
         // Keep reading the child's output for its whole life: dropping the pipe
         // readers closes the pipes, and cloudflared (Go) dies on SIGPIPE at its
         // next log write.
-        spawn_output_drain(out_lines, err_lines);
+        let pumps = spawn_output_drain(out_lines, err_lines);
 
         // Step 2: connected. Register the tunnel, then wait for DNS while still
         // watching for an early exit (which fails the start).
@@ -190,7 +190,7 @@ impl TunnelManager {
                     error: None,
                 });
                 guard.armed = false;
-                self.spawn_exit_watcher(label.to_string(), process.clone());
+                self.spawn_exit_watcher(label.to_string(), process.clone(), pumps);
                 Ok(url)
             }
             exit = process.exited() => Err(self.on_exit_before_ready(label, exit)),

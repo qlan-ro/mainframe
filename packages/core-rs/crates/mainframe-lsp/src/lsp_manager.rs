@@ -17,16 +17,17 @@ use tokio::task::JoinHandle;
 
 use crate::lsp_proxy::{BridgeHandle, encode_json_rpc};
 use crate::lsp_registry::{LspRegistry, ResolvedCommand};
+use mainframe_runtime::process::Signal;
 
 const IDLE_TIMEOUT: Duration = Duration::from_secs(10 * 60); // 10 minutes
 const SHUTDOWN_REQUEST_TIMEOUT: Duration = Duration::from_secs(3);
 const SHUTDOWN_EXIT_TIMEOUT: Duration = Duration::from_secs(2);
 const SIGTERM_GRACE: Duration = Duration::from_secs(2);
 
-/// Delivers a `kill(1)` signal flag (`-TERM`, `-KILL`) to a pid and reports
-/// whether it was delivered. A seam so tests can record the escalation.
+/// Delivers a signal to an owned pid and reports whether it was delivered.
+/// A seam so tests can record the escalation.
 pub(crate) type SignalFn =
-    Arc<dyn Fn(u32, &'static str) -> Pin<Box<dyn Future<Output = bool> + Send>> + Send + Sync>;
+    Arc<dyn Fn(u32, Signal) -> Pin<Box<dyn Future<Output = bool> + Send>> + Send + Sync>;
 
 /// Errors from spawning an LSP child.
 #[derive(Debug, thiserror::Error)]

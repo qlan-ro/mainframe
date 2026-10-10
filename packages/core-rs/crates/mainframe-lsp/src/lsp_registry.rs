@@ -1,9 +1,9 @@
 //! Language-server registry: the static `id -> LspServerConfig` table, the
 //! extension -> language map, and bring-your-own command resolution. The daemon
 //! ships no bundled servers, so every language resolves the same way: a project-local
-//! `node_modules/.bin`, then a Python venv, then a `command -v` probe on the
-//! resolved login-shell `PATH`. Fails soft — an unresolved server is `None`,
-//! never an error.
+//! `node_modules/.bin`, then a Python venv, then a scan of the resolved
+//! login-shell `PATH` for an executable of that name. Fails soft — an
+//! unresolved server is `None`, never an error.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -54,10 +54,10 @@ pub struct LspRegistry {
     configs: HashMap<String, LspServerConfig>,
     /// Preserves declaration order for `get_all_language_ids`.
     order: Vec<String>,
-    /// Boot-resolved login-shell `PATH`, applied to the `command -v` probe and the
-    /// external-server spawn so packaged builds find CLIs outside the bare launchd
-    /// `PATH`. `None` = inherit.
-    resolved_path: Option<String>,
+    /// Boot-resolved login-shell `PATH`, scanned for the server executable and
+    /// applied to the external-server spawn so packaged builds find CLIs outside
+    /// the bare launchd `PATH`. `None` = inherit.
+    resolved_path: Option<mainframe_runtime::ResolvedPath>,
 }
 
 impl LspRegistry {
@@ -80,7 +80,7 @@ impl LspRegistry {
     /// spawns.
     #[must_use]
     pub fn with_resolved_path(mut self, path: impl Into<String>) -> Self {
-        self.resolved_path = Some(path.into());
+        self.resolved_path = Some(mainframe_runtime::ResolvedPath::from_value(path.into()));
         self
     }
 
@@ -100,9 +100,9 @@ impl LspRegistry {
 
     /// Resolves a language's command by trying, in order: a project-local
     /// `node_modules/.bin/<cmd>`, a Python venv (project `.venv/bin` then
-    /// `$VIRTUAL_ENV/bin`), then a `command -v` probe against the boot-resolved
-    /// login-shell `PATH`. Fails soft — `None` when nothing resolves, never an
-    /// error, so an unavailable server never blocks the caller.
+    /// `$VIRTUAL_ENV/bin`), then a scan of the boot-resolved login-shell `PATH`
+    /// for an executable of that name. Fails soft — `None` when nothing
+    /// resolves, never an error, so an unavailable server never blocks the caller.
     pub async fn resolve_command(
         &self,
         language_id: &str,
@@ -193,18 +193,18 @@ async fn venv_bin(project_path: &str, virtual_env: Option<&str>, cmd: &str) -> O
         .then(|| candidate.to_string_lossy().into_owned())
 }
 
-/// `command -v <cmd>` against `resolved_path` (falls back to the inherited
-/// process `PATH` when unset). Shell is needed for the `command -v` builtin, but
-/// `cmd` is passed as a positional arg ($1) — never interpolated into the
-/// script — so it can't be parsed as shell syntax.
+/// Whether `cmd` is an executable on the resolved `PATH` (the daemon's own
+/// `PATH` when none was injected); the directory scan runs off the executor.
 async fn command_on_path(cmd: &str, resolved_path: Option<&str>) -> bool {
-    let mut probe = tokio::process::Command::new("/bin/sh");
-    probe.kill_on_drop(true);
-    probe.args(["-c", "command -v \"$1\"", "sh", cmd]);
-    if let Some(path) = resolved_path {
-        probe.env("PATH", path);
-    }
-    matches!(probe.output().await, Ok(out) if out.status.success())
+    let path = mainframe_runtime::ResolvedPath::from_value(
+        resolved_path
+            .map(str::to_owned)
+            .unwrap_or_else(|| std::env::var("PATH").unwrap_or_default()),
+    );
+    let cmd = cmd.to_string();
+    tokio::task::spawn_blocking(move || path.find(&cmd).is_some())
+        .await
+        .unwrap_or(false)
 }
 
 impl Default for LspRegistry {

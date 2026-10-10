@@ -15,7 +15,7 @@ pub(super) struct TunnelProcess {
     pub(super) id: u64,
     pub(super) label: String,
     pub(super) pid: Option<u32>,
-    pub(super) signals: mpsc::UnboundedSender<&'static str>,
+    pub(super) signals: mpsc::UnboundedSender<Signal>,
     pub(super) exit: watch::Receiver<Option<TunnelExit>>,
     /// Set by the first `terminate`, so a concurrent one waits instead of
     /// signalling a second time.
@@ -23,8 +23,8 @@ pub(super) struct TunnelProcess {
 }
 
 impl TunnelProcess {
-    pub(super) fn signal(&self, flag: &'static str) {
-        let _ = self.signals.send(flag); /* expected: Err means the watcher already reaped the child */
+    pub(super) fn signal(&self, kind: Signal) {
+        let _ = self.signals.send(kind); /* expected: Err means the watcher already reaped the child */
     }
 
     pub(super) async fn exited(&self) -> TunnelExit {
@@ -56,14 +56,20 @@ impl TunnelProcess {
             }
             return;
         }
-        self.signal("-TERM");
-        if timeout(grace, self.exited()).await.is_ok() {
-            return;
-        }
-        tracing::warn!(target: "tunnel", pid = ?self.pid, "tunnel survived SIGTERM, sending SIGKILL");
-        self.signal("-KILL");
-        if timeout(grace, self.exited()).await.is_err() {
-            tracing::warn!(target: "tunnel", pid = ?self.pid, "tunnel survived SIGKILL");
+        use mainframe_runtime::process::{Terminated, terminate_with};
+        let result = terminate_with(
+            |kind| {
+                self.signal(kind);
+                Ok(())
+            },
+            grace,
+            async {
+                self.exited().await;
+            },
+        )
+        .await;
+        if !matches!(result, Ok(Terminated::Exited | Terminated::Killed)) {
+            tracing::warn!(target: "tunnel", pid = ?self.pid, "tunnel survived shutdown");
             self.stopping.store(false, Ordering::SeqCst);
         }
     }
@@ -87,50 +93,39 @@ impl Drop for StartGuard<'_> {
         let id = self.process.id;
         self.tunnels
             .remove_if(self.label, |_, tunnel| tunnel.process.id == id);
-        self.process.signal("-KILL");
+        self.process.signal(Signal::Kill);
     }
 }
 
-/// Deliver `flag` to the watched child, but only while it is unreaped: until
+/// Deliver `kind` to the watched child, but only while it is unreaped: until
 /// `wait` collects it, its pid cannot be reused by another process.
-pub(super) async fn deliver(
-    child: &mut Child,
-    pid: Option<u32>,
-    flag: &'static str,
-    signal: &SignalFn,
-) {
+pub(super) async fn deliver(child: &mut Child, pid: Option<u32>, kind: Signal, signal: &SignalFn) {
     match (child.try_wait(), pid) {
         (Ok(None), Some(pid)) => {
-            if !signal(pid, flag).await {
-                tracing::warn!(target: "tunnel", pid, flag, "failed to signal tunnel process");
+            if !signal(pid, kind).await {
+                tracing::warn!(target: "tunnel", pid, ?kind, "failed to signal tunnel process");
             }
         }
         // Already exited; the watcher's `wait` arm reports it.
         (Ok(_), _) => {}
         (Err(err), _) => {
-            tracing::warn!(target: "tunnel", ?pid, flag, ?err, "failed to check tunnel process");
+            tracing::warn!(target: "tunnel", ?pid, ?kind, ?err, "failed to check tunnel process");
         }
     }
 }
 
-/// The production [`SignalFn`]: shell out to `kill` (house style — no `libc`/`nix`).
+/// The production [`SignalFn`]: direct delivery to the pid.
 pub(crate) fn kill_signal() -> SignalFn {
-    Arc::new(|pid, flag| Box::pin(send_kill(pid, flag)))
-}
-
-async fn send_kill(pid: u32, flag: &'static str) -> bool {
-    match Command::new("kill")
-        .arg(flag)
-        .arg(pid.to_string())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .await
-    {
-        Ok(status) => status.success(),
-        Err(err) => {
-            tracing::warn!(target: "tunnel", pid, flag, ?err, "failed to run kill");
-            false
-        }
-    }
+    use mainframe_runtime::process::{Target, signal};
+    Arc::new(|pid, kind| {
+        Box::pin(async move {
+            match signal(Target::Pid(pid), kind) {
+                Ok(delivered) => delivered,
+                Err(error) => {
+                    tracing::warn!(target: "tunnel", pid, ?kind, %error, "failed to signal tunnel process");
+                    false
+                }
+            }
+        })
+    })
 }
