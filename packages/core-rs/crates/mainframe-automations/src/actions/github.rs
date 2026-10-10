@@ -9,8 +9,8 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::engine::BoxFuture;
-use crate::github_http::{GITHUB_API, github_headers};
 use crate::tokens::TokenValue;
+use mainframe_github::github_http::{GITHUB_API, github_headers};
 
 use super::manifest::{
     ActionAuth, ActionField, ActionGroup, ActionManifest, ActionOutput, ActionOutputType,

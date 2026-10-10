@@ -25,6 +25,7 @@ nanoid = { workspace = true }
 tracing = { workspace = true }
 keyring = { workspace = true }
 mainframe-types = { workspace = true }
+mainframe-github = { workspace = true }
 
 [dev-dependencies]
 chrono-tz = { workspace = true }

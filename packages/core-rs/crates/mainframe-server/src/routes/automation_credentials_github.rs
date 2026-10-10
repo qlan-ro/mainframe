@@ -20,7 +20,7 @@ use axum::http::StatusCode;
 use axum::response::Response;
 use axum::routing::{get, post};
 use mainframe_automations::AutomationsEngine;
-use mainframe_automations::github_device::{
+use mainframe_github::github_device::{
     DeviceFlowError, DeviceStart, GithubDeviceFlow, PollOutcome,
 };
 use serde::Deserialize;

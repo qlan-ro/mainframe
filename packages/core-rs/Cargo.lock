@@ -1475,6 +1475,7 @@ dependencies = [
  "hex",
  "hmac",
  "keyring",
+ "mainframe-github",
  "mainframe-types",
  "nanoid",
  "rand 0.8.6",
@@ -1558,6 +1559,7 @@ dependencies = [
  "mainframe-background-tasks",
  "mainframe-claude-workflows",
  "mainframe-db",
+ "mainframe-github",
  "mainframe-launch",
  "mainframe-lsp",
  "mainframe-plugins",
@@ -1614,6 +1616,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "mainframe-github"
+version = "0.0.0"
+dependencies = [
+ "mainframe-types",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "wiremock",
+]
+
+[[package]]
 name = "mainframe-launch"
 version = "0.0.0"
 dependencies = [
@@ -1667,6 +1682,7 @@ dependencies = [
  "dashmap",
  "mainframe-adapter-api",
  "mainframe-git",
+ "mainframe-github",
  "mainframe-runtime",
  "mainframe-services",
  "mainframe-types",
@@ -1729,6 +1745,7 @@ dependencies = [
  "mainframe-db",
  "mainframe-display",
  "mainframe-git",
+ "mainframe-github",
  "mainframe-launch",
  "mainframe-lsp",
  "mainframe-orchestration",

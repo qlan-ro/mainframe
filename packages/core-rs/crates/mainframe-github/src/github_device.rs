@@ -38,7 +38,7 @@ pub const GITHUB_APP_CLIENT_ID: &str = "Iv23liJciR5mmjd0cFYE";
 const DEVICE_CODE_URL: &str = "https://github.com/login/device/code";
 /// Also the refresh-token endpoint (`credentials::refreshing`) — GitHub
 /// reuses one token endpoint for both the initial exchange and refresh.
-pub(crate) const TOKEN_URL: &str = "https://github.com/login/oauth/access_token";
+pub const TOKEN_URL: &str = "https://github.com/login/oauth/access_token";
 const GRANT_TYPE: &str = "urn:ietf:params:oauth:grant-type:device_code";
 
 #[derive(Debug, Clone, PartialEq)]

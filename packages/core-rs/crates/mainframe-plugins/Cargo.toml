@@ -18,6 +18,7 @@ nanoid = { workspace = true }
 dashmap = { workspace = true }
 tracing = { workspace = true }
 mainframe-types = { workspace = true }
+mainframe-github = { workspace = true }
 mainframe-runtime = { workspace = true }
 mainframe-services = { workspace = true }
 mainframe-adapter-api = { workspace = true }

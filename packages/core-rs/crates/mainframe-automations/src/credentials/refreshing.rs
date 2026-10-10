@@ -19,8 +19,8 @@ use serde::Deserialize;
 use tokio::sync::Mutex;
 
 use crate::USER_AGENT;
-use crate::github_device::{GITHUB_APP_CLIENT_ID, TOKEN_URL};
 use crate::ports::Clock;
+use mainframe_github::github_device::{GITHUB_APP_CLIENT_ID, TOKEN_URL};
 
 use super::{CredentialError, CredentialStore, Credentials};
 
