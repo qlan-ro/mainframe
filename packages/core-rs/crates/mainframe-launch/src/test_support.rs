@@ -10,6 +10,7 @@ use std::time::Duration;
 use mainframe_types::events::DaemonEvent;
 
 use crate::tunnel_manager::{BroadcastFn, SignalFn, kill_signal};
+use mainframe_runtime::process::Signal;
 
 /// A broadcast sink that keeps every event for later assertions.
 pub(crate) fn recorder() -> (BroadcastFn, Arc<Mutex<Vec<DaemonEvent>>>) {
@@ -19,8 +20,8 @@ pub(crate) fn recorder() -> (BroadcastFn, Arc<Mutex<Vec<DaemonEvent>>>) {
     (f, events)
 }
 
-/// Recorded `(pid, kill flag)` pairs, in delivery order.
-pub(crate) type SignalLog = Arc<Mutex<Vec<(u32, &'static str)>>>;
+/// Recorded `(pid, signal)` pairs, in delivery order.
+pub(crate) type SignalLog = Arc<Mutex<Vec<(u32, Signal)>>>;
 
 /// A [`SignalFn`] that records every signal, then really delivers it so the
 /// child under test behaves as it would in production.
@@ -28,9 +29,9 @@ pub(crate) fn recording_signal() -> (SignalFn, SignalLog) {
     let log: SignalLog = Arc::new(Mutex::new(Vec::new()));
     let sink = log.clone();
     let deliver = kill_signal();
-    let signal: SignalFn = Arc::new(move |pid, flag| {
-        sink.lock().unwrap().push((pid, flag));
-        deliver(pid, flag)
+    let signal: SignalFn = Arc::new(move |pid, kind| {
+        sink.lock().unwrap().push((pid, kind));
+        deliver(pid, kind)
     });
     (signal, log)
 }

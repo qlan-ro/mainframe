@@ -161,17 +161,7 @@ fn signal_manager(
 
 async fn assert_pid_gone(pid: u32) {
     tokio::time::timeout(Duration::from_secs(2), async {
-        loop {
-            let status = Command::new("kill")
-                .arg("-0")
-                .arg(pid.to_string())
-                .stderr(std::process::Stdio::null())
-                .status()
-                .await
-                .unwrap();
-            if !status.success() {
-                break;
-            }
+        while mainframe_runtime::process::is_alive(pid) {
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
     })
