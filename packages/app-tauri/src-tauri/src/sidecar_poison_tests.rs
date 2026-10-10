@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn poisoned_child_lock_still_allows_kill_to_clear_the_slot() {
+fn poisoned_child_lock_still_allows_stop_to_clear_the_slot() {
     let child = Command::new(std::env::current_exe().unwrap())
         .arg("--help")
         .stdout(Stdio::null())
@@ -23,6 +23,6 @@ fn poisoned_child_lock_still_allows_kill_to_clear_the_slot() {
     });
 
     assert_eq!(handle.pid(), Some(expected_pid));
-    handle.kill();
+    handle.stop();
     assert_eq!(handle.pid(), None);
 }

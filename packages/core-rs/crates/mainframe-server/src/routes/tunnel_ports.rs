@@ -78,7 +78,7 @@ async fn stop(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
     let Some(body) = parse_body::<StopBody>(&body) else {
         return fail(StatusCode::BAD_REQUEST, "Invalid request body");
     };
-    registry.stop(body.port);
+    registry.stop(body.port).await;
     ok_empty()
 }
 

@@ -54,7 +54,8 @@ use mainframe_claude_workflows::{bridge::spawn_workflow_run_bridge, store::Claud
 use mainframe_launch::{
     BroadcastFn, ChildRegistryPort, FileChildRegistry, LaunchRegistry, PortTunnelRegistry,
     ResolveCloudflaredDeps, TunnelManager, TunnelManagerOptions, TunnelStartOptions,
-    default_sweep_deps, resolve_cloudflared_path, sweep_stray_children,
+    default_sweep_deps, resolve_cloudflared_path, shutdown_launches_and_tunnels,
+    sweep_stray_children,
 };
 use mainframe_lsp::{LspManager, LspRegistry};
 use mainframe_plugins::manager::PluginManagerDeps;
@@ -547,10 +548,7 @@ async fn run_daemon() {
         flush_and_exit(1);
     }
 
-    // Ordered shutdown: automations.stop() → credential revoke → chats.dispose →
-    // plugins.unload_all → adapters.kill_all → launch.stop_all → tunnel.stop_all →
-    // liveness.stop → lsp.shutdown_all → db close. The HTTP server is already
-    // stopped (axum::serve returned above).
+    // Shut down child owners concurrently within the desktop shell's quit deadline.
     info!("Shutting down...");
     if let Some(automations) = &automations {
         automations.stop();
@@ -562,10 +560,11 @@ async fn run_daemon() {
     chats.dispose();
     plugin_manager.unload_all();
     adapters.kill_all();
-    launch_registry.stop_all().await;
-    tunnel_manager.stop_all().await;
+    tokio::join!(
+        shutdown_launches_and_tunnels(&launch_registry, &tunnel_manager),
+        lsp_manager.shutdown_all(),
+    );
     liveness.stop();
-    lsp_manager.shutdown_all().await;
     // `db` (the actor thread) closes when the last `Db` handle drops at exit.
 }
 

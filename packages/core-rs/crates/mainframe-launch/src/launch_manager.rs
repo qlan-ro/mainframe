@@ -433,7 +433,7 @@ impl LaunchManager {
                 inner.state.set_status(&name, LaunchProcessStatus::Failed);
                 inner.emit_status(&name, LaunchProcessStatus::Failed);
                 if let Some(tm) = &inner.tunnel_manager {
-                    tm.stop(&format!("preview:{name}"));
+                    tm.stop(&format!("preview:{name}")).await;
                 }
                 return Err(LaunchError::Spawn { name, source: err });
             }
@@ -568,22 +568,28 @@ impl LaunchManager {
         inner.state.set_status(name, LaunchProcessStatus::Stopped);
         inner.emit_status(name, LaunchProcessStatus::Stopped);
 
-        if let Some(tm) = &inner.tunnel_manager {
-            tm.stop(&format!("preview:{name}"));
-        }
+        // The preview tunnel and the process group stop concurrently, so a
+        // stubborn one does not delay the other's grace period.
+        let stop_tunnel = async {
+            if let Some(tm) = &inner.tunnel_manager {
+                tm.stop(&format!("preview:{name}")).await;
+            }
+        };
+        let stop_process = async {
+            // Kill the entire process group (pnpm/tsx spawn child trees).
+            kill_process(pid, "-TERM").await;
+            tracing::info!(target: "launch", name, pid = ?pid, "stopping launch process (SIGTERM)");
 
-        // Kill the entire process group (pnpm/tsx spawn child trees).
-        kill_process(pid, "-TERM").await;
-        tracing::info!(target: "launch", name, pid = ?pid, "stopping launch process (SIGTERM)");
-
-        if tokio::time::timeout(inner.timings.stop_grace, wait_until_exited(&mut exit_rx))
-            .await
-            .is_err()
-        {
-            tracing::warn!(target: "launch", name, "process did not exit after SIGTERM, sending SIGKILL");
-            kill_process(pid, "-KILL").await;
-            wait_until_exited(&mut exit_rx).await;
-        }
+            if tokio::time::timeout(inner.timings.stop_grace, wait_until_exited(&mut exit_rx))
+                .await
+                .is_err()
+            {
+                tracing::warn!(target: "launch", name, "process did not exit after SIGTERM, sending SIGKILL");
+                kill_process(pid, "-KILL").await;
+                wait_until_exited(&mut exit_rx).await;
+            }
+        };
+        tokio::join!(stop_tunnel, stop_process);
         tracing::info!(target: "launch", name, pid = ?pid, "launch process stopped");
     }
 
@@ -691,11 +697,10 @@ async fn wait_for_exit_task(
 
     inner.processes.remove(&name);
 
-    if let Some(tm) = &inner.tunnel_manager {
-        tm.stop(&format!("preview:{name}"));
-    }
-
     let _ = exit_tx.send(true);
+    if let Some(tm) = &inner.tunnel_manager {
+        tm.stop(&format!("preview:{name}")).await;
+    }
 }
 
 /// Poll `localhost:port` until it accepts a TCP connection or the process

@@ -7,8 +7,13 @@
 /// app-owned daemon settings are reapplied.
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+
+// LSP shutdown can take 3s for its reply, 2s for exit, and two 2s signal waits.
+const DAEMON_STOP_GRACE: Duration = Duration::from_secs(10);
+const DAEMON_STOP_POLL: Duration = Duration::from_millis(50);
 
 /// A real sidecar binary (the Rust `mainframe-daemon`) is several MB; this
 /// floor rejects the zero-byte `binaries/mainframe-daemon-<triple>` scaffold
@@ -29,31 +34,35 @@ pub struct DaemonHandle {
 impl DaemonHandle {
     /// A no-op handle for when the daemon is EXTERNAL (started by the user / a
     /// separate process, not spawned by us — `MAINFRAME_EXTERNAL_DAEMON`). Holds
-    /// no child, so `kill()` is a no-op and `pid()` is `None`.
+    /// no child, so `stop()` is a no-op and `pid()` is `None`.
     pub fn external() -> Self {
         DaemonHandle {
             child: Arc::new(Mutex::new(None)),
         }
     }
 
-    pub fn kill(&self) {
-        let mut guard = self.child.lock().unwrap_or_else(|e| e.into_inner());
+    /// Stop the daemon: SIGTERM so it runs its shutdown sequence, then SIGKILL
+    /// if it is still running after `DAEMON_STOP_GRACE`. Blocks until the child
+    /// is reaped. Idempotent.
+    pub fn stop(&self) {
         // take() empties the slot so the exit watcher knows this death was
-        // intentional; wait() reaps the child (no <defunct> zombie).
-        if let Some(mut child) = guard.take() {
-            match child.kill() {
-                Ok(()) => tracing::info!("daemon sidecar killed"),
-                Err(err) => tracing::warn!(%err, "daemon sidecar kill failed"),
-            }
-            if let Err(err) = child.wait() {
-                tracing::warn!(%err, "daemon sidecar wait failed");
+        // intentional; the lock is released before the (bounded) wait.
+        let child = self
+            .child
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
+        if let Some(mut child) = child {
+            match stop_child(&mut child, DAEMON_STOP_GRACE, DAEMON_STOP_POLL) {
+                Ok(status) => tracing::info!(%status, "daemon sidecar stopped"),
+                Err(e) => tracing::warn!(err = %e, "daemon sidecar stop failed"),
             }
         }
     }
 
     /// Watch for the child dying on its own (bind failure, crash). Polls
-    /// `try_wait` so it never contends with `kill()` for more than an instant;
-    /// an empty slot means `kill()` already ran (or the daemon is external) and
+    /// `try_wait` so it never contends with `stop()` for more than an instant;
+    /// an empty slot means `stop()` already ran (or the daemon is external) and
     /// the watcher just stops. On an unexpected exit the child is reaped, the
     /// slot cleared (so `get_daemon_status` reports "exited", not a live pid),
     /// and `on_exit` is invoked with the exit code.
@@ -68,7 +77,7 @@ impl DaemonHandle {
                 {
                     let mut guard = child.lock().unwrap_or_else(|e| e.into_inner());
                     match guard.as_mut() {
-                        None => return, /* expected — killed on app exit or external daemon */
+                        None => return, /* expected — stopped on app exit or external daemon */
                         Some(c) => match c.try_wait() {
                             Ok(Some(status)) => {
                                 let code = status.code();
@@ -121,7 +130,7 @@ pub struct SidecarConfig {
     pub data_dir: Option<PathBuf>,
 }
 
-/// Spawn the daemon sidecar. Returns a handle used to kill it on app exit.
+/// Spawn the daemon sidecar. Returns a handle used to stop it on app exit.
 ///
 /// Environment precedence (matching Electron's `startDaemon`):
 ///   base process env  ←  shell_env overlay  ←  app-owned daemon overrides
@@ -229,67 +238,11 @@ fn find_bundled_binary_in(dir: &Path, stem: &str) -> Option<PathBuf> {
     None
 }
 
+mod shutdown;
+use shutdown::stop_child;
+
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// The Rust daemon scan finds `mainframe-daemon[-triple]`, ignores zero-byte
-    /// placeholders, and stays disjoint from a sibling `node` binary.
-    #[test]
-    fn bundled_rust_daemon_scan() {
-        use std::io::Write;
-        let dir = std::env::temp_dir().join(format!("mf-bundled-rustd-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-
-        // A sibling `node` must not satisfy the mainframe-daemon scan.
-        let mut n = std::fs::File::create(dir.join("node")).unwrap();
-        n.write_all(&vec![0u8; (MIN_SIDECAR_BIN_BYTES + 1) as usize])
-            .unwrap();
-        assert!(find_bundled_binary_in(&dir, "mainframe-daemon").is_none());
-
-        // Zero-byte placeholder ignored.
-        std::fs::File::create(dir.join("mainframe-daemon-aarch64-apple-darwin")).unwrap();
-        assert!(find_bundled_binary_in(&dir, "mainframe-daemon").is_none());
-
-        // Real-sized triple binary found via the fallback.
-        let mut f =
-            std::fs::File::create(dir.join("mainframe-daemon-x86_64-unknown-linux-gnu")).unwrap();
-        f.write_all(&vec![0u8; (MIN_SIDECAR_BIN_BYTES + 1) as usize])
-            .unwrap();
-        assert_eq!(
-            find_bundled_binary_in(&dir, "mainframe-daemon"),
-            Some(dir.join("mainframe-daemon-x86_64-unknown-linux-gnu"))
-        );
-
-        // Exact base name wins over the triple sibling.
-        let mut f = std::fs::File::create(dir.join("mainframe-daemon")).unwrap();
-        f.write_all(&vec![0u8; (MIN_SIDECAR_BIN_BYTES + 1) as usize])
-            .unwrap();
-        assert_eq!(
-            find_bundled_binary_in(&dir, "mainframe-daemon"),
-            Some(dir.join("mainframe-daemon"))
-        );
-
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn daemon_env_overrides_remove_shell_owned_data_dir_when_not_explicit() {
-        assert!(
-            daemon_env_overrides(31500, None).contains(&EnvOverride::Remove("MAINFRAME_DATA_DIR"))
-        );
-    }
-
-    #[test]
-    fn daemon_env_overrides_keep_explicit_data_dir() {
-        assert!(
-            daemon_env_overrides(31500, Some(Path::new("/tmp/mainframe-data"))).contains(
-                &EnvOverride::Set("MAINFRAME_DATA_DIR", "/tmp/mainframe-data".to_string())
-            )
-        );
-    }
-}
+mod tests;
 
 #[cfg(test)]
 #[path = "sidecar_poison_tests.rs"]

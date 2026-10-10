@@ -85,6 +85,14 @@ impl LaunchRegistry {
     }
 }
 
+/// Daemon shutdown for launches and tunnels: stop every launch process and
+/// every cloudflared child, returning once each tunnel has exited. The tunnel
+/// sweep runs alongside the launch stops so a slow launch process cannot hold
+/// it up; a preview tunnel is stopped by whichever side reaches it first.
+pub async fn shutdown_launches_and_tunnels(launches: &LaunchRegistry, tunnels: &TunnelManager) {
+    tokio::join!(launches.stop_all(), tunnels.stop_all());
+}
+
 /// Minimal `join_all` (no `futures` crate in the allowlist): await each in turn.
 /// A `LaunchManager::stop_all` cannot fail (returns `()`), so sequential awaiting
 /// loses nothing over a settled-all join.
@@ -97,8 +105,12 @@ async fn futures_join_all<F: std::future::Future<Output = ()>>(futures: impl Ite
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::{recorder, recording_signal, write_ready_term_ignoring_cloudflared};
+    use crate::tunnel_manager::TunnelConfig;
     use mainframe_types::events::DaemonEvent;
+    use mainframe_types::launch::LaunchConfiguration;
     use std::sync::Mutex;
+    use std::time::Duration;
 
     fn noop() -> BroadcastFn {
         Arc::new(|_ev: DaemonEvent| {})
@@ -163,5 +175,67 @@ mod tests {
                 .any(|e| matches!(e, DaemonEvent::LaunchStatus { .. }))
         );
         registry.stop_all().await;
+    }
+
+    #[tokio::test]
+    async fn shutdown_kills_a_launch_preview_tunnel_that_ignores_sigterm() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut tunnels = TunnelManager::with_config(
+            None,
+            TunnelConfig {
+                cloudflared_bin: write_ready_term_ignoring_cloudflared(dir.path()),
+                dns_poll: Duration::from_millis(20),
+                dns_timeout: Duration::from_millis(60),
+                stop_grace: Duration::from_millis(500),
+                ..TunnelConfig::default()
+            },
+        );
+        let (signal, signals) = recording_signal();
+        tunnels.set_signal(signal);
+        let tunnels = Arc::new(tunnels);
+        let (broadcast, events) = recorder();
+        let registry = LaunchRegistry::new(broadcast, Some(tunnels.clone()));
+        // Accepts connections through its backlog, so the launch's port wait passes.
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        registry
+            .get_or_create("p1", "/tmp")
+            .start(&LaunchConfiguration {
+                name: "web".to_string(),
+                runtime_executable: "sh".to_string(),
+                runtime_args: vec!["-c".to_string(), "sleep 100".to_string()],
+                port: Some(i64::from(port)),
+                url: None,
+                preview: Some(true),
+                env: None,
+            })
+            .await
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                let ready = events
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .any(|e| matches!(e, DaemonEvent::LaunchTunnel { .. }));
+                if ready {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .expect("the preview tunnel should come up");
+        let pid = tunnels.pid_of("preview:web").unwrap();
+
+        shutdown_launches_and_tunnels(&registry, &tunnels).await;
+
+        assert_eq!(
+            *signals.lock().unwrap(),
+            vec![(pid, "-TERM"), (pid, "-KILL")]
+        );
+        assert_eq!(tunnels.live_count(), 0);
+        assert_eq!(tunnels.get_url("preview:web"), None);
     }
 }

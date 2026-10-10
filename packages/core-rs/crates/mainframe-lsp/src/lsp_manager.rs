@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use dashmap::DashMap;
 use tokio::io::AsyncReadExt;
-use tokio::process::{ChildStderr, ChildStdout, Command};
+use tokio::process::{Child, ChildStderr, ChildStdout, Command};
 use tokio::sync::{Notify, mpsc};
 use tokio::task::JoinHandle;
 
@@ -22,6 +22,11 @@ const IDLE_TIMEOUT: Duration = Duration::from_secs(10 * 60); // 10 minutes
 const SHUTDOWN_REQUEST_TIMEOUT: Duration = Duration::from_secs(3);
 const SHUTDOWN_EXIT_TIMEOUT: Duration = Duration::from_secs(2);
 const SIGTERM_GRACE: Duration = Duration::from_secs(2);
+
+/// Delivers a `kill(1)` signal flag (`-TERM`, `-KILL`) to a pid and reports
+/// whether it was delivered. A seam so tests can record the escalation.
+pub(crate) type SignalFn =
+    Arc<dyn Fn(u32, &'static str) -> Pin<Box<dyn Future<Output = bool> + Send>> + Send + Sync>;
 
 /// Errors from spawning an LSP child.
 #[derive(Debug, thiserror::Error)]
@@ -90,6 +95,8 @@ pub struct LspServerHandle {
     pub language: String,
     pub project_path: String,
     pid: u32,
+    /// Signals for the monitor task, the child's only reaper (see `deliver`).
+    signal_tx: mpsc::UnboundedSender<&'static str>,
     stdin_tx: mpsc::UnboundedSender<Vec<u8>>,
     stdout: Mutex<Option<ChildStdout>>,
     stderr: Mutex<Option<ChildStderr>>,
@@ -135,6 +142,10 @@ impl LspServerHandle {
         self.lock_inner().initialize_result.clone()
     }
 
+    fn signal(&self, flag: &'static str) {
+        let _ = self.signal_tx.send(flag); /* expected: Err means the monitor already reaped the child */
+    }
+
     /// Framed writer for this child's stdin (shared by the bridge and shutdown).
     pub fn stdin_tx(&self) -> mpsc::UnboundedSender<Vec<u8>> {
         self.stdin_tx.clone()
@@ -164,18 +175,39 @@ fn key(project_id: &str, language: &str) -> String {
 // NOTE: shells out to `kill -TERM` (unix) — tokio's `Child::kill` sends SIGKILL,
 // which would skip the server's graceful SIGTERM shutdown. Windows has no `kill`;
 // platform-sensitive, flagged for the Windows packaging pass.
-async fn send_signal(pid: u32, signal: &'static str) {
+fn kill_signal() -> SignalFn {
+    Arc::new(|pid, flag| Box::pin(send_kill(pid, flag)))
+}
+
+async fn send_kill(pid: u32, flag: &'static str) -> bool {
     match Command::new("kill")
-        .arg(signal)
+        .arg(flag)
         .arg(pid.to_string())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
         .await
     {
-        Ok(status) if status.success() => {}
-        Ok(status) => tracing::warn!(pid, signal, ?status, "LSP signal failed"),
-        Err(err) => tracing::warn!(pid, signal, ?err, "LSP signal failed"),
+        Ok(status) => status.success(),
+        Err(err) => {
+            tracing::warn!(pid, flag, ?err, "failed to run kill");
+            false
+        }
+    }
+}
+
+/// Deliver `flag` to the monitored child, but only while it is unreaped: until
+/// `wait` collects it, its pid cannot be reused by another process.
+async fn deliver(child: &mut Child, flag: &'static str, signal: &SignalFn) {
+    match (child.try_wait(), child.id()) {
+        (Ok(None), Some(pid)) => {
+            if !signal(pid, flag).await {
+                tracing::warn!(pid, flag, "LSP signal failed");
+            }
+        }
+        // Already exited; the monitor's `wait` arm reports it.
+        (Ok(_), _) => {}
+        (Err(err), _) => tracing::warn!(flag, ?err, "failed to check LSP server process"),
     }
 }
 
@@ -199,6 +231,7 @@ struct ManagerState {
     shutdown_request_timeout: Duration,
     shutdown_exit_timeout: Duration,
     sigterm_grace: Duration,
+    signal: SignalFn,
 }
 
 impl ManagerState {
@@ -315,11 +348,13 @@ impl ManagerState {
         let stderr = child.stderr.take();
         let exited = Arc::new(AtomicBool::new(false));
         let exit_notify = Arc::new(Notify::new());
+        let (signal_tx, mut signal_rx) = mpsc::unbounded_channel::<&'static str>();
 
         let handle = Arc::new(LspServerHandle {
             language: language.to_string(),
             project_path: project_path.to_string(),
             pid,
+            signal_tx,
             stdin_tx,
             stdout: Mutex::new(stdout),
             stderr: Mutex::new(stderr),
@@ -328,15 +363,20 @@ impl ManagerState {
             inner: Mutex::new(HandleInner::default()),
         });
 
-        // Monitor: owns the child, awaits exit (or a wait error), then removes the
-        // handle.
+        // The monitor owns the child until it is reaped.
+        let signal = Arc::clone(&self.signal);
         let state = Arc::clone(self);
         let key_owned = k.to_string();
         let language_owned = language.to_string();
         let project_path_owned = project_path.to_string();
         let handle_for_monitor = Arc::clone(&handle);
         tokio::spawn(async move {
-            let status = child.wait().await;
+            let status = loop {
+                tokio::select! {
+                    status = child.wait() => break status,
+                    Some(flag) = signal_rx.recv() => deliver(&mut child, flag, &signal).await,
+                }
+            };
             match status {
                 Ok(s) => tracing::info!(
                     language = %language_owned,
@@ -409,6 +449,7 @@ impl ManagerState {
         self.cancel_idle_timer(&handle);
         handle.set_cleanup(None);
 
+        let mut exited = handle.exited.load(Ordering::SeqCst);
         if !handle.stdin_tx.is_closed() {
             // shutdown request -> await ack (or timeout) -> exit notification -> await exit (or timeout)
             let shutdown_req = serde_json::json!({
@@ -432,21 +473,17 @@ impl ManagerState {
                 .stdin_tx
                 .send(encode_json_rpc(&exit_notif).into_bytes());
 
-            if !handle.exited.load(Ordering::SeqCst) {
-                let notified = handle.exit_notify.notified();
-                tokio::pin!(notified);
-                notified.as_mut().enable();
-                if !handle.exited.load(Ordering::SeqCst) {
-                    let _ =
-                        tokio::time::timeout(self.shutdown_exit_timeout, notified.as_mut()).await;
-                }
-            }
+            exited = wait_for_handle_exit(&handle, self.shutdown_exit_timeout).await;
         }
 
-        if !handle.exited.load(Ordering::SeqCst) {
-            send_signal(handle.pid, "-TERM").await;
+        if !exited {
+            handle.signal("-TERM");
             if !wait_for_handle_exit(&handle, self.sigterm_grace).await {
-                send_signal(handle.pid, "-KILL").await;
+                tracing::warn!(
+                    pid = handle.pid,
+                    "LSP server survived SIGTERM, sending SIGKILL"
+                );
+                handle.signal("-KILL");
                 if !wait_for_handle_exit(&handle, self.sigterm_grace).await {
                     tracing::warn!(pid = handle.pid, "LSP server survived SIGKILL");
                 }
@@ -465,11 +502,24 @@ impl ManagerState {
         self.handles.remove(&k);
     }
 
+    /// Shut every server down concurrently, so one slow server does not
+    /// stretch the others' grace periods.
     async fn shutdown_all(self: &Arc<Self>) {
         let keys: Vec<String> = self.handles.iter().map(|e| e.key().clone()).collect();
-        for k in keys {
-            let (project_id, language) = split_key(&k);
-            self.shutdown(&project_id, &language).await;
+        let tasks: Vec<_> = keys
+            .into_iter()
+            .map(|k| {
+                let state = Arc::clone(self);
+                tokio::spawn(async move {
+                    let (project_id, language) = split_key(&k);
+                    state.shutdown(&project_id, &language).await;
+                })
+            })
+            .collect();
+        for task in tasks {
+            if let Err(err) = task.await {
+                tracing::warn!(%err, "LSP shutdown task failed");
+            }
         }
     }
 }
@@ -510,6 +560,7 @@ impl LspManager {
                 shutdown_request_timeout: SHUTDOWN_REQUEST_TIMEOUT,
                 shutdown_exit_timeout: SHUTDOWN_EXIT_TIMEOUT,
                 sigterm_grace: SIGTERM_GRACE,
+                signal: kill_signal(),
             }),
         }
     }
@@ -572,12 +623,24 @@ impl LspManager {
 impl LspManager {
     /// Shrink the idle/shutdown timers so lifecycle tests run in real time
     /// without `tokio::time::pause` fighting real child I/O.
-    pub(crate) fn set_test_timeouts(&mut self, idle: Duration, request: Duration, exit: Duration) {
+    pub(crate) fn set_test_timeouts(
+        &mut self,
+        idle: Duration,
+        request: Duration,
+        exit: Duration,
+        sigterm_grace: Duration,
+    ) {
         let state = Arc::get_mut(&mut self.state).expect("no outstanding clones in test setup");
         state.idle_timeout = idle;
         state.shutdown_request_timeout = request;
         state.shutdown_exit_timeout = exit;
-        state.sigterm_grace = exit;
+        state.sigterm_grace = sigterm_grace;
+    }
+
+    /// Replace the signal sender, e.g. with one that records each delivery.
+    pub(crate) fn set_test_signal(&mut self, signal: SignalFn) {
+        let state = Arc::get_mut(&mut self.state).expect("no outstanding clones in test setup");
+        state.signal = signal;
     }
 }
 
