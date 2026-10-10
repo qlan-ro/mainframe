@@ -1,6 +1,6 @@
-//! Conformance harness (T10.2/T10.3): builds the real `AutomationsEngine` over
+//! Conformance harness: builds the real `AutomationsEngine` over
 //! a tempfile `automations.db` with the fake ports + recording action
-//! registry, loads the six canonical fixtures by relative path (never
+//! registry, loads the seven canonical fixtures by relative path (never
 //! re-authored), and drives runs to completion. Restart scenarios rebuild a
 //! fresh engine over the SAME db/credentials paths, mirroring a daemon
 //! crash-and-reboot.
@@ -51,7 +51,7 @@ pub fn load_fixture(name: &str) -> AutomationCreateInput {
 }
 
 /// Build an engine over explicit paths so a second engine can adopt the same
-/// store (restart parity); pass a fresh `FakeActions`/agent per engine so a
+/// store (a restart); pass a fresh `FakeActions`/agent per engine so a
 /// scenario can assert per-engine invocation counts.
 pub async fn build_engine(
     db: &Path,

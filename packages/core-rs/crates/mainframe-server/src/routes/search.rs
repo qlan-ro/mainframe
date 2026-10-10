@@ -1,5 +1,3 @@
-//! Ported from `src/server/routes/search.ts`.
-//!
 //! One endpoint: project content search — ripgrep (in-process) for
 //! directories, a direct read for a single-file scope. Every path is
 //! realpath'd and confirmed inside the (realpath'd) project base before it is
@@ -268,17 +266,3 @@ mod tests {
         assert_eq!(char_index_of(&hay, &ndl, 4), None);
     }
 }
-
-// PORT STATUS: src/server/routes/search.ts (handleContentSearch + searchFile)
-// confidence: high
-// todos: 0
-// notes: getEffectivePath → files::resolve_base (raw base), then a separate
-// realpath (404 "Project not found" on failure), matching the TS two-step. As
-// of the pure-Rust search rewrite (PR 1 of the Rust-daemon cutover),
-// `search_with_ripgrep` always runs (it's in-process, not a shelled-out
-// binary), so the old "ripgrep unavailable, fall back to a JS walk" branch and
-// its per-file `resolveWithinBase` containment recheck are gone — deleted
-// along with `search-symlink-fallback.test.ts`'s Rust counterpart. Zod custom
-// messages ("Query must be at least 2 characters", "path is required")
-// reproduced exactly; a missing param yields "Required". Line/column indices
-// are char-based (TS was UTF-16 code units); unobservable for ASCII sources.

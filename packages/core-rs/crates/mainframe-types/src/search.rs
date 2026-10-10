@@ -1,5 +1,3 @@
-//! Ported from `packages/types/src/search.ts`.
-
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -23,8 +21,3 @@ mod tests {
         assert_eq!(serde_json::to_string(&r).unwrap(), json);
     }
 }
-
-// PORT STATUS: packages/types/src/search.ts (6 lines)
-// confidence: high
-// todos: 0
-// notes: line/column are 1-based positions → i64 (integer counters).

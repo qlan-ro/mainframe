@@ -1,7 +1,7 @@
-//! `SessionStream::on_revision_delta` equivalence (todo #376 G2 task 5):
-//! for an equivalent sequence of container snapshots, it must produce the
-//! same frames `on_revision` would, frame for frame. Shares `stream/
-//! tests.rs`'s fixture builders via `use super::*`.
+//! `SessionStream::on_revision_delta` equivalence: for an equivalent sequence
+//! of container snapshots, it must produce the same frames `on_revision` would,
+//! frame for frame. Shares `stream/tests.rs`'s fixture builders via
+//! `use super::*`.
 
 use crate::encoder::delta::EncodedDelta;
 

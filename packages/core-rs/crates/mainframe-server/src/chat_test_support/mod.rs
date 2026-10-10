@@ -1,8 +1,8 @@
 //! A minimal `Adapter`/`AdapterSession` pair that actually "spawns" (unlike
 //! `routes/session_transcripts.rs`'s `StubAdapter`, whose `create_session` is
 //! `unreachable!`) — for route tests that need `ctx.chat_manager` wired to a
-//! real `ChatManager` (todo #346, AC 26) and drive it through a create/start
-//! round trip without touching a real CLI process.
+//! real `ChatManager` and drive it through a create/start round trip without
+//! touching a real CLI process.
 #![cfg(test)]
 
 use std::sync::Arc;
@@ -29,7 +29,7 @@ static NEXT_SESSION_ID: AtomicUsize = AtomicUsize::new(1);
 
 /// Registers under whatever `id` it is built with (route tests use `"claude"`
 /// to match their bodies' `adapterId`). `no_persistence` mirrors the
-/// registry capability the rule-7 spawn decision reads.
+/// registry capability the chat spawn decision reads.
 pub(crate) struct StubAdapter {
     id: String,
     no_persistence: bool,
@@ -213,5 +213,3 @@ impl AdapterSession for StubSession {
         ok()
     }
 }
-
-// Not a port; test scaffolding only. No PORT STATUS trailer.

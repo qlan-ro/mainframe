@@ -1,5 +1,5 @@
-//! Production `PlanActionContext`/`PlanModeContext` pair (T4). Wires the ported
-//! dispatcher in `plan_mode_handler.rs` to `ChatManager`'s private
+//! Production `PlanActionContext`/`PlanModeContext` pair. Wires the dispatcher
+//! in `plan_mode_handler.rs` to `ChatManager`'s private
 //! active-chat/message/permission state via the narrow `PlanHost` seam, so this
 //! module never names `EhDeps`/`LcDeps` and `chat_manager.rs` stays wiring-only.
 
@@ -80,8 +80,7 @@ impl PlanModeContext for ChatPlanModeCtx {
     }
 }
 
-/// `PlanActionContext` over one chat's `ActiveChat` cell — mirrors the TS
-/// `buildActionContext(chatId, active)` object bag.
+/// `PlanActionContext` over one chat's `ActiveChat` cell.
 struct ChatPlanActionCtx {
     chat_id: String,
     request_id: String,
@@ -241,15 +240,3 @@ impl PlanActionContext for ChatPlanActionCtx {
 
 #[cfg(test)]
 mod tests;
-
-// PORT STATUS: src/chat/plan-mode-actions.ts — production context, no direct TS
-// counterpart file (the TS `buildActionContext` closure lived inline in
-// chat-manager.ts). See plan_mode_handler.rs's PORT STATUS for the handler port.
-// confidence: medium
-// todos: 0
-// notes: `PlanHost` is the Rust-only seam replacing the TS closure's direct
-// notes: access to `this.eventHandler`/`this.lifecycle`; ChatManager's PlanHostImpl
-// notes: (chat_manager.rs) implements it. Locks are always dropped before an
-// notes: awaited call or a deps persist call (CONCURRENCY rules 1-4).
-// notes: no emit_display: TS's PlanModeHandler DI bag (chat-manager.ts:95-105)
-// notes: never wires it — emitDisplay only reaches ChatPermissionHandler.

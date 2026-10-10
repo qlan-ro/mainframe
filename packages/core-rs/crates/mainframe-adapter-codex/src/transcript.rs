@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/codex/transcript.ts`.
-
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -173,15 +171,3 @@ mod tests {
         assert_eq!(locate_codex_transcript(THREAD_ID, Some(&deps)).await, None);
     }
 }
-
-// PORT STATUS: src/plugins/builtin/codex/transcript.ts (41 lines)
-// confidence: high
-// todos: 0
-// notes: NEW (#424). realpath → tokio::fs::canonicalize; containment via
-// notes: resolved.starts_with(canonicalized root) (the TS `resolved.startsWith(root +
-// notes: sep)` — rollout files are always strictly nested, so component-based
-// notes: starts_with agrees; the outside case lives in a different tempdir). The TS
-// notes: boolean presence probe is gone: `Present`/`Missing`/`None` carry it. lookup is an injectable
-// notes: closure (defaults to thread_registry::lookup_agent_metadata, a sync one-shot
-// notes: read of Codex's external state DB, same as the TS). Ports transcript.test.ts
-// notes: assertion-for-assertion (5 cases), as locate_* assertions.

@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/chat/config-manager.ts`.
-
 use std::sync::{Arc, Mutex};
 
 use mainframe_adapter_api::{AdapterError, AdapterSession, BoxFuture};
@@ -22,8 +20,8 @@ const TRANSCRIPT_MOVE_FAILED: &str =
 #[path = "config_locks.rs"]
 mod config_locks;
 
-/// Errors surfaced by config changes. The message strings cross the wire
-/// (routes surface them), so they are copied verbatim from the TS `throw`s.
+/// Errors surfaced by config changes. The message strings cross the wire:
+/// routes return them as the error text.
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
     #[error("{0}")]
@@ -35,9 +33,9 @@ pub enum ConfigError {
     Adapter(#[from] AdapterError),
 }
 
-/// A partial `Chat` patch (mirrors the `Partial<Chat>` the TS passes to
-/// `db.chats.update`). Worktree fields are `Option<Option<String>>` so a clear
-/// (set-to-undefined) is distinct from "leave unchanged".
+/// A partial `Chat` patch for `chats_update`. Worktree fields are
+/// `Option<Option<String>>` so a clear (set to none) is distinct from "leave
+/// unchanged".
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ChatFieldUpdate {
     pub adapter_id: Option<String>,
@@ -49,12 +47,12 @@ pub struct ChatFieldUpdate {
     pub session_file_path: Option<String>,
 }
 
-/// Injected dependency surface — mirrors the TS `ConfigManagerDeps` object.
+/// Injected dependency surface for [`ChatConfigManager`].
 ///
-/// `getActiveChat` returns the shared per-chat cell (`Arc<Mutex<ActiveChat>>`);
+/// `get_active_chat` returns the shared per-chat cell (`Arc<Mutex<ActiveChat>>`);
 /// the manager mutates `active.chat` in place under a short lock and never holds
-/// it across `.await` (CONCURRENCY rule 3). The `db`/`adapters` fields collapse
-/// into the narrow methods actually used (no not-Send `mainframe-db` repo here).
+/// it across `.await`. Database and adapter access collapse into the narrow
+/// methods actually used (no not-Send `mainframe-db` repo here).
 pub trait ConfigManagerDeps: Send + Sync {
     fn get_active_chat(&self, chat_id: &str) -> Option<Arc<Mutex<ActiveChat>>>;
     fn chats_update(&self, chat_id: &str, updates: &ChatFieldUpdate);
@@ -194,10 +192,9 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
         session: &Arc<dyn AdapterSession>,
         changes: LiveChanges,
     ) -> Result<(), ConfigError> {
-        // TS `applyLiveSetting<K>` is generic over an async setter closure; Rust
-        // async-closure-in-generic is unergonomic, so the three settings are
-        // unrolled with identical control flow (try setter → stage into
-        // updates/active.chat on Ok, warn on Err).
+        // An async setter closure in a generic helper is unergonomic, so the
+        // three settings are unrolled with identical control flow (try setter →
+        // stage into updates/active.chat on Ok, warn on Err).
         let mut updates = ChatFieldUpdate::default();
         let mut model_error = None;
 
@@ -827,7 +824,6 @@ mod tests {
         Arc::new(Mutex::new(ActiveChat::new(test_chat("c1"), Some(session))))
     }
 
-    // Ports config-manager.test.ts assertion-for-assertion.
     #[tokio::test]
     async fn persists_permission_mode_even_when_set_model_rejects() {
         let session = Arc::new(FakeSession {
@@ -1345,19 +1341,3 @@ mod tests {
         );
     }
 }
-
-// PORT STATUS: src/chat/config-manager.ts (270 lines)
-// confidence: medium
-// todos: 0
-// notes: TS `ConfigManagerDeps` DI object → `ConfigManagerDeps` trait; `getActiveChat`
-// notes: returns the shared `Arc<Mutex<ActiveChat>>` cell (CONCURRENCY.tsv PER_ENTITY),
-// notes: mutated under short locks with session I/O + emitEvent kept OUTSIDE the lock
-// notes: (rule 3). The generic `applyLiveSetting<K>` is unrolled into three identical
-// notes: blocks (async-closure-in-generic is unergonomic); warn strings ("setModel
-// notes: rejected; not persisting model" etc.) copied verbatim. `startingChats` →
-// notes: `take_starting_chat` single-flight seam; `setStopLaunchProcesses` late-bind
-// notes: setter dropped (the trait method covers it). start/stop/applyTuning deps
-// notes: futures are infallible here (TS Promise<void> rejection propagation is a
-// notes: seam chat_manager wires). Both config-manager.test.ts cases ported. `db`
-// notes: is narrow trait methods (no not-Send mainframe-db repo); workspace fns come
-// notes: from mainframe-services directly.

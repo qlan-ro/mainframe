@@ -1,8 +1,6 @@
-//! Ported from `src/launch/launch-process-state.ts`.
-//!
 //! Durable per-config status + recent output, kept independent of
 //! `LaunchManager`'s live process map (which deletes its entry the instant the
-//! child exits). Two races this closes, verbatim from the TS docstring:
+//! child exits). Two races this closes:
 //!  - a terminal status ('stopped'/'failed') would be unobservable if reads went
 //!    through the process map — the exit path sets the status and deletes the
 //!    entry in the same tick, so a later read would fall through to a 'stopped'
@@ -14,7 +12,7 @@
 //! Both maps are reset (not deleted) on the next `start()` of the same name, so a
 //! fresh run never carries a previous run's terminal status or output.
 //!
-//! CONCURRENCY.tsv: `statuses` = `Arc<Mutex<HashMap<String, LaunchProcessStatus>>>`,
+//! State: `statuses` = `Arc<Mutex<HashMap<String, LaunchProcessStatus>>>`,
 //! `outputBuffers` = `Arc<Mutex<HashMap<String, VecDeque<LaunchOutputEntry>>>>`.
 
 use std::collections::{HashMap, VecDeque};
@@ -148,12 +146,3 @@ mod tests {
         assert_eq!(buffer.last().unwrap().data, "line-249\n");
     }
 }
-
-// PORT STATUS: src/launch/launch-process-state.ts (68 lines)
-// confidence: high
-// todos: 0
-// notes: two HashMaps behind one Arc<Mutex> (SHARED_MAP); reset/setStatus/
-// getStatus(default stopped)/getAllStatuses/bufferOutput(cap 200, drop oldest)/
-// getOutputBuffer(oldest-first) mirror the TS. LaunchOutputEntry.stream reuses
-// the canonical LaunchStream enum from mainframe-types::events. Cloneable so the
-// manager's reader/exit tasks share one store.

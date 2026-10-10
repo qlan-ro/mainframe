@@ -1,11 +1,9 @@
-//! Ported assertion-for-assertion from `mainframe-adapter-claude::pr_detection`'s
-//! `mod tests` (todo #339 task 2) — the pure parser now lives in
-//! `mainframe-adapter-api::pr_detection`.
+//! Tests for the pure PR parser in `mainframe-adapter-api::pr_detection`.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use mainframe_adapter_api::pr_detection::*;
 
-// The TS `REGEX.test(x)` boolean checks map to `parse_*(x).is_some()`.
+// Boolean match checks are `parse_*(x).is_some()`.
 #[test]
 fn pr_url_regex_matches_standard_github_pr_url() {
     assert!(parse_pr_url("https://github.com/owner/repo/pull/123").is_some());

@@ -1,17 +1,12 @@
-//! Todo #303 — red-phase integration tests for the Codex turn-start model
-//! resolution. Written against **today's** API: no reference to `turn_model`,
-//! `default_model`, or any other symbol the fix introduces. Drives a real
+//! Integration tests for the Codex turn-start model
+//! resolution. Drives a real
 //! `CodexSession` (spawn + `send_message`) against a fake `codex app-server`
 //! that tees every request line it receives to a capture file, so assertions
 //! read the exact serialized `turn/start` payload rather than adapter-side
 //! structs.
 //!
-//! `configured_model_is_sent_verbatim_in_collaboration_mode_settings` passes
-//! today and is the regression guard for acceptance criterion 1. The other
-//! four cases fail today — `CollaborationModeSettings.model` is
-//! `Option<String>` with `skip_serializing_if`, so a model-less chat omits the
-//! key instead of falling back through the reported/default tiers, and
-//! nothing stops a `turn/start` from being sent when no model can be found.
+//! Cases cover configured, reported, and default model selection, plus
+//! failure when no model is available.
 #![cfg(unix)]
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 

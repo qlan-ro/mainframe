@@ -1,4 +1,4 @@
-//! End-to-end revision-cursor cases through `start_resume` (todo #377):
+//! End-to-end revision-cursor cases through `start_resume`:
 //! the full daemon-level wiring — `begin_resume` creating the log,
 //! `dispatch_resume` planning against it, `reset_session` sending the
 //! reply — produces `cursor` meta on the actual socket frame for an
@@ -123,7 +123,7 @@ async fn a_second_resume_with_the_returned_cursor_is_incremental() {
 }
 
 /// A non-opted connection's resume reply carries no `cursor` meta at all —
-/// byte-identical to the pre-#377 wire.
+/// byte-identical to the legacy (pre-cursor) wire.
 #[tokio::test]
 async fn a_non_opted_connection_gets_no_cursor_meta() {
     let ctx = AppCtx::test_ctx();

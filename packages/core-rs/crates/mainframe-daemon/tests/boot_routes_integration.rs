@@ -1,4 +1,4 @@
-//! Boot integration for the Task 5.5 surfaces: serves `build_app` over a fully
+//! Boot integration for the launch, plugin, and LSP surfaces: serves `build_app` over a fully
 //! wired `AppCtx` (launch registry + LSP manager + plugin manager Some) and asserts
 //! the happy paths of `/api/projects/:id/launch/status`, `/api/plugins`, and
 //! `/api/lsp/languages`.
@@ -189,7 +189,7 @@ async fn boot_serves_launch_plugins_and_lsp_happy_paths() {
         "languages must be an array: {lsp}"
     );
 
-    // A missing projectId is a 400 (Zod min(1)).
+    // A missing projectId is a 400.
     let bad = reqwest::get(format!("{base}/api/lsp/languages"))
         .await
         .unwrap();

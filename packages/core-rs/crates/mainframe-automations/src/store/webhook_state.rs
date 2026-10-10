@@ -52,9 +52,3 @@ impl WebhookStateStore {
             .await
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-25-todo-234-automations-editor-plan.md T7), not a TS port
-// confidence: high
-// todos: 0
-// notes: the fourth table in automations.db; Node has no equivalent, so a
-//        file handed back to that engine simply ignores it.

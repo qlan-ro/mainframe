@@ -1,8 +1,6 @@
-//! Ported from `packages/types/src/api.ts`.
-//!
 //! The canonical daemon HTTP response envelope. The `ok`/`ok_empty`/`fail`
-//! *constructors* live in `mainframe-server::routes::respond` (crate map §2.16);
-//! this module ports the wire *shapes* only. Discrimination is on the boolean
+//! *constructors* live in `mainframe-server::routes::respond`; this module
+//! holds the wire *shapes* only. Discrimination is on the boolean
 //! `success` field, so the union types are `#[serde(untagged)]` with
 //! `deny_unknown_fields` on the payload-free arms to keep the empty-ok and error
 //! shapes unambiguous.
@@ -101,12 +99,3 @@ mod tests {
         assert_eq!(serde_json::to_value(&parsed).unwrap(), err);
     }
 }
-
-// PORT STATUS: packages/types/src/api.ts (18 lines)
-// confidence: high
-// todos: 0
-// notes: Envelope shapes only; ok/ok_empty/fail constructors belong to
-// mainframe-server::routes::respond. ApiResponse<T>/ApiResponseEmpty are
-// untagged (discriminant is the boolean `success`); ApiOkEmpty/ApiErr carry
-// deny_unknown_fields so an error body cannot be mis-read as an empty-ok. No
-// cross-module deps.

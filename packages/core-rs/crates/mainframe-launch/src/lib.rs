@@ -1,10 +1,8 @@
-//! Ported from `src/launch/*` and `src/tunnel/*` (packages/core).
-//!
 //! `mainframe-launch` owns the launcher (parse/validate `launch.json`, spawn +
 //! stream + tear down user launch processes, one manager per project) and the
 //! cloudflared tunnel manager. DaemonEvents are emitted through a broadcast
-//! handle (`BroadcastFn`) passed in by the daemon, matching the CONTRACT
-//! ws-events shapes (`launch.*`, `tunnel:status`).
+//! handle (`BroadcastFn`) passed in by the daemon, matching the `DaemonEvent`
+//! shapes in `packages/types/src/events.ts` (`launch.*`, `tunnel:status`).
 #![forbid(unsafe_code)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 

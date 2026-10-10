@@ -1,8 +1,4 @@
-//! Regression net for a router losing this route (todo #350 follow-up): the
-//! e2e run that surfaced this bug used daemon binaries built before commit
-//! 48f739a7 registered `GET /api/chats/{id}/workflow-runs` — the route itself
-//! was never missing from source, only from those stale artifacts. This test
-//! is the oracle that would have caught it.
+//! Regression net for a router losing `GET /api/chats/{id}/workflow-runs`.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod support;

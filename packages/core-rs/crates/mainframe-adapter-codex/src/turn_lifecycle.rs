@@ -1,5 +1,5 @@
-//! Moved out of `event_mapper.rs` (task 1, todo #247) to keep that file under
-//! the 300-line ceiling. Turn-scoped notification handlers, unchanged.
+//! Turn-scoped notification handlers, kept apart from `event_mapper.rs` to keep
+//! that file under the 300-line ceiling.
 
 use std::sync::Arc;
 
@@ -17,7 +17,7 @@ use crate::types::{
 
 /// Turn/usage bookkeeping describes the parent's own turn only — a spawned
 /// child runs its own turns on its own thread, and must not overwrite or clear
-/// the parent's state (todo #247 task 18).
+/// the parent's state.
 pub(crate) fn handle_turn_started(params: TurnStartedParams, state: &mut CodexSessionState) {
     let parent = match resolve_owner(params.thread_id.as_deref(), state) {
         Owner::Parent => None,
@@ -52,7 +52,7 @@ pub(crate) fn handle_turn_started(params: TurnStartedParams, state: &mut CodexSe
     state.current_turn_id = Some(params.turn.id);
     state.compaction_emitted = false;
     // A new parent turn starting must not inherit the previous turn's
-    // in-flight agent-message text (todo #378) — a child's own turn/started
+    // in-flight agent-message text — a child's own turn/started
     // never reaches here (the `Owner::Parent` check above returned already).
     state.agent_message_partial.clear();
 }
@@ -108,8 +108,8 @@ fn finish_parent(
     // A card the child never resolved itself (no `wait`, no own `turn/completed`)
     // closes here so it does not stay open forever once the parent moves on.
     collab_card::resolve_open_cards_on_parent_turn_end(sink, state);
-    // Backstop (P2): a row whose card was already resolved by another route can
-    // never survive the turn (AC 8).
+    // Backstop: a row whose card was already resolved by another route can
+    // never survive the turn.
     end_all_activity(state);
 
     let thread = params
@@ -120,7 +120,7 @@ fn finish_parent(
     state.command_state.end_parent_turn(thread, &params.turn.id);
     state.current_turn_plan = None;
     state.current_turn_id = None;
-    // Todo #378: any status (completed/failed/interrupted) ends the turn's
+    // Any status (completed/failed/interrupted) ends the turn's
     // in-flight agent-message accumulation — a stale delta for this turn
     // must find no current_turn_id to match against afterward.
     state.agent_message_partial.clear();
@@ -172,11 +172,9 @@ fn emit_parent_turn_result(
     sink.on_result(SessionResult {
         total_cost_usd: Some(0.0),
         usage,
-        // Codex has no distinct per-turn context total (#423 is Claude-only), so it
-        // resolves the sink's `contextTokens === undefined → fall back to usage`
-        // path (event-handler.ts:366) at the adapter boundary: report this turn's
-        // raw input usage as the context size. None (no usage yet) keeps the stored
-        // size. Option<i64> can't carry the TS undefined/null distinction downstream.
+        // Codex has no distinct per-turn context total (#423 is Claude-only), so the
+        // adapter reports this turn's raw input usage as the context size. None (no
+        // usage yet) keeps the stored size.
         context_tokens: state.last_usage.as_ref().map(|lu| lu.input_tokens),
         subtype: if is_error {
             Some("error_during_execution".to_string())

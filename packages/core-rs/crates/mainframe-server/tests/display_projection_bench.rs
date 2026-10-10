@@ -1,4 +1,4 @@
-//! Benchmark (todo #376 G4 task 4, `#[ignore]`d): old (full `prepare`/
+//! Benchmark (`#[ignore]`d): old (full `prepare`/
 //! `encode_revision`/`diff`/`record` every partial) vs. new
 //! (`IncrementalProjector` + per-container `encode_container`/`apply`/
 //! `record_delta`) per-partial cost, same active turn at 100/1,000/10,000

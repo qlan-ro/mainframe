@@ -1,6 +1,5 @@
-//! `POST /api/chats` — split out of `chat_commands.rs` for rule 2's create
-//! validator (#346): a chat now carries either a project or the `noProject`
-//! flag, and an optional `temporary` flag fixed at creation.
+//! `POST /api/chats`: a chat carries either a project or the `noProject` flag,
+//! and an optional `temporary` flag fixed at creation.
 
 use std::sync::Arc;
 
@@ -39,7 +38,7 @@ struct CreateChatBody {
     temporary: Option<bool>,
 }
 
-/// A validated chat home (rule 2): either a real project id or the "no
+/// A validated chat home: either a real project id or the "no
 /// project" flag. Replaces a `(bool, Option<String>)` pair so an impossible
 /// "neither" or "both" state cannot reach `resolve_project_id` — `validate_shape`
 /// is the only place that decides which variant applies.
@@ -48,7 +47,7 @@ enum ChatHome {
     NoProject,
 }
 
-/// Rule 2's shape checks: adapterId required, exactly one of a non-empty
+/// Create-body shape checks: adapterId required, exactly one of a non-empty
 /// projectId or `noProject: true`, worktree fields paired, and never a
 /// worktree on a non-project chat. Returns the adapter id and the chat's
 /// home on success.
@@ -90,7 +89,7 @@ fn validate_shape(b: &CreateChatBody) -> Result<(String, ChatHome), Response> {
 
 /// Resolves to the hidden scratch id for a non-project chat, else the real
 /// project's id after confirming it exists (an unknown or scratch id 400s,
-/// since `projects.get` excludes the hidden row — rule 1).
+/// since `projects.get` excludes the hidden row).
 async fn resolve_project_id(ctx: &Arc<AppCtx>, home: ChatHome) -> Result<String, Response> {
     let pid = match home {
         ChatHome::NoProject => return Ok(NO_PROJECT_ID.to_string()),
@@ -148,12 +147,3 @@ async fn create(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
 pub fn router() -> Router<Arc<AppCtx>> {
     Router::new().route("/api/chats", post(create))
 }
-
-// PORT STATUS: split out of src/server/routes/chat-commands.ts's `create`
-// confidence: high
-// todos: 0
-// notes: rule 2's create validator (#346) — exactly one of a non-empty
-// projectId or noProject: true, adapterId required, no worktree on a
-// non-project chat, and the project must exist (the hidden scratch row is
-// excluded from `projects.get`, so passing it as `projectId` 400s like any
-// other unknown id).

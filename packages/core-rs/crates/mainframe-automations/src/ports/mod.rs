@@ -18,9 +18,3 @@ pub use events::{
 };
 pub use notify::{Notification, NotificationLinks, Notifier, NotifyError};
 pub use projects::ProjectRegistry;
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T3.1-T4.1), not a TS port
-// confidence: high
-// todos: 0
-// notes: AgentPort/Notifier/ProjectRegistry/CredentialStore land with their
-//        phases (T4.3-T8).

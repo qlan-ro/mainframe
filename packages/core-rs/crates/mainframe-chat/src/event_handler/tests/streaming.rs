@@ -74,7 +74,7 @@ impl EventHandlerDeps for BgDeps {
     fn tracker_end_all_running(&self, chat_id: &str) {
         self.tracker.end_all_running(chat_id);
     }
-    /// Empty on purpose: chat_deps.rs's workflow_runs_stop_all_delegates_... test covers the wiring.
+ /// Empty on purpose: chat_deps.rs's workflow_runs_stop_all_delegates_... test covers the wiring.
     fn workflow_runs_stop_all(&self, _chat_id: &str) {}
 }
 

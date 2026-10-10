@@ -1,14 +1,13 @@
-//! Per-action manifest (T6.2): id, catalog metadata, named outputs typed by
-//! the exact contract §5 enum `text|number|list|record` (no `none` — a
-//! no-output action carries an empty outputs list), the engine-internal
-//! `idempotent` flag feeding the Decision-12 restart policy, and the editor's
-//! field schema (`fields`/`has_output_as` — Part 0 of the 2026-08-18
-//! automations-provider-connections plan). `fields` is a sibling to
-//! `params_schema`, not a translation of it: JSON Schema can't express "this
-//! is a code editor" or "this is a token-accepting chip field", so the
-//! daemon authors the control types by hand, same as `params_schema` itself.
-//! Both `idempotent` and `fields`/`has_output_as` now cross the wire in the
-//! `ActionCatalogEntry` projection (T7.3/T9.3).
+//! Per-action manifest: id, catalog metadata, named outputs typed by the exact
+//! contract §5 enum `text|number|list|record` (no `none` — a no-output action
+//! carries an empty outputs list), the `idempotent` flag feeding the
+//! restart-mid-action policy, and the editor's field schema
+//! (`fields`/`has_output_as`). `fields` is a sibling to `params_schema`, not a
+//! translation of it: JSON Schema can't express "this is a code editor" or
+//! "this is a token-accepting chip field", so the daemon authors the control
+//! types by hand, same as `params_schema` itself. Both `idempotent` and
+//! `fields`/`has_output_as` now cross the wire in the `ActionCatalogEntry`
+//! projection.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -53,9 +52,10 @@ pub enum ActionAuth {
     Token,
 }
 
-/// Mirrors the UI's `ActionFieldControl` (`steps/action-fields.ts`) exactly —
-/// that file is the consumer, so any new control value needs a matching case
-/// added there before it means anything.
+/// Wire contract: the UI matches these values in `ActionFieldControl`
+/// (`packages/ui/src/features/automations/steps/action-fields.ts`), so any
+/// new control value needs a matching case added there before it means
+/// anything.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ActionFieldControl {
@@ -151,8 +151,7 @@ pub struct ActionManifest {
     pub auth: ActionAuth,
     /// Suggested credential label shown by the editor (e.g. `github`).
     pub credential_label_hint: Option<&'static str>,
-    /// JSON Schema for the action's params form (Node emits zod's
-    /// `toJSONSchema`; Rust authors the equivalent schema by hand). Validated
+    /// JSON Schema for the action's params form, authored by hand. Validated
     /// server-side by each action's `parse_input`.
     pub params_schema: Value,
     /// The editor's auto-form field list — a sibling of `params_schema`, not
@@ -164,14 +163,7 @@ pub struct ActionManifest {
     /// (`engine/run_action_verb.rs`'s `ACTIONS_WITH_OUTPUT_AS`).
     pub has_output_as: bool,
     pub outputs: Vec<ActionOutput>,
-    /// Decision 12: non-idempotent actions get a persisted `running` marker
-    /// before executing and are never silently re-run on restart.
+    /// Non-idempotent actions get a persisted `running` marker before executing
+    /// and are never silently re-run on restart.
     pub idempotent: bool,
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T6.2), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node actions/types.ts ActionDef metadata; params_schema
-//        byte-parity with zod's toJSONSchema is a route-diff concern (T9.3),
-//        not asserted here.

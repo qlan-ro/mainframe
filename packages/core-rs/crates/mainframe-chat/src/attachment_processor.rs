@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/chat/attachment-processor.ts`.
-//!
 //! Pure transform: already-fetched attachments → the `ProcessedAttachments`
 //! the sendMessage seam feeds to the adapter. Images become inline `image`
 //! content (plus `ImageInput`s for adapters that take images out-of-band);
@@ -41,7 +39,7 @@ pub fn process_attachments(attachments: &[StoredAttachment]) -> ProcessedAttachm
     out
 }
 
-/// Mirrors the `attachmentPreviews` object in attachment-processor.ts —
+/// Builds the `attachmentPreviews` object with
 /// camelCase keys, omitting the path fields when absent (JSON.stringify drops
 /// `undefined`).
 fn build_preview(attachment: &StoredAttachment) -> serde_json::Value {

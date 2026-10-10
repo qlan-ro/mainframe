@@ -1,8 +1,8 @@
-//! `resolve`'s own cases (todo #377): what `dispatch_resume` delegates here
-//! for a connection with a revision log. End-to-end cursor-meta-on-the-wire
-//! cases live in `resume/tests.rs`, since those exercise `dispatch_resume`
-//! itself; these are the narrower `resolve`-level cases that would be
-//! awkward to drive through the full `ResumePort` plumbing.
+//! `resolve`'s own cases: what `dispatch_resume` delegates here for a
+//! connection with a revision log. End-to-end cursor-meta-on-the-wire cases
+//! live in `resume/tests.rs`, since those exercise `dispatch_resume` itself;
+//! these are the narrower `resolve`-level cases that would be awkward to drive
+//! through the full `ResumePort` plumbing.
 
 use std::sync::{LazyLock, Mutex};
 
@@ -13,7 +13,7 @@ use serde_json::json;
 use super::*;
 use crate::encoder::ItemRole;
 
-/// A connection that did not opt into replay result previews (spec Decision 41).
+/// A connection that did not opt into replay result previews.
 static NO_PREVIEWS: LazyLock<HashSet<String>> = LazyLock::new(HashSet::new);
 
 /// The boundary a caller like `hub.rs::begin_resume` would have captured

@@ -1,8 +1,8 @@
-//! Replay result previews (spec Decision 41): on a full `session/resume`
-//! replay, tool results that belong to containers older than the newest
-//! [`FULL_RESULT_CONTAINERS`] are sent as a short preview carrying the
-//! existing truncation marker, so the client's expand affordance fetches
-//! the full text on demand (`GET /api/chats/{id}/tool-result/{toolUseId}`).
+//! Replay result previews: on a full `session/resume` replay, tool results that
+//! belong to containers older than the newest [`FULL_RESULT_CONTAINERS`] are
+//! sent as a short preview carrying the existing truncation marker, so the
+//! client's expand affordance fetches the full text on demand
+//! (`GET /api/chats/{id}/tool-result/{toolUseId}`).
 //!
 //! Measured on real transcripts, tool-result text is 85–95% of a long
 //! chat's replay bytes (one 1958-item chat replayed 31.6 MB, 28.9 MB of it

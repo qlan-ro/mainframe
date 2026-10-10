@@ -1,15 +1,11 @@
 //! `CodexSession::load_scan_records` — the cold-load PR-detection scan source
-//! for Codex (todo #339 task 15). It must source its records from the rollout
+//! for Codex. It must source its records from the rollout
 //! JSONL, not `thread/read` (which never returns `commandExecution` items on
-//! codex-cli 0.147.0 — see the plan's Established facts table), and it must
+//! codex-cli 0.147.0), and it must
 //! never spawn a real `codex app-server` on the happy path.
 //!
-//! This file does not compile until task 17 introduces `CodexScanDeps` and
-//! `CodexSession::set_scan_deps` — the production entry points
-//! (`lookup_agent_metadata`, `read_rollout_items(.., None)`) hardcode `None`
-//! deps and enforce containment under the real `~/.codex/sessions`, so there
-//! is no way to test this offline without that seam. That is the intended
-//! red phase; do not weaken these assertions to make the file build early.
+//! `CodexScanDeps` and `CodexSession::set_scan_deps` let these tests run
+//! offline while production entry points enforce session containment.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod common;

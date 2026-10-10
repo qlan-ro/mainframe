@@ -1,4 +1,4 @@
-//! RED tests (T3) for the plan-mode dispatcher wiring: `ChatManager::respond_to_permission`
+//! RED tests for the plan-mode dispatcher wiring: `ChatManager::respond_to_permission`
 //! must forward the three `PhDeps::plan_mode_*` branches to a resolved adapter handler.
 //! A child module of `tests`, so it sees `tests`' private `StoreDeps`/`RecSession`/`seed_active`.
 
@@ -211,15 +211,15 @@ async fn answers_the_escalation_on_the_wire_exactly_once_via_the_permission_hand
     let response = exit_plan_response("r1", Some(ExecutionMode::AcceptEdits), None);
     mgr.respond_to_permission("c1", response).await.unwrap();
 
-    // Preserved deliberately (decision 6, plan T3/T12): `handle_normal_permission`
+    // `handle_normal_permission`
     // already answers the CLI before dispatching to the plan-mode handler, which
-    // answers again inside `on_approve`. This is the ported TS's double-send; do
-    // not "fix" it here without re-reading T12's live-verification contingency.
+    // answers again inside `on_approve`. This double-send is observable, so
+    // changing it requires verifying the live permission flow.
     assert_eq!(session.responded_calls.lock().unwrap().len(), 2);
     assert_eq!(session.permission_mode_calls.lock().unwrap().len(), 1);
 }
 
-/// T6's `PlanHostImpl`-specific case: `ChatManager::new` alone never calls
+/// `PlanHostImpl`-specific case: `ChatManager::new` alone never calls
 /// `attach_self` (only `build_chat_manager` does), so a manager built the way
 /// this crate's tests build one is exactly the "never attached" state the
 /// clear-context follow-up send must fail closed against.

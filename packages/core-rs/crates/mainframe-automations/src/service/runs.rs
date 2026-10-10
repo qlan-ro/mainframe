@@ -8,7 +8,7 @@ use crate::store::{RunRecord, RunTriggerContext};
 
 use super::{AutomationsEngine, EngineError};
 
-/// The runs page every list route serves (Node parity).
+/// The runs page every list route serves.
 pub(super) const RUNS_PAGE: u32 = 50;
 
 impl AutomationsEngine {
@@ -61,9 +61,3 @@ impl AutomationsEngine {
         Ok(self.interpreter.cancel_run(run_id).await?)
     }
 }
-
-// PORT STATUS: packages/core/src/automations/service.ts (runs surface)
-// confidence: high
-// todos: 0
-// notes: run_manually returns as soon as the run row exists; advance runs on a
-//        detached task so the route can answer 202.

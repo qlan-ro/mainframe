@@ -1,5 +1,4 @@
-//! Red-phase (Task 9): `reconcile::spawn_terminal_reconcile` — the terminal
-//! record backfill (D7). Turned green by Task 16.
+//! `reconcile::spawn_terminal_reconcile` — the terminal record backfill.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::sync::Arc;

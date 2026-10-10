@@ -1,12 +1,9 @@
-//! Ported from `packages/core/src/chat/chat-manager.ts`.
-//!
-//! The TS `ChatManager` owns `messages`/`permissions`/`activeChats`/`queuedRefs`
-//! and wires the sub-managers with closures over `this`. The Rust port keeps the
-//! shared PER_ENTITY caches behind `Arc<Mutex<..>>` / `Arc<DashMap<..>>` and wires
-//! the sub-managers with concrete delegating `Deps` wrappers (`EhDeps`/`LcDeps`/
-//! `PhDeps`) that all hold the SAME `Arc<dyn ChatManagerDeps>` + shared state — the
-//! Rust analogue of the TS closure bag. Non-generic (`dyn ChatManagerDeps`) to
-//! avoid generic self-recursion in the wiring.
+//! `ChatManager` owns the message cache, permissions, active-chat registry, and
+//! queued refs. It keeps the shared per-chat caches behind `Arc<Mutex<..>>` /
+//! `Arc<DashMap<..>>` and wires the sub-managers with concrete delegating `Deps`
+//! wrappers (`EhDeps`/`LcDeps`/`PhDeps`) that all hold the SAME
+//! `Arc<dyn ChatManagerDeps>` + shared state. Non-generic (`dyn ChatManagerDeps`)
+//! to avoid generic self-recursion in the wiring.
 //!
 //! The facade itself is split by band across flat submodules (never nested, so
 //! every submodule reaches this file's `use` block via `use super::*`): `deps.rs`
@@ -110,8 +107,8 @@ pub(crate) use shared::remap_history as remap_history_for;
 pub use side_chat::OpenSideChatError;
 pub use update::{ChatUpdate, ProcessedAttachments};
 
-// `ForkChatError` (todo #343's fork-a-chat action, `fork_api.rs`) is distinct
-// from `ForkError` above (the pre-existing `forkToWorktree` action).
+// `ForkChatError` (the fork-a-chat action, `fork_api.rs`) is distinct from
+// `ForkError` above (the `fork_to_worktree` action).
 pub use crate::fork::{AdapterForkInfo, ForkChatError, ForkCreateInput, ForkPoint};
 
 use deps_config::CmDeps;
@@ -167,66 +164,3 @@ pub struct ChatManager {
 
 #[cfg(test)]
 pub(crate) mod tests;
-
-// PORT STATUS: src/chat/chat-manager.ts (787 lines)
-// confidence: medium
-// notes: The TS closure-over-`this` wiring → concrete delegating Deps wrappers
-// notes: (EhDeps/LcDeps/PhDeps/CmDeps) that share ONE `Arc<dyn ChatManagerDeps>` + the
-// notes: shared PER_ENTITY caches (`Arc<Mutex<MessageCache/PermissionManager>>`,
-// notes: `Arc<DashMap<_, Arc<Mutex<ActiveChat>>>>`, `Arc<Mutex<HashMap<uuid,ref>>>`).
-// notes: `emitEvent`'s enrich-on-emit (displayStatus/isRunning/worktreeMissing) is a
-// notes: shared `enrich_and_emit` the wrappers + facade both call; `deps.emit_event`
-// notes: is the RAW onEvent. sendMessage + CLI-owned queue + command routing ported
-// notes: 1:1; queuedRefs keyed by uuid, filtered by chatId (per CONCURRENCY.tsv 72).
-// notes: Task 5.4 completed the deferred facade surface: list_filtered / getEffective/
-// notes: Project/ChatProjectId reads (enriched); sync_chat_tags/fields + emitChatUpdated
-// notes: + notifyWorktreeDeleted broadcasts; applyTuning (live re-apply); getMessages/
-// notes: getMessagesFromDisk/getDisplayMessages (loadHistory via create_session dep +
-// notes: cache/permission-restore); getSessionContext + addMention (context-tracker via
-// notes: the injected get_session_context/chats_add_mention deps); updateChatConfig /
-// notes: enable/attach/disable/forkToWorktree (CmDeps wires ChatConfigManager;
-// notes: forkToWorktree = lifecycle.fork_to_worktree + config.enable_worktree). PhDeps
-// notes: get_messages now shares build_history_session, so getPendingPermission's JSONL
-// notes: restore is real. applyTuning skips the TS `if (!session.applyTuning)` capability
-// notes: guard (Rust default apply_tuning is Ok no-op) → an extra resolve for adapters
-// notes: without live tuning; behaviourally faithful. trustWorkspace is now ported:
-// notes: chats_get + projects_get_path (both pre-existing deps) resolve
-// notes: `chat.worktreePath ?? project.path`, then the new injected
-// notes: `write_workspace_trust` deps hook (mainframe-adapter-claude::trust_store,
-// notes: wired in chat_deps.rs) persists it — 404/500 semantics match the TS route's
-// notes: try/catch. getExternalSessionService(): `ExternalSessionService<D>` is generic
-// notes: over the concrete deps type, but `new()` only ever receives the already-erased
-// notes: `Arc<dyn ChatManagerDeps>` — so the object-safe `ExternalSessionFacade` trait
-// notes: (BoxFuture-based) is blanket-impl'd for `ExternalSessionService<D>` and injected
-// notes: post-construction via `with_external_sessions` from `build_chat_manager`, where
-// notes: the concrete `DaemonChatDeps` Arc still exists. `None` (no service) is a legal
-// notes: state for harnesses that only need the rest of the facade. STILL DEFERRED
-// notes: (genuine blocker, not on this task's crate surface): plan-mode delegation
-// notes: (PhDeps createPlanModeHandler seam).
-// notes: setStopLaunchProcesses/setPushService are construction-time injection in Rust
-// notes: (LaunchStopper + send_push deps), so the TS late-bind setters are unnecessary.
-// notes: Ported tests: cli-queue (5), recover-working (5), turn-timing (1), command-
-// notes: routing (7), remove-project-kills-tasks (1), + 5.4 facade cases (5).
-// notes: Main catch-up (#423/#424/#425): enrichChat widens `working` via
-// notes: `tracker.listLive` + sets `backgroundActivity` (F); getDisplayMessages returns
-// notes: `ChatHistoryPayload` and reconciles transcript presence (E); reconcile_transcript
-// notes: / continue_here / continue_in_project_root / recreate_worktree delegate to the
-// notes: transcript_presence + degraded_recovery modules via a `RecoveryWrapper` that
-// notes: implements both deps traits over the shared internals (chat lock is a leaf,
-// notes: emit-after-drop); sendMessage auto-`continueHere` when transcriptMissing && not
-// notes: spawned. No defaulted ChatManagerDeps method is left silently unoverridden in
-// notes: chat_deps.rs: tracker_list_live, tracker_end_all_running, locate_transcript
-// notes: are all required, not defaulted (#273 for the
-// notes: tracker methods — a silent default caused backgroundActivity to stay empty,
-// notes: then let orphaned tasks stay Running forever, in production; #289 for
-// notes: the presence lookup — a silent default left transcript-presence
-// notes: reconciliation permanently inert in production);
-// notes: generate_title gained an adapter_id arg (adapter-aware).
-// notes: Ported: chat-manager-background-activity (5, via direct enrich_chat); the
-// notes: production wiring is covered by mainframe-server's chat_background_activity
-// notes: integration test (#273). Also chat-manager-degraded (3).
-// notes: #292 split this file into flat submodules under `chat_manager/` (by band:
-// notes: construction, deps wiring, registry reads, lifecycle/permission, history,
-// notes: config/worktree, send-path) to bring the file and `send_message`/`new`
-// notes: under the 300-line/50-line limits. Pure move, no API or behavior change.
-// todos: 1

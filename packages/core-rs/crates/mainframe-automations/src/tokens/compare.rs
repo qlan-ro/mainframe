@@ -24,7 +24,7 @@ fn eval_condition(scope: &Scope<'_>, row: &ConditionRow) -> bool {
 
 /// These compare via a single scalar stringify/number coercion — an array
 /// operand or value would silently compare by its joined string, so both
-/// sides are rejected explicitly rather than coerced (the Node fix).
+/// sides are rejected explicitly rather than coerced.
 fn is_scalar_only(comparator: Comparator) -> bool {
     matches!(
         comparator,
@@ -71,14 +71,14 @@ fn compare(operand: &TokenValue, comparator: Comparator, value: Option<&Conditio
 
 /// The authored value's string form. A missing value (unreachable through a
 /// validated definition) compares as a sentinel no real operand equals —
-/// `is` misses and `is_not` holds, matching Node's `String(undefined)`
-/// behavior without reproducing the literal "undefined" string.
+/// `is` misses and `is_not` holds, as JS `String(undefined)` would, without
+/// reproducing the literal "undefined" string.
 fn value_string(value: Option<&ConditionValue>) -> String {
     match value {
         Some(ConditionValue::Text(s)) => s.clone(),
         Some(ConditionValue::Number(n)) => js_number_string(n.as_f64().unwrap_or(f64::NAN)),
         // Only reachable via `contains` (scalar-only comparators bail above);
-        // mirror JS Array.prototype.toString (comma-joined).
+        // comma-joined, like JS Array.prototype.toString.
         Some(ConditionValue::List(items)) => items
             .iter()
             .map(scalar_string)
@@ -96,7 +96,7 @@ fn scalar_string(value: &ScalarValue) -> String {
 }
 
 /// JS `Number()` coercion: numeric strings parse, blank is 0, anything else
-/// is NaN — and NaN makes every eq/lt/gt false, exactly like Node.
+/// is NaN — and NaN makes every eq/lt/gt false.
 fn operand_number(operand: &TokenValue) -> f64 {
     match operand {
         TokenValue::Number(n) => *n,
@@ -121,8 +121,8 @@ fn js_parse_number(s: &str) -> f64 {
     trimmed.parse::<f64>().unwrap_or(f64::NAN)
 }
 
-/// Only lists and text have an emptiness (Node parity — a record or number
-/// is never "empty", so `not_empty` holds for them).
+/// Only lists and text have an emptiness (a record or number is never
+/// "empty", so `not_empty` holds for them).
 fn is_empty(operand: &TokenValue) -> bool {
     match operand {
         TokenValue::List(items) => items.is_empty(),
@@ -130,9 +130,3 @@ fn is_empty(operand: &TokenValue) -> bool {
         TokenValue::Number(_) | TokenValue::Record(_) => false,
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T3.2), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node engine/comparators.ts, including the scalar-only
-//        array rejection and the null-operand short-circuit.

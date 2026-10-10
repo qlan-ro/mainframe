@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/db/migrations.ts`.
-
 use mainframe_runtime::time::now_iso8601;
 use mainframe_types::chat::NO_PROJECT_ID;
 use rusqlite::Connection;
@@ -407,8 +405,7 @@ pub fn migrations() -> Vec<Migration> {
                 Ok(())
             },
         },
-        // Merged from main (34-commit catch-up): context-usage tracking columns +
-        // transcript-missing flag on chats. Mirrors TS migration 25.
+        // Context-usage tracking columns + transcript-missing flag on chats.
         Migration {
             version: 25,
             up: |db| {
@@ -433,7 +430,7 @@ pub fn migrations() -> Vec<Migration> {
             },
         },
         // Marks a chat as automation-created (ask_agent step) so the sessions
-        // sidebar can hide it from the default list. Mirrors TS migration 26.
+        // sidebar can hide it from the default list.
         Migration {
             version: 26,
             up: |db| {
@@ -458,7 +455,7 @@ pub fn migrations() -> Vec<Migration> {
                 )
             },
         },
-        // Fork lineage (todo #343): the nullable, generic parent reference plus
+        // Fork lineage: the nullable, generic parent reference plus
         // its lookup index, and the daemon-internal pending-fork payload (never
         // on the `Chat` wire type — read/written only through repo methods, like
         // `dismissed_worktrees`).
@@ -482,7 +479,7 @@ pub fn migrations() -> Vec<Migration> {
                 )
             },
         },
-        // Temporary and non-project sessions (#346): the temporary flag, the
+        // Temporary and non-project sessions: the temporary flag, the
         // no-persistence bookkeeping pair, and the non-project scratch cwd.
         // Also seeds the hidden scratch project row every non-project chat's
         // project_id points at.
@@ -521,7 +518,7 @@ pub fn migrations() -> Vec<Migration> {
                 Ok(())
             },
         },
-        // Side chats (#344): a parent chat has at most one side chat at a time.
+        // Side chats: a parent chat has at most one side chat at a time.
         // The partial unique index enforces the invariant atomically alongside
         // the DB worker's one-closure-at-a-time serialization (find_or_create).
         Migration {
@@ -567,16 +564,3 @@ pub fn run_migrations(db: &Connection, target: i64) -> Result<(), DbError> {
     }
     Ok(())
 }
-
-// PORT STATUS: src/db/migrations.ts (253 lines)
-// confidence: high
-// notes: same 25 numbered migrations, same in-body table_info guards and data
-// backfills, same LATEST_VERSION=25 (25 merged from main's 34-commit catch-up).
-// MIGRATIONS (const array in TS) becomes migrations() returning a Vec<Migration>
-// with non-capturing closures coerced to fn pointers (a Vec can't be const).
-// LATEST_VERSION is a const literal (25)
-// rather than MIGRATIONS[last].version; tests/migrations.rs asserts they agree.
-// The TS default param `target=LATEST_VERSION` becomes an explicit argument
-// (schema::initialize_schema passes LATEST_VERSION). now_iso8601() from
-// mainframe_runtime keeps `new Date().toISOString()` wire parity in migration 24.
-// todos: 0

@@ -1,5 +1,5 @@
-//! Greenfield (todo #243): `/api/projects/{id}/skills-cli/…` — installs and
-//! uninstalls skills via the `skills` CLI. The service layer
+//! `/api/projects/{id}/skills-cli/…` — installs and uninstalls skills via the
+//! `skills` CLI. The service layer
 //! (`skills_cli::{manifest,probe,install,uninstall}`) does the validation and
 //! CLI work; this module only resolves the project, parses the request shape,
 //! and maps `SkillsCliError` onto the wire contract.
@@ -250,10 +250,10 @@ mod tests {
     use super::*;
     use crate::skills_cli::{ProbedSkill, SkillsCliEntry};
 
-    // Pins the wire contract the TS `SkillsCliEntrySchema`/`ProbedSkillSchema`
-    // now decode with `.nullish()`: a name-only entry or bare-name probe
-    // candidate serializes its absent fields as explicit JSON `null`, not an
-    // omitted key.
+    // Wire contract: `SkillsCliEntrySchema`/`ProbedSkillSchema` in
+    // `packages/types/src/skills-cli.ts` decode with `.nullish()`: a name-only
+    // entry or bare-name probe candidate serializes its absent fields as explicit
+    // JSON `null`, not an omitted key.
     #[test]
     fn manifest_json_serializes_a_name_only_entry_with_explicit_null_fields() {
         let outcome = ManifestOutcome::Available {

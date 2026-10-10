@@ -1,10 +1,10 @@
-//! Task 14: the sync-run driver's happy path, its AC7 pair-scoping guarantee,
+//! The sync-run driver's happy path, its AC7 pair-scoping guarantee,
 //! the one-run-per-project guard, and the `needs_field_times` call-avoidance
 //! optimization. Failure-taxonomy and retention scenarios live in
 //! `run_failure_tests.rs`, split out to keep both files under the line cap.
 //!
-//! Every test uses its own project id: the one-run-per-project guard (task
-//! 15) is a real process-wide static, and `cargo test` runs these in
+//! Every test uses its own project id: the one-run-per-project guard
+//! is a real process-wide static, and `cargo test` runs these in
 //! parallel threads sharing that static.
 
 use std::sync::Arc;

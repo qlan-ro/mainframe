@@ -1,7 +1,7 @@
 //! Where `respond_to_permission` lands once its guards pass: a chat with no
 //! live session (start it, then forward), plan mode's clear-context
 //! escalation, and the normal forward-and-shift path. Split out of
-//! `permission_handler.rs` (todo #350, PR #688 review) — a pure move.
+//! `permission_handler.rs` — a pure move.
 
 use std::sync::{Arc, Mutex};
 
@@ -98,9 +98,8 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
 
         session.respond_to_permission(response.clone()).await?;
 
-        // Resolve the gate on the chat-surface seam (todo #350, plan task 17):
-        // the facade's gate registry clears the SAME request for every
-        // attached connection.
+        // Resolve the gate on the chat-surface seam: the facade's gate registry
+        // clears the SAME request for every attached connection.
         self.notify_surface(ChatSurfaceEvent::GateResolved {
             chat_id: chat_id.to_string(),
             request_id: response.request_id.clone(),

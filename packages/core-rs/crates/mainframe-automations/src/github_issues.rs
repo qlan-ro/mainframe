@@ -1,7 +1,7 @@
-//! Read/write client for GitHub Issues (todos-plugin GitHub sync, D1). Every
+//! Read/write client for GitHub Issues (todos-plugin GitHub sync). Every
 //! call takes the bearer token explicitly — this module holds no credential
 //! store, so its lifetime is independent of `PluginContext`. Built with
-//! `redirect::Policy::none()` (D6): a transferred issue answers a redirect,
+//! `redirect::Policy::none()`: a transferred issue answers a redirect,
 //! and following it would silently re-point a pair at a different
 //! repository, so callers see `GitHubError::Moved` instead.
 
@@ -32,9 +32,10 @@ impl GitHubIssuesClient {
     }
 
     /// Fallible because `build()` errs on TLS backend init failure, and a
-    /// fallback client without `redirect::Policy::none()` would silently
-    /// break D6. The composition root answers the error by leaving the
-    /// GitHub port unwired, as it already does for a dead automations engine.
+    /// fallback client without `redirect::Policy::none()` would silently start
+    /// following redirects. The composition root answers the error by leaving
+    /// the GitHub port unwired, as it already does for a dead automations
+    /// engine.
     pub fn with_base_url(base_url: impl Into<String>) -> Result<Self, GitHubError> {
         let http = reqwest::Client::builder()
             .user_agent(USER_AGENT)

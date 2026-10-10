@@ -1,5 +1,3 @@
-//! Ported from `src/commands/registry.ts`.
-
 use mainframe_types::command::CustomCommand;
 
 /// Prompt bodies live in `prompts/` as Markdown, not inline: they are prose that is
@@ -80,14 +78,3 @@ mod tests {
         assert!(prompt.contains("\"${PORT:-3000}\""));
     }
 }
-
-// PORT STATUS: src/commands/registry.ts (92 lines)
-// confidence: high
-// todos: 0
-// notes: LAUNCH_CONFIG_PROMPT now lives in prompts/launch-config.md and is pulled
-// in with include_str!; the body no longer matches the TS verbatim — it was
-// rewritten against `mainframe-launch`'s parser and process manager, which had
-// drifted from it (string ports, optional url, the executable "allowlist", the
-// env-key rule). MAINFRAME_COMMANDS is rebuilt per call (CustomCommand owns
-// Strings) — behaviorally identical to the module-level const the callers read.
-// No TS test existed; coverage here anchors the file load and the runtime rules.

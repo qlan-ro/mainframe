@@ -1,13 +1,11 @@
-//! Group B task 6 (todo #350 stable-ids): live-pipeline ids == history ids,
-//! run on one recorded transcript (criterion 4's replay half, plan decision
-//! 5). Assistant is the kind directly comparable on both paths: the initial
-//! user prompt has no live-stream counterpart (it's minted by the daemon's
-//! send path, `chat_manager/send.rs` — group D's file, out of this group's
-//! scope), and subagent/sidechain content mints no id on either path — it
-//! splices into an *existing* parent message's content
-//! (`history_subagents.rs`'s `inject_agent_children`, lines 239-264, and
-//! `mainframe-chat`'s `on_subagent_child` mutate-in-place path) — so there is
-//! nothing to reconcile there.
+//! Live-pipeline ids == history ids, run on one recorded transcript.
+//! Assistant is the kind directly comparable on both paths: the initial user
+//! prompt has no live-stream counterpart (it's minted by the daemon's send
+//! path, `chat_manager/send.rs`), and subagent/sidechain content mints no id
+//! on either path — it splices into an *existing* parent message's content
+//! (`history_subagents.rs`'s `inject_agent_children` and `mainframe-chat`'s
+//! `on_subagent_child` mutate-in-place path) — so there is nothing to
+//! reconcile there.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::sync::{Arc, Mutex};
@@ -167,16 +165,15 @@ fn per_api_message_first_entry_ids_match_between_live_and_history() {
     assert_eq!(live_ids, history_ids);
 }
 
-/// T21, R2.8 (revised for #178, AC9 decision 10): hidden-thinking models
-/// emit a signature-only thinking entry (empty prose) before the message's
-/// real content. Live gives that entry its own raw item (keyed by its own
-/// transcript uuid) without claiming the API message's id — history now
-/// mirrors that exactly (`convert_assistant_entry`, keeping the empty
-/// `thinking` block instead of dropping the entry) so BOTH the entry's own
-/// id and the following content-bearing entry's claimed id agree on both
-/// paths. Previously history dropped the signature-only entry outright,
-/// which agreed on the second entry's id but produced no raw item at all
-/// for the first — a real live-vs-reload divergence the #178 golden test
+/// Hidden-thinking models emit a signature-only thinking entry (empty prose)
+/// before the message's real content. Live gives that entry its own raw item
+/// (keyed by its own transcript uuid) without claiming the API message's id —
+/// history now mirrors that exactly (`convert_assistant_entry`, keeping the
+/// empty `thinking` block instead of dropping the entry) so BOTH the entry's
+/// own id and the following content-bearing entry's claimed id agree on both
+/// paths. Previously history dropped the signature-only entry outright, which
+/// agreed on the second entry's id but produced no raw item at all for the
+/// first — a real live-vs-reload divergence the #178 golden test
 /// (`live_vs_cold_reload_golden.rs`) exposed once it stopped excepting it.
 #[test]
 fn a_signature_only_thinking_block_claims_the_same_id_live_and_in_history() {

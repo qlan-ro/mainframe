@@ -22,7 +22,7 @@ pub struct ProjectionStats {
     /// 1 if a fallback anomaly forced a counted suffix rebuild, else 0.
     pub suffix_rebuilds: usize,
     /// Settled groups scanned this call to recompute frozen claim/scope
-    /// state (todo #376 follow-up gate): a projector whose per-call cost is
+    /// state: a projector whose per-call cost is
     /// independent of history keeps this at (or near) 0 regardless of how
     /// much settled history precedes `r`. `IncrementalProjector` looks this
     /// up via persistent indexes instead of rescanning, so it stays flat;
@@ -45,8 +45,7 @@ pub struct DisplayDelta {
 }
 
 impl DisplayDelta {
-    /// Coalesce a buffered `self` with a `later` delta. Laws (see the plan's
-    /// "Merge" section):
+    /// Coalesce a buffered `self` with a `later` delta:
     /// - a later full delta wins outright;
     /// - a full base stays full (the merged result cannot be incremental if
     ///   its starting point required a full snapshot);

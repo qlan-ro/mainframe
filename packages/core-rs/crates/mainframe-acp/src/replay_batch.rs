@@ -1,16 +1,15 @@
-//! Compressed replay batches (spec Decision 42): a `session/resume` replay
-//! for a connection that opted in travels as a few
-//! `_mainframe.dev/replay_batch` notifications, each carrying up to
-//! [`REPLAY_BATCH_MAX_UPDATES`] `session/update` payloads as a zlib-deflated
-//! JSON array in base64, instead of one text frame per update.
+//! Compressed replay batches: a `session/resume` replay for a connection that
+//! opted in travels as a few `_mainframe.dev/replay_batch` notifications, each
+//! carrying up to [`REPLAY_BATCH_MAX_UPDATES`] `session/update` payloads as a
+//! zlib-deflated JSON array in base64, instead of one text frame per update.
 //!
-//! The replay is the only large transfer on the facade (a long chat's is
-//! tens of megabytes of JSON, which deflates five to ten times), and the
-//! Rust WebSocket stack the daemon uses has no permessage-deflate, so the
-//! compression lives in the payload: plain text frames, nothing to negotiate
-//! at the transport, and a client decodes with a stock inflater. Live frames
-//! are small and stay as they are; a connection that did not opt in gets the
-//! per-update replay, byte-identical to before.
+//! The replay is the only large transfer on the facade (a long chat's is tens
+//! of megabytes of JSON, which deflates five to ten times), and the Rust
+//! WebSocket stack the daemon uses has no permessage-deflate, so the
+//! compression lives in the payload: plain text frames, nothing to negotiate at
+//! the transport, and a client decodes with a stock inflater. Live frames are
+//! small and stay as they are; a connection that did not opt in gets the
+//! per-update replay, one text frame per `session/update`.
 
 use std::io::Write;
 

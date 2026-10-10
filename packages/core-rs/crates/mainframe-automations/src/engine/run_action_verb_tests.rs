@@ -1,4 +1,4 @@
-//! run_action verb tests (T9.2): param rendering (joined string vs A1 script
+//! run_action verb tests: param rendering (joined string vs A1 script
 //! parts), outputAs merging, and the missing-credential failure.
 
 use std::sync::Arc;

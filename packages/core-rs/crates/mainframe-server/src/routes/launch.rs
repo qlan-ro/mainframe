@@ -1,8 +1,8 @@
-//! Ported from `src/server/routes/launch.ts` — the launch-process control routes.
+//! The launch-process control routes.
 //!
 //! Four endpoints under `/api/projects/:id/launch`: `status`, `configs`,
 //! `:name/start`, `:name/stop`. Each resolves the worktree-aware effective path
-//! (`getEffectivePath`) from the `:id` param + `?chatId`, then delegates to the
+//! (`AppCtx::effective_path`) from the `:id` param + `?chatId`, then delegates to the
 //! per-project `LaunchManager` obtained from `ctx.launch_registry`. Launch configs
 //! are always read + validated from disk — never trusted from the request body.
 
@@ -37,8 +37,8 @@ async fn resolve_launch_path(
     ctx.effective_path(project_id, chat_id).await
 }
 
-/// Parse a `.env` file into key-value pairs. Ignores comments and blank lines —
-/// mirrors `parseDotenv` (`^([A-Za-z_][A-Za-z0-9_]*)=(.*)`).
+/// Parse a `.env` file into key-value pairs (`^([A-Za-z_][A-Za-z0-9_]*)=(.*)`).
+/// Ignores comments and blank lines.
 fn parse_dotenv(content: &str) -> HashMap<String, String> {
     let mut env = HashMap::new();
     for line in content.split('\n') {
@@ -65,8 +65,8 @@ fn split_dotenv_line(line: &str) -> Option<(String, String)> {
     Some((key.to_string(), line[eq + 1..].to_string()))
 }
 
-/// Load the project's `.env` and merge with `process.env` (project `.env` wins).
-/// Mirrors `loadProjectEnv`; a missing `.env` degrades to just the process env.
+/// Load the project's `.env` and merge it with the process environment (project
+/// `.env` wins). A missing `.env` degrades to just the process env.
 async fn load_project_env(project_path: &str) -> HashMap<String, String> {
     let mut env: HashMap<String, String> = std::env::vars().collect();
     let dotenv_path = std::path::Path::new(project_path).join(".env");
@@ -237,19 +237,6 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/api/projects/{id}/launch/{name}/start", post(start))
         .route("/api/projects/{id}/launch/{name}/stop", post(stop))
 }
-
-// PORT STATUS: src/server/routes/launch.ts (187 lines)
-// confidence: medium
-// todos: 0
-// notes: getEffectivePath → ctx.effective_path over the Db actor; a missing project
-// → 404. `status`/`configs` degrade to empty when launch_registry is None (TS
-// optional chaining `ctx.launchRegistry?.…`); `start` returns 500 "LaunchRegistry
-// not available" when None, mirroring the `if (!manager)` guard. Launch config is
-// always read + validated from disk (`.mainframe/launch.json`) via
-// parse_launch_config with a merged process-env + project-.env (parseDotenv
-// hand-matches `^([A-Za-z_][A-Za-z0-9_]*)=(.*)`); ok/fail keep the exact envelope
-// bytes and status codes. `start`/`stop` success → ok_empty() (`{ success: true }`,
-// no `data`); `status`/`configs` → ok(data).
 
 #[cfg(test)]
 mod tests {

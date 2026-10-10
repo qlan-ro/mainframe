@@ -1,4 +1,4 @@
-//! Adapter-neutral live PR scanning (todo #339, task 10). Mirrors the Claude
+//! Adapter-neutral live PR scanning. Mirrors the Claude
 //! adapter's Path-A/Path-B scan (`assistant_event.rs:143-172`,
 //! `user_event.rs:433-467`) in terms every adapter's canonical tool-use /
 //! tool-result stream already carries: tool name, command text, tool-result

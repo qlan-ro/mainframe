@@ -1,11 +1,10 @@
-//! Per-frame ACP facade dispatch (todo #350, plan tasks 8 + 14): a pure
-//! function from one WS text frame to the reply (if any) to write back.
-//! Parameterized on `DaemonInfo` and a [`PromptPort`] rather than reading any
-//! daemon state directly, so this stays unit-testable without a socket —
-//! `mainframe-server`'s `acp_ws` module is the axum shell that owns the
-//! socket loop, peels off the stateful methods (`session/resume`, gate-answer
-//! responses), and routes every remaining frame through
-//! [`dispatch_with_prompt`].
+//! Per-frame ACP facade dispatch: a pure function from one WS text frame to the
+//! reply (if any) to write back. Parameterized on `DaemonInfo` and a
+//! [`PromptPort`] rather than reading any daemon state directly, so this stays
+//! unit-testable without a socket — `mainframe-server`'s `acp_ws` module is the
+//! axum shell that owns the socket loop, peels off the stateful methods
+//! (`session/resume`, gate-answer responses), and routes every remaining frame
+//! through [`dispatch_with_prompt`].
 
 use mainframe_types::acp::extensions::MAINFRAME_META_NAMESPACE;
 use mainframe_types::acp::jsonrpc::{
@@ -22,7 +21,7 @@ use crate::rpc::{self, InboundFrame};
 
 /// The daemon identity and configured heartbeat cadence threaded in from
 /// `AppCtx` — the only state `initialize`'s response needs. `Clone` so a
-/// spawned prompt task (T10) can own its copy.
+/// spawned prompt task can own its copy.
 #[derive(Clone)]
 pub struct DaemonInfo {
     pub version: String,
@@ -57,12 +56,12 @@ impl DispatchOutcome {
 }
 
 /// Handle one inbound WS text frame, with `session/prompt`/`session/cancel`
-/// routed through a [`PromptPort`] (plan task 14). `Some` is the JSON to
-/// write back; notifications and daemon-initiated-request responses never get
-/// one, per JSON-RPC 2.0 (even when the notification names an unknown method
-/// — a notification's sender does not expect an answer to be listening for).
-/// Callers that track negotiation across frames want
-/// [`dispatch_with_prompt`]'s full [`DispatchOutcome`] instead.
+/// routed through a [`PromptPort`]. `Some` is the JSON to write back;
+/// notifications and daemon-initiated-request responses never get one, per
+/// JSON-RPC 2.0 (even when the notification names an unknown method — a
+/// notification's sender does not expect an answer to be listening for).
+/// Callers that track negotiation across frames want [`dispatch_with_prompt`]'s
+/// full [`DispatchOutcome`] instead.
 pub async fn handle_frame_with_prompt(
     text: &str,
     daemon: &DaemonInfo,
@@ -85,9 +84,9 @@ pub async fn handle_frame_with_prompt(
 /// responses before falling through to this dispatcher, and must not pay (or
 /// diverge on) a second parse.
 ///
-/// `negotiated` gates every method but `initialize` (R3.21, spec 32): the
-/// handshake is load-bearing, not advisory — a peer that never negotiated (or
-/// negotiated an unsupported version) cannot prompt, resume, or cancel.
+/// `negotiated` gates every method but `initialize`: the handshake is
+/// load-bearing, not advisory — a peer that never negotiated (or negotiated an
+/// unsupported version) cannot prompt, resume, or cancel.
 pub async fn dispatch_with_prompt(
     frame: InboundFrame,
     daemon: &DaemonInfo,
@@ -138,8 +137,8 @@ fn refuse_before_initialize(frame: &InboundFrame) -> Option<String> {
 }
 
 /// The structured refusal every method but `initialize` gets before the
-/// handshake completes (R3.21) — `mainframe-server` reuses it for
-/// `session/resume`, which it peels off before this dispatcher ever sees it.
+/// handshake completes — `mainframe-server` reuses it for `session/resume`,
+/// which it peels off before this dispatcher ever sees it.
 pub fn initialize_required() -> JsonRpcErrorObject {
     JsonRpcErrorObject {
         code: error_codes::RESOURCE_NOT_FOUND,

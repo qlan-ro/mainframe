@@ -1,4 +1,4 @@
-//! Fake ports for the conformance harness (T10.2). These implement the real
+//! Fake ports for the conformance harness. These implement the real
 //! public port traits, so the suite drives the genuine `AutomationsEngine`
 //! facade — only the outside world (chats, notifications, the event bus) is
 //! faked. Recording fakes let each scenario assert what actually reached a

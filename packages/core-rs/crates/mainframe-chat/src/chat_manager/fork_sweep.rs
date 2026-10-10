@@ -1,10 +1,10 @@
-//! `ChatManager::sweep_unreferenced_fork_snapshots` (todo #343) — moved out of
-//! `fork_api.rs` to keep that file under the 300-line ceiling once
-//! `fork_chat` grew the from-message path.
+//! `ChatManager::sweep_unreferenced_fork_snapshots` — moved out of
+//! `fork_api.rs` to keep that file under the 300-line ceiling once `fork_chat`
+//! grew the from-message path.
 use super::*;
 
 impl ChatManager {
-    /// Startup sweep (todo #343): remove any directory directly under
+    /// Startup sweep: remove any directory directly under
     /// `fork_snapshots_dir()` that no chat's `pending_fork` currently
     /// references. Covers a crash between pin and the DB insert (the chat row
     /// was never created, so `on_result` never runs to retire it) and project

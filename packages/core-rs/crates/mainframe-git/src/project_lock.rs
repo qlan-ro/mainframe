@@ -1,11 +1,7 @@
-//! Ported from `packages/core/src/git/project-lock.ts`.
-//!
-//! Per-project async mutex map. The TS module chained a `Map<string,
-//! Promise<void>>` and returned a `release()` callback; the Rust port keeps one
-//! `tokio::sync::Mutex` per project path (fair → FIFO) and hands back an owned
-//! guard whose drop *is* the release. Per CONCURRENCY.tsv this state is a
-//! module-level `SHARED_MAP` behind a `OnceLock` (no `lazy_static`/`static mut`),
-//! orthogonal to the chat lock (never nested with it — lock-ordering rule 6).
+//! Per-project async mutex map: one `tokio::sync::Mutex` per project path
+//! (fair → FIFO), handing back an owned guard whose drop *is* the release. This
+//! state is a module-level `SHARED_MAP` behind a `OnceLock` (no
+//! `lazy_static`/`static mut`), orthogonal to the chat lock (never nested with it).
 
 use std::sync::{Arc, OnceLock};
 
@@ -20,7 +16,7 @@ fn locks() -> &'static Locks {
 }
 
 /// Acquire a mutex for a project path. Returns a guard; dropping it releases the
-/// lock (mirrors the TS `release()` callback). Concurrent callers on the same
+/// lock. Concurrent callers on the same
 /// path wait in FIFO order.
 pub async fn acquire_project_lock(project_path: &str) -> OwnedMutexGuard<()> {
     // Clone the per-path Arc out of the map, then drop the shard guard *before*
@@ -79,12 +75,3 @@ mod tests {
         assert!(acquired.is_ok());
     }
 }
-
-// PORT STATUS: packages/core/src/git/project-lock.ts (20 lines)
-// confidence: high
-// notes: The TS FIFO promise-chain becomes one tokio::sync::Mutex per path
-// (tokio's Mutex is fair, so FIFO holds). `release()` -> dropping the returned
-// OwnedMutexGuard. State: OnceLock<DashMap<String, Arc<Mutex<()>>>> per
-// CONCURRENCY.tsv (SHARED_MAP; module-level singleton, no static mut). Key is
-// String (the raw project path, matching the TS Map<string> key) rather than the
-// tsv's suggested PathBuf, to avoid path normalization diverging from TS keying.

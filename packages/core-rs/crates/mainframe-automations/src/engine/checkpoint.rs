@@ -1,5 +1,4 @@
-//! Checkpoint mutation + the per-frame token view (Node walk.ts `setStep` /
-//! `stepsView` / `buildTokenContext`).
+//! Checkpoint mutation + the per-frame token view.
 
 use std::sync::Arc;
 
@@ -94,7 +93,7 @@ pub(crate) fn set_step(
     checkpoint.steps.insert(step_ref.to_string(), entry);
 }
 
-/// The walk's wait commit (T4.3): a verb may park AND settle its entry
+/// The walk's wait commit: a verb may park AND settle its entry
 /// before the walk's own commit runs (a fast agent completion) — a terminal
 /// entry must not be re-parked, nor its wakeAt re-armed.
 ///
@@ -156,10 +155,10 @@ pub(crate) fn recompute_wake_at(checkpoint: &mut AutomationCheckpoint) {
         .min();
 }
 
-/// Builds the frame's flat token scope (Node `buildTokenContext`+`stepsView`):
-/// trigger payload keys, every plain-ref entry's outputs, this frame's own
-/// exact-suffix iteration entries under their plain id (other iterations and
-/// deeper-nested entries stay invisible), and the innermost `current` item.
+/// Builds the frame's flat token scope: trigger payload keys, every plain-ref
+/// entry's outputs, this frame's own exact-suffix iteration entries under their
+/// plain id (other iterations and deeper-nested entries stay invisible), and
+/// the innermost `current` item.
 pub(crate) fn build_scope(
     checkpoint: &AutomationCheckpoint,
     frame: &WalkFrame,
@@ -224,10 +223,3 @@ fn visible_plain_id<'r>(step_ref: &'r str, ref_suffix: &str) -> Option<&'r str> 
         .strip_suffix(ref_suffix)
         .filter(|plain| !plain.contains('#'))
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T4.1), not a TS port
-// confidence: high
-// todos: 0
-// notes: set_step preserves chatId/interactionId (deliberate divergence from
-//        Node's setStep, which rebuilds without them — Rust's T4.3 stamps
-//        chatId on the entry itself); visibility mirrors Node stepsView.

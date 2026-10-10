@@ -1,4 +1,4 @@
-//! Phase 4a validation: `repeat`'s `concurrency` field, its interaction with
+//! Concurrent-repeat validation: `repeat`'s `concurrency` field, its interaction with
 //! `break`, the nested fan-out cap, and the step-id charset the marker
 //! scheme (`@c`, `@w`, `@a`) now depends on. Split out of `validate_tests.rs`
 //! (300-line cap) as its own cohesive seam.

@@ -1,9 +1,7 @@
-//! Ported from `enrichPath()` in `src/index.ts` (packages/core).
-//!
-//! The TS daemon resolved a user's interactive-shell `PATH` at boot and
-//! **mutated `process.env.PATH`**, so every child process it spawned
-//! (claude/codex CLIs, `which` detection, title generation, LSP servers, launch
-//! processes, `lsof`/`kill`) inherited a full toolchain PATH. In a packaged app
+//! Resolves the user's interactive-shell `PATH` at boot so every child process
+//! the daemon spawns (claude/codex CLIs, `which` detection, title generation, LSP
+//! servers, launch processes, `lsof`/`kill`) gets a full toolchain PATH. In a
+//! packaged app
 //! the daemon starts from a bare launchd/login PATH (`/usr/bin:/bin:…`), so
 //! without this the CLIs live in `/opt/homebrew/bin` or `~/.local/bin` and
 //! spawns fail with `ENOENT`.
@@ -11,8 +9,7 @@
 //! Under edition 2024 `std::env::set_var` is `unsafe` and these crates are
 //! `#![forbid(unsafe_code)]`, so the resolved value cannot be written back into
 //! the process env. Instead it is captured once at boot as a [`ResolvedPath`]
-//! and threaded explicitly into every spawn site as an `env("PATH", …)` override
-//! — the same effect the TS achieved by mutating the shared env.
+//! and threaded explicitly into every spawn site as an `env("PATH", …)` override.
 
 use std::sync::Arc;
 
@@ -22,7 +19,7 @@ use std::sync::Arc;
 pub struct ResolvedPath(Arc<str>);
 
 impl ResolvedPath {
-    /// Resolve the interactive-shell `PATH` (mirrors `enrichPath()`): probe the
+    /// Resolve the interactive-shell `PATH`: probe the
     /// login shell for its `PATH`, falling back to the current `PATH` plus the
     /// common user/toolchain bin dirs when the shell probe fails or is empty.
     ///

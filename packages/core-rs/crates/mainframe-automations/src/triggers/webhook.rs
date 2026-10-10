@@ -1,8 +1,8 @@
-//! Webhook trigger primitives (T8.3, Node triggers/webhook.ts): HMAC-SHA256
-//! signature verification in GitHub's fixed `sha256=<lowercase-hex>` form,
-//! preset match predicates, replay-dedup delivery ids, and the A7 staleness
-//! window. Pure — the ingest pipeline (webhook_ingest.rs) sequences these
-//! and the route (T9.3) maps its decisions onto HTTP statuses.
+//! Webhook trigger primitives: HMAC-SHA256 signature verification in GitHub's
+//! fixed `sha256=<lowercase-hex>` form, preset match predicates, replay-dedup
+//! delivery ids, and the A7 staleness window. Pure — the ingest pipeline
+//! (webhook_ingest.rs) sequences these and the route maps its decisions onto
+//! HTTP statuses.
 
 use hmac::{Hmac, Mac};
 use serde_json::Value;
@@ -168,10 +168,9 @@ pub(crate) fn is_stale_delivery(timestamp_ms: i64, now_ms: i64) -> bool {
     now_ms - timestamp_ms > STALE_WINDOW_MS
 }
 
-/// Generates and persists the `webhook:<hookId>` signing secret once
-/// (Node ensureWebhookSecret) — the service calls this when arming a
-/// webhook trigger; an existing secret is left alone so rotating requires
-/// an explicit delete.
+/// Generates and persists the `webhook:<hookId>` signing secret once — the
+/// service calls this when arming a webhook trigger; an existing secret is left
+/// alone so rotating requires an explicit delete.
 ///
 /// Returns the secret because arming is the only path that may hand it to
 /// the user: `webhook:<hookId>` is unreachable through the credential API
@@ -202,9 +201,3 @@ pub(crate) async fn ensure_webhook_secret(
         .await?;
     Ok(token)
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T8.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node triggers/webhook.ts; sample capture is in-memory in
-//        webhook_ingest.rs (R3) instead of Node's trigger_state column.

@@ -1,4 +1,4 @@
-//! todo #352 — the Codex adapter must publish `ContextUsage` through the same
+//! the Codex adapter must publish `ContextUsage` through the same
 //! sink contract Claude uses. Drives `thread/tokenUsage/updated` through
 //! `handle_notification`, mirroring `tests/quota_notification.rs`.
 #![allow(clippy::unwrap_used, clippy::expect_used)]

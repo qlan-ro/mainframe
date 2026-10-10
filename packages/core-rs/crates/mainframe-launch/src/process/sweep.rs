@@ -1,5 +1,3 @@
-//! Ported from `src/process/sweep.ts`.
-//!
 //! Reaps tunnel and launch children orphaned by a previous daemon run. Reads the
 //! pidfile registry and, for each recorded pid still alive whose identity still
 //! matches (guarding against PID reuse), kills it — the pid for tunnels, the
@@ -173,11 +171,10 @@ fn signal_flag(signal: &str) -> String {
     format!("-{}", signal.strip_prefix("SIG").unwrap_or(signal))
 }
 
-/// Deliver a signal by shelling out to `kill` (house style — no libc/nix).
+/// Deliver a signal by shelling out to kill(1).
 ///
-/// Divergence from the TS `process.kill`: a `kill(1)` non-zero exit (e.g. the
-/// process died between the identity check and the signal — ESRCH) yields
-/// `false` here, where the TS returns `true`. The record is then retained and
+/// A `kill(1)` non-zero exit (e.g. the process died between the identity check
+/// and the signal — ESRCH) yields `false`. The record is then retained and
 /// pruned on the next boot sweep (the pid reads as gone), so the only cost is a
 /// one-run delay in an already-rare race.
 pub(crate) fn default_kill(pid: i64, signal: &str, group: bool) -> bool {
@@ -820,8 +817,7 @@ mod tests {
         assert_eq!(registry.remaining(), vec![5000]);
     }
 
-    // A JS `throw` from the kill dep is modeled as `false` (same sweep outcome:
-    // record retained, not reaped) since a Rust `Fn -> bool` cannot unwind.
+    // A failing kill dep returns `false`: the record is retained, not reaped.
     #[tokio::test]
     async fn treats_a_failing_kill_as_a_failure_and_retains_the_record() {
         let registry = FakeRegistry::new(vec![launch(1), launch(2)]);
@@ -871,9 +867,9 @@ mod tests {
         assert_eq!(queried.load(Ordering::SeqCst), 0);
     }
 
-    // defaultKill's ESRCH/EPERM branches are `process.kill`-specific (Node) and do
-    // not translate to the `kill(1)` shell-out; the group→negative-pid target and
-    // the signal-flag mapping are the portable, testable pieces.
+    // ESRCH/EPERM are not distinguishable through the `kill(1)` shell-out; the
+    // group→negative-pid target and the signal-flag mapping are the testable
+    // pieces.
     #[test]
     fn kill_targets_the_pid_when_not_a_group_kill() {
         assert_eq!(kill_target(4242, false), 4242);
@@ -897,16 +893,3 @@ mod tests {
         _accepts(&NoopChildRegistry);
     }
 }
-
-// PORT STATUS: src/process/sweep.ts (220 lines)
-// confidence: high
-// todos: 0
-// notes: sweep_stray_children + processMatchesBinary/Launch + orphanStillMatches
-// ported 1:1 (same TERM→grace→KILL ladder, same prune-on-gone/reused/reaped, same
-// win32 skip-and-keep, same EPERM-retain). SweepDeps holds Arc'd closures
-// (process_command/process_cwd = async ProcessQueryFn, kill = sync Fn->bool);
-// default_process_command/_cwd shell out to ps/lsof via tokio (5s timeout),
-// default_kill shells out to `kill` (house style; ESRCH divergence documented on
-// the fn). A JS `throw` from the kill dep maps to `false` (identical sweep
-// outcome). All sweep.test.ts cases ported; the process.kill-specific defaultKill
-// ESRCH/EPERM unit tests are covered by kill_target/signal_flag helper tests.

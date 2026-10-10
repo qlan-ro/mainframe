@@ -1,5 +1,5 @@
 //! Ownership, single-flight and listing for the per-port quick tunnels behind
-//! `/api/tunnel/ports/*` (#279).
+//! `/api/tunnel/ports/*`.
 //!
 //! `TunnelManager` keeps no scope metadata, offers no listing, and its `start`
 //! kills-and-respawns its label — so the dedupe, the in-flight registry and the

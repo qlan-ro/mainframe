@@ -1,5 +1,3 @@
-//! Ported from `packages/types/src/host/host-contract.ts`.
-//!
 //! Zod schemas for every host command payload + event. The single source of
 //! payload shapes: the Electron ipcMain handlers parse args with these; the Rust
 //! (Tauri) shell conforms via serde to the same documented contract. Platform /
@@ -224,15 +222,3 @@ mod tests {
         assert_eq!(serde_json::to_string(&s).unwrap(), na);
     }
 }
-
-// PORT STATUS: packages/types/src/host/host-contract.ts (104 lines)
-// confidence: high
-// todos: 0
-// notes: host bridge contract — not daemon-consumed (low priority per §2.1). Zod
-// enums → serde enums; zod objects → structs. The `.min(1)` / `.int().positive()`
-// refinements that serde can't express (TerminalCreateOpts) become validate().
-// cols/rows → i64 (int().positive()); Region x/y/w/h and Downloading.percent → f64
-// (plain z.number(), may be fractional). UpdateStatus is a discriminatedUnion on
-// `state` → internally-tagged enum. FilePathSchema/OpenExternalSchema are bare
-// `z.string().min(1)` aliases with no struct to hang on — callers validate the
-// string inline, so no Rust item is emitted for them.

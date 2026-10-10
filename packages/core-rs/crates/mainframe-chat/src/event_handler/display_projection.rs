@@ -1,7 +1,7 @@
 //! The streaming determination shared by live `DisplayRevision`s
 //! (`event_handler.rs::emit_display_for`) and resume snapshots
 //! (`EventHandler::display_snapshot`), so both read the exact same rule
-//! (todo #382). Before todo #376 this module also combined the overlay with
+//! This module previously combined the overlay with
 //! raw history and ran `prepare` over the result; that step now lives inside
 //! each `DisplayProjector` (`mainframe-display`, `mainframe-adapter-claude`),
 //! so only the streaming rule remains here.
@@ -12,7 +12,7 @@ use mainframe_types::display::{
     DisplayContent, DisplayMessage, DisplayMessageType, StreamingLeafKind,
 };
 
-/// Spec Decision 39's streaming determination: `Some` only when the overlay's
+/// Streaming determination: `Some` only when the overlay's
 /// own leaf has non-empty text/thinking after trim AND the prepared display's
 /// last container is an assistant message whose own last leaf is the same
 /// kind. The second check catches an overlay the conversion stripped to

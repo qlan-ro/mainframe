@@ -1,4 +1,4 @@
-//! The per-chat projection slot (todo #376): a [`DisplayProjector`] plus its
+//! The per-chat projection slot: a [`DisplayProjector`] plus its
 //! [`RawChanges`] journal, kept alongside the raw cache like `tool_timings`.
 //! Every cache mutation records into the journal (see the table in the plan's
 //! "Journal and lifecycle" section); every removal path drops the slot
@@ -13,7 +13,7 @@ use super::*;
 pub(crate) struct ProjectionSlot {
     projector: Box<dyn DisplayProjector>,
     journal: RawChanges,
-    /// A delta a resume snapshot produced but did not emit (todo #382): the
+    /// A delta a resume snapshot produced but did not emit: the
     /// next live emission merges it in first, so a connection that never saw
     /// the snapshot's state still catches up. `None` once a live emission has
     /// consumed it.

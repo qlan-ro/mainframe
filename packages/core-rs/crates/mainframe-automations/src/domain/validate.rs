@@ -1,4 +1,4 @@
-//! Plain-language, scope-aware validation (T1.3). Every issue is pinned to
+//! Plain-language, scope-aware validation. Every issue is pinned to
 //! the offending stepId (`None` only for automation-level issues) with a
 //! message a non-programmer can act on.
 
@@ -41,7 +41,7 @@ pub enum ValidationLevel {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ValidationError {
-    /// `None` for automation-level issues (serialized as `null`, Node parity).
+    /// `None` for automation-level issues (serialized as `null`).
     pub step_id: Option<String>,
     pub level: ValidationLevel,
     pub message: String,
@@ -394,8 +394,3 @@ fn check_ref(step: &Step, token_ref: &TokenRef, scope: &[TokenInfo], ctx: &mut C
         message,
     });
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T1.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: scope semantics mirror Node's token-scope.ts walk (If leaks, Repeat isolates).

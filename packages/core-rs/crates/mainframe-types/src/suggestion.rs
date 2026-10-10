@@ -1,5 +1,3 @@
-//! Ported from `packages/types/src/suggestion.ts`.
-
 use serde::{Deserialize, Serialize};
 
 /// Visual tint for a repo suggestion tile. `accent` = churn/neutral; `amber` = TODO/warning.
@@ -84,13 +82,3 @@ mod tests {
         assert!(serde_json::from_value::<Vec<Suggestion>>(valid()).is_err());
     }
 }
-
-// PORT STATUS: packages/types/src/suggestion.ts (27 lines)
-// confidence: high
-// todos: 0
-// notes: SuggestionSchema (zod) → serde struct + SuggestionTint enum for shape,
-// plus a `validate()` fn for the `.min(1)` refinements. SuggestionListSchema is a
-// bare `Vec<Suggestion>`. `validate()` returns `Result<(), String>` (no shared
-// ValidationError type — the types crate has neither `thiserror` nor a
-// lib.rs-registered validation module; the message is not wire-visible, tests only
-// assert pass/fail).

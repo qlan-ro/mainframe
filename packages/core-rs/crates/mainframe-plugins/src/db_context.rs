@@ -1,14 +1,11 @@
-//! Ported from `packages/core/src/plugins/db-context.ts`.
+//! Each plugin gets its own rusqlite connection to its `data.db`, with the
+//! same handle discipline as the main Db: the connection is confined to one
+//! dedicated OS thread and every query is serialized onto it via an mpsc
+//! actor — a private clone of the `mainframe-server` `Db` seam, scoped to a
+//! single plugin's `data.db`.
 //!
-//! `better-sqlite3` is synchronous and single-threaded. Per CONCURRENCY.tsv
-//! (`plugins/db-context.ts` → per-plugin Database, class DB: "one Arc<Db> per
-//! plugin — separate rusqlite conn, spawn_blocking, same handle discipline as
-//! the main Db"), the connection is confined to one dedicated OS thread and every
-//! query is serialized onto it via an mpsc actor — a private clone of the
-//! `mainframe-server` `Db` seam, scoped to a single plugin's `data.db`.
-//!
-//! The generic row shape (`serde_json::Map`) mirrors better-sqlite3 returning a
-//! plain JS object per row: `prepare(sql).get(...)` / `.all(...)`.
+//! The generic row shape (`serde_json::Map`) is one plain JSON object per
+//! row.
 
 use std::path::Path;
 
@@ -35,10 +32,9 @@ pub struct PluginDatabaseContext {
 }
 
 impl PluginDatabaseContext {
-    /// Opens (creating the parent dirs of) the plugin's `data.db` on a dedicated
-    /// worker thread, applying the same pragmas as the TS context
-    /// (`journal_mode = WAL`, `foreign_keys = ON`). Open failures surface
-    /// synchronously.
+    /// Opens (creating the parent dirs of) the plugin's `data.db` on a dedicated worker
+    /// thread, applying `journal_mode = WAL` and `foreign_keys = ON`. Open failures
+    /// surface synchronously.
     pub fn open(db_path: &Path) -> Result<Self, PluginError> {
         if let Some(parent) = db_path.parent() {
             std::fs::create_dir_all(parent)?;
@@ -242,15 +238,3 @@ mod tests {
         assert!(missing.is_none());
     }
 }
-
-// PORT STATUS: src/plugins/db-context.ts
-// confidence: high
-// todos: 0
-// notes: per-plugin SQLite confined to a dedicated worker thread (mpsc actor),
-// a scoped clone of the mainframe-server Db seam — matches better-sqlite3's
-// single-threaded semantics and the tsv's per-plugin "separate rusqlite conn"
-// directive. WAL + foreign_keys pragmas applied on open. Rows map to
-// serde_json::Map (better-sqlite3's plain row objects); params bind via
-// rusqlite::types::Value. `transaction()` is not ported — no builtin uses it
-// (todos runs single statements); a WASM loader restoring third-party plugins
-// would add it alongside the loader.

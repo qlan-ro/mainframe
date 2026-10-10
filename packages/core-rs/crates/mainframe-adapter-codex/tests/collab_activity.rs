@@ -1,7 +1,5 @@
-//! Todo #327 — red-phase adapter tests (group A). Pins the sub-agent-activity
-//! lifecycle against `BackgroundTaskTracker` before `CodexSessionState` carries
-//! the fields the hooks need (group B, tasks 3-6, turns this green). Payload
-//! shapes copied from `tests/collab_delegation.rs` and
+//! Pins the sub-agent-activity lifecycle against `BackgroundTaskTracker`.
+//! Payload shapes come from `tests/collab_delegation.rs` and
 //! `tests/fixtures/collab-delegation-0.144.3.jsonl`.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -20,12 +18,8 @@ const PARENT_THREAD_ID: &str = "parent-thread";
 
 /// `CodexSessionState` wired to a fresh `BackgroundTaskTracker` and a
 /// throwaway thread registry, keyed the same way `main.rs` keys a live chat.
-/// Fails to compile until `background_tasks`/`mainframe_chat_id` exist on
-/// `CodexSessionState` (task 4) — that compile failure is this task's red
-/// observation. Kept local to this binary (not `tests/common/mod.rs`) so the
-/// red state is scoped to `collab_activity` alone; every codex test binary does
-/// `mod common;`, so a helper referencing not-yet-added fields there would red
-/// the whole suite.
+/// Kept local to this binary because every Codex test binary includes
+/// `tests/common/mod.rs`.
 fn state_with_tracker(
     rows: &[RegistryRow<'_>],
 ) -> (

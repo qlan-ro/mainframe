@@ -1,7 +1,7 @@
-//! `encode_containers` (todo #376, plan G2 task 1): flattening it must equal
-//! `encode_revision` on the existing fixtures, including streaming on the
-//! last non-queued container and queued containers dropped as an empty list.
-//! Shares fixture builders with `tests.rs` via `use super::*`.
+//! `encode_containers`: flattening it must equal `encode_revision` on the
+//! existing fixtures, including streaming on the last non-queued container and
+//! queued containers dropped as an empty list. Shares fixture builders with
+//! `tests.rs` via `use super::*`.
 
 use mainframe_types::display::{DisplayMessageType, StreamingLeafKind, ToolCategory};
 

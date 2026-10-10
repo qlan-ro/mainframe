@@ -1,4 +1,4 @@
-//! Rewind-point computation (todo #376): how far back a partial must
+//! Rewind-point computation: how far back a partial must
 //! re-fold, and the frozen aggregate state (tool ids, display ids, subject
 //! scope) a refold from that point needs to seed with.
 
@@ -56,15 +56,14 @@ pub(crate) fn scope_before(scope_before: &[SubjectScope], r: usize) -> SubjectSc
         .unwrap_or_else(SubjectScope::new)
 }
 
-/// The raw index the refold must start from: group `r`'s own start, or —
-/// when `r` is past the end (no rewind target, i.e. `r == groups.len()`) —
-/// wherever the last group left off. With no groups at all that's raw index
-/// 0: nothing has ever been durably folded, so a refold must cover the
-/// whole raw slice rather than skip it (todo #376 follow-up). When `groups`
-/// is non-empty and `r == groups.len()`, `groups.last().end` already equals
-/// `raw.len()` because `baseline_rewind_point` only returns `groups.len()`
-/// when nothing (append, overlay now or before) could have grown `raw`
-/// since the last fold.
+/// The raw index the refold must start from: group `r`'s own start, or — when
+/// `r` is past the end (no rewind target, i.e. `r == groups.len()`) — wherever
+/// the last group left off. With no groups at all that's raw index 0: nothing
+/// has ever been durably folded, so a refold must cover the whole raw slice
+/// rather than skip it. When `groups` is non-empty and `r == groups.len()`,
+/// `groups.last().end` already equals `raw.len()` because
+/// `baseline_rewind_point` only returns `groups.len()` when nothing (append,
+/// overlay now or before) could have grown `raw` since the last fold.
 pub(crate) fn refold_start(groups: &[Group], r: usize) -> usize {
     groups
         .get(r)

@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/background-tasks/lsof.ts`.
-
 use std::future::Future;
 use std::pin::Pin;
 use std::process::Stdio;
@@ -8,7 +6,7 @@ use std::time::Duration;
 
 use tokio::process::Command;
 
-/// An `execFile` rejection `code`: `number | string` in TS.
+/// An exec failure `code`: numeric or textual.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExecCode {
     Number(i64),
@@ -38,7 +36,7 @@ pub struct LsofExecError {
 }
 
 type ExecFuture = Pin<Box<dyn Future<Output = Result<ExecOk, LsofExecError>> + Send>>;
-/// `promisify(execFile)` shape: `(cmd, args) -> Promise<{ stdout }>`.
+/// Exec seam: `(cmd, args)` resolving to the captured stdout.
 pub type ExecFn = Arc<dyn Fn(String, Vec<String>) -> ExecFuture + Send + Sync>;
 pub type WarnFn = Arc<dyn Fn(&str) + Send + Sync>;
 
@@ -122,7 +120,7 @@ async fn real_exec(cmd: String, args: Vec<String>) -> Result<ExecOk, LsofExecErr
             .await
         {
             Ok(Ok(output)) => output,
-            // execFile timeout kills the child and rejects with a SIGTERM signal.
+            // A timeout is reported as a SIGTERM signal.
             Err(_elapsed) => {
                 return Err(LsofExecError {
                     code: None,
@@ -362,15 +360,3 @@ mod tests {
         set_logger_for_tests(default_logger());
     }
 }
-
-// PORT STATUS: src/background-tasks/lsof.ts (90 lines)
-// confidence: high
-// todos: 0
-// notes: module-level `_exec`/`_log`/`warnedMissing` seams → OnceLock<Mutex<Seam>>
-// (no static mut / lazy_static). `__setExecForTests`/`__setLoggerForTests` →
-// set_exec_for_tests/set_logger_for_tests (both reset warned_missing, as TS).
-// Real `_exec` runs the exact `lsof -F pan -- <path>` argv with a 2s timeout
-// (kill_on_drop). Seam lock is never held across `.await`. lsofWritersDetailed's
-// `{ok,pids}|{ok,error}` union → Result<Vec<u32>,String>. Tests serialize on the
-// crate seam guard (parallel test threads share the global). All lsof.test.ts
-// cases translated, incl. warn-once.

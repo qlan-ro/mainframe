@@ -1,17 +1,11 @@
-//! Reconstructing the modern Codex "unified exec" tool from the rollout JSONL
-//! (todo #339 task 14): a `custom_tool_call` `name:"exec"` whose `input` is a
+//! Reconstructing the Codex "unified exec" tool from the rollout JSONL:
+//! a `custom_tool_call` `name:"exec"` whose `input` is a
 //! JS snippet wrapping `tools.exec_command({...})`, paired with a
 //! `custom_tool_call_output` whose `output` is an array of `input_text`
 //! blocks rather than the plain string every other tool call kind uses.
 //!
-//! This file compiles today and is expected to fail on behavior: neither
-//! `handle_custom_tool_call` (which only recognizes `name == "apply_patch"`)
-//! nor `RolloutPayload.output` (typed `Option<String>`) understands this
-//! shape yet. Task 16 teaches `rollout_reconstruct`/`rollout_reader` both;
-//! until then every array-shaped `custom_tool_call_output` line fails
-//! `serde_json::from_str::<RolloutLine>` and is silently skipped, so these
-//! assertions are expected to fail rather than panic. Do not weaken them to
-//! make the file pass early.
+//! The reader must accept array-shaped `custom_tool_call_output` entries
+//! and pair them with their `exec` calls.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use mainframe_adapter_codex::item_types::{PatchChangeKind, ThreadItem};

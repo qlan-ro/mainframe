@@ -1,9 +1,9 @@
-//! Per-chat `RevisionLog` registry and the `FacadeHub` methods that record
-//! into it and reset its epoch (todo #377), split out of `hub.rs` (already
-//! at 294 lines before this todo). Eviction is always safe: a dropped log
-//! is exactly an unknown epoch to its chat's next resume, and
-//! `RevisionLog::plan` already treats that as a full replay — nothing on
-//! the wire distinguishes "evicted" from "the daemon restarted".
+//! Per-chat `RevisionLog` registry and the `FacadeHub` methods that record into
+//! it and reset its epoch, split out of `hub.rs` to keep that file under the
+//! 300-line cap. Eviction is always safe: a dropped log is exactly an unknown
+//! epoch to its chat's next resume, and `RevisionLog::plan` already treats that
+//! as a full replay — nothing on the wire distinguishes "evicted" from "the
+//! daemon restarted".
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
@@ -120,10 +120,9 @@ impl FacadeHub {
     /// recorded, non-empty change; `None` when there is no log, nothing
     /// changed, or a vanished tool call forced an epoch reset instead.
     ///
-    /// Todo #376 G4: `delta`-shaped (`RevisionLog::record_delta`) rather than
-    /// a flat item list — `full` is the lazy fresh-attach fallback
-    /// `record_delta` forces only when this log is unseeded and `delta` is
-    /// incremental.
+    /// `delta`-shaped (`RevisionLog::record_delta`) rather than a flat item
+    /// list — `full` is the lazy fresh-attach fallback `record_delta` forces
+    /// only when this log is unseeded and `delta` is incremental.
     pub(super) fn record_display_delta(
         &self,
         chat_id: &str,

@@ -1,8 +1,8 @@
 //! Route tests for `git_chat.rs` — the worktree-missing (409) / chat-not-found
-//! (404) guards and the cross-project guard from `git-chat.test.ts`, translated
-//! onto a real DB + real git repos. Chats are created via the db chats repo and
-//! their `worktree_path` set through `ChatUpdate` (the Phase-4 ChatManager is not
-//! required — resolution goes through the shared git.rs helpers).
+//! (404) guards and the cross-project guard, on a real DB + real git repos.
+//! Chats are created via the db chats repo and their `worktree_path` set through
+//! `ChatUpdate` (no ChatManager is required — resolution goes through the shared
+//! git.rs helpers).
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod support;

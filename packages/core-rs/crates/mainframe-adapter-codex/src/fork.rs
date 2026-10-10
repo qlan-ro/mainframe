@@ -1,9 +1,9 @@
-//! Fork resolver, version gate, and fork-point pinning for the Codex adapter
-//! (todo #368 — see `docs/plans/2026-09-27-todo-368-codex-fork.md`). Mirrors
-//! `mainframe_adapter_claude::fork`'s split of a pure decision (`ThreadTarget`)
-//! from the async pin, but Codex's own `thread/fork` RPC replaces Claude's
-//! transcript-copy mechanism: forking needs no `dest_dir` write, only the
-//! parent's thread id and (optionally) its last turn id at pin time.
+//! Fork resolver, version gate, and fork-point pinning for the Codex adapter.
+//! Mirrors `mainframe_adapter_claude::fork`'s split of a pure decision
+//! (`ThreadTarget`) from the async pin, but Codex's own `thread/fork` RPC
+//! replaces Claude's transcript-copy mechanism: forking needs no `dest_dir`
+//! write, only the parent's thread id and (optionally) its last turn id at pin
+//! time.
 
 use mainframe_types::adapter::ForkSource;
 use mainframe_types::transcript::TranscriptLocation;
@@ -61,8 +61,8 @@ pub(crate) fn resolve_thread_target(
 /// `CodexSession::ensure_thread`/`load_history`'s shared entry point: resolves
 /// [`ThreadTarget`] from the session's own id, its pending fork source, and
 /// whether this spawn is no-persistence — including the async own-transcript
-/// probe, so `session.rs` gains only this one call site (todo #368; keeps
-/// that already-oversized file to call sites only, per the plan).
+/// probe, so `session.rs` gains only this one call site (keeping that
+/// already-oversized file to call sites only).
 /// `transcript_present_override` is a test seam only (`CodexSession::
 /// set_transcript_present_override`) — the real probe reads
 /// `~/.codex/state_5.sqlite` via `locate_codex_transcript`, which
@@ -92,8 +92,7 @@ pub(crate) async fn resolve_target(
 
 /// Parses `major.minor.patch` and compares against [`FORK_MIN_CODEX_VERSION`].
 /// A version with fewer than 3 numeric components, or a non-numeric major/minor,
-/// counts as unsupported (todo #368 AC: "an unparsable version… counts as
-/// unsupported").
+/// counts as unsupported.
 pub(crate) fn fork_supported(version: &str) -> bool {
     let mut parts = version.split('.');
     let (Some(major), Some(minor), Some(patch)) = (parts.next(), parts.next(), parts.next()) else {
@@ -114,8 +113,7 @@ pub(crate) fn fork_supported(version: &str) -> bool {
     (major, minor, patch) >= FORK_MIN_CODEX_VERSION
 }
 
-/// `capabilities().fork`'s reason copy (todo #368 AC: "a version-specific
-/// reason, exactly as #343's… refusal path already renders for Codex today").
+/// `capabilities().fork`'s version-specific reason copy.
 pub(crate) fn fork_unavailable_reason_for(version: Option<&str>) -> Option<String> {
     let version = version?;
     if fork_supported(version) {

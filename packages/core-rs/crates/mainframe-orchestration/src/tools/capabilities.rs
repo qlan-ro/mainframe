@@ -74,7 +74,7 @@ pub(super) async fn run(
     // One-line meaning per allowed mode, per adapter — cheap (a static
     // string table, not a live probe) and the reason a caller might reach
     // for a mode other than "inherit": e.g. Codex `default` really does ask
-    // before writes and network now (todo #772), where before it silently
+    // before writes and network now, where before it silently
     // edited unprompted.
     let permission_mode_meanings: Value = allowed_modes_by_adapter
         .iter()

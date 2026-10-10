@@ -1,6 +1,6 @@
-//! `EncodedDelta::merge` laws (todo #376 G2 task 2) — the same laws as
-//! `mainframe-display::DisplayDelta::merge` (G1), checked against
-//! `EncodedItem` containers instead of `DisplayMessage`s.
+//! `EncodedDelta::merge` laws — the same laws as
+//! `mainframe-display::DisplayDelta::merge`, checked against `EncodedItem`
+//! containers instead of `DisplayMessage`s.
 
 use mainframe_types::acp::content::ContentBlock;
 

@@ -1,10 +1,8 @@
-//! Todo #378: feeds top-level Codex `item/agentMessage/delta` notifications
-//! into the shared partial-message overlay (`SessionSink::on_message_partial`),
-//! so Codex agent text streams in place instead of arriving whole at
-//! `item/completed`. No TS counterpart — this notification postdates the
-//! retired TS plugin.
+//! Feeds top-level Codex `item/agentMessage/delta` notifications into the
+//! shared partial-message overlay (`SessionSink::on_message_partial`), so Codex
+//! agent text streams in place instead of arriving whole at `item/completed`.
 //!
-//! Scope is limited to the parent's own top-level agent text (plan decision):
+//! Scope is limited to the parent's own top-level agent text:
 //! a registered child thread's deltas are dropped here and its completed
 //! message still renders as it always has (`thread_item_render.rs`).
 

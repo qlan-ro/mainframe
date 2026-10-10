@@ -265,7 +265,7 @@ fn thread_read_turn_drops_an_unknown_typed_item_interleaved_with_known_ones() {
     assert!(matches!(&items[1], ThreadItem::Sleep(s) if s.duration_ms == 10));
 }
 
-// --- webSearch.action (todo #356) ---
+// webSearch.action
 
 use mainframe_adapter_codex::item_types::WebSearchAction;
 

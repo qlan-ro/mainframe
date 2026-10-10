@@ -13,14 +13,13 @@ pub struct ThreadReadTurn {
     pub timing: crate::presentation_fields::ProviderTiming,
 }
 
-/// Deserialize a turn's `items`, dropping any item whose `type` Codex added after
-/// this port (or whose shape changed) instead of failing the whole `thread/read`.
+/// Deserialize a turn's `items`, dropping any item whose `type` this crate does
+/// not know (or whose shape changed) instead of failing the whole `thread/read`.
 ///
 /// `ThreadItem` is an internally-tagged enum with no unknown-variant fallback, so a
 /// single unrecognized item (e.g. `contextCompaction` after a compaction, or
 /// `subAgentActivity` from multi-agent) would otherwise abort deserialization of the
-/// entire transcript and render it empty. This mirrors the TS reload path, where
-/// `convertThreadItems`'s `switch` silently skips items it doesn't handle.
+/// entire transcript and render it empty.
 fn deserialize_lenient_items<'de, D>(deserializer: D) -> Result<Vec<ThreadItem>, D::Error>
 where
     D: serde::Deserializer<'de>,

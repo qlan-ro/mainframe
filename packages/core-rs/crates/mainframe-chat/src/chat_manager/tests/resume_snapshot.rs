@@ -1,9 +1,9 @@
-//! `get_resume_snapshot`'s transcript budget (todo #350, PR #688 review). The
+//! `get_resume_snapshot`'s transcript budget (PR #688 review). The
 //! facade calls this on every `session/resume`, and a cold chat's load walks
 //! the whole JSONL — so it must happen once per resume, not once per caller
 //! inside it.
 //!
-//! The retention tests below (todo #350 R1, D1/D2) prove the companion
+//! The retention tests below ( R1, D1/D2) prove the companion
 //! invariant: with no per-chat message cap, a chat's cache never silently
 //! drops history and never forces a resync just because it grew past the old
 //! 2,000-message mark.
@@ -15,7 +15,7 @@ use mainframe_types::content::LeafContent;
 
 /// Records every `ChatSurfaceEvent` an attached facade session would see.
 /// A `DisplayRevision`'s snapshot handle is only valid during the
-/// synchronous `notify` call that carries it (todo #376), so it is
+/// synchronous `notify` call that carries it, so it is
 /// materialized at receipt and re-wrapped in a fresh, independent
 /// `DisplaySnapshot` — frozen at that point in time — rather than stored
 /// live; every other variant is cloned as-is.

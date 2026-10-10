@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/db/projects.ts`.
-
 use std::path::Path;
 use std::rc::Rc;
 
@@ -136,14 +134,3 @@ impl ProjectsRepository {
         Ok(())
     }
 }
-
-// PORT STATUS: src/db/projects.ts (77 lines)
-// confidence: high
-// notes: Project.parent_project_id is the types crate's tri-state
-// Option<Option<String>>; DB NULL → Some(None) (serializes null), value →
-// Some(Some(_)), matching the TS spread where the key is always present.
-// create()'s basename() fallback uses Path::file_name(). remove() uses
-// unchecked_transaction() (Rc<Connection> can't yield &mut Connection); RAII drop
-// rolls back on error, matching db.transaction(). now_iso8601() preserves the
-// `new Date().toISOString()` wire format. Tests in tests/projects.rs.
-// todos: 0

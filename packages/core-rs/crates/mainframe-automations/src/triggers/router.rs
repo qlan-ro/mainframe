@@ -1,10 +1,9 @@
-//! Event-trigger router + chaining (T8.3, Node triggers/events.ts +
-//! service.ts onDaemonEvent/emitCompletionEvent). Bindings are derived from
-//! the enabled automations on every event — no armed in-memory state to
-//! drift (same philosophy as the schedule sweep). Chaining short-circuits:
-//! the CompletionEmitter emits the `automation.completed` WS event AND
-//! routes it as a `CuratedEvent` directly, so the `EventSource` port stays
-//! app-events-only (`session.finished`).
+//! Event-trigger router + chaining. Bindings are derived from the enabled
+//! automations on every event — no armed in-memory state to drift (same
+//! philosophy as the schedule sweep). Chaining short-circuits: the
+//! CompletionEmitter emits the `automation.completed` WS event AND routes it as
+//! a `CuratedEvent` directly, so the `EventSource` port stays app-events-only
+//! (`session.finished`).
 
 use std::sync::Arc;
 
@@ -19,8 +18,8 @@ use super::fire::TriggerFirer;
 
 /// Excludes chats owned by an in-flight ask_agent wait from
 /// `session.finished`: that chat's completion already drives its own step —
-/// treating it as a fresh event too would double-fire (Node
-/// isAgentOwnedChat). `AgentVerb` implements this over its wait map.
+/// treating it as a fresh event too would double-fire. `AgentVerb`
+/// implements this over its wait map.
 pub trait AgentOwnedChats: Send + Sync {
     fn is_agent_owned(&self, chat_id: &str) -> bool;
 }
@@ -31,7 +30,7 @@ impl AgentOwnedChats for crate::engine::AgentVerb {
     }
 }
 
-/// One armed event trigger (Node EventTriggerBinding).
+/// One armed event trigger.
 pub struct EventTriggerBinding {
     pub automation_id: String,
     pub trigger_id: String,
@@ -68,7 +67,7 @@ pub(crate) fn event_bindings(automations: &[AutomationRecord]) -> Vec<EventTrigg
     bindings
 }
 
-/// Matches bindings against one event (Node matchEventTriggers). The
+/// Matches bindings against one event. The
 /// `automation.finished`/`automation.failed` selectors both filter the ONE
 /// `automation.completed` event by status.
 pub(crate) fn match_event_triggers(
@@ -182,7 +181,7 @@ impl TriggerRouter {
 }
 
 /// Subscribes an EventSource and dispatches until the sender closes
-/// (armed by the facade, T10.1).
+/// (armed by the facade).
 pub fn spawn_event_loop(
     router: Arc<TriggerRouter>,
     source: Arc<dyn EventSource>,
@@ -200,9 +199,3 @@ pub fn spawn_event_loop(
         }
     })
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T8.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: bindings derived per event instead of Node's armed array; the
-//        chaining hook lives in completion.rs (300-line file cap).

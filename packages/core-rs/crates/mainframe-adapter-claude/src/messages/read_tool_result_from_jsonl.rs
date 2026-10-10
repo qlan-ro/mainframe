@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/messages/read-tool-result-from-jsonl.ts`.
-//!
 //! Streams a session JSONL file line-by-line looking for a single tool_result by
 //! id. Tolerates a partial trailing line (the CLI may be mid-write).
 
@@ -138,11 +136,3 @@ mod tests {
         );
     }
 }
-
-// PORT STATUS: src/messages/read-tool-result-from-jsonl.ts (41 lines)
-// confidence: high
-// todos: 0
-// notes: createReadStream+readline → tokio BufReader::lines() (strips CRLF, so
-// crlfDelay:Infinity parity holds). The TS catch logs 'error scanning session
-// jsonl' and returns null; a missing-file open error takes the same path here.
-// Reuses history_tool_result::extract_tool_result_content. All 5 TS tests ported.

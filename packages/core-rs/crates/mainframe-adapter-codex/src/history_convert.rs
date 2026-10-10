@@ -1,6 +1,6 @@
-//! Moved out of `history.rs` (task 2, todo #247) to keep that file under the
-//! 300-line ceiling. `convert_thread_items` (the chat-reload path) and its
-//! `user_message_text` helper, unchanged.
+//! `convert_thread_items` (the chat-reload path) and its `user_message_text`
+//! helper, kept apart from `history.rs` to keep that file under the 300-line
+//! ceiling.
 
 use std::collections::HashMap;
 
@@ -156,9 +156,8 @@ pub fn convert_thread_items(
             ThreadItem::WebSearch(w) => {
                 messages.extend(crate::web_search_history::web_search_messages(w, chat_id));
             }
-            // T22, R3.17: reload silently dropped this item entirely — the
-            // live path (thread_item_render::render_dynamic_tool_call)
-            // renders exactly this one tool_use block, no result.
+            // Matches the live path (thread_item_render::render_dynamic_tool_call),
+            // which renders exactly this one tool_use block, no result.
             ThreadItem::DynamicToolCall(d) => {
                 let name = dynamic_tool_call_name(d);
                 let input = dynamic_tool_call_input(&d.arguments);

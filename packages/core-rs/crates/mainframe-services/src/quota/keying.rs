@@ -1,5 +1,5 @@
-//! Ported from `src/quota/keying.ts` — compound `(adapterId, accountIdentity)`
-//! keying and transient-read-failure identity resolution.
+//! Quota keys combine adapter and account identity.
+//! A transient identity read failure keeps the previous account key.
 
 /// Synthetic `accountIdentity` used for keyless auth (API key, Bedrock) — carries
 /// no quota.

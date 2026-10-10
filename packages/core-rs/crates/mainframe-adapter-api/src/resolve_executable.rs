@@ -1,11 +1,8 @@
-//! Ported from `packages/core/src/adapters/resolve-executable.ts`.
-//!
 //! Resolves an adapter's CLI executable path (configured → detected → fallback)
-//! and persists a detected absolute path back to settings. The TS `ResolverDeps`
-//! carried an inline `{ settings: { get, set } }`; here settings persistence goes
-//! through the `SettingsWriter` trait so this crate never depends on `mainframe-db`
-//! (avoids a db → adapter-api → db cycle). The module-level `resolveMemo` becomes
-//! an injectable `ResolveMemo` value (CONCURRENCY.tsv row 136 — no module global).
+//! and persists a detected absolute path back to settings. Settings persistence
+//! goes through the `SettingsWriter` trait so this crate never depends on
+//! `mainframe-db` (avoids a db → adapter-api → db cycle). The resolve memo is an
+//! injectable `ResolveMemo` value, not a module global.
 
 use std::collections::HashMap;
 use std::sync::LazyLock;
@@ -61,7 +58,7 @@ pub struct ResolvedExecutable {
     pub version: Option<String>,
 }
 
-/// Injected dependencies for resolution. `platform` mirrors `NodeJS.Platform`
+/// Injected dependencies for resolution. `platform` is a platform name
 /// (`"win32"` selects `where`, else `which`); `None` falls back to the build target.
 pub struct ResolverDeps<'a> {
     pub settings: &'a dyn SettingsWriter,
@@ -70,14 +67,12 @@ pub struct ResolverDeps<'a> {
 }
 
 /// Default `run` implementation — spawns the child and captures stdout, never
-/// throwing (a spawn error or timeout maps to `{ ok: false }`). Mirrors the TS
-/// `defaultRun` (which resolves `{ ok: !err }` from `execFile`).
+/// failing (a spawn error or timeout maps to `{ ok: false }`).
 ///
 /// `path` is the boot-resolved login-shell `PATH` (see
 /// `mainframe_runtime::ResolvedPath`). It must be threaded here so `which`/`where`
 /// detection and version probes find CLIs installed outside the packaged app's
-/// bare `PATH` — the TS twin relied on `enrichPath` having mutated
-/// `process.env.PATH`.
+/// bare `PATH`.
 pub async fn default_run(
     cmd: &str,
     args: &[String],
@@ -103,7 +98,7 @@ pub async fn default_run(
 }
 
 /// `\d+\.\d+\.\d+` — the first `N.N.N` triple in `stdout`. Hand-rolled (no regex
-/// crate); mirrors the TS `parseVersion` local to `resolve-executable.ts`.
+/// crate).
 fn parse_version(stdout: &str) -> Option<String> {
     let b = stdout.as_bytes();
     let n = b.len();
@@ -137,8 +132,7 @@ fn parse_version(stdout: &str) -> Option<String> {
     None
 }
 
-/// `(valid, version)` — TS returns `{ valid:false }`, `{ valid:true }`, or
-/// `{ valid:true, version }`.
+/// `(valid, version)`: `(false, None)`, `(true, None)`, or `(true, Some(v))`.
 async fn validate(path: &str, run: &dyn Runner) -> (bool, Option<String>) {
     let r = run
         .run(path.to_string(), vec!["--version".to_string()], Some(5_000))
@@ -404,12 +398,3 @@ mod tests {
         assert!(!r.ok);
     }
 }
-
-// PORT STATUS: src/adapters/resolve-executable.ts (109 lines)
-// confidence: high
-// notes: SettingsWriter trait replaces the inline `{settings:{get,set}}` dep (no
-// notes: mainframe-db cycle); module-level resolveMemo → injectable ResolveMemo
-// notes: (CONCURRENCY.tsv row 136, rule 8). parseVersion hand-rolled (no regex
-// notes: crate). backfill try/catch collapses — deps are infallible-by-type. All
-// notes: 10 vitest assertions ported.
-// todos: 0

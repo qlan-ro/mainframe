@@ -1,7 +1,5 @@
-//! Ported test cases from `packages/core/src/cli/__tests__/update.test.ts`
-//! (the `parseUpdateArgs` / `resolveInstallRoot` describe blocks). The install
-//! marker differs from the TS twin (`bin/mainframe-daemon`, not
-//! `lib/daemon.cjs`) because the standalone layout no longer bundles Node.
+//! Argument parsing and install-root resolution tests. The standalone install
+//! marker is `bin/mainframe-daemon`.
 
 use super::*;
 

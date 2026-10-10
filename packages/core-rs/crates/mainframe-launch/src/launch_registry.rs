@@ -1,7 +1,5 @@
-//! Ported from `src/launch/launch-registry.ts`.
-//!
 //! One `LaunchManager` per `projectId:projectPath`, created on demand and shared.
-//! CONCURRENCY.tsv: `managers` = `Arc<DashMap<String, Arc<LaunchManager>>>`.
+//! State: `managers` = `Arc<DashMap<String, Arc<LaunchManager>>>`.
 
 use std::sync::Arc;
 
@@ -20,8 +18,8 @@ pub struct LaunchRegistry {
     child_registry: Option<Arc<dyn ChildRegistryPort>>,
     /// Boot-resolved login-shell `PATH` (see `mainframe_runtime::ResolvedPath`),
     /// forwarded to each `LaunchManager` so launch children resolve the user's
-    /// toolchain (mirrors the TS `enrichPath` env mutation; `MAINFRAME_ORIG_PATH`
-    /// still overrides it in `clean_env`). `None` = inherit the daemon `PATH`.
+    /// toolchain (`MAINFRAME_ORIG_PATH` still overrides it in `clean_env`).
+    /// `None` inherits the daemon `PATH`.
     resolved_path: Option<String>,
 }
 
@@ -36,8 +34,8 @@ impl LaunchRegistry {
         }
     }
 
-    /// Inject the shared pidfile registry (TS ctor's `childRegistry` param, made a
-    /// builder to keep the boot call site additive) passed down to each manager.
+    /// Inject the shared pidfile registry (a builder, to keep the boot call site
+    /// additive) passed down to each manager.
     #[must_use]
     pub fn with_child_registry(mut self, child_registry: Arc<dyn ChildRegistryPort>) -> Self {
         self.child_registry = Some(child_registry);
@@ -88,8 +86,8 @@ impl LaunchRegistry {
 }
 
 /// Minimal `join_all` (no `futures` crate in the allowlist): await each in turn.
-/// The TS uses `Promise.allSettled`; a `LaunchManager::stop_all` cannot fail
-/// (returns `()`), so sequential awaiting is behaviorally equivalent.
+/// A `LaunchManager::stop_all` cannot fail (returns `()`), so sequential awaiting
+/// loses nothing over a settled-all join.
 async fn futures_join_all<F: std::future::Future<Output = ()>>(futures: impl Iterator<Item = F>) {
     for future in futures {
         future.await;
@@ -167,12 +165,3 @@ mod tests {
         registry.stop_all().await;
     }
 }
-
-// PORT STATUS: src/launch/launch-registry.ts (32 lines)
-// confidence: high
-// todos: 0
-// notes: managers = Arc<DashMap<"projectId:projectPath", Arc<LaunchManager>>>.
-// get/get_or_create mirror the TS; the shared on_event + tunnelManager + (new
-// #431) child_registry are cloned into each new manager. stopAll → await every
-// manager.stop_all then clear (a local join_all stands in for Promise.allSettled —
-// stop_all is infallible, so sequential await is equivalent; no `futures` crate).

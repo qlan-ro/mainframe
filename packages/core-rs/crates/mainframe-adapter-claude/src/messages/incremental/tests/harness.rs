@@ -1,7 +1,7 @@
-//! Shared equivalence-test fixtures (todo #376): after every step, both the
-//! projector's materialized snapshot and a mirror built purely by replaying
-//! emitted deltas must equal a fresh `prepare_messages_for_client` call —
-//! the ground truth the incremental projector must never drift from.
+//! Shared equivalence-test fixtures: after every step, both the projector's
+//! materialized snapshot and a mirror built purely by replaying emitted deltas
+//! must equal a fresh `prepare_messages_for_client` call — the ground truth the
+//! incremental projector must never drift from.
 
 use std::collections::HashMap;
 

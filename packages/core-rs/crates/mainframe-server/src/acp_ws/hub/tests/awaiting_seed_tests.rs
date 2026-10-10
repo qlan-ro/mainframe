@@ -1,7 +1,7 @@
-//! The `AwaitingSeed` window (T5/T6, R2.9/R2.11): everything raised between
-//! `begin_resume` and the snapshot's arrival is buffered, then drained behind
-//! the replay — a revision as a diff against the seed, raw frames in arrival
-//! order, minus the one gate the replay redelivers itself.
+//! The `AwaitingSeed` window: everything raised between `begin_resume` and the
+//! snapshot's arrival is buffered, then drained behind the replay — a revision
+//! as a diff against the seed, raw frames in arrival order, minus the one gate
+//! the replay redelivers itself.
 
 use serde_json::json;
 
@@ -40,9 +40,9 @@ async fn a_revision_during_the_snapshot_await_is_buffered_not_lost() {
     assert_eq!(frames[2]["params"]["update"]["content"]["text"], json!("!"));
 }
 
-/// Spec Decision 38: both a buffered raw frame and a buffered revision drain
-/// strictly AFTER `replay_complete` — the marker closes the replay before
-/// either catch-up op runs, never interleaved with it.
+/// Both a buffered raw frame and a buffered revision drain strictly AFTER
+/// `replay_complete` — the marker closes the replay before either catch-up op
+/// runs, never interleaved with it.
 #[tokio::test]
 async fn buffered_ops_drain_after_replay_complete() {
     let hub = hub();
@@ -80,7 +80,7 @@ async fn buffered_ops_drain_after_replay_complete() {
 
 /// A raw out-of-band frame raised during the snapshot await must not reach
 /// the client ahead of the replay it predates — it is buffered like a
-/// revision and drained behind it (T6, R2.11).
+/// revision and drained behind it.
 #[tokio::test]
 async fn a_raw_frame_during_the_snapshot_await_is_drained_after_the_replay() {
     let hub = hub();

@@ -1,13 +1,12 @@
-//! Red-phase (Task 11): `GET /api/chats/{id}/messages` folding `ctx.claude_workflows`'s
-//! retained runs with on-disk `wf_<runId>.json` records into
-//! `ChatHistoryPayload.workflowRuns`. Turned green by Tasks 21-25.
+//! `GET /api/chats/{id}/messages` folding `ctx.claude_workflows`'s retained
+//! runs with on-disk `wf_<runId>.json` records into
+//! `ChatHistoryPayload.workflowRuns`.
 //!
 //! `support::spawn_test_server_with` hardcodes `chat_manager: None` (the route
-//! 500s without one) and has no `claude_workflows` field yet, so this file
-//! builds its own harness: a real `ChatManager` via `build_chat_manager`
-//! (`chat_background_activity.rs`'s pattern) wired into a real `axum::serve`
-//! instance (`support::spawn_test_server_with`'s pattern), plus the
-//! not-yet-existing `claude_workflows` store field Task 22 adds to `AppCtx`.
+//! 500s without one), so this file builds its own harness: a real `ChatManager`
+//! via `build_chat_manager` (`chat_background_activity.rs`'s pattern) wired
+//! into a real `axum::serve` instance (`support::spawn_test_server_with`'s
+//! pattern), plus its own `claude_workflows` store on `AppCtx`.
 //!
 //! `record()`'s nested `json!` fixture (phases + workflow_progress agents) needs
 //! more than the default macro depth to expand.

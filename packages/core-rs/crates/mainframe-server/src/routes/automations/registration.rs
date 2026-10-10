@@ -1,4 +1,4 @@
-//! T7 — webhook registration. The URL is composed here rather than in the
+//! Webhook registration. The URL is composed here rather than in the
 //! engine because only the server knows the port it is listening on, and it
 //! is deliberately `127.0.0.1`: the daemon has no public tunnel, so the hook
 //! is reachable only from this machine.
@@ -87,10 +87,3 @@ fn to_wire(state: &WebhookState, port: u16) -> WebhookRegistration {
         last_delivery_at: state.last_delivery_at.clone(),
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-25-todo-234-automations-editor-plan.md T7), not a TS port
-// confidence: high
-// todos: 0
-// notes: only the single-automation GET embeds registrations; the list route
-//        would pay a store read per webhook trigger for a column the library
-//        never renders.

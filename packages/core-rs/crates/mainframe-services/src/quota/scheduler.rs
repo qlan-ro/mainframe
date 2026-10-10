@@ -1,4 +1,4 @@
-//! Ported from `src/quota/claude-scheduler.ts` — Claude's active pull cadence.
+//! Claude quota pull cadence.
 //!
 //! One unconditional warm-up pull on start (the daemon boots with the app, so the
 //! first glance reads fresh numbers), then a focus-gated interval: a timer tick

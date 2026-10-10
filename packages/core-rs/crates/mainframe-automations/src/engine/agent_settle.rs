@@ -1,6 +1,6 @@
-//! Agent settle path (T4.3, Node verbs/agent-waits.ts): a finished chat
-//! writes the step outcome into the checkpoint and re-advances. All writes
-//! ride the A8-guarded RunStore, so a cancel that raced always wins.
+//! Agent settle path: a finished chat writes the step outcome into the
+//! checkpoint and re-advances. All writes ride the A8-guarded RunStore, so a
+//! cancel that raced always wins.
 
 use serde_json::{Map, Value};
 
@@ -78,9 +78,9 @@ impl AgentVerb {
         }
     }
 
-    /// Node loadWaitingStep: the run must be live and the entry still
-    /// `waiting`, else the wait is stale — clear it and drop the outcome.
-    /// Returns the step's failure policy + A2 contract.
+    /// The run must be live and the entry still `waiting`, else the wait is stale —
+    /// clear it and drop the outcome. Returns the step's failure policy + A2
+    /// contract.
     async fn load_waiting_step(&self, chat_id: &str, key: &WaitKey) -> Option<WaitingContext> {
         let run = match self.store.get_run(&key.run_id).await {
             Ok(run) => run,
@@ -163,8 +163,8 @@ impl AgentVerb {
         }
     }
 
-    /// Mirrors Node failWaitingStep. The write, branch marker and
-    /// `RunUpdated` emit are shared with the deadline sweep through
+    /// Fails the waiting step. The write, branch marker and `RunUpdated` emit
+    /// are shared with the deadline sweep through
     /// `out_of_band::fail_step_out_of_band`, which documents the concurrent
     /// branch and still-waiting-sibling rules.
     async fn fail_waiting_step(
@@ -241,9 +241,3 @@ fn judge(
         }
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T4.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node AgentWaitService.onChatFinished/succeedWaitingStep/
-//        failWaitingStep; A2 parse+retry extends the Completed arm in T4.4.

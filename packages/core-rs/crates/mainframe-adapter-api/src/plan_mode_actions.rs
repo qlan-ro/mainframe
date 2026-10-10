@@ -1,19 +1,11 @@
-//! Ported (RELOCATED) from `packages/core/src/chat/plan-mode-actions.ts`.
+//! The `PlanModeActionHandler` / `PlanActionContext` pair lives in
+//! `mainframe-adapter-api` rather than in the chat crate so adapters never
+//! depend on `mainframe-chat`: adapters *implement* `PlanModeActionHandler`, and
+//! `mainframe-chat` *consumes* it by implementing `PlanActionContext`.
 //!
-//! ORCHESTRATOR RELOCATION (crate-map amendment recorded in PORTING.md §2.10):
-//! the TS `PlanModeActionHandler` / `PlanActionContext` pair lived in the `chat`
-//! module, which forced an adapter→chat layering inversion (the claude/codex
-//! adapters imported `chat/plan-mode-actions`). Moving the pair into
-//! `mainframe-adapter-api` reverses the dependency: adapters *implement*
-//! `PlanModeActionHandler`, and `mainframe-chat` *consumes* it by implementing
-//! `PlanActionContext`.
-//!
-//! Shape note (faithful-but-relocated): the TS `PlanActionContext` is an object
-//! bag exposing `chat`/`db`/`messages`/`permissions`/`active.session` directly.
-//! Because `mainframe-adapter-api` must not depend on the chat/db crates, those
-//! field accesses become trait methods that `mainframe-chat` fulfills. The
-//! handler's control flow (order of operations, early returns) is preserved
-//! line-for-line against the TS source.
+//! Because `mainframe-adapter-api` must not depend on the chat/db crates, the
+//! context's chat/db/messages/permissions/session accesses are trait methods
+//! that `mainframe-chat` fulfills.
 
 use mainframe_types::adapter::ControlResponse;
 use mainframe_types::events::DaemonEvent;
@@ -21,8 +13,8 @@ use mainframe_types::settings::ExecutionMode;
 
 use crate::{AdapterError, BoxFuture};
 
-/// Partial chat patch the plan-mode handlers apply — mirrors the fields the TS
-/// handlers both mutate on `ctx.chat` and pass to `ctx.db.chats.update`.
+/// Partial chat patch the plan-mode handlers apply — the fields the handlers
+/// both mutate on the in-memory chat and persist to the chats table.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct PlanChatUpdate {
     pub plan_mode: Option<bool>,
@@ -38,8 +30,7 @@ pub struct PlanChatUpdate {
 pub trait PlanActionContext: Send + Sync {
     fn chat_id(&self) -> String;
 
-    /// Mutate the in-memory `Chat` and persist via `db.chats.update` (mirrors the
-    /// TS `ctx.chat.X = ...; ctx.db.chats.update(chatId, patch)` pair).
+    /// Mutate the in-memory `Chat` and persist via `db.chats.update`.
     fn update_chat(&self, patch: PlanChatUpdate);
     /// `ctx.emitEvent({ type: 'chat.updated', chat: ctx.chat })`.
     fn emit_chat_updated(&self);
@@ -145,13 +136,3 @@ pub trait PlanModeActionHandler: Send + Sync {
         context: &'a dyn PlanActionContext,
     ) -> BoxFuture<'a, Result<(), AdapterError>>;
 }
-
-// PORT STATUS: src/chat/plan-mode-actions.ts (43 lines) — RELOCATED to mainframe-adapter-api
-// confidence: high
-// todos: 0
-// notes: Orchestrator-mandated relocation breaking the adapter→chat inversion.
-// notes: TS interface fields (chat/db/messages/permissions/active.session) become
-// notes: PlanActionContext trait methods so this crate needs no chat/db dep;
-// notes: mainframe-chat implements the trait. PlanModeActionHandler async methods
-// notes: return BoxFuture (no async-trait in the workspace). Crate-map row
-// notes: chat/plan-mode-actions.ts amended in PORTING.md §2.10 to point here.

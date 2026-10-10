@@ -1,8 +1,8 @@
-//! Ported from `src/server/routes/adapters.ts` — GET /api/adapters.
+//! `GET /api/adapters`.
 //!
-//! Replaces the Phase-3 absence with the real handler: `ctx.adapter_registry.list()`
-//! runs the registry's installed/version probing (single-flight + 2s cap live in
-//! the registry itself) and returns the `AdapterInfo` snapshots verbatim.
+//! `ctx.adapter_registry.list()` runs the registry's installed/version probing
+//! (single-flight + 2s cap live in the registry itself) and returns the
+//! `AdapterInfo` snapshots verbatim.
 
 use std::sync::Arc;
 
@@ -94,8 +94,8 @@ mod tests {
         assert_eq!(body, serde_json::json!({ "success": true, "data": [] }));
     }
 
-    /// AC 2/1: `noPersistence` is part of the wire capabilities of every
-    /// adapter, not gated behind an adapter id check (todo #346).
+    /// `noPersistence` is part of the wire capabilities of every adapter, not
+    /// gated behind an adapter id check.
     #[tokio::test]
     async fn every_adapter_reports_no_persistence_capability() {
         let ctx = test_ctx();
@@ -112,10 +112,3 @@ mod tests {
         assert_eq!(adapters[0]["capabilities"]["noPersistence"], false);
     }
 }
-
-// PORT STATUS: src/server/routes/adapters.ts (1 endpoint, 13 lines)
-// confidence: high
-// todos: 0
-// notes: REPLACES the Phase-3 stub-limited absence. `ctx.adapters.list()` →
-// `ctx.adapter_registry.list().await` (the registry owns installed/version probing
-// + single-flight); response wrapped by `ok()`. Envelope `{success,data}` verified.

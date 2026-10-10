@@ -1,7 +1,5 @@
-//! Ports `__tests__/request-user-input-routing.test.ts` +
-//! `__tests__/request-user-input-resolve.test.ts` assertion-for-assertion,
-//! split by gate: routing, plan exit, question, approval. The fixtures the
-//! four share live here.
+//! Request-user-input routing, plan exit, question, and approval tests share
+//! fixtures here.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod common;

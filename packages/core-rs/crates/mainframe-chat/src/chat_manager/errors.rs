@@ -21,8 +21,8 @@ impl From<AdapterError> for SendError {
     }
 }
 
-/// Error surfaced by `trust_workspace` (message crosses the wire as a 500 body,
-/// mirroring the TS `catch (err) { fail(res, 500, err.message) }`).
+/// Error surfaced by `trust_workspace` (its message crosses the wire as a 500
+/// body).
 #[derive(Debug, thiserror::Error)]
 pub enum TrustWorkspaceError {
     #[error("Chat {0} not found")]
@@ -45,8 +45,8 @@ pub struct ChatFieldsPartial {
     pub pinned: Option<bool>,
 }
 
-/// Error surfaced by `forkToWorktree` (the create step is fallible, the enable step
-/// too). `status_code()` mirrors the TS `err.statusCode ?? 500` (dirty tree → 409).
+/// Error surfaced by `fork_to_worktree` (the create step is fallible, the enable step
+/// too). `status_code` maps a dirty tree to 409 and everything else to 500.
 #[derive(Debug, thiserror::Error)]
 pub enum ForkError {
     #[error(transparent)]

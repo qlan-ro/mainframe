@@ -1,9 +1,6 @@
-//! Ported from `packages/core/src/plugins/builtin/codex/jsonrpc.ts`.
-//!
 //! Id-correlated request/response over the Codex app-server's line-delimited JSON
-//! framing (the framing — multiple objects per line, partial-object scanning — is
-//! copied exactly from the TS). 30s request timeout; notification + server-request
-//! handlers; close listeners.
+//! framing (multiple objects per line, partial-object scanning). 30s request
+//! timeout; notification + server-request handlers; close listeners.
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
@@ -354,9 +351,8 @@ impl JsonRpcClient {
         }
         reject_all_pending(&self.pending, JsonRpcError("Client closed".to_string()));
         // Signal the exit watcher (which owns the child) to terminate it.
-        // TODO(port): TS sends SIGTERM explicitly; start_kill() uses SIGKILL (no
-        // signal crate in the allowlist). The child dies with the client either way
-        // (detached:false parity).
+        // start_kill() sends SIGKILL, not SIGTERM (tokio's `Child` exposes no other
+        // signal). The child dies with the client either way.
         self.kill_notify.notify_waiters();
     }
 
@@ -454,7 +450,7 @@ fn reject_all_pending(pending: &Arc<Mutex<HashMap<RequestId, PendingTx>>>, err: 
     }
 }
 
-/// `2026-07-13T13:10:39.248771Z` — mirrors the TS `^\d{4}-\d{2}-\d{2}T[\d:.]+Z` prefix.
+/// `2026-07-13T13:10:39.248771Z` — a `^\d{4}-\d{2}-\d{2}T[\d:.]+Z` prefix.
 fn is_rfc3339_prefix(ts: &str) -> bool {
     let b = ts.as_bytes();
     // yyyy-mm-ddT + at least one time char + Z
@@ -472,8 +468,7 @@ fn is_rfc3339_prefix(ts: &str) -> bool {
 }
 
 /// `<rfc3339> <LEVEL> <target>: <message>` — the codex binary's tracing format.
-/// Hand-rolled (no regex crate); kept in parity with `TRACING_LINE` in the TS adapter,
-/// which also requires something to follow the level.
+/// Hand-rolled (no regex crate); requires something to follow the level.
 fn is_tracing_line(message: &str) -> bool {
     let mut parts = message.split_whitespace();
     let Some(ts) = parts.next() else {
@@ -556,8 +551,8 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    // Pure framing subset of codex-jsonrpc.test.ts (the client-level request/respond/
-    // close/dispatch cases need a mock ChildProcess and are noted as a test gap).
+    // Pure framing tests (the client-level request/respond/close/dispatch cases
+    // need a mock child process and are a known test gap).
 
     #[test]
     fn parses_a_single_json_object_line() {
@@ -592,23 +587,3 @@ mod tests {
         assert_eq!(find_json_object_end(r#"{"a":1"#), None);
     }
 }
-
-// PORT STATUS: src/plugins/builtin/codex/jsonrpc.ts (227 lines)
-// confidence: medium
-// todos: 1
-// notes: The line framing (parse_jsonrpc_messages + find_json_object_end) is copied
-// notes: char-for-char. Concurrency per CONCURRENCY.tsv 96-100: pending is
-// notes: Arc<Mutex<HashMap>>, next_id AtomicI64, closed AtomicBool, close_listeners a
-// notes: drained-once Vec + a Notify for the Rust-native `closed()` await. Writes go
-// notes: through an mpsc to a stdin writer task so notify/respond/write stay sync
-// notes: (TS stdin.write is sync). TODO(port): close() relies on kill_on_drop(SIGKILL)
-// notes: rather than an explicit SIGTERM (no signal crate in the allowlist); parity
-// notes: on "child dies with the client" holds. on_close's unsubscribe is a no-op
-// notes: (listeners drain exactly once on exit). request() returns raw Value; callers
-// notes: deserialize. TEST GAP: `__tests__/codex-jsonrpc.test.ts` (10 cases) is NOT
-// notes: ported — most cases inject a mock ChildProcess (EventEmitter stdin/stdout),
-// notes: but JsonRpcClient::new takes a concrete tokio Child, so faithfully porting
-// notes: request/respond/close/dispatch tests needs a generic-stream refactor
-// notes: (a redesign, out of scope for a structure-preserving port). The pure framing
-// notes: functions (parse_jsonrpc_messages/find_json_object_end) ARE unit-tested inline
-// notes: below; the client-level request/respond/close/dispatch cases remain a gap.

@@ -1,6 +1,6 @@
-//! Task 10 (group D, todo #350): the sink handler drives the chat-surface
+//! The sink handler drives the chat-surface
 //! observer through the turn lifecycle the legacy `DaemonEvent` stream cannot
-//! express (fact 6) — turn accepted/started/finished with stop reason, gate
+//! express — turn accepted/started/finished with stop reason, gate
 //! raised/resolved, retry, compaction, usage, and a display revision carrying
 //! the same snapshot the legacy emitter computed.
 

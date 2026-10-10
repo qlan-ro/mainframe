@@ -32,8 +32,8 @@ fn claude_config(fp: &ProjectFingerprint) -> Option<String> {
         .then(|| "a .claude/ directory or CLAUDE.md at the repo root".to_string())
 }
 
-/// Decision 22: the fingerprint reports no host for a worktree checkout, so the
-/// two forge rules stay silent there without a second remote-detection path.
+/// The fingerprint reports no host for a worktree checkout, so the two forge
+/// rules stay silent there without a second remote-detection path.
 fn git_remote(fp: &ProjectFingerprint) -> Option<String> {
     Some(match fp.git_host? {
         GitHost::Github => "a GitHub remote".to_string(),

@@ -1,9 +1,7 @@
-//! Ported from `packages/core/src/messages/parse-ask-user-question.ts`.
-//!
 //! Parses the Claude CLI's AskUserQuestion result text back into structured
 //! answers. The CLI wording varies across versions, so every known prefix/suffix
-//! variant is matched. `regex` is not on the port allowlist, so the PAIR /
-//! preview / notes patterns are matched by hand with identical semantics.
+//! variant is matched. `regex` is not on the allowlist, so the PAIR /
+//! preview / notes patterns are matched by hand.
 
 use mainframe_types::display::AskUserQuestionAnswer;
 
@@ -558,15 +556,3 @@ mod tests {
         );
     }
 }
-
-// PORT STATUS: src/messages/parse-ask-user-question.ts (146 lines)
-// confidence: high
-// todos: 0
-// notes: `regex` unavailable — PAIR (`"([^"]*)"="([^"]*)"`), the preview
-// (`selected preview:\r?\n([\s\S]*?)(?: user notes: |$)`) and notes
-// (`user notes: ([\s\S]*?)\s*,?\s*$`) patterns, and the `search()` cut are all
-// hand-rolled with identical semantics. All 21 TS assertions ported; the
-// canonical-fixture test inlines ASK_USER_QUESTION_FIXTURE's expected shape
-// (Which DB?→Postgres, Pick→[Red,Blue]+notes:dense) rather than importing the
-// types fixture. KnownQuestion.options is carried for interface fidelity though
-// the parser never reads it (matches TS).

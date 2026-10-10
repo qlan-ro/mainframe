@@ -1,9 +1,7 @@
-//! Ported from `packages/core/src/plugins/builtin/codex/history.ts`.
-//!
 //! Hosts the crate-shared `MessageContent` block builders + the `with_parent`
-//! tagger (reused by `event_mapper`); re-exports `convert_thread_items` (moved to
-//! `history_convert.rs`, task 2, todo #247) and `parse_unified_diff` (moved to
-//! `unified_diff.rs`) so external call sites keep compiling.
+//! tagger (reused by `event_mapper`); re-exports `convert_thread_items` (from
+//! `history_convert.rs`) and `parse_unified_diff` (from `unified_diff.rs`) so
+//! external call sites keep compiling.
 
 use std::collections::HashMap;
 
@@ -19,8 +17,7 @@ pub(crate) use crate::unified_diff::parse_unified_diff;
 
 /// The live-path counterpart to `make_message`'s id: wraps a Codex thread
 /// item's stable id as `on_message`'s vendor id, so the live `ChatMessage`
-/// gets the same id `make_message(id, ..)` would give it on history reload
-/// (todo #350 group B, stable-ids task 5).
+/// gets the same id `make_message(id, ..)` would give it on history reload.
 pub(crate) fn vendor_metadata(id: &str) -> Option<MessageMetadata> {
     Some(MessageMetadata {
         model: None,
@@ -179,7 +176,7 @@ pub(crate) fn collab_agent_tool_use(
     tool_use_block(id, "CollabAgent", input)
 }
 
-/// Tag a block with `parentToolUseId` (mirrors the TS `{ ...b, parentToolUseId }`).
+/// Tag a block with `parentToolUseId`.
 pub(crate) fn with_parent(block: MessageContent, pid: &str) -> MessageContent {
     use mainframe_types::chat::MessageContentNode as N;
     let pid = Some(pid.to_string());
@@ -265,23 +262,3 @@ pub(crate) fn with_parent(block: MessageContent, pid: &str) -> MessageContent {
         divider @ MessageContent::Node(N::ProviderSwitch { .. }) => divider,
     }
 }
-
-// PORT STATUS: src/plugins/builtin/codex/history.ts (249 lines)
-// confidence: medium
-// todos: 1
-// notes: BLOCKER — `parse_unified_diff` (now in unified_diff.rs) lives in a
-// notes: crate-private shim (faithful copy of messages/parse-unified-diff.ts)
-// notes: because mainframe_display::parse_unified_diff is still a skeleton; swap to
-// notes: the canonical fn once that task lands (TODO(port)).
-// notes: This file hosts the crate-shared MessageContent block builders + the
-// notes: `with_parent` tagger (reused by event_mapper) to keep ONE canonical copy.
-// notes: convert_thread_items (now in history_convert.rs) takes all 4 params
-// notes: explicitly (TS defaulted the last two); the recursive child call passes an
-// notes: empty agent-meta map, matching TS.
-// notes: Tests in tests/history.rs — both codex/__tests__/history.test.ts (userMessage
-// notes: shapes + id stability) AND src/__tests__/codex-history.test.ts (per-item-type
-// notes: conversions), assertion-for-assertion.
-// notes: task 2 (todo #247) carved convert_thread_items into history_convert.rs,
-// notes: emit_collab_agent into history_collab.rs, and parse_unified_diff/
-// notes: parse_hunk_header/parse_pair into unified_diff.rs; re-exported here so
-// notes: external `history::X` call sites keep compiling.

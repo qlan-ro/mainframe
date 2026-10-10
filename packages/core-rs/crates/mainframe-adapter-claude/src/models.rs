@@ -1,8 +1,6 @@
 //! The Claude model catalog: the static fallback list, the older-but-still-active
 //! models Mainframe offers on top of the CLI's own picker, and the context-window
 //! reconciliation applied to a live probe.
-//!
-//! Ported from `packages/core/src/plugins/builtin/claude/adapter.ts`.
 
 use std::collections::{HashMap, HashSet};
 
@@ -323,10 +321,8 @@ mod tests {
             .and_then(|m| m.context_window)
     }
 
-    // These port probe-context-window.test.ts's enrichment assertions. The TS
-    // harness drives them through a mocked `ClaudeAdapter.probeModels()`, which is
-    // exactly `enrich_with_context_window(result.models, result.resolvedModel)`;
-    // called directly here since the adapter struct is deferred (above).
+    // Context-window enrichment, driven through `enrich_with_context_window`
+    // directly rather than through a mocked model probe.
 
     #[test]
     fn preserves_context_window_from_static_catalog_for_known_ids() {
@@ -369,8 +365,7 @@ mod tests {
         assert_eq!(out[0].context_window, Some(1_000_000));
     }
 
-    // Translated assertion-for-assertion from the new adapter-enrich.test.ts cases
-    // (each probed entry carries its own resolvedModel).
+    // Each probed entry carries its own resolvedModel.
     fn probed_full(id: &str, description: &str, resolved: &str) -> AdapterModel {
         let mut m = probed(id);
         m.description = Some(description.to_string());

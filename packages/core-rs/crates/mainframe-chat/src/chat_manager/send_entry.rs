@@ -11,8 +11,8 @@ impl ChatManager {
         attachment_ids: Option<&[String]>,
         command: Option<CommandMeta>,
     ) -> Result<(), SendError> {
-        // Register before reading any registry/cache state (todo #178); the
-        // guard drops on every return path below, `?` included.
+        // Register before reading any registry/cache state; the guard drops on
+        // every return path below, `?` included.
         let _send_guard = self.lifecycle.begin_send(chat_id).await;
 
         let chat = self.get_chat(chat_id);
@@ -70,9 +70,8 @@ impl ChatManager {
 
     /// Stamp turn start (for `onResult`'s `turnDurationMs`) and tell the chat
     /// surface the manager has taken ownership of this prompt — accepted
-    /// whether it dispatches immediately or lands behind a running turn (plan
-    /// task 10; `send_plain_text`/`dispatch_command` fire the matching
-    /// `TurnStarted`).
+    /// whether it dispatches immediately or lands behind a running turn
+    /// (`send_plain_text`/`dispatch_command` fire the matching `TurnStarted`).
     fn mark_turn_accepted(&self, post: &Arc<Mutex<ActiveChat>>, chat_id: &str) {
         post.lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -84,10 +83,10 @@ impl ChatManager {
         );
     }
 
-    /// Loads any existing history into the cache FIRST (todo #350 R1, finding
-    /// 5): a cold or evicted chat's cache is empty, and appending straight
-    /// into it would replace the whole transcript with just this one error
-    /// message — the next resume snapshot then shows nothing else.
+    /// Loads any existing history into the cache FIRST: a cold or evicted
+    /// chat's cache is empty, and appending straight into it would replace the
+    /// whole transcript with just this one error message — the next resume
+    /// snapshot then shows nothing else.
     async fn emit_worktree_missing_error(&self, chat_id: &str, chat: &Chat) {
         self.get_messages(chat_id).await;
         let error_msg = self.messages.lock().unwrap_or_else(|e| e.into_inner())
@@ -246,7 +245,7 @@ impl ChatManager {
 
     /// How many accepted prompts are queued behind this chat's running turn.
     /// The ACP facade's prompt port reads this right after `send_message` to
-    /// fill the queued-state extension metadata (spec decision 11).
+    /// fill the queued-state extension metadata.
     pub fn queued_message_count(&self, chat_id: &str) -> usize {
         self.queued_refs
             .lock()

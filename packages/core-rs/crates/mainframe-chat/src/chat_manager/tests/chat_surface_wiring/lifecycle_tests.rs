@@ -1,6 +1,5 @@
 //! Permission-resolution and chat-teardown cases for the chat-surface seam
-//! (task 14, todo #350) — split out of `chat_surface_wiring.rs` (plan task
-//! 37, R2.13) to keep that file under the 300-line cap.
+//! — split out of `chat_surface_wiring.rs` to keep that file under the 300-line cap.
 
 use super::*;
 
@@ -31,7 +30,7 @@ fn control_request(request_id: &str) -> ControlRequest {
     }
 }
 
-/// Plan task 17: the facade's cross-surface gate resolution relies on the
+/// The facade's cross-surface gate resolution relies on the
 /// chat surface hearing about a permission answered *normally* (not just a
 /// CLI-cancelled one, which `on_permission_cancelled` already covered above)
 /// — a legacy-surface answer is the only way a facade session's pending gate
@@ -65,7 +64,7 @@ async fn answering_a_permission_normally_emits_gate_resolved_on_the_chat_surface
     );
 }
 
-/// The other half of task 17's promotion path: answering the front of a
+/// The other half of promotion path: answering the front of a
 /// multi-request queue must raise the newly-promoted request on the chat
 /// surface too, not just via the legacy `DaemonEvent`.
 #[tokio::test]

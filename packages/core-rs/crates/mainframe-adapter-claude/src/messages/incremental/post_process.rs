@@ -1,4 +1,4 @@
-//! Post-processing a freshly folded tail (todo #376): subject backfill
+//! Post-processing a freshly folded tail: subject backfill
 //! (continuing the frozen prefix's scope) and per-id tool-call timing, both
 //! scoped to only the groups this call actually (re)folded.
 
@@ -7,13 +7,12 @@ use mainframe_types::chat::ChatMessage;
 use super::group::Group;
 use crate::messages::task_subject_backfill::{SubjectScope, backfill_from};
 
-/// Backfill task subjects across `groups[from..]`, continuing `scope`
-/// (already positioned at "before `from`"). Rewrites each group's display
-/// in place when backfill changed it, and records a `scope_before`
-/// checkpoint per group so a later call can look up "the scope entering
-/// group `r`" in `O(1)` instead of re-walking `groups[..r]` (todo #376
-/// follow-up). `scope_before[i]` is the scope entering group `i`; entries
-/// from `from` onward are rebuilt here, matching the groups this call
+/// Backfill task subjects across `groups[from..]`, continuing `scope` (already
+/// positioned at "before `from`"). Rewrites each group's display in place when
+/// backfill changed it, and records a `scope_before` checkpoint per group so a
+/// later call can look up "the scope entering group `r`" in `O(1)` instead of
+/// re-walking `groups[..r]`. `scope_before[i]` is the scope entering group `i`;
+/// entries from `from` onward are rebuilt here, matching the groups this call
 /// actually touched.
 pub(crate) fn backfill_tail(
     groups: &mut [Group],

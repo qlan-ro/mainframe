@@ -1,5 +1,3 @@
-//! Ported from `packages/types/src/chat.ts`.
-
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
@@ -264,9 +262,9 @@ pub struct Chat {
     /// absent from the wire `Chat`.
     #[serde(skip)]
     pub scratch_path: Option<String>,
-    /// The chat this one was forked from, or `null` for a chat with no parent
-    /// (todo #343). Deliberately generic — never fork-specific in name or
-    /// semantics, since side chats (#344) reuse it as "temporary and has a
+    /// The chat this one was forked from, or `null` for a chat with no parent.
+    /// Deliberately generic — never fork-specific in name or
+    /// semantics, since side chats reuse it as "temporary and has a
     /// parent". Survives archive/unarchive; never cascades from the parent.
     #[serde(
         default,
@@ -274,7 +272,7 @@ pub struct Chat {
         skip_serializing_if = "Option::is_none"
     )]
     pub parent_chat_id: Option<Option<String>>,
-    /// Id of this chat's side chat (todo #344), derived on every read by a
+    /// Id of this chat's side chat, derived on every read by a
     /// correlated subquery — never a stored column. `None` when this chat has
     /// no side chat, or when this chat is itself a side chat (side chats never
     /// have side chats).
@@ -391,7 +389,7 @@ pub enum MessageContentNode {
         original_file: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         modified_file: Option<String>,
-        /// Base64 image blocks carried on the `tool_result` (todo #363), source
+        /// Base64 image blocks carried on the `tool_result`, in source
         /// order. Never serialized as text; omitted when empty.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         images: Vec<ToolResultImage>,
@@ -594,7 +592,7 @@ mod tests {
             "name": "Bash",
             "input": { "command": "echo 4" }
         }));
-        // Node arm: tool_result with images (todo #363) — omitted when empty,
+        // Node arm: tool_result with images — omitted when empty,
         // present in source order when populated.
         roundtrip::<MessageContent>(json!({
             "type": "tool_result",
@@ -636,27 +634,3 @@ mod tests {
         }));
     }
 }
-
-// PORT STATUS: packages/types/src/chat.ts (153 lines)
-// confidence: high
-// todos: 0
-// notes: Main catch-up (#423/#424/#425): Chat gains lastContextTotalTokens/
-// lastContextMaxTokens (Option<u64>, persisted), backgroundActivity
-// (Option<BackgroundActivity> from background_task.rs — derived per response,
-// NEVER persisted), transcriptMissing (Option<bool>, persisted). All skip-when-
-// none; serde auto-defaults Option on absent so old payloads still parse.
-// notes(orig): `?: X | null` fields (Chat.processState/effort/fast/ultracode/
-// adaptiveThinking, Project.parentProjectId, SessionTuning.*) use
-// Option<Option<T>> + #[serde(default, skip_serializing_if=Option::is_none)] to
-// preserve the absent/null/value tri-state faithfully (route.projects-list
-// fixture shows parentProjectId present as null); deserialize_with="double_option"
-// is required because plain Option<Option<T>> collapses null to the outer None.
-// WIRE NOTE (Phase B): Chat.totalCost is f64 (0.0842 in fixtures); serde_json
-// renders a whole-valued f64 as `0.0` whereas Node's JSON.stringify emits `0`.
-// Semantically identical (JS coerces) but byte-differs — verify against the live
-// Node output in the differential harness. ChatEffort is a type alias to
-// adapter::EffortLevel. MessageContent is an untagged wrapper over shared
-// LeafContent (content.rs) + transcript-only MessageContentNode (internally
-// tagged, disjoint tags). ToolResultMessageContent (TS Extract alias) has no
-// standalone Rust type — consumers match MessageContentNode::ToolResult.
-// References crate::{content,adapter,context,settings}.

@@ -1,4 +1,4 @@
-//! Negotiated response compression for the HTTP API (todo #294).
+//! Negotiated response compression for the HTTP API.
 //!
 //! Scoped to the HTTP router in `http.rs`, never the WS upgrade routes.
 

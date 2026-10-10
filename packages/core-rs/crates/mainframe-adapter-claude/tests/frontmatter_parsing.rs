@@ -1,11 +1,6 @@
-//! RED-phase tests for todo #317 — `parse_frontmatter` cannot read the YAML
-//! block scalars (`description: |` / `>`) real agent and skill files use, and
-//! finds the closing fence by substring search rather than by line. See
-//! `docs/plans/2026-08-09-todo-317-agent-description-frontmatter-plan.md`
-//! Task 1.
-//!
-//! Cases 1-5 and 10-11 fail against today's parser; the rest are green
-//! regression guards that must stay green once the parser is rebuilt.
+//! `parse_frontmatter` tests: the YAML block scalars (`description: |` / `>`)
+//! real agent and skill files use, and a closing fence found by line rather
+//! than by substring search.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use mainframe_adapter_claude::frontmatter::{build_frontmatter, parse_frontmatter};

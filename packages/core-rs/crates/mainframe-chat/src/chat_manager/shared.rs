@@ -7,9 +7,9 @@ pub(super) fn is_working(chat: &Chat) -> bool {
 
 /// `enrichChat` — set displayStatus/isRunning/backgroundActivity/directory signals.
 /// Mutates in place. `live_tasks` is `tracker.listLive(chat.id)`. `side_chat_waiting`
-/// (todo #344 rule 9) is `permissions.has_pending(side_id)` when this chat has a
-/// side chat, else `None` — `display_status`/`is_running` stay this chat's own so
-/// the fork-availability gate (which reads `hasPending`) is unaffected.
+/// is `permissions.has_pending(side_id)` when this chat has a side chat, else `None`
+/// — `display_status`/`is_running` stay this chat's own so the fork-availability gate
+/// (which reads `hasPending`) is unaffected.
 pub(super) fn enrich_chat(
     chat: &mut Chat,
     has_pending: bool,
@@ -111,10 +111,10 @@ pub(super) fn clear_all_queued_for_chat(refs: &QueuedRefs, chat_id: &str) {
 /// Build a stateless history-load session for `chat` (shared by the facade's
 /// `get_messages`/`get_messages_from_disk` and the permission handler's history
 /// restore). `None` when the chat has no Claude session / pending fork / adapter
-/// / project — an unsent fork (todo #343) has no `claude_session_id` yet, so it
-/// resumes from `chats.pending_fork`'s `fork_source` instead; this is the path a
-/// freshly forked chat's pre-first-message history takes (still in
-/// `active_chats`, so `load_chat` never runs `do_load_chat` for it).
+/// / project — an unsent fork has no `claude_session_id` yet, so it resumes from
+/// `chats.pending_fork`'s `fork_source` instead; this is the path a freshly
+/// forked chat's pre-first-message history takes (still in `active_chats`, so
+/// `load_chat` never runs `do_load_chat` for it).
 pub(super) fn build_history_session(
     deps: &Arc<dyn ChatManagerDeps>,
     chat: &Chat,

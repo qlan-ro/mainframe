@@ -17,8 +17,3 @@ impl Clock for SystemClock {
         Local::now().fixed_offset()
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T3.1), not a TS port
-// confidence: high
-// todos: 0
-// notes: FakeClock lives in the test modules until the testkit phase.

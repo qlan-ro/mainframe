@@ -1,10 +1,8 @@
-//! Pure helpers for todo #343's fork feature — the pieces `ChatManager::fork_chat`
+//! Pure helpers for the fork-a-chat feature — the pieces `ChatManager::fork_chat`
 //! (`chat_manager/fork_api.rs`) needs that don't touch the registry, the DB or an
 //! adapter: the fork point, the provisional title rule, the deps-boundary data shapes (so
 //! `mainframe-chat` never depends on `mainframe-db`'s `PendingFork`/`ForkInsert`),
 //! and the REST-status mapping for `ForkChatError`.
-//!
-//! See `docs/plans/2026-09-24-todo-343-fork-thread.md` "Group 3 — daemon-fork".
 
 use mainframe_types::adapter::{EffortLevel, ForkSource};
 use mainframe_types::settings::ExecutionMode;
@@ -12,7 +10,7 @@ use mainframe_types::settings::ExecutionMode;
 /// Where `ChatManager::fork_chat` cuts the parent's conversation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ForkPoint {
-    /// The parent's current end (todo #343's whole-chat fork).
+    /// The parent's current end (a whole-chat fork).
     Current,
     /// Immediately before this chat message id, which must name a sent user
     /// message. The fork holds everything before it and nothing after.
@@ -33,8 +31,8 @@ pub struct PendingForkState {
 
 /// What `fork_chat`'s capability check needs from the parent's adapter: its
 /// display name (for the 422 message), whether it can fork at all, and — when
-/// it can't — a version-specific reason (todo #368, e.g. an old Codex CLI)
-/// preferred over the generic "isn't available" message.
+/// it can't — a version-specific reason (e.g. an old Codex CLI) preferred over
+/// the generic "isn't available" message.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AdapterForkInfo {
     pub name: String,
@@ -89,10 +87,10 @@ pub enum ForkChatError {
     NotFound(String),
     #[error("Forking isn't available for {0} chats yet")]
     Unsupported(String),
-    /// `adapter_fork_info` reported a version-specific reason (todo #368,
-    /// e.g. "Forking Codex chats needs Codex CLI 0.143.0 or newer") instead
-    /// of a bare capability flag. Preferred over `Unsupported` whenever a
-    /// reason exists, so the 422 body names the fix instead of just the gap.
+    /// `adapter_fork_info` reported a version-specific reason (e.g. "Forking
+    /// Codex chats needs Codex CLI 0.143.0 or newer") instead of a bare
+    /// capability flag. Preferred over `Unsupported` whenever a reason exists,
+    /// so the 422 body names the fix instead of just the gap.
     #[error("{0}")]
     UnavailableWithReason(String),
     #[error("Temporary chats can't be forked")]
@@ -242,7 +240,3 @@ mod tests {
         );
     }
 }
-
-// PORT STATUS: new (todo #343 Group 3)
-// confidence: high
-// todos: 0

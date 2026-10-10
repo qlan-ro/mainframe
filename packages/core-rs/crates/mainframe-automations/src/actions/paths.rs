@@ -21,15 +21,9 @@ pub(crate) async fn resolve_and_validate_path(
     requested_path: &str,
 ) -> Option<String> {
     let real_base = tokio::fs::canonicalize(base_path).await.ok()?;
-    // `Path::join` mirrors Node's `path.resolve(base, requested)`: an
-    // absolute `requested` replaces the base; a relative one is appended.
+    // `Path::join`: an absolute `requested` replaces the base; a relative
+    // one is appended.
     let joined = Path::new(base_path).join(requested_path);
     let full_path = tokio::fs::canonicalize(&joined).await.ok()?;
     is_within_base(&real_base, &full_path).then(|| full_path.to_string_lossy().into_owned())
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T6.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirror of mainframe-server/src/path_utils.rs (itself the port of
-//        server/routes/path-utils.ts resolveAndValidatePath).

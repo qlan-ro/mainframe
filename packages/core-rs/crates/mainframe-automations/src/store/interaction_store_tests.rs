@@ -1,4 +1,4 @@
-//! T2.2 — interaction store: pending lifecycle and the one-transaction
+//! Interaction store: pending lifecycle and the one-transaction
 //! `resolve_interaction` (contract §3: a crash cannot strand an `answered`
 //! interaction against a still-`waiting` step).
 
@@ -119,8 +119,8 @@ async fn resolve_claims_and_writes_answers_in_one_transaction() {
 
 /// `apply_answers` is the one `Waiting`->terminal transition that used to
 /// leave `wake_at` untouched — harmless only because `ask_me` itself never
-/// carries a deadline. A sibling that DOES (an agent's `timeoutMinutes`,
-/// Phase 4a concurrency) must keep its own deadline live across this resolve.
+/// carries a deadline. A sibling that DOES (an agent's `timeoutMinutes`
+/// under concurrency) must keep its own deadline live across this resolve.
 #[tokio::test]
 async fn resolving_an_interaction_recomputes_wake_at_instead_of_clobbering_a_sibling_deadline() {
     let h = harness().await;

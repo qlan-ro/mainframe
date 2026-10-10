@@ -1,7 +1,6 @@
-//! Red-phase (todo #338, Task 2): pins that the Claude adapter's recorded
-//! task-output path, `spool_root()`, and the production-default spool
-//! validator all agree — the acceptance criterion "asserted in one test
-//! rather than three independent constant checks."
+//! Pins that the Claude adapter's recorded task-output path, `spool_root()`,
+//! and the production-default spool validator all agree, asserted in one test
+//! rather than three independent constant checks.
 #![cfg(unix)]
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 

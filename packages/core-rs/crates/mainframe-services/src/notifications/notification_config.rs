@@ -1,5 +1,3 @@
-//! Ported from `src/notifications/notification-config.ts`.
-
 use mainframe_types::settings::NotificationConfig;
 use serde_json::Value;
 
@@ -234,13 +232,3 @@ mod tests {
         assert!(!should_notify_permission(&off, None));
     }
 }
-
-// PORT STATUS: src/notifications/notification-config.ts (55 lines)
-// confidence: high
-// todos: 0
-// notes: Zod per-group `.partial()` salvage → salvage_* fns: a present known key
-// of the wrong type fails the whole group (val.as_bool()? → None), unknown keys
-// ignored (Zod strips). Non-object root → {} → all defaults. NOTIFICATION_DEFAULTS
-// is NotificationConfig::default() (types crate). Takes `&impl SettingsReader`
-// (the shared trait) rather than DatabaseManager so it is testable with a fake,
-// mirroring the TS test's fakeDb; the real DB satisfies the trait.

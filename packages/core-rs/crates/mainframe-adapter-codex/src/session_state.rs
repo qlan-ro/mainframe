@@ -1,6 +1,5 @@
-//! Moved out of `event_mapper.rs` (task 1, todo #247) to keep that file under
-//! the 300-line ceiling. `CodexSessionState` and its two small value types,
-//! unchanged.
+//! `CodexSessionState` and its two small value types, kept apart from
+//! `event_mapper.rs` to keep that file under the 300-line ceiling.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -36,9 +35,8 @@ pub struct SubAgentCard {
     pub last_message: Option<String>,
 }
 
-/// Per-session mutable state driven by the notification stream (SINGLE_TASK per
-/// CONCURRENCY.tsv row 95 — owned by the session actor). The lazily-created TS
-/// `Set`/`Map` fields become always-present empty collections here.
+/// Per-session mutable state driven by the notification stream (owned by the
+/// session actor). Set/map fields are always-present, possibly empty collections.
 #[derive(Debug, Default)]
 pub struct CodexSessionState {
     pub thread_id: Option<String>,
@@ -71,7 +69,7 @@ pub struct CodexSessionState {
     pub background_tasks: Option<Arc<BackgroundTaskTracker>>,
     /// child thread id → its live tracker task id. Presence means "a row is live".
     pub agent_task_ids: HashMap<String, String>,
-    /// Todo #378: the parent's own in-flight `item/agentMessage/delta`
+    /// The parent's own in-flight `item/agentMessage/delta`
     /// accumulation, fed to `SessionSink::on_message_partial`.
     pub agent_message_partial: AgentMessagePartialState,
     pub presentation: crate::transcript_presentation::PresentationStateByThread,

@@ -1,4 +1,4 @@
-//! Ported from `src/quota/manager.ts` — the daemon's in-memory quota state.
+//! The daemon's in-memory quota state.
 //!
 //! Adapters push escalations (sparse merges) and registered pullers refresh full
 //! snapshots; both are keyed per account so a same-provider swap lands on a fresh
@@ -36,7 +36,7 @@ pub enum IngestMode {
 }
 
 /// The account-wide `settings` KV surface the manager persists into. Sync, to
-/// mirror the TS `settings` collaborator (better-sqlite3 is synchronous); the
+/// use a synchronous settings collaborator; the
 /// daemon backs it with the `Db` actor's blocking bridge.
 pub trait QuotaSettingsStore: Send + Sync {
     fn get(&self, category: &str, key: &str) -> Option<String>;
@@ -60,8 +60,7 @@ type ClockFn = Box<dyn Fn() -> i64 + Send + Sync>;
 type SharedClock = Arc<dyn Fn() -> i64 + Send + Sync>;
 
 /// The read + manual-refresh surface the quota routes depend on. A trait (not the
-/// concrete `QuotaManager`) so the route-unit harness can inject a fake, mirroring
-/// the duck-typed `{ get, refresh }` the TS route accepts.
+/// concrete `QuotaManager`) so the route-unit harness can inject a fake.
 pub trait QuotaService: Send + Sync {
     fn get(&self, adapter_id: &str) -> Option<ProviderQuota>;
     fn refresh<'a>(
@@ -83,7 +82,7 @@ impl QuotaService for QuotaManager {
     }
 }
 
-/// Constructor collaborators, mirroring `QuotaManagerDeps`.
+/// Constructor collaborators for the quota manager.
 pub struct QuotaManagerDeps {
     pub settings: Box<dyn QuotaSettingsStore>,
     pub emit_event: EmitFn,

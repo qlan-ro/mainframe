@@ -1,8 +1,8 @@
-//! Todo #344 (Task 4) — side-chat lifecycle wiring tests, built on the same
-//! real-`ChatManager` harness as `temporary_chat_lifecycle.rs`. No adapter
-//! code: #346's `no_persistence_for_spawn` already gives a side chat the
-//! no-persistence spawn option once it is temporary (always true) and the
-//! adapter reports the capability.
+//! Side-chat lifecycle wiring tests, built on the same real-`ChatManager`
+//! harness as `temporary_chat_lifecycle.rs`. No adapter code:
+//! `no_persistence_for_spawn` already gives a side chat the no-persistence
+//! spawn option once it is temporary (always true) and the adapter reports the
+//! capability.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod temporary_chat_lifecycle_support;
@@ -33,7 +33,7 @@ fn create_parent_with_worktree(h: &support::Harness, worktree_path: Option<&str>
     support::get_chat(h, &chat.id)
 }
 
-// ── first-spawn cwd priority (rule 2, `chat_cwd`) ────────────────────────────
+// ── first-spawn cwd priority (`chat_cwd`) ────────────────────────────────────
 
 #[tokio::test]
 async fn first_spawn_cwd_prefers_the_parents_worktree() {
@@ -91,7 +91,7 @@ async fn first_spawn_cwd_falls_back_to_the_parents_scratch_directory_for_a_non_p
     );
 }
 
-// ── no-persistence spawn option (AC 10 — no adapter code) ───────────────────
+// ── no-persistence spawn option (no adapter code) ───────────────────────────
 
 #[tokio::test]
 async fn spawn_carries_no_persistence_exactly_when_the_capability_is_on() {
@@ -120,7 +120,7 @@ async fn spawn_carries_no_persistence_exactly_when_the_capability_is_on() {
     );
 }
 
-// ── empty conversation (AC 4, "no adapter code") ────────────────────────────
+// ── empty conversation ("no adapter code") ──────────────────────────────────
 
 #[tokio::test]
 async fn the_side_chat_starts_with_no_session_even_after_the_parent_has_one() {
@@ -145,7 +145,7 @@ async fn the_side_chat_starts_with_no_session_even_after_the_parent_has_one() {
     );
 }
 
-// ── restart survival (AC 12, 13) ─────────────────────────────────────────────
+// ── restart survival ─────────────────────────────────────────────────────────
 
 #[tokio::test]
 async fn restart_with_the_capability_on_stamps_loss_mints_a_fresh_id_never_transcript_missing() {

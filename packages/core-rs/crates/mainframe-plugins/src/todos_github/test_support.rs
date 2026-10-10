@@ -1,4 +1,4 @@
-//! Shared harness for `run.rs`/`pairing.rs` tests (todo #286): unlike the
+//! Shared harness for `run.rs`/`pairing.rs` tests: unlike the
 //! rest of `todos_github`, those two modules call the `GitHubIssues` port, so
 //! `todos::tests::setup()` (which hardcodes `github: None`) can't be reused.
 

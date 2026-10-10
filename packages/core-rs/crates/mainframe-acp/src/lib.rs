@@ -1,4 +1,4 @@
-//! The ACP v2 chat-facade server (todo #350): JSON-RPC framing, the
+//! The ACP v2 chat-facade server: JSON-RPC framing, the
 //! `initialize` handshake, and the `_mainframe.dev` extension namespace,
 //! built over the vendored types in `mainframe_types::acp`. Pure logic only —
 //! `mainframe-server` owns the axum socket shell (`/acp/{profile}`) this

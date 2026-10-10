@@ -1,11 +1,8 @@
-//! Ported from `src/server/routes/path-utils.ts`.
-//!
 //! SECURITY-critical: `resolve_and_validate_path` canonicalizes (realpath) and
 //! then confirms strict containment within the base, closing path-traversal and
-//! sibling-prefix seams. The TS used `realpathSync`; the port uses async
-//! `tokio::fs::canonicalize` (PORTING.md forbids sync I/O in the daemon) — the
-//! semantics (resolve symlinks, fail-closed on non-existent/escaping paths) are
-//! identical.
+//! sibling-prefix seams. It uses async `tokio::fs::canonicalize` so no blocking
+//! I/O runs on the async executor; symlinks are resolved and non-existent or
+//! escaping paths fail closed.
 
 use std::path::{Path, PathBuf};
 
@@ -19,7 +16,7 @@ pub fn is_within_base(real_base: &Path, real_target: &Path) -> bool {
     }
     // `Path::starts_with` compares whole components, so `/proj` does NOT
     // "start with" `/proj-evil` and vice-versa — this is exactly the
-    // separator-boundary guard the TS `realBase + sep` string check provided.
+    // separator-boundary guard.
     real_target.starts_with(real_base)
 }
 
@@ -32,8 +29,8 @@ pub fn is_within_base(real_base: &Path, real_target: &Path) -> bool {
 /// (403) — never fall back to an unvalidated path.
 pub async fn resolve_and_validate_path(base_path: &str, requested_path: &str) -> Option<String> {
     let real_base = tokio::fs::canonicalize(base_path).await.ok()?;
-    // `Path::join` mirrors Node's `path.resolve(base, requested)`: an absolute
-    // `requested` replaces the base entirely; a relative one is appended.
+    // `Path::join`: an absolute `requested` replaces the base entirely; a
+    // relative one is appended.
     let joined = Path::new(base_path).join(requested_path);
     let full_path = tokio::fs::canonicalize(&joined).await.ok()?;
     is_within_base(&real_base, &full_path).then(|| path_to_string(&full_path))
@@ -141,8 +138,8 @@ mod tests {
         }
     }
 
-    /// Realpath of a str, for building the expected canonical results the way the
-    /// TS test's `fs.realpathSync(tmpDir)` does (macOS `/tmp` → `/private/tmp`).
+    /// Realpath of a str, for building the expected canonical results (macOS
+    /// `/tmp` → `/private/tmp`).
     fn real(path: &Path) -> String {
         fs::canonicalize(path)
             .unwrap()
@@ -244,13 +241,3 @@ mod tests {
         assert_eq!(result, None);
     }
 }
-
-// PORT STATUS: src/server/routes/path-utils.ts (4 helpers)
-// confidence: high
-// todos: 0
-// notes: `realpathSync` → async `tokio::fs::canonicalize` (no sync I/O in the
-// daemon). `isWithinBase`'s string prefix + separator guard → `Path::starts_with`
-// (component-wise, so the `/proj` vs `/proj-evil` sibling seam stays closed — the
-// dedicated test proves it). Node `path.resolve(base, requested)` (absolute
-// requested wins) → `Path::join`. All 9 path-utils.test.ts cases translated with
-// real tempdirs (real collaborators, no mocks).

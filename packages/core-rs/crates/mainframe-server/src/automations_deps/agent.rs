@@ -134,7 +134,8 @@ impl AgentPort for DaemonAgentPort {
                 .resolve_project_id(request.project_id.as_deref())
                 .await?;
             if request.auto_approve.as_ref().is_some_and(|a| !a.is_empty()) {
-                // R6: no ChatManager parameter exists yet — loud, never silent.
+                // No ChatManager parameter carries this yet — warn loudly, never
+                // drop it silently.
                 tracing::warn!(
                     "ask_agent auto-approve scope is not supported by the chat manager yet (R6); option ignored"
                 );
@@ -218,12 +219,3 @@ impl AgentPort for DaemonAgentPort {
         })
     }
 }
-
-// PORT STATUS: packages/core/src/automations/agent-port.ts +
-// verbs/agent-waits.ts onChatFinished (the watch loop folds the wait table
-// into a future — Rust durable-wait design, T4.3)
-// confidence: high
-// todos: 0
-// notes: worktree base branch defaults to the project's current branch when
-//        the step omits baseBranch (the enable-worktree route requires an
-//        explicit base; an automation has no UI picker to supply one).

@@ -1,5 +1,4 @@
-//! `_mainframe.dev/session_detach` (todo #350, plan task 8, D2). Split out of
-//! `acp_ws_integration.rs` to keep that file under the 300-line cap.
+//! `_mainframe.dev/session_detach`.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod support;
@@ -24,8 +23,7 @@ async fn server_with_mock_adapter() -> TestServer {
 /// Attaches by prompting (attach-on-send runs even though the prompt itself
 /// fails — no `ChatManager` in this harness; it still needs the `initialize`
 /// handshake, which gates the attach), detaches, then asserts a further
-/// chat-surface revision for that session produces no frame on this socket
-/// (D2, R2.3).
+/// chat-surface revision for that session produces no frame on this socket.
 #[tokio::test]
 async fn session_detach_stops_session_updates() {
     let server = server_with_mock_adapter().await;

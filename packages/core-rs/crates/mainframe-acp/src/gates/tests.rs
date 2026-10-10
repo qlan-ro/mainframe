@@ -38,9 +38,9 @@ fn control_request() -> ControlRequest {
     }
 }
 
-/// Desktop-cutover pass: the rich gate cards render the raw `ControlRequest`
-/// (input, suggestions), so the request carries it whole under the extension
-/// namespace — round-trippable back into the same struct.
+/// The rich gate cards render the raw `ControlRequest` (input, suggestions), so
+/// the request carries it whole under the extension namespace — round-trippable
+/// back into the same struct.
 #[test]
 fn build_request_carries_the_full_control_request_in_meta() {
     let request = build_request(
@@ -215,8 +215,8 @@ fn an_adapter_supplied_option_carries_its_own_updated_input() {
     );
 }
 
-/// R3.2/T19 regression: the desktop never sets `scope` on a rich answer, so
-/// a rich answer selecting an `allow_always` option must still come out
+/// Regression: the desktop never sets `scope` on a rich answer, so a rich
+/// answer selecting an `allow_always` option must still come out
 /// session-scoped, or Codex's "Accept for session" re-prompts next turn.
 #[test]
 fn rich_answer_selecting_an_allow_always_option_gets_session_scope_overlaid() {

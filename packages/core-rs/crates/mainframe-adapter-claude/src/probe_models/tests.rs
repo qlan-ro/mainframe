@@ -48,9 +48,7 @@ fn extract_probe_payload_undefined_resolved_when_no_default() {
     assert_eq!(extract_probe_payload(&event).unwrap().resolved_model, None);
 }
 
-// Ports the parse assertions of claude-probe-models.test.ts's "sends initialize
-// request and parses model response" (the subprocess mock harness itself needs a
-// process abstraction not present here; the parse path is what those assertions check).
+// The initialize-response parse path, checked without spawning the CLI.
 #[test]
 fn extract_probe_payload_maps_full_initialize_response() {
     let event = json!({
@@ -131,8 +129,6 @@ fn map_model_info_hides_ultracode_without_xhigh() {
     }));
     assert_eq!(m.supports_ultracode, None);
 }
-
-// Translated from the new probe-models.test.ts cases (#441).
 
 #[test]
 fn carries_each_entry_own_resolved_model_onto_the_mapped_model() {

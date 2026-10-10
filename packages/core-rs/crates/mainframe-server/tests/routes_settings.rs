@@ -1,8 +1,6 @@
-//! Integration tests for `routes/settings.rs` — translated from
-//! `settings.test.ts` and `settings-notifications.test.ts`. The provider GET
-//! cases assert the DB-derivable shape (skipPermissions→yolo, ghost adapter); the
-//! TS `resolvedExecutable` enrichment + adapter-registry union are a Phase-4/5
-//! seam, so those assertions pin the seam (resolvedExecutable absent).
+//! Integration tests for `routes/settings.rs`, general and notification settings
+//! included. The provider GET cases assert the DB-derived shape
+//! (skipPermissions→yolo, ghost adapter) and the per-id `resolvedExecutable`.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod support;
@@ -111,7 +109,7 @@ async fn general_put_rejects_worktree_dir_with_separators() {
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     let body: serde_json::Value = resp.json().await.unwrap();
     assert_eq!(body["success"], false);
-    // worktreeDir regex-only failure → the bare Zod refinement message.
+    // worktreeDir regex-only failure → the bare refinement message.
     assert_eq!(body["error"], "Must be a simple directory name");
 }
 
@@ -392,7 +390,7 @@ async fn provider_get_includes_adapter_with_only_stored_settings() {
     set_setting(&server, "provider", "ghost.defaultModel", "gpt-ghost").await;
     let body = get_json(&server, "/api/settings/providers").await;
     assert_eq!(body["data"]["ghost"]["defaultModel"], "gpt-ghost");
-    // resolvedExecutable is attached for every id (TS resolveAdapterExecutableCached).
+    // resolvedExecutable is attached for every id.
     // `ghost` is not a real CLI and has no configured path, so it resolves to the
     // bare-name fallback (source "fallback", invalid).
     let resolved = &body["data"]["ghost"]["resolvedExecutable"];

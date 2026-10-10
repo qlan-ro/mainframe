@@ -1,10 +1,10 @@
-//! ISO-8601 timestamp helpers — the single source of `Date.toISOString()` wire
-//! parity. Every timestamp *string* field the daemon emits (events, chats,
-//! `/health`, …) must go through here so the bytes match the Node daemon.
+//! ISO-8601 timestamp helpers — the single source of the daemon's timestamp wire
+//! shape. Every timestamp *string* field the daemon emits (events, chats,
+//! `/health`, …) must go through here so every timestamp has the same shape.
 //!
 //! `chrono::DateTime::to_rfc3339()` alone is NOT a valid substitute: it emits
 //! microsecond precision and a `+00:00` offset (`...30.123456+00:00`), whereas
-//! Node's `Date.toISOString()` emits millisecond precision and a literal `Z`
+//! the wire shape (JS `Date.toISOString()`) has millisecond precision and a literal `Z`
 //! (`...30.123Z`). Use these helpers, never `to_rfc3339()`, for wire output.
 
 use chrono::{DateTime, SecondsFormat, Utc};
@@ -28,7 +28,7 @@ mod tests {
 
     #[test]
     fn to_iso8601_matches_node_to_iso_string() {
-        // 2026-07-08T10:15:30.000Z — the shape Node's toISOString() produces.
+        // 2026-07-08T10:15:30.000Z — the shape JS `Date.toISOString()` produces.
         let dt = Utc.with_ymd_and_hms(2026, 7, 8, 10, 15, 30).unwrap();
         assert_eq!(to_iso8601(dt), "2026-07-08T10:15:30.000Z");
     }
@@ -56,11 +56,3 @@ mod tests {
         );
     }
 }
-
-// PORT STATUS: (new helper — no direct TS source file)
-// confidence: high
-// todos: 0
-// notes: shared iso8601 helper backing PORTING.md §4's toISOString() wire-parity
-// rule; `use chrono::Utc; chrono::Timelike::with_nanosecond` is pulled in the test
-// module only. Consumers: mainframe-server::routes::health (and future timestamp
-// string fields). Never emit `to_rfc3339()` for wire output — it drifts (micros/+00:00).

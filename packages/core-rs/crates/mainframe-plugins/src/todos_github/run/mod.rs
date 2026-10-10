@@ -1,7 +1,7 @@
-//! The sync-run driver (todo #286): the only place in `todos_github` that
+//! The sync-run driver: the only place in `todos_github` that
 //! calls the `GitHubIssues` port. Reads the link, reconciles every eligible
 //! pair through the pure `reconcile` module, and persists both the writes and
-//! the run's report. One run per project at a time (fact 12, AC35).
+//! the run's report. One run per project at a time.
 
 mod apply;
 mod fetch;
@@ -49,7 +49,7 @@ pub(crate) async fn run_sync(
 }
 
 /// Read access to the mutual-exclusion set for `GET /link`'s `running` field
-/// (routes.rs, task 19) — the route surface has no other way to answer it.
+/// (routes.rs) — the route surface has no other way to answer it.
 pub fn is_running(project_id: &str) -> bool {
     RUNNING.contains_key(project_id)
 }

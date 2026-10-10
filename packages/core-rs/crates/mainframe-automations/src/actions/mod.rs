@@ -1,7 +1,7 @@
-//! run_action registry + built-in actions (plan Phase 6). Every action is a
-//! trait object behind the flat-id `ActionRegistry`; the run_action verb
-//! (Node verbs/run-action.ts) renders ChipText params, resolves the
-//! credential label, and hands this layer a JSON input object.
+//! run_action registry + built-in actions. Every action is a trait object
+//! behind the flat-id `ActionRegistry`; the run_action verb renders ChipText
+//! params, resolves the credential label, and hands this layer a JSON input
+//! object.
 
 pub mod ado;
 pub mod files;
@@ -27,13 +27,12 @@ use crate::credentials::Credentials;
 use crate::engine::BoxFuture;
 use crate::tokens::TokenValue;
 
-/// What an action sees at execution time (Node actions/types.ts ActionCtx).
-/// Cancellation is structural — the interpreter drops the walk future — so
-/// no abort signal is threaded through.
+/// What an action sees at execution time. Cancellation is structural — the
+/// interpreter drops the walk future — so no abort signal is threaded through.
 pub struct ActionCtx {
     pub creds: Option<Credentials>,
     /// The label `creds` was resolved from (the step's `credential` field) —
-    /// connector auth failures name it so the fix is actionable (plan T7.1).
+    /// connector auth failures name it so the fix is actionable.
     pub credential_label: Option<String>,
     /// `runId:stepRef` — passed through to actions that support idempotency
     /// keys (e.g. HTTP).
@@ -97,9 +96,9 @@ pub(crate) fn http_client() -> reqwest::Client {
 
 const ERROR_BODY_SNIPPET_CHARS: usize = 500;
 
-/// Connector HTTP failure (Node's `<op> failed (<status>): <500-char body>`),
-/// plus the plan-T7.1 twist: an auth rejection names the credential label the
-/// step used so the failure is actionable from the run timeline.
+/// Connector HTTP failure (`<op> failed (<status>): <500-char body>`); an
+/// auth rejection also names the credential label the step used so the
+/// failure is actionable from the run timeline.
 pub(crate) fn http_failure(op: &str, status: u16, ctx: &ActionCtx, body: &str) -> ActionError {
     let snippet: String = body.chars().take(ERROR_BODY_SNIPPET_CHARS).collect();
     if status == 401 || status == 403 {
@@ -112,8 +111,8 @@ pub(crate) fn http_failure(op: &str, status: u16, ctx: &ActionCtx, body: &str) -
     ActionError(format!("{op} failed ({status}): {snippet}"))
 }
 
-/// Strict input parse — unknown fields rejected (zod `.strict()` parity),
-/// with the Node verb's error text (`invalid input for '<id>': …`).
+/// Strict input parse — unknown fields rejected, with the error text
+/// `invalid input for '<id>': …`.
 pub(crate) fn parse_input<T: DeserializeOwned>(
     action_id: &str,
     params: &Value,
@@ -122,9 +121,8 @@ pub(crate) fn parse_input<T: DeserializeOwned>(
         .map_err(|err| ActionError(format!("invalid input for '{action_id}': {err}")))
 }
 
-/// `~` expansion + absolute resolution (Node verbs/run-action.ts
-/// resolvePath): a leading `~` or `~/` becomes the home dir; a relative
-/// path resolves against the process cwd, mirroring `path.resolve`.
+/// `~` expansion + absolute resolution: a leading `~` or `~/` becomes the
+/// home dir; a relative path resolves against the process cwd.
 pub(crate) fn expand_user_path(path: &str) -> PathBuf {
     if let Some(home) = dirs::home_dir() {
         if path == "~" {
@@ -153,7 +151,7 @@ pub(crate) fn register_builtin_actions(registry: &mut ActionRegistry) -> Result<
     Ok(())
 }
 
-/// Curated connectors (plan Phase 7).
+/// Curated connectors.
 pub(crate) fn register_curated_actions(registry: &mut ActionRegistry) -> Result<(), ActionError> {
     registry.register(Box::new(github::GithubCreatePrAction::new()))?;
     registry.register(Box::new(github::GithubListPrsAction::new()))?;
@@ -193,9 +191,3 @@ mod run_command_tests;
 
 #[cfg(test)]
 mod user_agent_tests;
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T6.2-T7.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: built-ins (T6.3-T6.5) + curated connectors (T7.1/T7.2) registered;
-//        MCP is a catalog-entry seam only (T7.3, contract §9).

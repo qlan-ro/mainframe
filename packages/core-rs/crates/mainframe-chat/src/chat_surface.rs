@@ -1,14 +1,12 @@
-//! The chat-surface observer seam (todo #350, plan task 10): turn lifecycle,
-//! display revisions, gates, retry, compaction, and usage — the events the
-//! legacy `DaemonEvent` stream cannot express (fact 6: no turn/retry/version
-//! variants exist there). Both the legacy WS surface and the ACP facade
-//! (`mainframe-acp`) can be driven from one implementation of [`ChatSurface`];
-//! the legacy emit paths in `event_handler.rs`/`display_emitter.rs` are
-//! untouched — this seam is called alongside them, never instead.
+//! The chat-surface observer seam: turn lifecycle, display revisions, gates,
+//! retry, compaction, and usage — the events the `DaemonEvent` stream cannot
+//! express (it has no turn/retry/version variants). The ACP facade hub in
+//! `mainframe-server` implements [`ChatSurface`]; every display revision
+//! reaches clients through this seam (`event_handler/display_emission.rs`).
 //!
-//! Injection mirrors `ChatManager::attach_self`'s `OnceLock` pattern (plan
-//! decision: constructor injection over another defaulted `ChatManagerDeps`
-//! method, per the #273 silently-inherited-default bug class): a
+//! Injection follows `ChatManager::attach_self`'s `OnceLock` pattern:
+//! constructor injection rather than another defaulted `ChatManagerDeps`
+//! method, which an existing deps impl would inherit silently. A
 //! `ChatManager`/`EventHandler` built with no surface attached is a no-op,
 //! not a compile-time obligation on every existing deps impl.
 
@@ -29,8 +27,7 @@ pub enum CompactionPhase {
 
 /// Why a turn ended. `Error` covers both an adapter-reported failure
 /// (`on_result`'s `is_error`) and the adapter process dying mid-turn
-/// (`on_exit` while the turn was still working) — the edge case the plan
-/// calls out explicitly.
+/// (`on_exit` while the turn was still working).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TurnStopReason {
     Completed,
@@ -40,11 +37,11 @@ pub enum TurnStopReason {
 
 /// One chat-surface event. `chat_id` is on every variant so a single
 /// implementation can multiplex sessions without a second dispatch layer.
-/// `Debug`/`PartialEq` are not derived (todo #376): `DisplayRevision`'s
-/// `DisplayDelta` carries a `DisplaySnapshot` handle (an `Arc<Mutex<..>>`
-/// over the projector's live container list, foreign to this crate), which
-/// implements neither. See the manual `Debug` impl below; nothing in this
-/// crate compares a whole `ChatSurfaceEvent` for equality.
+/// `Debug`/`PartialEq` are not derived: `DisplayRevision`'s `DisplayDelta`
+/// carries a `DisplaySnapshot` handle (an `Arc<Mutex<..>>` over the projector's
+/// live container list, foreign to this crate), which implements neither. See
+/// the manual `Debug` impl below; nothing in this crate compares a whole
+/// `ChatSurfaceEvent` for equality.
 #[derive(Clone)]
 pub enum ChatSurfaceEvent {
     /// The manager accepted a prompt — immediately for a free chat, or
@@ -62,12 +59,11 @@ pub enum ChatSurfaceEvent {
         stop_reason: TurnStopReason,
     },
     /// The container-level delta the chat's projector computed for this
-    /// revision (todo #376) — the canonical encoder reads only
-    /// `delta.changes` (`G4`); a consumer that has no baseline yet
-    /// (unseeded) falls back to `delta.snapshot.materialize()`.
-    /// `streaming` names the leaf kind the partial-message overlay currently
-    /// backs, when `emit_display_for` finds one still open on the last
-    /// container (spec Decision 39); `None` outside a live partial,
+    /// revision — the canonical encoder reads only `delta.changes`; a consumer
+    /// that has no baseline yet (unseeded) falls back to
+    /// `delta.snapshot.materialize`. `streaming` names the leaf kind the
+    /// partial-message overlay currently backs, when `emit_display_for` finds
+    /// one still open on the last container; `None` outside a live partial,
     /// including every resume replay (no overlay in a snapshot).
     DisplayRevision {
         chat_id: String,
@@ -82,8 +78,8 @@ pub enum ChatSurfaceEvent {
         chat_id: String,
         request_id: String,
     },
-    /// The CLI's `api_error` retry (plan task 11); `reason` is the adapter's
-    /// raw error text, not a categorized taxonomy (todo #350 group D scope).
+    /// The CLI's `api_error` retry; `reason` is the adapter's raw error text,
+    /// not a categorized taxonomy.
     Retry {
         chat_id: String,
         attempt: i64,
@@ -126,11 +122,11 @@ pub enum ChatSurfaceEvent {
 }
 
 impl PartialEq for ChatSurfaceEvent {
-    /// Manual, mirroring the dropped derive (todo #376): every variant
-    /// compares its fields directly except `DisplayRevision.delta`, whose
-    /// `DisplaySnapshot` handle has no `PartialEq` to borrow — compared by
-    /// `full`/`len`/`changes` (the delta's actual content) instead, same as
-    /// the manual `Debug` impl above reads it.
+    /// Manual, since the derive is unavailable: every variant compares its
+    /// fields directly except `DisplayRevision.delta`, whose `DisplaySnapshot`
+    /// handle has no `PartialEq` to borrow — compared by `full`/`len`/`changes`
+    /// (the delta's actual content) instead, same as the manual `Debug` impl
+    /// above reads it.
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::TurnAccepted { chat_id: a }, Self::TurnAccepted { chat_id: b }) => a == b,

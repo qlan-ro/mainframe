@@ -1,9 +1,8 @@
-//! Multi-client + cross-surface gate resolution (todo #350, plan task 17): a
-//! gate raised on one chat is broadcast to every attached facade session, but
-//! only the first answer is applied — a second facade client's answer, or a
-//! legacy-surface answer arriving after a facade client already claimed it,
-//! gets a structured "resolved" outcome instead of a second
-//! `respond_to_permission` call.
+//! Multi-client + cross-surface gate resolution: a gate raised on one chat is
+//! broadcast to every attached facade session, but only the first answer is
+//! applied — a second facade client's answer, or a legacy-surface answer
+//! arriving after a facade client already claimed it, gets a structured
+//! "resolved" outcome instead of a second `respond_to_permission` call.
 //!
 //! Cross-surface awareness rides the existing chat-surface seam
 //! (`chat_surface::ChatSurfaceEvent::GateResolved`, mainframe-chat) — this

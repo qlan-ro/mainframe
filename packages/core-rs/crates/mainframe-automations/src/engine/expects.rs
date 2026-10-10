@@ -1,8 +1,7 @@
-//! A2 structured agent outputs (T4.4, Node verbs/expects.ts): the output
-//! contract appended to the prompt, the corrective-retry message, and the
-//! parse/validate/coerce pass over the agent's final message. Every string
-//! here crosses the wire (prompts, retry messages, step errors) — keep them
-//! byte-identical to Node.
+//! A2 structured agent outputs: the output contract appended to the prompt,
+//! the corrective-retry message, and the parse/validate/coerce pass over the
+//! agent's final message. Every string here crosses the wire (prompts, retry
+//! messages, step errors).
 
 use serde_json::{Map, Value};
 
@@ -117,7 +116,7 @@ pub(crate) fn js_string(value: &Value) -> String {
 
 /// Scans left to right tracking brace depth (string-aware, so a `}` inside a
 /// quoted value never miscounts), collecting complete top-level `{...}`
-/// spans; candidates are tried from the end (Node extractLastJsonObject).
+/// spans; candidates are tried from the end.
 fn extract_last_json_object(text: &str) -> Option<Map<String, Value>> {
     for candidate in collect_top_level_objects(text).iter().rev() {
         if let Ok(Value::Object(object)) = serde_json::from_str::<Value>(candidate) {
@@ -165,9 +164,3 @@ fn collect_top_level_objects(text: &str) -> Vec<&str> {
     }
     candidates
 }
-
-// PORT STATUS: packages/core/src/automations/verbs/expects.ts (118 lines)
-// confidence: high
-// todos: 0
-// notes: number coercion via parse::<f64> mirrors JS Number(raw) for the
-//        strings agents actually emit; Infinity/NaN are rejected either way.

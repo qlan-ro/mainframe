@@ -3,8 +3,7 @@
 //! `input` is a JS snippet wrapping `tools.exec_command({...})`, rather than
 //! the plain JSON args string `exec_command`'s own `function_call` record
 //! carries, paired with a `custom_tool_call_output`. Split from
-//! `rollout_reconstruct.rs` to keep both files under the 300-line ceiling
-//! (todo #339 task 16).
+//! `rollout_reconstruct.rs` to keep both files under the 300-line ceiling.
 
 use std::collections::HashMap;
 

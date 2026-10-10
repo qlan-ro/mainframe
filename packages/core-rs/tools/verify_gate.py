@@ -41,7 +41,7 @@ ALWAYS_FORBIDDEN = [
 # guard so a future rule change can't accidentally trip its own grep.
 FORBID_DECLARATION = re.compile(r"#!\[forbid\(unsafe_code\)\]")
 
-# panic! is test-exempt like unwrap/expect: PORTING forbids it outside
+# panic! is test-exempt like unwrap/expect: reject it outside
 # #[cfg(test)] code and main.rs boot, and tests use it idiomatically.
 UNWRAP_EXPECT = [
     (re.compile(r"\bpanic!\("), "panic!("),
@@ -56,8 +56,8 @@ def is_main_boot(path: Path) -> bool:
 
 
 def is_binary_crate(path: Path) -> bool:
-    """The daemon binary crate may use `anyhow` at its top level (PORTING.md §5,
-    §8; plan §5). Library crates may not."""
+    """The daemon binary crate may use `anyhow` at its top level.
+    Library crates may not."""
     return "mainframe-daemon" in path.parts
 
 

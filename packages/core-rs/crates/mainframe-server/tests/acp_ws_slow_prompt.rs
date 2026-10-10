@@ -1,8 +1,6 @@
-//! A slow `session/prompt` blocks neither the socket loop (todo #350, plan
-//! task 10, R3.6) nor the ordering its own session's `session/cancel`
-//! depends on. Split out of `acp_ws_integration.rs` — these are the tests in
-//! the group that need the group-1-step-0 `FacadeServer` fixture and a
-//! barrier adapter, both sizable enough to justify their own file.
+//! A slow `session/prompt` blocks neither the socket loop nor the ordering its
+//! own session's `session/cancel` depends on. These tests need the
+//! `FacadeServer` fixture and a barrier adapter.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod support;

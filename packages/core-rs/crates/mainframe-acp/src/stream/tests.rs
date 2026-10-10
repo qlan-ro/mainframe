@@ -1,7 +1,6 @@
-//! Basic delta/seed and lifecycle/gate characterization for
-//! `SessionStream`. Retry-marker cases moved to `retry_marker_tests.rs`
-//! (todo #350, plan task 37, R2.13) — it shares this file's fixture
-//! builders via `use super::*`.
+//! Basic delta/seed and lifecycle/gate characterization for `SessionStream`.
+//! Retry-marker cases moved to `retry_marker_tests.rs` — it shares this file's
+//! fixture builders via `use super::*`.
 
 mod container_delta_tests;
 mod retry_marker_tests;

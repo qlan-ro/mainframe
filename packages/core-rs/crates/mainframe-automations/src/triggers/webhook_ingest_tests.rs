@@ -1,9 +1,9 @@
-//! T8.3 — the webhook ingest pipeline end-to-end over a real store:
-//! valid+matching starts a run with the payload Record + captures the
-//! in-memory sample; bad signature 401s; preset mismatch 204s; a replayed
-//! delivery id is a 200 no-op; stale deliveries drop; disabled automations
-//! accept silently without a run (A7 + contract §4). T7 adds the durable
-//! delivery stamp the editor's registration panel reads.
+//! The webhook ingest pipeline end-to-end over a real store: valid+matching
+//! starts a run with the payload Record + captures the in-memory sample; bad
+//! signature 401s; preset mismatch 204s; a replayed delivery id is a 200 no-op;
+//! stale deliveries drop; disabled automations accept silently without a run
+//! (A7 + contract §4). Also covers the durable delivery stamp the editor's
+//! registration panel reads.
 
 use serde_json::json;
 

@@ -1,4 +1,4 @@
-//! Chunked folding (todo #376): the same per-message grouping decision and
+//! Chunked folding: the same per-message grouping decision and
 //! the same `convert_grouped_to_display` the full pipeline uses, applied to
 //! one raw slice at a time so a partial update touches only the groups it
 //! changed. A full rebuild is just this fold called over `0..raw.len()`.
@@ -35,7 +35,7 @@ pub(crate) fn fold_merge_group(
     let mut base: Option<ChatMessage> = None;
     // Indices (into the un-deduped merged content) the tool-id dedup keeps —
     // the same list `group_messages`'s dedupe pass hands
-    // `presentation_grouping::retain` (todo #384).
+    // `presentation_grouping::retain`.
     let mut retained: Vec<usize> = Vec::new();
 
     for idx in raw_range {

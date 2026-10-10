@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/chat/message-cache.ts`.
-
 use std::collections::{HashMap, HashSet};
 
 use mainframe_runtime::time::now_iso8601;
@@ -7,23 +5,21 @@ use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent};
 
 const MAX_CHATS: usize = 50;
 
-/// In-memory message store keyed by chat id, with no per-chat message cap
-/// (todo #350 R1, D1/D2): a chat the lifecycle registry still holds is pinned
-/// whole, so retention is never visible on the wire (no resync, no dropped
-/// history). `MAX_CHATS` bounds only unpinned entries — cold reads for a chat
-/// with no registry cell (`get_messages`); see `evict_if_needed`.
+/// In-memory message store keyed by chat id, with no per-chat message cap: a
+/// chat the lifecycle registry still holds is pinned whole, so retention is
+/// never visible on the wire (no resync, no dropped history). `MAX_CHATS`
+/// bounds only unpinned entries — cold reads for a chat with no registry cell
+/// (`get_messages`); see `evict_if_needed`.
 ///
-/// CONCURRENCY.tsv (`message-cache.ts cache`): PER_ENTITY — folds into
-/// `ChatState.messages: Vec<ChatMessage>` once chat_manager lands. `order`
-/// mirrors JS `Map` insertion order so `evict_if_needed` drops the oldest
-/// unpinned chat, matching `cache.keys().next()`.
+/// `order` records insertion order so `evict_if_needed` drops the oldest
+/// unpinned chat.
 pub struct MessageCache {
     cache: HashMap<String, Vec<ChatMessage>>,
     order: Vec<String>,
     pinned: HashSet<String>,
     tool_timings: HashMap<String, crate::tool_call_timing::ToolTimingStore>,
-    /// Per-chat incremental-display-projection state (todo #376): a display
-    /// projector plus its mutation journal. See `projection.rs`.
+    /// Per-chat incremental-display-projection state: a display projector plus
+    /// its mutation journal. See `projection.rs`.
     projections: HashMap<String, projection::ProjectionSlot>,
     now_epoch_ms: std::sync::Arc<dyn Fn() -> u64 + Send + Sync>,
 }
@@ -61,9 +57,9 @@ impl MessageCache {
         self.pinned.remove(chat_id);
     }
 
-    /// Test-only pin query (todo #381): lets a test observe that `release`
-    /// actually dropped the pin, without depending on the eviction-order
-    /// side effect `release_unpins`'s existing assertion uses.
+    /// Test-only pin query: lets a test observe that `release` actually dropped
+    /// the pin, without depending on the eviction-order side effect
+    /// `release_unpins`'s existing assertion uses.
     #[cfg(test)]
     pub(crate) fn is_pinned(&self, chat_id: &str) -> bool {
         self.pinned.contains(chat_id)
@@ -97,8 +93,8 @@ impl MessageCache {
 
     /// Drop the oldest *unpinned* chat while over `MAX_CHATS`. A chat with a
     /// live registry cell is pinned and skipped, so the registry's own bound
-    /// (idle offload, end, archive, discard) is the real cap once every chat
-    /// is pinned (D1).
+    /// (idle offload, end, archive, discard) is the real cap once every chat is
+    /// pinned.
     fn evict_if_needed(&mut self) {
         while self.cache.len() > MAX_CHATS {
             let Some(idx) = self.order.iter().position(|k| !self.pinned.contains(k)) else {
@@ -190,10 +186,9 @@ impl MessageCache {
 
     /// Run `edit` over every message of `chat_id` in place; `edit` reports
     /// whether it changed that message. Records one `Structural` entry at the
-    /// earliest changed index (the same journal shape `strip_all_queued`
-    /// uses for its in-place metadata edits), so the display projector
-    /// re-folds from there instead of dropping its slot (todo #376). Returns
-    /// whether any message changed.
+    /// earliest changed index (the same journal shape `strip_all_queued` uses
+    /// for its in-place metadata edits), so the display projector re-folds from
+    /// there instead of dropping its slot. Returns whether any message changed.
     pub fn update_in_place(
         &mut self,
         chat_id: &str,
@@ -226,10 +221,9 @@ impl MessageCache {
     }
 
     /// `create_transient_message`, with an adapter-supplied id (the transcript
-    /// uuid / thread-item id) in place of a minted nanoid — todo #350 group B,
-    /// stable-ids task 5. `None` falls back to the nanoid path unchanged, so
-    /// this is additive: every existing caller of `create_transient_message`
-    /// keeps its current behavior verbatim.
+    /// uuid / thread-item id) in place of a minted nanoid. `None` falls back to
+    /// the nanoid path unchanged, so this is additive: every existing caller of
+    /// `create_transient_message` keeps its current behavior verbatim.
     pub fn create_transient_message_with_vendor_id(
         &self,
         chat_id: &str,
@@ -294,7 +288,6 @@ mod tests {
             .collect()
     }
 
-    // Ports message-cache-move-to-end.test.ts assertion-for-assertion.
     #[test]
     fn moves_a_message_to_the_end_and_preserves_the_others_in_order() {
         let mut cache = MessageCache::new();
@@ -394,16 +387,6 @@ mod tests {
         );
     }
 }
-
-// PORT STATUS: src/chat/message-cache.ts (76 lines)
-// confidence: high
-// todos: 0
-// notes: `Map<string, ChatMessage[]>` → `HashMap` + an `order: Vec<String>` that
-// notes: mirrors JS `Map` insertion order so `evict_if_needed` drops the oldest
-// notes: unpinned chat (`cache.keys().next()`, skipping pinned keys — todo #350
-// notes: R1, D1). No per-chat message cap: a chat with a live registry cell is
-// notes: pinned whole. nanoid + now_iso8601 for createTransientMessage.
-// notes: move-to-end test ported verbatim.
 
 #[cfg(test)]
 pub(crate) mod timing_tests;

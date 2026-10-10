@@ -1,6 +1,6 @@
-//! Greenfield (todo #243): `/api/skills-cli/{catalog,search}` — the browsable
-//! skills.sh registry. Neither route is project-scoped: the catalog and the
-//! search index are the same for every project, and so is the catalog's cache.
+//! `/api/skills-cli/{catalog,search}` — the browsable skills.sh registry.
+//! Neither route is project-scoped: the catalog and the search index are the
+//! same for every project, and so is the catalog's cache.
 //!
 //! The daemon proxies both calls rather than letting the renderer make them —
 //! the webview's CSP grants no registry origin, and on a remote daemon it is
@@ -134,9 +134,10 @@ mod tests {
         assert_eq!(entry["isOfficial"], true);
     }
 
-    // Pins what the TS `.nullish()` decodes: search results carry an explicit
-    // `null` for the flag the search API doesn't report, so the UI can withhold
-    // the official marker instead of asserting a skill isn't official.
+    // Wire contract: `packages/types/src/skills-cli.ts` decodes `isOfficial` with
+    // `.nullish()`. Search results carry an explicit `null` for the flag the
+    // search API doesn't report, so the UI can withhold the official marker
+    // instead of asserting a skill isn't official.
     #[test]
     fn a_search_row_serializes_an_unknown_official_flag_as_null() {
         let json = search_json(vec![SearchEntry {

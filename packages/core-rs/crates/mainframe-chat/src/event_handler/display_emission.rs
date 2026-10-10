@@ -4,7 +4,7 @@ use super::*;
 /// sink: advance the chat's display projection and hand the resulting delta
 /// to the chat-surface seam (the ACP facade's per-connection `SessionStream`
 /// owns all diffing). Holds the `MessageCache` guard across `notify` (same
-/// as before todo #376): emissions are serialized and the hub handles each
+/// as before ): emissions are serialized and the hub handles each
 /// synchronously.
 pub(super) fn emit_display_for<D: EventHandlerDeps>(
     chat_id: &str,

@@ -118,9 +118,9 @@ async fn a_start_cursor_replays_every_item_as_a_create() {
     ));
 }
 
-/// todo #376 G2 task 5: `ResumeReplay.containers` is the per-container
-/// shape `encode_containers` produced; flattened, it must equal `items`
-/// exactly — the flat form stays the one `plan`/`itemCount` use.
+/// `ResumeReplay.containers` is the per-container shape `encode_containers`
+/// produced; flattened, it must equal `items` exactly — the flat form stays the
+/// one `plan`/`itemCount` use.
 #[tokio::test]
 async fn containers_flatten_to_items() {
     let port = FakePort {
@@ -142,9 +142,9 @@ async fn containers_flatten_to_items() {
     assert_eq!(flattened, replay.items);
 }
 
-/// Spec Decision 37: `dispatch_resume` diffs the snapshot against a fresh
-/// `SessionState`, so every replayed item goes through `create_update` —
-/// every item frame in the replay must carry the creation marker.
+/// `dispatch_resume` diffs the snapshot against a fresh `SessionState`, so
+/// every replayed item goes through `create_update` — every item frame in the
+/// replay must carry the creation marker.
 #[tokio::test]
 async fn a_replay_create_carries_the_marker() {
     let port = FakePort {
@@ -326,14 +326,14 @@ async fn resume_replay_ends_with_the_current_turn_state() {
     ));
 }
 
-// Overlay-parity streaming-attribution tests (todo #382) live in
-// `overlay_streaming.rs`, split out to keep this file under 300 lines.
+// Overlay-parity streaming-attribution tests live in `overlay_streaming.rs`,
+// split out to keep this file under 300 lines.
 mod overlay_streaming;
-// End-to-end revision-cursor tests (todo #377) live in
-// `revision_cursor_tests.rs`, split out for the same reason.
+// End-to-end revision-cursor tests live in `revision_cursor_tests.rs`, split
+// out for the same reason.
 mod revision_cursor_tests;
 
-// ── Replay result previews (spec Decision 41) ────────────────────────────────
+// ── Replay result previews ───────────────────────────────────────────────────
 
 fn tool_call_message(id: &str, result: &str) -> DisplayMessage {
     use mainframe_types::display::{DisplayNode, ToolCallResult, ToolCategory};

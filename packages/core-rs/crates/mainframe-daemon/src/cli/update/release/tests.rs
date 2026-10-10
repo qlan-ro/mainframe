@@ -1,7 +1,5 @@
-//! Ported test cases from `packages/core/src/cli/__tests__/update.test.ts`
-//! (the `standaloneArtifactName` / `pickRelease` / `assetUrl` / `compareSemver`
-//! / `assertNotDowngrade` describe blocks). Expectations are hardcoded, not
-//! recomputed from the implementation under test.
+//! Release selection, artifact naming, and semver tests. Expectations are
+//! hardcoded instead of being recomputed from the implementation under test.
 
 use super::*;
 

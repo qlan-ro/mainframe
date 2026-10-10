@@ -1,12 +1,11 @@
-//! Moved out of `history.rs` (task 2, todo #247) to keep that file under the
-//! 300-line ceiling. `parse_unified_diff` and its two helpers, unchanged.
+//! `parse_unified_diff` and its two helpers, kept apart from `history.rs` to keep
+//! that file under the 300-line ceiling.
 
 use mainframe_types::chat::DiffHunk;
 
-/// TODO(port): replace with `mainframe_display::parse_unified_diff::parse_unified_diff`
-/// once that (currently-skeleton) module is ported by the mainframe-display task.
-/// Faithful copy of `messages/parse-unified-diff.ts` kept crate-private meanwhile so
-/// this crate compiles + tests green (BLOCKER surfaced in the task output).
+/// TODO: crate-private duplicate of
+/// `mainframe_display::parse_unified_diff::parse_unified_diff`, which is implemented
+/// and already a dependency of this crate; switch callers to it and delete this copy.
 pub(crate) fn parse_unified_diff(diff: &str) -> Vec<DiffHunk> {
     if diff.trim().is_empty() {
         return Vec::new();

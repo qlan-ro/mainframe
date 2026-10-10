@@ -1,4 +1,4 @@
-//! `/acp/{adapter-profile}` — the ACP v2 chat-facade WS upgrade (todo #350).
+//! `/acp/{adapter-profile}` — the ACP v2 chat-facade WS upgrade.
 //! Self-authenticates like `/` and `/lsp/:projectId/:language`; the profile
 //! segment must name a registered adapter. This module is only the axum
 //! socket shell: inbound frames route through `dispatch::handle_inbound`

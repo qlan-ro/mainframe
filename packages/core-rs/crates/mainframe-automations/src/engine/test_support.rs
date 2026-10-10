@@ -86,7 +86,7 @@ fn never<S>(name: &'static str) -> Handler<S> {
     Box::new(move |_, _| panic!("unexpected call to VerbPorts.{name}"))
 }
 
-/// Node test parity: every verb panics unless the test installs a handler.
+/// Every verb panics unless the test installs a handler.
 pub(crate) struct FakePorts {
     pub ask_agent: Handler<AskAgentStep>,
     pub ask_me: Handler<AskMeStep>,

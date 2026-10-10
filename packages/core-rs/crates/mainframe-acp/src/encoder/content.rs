@@ -1,7 +1,6 @@
-//! `encode_content` and its per-leaf-kind helpers, split out of
-//! `encoder.rs` (todo #350, plan task 37, R2.13) — the 125-line match this
-//! module breaks up was itself the single biggest function in the crate
-//! (`cargo clippy -- -W clippy::too_many_lines`).
+//! `encode_content` and its per-leaf-kind helpers, split out of `encoder.rs` —
+//! the 125-line match this module breaks up was itself the single biggest
+//! function in the crate (`cargo clippy -- -W clippy::too_many_lines`).
 
 use mainframe_types::display::{StreamingLeafKind, has_attachment_evidence};
 
@@ -26,14 +25,14 @@ pub(super) fn push_text(blocks: &mut Vec<ContentBlock>, text: &str) {
 /// leaves accumulate into message items and thinking leaves into thought
 /// items, each segmented at the points where another item interrupts the run.
 ///
-/// `streaming` marks the item backed by the partial overlay (spec Decision
-/// 39, `encoder.rs::encode_revision`): when the message or thought
-/// accumulator is still open at `finish` and its kind matches, the finished
-/// item's `ItemMeta.streaming` is `Some(true)`. A segment closed earlier by
-/// an interruption never carries it — only the segment still open at the end
-/// of this container is "the one streaming right now". `None` everywhere
-/// (`encode`'s plain call, and every nested `TaskGroup` call) reproduces
-/// today's unmarked output exactly.
+/// `streaming` marks the item backed by the partial overlay
+/// (`encoder.rs::encode_revision`): when the message or thought accumulator is
+/// still open at `finish` and its kind matches, the finished item's
+/// `ItemMeta.streaming` is `Some(true)`. A segment closed earlier by an
+/// interruption never carries it — only the segment still open at the end of
+/// this container is "the one streaming right now". `None` everywhere
+/// (`encode`'s plain call, and every nested `TaskGroup` call) produces
+/// unmarked output.
 pub(super) fn encode_content(
     content: &[DisplayContent],
     container: &Container<'_>,
@@ -216,9 +215,9 @@ fn handle_task_group(
         message_meta: None,
         parent_tool_call_id: Some(agent_id),
     };
-    // The overlay backs only the top-level container `encode_revision` names
-    // (todo #350 R2); a subagent's own content never streams yet (follow-up
-    // 3), so this nested call always passes `None`.
+    // The overlay backs only the top-level container `encode_revision` names;
+    // a subagent's own content never streams, so this nested call always
+    // passes `None`.
     encode_content(calls, &child, role, out, None);
 }
 

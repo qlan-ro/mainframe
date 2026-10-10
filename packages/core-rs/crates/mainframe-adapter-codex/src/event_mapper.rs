@@ -110,7 +110,7 @@ fn handle_account_rate_limits_updated(
     sink.on_provider_quota("codex", quota);
 }
 
-/// Which session a notification's `threadId` belongs to (task 17, todo #247):
+/// Which session a notification's `threadId` belongs to:
 /// the parent's own thread (or untagged, or pre-`thread/started`), a registered
 /// child, or neither — an item from a thread nobody named must be dropped, not
 /// leaked to the parent's transcript.

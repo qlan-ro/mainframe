@@ -1,4 +1,4 @@
-//! Per-port quick tunnels for the localhost chips (#279).
+//! Per-port quick tunnels for the localhost chips.
 //!
 //! Three endpoints under `/api/tunnel/ports`, driving `ctx.port_tunnels`. Kept
 //! out of `tunnel.rs`, which owns the single `daemon`-labelled remote-access
@@ -21,7 +21,7 @@ use crate::respond::{fail, ok, ok_empty};
 use crate::routes::projects::parse_body;
 
 /// Ports below 1024 are privileged and never a dev server; the client applies
-/// the same floor in `isTunnelEligiblePort`.
+/// the same floor in `isTunnelEligiblePort` (`@qlan-ro/mainframe-types`).
 const MIN_PORT: u16 = 1024;
 
 #[derive(Deserialize)]

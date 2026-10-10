@@ -1,5 +1,3 @@
-//! Ported from `packages/types/src/git.ts`.
-
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -213,13 +211,3 @@ mod tests {
         assert_eq!(serde_json::to_string(&s).unwrap(), json);
     }
 }
-
-// PORT STATUS: packages/types/src/git.ts (68 lines)
-// confidence: high
-// todos: 0
-// notes: the result unions (Fetch/Pull/Merge/Rebase/Push/DeleteBranch) are
-// internally-tagged enums on "status" with explicit renames for the kebab literals
-// (up-to-date, not-merged, is-current). Inline `summary` objects become named
-// structs (PullSummary, MergeSummary). All counts (ahead/behind/additions/
-// insertions/etc.) are i64. BranchInfo optionals + BranchListResult.activeOperation
-// + BranchUpdateStatus.error use Option + skip_serializing_if.

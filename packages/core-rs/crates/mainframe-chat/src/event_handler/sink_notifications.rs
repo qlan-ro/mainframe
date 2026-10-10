@@ -48,7 +48,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
 
     pub(super) fn handle_api_retry(&self, attempt: i64, reason: Option<String>) {
         // The marker must be recorded before the clearing revision it
-        // precedes (T16, R1.4): the hub attaches a pending marker to the
+        // precedes: the hub attaches a pending marker to the
         // first eligible upsert on the NEXT revision, and the display
         // revision below is that revision's trigger — recording the marker
         // after emitting it would let the clearing frame go out unmarked.

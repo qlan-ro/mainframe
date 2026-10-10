@@ -12,11 +12,8 @@
 //! actually carries `SessionSpawnOptions::orchestration_mcp` — never to a
 //! chat without the tools.
 
-/// Kept well under T3 Code's ~5k-character orchestration block (see
-/// `docs/research/2026-10-09-t3code-agent-instructions-and-mcp-tools.md`,
-/// section 1): enough to say when to delegate, without spending the token
-/// budget T3 does on scheduling, secrets, and visuals Mainframe does not
-/// (yet) expose over this server.
+/// Kept under 2,500 characters: enough to explain when to delegate without
+/// crowding the agent's own system prompt.
 pub const ORCHESTRATION_SYSTEM_PROMPT: &str = "\
 ## Mainframe chat orchestration
 
@@ -53,7 +50,7 @@ mod tests {
                 "missing {needle:?}"
             );
         }
-        // T3's own block is ~5,083 chars; stay well clear of that budget.
+        // Keep the appended guidance concise.
         assert!(ORCHESTRATION_SYSTEM_PROMPT.chars().count() < 2_500);
     }
 }

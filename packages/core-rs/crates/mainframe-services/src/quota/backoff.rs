@@ -1,4 +1,4 @@
-//! Ported from `src/quota/backoff.ts` — keep-last-known on a pull failure.
+//! Retain the last known quota after a pull failure.
 
 use mainframe_types::adapter::{ProviderQuota, ProviderQuotaStatus};
 

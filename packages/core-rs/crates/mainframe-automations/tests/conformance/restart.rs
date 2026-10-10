@@ -1,8 +1,8 @@
-//! T10.3 durability matrix: for each pause point (waiting-on-form,
-//! waiting-on-agent, mid-Repeat, mid-`running`), drop the engine and rebuild a
-//! fresh one over the SAME db — a daemon crash-and-reboot. Assert the run
-//! completes with no non-idempotent action re-executed, and the restart-mid-
-//! `running` policy (idempotent re-runs, else fails loudly).
+//! Durability matrix: for each pause point (waiting-on-form, waiting-on-agent,
+//! mid-Repeat, mid-`running`), drop the engine and rebuild a fresh one over the
+//! SAME db — a daemon crash-and-reboot. Assert the run completes with no
+//! non-idempotent action re-executed, and the restart-mid- `running` policy
+//! (idempotent re-runs, else fails loudly).
 //!
 //! The automations are DISABLED before their manual run so the boot sweep
 //! injects no scheduled make-up runs — these tests isolate reconcile, and an
@@ -198,8 +198,8 @@ async fn restart_mid_running_nonidempotent_fails_loudly() {
 
 /// A repeat over `github.list_prs`' two records, fanned out with
 /// `concurrency: 2` — built inline rather than as a fixture, since the
-/// fixtures directory is Node-authored canon (T1.2 `fixture_tests`) and this
-/// scenario (Phase 4a) has no Node counterpart to mirror.
+/// fixtures directory holds the canonical contract fixtures (checked by
+/// `fixture_tests`), which are never re-authored.
 fn concurrent_fan_out_input() -> AutomationCreateInput {
     serde_json::from_value(json!({
         "name": "Concurrent PR review",

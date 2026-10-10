@@ -1,8 +1,8 @@
-//! Route-level tests for the todos-plugin GitHub sub-router (todo #286, task
-//! 18): the frozen wire shapes in the plan, the request-validation edge
-//! cases, and the two cascades (`DELETE /link`, `DELETE /pairs/{todoId}`)
-//! that must not reach the wrong tables. Split by route group to stay under
-//! the 300-line file cap; this module holds the shared harness helpers.
+//! Route-level tests for the todos-plugin GitHub sub-router: the frozen
+//! wire shapes, the request-validation edge cases, and the two cascades
+//! (`DELETE /link`, `DELETE /pairs/{todoId}`) that must not reach the wrong
+//! tables. Split by route group to stay under the 300-line file cap; this
+//! module holds the shared harness helpers.
 
 mod cascades;
 mod link;

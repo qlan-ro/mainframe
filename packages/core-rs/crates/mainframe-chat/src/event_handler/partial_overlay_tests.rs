@@ -1,9 +1,9 @@
-//! Partial-message overlay (todo #350, `--include-partial-messages`): the
+//! Partial-message overlay (`--include-partial-messages`): the
 //! sink's `on_message_partial` merges the in-flight block into the display
 //! computation feeding the chat-surface revision stream, and the completed
 //! block converges in place because it lands under the same item id (the API
 //! message id), never as a reset. Session-teardown/retry-ordering cases
-//! moved to `teardown_tests.rs` (todo #350, plan task 37, R2.13) — it
+//! moved to `teardown_tests.rs` — it
 //! shares this file's fixtures via `use super::*`.
 
 mod teardown_tests;
@@ -203,7 +203,7 @@ impl ChatSurface for RevisionSurface {
             delta, streaming, ..
         } = event
         {
-            // Materialize at receipt (todo #376): the snapshot handle is
+            // Materialize at receipt: the snapshot handle is
             // only valid during this synchronous call.
             let messages = delta.snapshot.materialize();
             self.revisions
@@ -353,7 +353,7 @@ fn partial_text_gets_the_same_command_tag_stripping_as_completed_text() {
     );
 }
 
-/// Spec Decision 39: the overlay-backed item carries `streaming: true` only
+/// The overlay-backed item carries `streaming: true` only
 /// while the overlay is live; the committed block that supersedes it drops
 /// the flag in the very next revision.
 #[test]
@@ -393,7 +393,7 @@ fn a_thinking_partial_streams_as_thinking() {
     assert_eq!(streaming.last(), Some(&Some(StreamingLeafKind::Thinking)));
 }
 
-/// Spec Decision 39: the overlay's timestamp is fixed at its first partial.
+/// The overlay's timestamp is fixed at its first partial.
 /// The cache ends with a user message, so the overlay opens its own group,
 /// and that group's base — which supplies the `DisplayMessage.timestamp` —
 /// is the overlay itself. This fails before the fix: `overlay_message` would
@@ -433,7 +433,7 @@ fn the_overlay_timestamp_is_frozen_at_the_first_partial() {
     );
 }
 
-/// Spec Decision 39: a partial whose text strips to empty (all command-tag
+/// A partial whose text strips to empty (all command-tag
 /// content) never reports streaming — the display has no trailing leaf to
 /// back the claim.
 #[test]

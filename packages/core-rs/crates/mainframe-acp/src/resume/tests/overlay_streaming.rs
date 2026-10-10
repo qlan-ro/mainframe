@@ -1,10 +1,9 @@
-//! Overlay-parity streaming attribution on resume replay (todo #382),
-//! split out of `tests.rs` to keep that file under the 300-line limit — a
-//! mid-stream snapshot's streaming leaf must land on only the last
-//! replayed item, matching `encode_revision`'s own contract
-//! (`encoder/tests/streaming_tests.rs`). Shares `tests.rs`'s fixtures
-//! (`FakePort`, `dmsg`, `text`, `control_request`, `resume_request`) via
-//! `use super::*`.
+//! Overlay-parity streaming attribution on resume replay, split out of
+//! `tests.rs` to keep that file under the 300-line limit — a mid-stream
+//! snapshot's streaming leaf must land on only the last replayed item, matching
+//! `encode_revision`'s own contract (`encoder/tests/streaming_tests.rs`).
+//! Shares `tests.rs`'s fixtures (`FakePort`, `dmsg`, `text`, `control_request`,
+//! `resume_request`) via `use super::*`.
 
 use mainframe_types::acp::update::MessageUpsert;
 use mainframe_types::display::StreamingLeafKind;
@@ -107,7 +106,7 @@ async fn no_streaming_snapshot_replays_identically_to_the_pre_382_encode_based_p
     )
     .await;
 
-    // The pre-#382 path: `encoder::encode` fed straight into the same replay
+    // The no-overlay path: `encoder::encode` fed straight into the same replay
     // machinery, with no streaming-aware port at all.
     let items = crate::encoder::encode(&messages);
     let mut state = crate::session_state::SessionState::new();

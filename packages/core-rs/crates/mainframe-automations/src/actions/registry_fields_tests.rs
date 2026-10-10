@@ -1,8 +1,7 @@
-//! Part 0 of the 2026-08-18 automations-provider-connections plan — the
-//! field-schema/idempotent projection this crate didn't carry before: an
-//! empty `fields` list on the wire is exactly the bug that made `run_action`
-//! render a blank form, so these are the regression net for that gap, split
-//! out of `registry_tests.rs` to stay under the file line cap.
+//! The field-schema/idempotent projection of the action catalog: an empty
+//! `fields` list on the wire is exactly the bug that made `run_action` render a
+//! blank form, so these are the regression net for that gap, split out of
+//! `registry_tests.rs` to stay under the file line cap.
 
 use super::ActionRegistry;
 

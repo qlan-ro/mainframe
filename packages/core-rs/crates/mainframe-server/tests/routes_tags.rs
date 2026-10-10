@@ -1,6 +1,5 @@
-//! Integration tests for `routes/tags.rs` — translated assertion-for-assertion
-//! from `src/server/routes/__tests__/tags.test.ts` (real in-memory DB, a seeded
-//! project + chat for the chat-scoped routes).
+//! Integration tests for `routes/tags.rs` (real in-memory DB, a seeded project +
+//! chat for the chat-scoped routes).
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod support;

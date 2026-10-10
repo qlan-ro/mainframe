@@ -1,4 +1,4 @@
-//! Journal coverage (todo #376, G3 task 1): every `MessageCache` mutation
+//! Journal coverage: every `MessageCache` mutation
 //! records the entry the plan's table assigns it, and every removal path
 //! drops the slot so the next projection rebuilds from scratch (`Full`).
 //! A fake projector that records its own `ProjectionInput` is used instead
@@ -376,7 +376,7 @@ fn project_display_folds_in_a_pending_delta_from_a_prior_display_snapshot() {
     assert!(!delta.full);
 }
 
-/// todo #376 follow-up regression: `session/resume` reaches
+/// follow-up regression: `session/resume` reaches
 /// `EventHandler::display_snapshot` -> `MessageCache::display_snapshot`
 /// before the chat's first prompt, seeding the real `IncrementalProjector`
 /// (not a fake) with an empty `raw` slice. The exact production path —

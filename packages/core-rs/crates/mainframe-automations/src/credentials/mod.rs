@@ -1,14 +1,11 @@
-//! Credential storage (T6.1, extended by the 2026-08-19
-//! provider-connections plan). `CredentialStore` is the contract every
-//! caller depends on; `FileCredentialStore` (plaintext JSON at 0600) is the
-//! original impl and stays as the fallback for headless Linux or a keychain
-//! that isn't reachable. `keyring_store` adds the OS-keychain-backed impl
-//! the plan asked for; `boot::build_credential_store` is where a daemon
+//! Credential storage. `CredentialStore` is the contract every caller depends
+//! on; `FileCredentialStore` (plaintext JSON at 0600) is the fallback for
+//! headless Linux or a keychain that isn't reachable. `keyring_store` is the
+//! OS-keychain-backed impl; `boot::build_credential_store` is where a daemon
 //! picks between them (logs the choice, migrates an existing plaintext file
-//! into the keychain the first time it becomes available). Node is deleted
-//! (c470bb1f) — there is no second reader of this file, so the on-disk shape
-//! is this crate's alone to evolve. Secrets never enter template scope or
-//! step I/O.
+//! into the keychain the first time it becomes available). This crate is the
+//! only reader of the file, so the on-disk shape is its alone to evolve.
+//! Secrets never enter template scope or step I/O.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -56,8 +53,7 @@ pub enum CredentialKind {
 }
 
 /// Manual Debug: `token`, `extra`, and `refresh_token` are secret material
-/// and must not reach logs or error messages (plan T6.1; refresh_token added
-/// by the 2026-08-19 GitHub App migration).
+/// and must not reach logs or error messages.
 impl fmt::Debug for Credentials {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Credentials")
@@ -115,8 +111,8 @@ pub struct FileCredentialStore {
 
 impl FileCredentialStore {
     /// Reads the file once at construction; a missing file is a fresh store,
-    /// an unreadable/malformed one logs and starts empty (Node parity — the
-    /// next persist repairs it).
+    /// an unreadable/malformed one logs and starts empty (the next persist
+    /// repairs it).
     pub async fn load(path: PathBuf) -> Self {
         let cache = match tokio::fs::read(&path).await {
             Ok(bytes) => match serde_json::from_slice(&bytes) {
@@ -147,8 +143,8 @@ impl FileCredentialStore {
     }
 
     /// Serializes under the write lock (writers stay ordered), then writes a
-    /// nanoid-suffixed sibling and renames over the real file — atomic even
-    /// against the Node daemon writing the same path.
+    /// nanoid-suffixed sibling and renames over the real file, so a reader
+    /// never sees a half-written file.
     async fn persist(&self, cache: &BTreeMap<String, Credentials>) -> Result<(), CredentialError> {
         let json = serde_json::to_string_pretty(cache)?;
         if let Some(parent) = self.path.parent() {
@@ -209,11 +205,3 @@ impl CredentialStore for FileCredentialStore {
         Box::pin(async move { self.cache.read().await.keys().cloned().collect() })
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T6.1;
-// keyring backend + migration is the 2026-08-19 provider-connections plan), not a TS port
-// confidence: high
-// todos: 0
-// notes: FileCredentialStore is now the fallback store, not the only one —
-//        see keyring_store.rs (OS-keychain impl) and boot.rs (which one a
-//        daemon boots with, and the file→keychain migration).

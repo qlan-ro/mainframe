@@ -1,6 +1,5 @@
-//! `build_sink` wraps its `SessionSinkImpl` in `PrDetectionSink` (todo #339,
-//! task 12) so every adapter inherits live PR detection through the one
-//! construction point every session's sink comes from.
+//! `build_sink` wraps its `SessionSinkImpl` in `PrDetectionSink`, so every
+//! adapter inherits live PR detection through the session sink.
 
 use super::*;
 use crate::test_support::test_chat;

@@ -1,6 +1,6 @@
-//! G3 golden test (#178, AC9, plan `## Task groups` > G3): the display graph
-//! a cold-reloaded chat renders from its Claude JSONL transcript must be
-//! identical to the graph the same session renders while live-streamed.
+//! Golden test: the display graph a cold-reloaded chat renders from its Claude
+//! JSONL transcript must be identical to the graph the same session renders
+//! while live-streamed.
 //!
 //! The fixture (`fixtures/golden-session-with-tool-calls.jsonl`) is a
 //! trimmed, verbatim excerpt of an actual recorded Claude Code session on
@@ -21,7 +21,7 @@
 //! the entry, and withholding the same claim) so grouping in
 //! `prepare_messages_for_client` picks the same *first* raw entry as the
 //! display item's base id on both sides — closing what was previously a
-//! real base-id divergence (AC9, decision 10).
+//! real base-id divergence.
 //!
 //! **Live** replays the transcript the way the daemon actually builds one:
 //! - The human-typed prompt goes through
@@ -31,7 +31,7 @@
 //!   send (not just a queued one) and hands the CLI on stdin
 //!   (`build_user_payload`'s `uuid` field), which the CLI persists verbatim
 //!   as the entry's own `uuid`. This closes what was previously a permanent
-//!   live-vs-reload id gap for an unqueued human message (AC9, decision 10) —
+//!   live-vs-reload id gap for an unqueued human message —
 //!   see the module-level note in `chat_manager/send_queue.rs`.
 //! - Every other transcript line (assistant turns AND the CLI's own
 //!   tool_result echoes, both "user" and "assistant"-typed stream-json
@@ -188,7 +188,7 @@ fn claude_session() -> Arc<ClaudeSession> {
 /// (`build_user_payload`'s `uuid` field) — the CLI persists that same uuid as
 /// the transcript entry's own `uuid`, which is what this fixture's human
 /// prompt entry carries. Forcing it here is what makes a real send and a
-/// cold reload agree on this item's id (module doc above, decision 10); every
+/// cold reload agree on this item's id (module doc above); every
 /// other line goes through `handle_stdout` into a real `EventHandler` sink,
 /// matching a spawned CLI process's stdout.
 fn run_live_pipeline() -> Vec<mainframe_types::chat::ChatMessage> {

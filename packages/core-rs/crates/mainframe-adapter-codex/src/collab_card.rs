@@ -1,10 +1,10 @@
-//! Todo #247 (CollabAgent sub-agent delegation): the card engine. Every naming
-//! route (subAgentActivity, wait's receiverThreadIds, a child's own
-//! turn/completed, the parent-turn-end backstop) funnels through here, so a
-//! child is ever represented by exactly one card (spec decision 1). Wired into
-//! the live path by `thread_item_render.rs` and `event_mapper.rs` (tasks 16-17).
-//! Resolution-side helpers (closing a card) live in the `collab_resolve`
-//! sibling — split out to keep this file under the 300-line ceiling.
+//! CollabAgent sub-agent delegation: the card engine. Every naming route
+//! (subAgentActivity, wait's receiverThreadIds, a child's own turn/completed,
+//! the parent-turn-end backstop) funnels through here, so a child is ever
+//! represented by exactly one card. Wired into the live path by
+//! `thread_item_render.rs` and `event_mapper.rs`. Resolution-side helpers
+//! (closing a card) live in the `collab_resolve` sibling — split out to keep
+//! this file under the 300-line ceiling.
 
 use std::sync::Arc;
 
@@ -64,8 +64,8 @@ pub(crate) fn on_sub_agent_activity(
 
 /// Registers `child_thread_id` and emits its opening `CollabAgent` tool_use. A
 /// no-op when the child is already registered — the activity route and the
-/// legacy `receiverThreadIds` route can both name the same child (spec
-/// decision 1), and must still produce exactly one card.
+/// legacy `receiverThreadIds` route can both name the same child, and must
+/// still produce exactly one card.
 pub(crate) fn open_card(
     child_thread_id: &str,
     card_id: String,
@@ -109,7 +109,7 @@ pub(crate) fn open_card(
 }
 
 /// Records the child's latest non-empty `agentMessage` text as the fallback
-/// closing content for its card (spec decision 5). A no-op for unregistered
+/// closing content for its card. A no-op for unregistered
 /// children or blank text.
 pub(crate) fn record_child_message(
     child_thread_id: &str,
@@ -125,10 +125,10 @@ pub(crate) fn record_child_message(
 }
 
 /// Re-opens a resolved card for a fresh `sendInput`/`resumeAgent` round without
-/// creating a second one (spec decision 4). A no-op for unregistered children.
-/// Always calls `open_activity`, never gated on `card.resolved`: `closeAgent`
-/// ends a child's row while leaving its card open and unresolved (spec decision
-/// 3), so a gated call here would skip that round's re-engagement row (AC 6).
+/// creating a second one. A no-op for unregistered children. Always calls
+/// `open_activity`, never gated on `card.resolved`: `closeAgent` ends a child's
+/// row while leaving its card open and unresolved, so a gated call here would
+/// skip that round's re-engagement row.
 /// `open_activity`'s own map-presence check is the dedupe for a still-live child.
 pub(crate) fn reopen_card(child_thread_id: &str, state: &mut CodexSessionState) {
     let Some(card) = state.sub_agent_cards.get_mut(child_thread_id) else {

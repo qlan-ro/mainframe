@@ -1,4 +1,4 @@
-//! Serde helper for ACP's patch-field convention (todo #350, ACP-EVALUATION.md
+//! Serde helper for ACP's patch-field convention (ACP-EVALUATION.md
 //! "What to borrow" #1): on an upsert/patch frame, an **omitted** key leaves
 //! the field unchanged, `null` clears it, and a value replaces it. A bare
 //! `Option<T>` cannot distinguish omitted from explicit `null` — both

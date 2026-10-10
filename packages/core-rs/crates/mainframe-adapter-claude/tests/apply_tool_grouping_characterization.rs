@@ -1,10 +1,6 @@
-//! Ported from
-//! `packages/core/src/messages/__tests__/apply-tool-grouping-characterization.test.ts`.
-//!
-//! CHARACTERIZATION TESTS for `apply_tool_grouping` (WS14b safety net): pins the
-//! current interleaving / grouping / progress-accumulation / task-group-nesting /
-//! hidden-suppression behavior. Assertions run against serde_json Values to mirror
-//! the TS deep-equality `toEqual`.
+//! CHARACTERIZATION TESTS for `apply_tool_grouping`: pins the current
+//! interleaving / grouping / progress-accumulation / task-group-nesting /
+//! hidden-suppression behavior. Assertions compare whole serde_json Values.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use mainframe_adapter_claude::messages::display_helpers::apply_tool_grouping;
@@ -314,9 +310,9 @@ fn task_group_children_thinking_before_explore_pair_stays_at_index_0() {
 
 #[test]
 fn subagent_without_children_emits_an_empty_task_group() {
-    // INTENTIONAL DIVERGENCE from the TS source (#507): the TS `groupTaskChildren`
-    // collapses a childless Task back to a bare tool_call, but the Rust daemon keeps
-    // the empty `_task_group` so the live TaskCard renders before children stream in.
+    // Intentional (#507): a childless Task keeps the empty `_task_group` instead
+    // of collapsing back to a bare tool_call, so the live TaskCard renders before
+    // children stream in.
     let out = run(json!([
         { "type": "tool_call", "id": "agent1", "name": "Task", "input": { "description": "solo agent" }, "category": "subagent" },
     ]));

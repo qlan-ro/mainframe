@@ -1,7 +1,7 @@
-//! T17: shipped-dataset expectations against the spec's category mappings and
+//! Shipped-dataset expectations against the spec's category mappings and
 //! `docs/research/2026-07-25-todo-191-command-provenance.md` **only** — written
 //! without opening `mcp.rs`/`skills.rs`/`hooks.rs`/`subagents.rs`/`plugins.rs`.
-//! A failure here means the T15/T16 dataset diverged from that contract; it is
+//! A failure here means the shipped dataset diverged from that contract; it is
 //! not an expectation to adjust to match the code.
 
 use mainframe_types::setup_advisor::{
@@ -11,8 +11,8 @@ use mainframe_types::setup_advisor::{
 use super::super::all;
 use crate::setup_advisor::recommend::recommend;
 
-/// The injection cases (AC 6) and the cap-ordering cases (AC 5) live separately
-/// to keep this file under the 300-line limit.
+/// The injection cases and the cap-ordering cases live separately to keep this
+/// file under the 300-line limit.
 mod injection;
 mod ordering;
 
@@ -23,7 +23,7 @@ fn rec<'a>(recs: &'a [AutomationRecommendation], id: &str) -> &'a AutomationReco
     })
 }
 
-/// AC 4: one representative fingerprint, one hardcoded expectation per category.
+/// One representative fingerprint, one hardcoded expectation per category.
 /// `databases: [postgres]` + `tooling: [prettier]` was chosen so exactly the
 /// rules below fire (verified against the spec's predicate list, not the code):
 /// no other mcp/skills/subagents predicate keys off an empty `frameworks`/
@@ -93,7 +93,7 @@ fn a_postgres_and_prettier_project_recommends_across_all_five_categories() {
     );
 }
 
-/// AC 5, empty category: nothing in this fingerprint satisfies any subagents
+/// Empty category: nothing in this fingerprint satisfies any subagents
 /// predicate in the spec's mapping (fileCount>500, an auth-library external
 /// API, non-empty languages, an api dir/backend framework, non-empty
 /// databases, or a frontend framework).
@@ -118,7 +118,8 @@ fn a_fingerprint_with_no_subagent_signal_recommends_nothing_in_that_category() {
 
 /// Every skills `command` is either the deterministic `npx skills add` long
 /// form or a scaffold snippet paired with a `.claude/skills/*/SKILL.md` path —
-/// the two shapes the spec and T2 describe; nothing else is a valid skills row.
+/// the two shapes the spec and the command-provenance doc describe; nothing
+/// else is a valid skills row.
 #[test]
 fn every_skills_rule_is_a_registry_install_or_a_scaffold_snippet() {
     for r in all()
@@ -140,7 +141,7 @@ fn every_skills_rule_is_a_registry_install_or_a_scaffold_snippet() {
     }
 }
 
-/// Ids feed testids (spec AC 4), so a collision would silently merge two rules'
+/// Ids feed testids, so a collision would silently merge two rules'
 /// UI affordances.
 #[test]
 fn rule_ids_are_unique_across_the_whole_dataset() {
@@ -155,7 +156,7 @@ fn rule_ids_are_unique_across_the_whole_dataset() {
     );
 }
 
-/// T2: mcp rules are vendor-official; hooks/subagents/plugins are first-party.
+/// Mcp rules are vendor-official; hooks/subagents/plugins are first-party.
 #[test]
 fn provenance_matches_the_tier_assigned_per_category() {
     for r in all() {
@@ -181,12 +182,13 @@ fn provenance_matches_the_tier_assigned_per_category() {
     }
 }
 
-/// T2's skills tables name an exact rule per tier: 17 vendor-official sources;
-/// 19 third-party aggregator rows that collapse to 18 rules (the prettier and
-/// eslint signals are "deliberately" merged into one `skills-eslint-prettier`
-/// rule); 8 custom-scaffold fallbacks pinned first-party ("these scaffold a
-/// file the user owns, fetching nothing"). A category-only check can't catch a
-/// rule landing in the wrong tier within skills, so this counts each tier.
+/// The command-provenance doc's skills tables name an exact rule per tier: 17
+/// vendor-official sources; 19 third-party aggregator rows that collapse to 18
+/// rules (the prettier and eslint signals are "deliberately" merged into one
+/// `skills-eslint-prettier` rule); 8 custom-scaffold fallbacks pinned
+/// first-party ("these scaffold a file the user owns, fetching nothing"). A
+/// category-only check can't catch a rule landing in the wrong tier within
+/// skills, so this counts each tier.
 #[test]
 fn skills_rules_split_into_the_three_tiers_at_the_counts_the_provenance_doc_gives() {
     let mut vendor_official = 0;

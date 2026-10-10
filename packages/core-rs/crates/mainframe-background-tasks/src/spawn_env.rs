@@ -1,13 +1,13 @@
 //! Boot-set login-shell `PATH` for the `lsof`/`kill`/`pgrep`/`ps` spawns.
 //!
-//! The TS twin relied on `enrichPath` having mutated `process.env.PATH`, so these
-//! system-utility spawns inherited the enriched `PATH`. Under edition 2024
-//! `std::env::set_var` is `unsafe` (this crate is `#![forbid(unsafe_code)]`), so
+//! These system-utility spawns use the daemon's enriched login-shell `PATH`.
+//! Under edition 2024 `std::env::set_var` is `unsafe` (this crate is
+//! `#![forbid(unsafe_code)]`), so
 //! the daemon threads the resolved value here once at boot via
 //! [`set_resolved_path`]. It is applied as an `env("PATH", …)` override on each
 //! spawn. `lsof`/`kill`/`pgrep`/`ps` live on the bare launchd `PATH`, so this is
-//! belt-and-suspenders parity rather than a hard requirement — but it keeps the
-//! spawn env identical to what the TS daemon produced.
+//! belt-and-suspenders rather than a hard requirement — but it keeps these
+//! spawns on the same `PATH` as every other daemon child process.
 //!
 //! This is a write-once `OnceLock` (not a mutable env var): safe, set exactly
 //! once at boot before any task work runs.

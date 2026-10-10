@@ -1,5 +1,5 @@
-//! AC 5, per-category cap: mcp priority is ordered by how specific a rule's
-//! evidence is, so the broadest rule can never crowd out a precise one.
+//! Per-category cap: mcp priority is ordered by how specific a rule's evidence
+//! is, so the broadest rule can never crowd out a precise one.
 
 use mainframe_types::setup_advisor::{GitHost, ProjectFingerprint, RecommendationCategory};
 
@@ -13,9 +13,9 @@ fn mcp_ids(fp: &ProjectFingerprint) -> Vec<String> {
         .collect()
 }
 
-/// `mcp-context7` fires on any framework at all, so ranking it first — as the
-/// plan's prose had it — would spend a capped slot on every project alive. A
-/// React + Supabase + Sentry project must be told about Supabase instead.
+/// `mcp-context7` fires on any framework at all, so ranking it first would
+/// spend a capped slot on every project alive. A React + Supabase + Sentry
+/// project must be told about Supabase instead.
 #[test]
 fn mcp_caps_at_two_and_the_broadest_rule_never_takes_a_slot() {
     let ids = mcp_ids(&ProjectFingerprint {

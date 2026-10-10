@@ -1,9 +1,8 @@
 //! Text/thought segmentation cases — a run of message or thinking leaves
-//! interrupted by a tool call (or the other leaf kind) closes and resumes as
-//! a new segment item after the interruption, split out of `tests.rs`
-//! (todo #350, plan task 37, R2.13). Marker cases (compaction, skill-loaded,
-//! error) that ride the open segment instead of splitting it live in the
-//! sibling `marker_tests.rs`.
+//! interrupted by a tool call (or the other leaf kind) closes and resumes as a
+//! new segment item after the interruption, split out of `tests.rs`. Marker
+//! cases (compaction, skill-loaded, error) that ride the open segment instead
+//! of splitting it live in the sibling `marker_tests.rs`.
 
 use mainframe_types::display::{DisplayMessageType, ToolCategory};
 

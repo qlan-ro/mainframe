@@ -1,16 +1,15 @@
-//! Permission gates on the facade (todo #350, plan task 16): build the
-//! daemon-initiated `session/request_permission` request from a
-//! `ControlRequest`, and parse the client's answer back into a
-//! `ControlResponse` — today's semantics, reused verbatim per the
-//! single-canonical-type rule.
+//! Permission gates on the facade: build the daemon-initiated
+//! `session/request_permission` request from a `ControlRequest`, and parse the
+//! client's answer back into a `ControlResponse` — today's semantics, reused
+//! verbatim per the single-canonical-type rule.
 //!
-//! `session/request_permission` is a request the *daemon* sends to the
-//! client (mid-turn, blocking) — the reverse direction from `session/prompt`.
-//! An answer arrives as `rpc::InboundFrame::Response`, already classified by
-//! group C's codec; this module only converts between it and `ControlRequest`/
+//! `session/request_permission` is a request the *daemon* sends to the client
+//! (mid-turn, blocking) — the reverse direction from `session/prompt`. An
+//! answer arrives as `rpc::InboundFrame::Response`, already classified by the
+//! `rpc` codec; this module only converts between it and `ControlRequest`/
 //! `ControlResponse`, not the correlation of a reply to its request (that is
-//! `mainframe-server`'s socket-loop concern, out of this crate's scope per
-//! the module doc in `lib.rs`).
+//! `mainframe-server`'s socket-loop concern, out of this crate's scope per the
+//! module doc in `lib.rs`).
 
 use std::collections::HashMap;
 
@@ -28,12 +27,12 @@ pub const OPTION_ALLOW_ALWAYS: &str = "allow-always";
 pub const OPTION_REJECT_ONCE: &str = "reject-once";
 
 /// The offered option list for `request`: the adapter's own (Codex) when it
-/// supplies one, Claude's derivation otherwise (plan task 7, D4). The client
-/// must not infer a permission's effect from an option's `kind`/`name`
-/// (spec: "the daemon/adapter owns the effect"). This list bounds the plain
-/// `{optionId}` path alone — an id outside it is
-/// [`GateAnswerError::UnknownOption`], while a rich `_mainframe.dev` answer
-/// stands on its request-id/tool-use-id match instead.
+/// supplies one, Claude's derivation otherwise. The client must not infer a
+/// permission's effect from an option's `kind`/`name` (spec: "the
+/// daemon/adapter owns the effect"). This list bounds the plain `{optionId}`
+/// path alone — an id outside it is [`GateAnswerError::UnknownOption`], while a
+/// rich `_mainframe.dev` answer stands on its request-id/tool-use-id match
+/// instead.
 ///
 /// An EMPTY adapter list is offered the reject option and nothing else. The
 /// adapter had labels to give and had none (Codex's `requestUserInput` before
@@ -57,11 +56,10 @@ fn reject_option() -> PermissionOption {
     }
 }
 
-/// Claude offers allow-once and reject-once always, plus allow-always only
-/// when the CLI sent rule suggestions to save it against (D4; matches
-/// `origin/main`'s `PermissionGate.tsx` — "Always allow" only when
-/// `request.suggestions.length > 0`) — there is nothing to make "always"
-/// durable otherwise.
+/// Claude offers allow-once and reject-once always, plus allow-always only when
+/// the CLI sent rule suggestions to save it against (non-empty
+/// `request.suggestions`) — there is nothing to make "always" durable
+/// otherwise.
 fn claude_default_options(request: &ControlRequest) -> Vec<PermissionOption> {
     let mut options = vec![PermissionOption {
         option_id: OPTION_ALLOW_ONCE.into(),
@@ -95,7 +93,7 @@ fn behavior_for(kind: PermissionOptionKind) -> ControlBehavior {
     }
 }
 
-/// `PermissionOption.meta["_mainframe.dev"].updatedInput` (plan decision 2):
+/// `PermissionOption.meta["_mainframe.dev"].updatedInput`:
 /// how an adapter-supplied option (a Codex question choice) carries its own
 /// answer payload without the client inferring anything from the option id.
 fn updated_input_from_option(
@@ -143,7 +141,7 @@ pub fn build_request(session_id: &str, id: RequestId, request: &ControlRequest) 
         // The full `ControlRequest` (input, suggestions, decision reason) —
         // what the rich gate cards render and what `rich_answer` below
         // validates a rich reply against. Generic ACP clients ignore it and
-        // render the option list (desktop-cutover pass).
+        // render the option list.
         meta: Some(serde_json::json!({
             MAINFRAME_META_NAMESPACE: { "controlRequest": request }
         })),
@@ -172,12 +170,12 @@ pub enum GateAnswerError {
 
 /// Parse a `session/request_permission` answer for `request` into today's
 /// `ControlResponse`. A rich `_mainframe.dev` answer resolves on its own
-/// behavior, and the `optionId` it names — when it names an offered one at
-/// all — only overlays that option's `scope`/`updatedInput`, never vetoes
-/// it: the client never sets `scope` itself, so without the overlay a
-/// session-scoped allow (e.g. Codex's `acceptForSession`) would re-prompt
-/// next turn (R3.2/T19). A plain answer has nothing but its `optionId`, so
-/// that id must resolve against [`offered_options`].
+/// behavior, and the `optionId` it names — when it names an offered one at all
+/// — only overlays that option's `scope`/`updatedInput`, never vetoes it: the
+/// client never sets `scope` itself, so without the overlay a session-scoped
+/// allow (e.g. Codex's `acceptForSession`) would re-prompt next turn. A plain
+/// answer has nothing but its `optionId`, so that id must resolve against
+/// [`offered_options`].
 pub fn parse_answer(
     request: &ControlRequest,
     response: RequestPermissionResponse,

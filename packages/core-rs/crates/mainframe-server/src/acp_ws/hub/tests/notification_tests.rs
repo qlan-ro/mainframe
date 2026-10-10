@@ -1,6 +1,6 @@
-//! Out-of-band notification passthrough cases for `FacadeHub` — retry
-//! markers, queue changes, transcript-cleared, compaction, and usage —
-//! split out of `tests.rs` (todo #350, plan task 37, R2.13).
+//! Out-of-band notification passthrough cases for `FacadeHub` — retry markers,
+//! queue changes, transcript-cleared, compaction, and usage — split out of
+//! `tests.rs`.
 
 use mainframe_chat::chat_surface::CompactionPhase;
 use mainframe_types::adapter::ContextUsage;

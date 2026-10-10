@@ -1,5 +1,5 @@
-//! `IncrementalProjector` (todo #376): the production
-//! `mainframe_display::DisplayProjector` for Claude chats. It keeps the full
+//! `IncrementalProjector`: the production `mainframe_display::DisplayProjector`
+//! (`mainframe-server`'s chat deps use it for every chat). It keeps the full
 //! pipeline's per-message grouping decision and per-group conversion
 //! (`message_grouping::classify_message`, `display_pipeline::convert_grouped_to_display`)
 //! as its only source of per-container truth, and adds only the bookkeeping

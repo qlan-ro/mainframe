@@ -1,4 +1,4 @@
-//! Webhook ingress route tests (T9.3, A7): signature → preset predicate →
+//! Webhook ingress route tests: signature → preset predicate →
 //! staleness → replay dedup → run, with the exact status matrix.
 
 use std::time::Duration;
@@ -136,7 +136,7 @@ async fn valid_delivery_starts_a_run_and_a_replay_is_a_200_noop() {
     tokio::time::sleep(Duration::from_millis(50)).await;
     assert_eq!(run_count(&h, &automation_id).await, 1);
 
-    // A7 — the same delivery id replays as a 200 no-op, not a second run.
+    // The same delivery id replays as a 200 no-op, not a second run.
     let (status, _) = read(
         ingest(
             State(h.ctx.clone()),

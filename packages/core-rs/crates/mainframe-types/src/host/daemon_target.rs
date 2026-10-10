@@ -1,5 +1,3 @@
-//! Ported from `packages/types/src/host/daemon-target.ts`.
-
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -115,13 +113,3 @@ mod tests {
         assert_eq!(serde_json::to_string(&m).unwrap(), json);
     }
 }
-
-// PORT STATUS: packages/types/src/host/daemon-target.ts (23 lines)
-// confidence: high
-// todos: 0
-// notes: host bridge/registry type — not daemon-consumed (low priority per §2.1).
-// `kind` literal-union → DaemonKind enum, shared by DaemonTarget and DaemonMeta.
-// `token: string | null` is required-nullable → Option WITHOUT skip. DaemonMeta
-// mirrors DaemonMetaSchema (zod); the `.min(1)` refinements become validate().
-// `scheme` is optional (absent = https) so old registry files without the key
-// keep loading unchanged.

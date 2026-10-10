@@ -1,14 +1,12 @@
-//! Ported from `src/tunnel/tunnel-manager.ts`.
-//!
 //! Spawns `cloudflared` per label, scans its stdout/stderr for the
 //! `*.trycloudflare.com` URL and the "Registered tunnel connection" line, then
 //! waits for DNS propagation before resolving. Emits `tunnel:status` DaemonEvents
-//! at each phase and exposes `verify()` (a cached `/health` probe). The TS uses
-//! two regexes and a `node:dns` resolver pinned to 1.1.1.1; no `regex` crate is
-//! allowlisted (both patterns are hand-scanned) and no DNS resolver crate is
-//! (system resolution via `tokio::net::lookup_host` stands in — see TODO(port)).
+//! at each phase and exposes `verify()` (a cached `/health` probe). No `regex`
+//! crate is allowlisted, so both patterns are hand-scanned, and no DNS resolver
+//! crate is, so DNS propagation is checked through system resolution
+//! (`tokio::net::lookup_host`) rather than a resolver pinned to 1.1.1.1.
 //!
-//! CONCURRENCY.tsv: `tunnels` = `Arc<DashMap<String, ManagedTunnel>>` keyed by
+//! State: `tunnels` = `Arc<DashMap<String, ManagedTunnel>>` keyed by
 //! label; `verifiedAt` = `Arc<DashMap<String, VerifyResult>>` (30s TTL cache).
 
 use std::collections::HashSet;
@@ -27,20 +25,20 @@ use crate::process::{
     ChildRegistryPort, ManagedChildEntry, ManagedChildKind, NoopChildRegistry, now_ms,
 };
 
-/// Fire-and-forget DaemonEvent sink (TS `broadcast?: (event) => void`).
+/// Fire-and-forget DaemonEvent sink.
 pub type BroadcastFn = Arc<dyn Fn(DaemonEvent) + Send + Sync>;
 
 const REGISTERED_MARKER: &str = "Registered tunnel connection";
 const CLOUDFLARED_NOT_FOUND: &str = "cloudflared not found. Install it from https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/";
 
-/// Named/quick-tunnel start options (TS `TunnelStartOptions`).
+/// Named/quick-tunnel start options.
 #[derive(Debug, Clone, Default)]
 pub struct TunnelStartOptions {
     pub token: Option<String>,
     pub url: Option<String>,
 }
 
-/// Registry + spawn-binary options (TS `TunnelManagerOptions`).
+/// Registry + spawn-binary options.
 #[derive(Default)]
 pub struct TunnelManagerOptions {
     pub registry: Option<Arc<dyn ChildRegistryPort>>,
@@ -72,7 +70,7 @@ fn tunnel_record_entry(
     })
 }
 
-/// Tunable timings + binary path. Defaults match the TS constants; tests shrink
+/// Tunable timings + binary path. Tests shrink
 /// the timings and point `cloudflared_bin` at a stand-in script.
 #[derive(Debug, Clone)]
 pub struct TunnelConfig {
@@ -144,8 +142,7 @@ pub struct TunnelManager {
     /// it leaked. Defaults to `NoopChildRegistry`.
     registry: Arc<dyn ChildRegistryPort>,
     /// Boot-resolved login-shell `PATH`, applied to the spawned `cloudflared` so
-    /// packaged builds find it outside the bare launchd `PATH` (mirrors the TS
-    /// `enrichPath` env mutation). `None` = inherit the daemon `PATH`.
+    /// packaged builds find it outside the bare launchd `PATH`. `None` = inherit the daemon `PATH`.
     resolved_path: Option<String>,
 }
 
@@ -167,8 +164,8 @@ impl TunnelManager {
         }
     }
 
-    /// Construct with a child registry + spawn-binary path (TS second ctor arg).
-    /// `cloudflaredPath` sets the spawned binary (default bare `cloudflared`).
+    /// Construct with a child registry + spawn-binary path.
+    /// `cloudflared_path` sets the spawned binary (default bare `cloudflared`).
     pub fn with_options(broadcast: Option<BroadcastFn>, options: TunnelManagerOptions) -> Self {
         let mut config = TunnelConfig::default();
         if let Some(path) = options.cloudflared_path {
@@ -329,7 +326,7 @@ impl TunnelManager {
         let start_deadline = sleep(self.config.start_timeout);
         tokio::pin!(start_deadline);
 
-        // Phase 1: wait for URL + registration (or timeout / early exit).
+        // Step 1: wait for URL + registration (or timeout / early exit).
         loop {
             if pending_url.is_some() && registered {
                 break;
@@ -372,11 +369,11 @@ impl TunnelManager {
 
         // Keep reading the child's output for its whole life: dropping the pipe
         // readers closes the pipes, and cloudflared (Go) dies on SIGPIPE at its
-        // next log write. The TS never hits this — its 'data' handlers persist.
+        // next log write.
         spawn_output_drain(out_lines, err_lines);
 
-        // Phase 2: connected. Register the tunnel, then wait for DNS while still
-        // watching for an early exit (which rejects, per the TS `!done` branch).
+        // Step 2: connected. Register the tunnel, then wait for DNS while still
+        // watching for an early exit (which fails the start).
         let url = pending_url.unwrap_or_default();
         self.tunnels.insert(
             label.to_string(),
@@ -466,7 +463,7 @@ impl TunnelManager {
         msg
     }
 
-    /// Post-ready exit handling (TS `child.once('exit')` `else` branch): forget
+    /// Post-ready exit handling: forget
     /// the reap pid, remove the tunnel, and broadcast `stopped` when the
     /// established child dies.
     fn spawn_exit_watcher(
@@ -586,8 +583,8 @@ impl TunnelManager {
                         );
                         reachable
                     }
-                    // Non-JSON body → TS `await res.json()` throws → outer catch →
-                    // false, and (unlike the non-200 path) no cache write.
+                    // Non-JSON body → false, and (unlike the non-200 path) no cache
+                    // write.
                     Err(err) => {
                         tracing::debug!(target: "tunnel", label, ?err, "verify failed: network error");
                         false
@@ -602,7 +599,7 @@ impl TunnelManager {
     }
 
     /// Poll system DNS until the tunnel hostname resolves. Returns `true` on
-    /// resolution, `false` on timeout (TS `waitForDns` resolve/reject).
+    /// resolution, `false` on timeout.
     async fn wait_for_dns(&self, url: &str) -> bool {
         let hostname = extract_hostname(url);
         let start = Instant::now();
@@ -624,7 +621,7 @@ impl TunnelManager {
     }
 }
 
-/// Signal a pid by shelling out to `kill` (house style — no `libc`/`nix`).
+/// Signal a pid by shelling out to kill(1).
 fn kill_pid(pid: Option<u32>, flag: &'static str) {
     let Some(pid) = pid else {
         return;
@@ -1031,7 +1028,7 @@ mod tests {
         );
         manager.stop("daemon");
         // stop() broadcasts stopped; the killed child's watcher broadcasts a
-        // second stopped shortly after (faithful to the TS double-broadcast).
+        // second stopped shortly after.
         sleep(Duration::from_millis(50)).await;
         assert!(stopped_broadcasts(&events) >= 1);
     }
@@ -1173,31 +1170,3 @@ mod tests {
         task.abort();
     }
 }
-
-// PORT STATUS: src/tunnel/tunnel-manager.ts (245 lines)
-// confidence: medium
-// todos: 1
-// notes: cloudflared spawn (tokio::process, kill_on_drop) + line scan for the
-// trycloudflare URL (hand-scanned, no regex) and the "Registered tunnel
-// connection" marker. The TS callback state machine is linearized: Phase 1
-// select loop (stdout/stderr lines vs start-timeout vs early-exit) → Phase 2
-// select (waitForDns vs early-exit), so the start timeout is naturally "cleared"
-// once connected (regression the 45s-timeout test pins). Post-ready exit → a
-// spawned watcher removes the tunnel + broadcasts stopped (the `!done ? reject :
-// delete+stopped` split preserved). stop() shells out to `kill` (house style) and
-// the killed child's watcher re-broadcasts stopped (faithful double-broadcast).
-// verify() = reqwest GET /health with the 30s TTL cache (non-200 caches false;
-// non-JSON/network error returns false without caching). TODO(port): waitForDns
-// uses tokio::net::lookup_host (system resolver) — the TS pins 1.1.1.1 via
-// node:dns Resolver; the specific-resolver behavior is lost (see blockers).
-// Tunnel/verify tests use real spawned processes / a canned local HTTP server,
-// not code mocks. Post-connection, spawn_output_drain keeps reading stdout/stderr
-// for the child's life — dropping the readers closes the pipes and cloudflared
-// dies on SIGPIPE at its next log write (the TS 'data' handlers persist, so the
-// port needs the explicit drain).
-// #431/#442 child-reaping: TunnelManagerOptions{registry,cloudflaredPath} added;
-// recordSpawn/forgetSpawn fire-and-forget against an Arc<dyn ChildRegistryPort>
-// (absolute paths only, via tunnel_record_entry); a `pending` HashSet<pid> tracks
-// mid-start children so stop_all reaps them (the mock-spawn TS tests map to the
-// pure tunnel_record_entry unit tests + real-process record/stop/mid-start-reap
-// tests, matching the crate's real-process test idiom).

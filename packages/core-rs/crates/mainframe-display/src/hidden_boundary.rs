@@ -1,5 +1,5 @@
 //! Preserves a paragraph boundary when a hidden-category tool call is
-//! dropped between two visible text contributions (todo #383).
+//! dropped between two visible text contributions.
 //!
 //! `group_tool_call_parts` (`tool_grouping.rs`) drops a hidden tool call with
 //! no marker, so the text before and after it lands adjacent in the same
@@ -11,7 +11,7 @@
 //!
 //! The break is applied to the *incoming* text, never retroactively to the
 //! tail already pushed, so a streamed revision only ever grows an already-
-//! sent suffix (plan "Risks — Prefix monotonicity under streaming").
+//! sent suffix (prefix monotonicity under streaming).
 
 /// Tracks the most recent hidden-tool drop still awaiting a following text
 /// push. `pending` holds the dropped call's `parent_tool_use_id` (`None` for

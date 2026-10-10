@@ -1,8 +1,8 @@
-//! Token refresh for GitHub-App-issued credentials (2026-08-19
-//! GitHub-App-with-refresh plan). GitHub App user tokens expire after 8h; a
-//! pasted PAT (or a plain OAuth App token) never carries `expires_at` and is
-//! passed through untouched — see `github_device.rs`'s module doc for why
-//! `client_id` alone is enough to refresh (device flow needs no secret).
+//! Token refresh for GitHub-App-issued credentials. GitHub App user tokens
+//! expire after 8h; a pasted PAT (or a plain OAuth App token) never carries
+//! `expires_at` and is passed through untouched — see `github_device.rs`'s
+//! module doc for why `client_id` alone is enough to refresh (device flow needs
+//! no secret).
 //!
 //! A per-label lock is mandatory, not an optimization: GitHub invalidates
 //! the old refresh token the moment a new one is issued, so two concurrent
@@ -169,10 +169,3 @@ fn refresh_failed(label: &str, reason: &str) -> CredentialError {
         reason: reason.to_string(),
     }
 }
-
-// PORT STATUS: greenfield (2026-08-19 GitHub-App-with-refresh plan), not a TS port
-// confidence: high
-// todos: 0
-// notes: sits above CredentialStore rather than implementing it — only
-//        RunActionVerb (the execution path) needs refresh; the admin/UI
-//        accessor and webhook secret lookups keep reading the raw store.

@@ -1,11 +1,9 @@
-//! Ported from `packages/core/src/messages/display-pipeline.ts`.
-//!
 //! Transforms raw `ChatMessage[]` into display-ready `DisplayMessage[]`.
 //!
-//! CRATE-SPLIT NOTE (PORTING §2.5 amendment): REASSIGNED from mainframe-display to
-//! this crate together with `display_helpers` — it composes the Claude-specific
-//! grouping/helpers (`group_messages`, `convert_assistant_content`, …) plus the
-//! Claude `task_subject_backfill`. See `display_helpers.rs` for the split rationale.
+//! Lives in this crate rather than `mainframe-display`, together with
+//! `display_helpers`: it composes the Claude-specific grouping/helpers
+//! (`group_messages`, `convert_assistant_content`, …) plus the Claude
+//! `task_subject_backfill`. See `display_helpers.rs` for the split rationale.
 
 use std::collections::HashSet;
 
@@ -70,9 +68,9 @@ pub fn prepare_messages_for_client(
     result
 }
 
-/// `pub(crate)` (todo #376): the incremental projector calls this per group
-/// directly, so a patched or freshly refolded group produces byte-identical
-/// `DisplayMessage` content to the full pipeline that calls it here.
+/// `pub(crate)`: the incremental projector calls this per group directly, so
+/// a patched or freshly refolded group produces the same `DisplayMessage`
+/// content as the full pipeline that calls it here.
 pub(crate) fn convert_grouped_to_display(
     msg: &GroupedMessage,
     categories: Option<&ToolCategories>,

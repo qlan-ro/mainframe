@@ -1,9 +1,6 @@
-//! Ported from `packages/types/src/adapter.ts`.
-//!
 //! Data types only. The `Adapter` / `AdapterSession` / `SessionSink` *trait*
-//! interfaces from the TS file live in `mainframe-adapter-api` (per the crate
-//! map §2.6); this module ports the serde DTOs they exchange plus the pure
-//! effort-clamp logic.
+//! interfaces live in `mainframe-adapter-api`; this module holds the serde DTOs
+//! they exchange plus the pure effort-clamp logic.
 
 use serde::{Deserialize, Serialize};
 
@@ -32,8 +29,8 @@ pub struct MessageMetadata {
     pub usage: Option<MessageUsage>,
     /// The adapter's own stable id for this message (Claude: transcript
     /// `uuid`; Codex: thread-item id) — never serialized to the wire, only
-    /// consumed by `SessionSinkImpl::on_message` as the `ChatMessage.id`
-    /// (todo #350 group B, stable-ids). `None` falls back to a minted nanoid.
+    /// consumed by `SessionSinkImpl::on_message` as the `ChatMessage.id`.
+    /// `None` falls back to a minted nanoid.
     #[serde(skip)]
     pub vendor_id: Option<String>,
 }
@@ -74,7 +71,7 @@ pub struct ForkSource {
     pub source_session_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub resume_path: Option<String>,
-    /// The parent's last turn id at the moment of pinning (todo #368) — Codex's
+    /// The parent's last turn id at the moment of pinning — Codex's
     /// `thread/fork` forks "through, inclusive" this turn, so the fork point
     /// stays fixed at the click even if the parent gains turns afterward.
     /// `None` when the parent had no turns yet, or the adapter has no turn-level
@@ -128,7 +125,7 @@ pub struct SessionSpawnOptions {
     /// Set only for a temporary chat whose adapter reports
     /// `AdapterCapabilities.no_persistence`. The chat layer never sets this for a
     /// non-temporary chat or for an adapter without the capability. A no-persistence
-    /// spawn never carries a resume target (todo #346).
+    /// spawn never carries a resume target.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub no_persistence: Option<bool>,
     /// The orchestration MCP endpoint + this spawn's bearer token. Never
@@ -241,7 +238,7 @@ pub struct ControlRequest {
     pub suggestions: Vec<ControlUpdate>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub decision_reason: Option<String>,
-    /// The adapter's own ordered option list (plan task 7, D4). `None` keeps
+    /// The adapter's own ordered option list. `None` keeps
     /// today's Claude derivation (`gates::offered_options`); Codex sets
     /// `Some` with its real accept/acceptForSession/decline or question
     /// choices, so `gates::parse_answer` no longer has to guess a fixed
@@ -251,7 +248,7 @@ pub struct ControlRequest {
 }
 
 /// Whether a granted permission covers just this call or the rest of the
-/// session (plan task 7, D4). Distinct from `ControlUpdate::SetMode`, which
+/// session. Distinct from `ControlUpdate::SetMode`, which
 /// Claude still uses for its own persisted rule scopes — this rides the
 /// answer itself for adapters (Codex) that have no equivalent rule store.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -367,13 +364,13 @@ pub struct AdapterCapabilities {
     pub auto_mode: bool,
     /// The adapter's CLI has a native mechanism to run a session without writing
     /// a vendor transcript (Claude `--no-session-persistence`, Codex
-    /// `thread/start.ephemeral`), verified interactively (todo #346 spike).
+    /// `thread/start.ephemeral`), verified interactively.
     /// `#[serde(default)]` so a payload recorded before this field existed still
     /// deserializes, defaulting to false (no mechanism).
     #[serde(default)]
     pub no_persistence: bool,
-    /// Whether this adapter can branch a chat's conversation into a new chat
-    /// (todo #343). Absent on the wire (older daemon) deserializes to `false`.
+    /// Whether this adapter can branch a chat's conversation into a new chat.
+    /// Absent on the wire (older daemon) deserializes to `false`.
     #[serde(default)]
     pub fork: bool,
 }
@@ -393,7 +390,7 @@ pub struct AdapterInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub catalog_source: Option<CatalogSource>,
     pub capabilities: AdapterCapabilities,
-    /// Why `capabilities.fork` is currently `false` (todo #368), e.g. a CLI
+    /// Why `capabilities.fork` is currently `false`, e.g. a CLI
     /// below the version that introduced the fork RPC. `None` when fork is
     /// available or the adapter has no version-gated fork story. Absent on the
     /// wire (older daemon, or an adapter/state with no reason) deserializes to
@@ -463,9 +460,10 @@ pub fn model_endpoint(model: &str) -> Option<&str> {
         .map(|(endpoint, _)| endpoint)
 }
 
-/// Single source of truth for the boolean tuning features. Mirrors the TS
-/// `TUNABLE_FEATURES` const array (resolver clamp, Claude flag-settings mapping,
-/// and renderer gating all iterate this).
+/// Single source of truth for the boolean tuning features (resolver clamp, Claude
+/// flag-settings mapping, and renderer gating all iterate this). Wire contract:
+/// the keys must match `TUNABLE_FEATURES` in `packages/types/src/adapter.ts`,
+/// which the UI's `ProviderTuningDefaults` pane iterates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TunableFeature {
     pub key: &'static str,
@@ -739,7 +737,7 @@ mod tests {
         }));
     }
 
-    /// Todo #368: `lastTurnId` round-trips camelCase, is omitted when absent,
+    /// `lastTurnId` round-trips camelCase, is omitted when absent,
     /// and an older payload with no such key still deserializes (`serde(default)`).
     #[test]
     fn fork_source_last_turn_id_roundtrips_and_is_optional() {
@@ -869,21 +867,3 @@ mod tests {
         assert_eq!(clamp_effort_to_supported(E::High, &[], None), None);
     }
 }
-
-// PORT STATUS: packages/types/src/adapter.ts (395 lines)
-// confidence: high
-// todos: 0
-// notes: Main catch-up (#424/#425/#441): SessionResult.contextTokens (Option<i64>,
-// serde default+skip; absent/null both → None, three-way branch lives in the
-// event-handler producer) and AdapterModel.resolvedModel (Option<String>, skip).
-// The new Adapter TRAIT methods generateTitle/isTranscriptPresent land in
-// mainframe-adapter-api (behavioral half). Data DTOs + effort-clamp logic only;
-// the Adapter/AdapterSession/
-// SessionSink TRAIT interfaces are intentionally NOT here — they port to
-// mainframe-adapter-api (crate map §2.6). MessageMetadata.usage / SessionResult
-// fields stay snake_case (they mirror the CLI usage payload; fixture
-// message.added shows input_tokens/output_tokens). ControlUpdate is internally
-// tagged (rename_all gives addRules/replaceRules/... tag values). References
-// crate::settings::{ExecutionMode,PermissionMode} and crate::chat::ResolvedTuning
-// (owned by the sibling types-port task). TUNABLE_FEATURES / clampEffortToSupported
-// ported as const + fn with a logic-parity test.

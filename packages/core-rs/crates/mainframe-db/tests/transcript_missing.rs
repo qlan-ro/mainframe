@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/db/__tests__/transcript-missing.test.ts`.
-//!
 //! The `transcript_missing` column, its `mapRow` boolean coercion, and the
 //! `clear_session` / `clear_worktree` degraded-recovery helpers. (The migration
 //! that adds the column itself is version 25 in `mainframe-db::migrations`, with

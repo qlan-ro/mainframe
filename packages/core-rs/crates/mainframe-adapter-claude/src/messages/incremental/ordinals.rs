@@ -1,4 +1,4 @@
-//! Ordinal bookkeeping and snapshot sync (todo #376) once a call's groups
+//! Ordinal bookkeeping and snapshot sync once a call's groups
 //! have settled: groups below the rewind point keep their ordinal (nothing
 //! about their presence changed), the newly folded tail gets numbered
 //! continuing from there, and the materialized snapshot list is patched to

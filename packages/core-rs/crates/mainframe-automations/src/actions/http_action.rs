@@ -1,8 +1,7 @@
-//! `http.request` (T6.5, Node actions/http.ts). Contract §5: outputs are
-//! `{status: number, body: text}` ONLY — `headers` is dropped and `body` is
-//! always raw response text (no content-type-based JSON parsing). Non-2xx
-//! (>= 400, Node parity — redirects are followed) fails the step, mirroring
-//! run_command's non-zero-exit convention.
+//! `http.request`. Contract §5: outputs are `{status: number, body: text}` ONLY
+//! — `headers` is dropped and `body` is always raw response text (no
+//! content-type-based JSON parsing). Non-2xx (>= 400; redirects are followed)
+//! fails the step, like run_command's non-zero-exit convention.
 
 use std::collections::BTreeMap;
 use std::time::Duration;
@@ -53,8 +52,7 @@ struct HttpInput {
     url: String,
     #[serde(default)]
     headers: Option<BTreeMap<String, String>>,
-    /// `string | object | array` (zod union parity) — other JSON types are
-    /// rejected below.
+    /// `string | object | array` — other JSON types are rejected below.
     #[serde(default)]
     body: Option<Value>,
     #[serde(default)]
@@ -211,10 +209,3 @@ fn params_schema() -> Value {
         "additionalProperties": false
     })
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T6.5), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node actions/http.ts (bearer-unless-authored auth,
-//        x-idempotency-key, JSON body content-type, >=400 throw); reqwest
-//        follows redirects like fetch.

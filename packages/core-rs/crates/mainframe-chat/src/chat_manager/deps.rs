@@ -10,17 +10,17 @@ pub trait ChatManagerDeps: Send + Sync {
     fn emit_event(&self, event: DaemonEvent);
     fn get_tool_categories(&self, chat_id: &str) -> Option<ToolCategories>;
     /// `prepareMessagesForClient`, kept for the REST `get_display_messages`
-    /// path (todo #376): that read is not on the partial path and stays a
-    /// full `prepare` over the whole history every call.
+    /// path: that read is not on the partial path and stays a full `prepare`
+    /// over the whole history every call.
     fn prepare_messages_for_client(
         &self,
         raw: &[ChatMessage],
         categories: Option<&ToolCategories>,
     ) -> Vec<DisplayMessage>;
     /// A fresh [`mainframe_display::DisplayProjector`] for one chat's live
-    /// display computation (todo #376), bridged to `EventHandlerDeps`'s
-    /// identical method via `deps_event.rs::EhDeps`. Required, not
-    /// defaulted (#273 rule): every deps impl states which projector it is.
+    /// display computation, bridged to `EventHandlerDeps`'s identical method
+    /// via `deps_event.rs::EhDeps`. Required, not defaulted: every deps impl
+    /// states which projector it is.
     fn display_projector(&self) -> Box<dyn mainframe_display::DisplayProjector>;
     fn strip_command_tags(&self, text: &str) -> String;
 
@@ -87,7 +87,7 @@ pub trait ChatManagerDeps: Send + Sync {
     ) -> Option<Arc<dyn AdapterSession>>;
 
     /// `adapters.get(adapterId)?.createPlanModeHandler()` — required (not
-    /// defaulted), per the #273 rule that every deps impl states its answer.
+    /// defaulted), so every deps impl states its answer.
     fn create_plan_mode_handler(&self, adapter_id: &str) -> Option<Arc<dyn PlanModeActionHandler>>;
 
     fn attachment_delete_chat<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()>;
@@ -146,16 +146,16 @@ pub trait ChatManagerDeps: Send + Sync {
     fn should_notify_permission(&self, tool_name: Option<&str>) -> bool;
     fn notify_task_complete(&self) -> bool;
     fn notify_session_error(&self) -> bool;
-    /// Gates `notifications.chat.attentionRequest`. Not defaulted — a
-    /// defaulted trait method silently inherited the wrong behavior once
-    /// before (bug class #273), so every deps impl must state its answer.
+    /// Gates `notifications.chat.attentionRequest`. Not defaulted — a defaulted
+    /// trait method silently inherited the wrong behavior once before, so every
+    /// deps impl must state its answer.
     fn notify_attention_request(&self) -> bool;
     fn send_push(&self, _msg: PushOut) {}
 
     /// `onProviderQuota(adapterId, quota)` — account-wide provider-plan quota pushed
     /// from a session event (Codex `account/rateLimits/updated`, Claude
-    /// `rate_limit_event`). Default no-op mirrors the TS optional callback: a
-    /// ChatManager built without a QuotaManager simply drops it.
+    /// `rate_limit_event`). Default no-op: a ChatManager built without a
+    /// QuotaManager simply drops it.
     fn on_provider_quota(&self, _adapter_id: &str, _quota: ProviderQuota) {}
 
     /// `extractMentionsFromText(chatId, text, db)` — returns whether any mention
@@ -165,15 +165,15 @@ pub trait ChatManagerDeps: Send + Sync {
     /// `tracker.listLive(chatId)` — live (running) background tasks, for enrichChat's
     /// backgroundActivity + widened working state. Required, not defaulted: an
     /// implementation that silently inherited an empty default blanked
-    /// backgroundActivity for every chat (#273).
+    /// backgroundActivity for every chat.
     fn tracker_list_live(&self, chat_id: &str) -> Vec<BackgroundTask>;
     /// `tracker?.endAllRunning(chatId)` — stop every live background task on session
     /// exit. Required, not defaulted: an implementation that silently inherited an
-    /// empty default left orphaned tasks Running forever, pinning `displayStatus:
-    /// working` and `backgroundActivity` with no recovery path (#273).
+    /// empty default left orphaned tasks Running forever, pinning
+    /// `displayStatus: working` and `backgroundActivity` with no recovery path.
     fn tracker_end_all_running(&self, chat_id: &str);
-    /// D5 (#273) — the workflow-run store's counterpart to
-    /// `tracker_end_all_running`, delegated to `EventHandlerDeps` below.
+    /// The workflow-run store's counterpart to `tracker_end_all_running`,
+    /// delegated to `EventHandlerDeps` below.
     fn workflow_runs_stop_all(&self, chat_id: &str);
     /// `db.chats.clearSession(chatId)` — NULL session id/file, transcript_missing=0.
     /// Required (not a no-op default): `continue-here` relies on it persisting.
@@ -182,10 +182,10 @@ pub trait ChatManagerDeps: Send + Sync {
     /// Required (not a no-op default): `continue-in-project-root` relies on it persisting.
     fn chats_clear_worktree(&self, chat_id: &str);
     /// `adapters.get(adapterId)?.locateTranscript(sessionId, projectPath, sessionFilePath)`.
-    /// `None` = the location cannot be determined (no adapter / no layout / error).
-    /// Required, not defaulted: an implementation that silently inherited a `None`
-    /// default left transcript-presence reconciliation permanently inert in
-    /// production — same class as #273 (#289).
+    /// `None` = the location cannot be determined (no adapter / no layout /
+    /// error). Required, not defaulted: an implementation that silently
+    /// inherited a `None` default left transcript-presence reconciliation
+    /// permanently inert in production.
     fn locate_transcript<'a>(
         &'a self,
         adapter_id: &'a str,
@@ -193,25 +193,27 @@ pub trait ChatManagerDeps: Send + Sync {
         project_path: &'a str,
         session_file_path: Option<&'a str>,
     ) -> BoxFuture<'a, Option<mainframe_types::transcript::TranscriptLocation>>;
-    /// Rule 7's per-spawn capability read: `adapters.get(adapterId)?.capabilities()
-    /// .noPersistence`. Never derived from the adapter id itself (AC 2) — an
-    /// unregistered adapter answers `false`, same as one that never opted in.
+    /// The per-spawn no-persistence capability read:
+    /// `adapters.get(adapterId)?.capabilities.noPersistence`. Never derived
+    /// from the adapter id itself — an unregistered adapter answers `false`,
+    /// same as one that never opted in.
     fn adapter_supports_no_persistence(&self, adapter_id: &str) -> bool;
     /// `fs.mkdir(path, { recursive: true })` for a non-project chat's scratch
-    /// cwd. Run before every spawn (rule 6): the first call creates it, and a
-    /// later one recreates a deleted directory at the same path.
+    /// cwd. Run before every spawn: the first call creates it, and a later one
+    /// recreates a deleted directory at the same path.
     fn ensure_dir<'a>(&'a self, path: &'a str) -> BoxFuture<'a, ()>;
-    /// `db.chats.markContextLost(chatId, contextLostAt)` (rule 7): the one DB
-    /// path that atomically stamps the loss time and clears `claude_session_id`
-    /// / `session_file_path` / `vendor_session_ephemeral` — `chats_update`'s
+    /// `db.chats.markContextLost(chatId, contextLostAt)`: the one DB path that
+    /// atomically stamps the loss time and clears `claude_session_id` /
+    /// `session_file_path` / `vendor_session_ephemeral` — `chats_update`'s
     /// generic patch cannot write an explicit NULL for the first two columns.
     fn mark_context_lost(&self, chat_id: &str, context_lost_at: &str);
-    // ── fork-a-chat (todo #343) ───────────────────────────────────────────────
+    // ── fork-a-chat ───────────────────────────────────────────────────────────
     /// The parent's adapter display name + fork capability, for `fork_chat`'s
-    /// capability check and its 422 message. Defaulted to "cannot fork" so every
-    /// pre-existing `ChatManagerDeps` implementer (test doubles included) keeps
-    /// compiling without opting in — unlike #273's cases, "not fork-capable" is
-    /// the correct default for every adapter that predates this feature.
+    /// capability check and its 422 message. Defaulted to "cannot fork" so
+    /// every pre-existing `ChatManagerDeps` implementer (test doubles included)
+    /// keeps compiling without opting in — unlike the required methods above,
+    /// "not fork-capable" is the correct default for every adapter that
+    /// predates this feature.
     fn adapter_fork_info(&self, adapter_id: &str) -> AdapterForkInfo {
         AdapterForkInfo {
             name: adapter_id.to_string(),
@@ -276,13 +278,13 @@ pub trait ChatManagerDeps: Send + Sync {
             .into_owned()
     }
 
-    // ── side chats (todo #344) ───────────────────────────────────────────────
+    // ── side chats ────────────────────────────────────────────────────────────
     /// `db.chats.findOrCreateSideChat(parent)` — a SELECT-then-INSERT that
     /// returns the parent's existing side chat (`created = false`) or seeds and
     /// inserts a new one from the parent's resolved config (`created = true`).
     /// Required (not defaulted): the two implementers (`DaemonChatDeps`,
     /// `StoreDeps`) both back a real store, so a silent no-op default would mint
-    /// side chats that vanish on the next read (same class as #273/#289/#290).
+    /// side chats that vanish on the next read.
     fn chats_find_or_create_side_chat(&self, parent: &Chat) -> Result<(Chat, bool), String>;
 
     // ── provider segments ─────────────────────────────────────────────────────

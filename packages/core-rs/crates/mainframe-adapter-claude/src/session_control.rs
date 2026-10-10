@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/session-control.ts`.
-//!
 //! One correlation channel per session for `control_request`/`control_response`
 //! round-trips. Fire-and-forget callers use [`ControlRequestChannel::send`];
 //! awaiting callers use [`ControlRequestChannel::send_awaiting`]. A single pending
@@ -18,9 +16,9 @@ use tokio::sync::{mpsc, oneshot};
 /// absent (timeout / drained).
 pub type Raw = Option<Value>;
 
-/// The stdin write handle the session hands to `send`/`send_awaiting`. Mirrors
-/// the TS `ChildProcess['stdin']` argument (nullable when the process is gone):
-/// bytes are pushed to the session's stdin writer task, sync fire-and-forget.
+/// The stdin write handle the session hands to `send`/`send_awaiting` (`None`
+/// when the process is gone): bytes are pushed to the session's stdin writer
+/// task, sync fire-and-forget.
 pub type StdinTx = mpsc::UnboundedSender<Vec<u8>>;
 
 /// When provided, `resolve` fulfills only on a response the predicate accepts —
@@ -32,7 +30,7 @@ struct Pending {
     done: oneshot::Sender<Raw>,
 }
 
-/// Options for [`ControlRequestChannel::send_awaiting`], mirroring the TS `opts`.
+/// Options for [`ControlRequestChannel::send_awaiting`].
 pub struct SendAwaitingOpts {
     pub label: String,
     pub timeout_ms: Option<u64>,
@@ -45,8 +43,8 @@ pub struct ControlRequestChannel {
 }
 
 impl ControlRequestChannel {
-    /// The TS constructor takes a `Logger`; the Rust port logs through the global
-    /// `tracing` subscriber, so only the `sessionId` (carried on every log) is kept.
+    /// Logs go through the global `tracing` subscriber, so only the `sessionId`
+    /// (carried on every log) is kept.
     pub fn new(session_id: String) -> Self {
         Self {
             pending: Arc::new(Mutex::new(HashMap::new())),
@@ -230,16 +228,3 @@ mod tests {
         assert_eq!(result, None);
     }
 }
-
-// PORT STATUS: src/plugins/builtin/claude/session-control.ts (76 lines)
-// confidence: high
-// todos: 0
-// notes: pending is Arc<Mutex<HashMap<RequestId, Pending>>> per CONCURRENCY.tsv
-// notes: (session-control.ts:pending → SHARED_MAP, leaf below the session handle).
-// notes: sendAwaiting uses oneshot + tokio::time::timeout; the isTerminal predicate
-// notes: rides on the Pending entry so resolve() can reject intermediate acks. The
-// notes: TS `stdin` (ChildProcess['stdin']) becomes Option<&StdinTx> — an mpsc byte
-// notes: sender to the session's stdin writer task (codex jsonrpc house style), so
-// notes: send/send_awaiting stay sync fire-and-forget. Logger arg dropped (tracing
-// notes: is global; sessionId retained on the warn). Tests ported assertion-for-
-// notes: assertion (fake vi.fn stdin → an mpsc receiver read for the request_id).

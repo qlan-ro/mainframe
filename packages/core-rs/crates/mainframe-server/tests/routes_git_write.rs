@@ -1,7 +1,7 @@
-//! Route tests for `git_write.rs` — the commit + working-stat assertions from
-//! `git-review.test.ts` (translated onto real git repos instead of a mocked
-//! `GitService`), plus branch listing/creation coverage. Real collaborators: a
-//! temp git repo per test, a real in-memory DB project row.
+//! Route tests for `git_write.rs` — the commit + working-stat assertions (on
+//! real git repos, not a mocked `GitService`), plus branch listing/creation
+//! coverage. Real collaborators: a temp git repo per test, a real in-memory DB
+//! project row.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod support;
@@ -116,11 +116,10 @@ async fn commit_returns_success_with_commit_hash() {
 
 #[tokio::test]
 async fn commit_returns_500_with_leaked_message_when_nothing_to_commit() {
-    // Translated from git-review.test.ts's mocked "commitAll throws" case. With a
-    // real repo the clean-tree commit fails at git itself (exit 1), so the leaked
-    // message is git's exec error rather than the mock's literal "Nothing to
-    // commit" — the contract under test is 500 + `success:false` + a leaked,
-    // non-opaque git message (NOT the "Internal server error" async_err handler).
+    // With a real repo the clean-tree commit fails at git itself (exit 1), so the
+    // leaked message is git's exec error — the contract under test is 500 +
+    // `success:false` + a leaked, non-opaque git message (NOT the "Internal
+    // server error" async_err handler).
     let server = spawn_test_server(None).await;
     let repo = init_repo(); // clean tree → commit fails
     let id = server.create_project(repo.path().to_str().unwrap()).await;

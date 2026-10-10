@@ -1,5 +1,5 @@
 //! Contract §5 — the authoritative action id → named outputs table, plus the
-//! friendly output labels used in error messages. Frozen; the Phase-6 action
+//! friendly output labels used in error messages. Frozen; the action
 //! manifests must match it.
 
 use super::scope::TokenType;
@@ -43,8 +43,8 @@ pub(crate) fn action_outputs(action_id: &str) -> &'static [(&'static str, TokenT
         .unwrap_or(&[])
 }
 
-/// camelCase output name → friendly label for error messages (Node's
-/// OUTPUT_LABELS).
+/// camelCase output name → friendly label for error messages (same table as
+/// `OUTPUT_LABELS` in packages/types/src/automation-domain/tokens.ts).
 pub(crate) fn output_label(name: &str) -> String {
     match name {
         "output" => "Output".to_string(),
@@ -70,9 +70,3 @@ pub(crate) fn capitalize(s: &str) -> String {
         None => String::new(),
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T1.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: table is contract §5 verbatim; `run_command` outputAs:"lines" still
-//        catalogs `output` as text (Node catalog parity).

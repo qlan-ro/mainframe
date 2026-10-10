@@ -1,10 +1,9 @@
-//! Ported from `src/server/routes/chat-commands.ts` — chat create + config PATCH
-//! + interrupt/resume/trust-workspace commands + queue edit/cancel.
+//! Chat config PATCH, interrupt/resume/trust-workspace commands, and queue
+//! edit/cancel (chat create lives in `chat_create`).
 //!
-//! create (createChatWithDefaults), config PATCH (updateChatConfig),
-//! interrupt/resume/trust-workspace and queue edit/cancel all port over the
-//! `ChatManager` facade and are gated on the manager being wired. Existence is
-//! checked against `ctx.db.chats` so 404s are honoured before the facade call.
+//! Every route goes through the `ChatManager` facade and is gated on the manager
+//! being wired. Existence is checked against `ctx.db.chats` so 404s are honoured
+//! before the facade call.
 
 use std::sync::Arc;
 
@@ -25,8 +24,8 @@ use crate::routes::projects::parse_body;
 /// serde only invokes this when the key is present, so a plain `Option<T>`
 /// would collapse an explicit JSON `null` into the same `None` as an absent
 /// key. Wrapping in `Some` here keeps absent → outer `None` and present
-/// (including `null`) → outer `Some`, which is what rule 4's `projectId`
-/// presence check needs.
+/// (including `null`) → outer `Some`, which is what the `projectId` presence
+/// check needs.
 fn double_option<'de, D, T>(de: D) -> Result<Option<Option<T>>, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -43,8 +42,9 @@ async fn chat_exists(ctx: &Arc<AppCtx>, id: &str) -> Result<bool, Response> {
     }
 }
 
-/// `UpdateChatConfigBody` (ws-schemas): every field optional; `permissionMode`
-/// is `z.enum(EXECUTION_MODES)` (no `plan`), so it maps to `ExecutionMode`.
+/// Config PATCH body: every field optional; `permissionMode` takes one of
+/// `EXECUTION_MODES` from `packages/types/src/settings.ts` (no `plan`), so it
+/// maps to `ExecutionMode`.
 #[derive(Deserialize)]
 struct UpdateChatConfigBody {
     #[serde(rename = "adapterId")]
@@ -54,7 +54,7 @@ struct UpdateChatConfigBody {
     permission_mode: Option<ExecutionMode>,
     #[serde(rename = "planMode")]
     plan_mode: Option<bool>,
-    /// Rule 4: a chat's project is fixed at creation. Detected as an explicit
+    /// A chat's project is fixed at creation. Detected as an explicit
     /// field (present at all, any value including `null`) rather than
     /// `deny_unknown_fields`, because other clients may send extra keys today.
     #[serde(rename = "projectId", default, deserialize_with = "double_option")]
@@ -66,8 +66,7 @@ async fn update_config(
     Path(id): Path<String>,
     body: Bytes,
 ) -> Response {
-    // validate(UpdateChatConfigBody, ...): a non-object body or a bad
-    // permissionMode enum fails the parse → 400, mirroring the TS Zod refine.
+    // A non-object body or a bad permissionMode enum fails the parse → 400.
     let Some(cfg) = parse_body::<UpdateChatConfigBody>(&body) else {
         return fail(StatusCode::BAD_REQUEST, "Invalid request body");
     };
@@ -259,7 +258,7 @@ mod tests {
 
     #[tokio::test]
     async fn update_config_rejects_a_null_project_id_field_400() {
-        // The refusal is keyed on the field's PRESENCE (rule 4), not its value —
+        // The refusal is keyed on the field's PRESENCE, not its value —
         // an explicit `null` still counts.
         let ctx = AppCtx::test_ctx();
         let resp = update_config(
@@ -310,19 +309,3 @@ mod tests {
         assert_eq!(read(resp).await.0, StatusCode::BAD_REQUEST);
     }
 }
-
-// PORT STATUS: src/server/routes/chat-commands.ts (7 endpoints, 96 lines)
-// confidence: high
-// todos: 0
-// notes: create (createChatWithDefaults) + config PATCH (updateChatConfig) +
-// interrupt/resume/trust-workspace/queue-edit/queue-cancel port over the
-// ChatManager facade — all self-gate on ctx.chat_manager, wired at boot (Task
-// 4.6c), so they are live. updateChatConfig parses UpdateChatConfigBody
-// (permissionMode is z.enum(EXECUTION_MODES) → ExecutionMode, no `plan`),
-// delegates to ChatManager.update_chat_config (chat_manager.rs), then returns
-// ok(get_chat(id)), matching TS. trust-workspace now delegates to
-// ChatManager::trust_workspace (writeWorkspaceTrust is ported in
-// mainframe-adapter-claude::trust_store) — the db existence 404 is honoured
-// first, then any chat/project-not-found or write error 500s with the error
-// message, matching the TS route's try/catch. Zod enum/refine 400 messages are
-// approximated; the both-or-neither worktree refine string matches TS.

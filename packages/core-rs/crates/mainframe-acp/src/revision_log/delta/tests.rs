@@ -1,6 +1,6 @@
-//! `RevisionLog::record_delta` equivalence (todo #376 G2 task 4): outcomes,
-//! revision stamps, tombstones, and later `plan` output must match
-//! `record`'s for the same sequence of snapshots.
+//! `RevisionLog::record_delta` equivalence: outcomes, revision stamps,
+//! tombstones, and later `plan` output must match `record`'s for the same
+//! sequence of snapshots.
 
 use mainframe_types::acp::tool_call::{ToolCallStatus, ToolKind};
 use serde_json::Value;

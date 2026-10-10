@@ -1,9 +1,9 @@
 //! Opens `<dataDir>/automations.db` — a separate file from `mainframe.db`
 //! (contract §3), outside its migration chain, with its own `user_version=1`.
-//! The three contract tables plus `automation_webhook_state` (T7 — the one
-//! webhook fact that must outlive a restart); Node's `trigger_state` /
-//! `agent_waits` are that engine's private caches and both engines ignore
-//! unknown tables in the file.
+//! The three contract tables plus `automation_webhook_state` (the one
+//! webhook fact that must outlive a restart). Unknown tables in the file
+//! (such as `trigger_state` / `agent_waits` from an older engine) are
+//! ignored.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -110,10 +110,3 @@ impl AutomationDb {
         .map_err(|e| StoreError::Task(e.to_string()))?
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T2.1), not a TS port
-// confidence: high
-// todos: 0
-// notes: DDL column shapes match Node's db.ts exactly (shared automations.db);
-//        index names follow this plan's T2.1 (uq_runs_dedup, idx_runs_*) —
-//        Node creates its own names, both are IF NOT EXISTS and coexist.

@@ -1,5 +1,3 @@
-//! Ported from `src/attachment/attachment-store.ts`.
-
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -48,8 +46,8 @@ pub struct StoredAttachmentMeta {
 }
 
 /// Fallible-operation error surfaced by `save` (the write path). Read paths
-/// (`get`/`list`/`delete_chat`) never return `Err` — they mirror the TS
-/// swallow-to-null/empty behavior.
+/// (`get`/`list`/`delete_chat`) never return `Err`; they return null or empty
+/// results when a read fails.
 #[derive(Debug, thiserror::Error)]
 pub enum AttachmentError {
     #[error("{0}")]
@@ -197,8 +195,7 @@ impl AttachmentStore {
         match self.chat_dir(chat_id) {
             Ok(dir) => {
                 if let Err(err) = tokio::fs::remove_dir_all(&dir).await {
-                    // `rm` with force ignores a missing dir; mirror that by
-                    // ignoring NotFound, but surface anything else.
+                    // A missing directory is already deleted; surface other errors.
                     if err.kind() != std::io::ErrorKind::NotFound {
                         tracing::warn!(
                             module = "attachment-store",
@@ -253,9 +250,7 @@ fn sanitize_file_name(name: &str) -> String {
     }
 }
 
-/// Lenient base64 decoder mirroring `Buffer.from(data, 'base64')` (which skips
-/// invalid characters rather than throwing). No `base64` crate is in the §8
-/// allowlist, so it is hand-rolled.
+/// Lenient base64 decoder: skips invalid characters rather than failing.
 fn decode_base64(input: &str) -> Vec<u8> {
     fn val(c: u8) -> Option<u8> {
         match c {
@@ -275,7 +270,7 @@ fn decode_base64(input: &str) -> Vec<u8> {
             break;
         }
         let Some(v) = val(c) else {
-            continue; // skip whitespace / invalid chars (Node is lenient)
+            continue; // skip whitespace and invalid characters
         };
         buf = (buf << 6) | u32::from(v);
         bits += 6;
@@ -292,8 +287,7 @@ mod tests {
     use super::*;
 
     fn b64(s: &str) -> String {
-        // Encode with the standard alphabet + padding (test helper mirroring
-        // Buffer.from(x).toString('base64')).
+        // Encode with the standard alphabet and padding.
         const ALPHA: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
         let bytes = s.as_bytes();
         let mut out = String::new();
@@ -648,16 +642,3 @@ mod tests {
         assert!(store.list("chat-img-4").await.is_empty());
     }
 }
-
-// PORT STATUS: src/attachment/attachment-store.ts (159 lines)
-// confidence: high
-// todos: 0
-// notes: async fs via tokio::fs (Promise.all → sequential awaits, order preserved).
-// SAFE_SEGMENT regex → is_safe_segment byte check; nanoid! for ids (same alphabet).
-// The .json blob is the StoredAttachment with materializedPath overridden
-// (serde camelCase + skip_serializing_if None mirrors JSON.stringify omitting
-// undefined). delete_chat ignores NotFound to mirror `rm {force:true}`; other
-// errors log the same warn. base64 decode is hand-rolled (no base64 crate in the
-// §8 allowlist) and lenient like Buffer.from. size_bytes is i64. Materialization
-// is kind-agnostic (todo #300): every attachment, image or file, is written to
-// the chat's files/ dir and its path recorded on the stored metadata.

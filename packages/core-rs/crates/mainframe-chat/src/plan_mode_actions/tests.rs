@@ -1,4 +1,4 @@
-//! Unit tests (T6) for `ChatPlanActionCtx` against a fake `PlanHost` plus a real
+//! Unit tests for `ChatPlanActionCtx` against a fake `PlanHost` plus a real
 //! `PermissionManager`/`MessageCache` and the crate's recording `StoreDeps`
 //! (`chat_manager::tests`, exposed `pub(crate)` for reuse here rather than
 //! duplicating a second `ChatManagerDeps` fake). The `PlanHostImpl`-specific

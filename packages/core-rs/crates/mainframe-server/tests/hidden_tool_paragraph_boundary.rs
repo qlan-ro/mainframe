@@ -1,4 +1,4 @@
-//! Production-path regression for todo #383: a hidden-category tool call
+//! Production-path regression: a hidden-category tool call
 //! (Claude's `TodoWrite`, `AskUserQuestion`, ...) sitting between two visible
 //! text contributions of one display message must not let the two texts
 //! coalesce with no separator once the hidden call is dropped.

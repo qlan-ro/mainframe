@@ -1,12 +1,11 @@
-//! Ported from `src/server/routes/auth.ts` — mobile pairing + device management.
+//! Mobile pairing and device management.
 //!
-//! The pairing / rate-limit / recent-pairing maps are process-global in the TS
-//! (module-level `Map`s shared across every router instance); they map to a
-//! single `LazyLock<Mutex<AuthState>>` here with the exact TTLs and thresholds.
-//! The `AUTH_TOKEN_SECRET` the TS reads per-request from `process.env` comes from
-//! `AppCtx.auth_secret` (the daemon reads it once at boot); the devices repo and
-//! push service are the `AppCtx` handles. `req.auth` (set by the auth middleware)
-//! is read back from request extensions as `Extension<TokenPayload>`.
+//! The pairing / rate-limit / recent-pairing maps are process-global (shared
+//! across every router instance): a single `LazyLock<Mutex<AuthState>>` with
+//! fixed TTLs and thresholds. `AUTH_TOKEN_SECRET` comes from `AppCtx.auth_secret`
+//! (the daemon reads it once at boot); the devices repo and push service are the
+//! `AppCtx` handles. The token payload set by the auth middleware is read back
+//! from request extensions as `Extension<TokenPayload>`.
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -188,7 +187,7 @@ fn bearer_token(headers: &HeaderMap) -> Option<String> {
 
 fn client_ip_from(peer: &SocketAddr, headers: &HeaderMap) -> String {
     let forwarded = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok());
-    // `req.ip` for the confirm rate-limit key uses Express trust-proxy=loopback,
+    // The confirm rate-limit key resolves the client IP with trust-proxy=loopback,
     // the same proxy-addr rule as the auth middleware (not the WS first-hop rule).
     trust_proxy_client_ip(&peer.ip().to_string(), forwarded)
 }
@@ -239,10 +238,10 @@ async fn confirm(
         }
         return fail(StatusCode::BAD_REQUEST, "Invalid request body");
     };
-    // confirmBodySchema: pairingCode.min(1), deviceName.min(1).optional,
-    // clientDeviceId.uuid. serde alone accepts an empty pairingCode or an
-    // empty-but-present deviceName, both of which Zod rejects — fold those into
-    // the same rate-limit-then-400 path so a Zod-rejected body never pairs.
+    // The confirm body needs a non-empty pairingCode, an optional non-empty
+    // deviceName and a UUID clientDeviceId. serde alone accepts an empty
+    // pairingCode or an empty-but-present deviceName — fold those into the same
+    // rate-limit-then-400 path so an invalid body never pairs.
     if parsed.pairing_code.is_empty()
         || parsed.device_name.as_deref() == Some("")
         || !is_valid_uuid(&parsed.client_device_id)
@@ -424,17 +423,3 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/api/auth/devices/{deviceId}", delete(delete_device))
         .route("/api/auth/pair-status", get(pair_status))
 }
-
-// PORT STATUS: src/server/routes/auth.ts (7 endpoints, 249 lines)
-// confidence: high
-// todos: 0
-// notes: module-global pairing/rate-limit/recent Maps → one LazyLock<Mutex<AuthState>>
-// (process-global, matching TS semantics) with identical TTLs/thresholds;
-// `_resetAuthState` → `reset_auth_state`. Secret read from AppCtx.auth_secret (boot
-// value), not process.env. `req.ip` (trust-proxy=loopback) → net::trust_proxy_client_ip
-// over ConnectInfo + x-forwarded-for. `req.auth` → Extension<TokenPayload>. Zod schemas
-// (confirmBodySchema uuid+min1, registerPushSchema min1, pairStatusQuerySchema
-// [A-Z0-9]{6}) → serde parse + explicit refinements (is_valid_uuid, non-empty,
-// is_valid_pair_code). devices/push via AppCtx handles. No QR payload is emitted by
-// this route (the terminal QR is CLI-side, per the task note). Locks are never held
-// across an await (confirm validates + drops the lock before the DB call).

@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/codex/approval-handler.ts`.
-//!
 //! Maps Codex app-server *server requests* (approvals + requestUserInput) onto the
 //! Mainframe `ControlRequest`/`ControlResponse` permission flow: `intake.rs`
 //! on the way in, `answers.rs` on the way back out, `approval_options.rs` for
@@ -94,13 +92,3 @@ impl ApprovalHandler {
         }
     }
 }
-
-// PORT STATUS: src/plugins/builtin/codex/approval-handler.ts (284 lines)
-// confidence: high
-// todos: 0
-// notes: pending/planContext behind Mutex (CONCURRENCY.tsv 101/102, session-scoped
-// notes: leaf locks). RespondFn = Box<dyn Fn(RequestId, Value) + Send + Sync> mirrors
-// notes: the TS per-request respond callback. questions/options are handled as raw
-// notes: serde_json Values (structural, matching TS). `insert_if_present` reproduces
-// notes: the JS omit-when-undefined behavior for command/cwd/reason input keys.
-// notes: Tests in tests/approval_handler/ (routing + resolve, assertion-for-assertion).

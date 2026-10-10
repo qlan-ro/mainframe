@@ -1,4 +1,4 @@
-//! Derives an agent's picker-row description from its frontmatter (todo #317).
+//! Derives an agent's picker-row description from its frontmatter.
 //!
 //! Two file kinds used to have two derivations: skills read
 //! `attributes["description"]`, agents took the first markdown line — which,
@@ -39,8 +39,7 @@ pub(crate) fn derive_agent_description(raw: &str) -> AgentDescription {
     AgentDescription { summary, full }
 }
 
-/// Today's `agent_description` heuristic (`skills.rs`, pre-#317), unchanged:
-/// first non-blank line, leading `#`s stripped.
+/// The heading heuristic: first non-blank line, leading `#`s stripped.
 fn heading_heuristic(body: &str) -> String {
     let first_line = body
         .split('\n')
@@ -93,7 +92,7 @@ fn cut_at_sentence(line: &str) -> String {
 }
 
 /// Marks the `.` positions that belong to a known abbreviation, so they're
-/// never mistaken for a sentence terminator (todo #317 Decision D4).
+/// never mistaken for a sentence terminator.
 fn protected_period_indices(chars: &[char]) -> HashSet<usize> {
     const ABBREVIATIONS: [&str; 5] = ["e.g.", "i.e.", "etc.", "vs.", "cf."];
     let mut protected = HashSet::new();

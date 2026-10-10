@@ -1,4 +1,4 @@
-//! Harness for todo #346's G2b integration tests: a real `ChatManager` (via
+//! Harness for the temporary-chat integration tests: a real `ChatManager` (via
 //! `build_chat_manager`, production `DaemonChatDeps`) over an in-memory DB,
 //! paired with the `session` module's minimal `Adapter`/`AdapterSession`.
 
@@ -134,8 +134,8 @@ pub fn get_chat(h: &Harness, chat_id: &str) -> Chat {
         .expect("chat row must still exist")
 }
 
-/// Opens (or reveals) `parent_id`'s side chat through the real `ChatManager`
-/// (todo #344), the same path the daemon route calls. `#[allow(dead_code)]`:
+/// Opens (or reveals) `parent_id`'s side chat through the real `ChatManager`,
+/// the same path the daemon route calls. `#[allow(dead_code)]`:
 /// only `side_chat_lifecycle.rs` calls this among this module's consumers.
 #[allow(dead_code)]
 pub async fn create_side_chat(mgr: &ChatManager, parent_id: &str) -> Chat {

@@ -12,13 +12,13 @@ use mainframe_acp::stream::SessionStream;
 use mainframe_types::adapter::ControlRequest;
 
 /// The fresh-attach fallback a [`StreamOp::Revision`] carries alongside its
-/// incremental delta (todo #376 G4): a per-container encoding of the WHOLE
-/// current snapshot, computed at most once per `handle_display_revision`
-/// call no matter how many attached connections or the revision log end up
-/// needing it (an unseeded `SessionState`/`RevisionLog`, the fresh-`attach`
-/// case). `Arc<dyn Fn...>` because `StreamOp` is `Clone` (buffered, merged)
-/// and the same handle is handed to every attached connection's
-/// `SessionStream::on_revision_delta` plus `RevisionLog::record_delta`.
+/// incremental delta: a per-container encoding of the WHOLE current snapshot,
+/// computed at most once per `handle_display_revision` call no matter how many
+/// attached connections or the revision log end up needing it (an unseeded
+/// `SessionState`/`RevisionLog`, the fresh-`attach` case). `Arc<dyn Fn...>`
+/// because `StreamOp` is `Clone` (buffered, merged) and the same handle is
+/// handed to every attached connection's `SessionStream::on_revision_delta`
+/// plus `RevisionLog::record_delta`.
 pub(crate) type LazyFullEncoding = Arc<dyn Fn() -> Vec<Vec<EncodedItem>> + Send + Sync>;
 
 /// A gate delivered to a connection and not yet answered, keyed by the
@@ -31,24 +31,23 @@ pub struct PendingGate {
 
 /// One thing that happens to a session's stream. Applied immediately on a
 /// seeded stream; buffered in arrival order while a resume's snapshot is in
-/// flight, then replayed through the freshly seeded stream (T5/T6, R2.9).
+/// flight, then replayed through the freshly seeded stream.
 /// A gate raise carries the rpc id it was delivered under, so the drain can
 /// recognize the gate the replay redelivers on its own and not hand the
 /// client two live requests for one decision.
 #[derive(Clone)]
 pub(crate) enum StreamOp {
-    /// `delta` (todo #376 G4) is the per-container encoding of only the
-    /// containers this revision touched — `SessionStream::on_revision_delta`
-    /// applies it without re-comparing settled containers. `full` is the
-    /// fresh-attach fallback above, forced only when a stream is unseeded
-    /// and `delta` is incremental; the hub never forces it from a buffered
-    /// op (a drained op always hits a stream `reset_session` already
-    /// seeded). `cursor` (todo #377) is the chat's revision-log boundary
-    /// once this same display revision was recorded into it — `None` for a
-    /// chat with no log, or when the record was a no-op. Carried alongside
-    /// the delta rather than recomputed on replay, so a buffered catch-up
-    /// frame's cursor is exactly the one the live revision would have sent,
-    /// never a later log state read after the fact.
+    /// `delta` is the per-container encoding of only the containers this
+    /// revision touched — `SessionStream::on_revision_delta` applies it without
+    /// re-comparing settled containers. `full` is the fresh-attach fallback
+    /// above, forced only when a stream is unseeded and `delta` is incremental;
+    /// the hub never forces it from a buffered op (a drained op always hits a
+    /// stream `reset_session` already seeded). `cursor` is the chat's
+    /// revision-log boundary once this same display revision was recorded into
+    /// it — `None` for a chat with no log, or when the record was a no-op.
+    /// Carried alongside the delta rather than recomputed on replay, so a
+    /// buffered catch-up frame's cursor is exactly the one the live revision
+    /// would have sent, never a later log state read after the fact.
     Revision {
         delta: Arc<EncodedDelta>,
         full: LazyFullEncoding,
@@ -83,15 +82,14 @@ impl SessionLockWait {
 }
 
 /// A connection's per-session slot. `AwaitingSeed` covers the window a
-/// `session/resume` spends awaiting its snapshot (T5, R2.9): a live revision
-/// racing that await has nowhere seeded to diff against yet, so its item
-/// snapshot is buffered — a later revision replaces the earlier one in
-/// place, since only the latest matters — instead of diffed and instead of
-/// dropped. Everything else raised in the window (raw frames, turn
-/// lifecycle, usage, retry markers) buffers alongside it in arrival order,
-/// or it would either reach the client ahead of the replay it predates or
-/// vanish with the window. `reset_session` drains the lot once the stream is
-/// seeded.
+/// `session/resume` spends awaiting its snapshot: a live revision racing that
+/// await has nowhere seeded to diff against yet, so its item snapshot is
+/// buffered — a later revision merges into the one already waiting
+/// (`fanout.rs::buffer_op`) — instead of diffed and instead of dropped.
+/// Everything else raised in the window (raw frames, turn lifecycle, usage,
+/// retry markers) buffers alongside it in arrival order, or it would either
+/// reach the client ahead of the replay it predates or vanish with the window.
+/// `reset_session` drains the lot once the stream is seeded.
 pub(crate) enum SessionSlot {
     Live(SessionStream),
     AwaitingSeed { pending: Vec<StreamOp> },

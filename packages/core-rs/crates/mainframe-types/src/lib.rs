@@ -1,9 +1,9 @@
-//! Ported from `packages/types/src/*` — pure serde structs/enums, one `.rs` per `.ts`.
+//! Pure serde structs/enums for the wire types in `packages/types/src/*`, one `.rs` per `.ts`.
 //!
 //! `packages/types/src/index.ts` is a barrel re-export only; it has no Rust module
 //! counterpart here — this `lib.rs` plays that role (crate root re-exports go here
 //! once the submodules have real content). `__fixtures__/` and `__tests__/` are test
-//! support, not port targets, and are intentionally omitted from the module list.
+//! support, not wire types, and are intentionally omitted from the module list.
 #![forbid(unsafe_code)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 

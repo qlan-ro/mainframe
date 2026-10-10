@@ -1,11 +1,9 @@
-//! Ported from `src/server/routes/agents.ts` — adapter agent CRUD.
+//! Adapter agent CRUD.
 //!
-//! TS resolves `ctx.adapters.get(adapterId)` and gates on `adapter?.listAgents`.
-//! In the Rust port the `Adapter` trait carries no agent methods; only the Claude
-//! adapter supports them, exposed as free functions in
-//! `mainframe_adapter_claude::skills`. So the capability gate is "adapter is
-//! registered AND its id is `claude`", and the CRUD delegates to that module —
-//! exactly the TS behaviour (a non-Claude adapter has no `listAgents` → 404).
+//! The `Adapter` trait carries no agent methods; only the Claude adapter supports
+//! them, exposed as free functions in `mainframe_adapter_claude::skills`. So the
+//! capability gate is "adapter is registered AND its id is `claude`" (any other
+//! adapter → 404), and the CRUD delegates to that module.
 
 use std::sync::Arc;
 
@@ -26,8 +24,8 @@ use crate::routes::projects::parse_body;
 
 const NOT_SUPPORTED: &str = "Adapter not found or does not support agents";
 
-/// `ctx.adapters.get(id)?.listAgents`-equivalent: the adapter must be registered
-/// and Claude (the only adapter with agent support).
+/// Capability gate: the adapter must be registered and Claude (the only adapter
+/// with agent support).
 fn claude_supported(ctx: &AppCtx, adapter_id: &str) -> bool {
     ctx.adapter_registry
         .get(adapter_id)
@@ -260,14 +258,3 @@ mod tests {
         assert_eq!(body["data"][0]["id"], "mock-cli:project:agent:planner");
     }
 }
-
-// PORT STATUS: src/server/routes/agents.ts (4 endpoints, 112 lines)
-// confidence: medium
-// todos: 0
-// notes: The Adapter trait has no agent methods; only Claude supports them, so the
-// `adapter?.listAgents` capability gate becomes "registered adapter whose id is
-// claude", and CRUD delegates to `mainframe_adapter_claude::skills::{list,create,
-// update,delete}_agent`. axum percent-decodes `{id}` already, so the TS
-// `decodeURIComponent(id)` is implicit. Zod 400 messages are approximated (exact
-// per-field issue strings not reproduced); status codes + the hand-written
-// "Adapter not found or does not support agents" / "Operation failed" match TS.

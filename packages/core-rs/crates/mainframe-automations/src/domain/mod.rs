@@ -1,5 +1,5 @@
 //! Domain model for Automations v2 — serde shapes are the ratified wire
-//! contract (docs/plans/2026-07-12-automations-v2-contract.md §1).
+//! contract (§1).
 
 pub mod automation;
 pub(crate) mod catalog;
@@ -63,9 +63,9 @@ mod validate_tests;
 #[cfg(test)]
 mod validate_variable_tests;
 
-/// T1.2 — the canonical fixtures (contract §8, authored by Node Phase 0) must
-/// deserialize, and re-serialize to the exact same JSON. Rust loads them by
-/// relative path and never authors its own.
+/// The canonical fixtures (contract §8) must deserialize, and re-serialize to
+/// the exact same JSON. These tests load them by relative path and never
+/// author their own.
 #[cfg(test)]
 mod fixture_tests {
     use std::path::PathBuf;
@@ -105,8 +105,3 @@ mod fixture_tests {
         }
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T1.1-T1.2), not a TS port
-// confidence: high
-// todos: 0
-// notes: fixture validate-clean assertion lands with validation (T1.3).

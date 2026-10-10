@@ -1,29 +1,27 @@
-//! The canonical encoder (todo #350, plan task 12): `DisplayMessage[] → ACP
-//! item list`. Pure function — same input always produces the same output —
-//! so live streaming and history replay encode identically by construction
-//! (plan criterion 10), and the diff engine (`session_state.rs`, task 13)
-//! can be tested by feeding it two encoder snapshots directly.
+//! The canonical encoder: `DisplayMessage[] → ACP item list`. Pure function —
+//! same input always produces the same output — so live streaming and history
+//! replay encode identically by construction, and the diff engine
+//! (`session_state.rs`) can be tested by feeding it two encoder snapshots
+//! directly.
 //!
-//! Subagent/task content (`DisplayNode::TaskGroup`) flattens to tool-call
-//! items carrying a `_meta` parent relation instead of nesting — the facade
-//! has no `task_group` (criterion 10). Text/thinking/image leaves under one
-//! container id accumulate into an item's ordered block list (spec Decision
-//! 22), and that item sits at the position of its FIRST contribution. A run
-//! of leaves interrupted by a tool call, a subagent task, or the other leaf
-//! kind closes there and resumes as a new *segment* item after it
-//! (`accum.rs`), so a turn that alternates prose and tools keeps
+//! Subagent/task content (`DisplayNode::TaskGroup`) flattens to tool-call items
+//! carrying a `_meta` parent relation instead of nesting — the facade has no
+//! `task_group`. Text/thinking/image leaves under one container id accumulate
+//! into an item's ordered block list, and that item sits at the position of its
+//! FIRST contribution. A run of leaves interrupted by a tool call, a subagent
+//! task, or the other leaf kind closes there and resumes as a new *segment*
+//! item after it (`accum.rs`), so a turn that alternates prose and tools keeps
 //! source order rather than hoisting every paragraph above every tool.
 //! Invariant: a block list never holds two adjacent text blocks — text
-//! coalesces into the trailing text block — so the diff engine's chunk
-//! appends are lossless under the client's trailing-text coalescing rule.
+//! coalesces into the trailing text block — so the diff engine's chunk appends
+//! are lossless under the client's trailing-text coalescing rule.
 //!
-//! Every item carries an `ItemMeta` under `_meta["_mainframe.dev"]`
-//! (desktop-cutover pass): timestamp, container id, the raw
-//! `DisplayMessage.metadata` map, error/system markers, tool-group
-//! membership, and subagent attribution — the display fidelity the core ACP
-//! grammar has no fields for. Hidden-category tool calls are not encoded at
-//! all: the legacy renderer never shows them, and an item without its
-//! category could not be hidden client-side.
+//! Every item carries an `ItemMeta` under `_meta["_mainframe.dev"]`: timestamp,
+//! container id, the raw `DisplayMessage.metadata` map, error/system markers,
+//! tool-group membership, and subagent attribution — the display fidelity the
+//! core ACP grammar has no fields for. Hidden-category tool calls are not
+//! encoded at all: the legacy renderer never shows them, and an item without
+//! its category could not be hidden client-side.
 
 use std::collections::HashMap;
 
@@ -56,9 +54,9 @@ pub enum ItemRole {
     Agent,
 }
 
-/// One encoded item, addressed by [`EncodedItem::id`]. The diff engine
-/// (task 13) compares two `Vec<EncodedItem>` snapshots by id to decide
-/// chunk-append vs. full-revision vs. patch.
+/// One encoded item, addressed by [`EncodedItem::id`]. The diff engine compares
+/// two `Vec<EncodedItem>` snapshots by id to decide chunk-append vs.
+/// full-revision vs. patch.
 #[derive(Debug, Clone, PartialEq)]
 pub enum EncodedItem {
     Message {
@@ -106,10 +104,10 @@ struct Container<'a> {
 
 impl Container<'_> {
     /// The container's message-item id. Top-level containers use the
-    /// `DisplayMessage` id itself (Decision 23: the item id IS the message
-    /// id); a task-group child suffixes it — its container id is the parent
-    /// Task tool call's id, and an unsuffixed message item would collide
-    /// with (and clobber) that tool-call item in any id-keyed accumulator.
+    /// `DisplayMessage` id itself (the item id IS the message id); a task-group
+    /// child suffixes it — its container id is the parent Task tool call's id,
+    /// and an unsuffixed message item would collide with (and clobber) that
+    /// tool-call item in any id-keyed accumulator.
     fn message_item_id(&self) -> String {
         match self.parent_tool_call_id {
             Some(_) => format!("{}-message", self.id),
@@ -135,9 +133,9 @@ fn wrap_meta(meta: ItemMeta) -> Option<Value> {
         .map(|value| json!({ MAINFRAME_META_NAMESPACE: value }))
 }
 
-/// Queued turns render from the `queue_state` snapshot, not the transcript
-/// (D1) — the encoder drops them so a dequeue is a plain create at the tail
-/// instead of a reorder the wire cannot express.
+/// Queued turns render from the `queue_state` snapshot, not the transcript —
+/// the encoder drops them so a dequeue is a plain create at the tail instead of
+/// a reorder the wire cannot express.
 fn is_queued(message: &DisplayMessage) -> bool {
     message
         .metadata
@@ -154,12 +152,11 @@ pub fn encode(messages: &[DisplayMessage]) -> Vec<EncodedItem> {
 
 /// Like `encode`, but for the last non-queued top-level container, marks
 /// whichever accumulator segment is still open at `finish` with
-/// `ItemMeta.streaming: true` when its kind matches `streaming` (spec
-/// Decision 39) — the item the partial-message overlay currently backs.
-/// `handle_display_revision` calls this for live revisions; `dispatch_resume`
-/// (todo #382) calls it too, since a resume snapshot now carries the same
-/// overlay a live revision would — `streaming: None` makes this
-/// byte-identical to `encode`, so a no-overlay resume is unaffected.
+/// `ItemMeta.streaming: true` when its kind matches `streaming` — the item the
+/// partial-message overlay currently backs. `handle_display_revision` calls
+/// this for live revisions; `dispatch_resume` calls it too, since a resume
+/// snapshot carries the same overlay a live revision would — `streaming: None`
+/// makes the output equal to `encode`'s, so a no-overlay resume is unaffected.
 pub fn encode_revision(
     messages: &[DisplayMessage],
     streaming: Option<StreamingLeafKind>,
@@ -177,12 +174,11 @@ fn encode_messages(
         .collect()
 }
 
-/// Encode one top-level container (a single `DisplayMessage`) into its items
-/// — empty for a queued message (todo #376 G2 task 1). `streaming`, when
-/// `Some`, marks whichever leaf accumulator segment is still open at
-/// `finish`, exactly as `encode_content` already does for a whole-snapshot
-/// call; the caller (`encode_containers`) is the one that decides WHICH
-/// container gets a non-`None` value here.
+/// Encode one top-level container (a single `DisplayMessage`) into its items —
+/// empty for a queued message. `streaming`, when `Some`, marks whichever leaf
+/// accumulator segment is still open at `finish`, exactly as `encode_content`
+/// already does for a whole-snapshot call; the caller (`encode_containers`) is
+/// the one that decides WHICH container gets a non-`None` value here.
 pub fn encode_container(
     message: &DisplayMessage,
     streaming: Option<StreamingLeafKind>,
@@ -214,9 +210,8 @@ pub fn encode_container(
 /// Encode every top-level container separately, one item list per input
 /// message, in the same order. `streaming` lands on the last non-queued
 /// container only — the "last non-queued container" rule the chat-side
-/// projector's contract also relies on (todo #376 plan). `encode_messages`
-/// is the flattened form of this, so the full and future incremental paths
-/// share one encoder (G2 task 1).
+/// projector's contract also relies on. `encode_messages` is the flattened form
+/// of this, so the full and incremental paths share one encoder.
 pub fn encode_containers(
     messages: &[DisplayMessage],
     streaming: Option<StreamingLeafKind>,

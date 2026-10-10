@@ -1,7 +1,7 @@
 //! JSON-RPC 2.0 envelope (ACP's transport framing). Method-specific params and
 //! results (`InitializeRequest`, `ToolCallUpdate`, ...) are typed separately in
 //! sibling modules and travel inside `params`/`result` as `serde_json::Value` —
-//! the facade connection (group C, out of this task's scope) dispatches on
+//! the facade connection dispatches on
 //! `method` before typing the payload.
 
 use serde::{Deserialize, Serialize};

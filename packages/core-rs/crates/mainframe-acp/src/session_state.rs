@@ -1,11 +1,9 @@
-//! Per-session diff engine (todo #350, plan task 13): consecutive
-//! [`crate::encoder::EncodedItem`] snapshots diff into chunk appends
-//! (tail-block text growth and appended blocks, spec Decision 22) and
-//! `tool_call_update`-style patches (omit/
-//! null/value/append) — never a full resend of an item's accumulated content
-//! after its first frame (criterion 3). One [`SessionState`] per attached
-//! facade session; `throttle.rs` coalesces its output before it reaches the
-//! wire.
+//! Per-session diff engine: consecutive [`crate::encoder::EncodedItem`]
+//! snapshots diff into chunk appends (tail-block text growth and appended
+//! blocks) and `tool_call_update`-style patches (omit/null/value/append) —
+//! never a full resend of an item's accumulated content after its first frame.
+//! One [`SessionState`] per attached facade session; `throttle.rs` coalesces
+//! its output before it reaches the wire.
 
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
@@ -23,23 +21,22 @@ pub(crate) mod updates;
 use tool_patch::tool_call_patch;
 use updates::{clear_update, create_patch, create_update, message_variant, upsert_variant};
 
-/// Per-item last-known state, so a diff against a fresh [`SessionState`]
-/// (a just-attached or just-resumed session) always creates every item —
-/// matching `session/resume`'s intended "replay from cursor" seam (group E)
-/// without this crate depending on that group's cursor scheme.
+/// Per-item last-known state, so a diff against a fresh [`SessionState`] (a
+/// just-attached or just-resumed session) always creates every item, which is
+/// what a `session/resume` replay relies on.
 ///
-/// `containers` and `seeded` (todo #376 G2 task 3) are the container-delta
-/// half of this state: a per-ordinal list of item ids, kept in sync by
-/// [`containers::apply`] so an incremental [`crate::encoder::delta::EncodedDelta`]
-/// can find exactly which old ids an affected or removed ordinal owned
-/// without scanning every item. `diff` does not maintain this index — it
-/// is the resume-replay path, always starting from a fresh, unseeded state.
+/// `containers` and `seeded` are the container-delta half of this state: a
+/// per-ordinal list of item ids, kept in sync by [`containers::apply`] so an
+/// incremental [`crate::encoder::delta::EncodedDelta`] can find exactly which old
+/// ids an affected or removed ordinal owned without scanning every item. `diff`
+/// does not maintain this index — it is the resume-replay path, always starting
+/// from a fresh, unseeded state.
 ///
-/// `previews` (spec Decision 41) is the set of tool-call ids this
-/// connection holds as result previews: every incoming revision of one of
-/// them is trimmed the same way before it is compared or stored, so a live
-/// full re-encode of a settled container never "restores" a result the
-/// client only has a preview of. Empty for a connection that did not opt in.
+/// `previews` is the set of tool-call ids this connection holds as result
+/// previews: every incoming revision of one of them is trimmed the same way
+/// before it is compared or stored, so a live full re-encode of a settled
+/// container never "restores" a result the client only has a preview of. Empty
+/// for a connection that did not opt in.
 #[derive(Default)]
 pub struct SessionState {
     items: HashMap<String, EncodedItem>,
@@ -70,11 +67,10 @@ impl SessionState {
         }
     }
 
-    /// Cumulative count of items this state has compared against their
-    /// previous value, across every `diff`/`apply` call — the deterministic
-    /// gate an incremental `apply` must not grow past the affected
-    /// containers' item count, no matter how much settled history sits
-    /// outside them (todo #376 G2 task 3).
+    /// Cumulative count of items this state has compared against their previous
+    /// value, across every `diff`/`apply` call — the deterministic gate an
+    /// incremental `apply` must not grow past the affected containers' item
+    /// count, no matter how much settled history sits outside them.
     pub fn items_compared(&self) -> u64 {
         self.items_compared
     }
@@ -125,11 +121,11 @@ impl SessionState {
     }
 }
 
-/// The invariant this function exists to guarantee (criterion 3): once an
-/// item has had its first frame (`create_update`), no later frame for it
-/// carries its full accumulated content again — a pure suffix growth is a
-/// chunk (the delta only), and anything else is an explicit revision, never
-/// a repeat of what the client already has.
+/// The invariant this function exists to guarantee: once an item has had its
+/// first frame (`create_update`), no later frame for it carries its full
+/// accumulated content again — a pure suffix growth is a chunk (the delta
+/// only), and anything else is an explicit revision, never a repeat of what the
+/// client already has.
 fn revise_update(prev: &EncodedItem, new: &EncodedItem) -> Vec<SessionUpdate> {
     match (prev, new) {
         (
@@ -222,8 +218,8 @@ fn content_revision(
             .collect();
     }
     // Not a pure extension (shrank, or diverged mid-list — e.g. a retry
-    // replacing content wholesale, spec decision 10): a full revision, valid
-    // exactly once per divergence, never a repeat of a value already sent.
+    // replacing content wholesale): a full revision, valid exactly once per
+    // divergence, never a repeat of a value already sent.
     vec![upsert_variant(role, is_thought)(MessageUpsert {
         message_id: id.to_string(),
         content: create_patch(Some(new.to_vec())),

@@ -1,4 +1,4 @@
-//! Task 17: importing a selected GitHub issue as a new local task (AC3, AC5).
+//! Importing a selected GitHub issue as a new local task (AC3, AC5).
 //! `import_one`'s errors are plain strings — the caller in `mod.rs` turns
 //! them into a `Skipped` row rather than failing the whole batch.
 

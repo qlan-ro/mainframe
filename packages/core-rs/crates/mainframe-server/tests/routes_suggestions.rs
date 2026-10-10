@@ -1,5 +1,4 @@
-//! Integration tests for `routes/suggestions.rs`, translated from
-//! `server/routes/__tests__/suggestions.test.ts`. Real spawned app + in-memory
+//! Integration tests for `routes/suggestions.rs`. Real spawned app + in-memory
 //! DB + real git repos in a tempdir; ripgrep runs for real (resolved off PATH in
 //! the test environment).
 #![allow(clippy::unwrap_used, clippy::expect_used)]

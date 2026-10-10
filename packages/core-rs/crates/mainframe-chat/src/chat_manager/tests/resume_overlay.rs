@@ -1,4 +1,4 @@
-//! Resume-snapshot/live-revision overlay parity (todo #382): a
+//! Resume-snapshot/live-revision overlay parity: a
 //! `session/resume` snapshot taken mid-stream must carry the exact same
 //! messages and `StreamingLeafKind` a live `DisplayRevision` taken at the
 //! same moment would — see `event_handler::display_projection`, the shared
@@ -9,7 +9,7 @@ use crate::chat_surface::{ChatSurface, ChatSurfaceEvent};
 use mainframe_types::content::LeafContent;
 use mainframe_types::display::{DisplayContent, StreamingLeafKind};
 
-/// Materializes each `DisplayRevision`'s snapshot at receipt (todo #376):
+/// Materializes each `DisplayRevision`'s snapshot at receipt:
 /// the handle is only valid during the synchronous `notify` call that
 /// carries it, so storing the raw event and materializing later would risk
 /// reading a LATER projector state than the one this revision actually
@@ -218,7 +218,7 @@ async fn clear_display_state_leaves_no_overlay_in_the_snapshot() {
     assert!(leaf_texts(&snapshot.messages).is_empty());
 }
 
-/// T13/R3.19: a superseded session's `on_exit` must only clear its OWN
+/// A superseded session's `on_exit` must only clear its OWN
 /// overlay entry — the newer session's overlay must still show up in the
 /// snapshot exactly like it shows up live.
 #[tokio::test]

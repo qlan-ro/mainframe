@@ -1,12 +1,11 @@
-//! One attached (connection, session) pair's outbound stream state (todo
-//! #350, live-wiring pass): the assembly of the diff engine
-//! (`session_state.rs`), the retry marker (spec decision 10), the turn
+//! One attached (connection, session) pair's outbound stream state: the
+//! assembly of the diff engine (`session_state.rs`), the retry marker, the turn
 //! lifecycle's `StateUpdate` frames, and the coalescing throttle
 //! (`throttle.rs`) into a single pure state machine. `mainframe-server`'s
-//! facade hub owns one `SessionStream` per attached session per connection
-//! and forwards whatever these methods return to the socket — everything
-//! order- or content-sensitive is decided here, behind unit tests, not in
-//! the socket shell.
+//! facade hub owns one `SessionStream` per attached session per connection and
+//! forwards whatever these methods return to the socket — everything order- or
+//! content-sensitive is decided here, behind unit tests, not in the socket
+//! shell.
 //!
 //! Lifecycle frames go through the same throttle FIFO as content so an
 //! `Idle` stop can never overtake the final buffered chunks of its own turn.
@@ -50,9 +49,9 @@ impl SessionStream {
     }
 
     /// The tool-call ids the replay that seeds this stream sent as result
-    /// previews (spec Decision 41, `ResumeReplay.preview_ids`) — set before
-    /// seeding, so every later revision of those items is trimmed the same
-    /// way and never restores a result the client only holds a preview of.
+    /// previews (`ResumeReplay.preview_ids`) — set before seeding, so every
+    /// later revision of those items is trimmed the same way and never restores
+    /// a result the client only holds a preview of.
     pub fn set_previews(&mut self, ids: HashSet<String>) {
         self.state.set_previews(ids);
     }
@@ -64,24 +63,23 @@ impl SessionStream {
         let _ = self.state.diff(items);
     }
 
-    /// Like [`Self::seed`], but container-aware (todo #376 G2 task 5) — the
-    /// resume replay's per-container shape (`ResumeReplay.containers`), so
-    /// the next [`Self::on_revision_delta`] can delta against it without
-    /// this stream ever re-flattening settled history itself.
+    /// Like [`Self::seed`], but container-aware — the resume replay's
+    /// per-container shape (`ResumeReplay.containers`), so the next
+    /// [`Self::on_revision_delta`] can delta against it without this stream
+    /// ever re-flattening settled history itself.
     pub fn seed_containers(&mut self, containers: &[Vec<EncodedItem>]) {
         self.state.seed_containers(containers);
     }
 
     /// A display revision for this session: diff, attach any pending retry
-    /// marker, and run the result through the throttle. Returns the frames
-    /// due now; the rest sit buffered until the next revision or
-    /// [`Self::flush`]. `cursor` (todo #377) is the chat's revision-log
-    /// boundary after recording this same revision — `None` for a
-    /// connection that did not opt into revision cursors, or when the
-    /// revision was a no-op the log did not bump; either way, nothing rides
-    /// the FIFO for it. When present, it is pushed after the diff's own
-    /// frames, so receiving it means every frame up to and including it is
-    /// already applied.
+    /// marker, and run the result through the throttle. Returns the frames due
+    /// now; the rest sit buffered until the next revision or [`Self::flush`].
+    /// `cursor` is the chat's revision-log boundary after recording this same
+    /// revision — `None` for a connection that did not opt into revision
+    /// cursors, or when the revision was a no-op the log did not bump; either
+    /// way, nothing rides the FIFO for it. When present, it is pushed after the
+    /// diff's own frames, so receiving it means every frame up to and including
+    /// it is already applied.
     pub fn on_revision(
         &mut self,
         items: &[EncodedItem],
@@ -99,13 +97,13 @@ impl SessionStream {
         due
     }
 
-    /// Like [`Self::on_revision`], but for a container delta (todo #376 G2
-    /// task 5): the hub encodes only the changed containers and passes the
-    /// result here instead of a full flattened snapshot. `full` is the
-    /// lazy fallback `SessionState::apply` needs only for the fresh-attach
-    /// case (an unseeded state given an incremental delta); everything
-    /// else about this method — the retry marker, the throttle FIFO, the
-    /// cursor placement — matches `on_revision` frame for frame.
+    /// Like [`Self::on_revision`], but for a container delta: the hub encodes
+    /// only the changed containers and passes the result here instead of a full
+    /// flattened snapshot. `full` is the lazy fallback `SessionState::apply`
+    /// needs only for the fresh-attach case (an unseeded state given an
+    /// incremental delta); everything else about this method — the retry
+    /// marker, the throttle FIFO, the cursor placement — matches `on_revision`
+    /// frame for frame.
     pub fn on_revision_delta(
         &mut self,
         delta: &EncodedDelta,
@@ -155,11 +153,11 @@ impl SessionStream {
             .push(now_ms, SessionUpdate::UsageUpdate(usage))
     }
 
-    /// Feed a raw out-of-band notification (a gate raise, a queue snapshot,
-    /// a transcript clear, a compaction phase) into the SAME FIFO content
-    /// updates sit in, so it cannot arrive on the wire ahead of a still-
-    /// buffered update it depends on (R2.11) — e.g. a gate for a tool call
-    /// whose creation frame has not flushed yet.
+    /// Feed a raw out-of-band notification (a gate raise, a queue snapshot, a
+    /// transcript clear, a compaction phase) into the SAME FIFO content updates
+    /// sit in, so it cannot arrive on the wire ahead of a still-buffered update
+    /// it depends on — e.g. a gate for a tool call whose creation frame has not
+    /// flushed yet.
     pub fn push_raw(&mut self, frame_json: String, now_ms: i64) -> Vec<ThrottledFrame> {
         self.throttle.push_raw(now_ms, frame_json)
     }
@@ -177,17 +175,16 @@ impl SessionStream {
         due
     }
 
-    /// Merge the pending marker into the first content-carrying message
-    /// upsert of this batch (T16, R1.4). Narrower than "any upsert with a
-    /// meta slot": a `ToolCallUpdate` patch is never a carrier — a tool call
-    /// already in flight when `api_error` fired would otherwise claim the
-    /// marker ahead of the retry's own content, the "later unrelated one"
-    /// bug this closes. Nor is any empty-content upsert: the clearing frame
-    /// `session_state.rs::clear_update` emits is deleted by the client on
+    /// Merge the pending marker into the first content-carrying message upsert
+    /// of this batch. Narrower than "any upsert with a meta slot": a
+    /// `ToolCallUpdate` patch is never a carrier — a tool call already in
+    /// flight when `api_error` fired would otherwise claim the marker ahead of
+    /// the retry's own content. Nor is any empty-content upsert: the clearing
+    /// frame `session_state.rs::clear_update` emits is deleted by the client on
     /// receipt, and the one other empty-content shape — a pill whose whole
-    /// payload is its meta — is no place for a retry marker either. Chunks
-    /// are pure appends and never carry it. If the batch has
-    /// no carrier the marker stays pending for the next one.
+    /// payload is its meta — is no place for a retry marker either. Chunks are
+    /// pure appends and never carry it. If the batch has no carrier the marker
+    /// stays pending for the next one.
     fn attach_retry_marker(&mut self, updates: &mut [SessionUpdate]) {
         let Some(slot) = updates.iter_mut().find_map(retry_marker_carrier) else {
             return;
@@ -230,11 +227,11 @@ fn is_empty_content_clear(
     matches!(content, Some(Some(blocks)) if blocks.is_empty())
 }
 
-/// Merge `value`'s keys into `_meta["_mainframe.dev"]` on top of whatever
-/// the frame already carries — the encoder's parent relation and the retry
-/// marker share the namespace object, so a marker must extend it, never
-/// replace it. `pub(crate)`: `session_state/updates.rs::create_update`
-/// reuses it to merge in the creation marker (spec Decision 37).
+/// Merge `value`'s keys into `_meta["_mainframe.dev"]` on top of whatever the
+/// frame already carries — the encoder's parent relation and the retry marker
+/// share the namespace object, so a marker must extend it, never replace it.
+/// `pub(crate)`: `session_state/updates.rs::create_update` reuses it to merge
+/// in the creation marker.
 pub(crate) fn merge_namespace(existing: Option<Value>, value: Value) -> Value {
     let mut map = match existing {
         Some(Value::Object(map)) => map,

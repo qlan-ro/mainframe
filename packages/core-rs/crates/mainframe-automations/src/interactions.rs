@@ -1,8 +1,8 @@
-//! Form pause/respond (T5.1, Node verbs/ask-me.ts): the ask_me verb creates
-//! a pending interaction and parks; `InteractionService::respond` validates,
-//! claims `pending→answered` + writes the answers into the checkpoint in ONE
-//! transaction (`InteractionStore::resolve_interaction`, contract §3), then
-//! advances. No timeouts — interactions never expire (contract §9).
+//! Form pause/respond: the ask_me verb creates a pending interaction and parks;
+//! `InteractionService::respond` validates, claims `pending→answered` + writes
+//! the answers into the checkpoint in ONE transaction
+//! (`InteractionStore::resolve_interaction`, contract §3), then advances. No
+//! timeouts — interactions never expire (contract §9).
 
 use std::sync::Arc;
 
@@ -31,7 +31,7 @@ pub enum InteractionError {
     AlreadyAnswered,
     #[error("interaction already cancelled")]
     AlreadyCancelled,
-    /// Field-level validation errors, joined for the wire like Node's
+    /// Field-level validation errors, joined with `; ` for the wire as
     /// `invalid response: ...`.
     #[error("invalid response: {}", errors.join("; "))]
     Invalid { errors: Vec<String> },
@@ -148,7 +148,7 @@ impl AskMeVerb {
         }
     }
 
-    /// Best-effort attention ping (T5.1): automation name as title, the form
+    /// Best-effort attention ping: automation name as title, the form
     /// title as body. Never fails the pause.
     async fn send_notification(&self, run_id: &str, form_title: &str) {
         let run = match self.runs.get_run(run_id).await {
@@ -243,9 +243,3 @@ fn failed(err: StoreError) -> StepOutcome {
         error: err.to_string(),
     }
 }
-
-// PORT STATUS: packages/core/src/automations/verbs/ask-me.ts (139 lines)
-// confidence: high
-// todos: 0
-// notes: Rust adds the T5.1 Notifier ping on pause (plan-mandated; Node has
-//        no interaction push) and stamps interactionId on the entry.

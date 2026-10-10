@@ -1,5 +1,5 @@
-//! Moved out of `event_mapper.rs` (task 1, todo #247) to keep that file under
-//! the 300-line ceiling. `ParentIdSink`, unchanged.
+//! `ParentIdSink`, kept apart from `event_mapper.rs` to keep that file under
+//! the 300-line ceiling.
 
 use std::sync::Arc;
 
@@ -10,9 +10,9 @@ use mainframe_types::chat::{MessageContent, TodoItem};
 use crate::history::with_parent;
 use mainframe_types::transcript_presentation::{PresentationUpdate, TranscriptPresentation};
 
-/// Wraps a sink to tag every emitted block with `parentToolUseId` (mirrors the TS
-/// `wrapSinkWithParentId`). Only `on_message`/`on_tool_result` are transformed;
-/// every other callback delegates unchanged.
+/// Wraps a sink to tag every emitted block with `parentToolUseId`. Only
+/// `on_message`/`on_tool_result` are transformed; every other callback delegates
+/// unchanged.
 pub(crate) struct ParentIdSink {
     inner: Arc<dyn SessionSink>,
     parent: String,

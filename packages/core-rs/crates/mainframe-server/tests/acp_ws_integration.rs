@@ -1,8 +1,8 @@
-//! `/acp/{adapter-profile}` integration tests (todo #350, plan tasks 8-9):
-//! auth parity with `/`, profile validation, the `initialize` handshake's
-//! both branches (criterion 1: supported version succeeds, unsupported gets a
-//! structured error with the connection still open), the heartbeat cadence,
-//! and the facade connection registry (criterion 11's daemon half).
+//! `/acp/{adapter-profile}` integration tests: auth parity with `/`, profile
+//! validation, the `initialize` handshake's both branches (supported version
+//! succeeds, unsupported gets a structured error with the connection still
+//! open), the heartbeat cadence, and the daemon side of the facade connection
+//! registry.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod support;
@@ -35,7 +35,7 @@ fn initialize_request(id: i64, protocol_version: i64) -> serde_json::Value {
 }
 
 /// Connect and negotiate, draining the `initialize` reply — every method but
-/// `initialize` itself is refused before this (R3.21).
+/// `initialize` itself is refused before this.
 async fn connect_initialized(server: &TestServer, path: &str) -> WsClient {
     let mut ws = WsClient::connect(server.addr, path, None).await.unwrap();
     ws.send_json(&initialize_request(0, 2)).await;
@@ -210,7 +210,7 @@ async fn session_resume_reaches_the_resume_port() {
     );
 
     // The replay always ends with the turn state (idle: no ChatManager to
-    // report running) before the queue snapshot (plan task 2).
+    // report running) before the queue snapshot.
     let state_update = ws.read_event().await;
     assert_eq!(state_update["method"], json!("session/update"));
     assert_eq!(
@@ -226,8 +226,8 @@ async fn session_resume_reaches_the_resume_port() {
     assert_eq!(queue_state["params"]["sessionId"], json!("no-such-chat"));
     assert_eq!(queue_state["params"]["refs"], json!([]));
 
-    // `_mainframe.dev/replay_complete` closes the replay (spec Decision 38),
-    // after `queue_state` and before any buffered catch-up (none here).
+    // `_mainframe.dev/replay_complete` closes the replay, after `queue_state`
+    // and before any buffered catch-up (none here).
     let marker = ws.read_event().await;
     assert_eq!(marker["method"], json!("_mainframe.dev/replay_complete"));
     assert_eq!(marker["params"]["sessionId"], json!("no-such-chat"));

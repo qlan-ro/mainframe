@@ -1,7 +1,5 @@
-//! Ported from `packages/core/src/plugins/builtin/codex/types.ts`.
-//!
 //! JSON-RPC 2.0 framing + Codex app-server protocol serde types. INTERNAL to this
-//! crate (crate-map §2.8): they deserialize from / serialize to the Codex
+//! crate: they deserialize from / serialize to the Codex
 //! app-server, NOT the daemon wire, so field casing tracks Codex exactly (mostly
 //! camelCase; `CollaborationModeSettings` fields are snake_case as Codex emits
 //! them). Unknown inbound fields are tolerated (serde ignores them).
@@ -57,8 +55,8 @@ pub struct InitializeResult {
 pub struct ThreadRef {
     pub id: String,
     /// Present only on a `thread/fork` response — "Source thread id when this
-    /// thread was created by forking another thread" (todo #368, established
-    /// fact: `ThreadForkResponse.json`, `definitions.Thread.forkedFromId`).
+    /// thread was created by forking another thread"
+    /// (`ThreadForkResponse.json`, `definitions.Thread.forkedFromId`).
     /// `#[serde(default)]` so `thread/start`/`thread/resume` (which never send
     /// this key) still deserialize.
     #[serde(default, rename = "forkedFromId")]

@@ -1,12 +1,10 @@
-//! Ported from `src/server/suggestions/build-suggestions.ts`.
-
 use std::collections::HashMap;
 
 use mainframe_types::suggestion::{Suggestion, SuggestionTint};
 
 const MAX_SUGGESTIONS: usize = 3;
 
-/// Cheap git signals gathered by the route (`gatherChurn` in the TS source).
+/// Cheap git signals gathered by the route.
 pub struct ChurnInput {
     pub branch: Option<String>,
     pub base_branch: Option<String>,
@@ -78,8 +76,8 @@ pub(crate) fn build_todo_suggestions(matches: &[String]) -> Vec<Suggestion> {
     }
 
     let mut counts: HashMap<&str, i64> = HashMap::new();
-    // Insertion order matters for a stable "largest area" tie-break (mirrors the
-    // TS `Map` iteration order — first-seen area wins ties).
+    // Insertion order matters for a stable "largest area" tie-break: the
+    // first-seen area wins ties.
     let mut order: Vec<&str> = Vec::new();
     for m in matches {
         let area = top_area(m);
@@ -282,12 +280,3 @@ mod tests {
         assert_eq!(titles, vec!["c1", "c2", "t1"]);
     }
 }
-
-// PORT STATUS: src/server/suggestions/build-suggestions.ts (91 lines)
-// confidence: high
-// todos: 0
-// notes: Pure port — `buildChurnSuggestions`/`buildTodoSuggestions`/
-// `mergeSuggestions` translated 1:1, all 12 vitest assertions carried over as
-// hardcoded-literal `#[test]`s. `Map` iteration order (insertion order, first
-// area wins ties) reproduced via a parallel `order: Vec<&str>` alongside the
-// `HashMap` count table, since `HashMap` itself has no stable order.

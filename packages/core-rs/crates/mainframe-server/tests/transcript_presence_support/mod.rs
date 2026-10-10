@@ -1,6 +1,6 @@
-//! Shared harness for #289's wiring-level transcript-presence tests. Drives
-//! the production stack through `build_chat_manager` (see
-//! `chat_background_activity.rs`, #273's structural template) rather than a
+//! Shared harness for the wiring-level transcript-presence tests. Drives the
+//! production stack through `build_chat_manager` (see
+//! `chat_background_activity.rs`, the structural template) rather than a
 //! hand-built `ChatManagerDeps` fake.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 

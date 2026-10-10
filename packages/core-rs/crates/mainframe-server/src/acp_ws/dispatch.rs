@@ -1,10 +1,10 @@
-//! Inbound frame routing for one facade connection (todo #350, live-wiring
-//! pass). Classifies each WS text frame once (`rpc::parse_frame`) and peels
-//! off the two stateful flows — `session/resume` (reply + replay + stream
-//! seed, ordered atomically through the hub) and gate-answer responses —
-//! before falling through to the pure `mainframe_acp::dispatch_with_prompt`
-//! dispatcher for `initialize`, `session/prompt`, `session/cancel`, and the
-//! unknown-method/malformed-frame errors.
+//! Inbound frame routing for one facade connection. Classifies each WS text
+//! frame once (`rpc::parse_frame`) and peels off the two stateful flows —
+//! `session/resume` (reply + replay + stream seed, ordered atomically through
+//! the hub) and gate-answer responses — before falling through to the pure
+//! `mainframe_acp::dispatch_with_prompt` dispatcher for `initialize`,
+//! `session/prompt`, `session/cancel`, and the unknown-method/malformed-frame
+//! errors.
 
 use std::sync::Arc;
 
@@ -26,14 +26,13 @@ use gate_answers::handle_gate_answer;
 use resume::start_resume;
 
 /// Handle one inbound text frame. `Some` is a reply the socket loop writes
-/// directly, covering every arm except `session/resume` (pushes its own
-/// reply through the connection channel so the replay updates cannot
-/// overtake it) and the two session methods that run off the loop —
-/// `session/prompt` and `session/cancel` (T10, and the ordering below: a
-/// prompt's reply goes through the connection channel and may trail frames
-/// its own request caused; `sendPrompt` on the client only reads
-/// `_meta.position` from it, and run state comes from the reducer, not reply
-/// ordering).
+/// directly, covering every arm except `session/resume` (pushes its own reply
+/// through the connection channel so the replay updates cannot overtake it) and
+/// the two session methods that run off the loop — `session/prompt` and
+/// `session/cancel` (on ordering: a prompt's reply goes through the connection
+/// channel and may trail frames its own request caused; `sendPrompt` on the
+/// client only reads `_meta.position` from it, and run state comes from the
+/// reducer, not reply ordering).
 pub async fn handle_inbound(
     text: &str,
     daemon: &DaemonInfo,
@@ -95,10 +94,10 @@ pub async fn handle_inbound(
 }
 
 /// `session/prompt` and `session/cancel`: attach-on-send stays inline, ahead
-/// of the spawn — T35 pins this ordering (a connection observes the session
-/// from the moment it sends, not from whenever the spawned task gets
-/// scheduled) — but behind the negotiation gate, so a peer whose call is
-/// about to be refused never gets a stream (spec decision 32).
+/// of the spawn so a connection observes the session from the moment it
+/// sends, not from whenever the spawned task gets scheduled — but behind the
+/// negotiation gate, so a peer whose call is about to be refused never gets a
+/// stream.
 fn handle_session_method(
     frame: InboundFrame,
     session_id: Option<String>,
@@ -121,14 +120,14 @@ fn handle_session_method(
     );
 }
 
-/// What is left once `session/resume`, a gate answer, `session_detach`, and
-/// the two spawned session methods are peeled off: `initialize` and the
+/// What is left once `session/resume`, a gate answer, `session_detach`, and the
+/// two spawned session methods are peeled off: `initialize` and the
 /// malformed/unknown-method errors. None of them touch a session, so all of
-/// them stay inline; a successful `initialize` marks the connection
-/// negotiated, and — todo #377 — also opted into revision cursors when its
-/// params said so. Read from the still-owned `frame` before it moves into
-/// `dispatch_with_prompt`, which only reports whether the handshake
-/// completed, not what the client asked for inside it.
+/// them stay inline; a successful `initialize` marks the connection negotiated,
+/// and also opted into revision cursors when its params said so. Read from the
+/// still-owned `frame` before it moves into `dispatch_with_prompt`, which only
+/// reports whether the handshake completed, not what the client asked for
+/// inside it.
 async fn dispatch_fallback(
     frame: InboundFrame,
     daemon: &DaemonInfo,
@@ -167,7 +166,7 @@ fn initialize_params(frame: &InboundFrame) -> Option<&serde_json::Value> {
     }
 }
 
-/// The session methods run off the socket-loop task (R3.6, plan decision 5):
+/// The session methods run off the socket-loop task:
 /// a cold-chat start's adapter spawn can take seconds, and inlining it would
 /// stall every other frame on this connection — heartbeats, a call for a
 /// different chat, another chat's `session/update`.
@@ -235,7 +234,7 @@ pub(super) fn params_session_id(params: Option<&serde_json::Value>) -> Option<St
         .map(str::to_string)
 }
 
-/// `_mainframe.dev/session_detach` (D2): drop this connection's stream state
+/// `_mainframe.dev/session_detach`: drop this connection's stream state
 /// and pending gates for the session, the same teardown `ChatEnded` already
 /// does — a malformed or missing `sessionId` is silently ignored, matching
 /// every other extension notification's tolerance for a stale client.

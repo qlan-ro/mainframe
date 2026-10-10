@@ -20,9 +20,9 @@ use mainframe_types::context::SkillFileEntry;
 
 use super::*;
 
-// T18, R3.20's probe tests (a_failed_probe_logs_its_downgrade,
+// The probe tests (a_failed_probe_logs_its_downgrade,
 // concurrent_callers_for_the_same_executable_share_one_probe) live in the
-// sibling `probe_tests.rs` (todo #350, plan task 37).
+// sibling `probe_tests.rs`.
 
 #[derive(Default)]
 struct PartialRec {

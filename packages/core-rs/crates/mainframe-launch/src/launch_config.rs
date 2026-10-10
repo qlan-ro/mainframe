@@ -1,11 +1,8 @@
-//! Ported from `src/launch/launch-config.ts`.
-//!
-//! Variable-expansion + validation for a raw `launch.json`. The TS uses a Zod
-//! schema; there is no allowlisted schema crate, so the same rules are checked
-//! by hand and the custom `message` strings are reproduced verbatim. Structural
-//! type errors are collected and joined with `, ` (mirroring
-//! `error.issues.map(i => i.message).join(', ')`). Validation runs on the
-//! already-expanded value, so an unresolved-variable error surfaces first.
+//! Variable-expansion + validation for a raw `launch.json`. There is no
+//! allowlisted schema crate, so the rules are checked by hand with fixed
+//! `message` strings. Structural type errors are collected and joined with
+//! `, `. Validation runs on the already-expanded value, so an
+//! unresolved-variable error surfaces first.
 
 use std::collections::HashMap;
 
@@ -73,7 +70,7 @@ pub fn parse_launch_config(
 }
 
 // Allowed executables: common package managers + node. No shell operators.
-// Mirrors `SAFE_EXECUTABLE` in launch-config.ts — the trailing alternative
+// The trailing alternative
 // `[a-zA-Z0-9_\-./]+` makes any operator-free path acceptable, so the guard is
 // really "no `;`, `|`, or `&`, and only path-safe characters".
 fn is_safe_executable(value: &str) -> bool {
@@ -187,8 +184,8 @@ fn parse_configuration(item: &Value) -> Result<LaunchConfiguration, Vec<String>>
     }
 }
 
-/// `z.union([number, string, null]).default(null)` + transform. A JSON number
-/// passes through unchecked (the TS number branch never validates positivity);
+/// A number, string, or null (default null). A JSON number passes through
+/// unchecked (its positivity is never validated);
 /// a string is `parseInt`-ed and must be a positive integer; `null`/absent → None.
 fn parse_port(value: Option<&Value>) -> Result<Option<i64>, String> {
     const MESSAGE: &str = "port must be a positive integer or null";
@@ -247,9 +244,9 @@ fn parse_url_field(value: Option<&Value>) -> Result<Option<String>, String> {
     }
 }
 
-// TODO(port): Zod's `.url()` is stricter than this shape check (it rejects
-// spaces, bare hosts, missing authority, etc.); no test exercises URL rejection,
-// so a permissive `scheme://non-empty` gate is used until a URL parser lands.
+// TODO: this shape check is permissive (`scheme://non-empty`, no whitespace); a
+// real URL parser would also reject bare hosts, missing authority, etc. No test
+// exercises URL rejection yet.
 fn looks_like_url(value: &str) -> bool {
     if let Some(idx) = value.find("://") {
         idx > 0 && value.len() > idx + 3 && !value.chars().any(char::is_whitespace)
@@ -471,15 +468,3 @@ mod tests {
         assert!(err.contains("At least one configuration is required"));
     }
 }
-
-// PORT STATUS: src/launch/launch-config.ts (65 lines)
-// confidence: medium
-// todos: 1
-// notes: Zod schema → hand validation; custom `message` strings reproduced
-// verbatim (safe-executable, positive-port, preview cap, min-1 configs, env-key).
-// Structural/type-error messages are best-effort (not asserted by any test).
-// Port transform keeps the TS asymmetry: a JSON number passes through
-// unvalidated; only string ports run parseInt + positive check. TODO(port):
-// url() strictness — a permissive scheme://host shape stands in for Zod's URL
-// validator (no test rejects a URL). All 6 launch-config.test.ts cases + 3 added
-// guard cases pass.

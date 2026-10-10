@@ -1,9 +1,6 @@
-//! Ported from `packages/core/src/messages/display-helpers.ts`.
-//!
-//! CRATE-SPLIT NOTE (PORTING §2.5 amendment): this file imports the Claude-
-//! specific message parsers (`message_parsing`, `parse_ask_user_question`) and the
-//! Claude `GroupedMessage`, so — per the "references Claude shapes → adapter-claude"
-//! test — it was REASSIGNED from `mainframe-display` to this crate together with
+//! This file imports the Claude-specific message parsers (`message_parsing`,
+//! `parse_ask_user_question`) and the Claude `GroupedMessage`, so it lives in
+//! this crate rather than `mainframe-display`, together with
 //! `display_pipeline`. The adapter-agnostic grouping primitives it calls
 //! (`group_tool_call_parts`, `group_task_children`, `truncate_tool_content`) stay in
 //! `mainframe-display`, which this crate depends on.
@@ -149,7 +146,7 @@ pub(crate) fn to_tool_call_result(
         } else {
             None
         },
-        // Never truncated (todo #363) — copied verbatim from the transcript node.
+        // Never truncated — copied verbatim from the transcript node.
         images: images.clone(),
     })
 }

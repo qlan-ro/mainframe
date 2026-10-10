@@ -30,7 +30,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
             self.emit_display();
             // A queued prompt's `TurnAccepted` (send_entry.rs) is not
             // `TurnStarted` until the CLI actually dequeues it — this is that
-            // signal (plan task 10's queued-turn start point).
+            // signal ( queued-turn start point).
             self.notify_surface(ChatSurfaceEvent::TurnStarted {
                 chat_id: self.chat_id.clone(),
             });

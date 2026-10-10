@@ -1,9 +1,9 @@
-//! The container-delta half of [`RevisionLog`] (todo #376 G2 task 4):
-//! `seed_containers` and `record_delta` mirror `session_state/containers.rs`
-//! exactly, over this log's `(revision, EncodedItem)` records instead of
-//! bare items. The outcomes, revision stamps, and tombstones `record_delta`
-//! produces for an equivalent sequence of snapshots must match `record`'s —
-//! only the work to reach them differs.
+//! The container-delta half of [`RevisionLog`]: `seed_containers` and
+//! `record_delta` mirror `session_state/containers.rs` exactly, over this log's
+//! `(revision, EncodedItem)` records instead of bare items. The outcomes,
+//! revision stamps, and tombstones `record_delta` produces for an equivalent
+//! sequence of snapshots must match `record`'s — only the work to reach them
+//! differs.
 
 use std::collections::HashSet;
 

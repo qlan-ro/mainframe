@@ -17,7 +17,7 @@ pub type PermissionOptionId = String;
 
 /// Closed enum on purpose: the daemon only ever *serializes* kinds (it is
 /// the option producer). The TS client boundary is deliberately tolerant of
-/// kinds outside this set (spec decision 25) so a version-skewed daemon
+/// kinds outside this set so a version-skewed daemon
 /// cannot wedge a turn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -52,7 +52,7 @@ pub struct ToolCallPermissionSubject {
 /// scoped to the `tool_call` variant — `command` (a bare-shell-command
 /// subject with no associated tool call) has no producer here: every
 /// Mainframe gate originates from an adapter `ControlRequest` bound to a
-/// tool use (spec Decision 18).
+/// tool use.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum RequestPermissionSubject {

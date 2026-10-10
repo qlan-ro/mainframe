@@ -1,6 +1,5 @@
-//! Interactions, action catalog, credentials (Node
-//! routes/automation-admin.ts). Credential GETs never return secret
-//! material; the `^[a-zA-Z0-9_-]+$` label rule keeps the reserved
+//! Interactions, action catalog, credentials. Credential GETs never return
+//! secret material; the `^[a-zA-Z0-9_-]+$` label rule keeps the reserved
 //! `webhook:<hookId>` labels out of user-facing CRUD (no colon) — those are
 //! provisioned and revealed by the webhook register route instead.
 
@@ -69,7 +68,7 @@ async fn respond(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>, body: B
         Err(err @ (InteractionError::AlreadyAnswered | InteractionError::AlreadyCancelled)) => {
             fail(StatusCode::CONFLICT, err.to_string())
         }
-        // Field-level validation + store errors → 400 (Node's catch-all).
+        // Field-level validation + store errors → 400 (the catch-all).
         Err(err) => fail(StatusCode::BAD_REQUEST, err.to_string()),
     }
 }
@@ -171,8 +170,3 @@ pub fn router() -> Router<Arc<AppCtx>> {
 
 #[cfg(test)]
 mod automation_admin_tests;
-
-// PORT STATUS: src/server/routes/automation-admin.ts (7 endpoints, 128 lines)
-// confidence: high
-// todos: 0
-// notes: —

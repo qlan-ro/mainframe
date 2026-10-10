@@ -1,7 +1,7 @@
-//! Dataset-level tests: the decision 22 regression pin, plus the evidence
+//! Dataset-level tests: the worktree-checkout regression pin, plus the evidence
 //! helpers shared across categories.
 //!
-//! Decision 22: a worktree checkout gets no remote-derived recommendations.
+//! A worktree checkout gets no remote-derived recommendations.
 //!
 //! The enforcement lives one layer down — `detect_git_host` returns `None` when
 //! `.git` is a `gitdir:` pointer file rather than a directory — so the affected
@@ -14,8 +14,8 @@ use mainframe_types::setup_advisor::{GitHost, ProjectFingerprint};
 use super::{all, large_project_evidence};
 use crate::setup_advisor::recommend::recommend;
 
-/// T17: blind characterization of the shipped dataset, derived from the spec
-/// and the command-provenance table rather than these rule files.
+/// Blind characterization of the shipped dataset, derived from the spec and
+/// the command-provenance table rather than these rule files.
 mod dataset_ac;
 /// Every rule's own firing signal, one case each.
 mod firing;

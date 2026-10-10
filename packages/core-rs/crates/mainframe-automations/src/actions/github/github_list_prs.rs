@@ -143,9 +143,3 @@ impl Action for GithubListPrsAction {
         })
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T7.1;
-// REST migration off `gh` is the 2026-08-19 provider-connections plan), not a TS port
-// confidence: high
-// todos: 0
-// notes: split out of github.rs to stay under the 300-line file cap.

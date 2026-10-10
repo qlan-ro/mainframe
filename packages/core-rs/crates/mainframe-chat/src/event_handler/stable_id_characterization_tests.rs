@@ -1,16 +1,6 @@
-//! Task 4 (group B, todo #350 stable-ids): characterizes today's id sources
-//! before the retrofit. Established facts 2/3 — live mints a fresh nanoid per
-//! call (`create_transient_message`), history derives from the transcript
-//! `uuid` (`id_or_nanoid`) — so live and replayed ids disagree. This file pins
-//! the live half in-crate (the history half lives in
-//! `mainframe-adapter-claude::history_converters`, which this crate cannot
-//! depend on — fact 9); task 6 adds the cross-path equality test once both
-//! halves derive ids the same way.
-//!
-//! Task 5 landed `MessageMetadata::vendor_id` / `on_tool_result`'s vendor-id
-//! parameter (this crate's half of the retrofit): the no-vendor-id fallback
-//! below is unchanged (still nanoid, still fresh per call), and a new test
-//! pins the added invariant — same vendor id in, same `ChatMessage.id` out.
+//! Checks live message ids. Without a vendor id, each call mints a fresh
+//! nanoid. With a vendor id, `MessageMetadata` and `on_tool_result` retain it
+//! as `ChatMessage.id`, including for compaction markers.
 
 use super::*;
 use crate::test_support::test_chat;
@@ -155,13 +145,8 @@ fn message_ids(messages: &Arc<Mutex<MessageCache>>) -> Vec<String> {
         .collect()
 }
 
-/// Fact 2: `create_transient_message` mints a fresh nanoid on every call — the
-/// live path has no notion of a vendor-supplied id yet, so two calls with
-/// byte-identical content never collapse to the same id. Task 5 threads a
-/// vendor id through `MessageMetadata`; once two calls carrying the *same*
-/// vendor id produce the *same* `ChatMessage.id`, this assertion goes false
-/// and must be rewritten to state the new invariant (same vendor id → same
-/// id; absent vendor id → nanoid fallback, still fresh).
+/// Without a vendor id, `create_transient_message` mints a fresh nanoid on
+/// every call, even when the content is identical.
 #[test]
 fn live_path_mints_a_fresh_id_per_call_regardless_of_identical_content() {
     let deps = ShapeDeps::new();
@@ -178,7 +163,7 @@ fn live_path_mints_a_fresh_id_per_call_regardless_of_identical_content() {
     );
 }
 
-/// Criterion 12's unit-level tripwire (plan decision 5): pins the cached
+/// Criterion 12's unit-level tripwire: pins the cached
 /// `ChatMessage` shape for an assistant tool_use and its tool_result so the
 /// id-derivation work cannot silently touch anything else. `ChatMessage` is
 /// destructured exhaustively (no `..`) so an added/removed/renamed field
@@ -231,9 +216,8 @@ fn cached_message_shape_is_pinned_for_tool_use_and_tool_result() {
     assert_eq!(metadata, &None);
 }
 
-/// Task 5: a vendor id threaded through `MessageMetadata`/`on_tool_result`
-/// becomes the `ChatMessage.id` verbatim — the invariant that falsifies this
-/// file's first (pre-task-5) assertion once an adapter actually supplies one.
+/// A vendor id threaded through `MessageMetadata`/`on_tool_result`
+/// becomes the `ChatMessage.id` verbatim.
 #[test]
 fn a_shared_vendor_id_produces_the_same_message_id_on_message_and_on_tool_result() {
     let deps = ShapeDeps::new();
@@ -251,10 +235,9 @@ fn a_shared_vendor_id_produces_the_same_message_id_on_message_and_on_tool_result
     );
 }
 
-/// T15, R3.14: the compaction pill's live id must match what history
+/// The compaction pill's live id must match what history
 /// reconstruction would assign it — the transcript entry's own vendor id,
-/// not a minted nanoid, so live and reload agree (fact 2's disagreement,
-/// closed for this item kind).
+/// not a minted nanoid, so live and reload agree.
 #[test]
 fn compaction_pill_id_matches_history() {
     let deps = ShapeDeps::new();

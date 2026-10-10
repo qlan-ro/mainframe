@@ -1,6 +1,6 @@
-//! files.append / files.write / files.read (T6.4, Node actions/files.ts).
-//! Contract §5: append/write have no outputs; read exposes `content` only
-//! (text, or trimmed non-empty lines with `outputAs: "lines"`).
+//! files.append / files.write / files.read. Contract §5: append/write have no
+//! outputs; read exposes `content` only (text, or trimmed non-empty lines with
+//! `outputAs: "lines"`).
 
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -65,8 +65,8 @@ impl Action for FilesAppendAction {
 
 impl Action for FilesWriteAction {
     fn manifest(&self) -> ActionManifest {
-        // Truncating write is restart-safe (Node ships idempotent: true) —
-        // blindly re-running converges on the same file body.
+        // Truncating write is restart-safe (idempotent: true) — blindly
+        // re-running converges on the same file body.
         write_manifest("files.write", "Write file (overwrite)", true)
     }
 
@@ -183,10 +183,3 @@ fn write_manifest(id: &'static str, title: &'static str, idempotent: bool) -> Ac
         idempotent,
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T6.4), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node actions/files.ts; files.write idempotent:true follows
-//        the shipped Node engine (plan text said false — cross-engine
-//        restart-policy parity wins, and a truncating write IS safe).

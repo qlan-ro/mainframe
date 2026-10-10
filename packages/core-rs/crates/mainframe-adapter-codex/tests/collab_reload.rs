@@ -1,5 +1,5 @@
-//! Todo #247 — reload-path counterpart to `tests/collab_delegation.rs` (spec
-//! criterion 17). Replays the same captured Codex 0.144.3 notification stream,
+//! Reload-path counterpart to `tests/collab_delegation.rs`. Replays the
+//! same captured Codex 0.144.3 notification stream,
 //! but through `convert_thread_items` (the `thread/read` reload path) instead
 //! of `handle_notification` (the live path), and asserts the reload produces
 //! the same card shape the live replay does.

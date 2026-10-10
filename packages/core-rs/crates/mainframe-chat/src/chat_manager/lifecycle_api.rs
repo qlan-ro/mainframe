@@ -44,13 +44,12 @@ impl ChatManager {
     }
 
     /// A chat left on screen through an idle offload keeps its facade session
-    /// (`idle_offload.rs` deliberately emits no `ChatEnded`), so a reload
-    /// here — or via `start_chat`'s own internal `load_chat` call on a
-    /// resumed send — rebuilds the cache under the transcript's own ids,
-    /// different from the ids that session cached live for the same items
-    /// (todo #178, AC6/AC9). `ChatLifecycleManager::do_load_chat` notifies
-    /// `Resync` itself when it actually reloads, so BOTH paths cover it —
-    /// see the module note there.
+    /// (`idle_offload.rs` deliberately emits no `ChatEnded`), so a reload here
+    /// — or via `start_chat`'s own internal `load_chat` call on a resumed send
+    /// — rebuilds the cache under the transcript's own ids, different from the
+    /// ids that session cached live for the same items.
+    /// `ChatLifecycleManager::do_load_chat` notifies `Resync` itself when it
+    /// actually reloads, so BOTH paths cover it — see the module note there.
     pub async fn load_chat(&self, chat_id: &str) {
         self.lifecycle.load_chat(chat_id).await;
     }
@@ -74,10 +73,10 @@ impl ChatManager {
         self.lifecycle.orchestration().attach(hooks);
     }
 
-    /// Rule 6: a chat's side chat (if any) is discarded before the lifecycle
-    /// archive runs — the worktree removal `delete_worktree` may trigger
-    /// happens there, and discarding first keeps the side chat from
-    /// referencing a worktree the archive is about to remove.
+    /// A chat's side chat (if any) is discarded before the lifecycle archive
+    /// runs — the worktree removal `delete_worktree` may trigger happens there,
+    /// and discarding first keeps the side chat from referencing a worktree the
+    /// archive is about to remove.
     pub async fn archive_chat(&self, chat_id: &str, delete_worktree: bool) {
         self.lifecycle.orchestration().stopping(chat_id).await;
         if let Some(chat) = self.deps.chats_get(chat_id)

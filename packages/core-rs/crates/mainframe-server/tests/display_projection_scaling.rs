@@ -1,4 +1,4 @@
-//! Scaling gate (todo #376 G4 task 2). Drives the real chat-side projection
+//! Scaling gate. Drives the real chat-side projection
 //! (`IncrementalProjector` via `MessageCache::project_display`) into the
 //! hub-side encode/record pipeline — `encode_container` per changed
 //! ordinal, `SessionState::apply`, `RevisionLog::record_delta` — the same
@@ -93,9 +93,8 @@ fn make_projector() -> Box<dyn DisplayProjector> {
     Box::new(mainframe_adapter_claude::messages::incremental::IncrementalProjector::new())
 }
 
-/// `handle_display_revision`'s "encode only `delta.changes`" conversion
-/// (todo #376 G4), duplicated here (see module doc) — `streaming` lands on
-/// ordinal `len - 1`.
+/// `handle_display_revision`'s "encode only `delta.changes`" conversion,
+/// duplicated here (see module doc) — `streaming` lands on ordinal `len - 1`.
 fn encode_changes(delta: &DisplayDelta, streaming: Option<StreamingLeafKind>) -> EncodedDelta {
     assert!(
         !delta.full,

@@ -1,7 +1,7 @@
 //! The `ChatSurface` sink: `on_chat_surface_event`'s dispatch match and one
-//! handler method per event family (todo #350, plan task 37, R2.13). Every
-//! method routes through `fanout.rs`, which owns the T5/T6 critical section
-//! — nothing here takes a lock itself.
+//! handler method per event family. Every method routes through `fanout.rs`,
+//! which owns the delivery critical section (per-session FIFO order and the
+//! resume buffer) — nothing here takes a lock itself.
 
 use std::sync::{Arc, OnceLock};
 
@@ -54,22 +54,22 @@ impl FacadeHub {
     }
 
     /// Encode only when someone is listening OR the chat has a revision log
-    /// to record into (todo #377: accounting must not depend on connection
-    /// presence) — a chat with neither pays nothing new.
+    /// to record into (accounting must not depend on connection presence) — a
+    /// chat with neither pays nothing new.
     ///
-    /// Todo #376 G4: encodes only `delta.changes` (`encode_container`, not
+    /// Encodes only `delta.changes` (`encode_container`, not
     /// `encode_revision`'s whole-snapshot `encode_messages`), with the
     /// `streaming` flag landing on ordinal `len - 1` — the chat side's own
-    /// "last non-queued container" rule, which already guarantees that
-    /// ordinal is always in `changes` whenever `streaming` is `Some` (see
-    /// the plan's "Streaming flag" section). `full` is a lazily evaluated,
-    /// `Arc`-memoized per-container encoding of the delta's WHOLE snapshot —
-    /// forced here outright when `delta.full` (its `changes` would
-    /// otherwise need to cover every ordinal to become an `EncodedDelta`'s
-    /// own `full` shape), and left lazy otherwise, for whichever of
-    /// `record_delta` or an unseeded attached stream's `on_revision_delta`
-    /// needs the fresh-attach fallback — computed at most once no matter
-    /// how many of those call it inside this one synchronous call.
+    /// "last non-queued container" rule, which already guarantees that ordinal
+    /// is always in `changes` whenever `streaming` is `Some`. `full` is a
+    /// lazily evaluated, `Arc`-memoized per-container encoding of the delta's
+    /// WHOLE snapshot — forced here outright when `delta.full` (its `changes`
+    /// would otherwise need to cover every ordinal to become an
+    /// `EncodedDelta`'s own `full` shape), and left lazy otherwise, for
+    /// whichever of `record_delta` or an unseeded attached stream's
+    /// `on_revision_delta` needs the fresh-attach fallback — computed at most
+    /// once no matter how many of those call it inside this one synchronous
+    /// call.
     pub(super) fn handle_display_revision(
         &self,
         chat_id: &str,
@@ -110,8 +110,7 @@ impl FacadeHub {
         let rpc_id = super::rpc_id_string(request_id);
         // A connection still holding the delivered gate did not answer it
         // (the answer path removes its own entry first) — push the
-        // resolution so it clears now, not on its next resume (spec
-        // criterion 8).
+        // resolution so it clears now, not on its next resume.
         let note = mainframe_acp::gate_resolved_notification(chat_id, &rpc_id);
         for entry in self.connections.iter() {
             if entry.value().remove_gate(&rpc_id).is_some() {
@@ -134,7 +133,7 @@ impl FacadeHub {
         self.push_notification(chat_id, &note, RawFrameKind::QueueState);
     }
 
-    /// Rotates the chat's revision-log epoch (todo #377): the daemon wiped
+    /// Rotates the chat's revision-log epoch: the daemon wiped
     /// the transcript, so every cursor issued against the old one would be
     /// reinterpreting a stale revision against reconstructed state —
     /// `RevisionLog`'s module doc calls that out as the thing epochs exist
@@ -145,11 +144,10 @@ impl FacadeHub {
         self.push_notification(chat_id, &note, RawFrameKind::TranscriptCleared);
     }
 
-    /// Same FIFO as content updates (T6, R2.11): a resync must not overtake
-    /// the frames whose loss triggered the eviction. Rotates the revision
-    /// epoch too (todo #377) — the daemon's view just diverged from what an
-    /// attached client holds, the same condition that invalidates an old
-    /// cursor.
+    /// Same FIFO as content updates: a resync must not overtake the frames
+    /// whose loss triggered the eviction. Rotates the revision epoch too — the
+    /// daemon's view just diverged from what an attached client holds, the same
+    /// condition that invalidates an old cursor.
     pub(super) fn handle_resync(&self, chat_id: &str) {
         self.reset_revision_epoch(chat_id);
         let note = mainframe_acp::resync_notification(chat_id);
@@ -160,7 +158,7 @@ impl FacadeHub {
         let wire_phase = match phase {
             CompactionPhase::Started => CompactionWirePhase::Started,
             CompactionPhase::Done => {
-                // A finished compaction rewrites history (todo #377): the
+                // A finished compaction rewrites history: the
                 // items an old cursor named may no longer exist under the
                 // same ids, so the epoch rotates rather than trying to
                 // reinterpret it.
@@ -177,8 +175,8 @@ impl FacadeHub {
     }
 
     /// Chat teardown: nothing else ever clears the gate registry's per-chat
-    /// bookkeeping, a connection's per-chat session state, or (todo #377)
-    /// the chat's revision log.
+    /// bookkeeping, a connection's per-chat session state, or the chat's
+    /// revision log.
     pub(super) fn handle_chat_ended(&self, chat_id: &str) {
         self.locked_registry().forget_chat(chat_id);
         for entry in self.connections.iter() {
@@ -238,8 +236,7 @@ impl ChatSurface for FacadeHub {
 /// `delta.changes` re-encoded one container at a time, with `streaming`
 /// landing on ordinal `len - 1` — the hub-side half of the "last non-queued
 /// container" rule the chat-side projector already enforces when it decides
-/// which ordinal belongs in `changes` for a streaming update (todo #376 G4
-/// task 3).
+/// which ordinal belongs in `changes` for a streaming update.
 fn encode_changes(delta: &DisplayDelta, streaming: Option<StreamingLeafKind>) -> EncodedDelta {
     let streaming_ordinal = delta.len.checked_sub(1);
     let changes = delta
@@ -257,15 +254,14 @@ fn encode_changes(delta: &DisplayDelta, streaming: Option<StreamingLeafKind>) ->
     }
 }
 
-/// A per-container encoding of `delta`'s WHOLE materialized snapshot,
-/// computed at most once no matter how many of this call's consumers force
-/// it — `record_display_delta` and every attached connection's
-/// `on_revision_delta` share the same `Arc`-memoized closure (todo #376 G4
-/// task 3). Correct to call even outside the synchronous window that
-/// produced `delta`, UNLIKE `delta.snapshot.materialize()` directly, because
-/// the `OnceLock` freezes whatever the first call observed — but nothing
-/// here ever calls it outside that window regardless (see `StreamOp::Revision`'s
-/// doc).
+/// A per-container encoding of `delta`'s WHOLE materialized snapshot, computed
+/// at most once no matter how many of this call's consumers force it —
+/// `record_display_delta` and every attached connection's `on_revision_delta`
+/// share the same `Arc`-memoized closure. Correct to call even outside the
+/// synchronous window that produced `delta`, UNLIKE
+/// `delta.snapshot.materialize()` directly, because the `OnceLock` freezes
+/// whatever the first call observed — but nothing here ever calls it outside
+/// that window regardless (see `StreamOp::Revision`'s doc).
 fn lazy_full_encoding(
     delta: &DisplayDelta,
     streaming: Option<StreamingLeafKind>,

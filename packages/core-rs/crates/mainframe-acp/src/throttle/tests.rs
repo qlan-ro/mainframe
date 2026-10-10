@@ -113,10 +113,9 @@ fn non_chunk_updates_pass_through_unmerged() {
     assert_eq!(chunk_text(&out[1]), "bc");
 }
 
-/// Criterion 3, throttle half: over an N-revision growing message pushed
-/// through the diff engine then the throttle, concatenating every emitted
-/// delta reconstructs the final text, and no individual frame after the
-/// first repeats the full accumulated string.
+/// Over an N-revision growing message pushed through the diff engine then the
+/// throttle, concatenating every emitted delta reconstructs the final text, and
+/// no individual frame after the first repeats the full accumulated string.
 #[test]
 fn coalescing_a_growing_message_never_repeats_the_full_text_and_reconstructs_it() {
     use crate::encoder::{EncodedItem, ItemRole};
@@ -246,7 +245,7 @@ fn a_merged_chunk_keeps_the_later_meta() {
     );
 }
 
-/// todo #377: only the last cursor in a flushed batch survives.
+/// Only the last cursor in a flushed batch survives.
 #[test]
 fn only_the_last_cursor_in_a_batch_survives() {
     let mut throttle = Throttle::new(50);
@@ -265,9 +264,8 @@ fn only_the_last_cursor_in_a_batch_survives() {
     assert_eq!(cursors[0], &ThrottledFrame::Cursor(cursor(2)));
 }
 
-/// todo #377: a dropped cursor must not have blocked the merge chain around
-/// it — chunks on either side of it still coalesce as if it were never
-/// there.
+/// A dropped cursor must not have blocked the merge chain around it — chunks
+/// on either side of it still coalesce as if it were never there.
 #[test]
 fn chunks_on_both_sides_of_a_dropped_cursor_still_coalesce() {
     let mut throttle = Throttle::new(50);

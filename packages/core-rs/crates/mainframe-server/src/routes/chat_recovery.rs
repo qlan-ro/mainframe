@@ -1,5 +1,3 @@
-//! Ported from `src/server/routes/chat-recovery.ts`.
-//!
 //! Degraded-chat recovery routes — the actions behind the unified degraded-chat
 //! card (missing transcript / missing worktree). All three re-emit an enriched
 //! `chat.updated` via the ChatManager so clients clear the card live.
@@ -42,7 +40,7 @@ async fn run(ctx: &Arc<AppCtx>, chat_id: &str, action: RecoveryAction) -> Respon
     }
     let label = action.label();
     // The recovery ops are ChatManager-backed with no db fallback; when the
-    // manager is unwired (Phase-3 harness) the route reports the seam.
+    // manager is unwired (the test harness) the route reports the seam.
     let Some(cm) = ctx.chat_manager.as_ref() else {
         tracing::warn!(chat_id, "chat recovery needs ChatManager (unwired)");
         return fail(StatusCode::INTERNAL_SERVER_ERROR, "Operation failed");
@@ -108,10 +106,9 @@ mod tests {
     }
 
     // Without a wired ChatManager the recovery ops have no db fallback, so every
-    // route reports the seam (mirrors the other manager-backed routes). The
-    // getChat-404, 409-branch-gone, and happy-path assertions from
-    // chat-recovery.test.ts are covered by the degraded_recovery / chat_manager
-    // oracle in mainframe-chat.
+    // route reports the seam (like the other manager-backed routes). The
+    // chat-404, 409-branch-gone, and happy-path cases are covered by the
+    // degraded_recovery / chat_manager oracle in mainframe-chat.
     #[tokio::test]
     async fn recovery_routes_report_the_seam_without_a_chat_manager() {
         let ctx = AppCtx::test_ctx();
@@ -126,14 +123,3 @@ mod tests {
         }
     }
 }
-
-// PORT STATUS: src/server/routes/chat-recovery.ts (3 POST routes)
-// confidence: high
-// todos: 0
-// notes: Main catch-up (#424): new degraded-chat recovery routes
-// (recreate-worktree / continue-here / continue-in-project-root) → okEmpty. The id
-// param 404s an unknown chat before the action runs; a DegradedRecoveryError maps
-// its status_code() (BranchGone → 409) else 400, with the Display message crossing
-// the wire verbatim (as the TS `err.statusCode`/`err.message` pass-through does).
-// ChatManager-backed with no db fallback, so the unwired harness reports the 500
-// seam like the other Phase-4 routes.

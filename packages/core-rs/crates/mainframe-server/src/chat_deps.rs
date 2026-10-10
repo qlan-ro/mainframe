@@ -1,17 +1,16 @@
 //! The production `ChatManagerDeps` implementation — the daemon-side wiring that
-//! injects every real collaborator into the ported `ChatManager` (Task 4.6c).
+//! injects every real collaborator into the `ChatManager`.
 //!
-//! In the TS `ChatManager` the constructor closes over `db`, `adapters`,
-//! `tracker`, `attachmentStore` and the sub-managers wire themselves with
-//! closures over `this`. The Rust port lifted that whole injected surface into the
-//! single `ChatManagerDeps` trait (see `mainframe_chat::chat_manager`); this module
-//! is the one production impl of it.
+//! The whole injected surface of the `ChatManager` (database, adapters, tracker,
+//! attachment store, sub-manager callbacks) lives in the single `ChatManagerDeps`
+//! trait (see `mainframe_chat::chat_manager`); this module is the one production
+//! impl of it.
 //!
 //! Two structural facts shape the code:
 //!   1. `ChatManagerDeps`'s DB accessors are **synchronous** but the daemon owns
 //!      the connection behind the async `Db` actor. They go through the SYNC-DB
 //!      BRIDGE (`Db::call_blocking`) — one WAL connection, no second writer.
-//!   2. A handful of generic ported helpers (`resolve_tuning_for_chat`,
+//!   2. A handful of generic helpers (`resolve_tuning_for_chat`,
 //!      `extract_mentions_from_text`, `read_notification_config`) take a trait the
 //!      raw `!Send` `DatabaseManager` cannot satisfy across the actor boundary;
 //!      small local bridge types (`RtDeps`, `CtxDbHandle`) satisfy those bounds by
@@ -130,9 +129,8 @@ mod to_db_update_tests {
     }
 }
 
-/// Translate the external-session-import `Partial<Chat>` patch into the DB
-/// repository's `ChatUpdate`. `Object.assign(chat, updates)` in the TS only ever
-/// touches these four fields.
+/// Translate the external-session-import patch into the DB repository's
+/// `ChatUpdate`. The import only ever touches these four fields.
 fn to_external_chat_update(patch: &ExternalChatUpdate) -> mainframe_db::chats::ChatUpdate {
     mainframe_db::chats::ChatUpdate {
         claude_session_id: patch.claude_session_id.clone(),
@@ -143,8 +141,8 @@ fn to_external_chat_update(patch: &ExternalChatUpdate) -> mainframe_db::chats::C
     }
 }
 
-/// `mainframe_chat::fork::PendingForkState` → the DB repository's `PendingFork`
-/// (todo #343). Field-for-field; the two exist separately only because
+/// `mainframe_chat::fork::PendingForkState` → the DB repository's `PendingFork`.
+/// Field-for-field; the two exist separately only because
 /// `mainframe-chat` does not depend on `mainframe-db`.
 fn to_db_pending_fork(pending: &PendingForkState) -> mainframe_db::chats::PendingFork {
     mainframe_db::chats::PendingFork {
@@ -164,7 +162,7 @@ fn from_db_pending_fork(pending: mainframe_db::chats::PendingFork) -> PendingFor
 }
 
 /// `ChatManager::fork_chat`'s `ForkCreateInput` → the DB repository's
-/// `ForkInsert<'a>` (todo #343). A free function rather than a method so it can
+/// `ForkInsert<'a>`. A free function rather than a method so it can
 /// borrow from `input` and `pending_fork` with independent lifetimes.
 fn to_db_fork_insert<'a>(
     input: &'a ForkCreateInput,
@@ -203,20 +201,20 @@ pub struct DaemonChatDeps {
     scope_tunnels: Arc<dyn ScopeTunnelStopper>,
     quota: Arc<QuotaManager>,
     /// Process-lifetime Claude external-session enrichment cache — owned here
-    /// (not a module-level singleton, forbidden by PORTING.md §5) and threaded
-    /// into every `list_external_sessions("claude", ...)` call.
+    /// (not a module-level singleton) and threaded into every
+    /// `list_external_sessions("claude", ...)` call.
     claude_external_session_cache: ExternalSessionCache,
     /// `Weak`, set once after construction in [`build_chat_manager`] — the manager
     /// is built *from* these deps, so a strong reference here would cycle.
     chat_manager: OnceLock<Weak<ChatManager>>,
     /// Shared with `AppCtx` and the `ClaudeAdapter` — the daemon's single
-    /// per-chat workflow-run store (D5's CLI-exit sweep target).
+    /// per-chat workflow-run store (the CLI-exit sweep's target).
     claude_workflows: Arc<ClaudeWorkflowStore>,
     /// The daemon's data directory (`AppCtx::data_dir`). A non-project chat's
-    /// scratch cwd is `<data_dir>/scratch/<chatId>` (todo #346 rule 2),
-    /// `fork_snapshots_dir` joins `"fork-snapshots"` onto it (todo #343), and
-    /// `history_cache_dir` joins `"cache/history"` onto it (the history
-    /// snapshot cache's cold-load shortcut). Threaded in rather than read via
+    /// scratch cwd is `<data_dir>/scratch/<chatId>`, `fork_snapshots_dir`
+    /// joins `"fork-snapshots"` onto it, and `history_cache_dir` joins
+    /// `"cache/history"` onto it (the history snapshot cache's cold-load
+    /// shortcut). Threaded in rather than read via
     /// `mainframe_runtime::config::get_data_dir()` at request time: that
     /// helper does synchronous I/O, which a request-path deps method must
     /// not do.
@@ -224,7 +222,7 @@ pub struct DaemonChatDeps {
 }
 
 impl DaemonChatDeps {
-    /// `scan_loaded_history` only receives the chatId (§ trait contract), so it
+    /// `scan_loaded_history` only receives the chatId (trait contract), so it
     /// re-derives a session from the same chat row `doLoadChat` already read
     /// rather than reusing the live one — both are stateless reads over the
     /// on-disk transcript, so results match. `scan_loaded_history` then reads
@@ -232,11 +230,11 @@ impl DaemonChatDeps {
     /// `load_scan_records` (PRs) — for Claude, where `load_scan_records`
     /// defaults to `load_history`, that is the same file read twice; for
     /// Codex it is `thread/read` plus a rollout reconstruction (no app-server
-    /// spawn since todo #339). Correctness (the rollout's injected preamble
+    /// spawn). Correctness (the rollout's injected preamble
     /// must never feed the mention scan) outweighs the extra I/O here.
     fn session_for_scan(&self, chat_id: &str) -> Option<Arc<dyn AdapterSession>> {
         let chat = self.chats_get(chat_id)?;
-        // An unsent fork (todo #343) has no `claude_session_id` yet; it scans
+        // An unsent fork has no `claude_session_id` yet; it scans
         // its pending fork's snapshot instead, same as every other session
         // builder (`build_history_session`/`do_load_chat`/`do_start_chat`).
         let own_id = chat.claude_session_id.clone();
@@ -284,7 +282,7 @@ impl DaemonChatDeps {
     }
 
     /// `@`-mention extraction over already-loaded history. Split out of
-    /// `scan_and_persist_prs` (todo #339 review) so it only ever runs against
+    /// `scan_and_persist_prs` so it only ever runs against
     /// `load_history` — never `load_scan_records`, whose Codex rollout
     /// reconstruction injects a `role: "user"` preamble record
     /// (`<recommended_plugins>` + AGENTS.md/CLAUDE.md body) that `thread/read`
@@ -297,7 +295,7 @@ impl DaemonChatDeps {
     }
 
     /// `Promise.all([extractPlanFiles(), extractSkillFiles()])` — either failing
-    /// drops both (best-effort, matches the TS try/catch).
+    /// drops both (best-effort).
     async fn persist_plan_and_skill_files(&self, chat_id: &str, session: &dyn AdapterSession) {
         let Ok((plan_paths, skill_paths)) =
             tokio::try_join!(session.extract_plan_files(), session.extract_skill_files())
@@ -345,7 +343,7 @@ impl ChatManagerDeps for DaemonChatDeps {
         prepare_messages_for_client(raw, categories)
     }
 
-    /// The production projector (todo #376). `IncrementalProjector`'s
+    /// The production projector. `IncrementalProjector`'s
     /// `Nested`-patch path now re-applies both per-group post-processing
     /// passes a tail refold would have given the patched group — tool-call
     /// timing and task-subject backfill (`try_patch_nested`'s
@@ -372,7 +370,7 @@ impl ChatManagerDeps for DaemonChatDeps {
     }
 
     fn chats_create(&self, new_chat: &NewChat) -> Chat {
-        // The scratch root is a daemon concern (rule 2's `<data_dir>/scratch`);
+        // The scratch root is a daemon concern (`<data_dir>/scratch`);
         // the caller only ever knows the chat is non-project, never the path.
         let db_new_chat = NewChat {
             scratch_root: Some(self.data_dir.join("scratch").to_string_lossy().into_owned()),
@@ -381,11 +379,10 @@ impl ChatManagerDeps for DaemonChatDeps {
         let created = self.db.call_blocking(move |d| d.chats.create(&db_new_chat));
         match created {
             Ok(chat) => chat,
-            // The trait signature is infallible (mirrors the synchronous
-            // better-sqlite3 `db.chats.create`); a DB failure has no error channel
+            // The trait signature is infallible; a DB failure has no error channel
             // to surface through, so log loudly and return an unpersisted stub so
-            // the caller does not crash. TODO(port): revisit if the ported
-            // orchestration ever grows a fallible create path.
+            // the caller does not crash. TODO: revisit if the orchestration ever
+            // grows a fallible create path.
             Err(err) => {
                 tracing::error!(
                     %err,
@@ -750,11 +747,10 @@ impl ChatManagerDeps for DaemonChatDeps {
     }
 
     fn apply_codex_provider_tuning(&self, _session: &Arc<dyn AdapterSession>) {
-        // TODO(port): `setCodexProviderTuning(personality, reasoningSummary)` is a
-        // codex-only session method not present on the generic AdapterSession trait
-        // (it lands with the concrete codex adapter's provider tuning, Phase 5).
-        // No-op is faithful for every non-codex adapter (the TS guards on
-        // `adapterId === 'codex' && 'setCodexProviderTuning' in session`).
+        // TODO: `set_codex_provider_tuning` (personality, reasoning summary) is a
+        // Codex-only session method that the generic `AdapterSession` trait does not
+        // expose, so this cannot reach it and the tuning stays at its default.
+        // The no-op is correct for every non-Codex adapter.
     }
 
     fn generate_title<'a>(
@@ -763,9 +759,9 @@ impl ChatManagerDeps for DaemonChatDeps {
         content: &'a str,
         binary: &'a str,
     ) -> BoxFuture<'a, Option<String>> {
-        // Adapter-aware (#430): route to the owning adapter's `generateTitle`;
-        // an unregistered adapter id and an adapter error are logged
-        // separately (#287) so an operator can tell the two apart.
+        // Route to the owning adapter's `generate_title`; an unregistered
+        // adapter id and an adapter error are logged separately so an operator
+        // can tell the two apart.
         let Some(adapter) = self.adapters.get(adapter_id) else {
             tracing::warn!(
                 adapter_id,
@@ -921,7 +917,7 @@ impl ChatManagerDeps for DaemonChatDeps {
                 PushPriority::Default
             },
         };
-        // Fire-and-forget, matching the TS `pushService?.sendPush(...).catch(...)`.
+        // Fire-and-forget: the caller does not wait for delivery.
         tokio::spawn(async move {
             push.send_push(message).await;
         });
@@ -1052,10 +1048,10 @@ impl ChatManagerDeps for DaemonChatDeps {
 #[path = "chat_deps_segments.rs"]
 mod segments;
 
-/// The daemon-side `ExternalSessionDeps` (`getExternalSessionService()`'s
-/// backing instance). `listExternalSessions` is not on the ported `Adapter`
-/// trait (adapter-api TODO), so this dispatches to the concrete Claude/Codex
-/// scan functions directly by adapter id rather than through the registry.
+/// The daemon-side `ExternalSessionDeps`. `list_external_sessions` is not on
+/// the `Adapter` trait (see the TODO in `mainframe-adapter-api`), so this
+/// dispatches to the concrete Claude/Codex scan functions directly by adapter
+/// id rather than through the registry.
 impl ExternalSessionDeps for DaemonChatDeps {
     fn projects_get(&self, project_id: &str) -> Option<Project> {
         let pid = project_id.to_string();
@@ -1200,8 +1196,7 @@ impl ExternalSessionDeps for DaemonChatDeps {
 
 /// Assemble the production `ChatManager` from the daemon's live collaborators.
 /// Called once at boot (after the AdapterRegistry + BackgroundTaskTracker exist,
-/// before the server starts) — mirrors `new ChatManager(db, adapters, tracker,
-/// attachmentStore, onEvent)` in `index.ts`.
+/// before the server starts).
 #[allow(clippy::too_many_arguments)]
 pub fn build_chat_manager(
     db: Db,
@@ -1215,15 +1210,15 @@ pub fn build_chat_manager(
     scope_tunnels: Arc<dyn ScopeTunnelStopper>,
     quota: Arc<QuotaManager>,
     claude_workflows: Arc<ClaudeWorkflowStore>,
-    // Title generation is now adapter-aware (#430) — the resolved PATH lives with
-    // the adapter's title spawn, so the ChatManager no longer needs it. The param
+    // Title generation is adapter-aware — the resolved PATH lives with the
+    // adapter's title spawn, so the ChatManager does not need it. The param
     // is retained for the boot call site (mainframe-daemon) until it drops the arg.
     _resolved_path: ResolvedPath,
-    // The chat-surface observer (todo #350): the ACP facade hub in the daemon
+    // The chat-surface observer: the ACP facade hub in the daemon
     // boot; `None` in harnesses that exercise the legacy surface only.
     chat_surface: Option<Arc<dyn mainframe_chat::chat_surface::ChatSurface>>,
-    // A non-project chat's scratch root (todo #346) and `fork_snapshots_dir`
-    // (todo #343) both join onto this.
+    // A non-project chat's scratch root and `fork_snapshots_dir` both join
+    // onto this.
     data_dir: std::path::PathBuf,
 ) -> Arc<ChatManager> {
     let deps = Arc::new(DaemonChatDeps {
@@ -1351,11 +1346,10 @@ impl ContextDb for CtxDbHandle {
     }
 }
 
-/// Ported from the post-`loadHistory` scan in `doLoadChat`
-/// (`packages/core/src/chat/lifecycle-manager.ts`): `@`-mention extraction over
-/// `@`-mention extraction over user text — the first half of the post-
-/// `loadHistory` scan in `doLoadChat` (`packages/core/src/chat/lifecycle-manager.ts`).
-/// Persists through `ctx_db` as a side effect (mirrors `db.chats.addMention`).
+/// `@`-mention extraction over user text — the first half of the post-load
+/// history scan that `do_load_chat` runs through `scan_loaded_history`.
+/// Persists each mention through `ctx_db` (`ContextDb::add_mention`) as a side
+/// effect.
 fn scan_history_for_mentions(chat_id: &str, history: &[ChatMessage], ctx_db: &dyn ContextDb) {
     for msg in history {
         if msg.r#type != ChatMessageType::User {
@@ -1376,8 +1370,8 @@ fn scan_history_for_mentions(chat_id: &str, history: &[ChatMessage], ctx_db: &dy
 
 /// Bridges `AttachmentStore::list` (returns `StoredAttachmentMeta`) to the
 /// context-tracker's `AttachmentLister` (wants `SessionAttachment`). The stored
-/// meta is a structural superset of `SessionAttachment` (drops `materializedPath`);
-/// the TS passes the metas straight through, so this mirrors that projection.
+/// meta is a structural superset of `SessionAttachment`; the projection drops
+/// `materializedPath` and maps every other field across.
 struct AttachmentListerHandle {
     store: Arc<AttachmentStore>,
 }
@@ -1546,7 +1540,7 @@ mod scan_loaded_history_tests {
     }
 
     // -- scan_history_for_prs (moved to mainframe-adapter-api::pr_detection::history;
-    //    tests live in that crate's tests/pr_detection_history.rs, todo #339 task 4) --
+    //    tests live in that crate's tests/pr_detection_history.rs) --
 
     // -- scan_history_for_mentions ----------------------------------------
 
@@ -1694,9 +1688,9 @@ mod scan_loaded_history_tests {
         );
     }
 
-    /// todo #376 follow-up: production must actually ship the incremental
-    /// projector, not just build one in a test harness (the scaling gates
-    /// in `mainframe-adapter-claude` and this crate both construct
+    /// Production must actually ship the incremental projector, not just build
+    /// one in a test harness (the scaling gates in `mainframe-adapter-claude`
+    /// and this crate both construct
     /// `IncrementalProjector` directly and so cannot catch a
     /// `display_projector()` that silently falls back to a full rebuild).
     /// A second `project` call over an appended message must come back
@@ -1846,7 +1840,7 @@ mod scan_loaded_history_tests {
     /// Codex's canonical shape for a PR-create turn: an assistant `Bash`
     /// tool_use whose command is `gh pr create …`, followed by a `ToolResult`
     /// carrying the PR URL — the same pair `load_scan_records` reconstructs
-    /// from the rollout (todo #339). Acceptance criterion 1.
+    /// from the rollout.
     #[test]
     fn scan_and_persist_prs_persists_a_codex_shaped_create_as_created_and_emits_event() {
         let deps = test_deps();
@@ -1900,9 +1894,9 @@ mod scan_loaded_history_tests {
         }
     }
 
-    /// Acceptance criterion 2 (no-duplicate half): rescanning the same
-    /// transcript a second time must not add a second row or emit a second
-    /// event — `add_detected_prs` dedupes by URL.
+    /// No duplicates: rescanning the same transcript a second time must not
+    /// add a second row or emit a second event — `add_detected_prs` dedupes by
+    /// URL.
     #[test]
     fn scan_and_persist_prs_run_twice_persists_no_duplicate_and_emits_no_second_event() {
         let deps = test_deps();
@@ -1945,9 +1939,9 @@ mod scan_loaded_history_tests {
         );
     }
 
-    /// Acceptance criterion 2 (upgrade half): a URL first seen as `mentioned`
-    /// is upgraded in place to `created` when a later scan matches it to a
-    /// pending create — never duplicated, never downgraded.
+    /// A URL first seen as `mentioned` is upgraded in place to `created` when
+    /// a later scan matches it to a pending create — never duplicated, never
+    /// downgraded.
     #[test]
     fn scan_and_persist_prs_upgrades_a_mentioned_pr_to_created_for_the_same_url() {
         let deps = test_deps();
@@ -2331,10 +2325,10 @@ mod scan_loaded_history_tests {
         fn kill_all(&self) {}
     }
 
-    /// Todo #339 review finding: cold-load @-mention scanning must stay pinned
-    /// to `load_history` even when the PR scan needs `load_scan_records`'s
-    /// wider reconstruction — otherwise Codex's injected rollout preamble
-    /// leaks in as a bogus file mention.
+    /// Cold-load @-mention scanning must stay pinned to `load_history` even
+    /// when the PR scan needs `load_scan_records`'s wider reconstruction —
+    /// otherwise Codex's injected rollout preamble leaks in as a bogus file
+    /// mention.
     #[tokio::test]
     async fn scan_loaded_history_scans_mentions_from_load_history_and_prs_from_load_scan_records() {
         let deps = test_deps();
@@ -2406,38 +2400,3 @@ mod scan_loaded_history_tests {
         );
     }
 }
-
-// PORT STATUS: (new — production ChatManagerDeps wiring for chat/chat-manager.ts
-// constructor injection + index.ts `new ChatManager(...)`)
-// confidence: medium
-// todos: 2
-// notes: The one production impl of ChatManagerDeps. DB accessors go through the
-// SYNC-DB BRIDGE (Db::call_blocking) — one WAL connection. notifications / per-chat
-// todos / push / mentions / tuning / title / kill / worktree-remove are wired to
-// the real ported helpers (RtDeps + CtxDbHandle bridge the generic helper trait
-// bounds through the actor). Task 5.4 added chats_list_filtered (translates to the db
-// ChatListFilters), chats_add_mention (db write), and get_session_context (runs the
-// context-tracker read with the AdapterRegistry + an AttachmentListerHandle over the
-// AttachmentStore). scanLoadedHistory now runs the ported pr-detection scan +
-// mention extraction + plan/skill-file persistence by re-deriving a session from
-// the chat row (session_for_scan) since the trait only carries chatId; see that
-// method's doc comment for the fidelity tradeoff. Seams (TODO(port)):
-// applyCodexProviderTuning (codex-only session method, Phase 5),
-// stopLaunchProcesses (LaunchStopper seam, Phase 5). chats_create is infallible
-// per the ported trait; a DB failure logs + returns an unpersisted stub.
-// notes: ExternalSessionDeps (external-session-service.ts's DI surface) is also
-// implemented here and wired into `build_chat_manager` via
-// `ExternalSessionService::new(deps.clone())` + `ChatManager::with_external_sessions`.
-// `listExternalSessions` is not on the polymorphic Adapter trait (adapter-api TODO),
-// so `list_external_sessions` dispatches to the concrete
-// `mainframe_adapter_claude`/`mainframe_adapter_codex` free functions by id rather
-// than through the registry; `external_session_adapter_ids` mirrors the TS capability
-// filter as a hardcoded {claude, codex} id allowlist intersected with what is
-// actually registered. `claude_external_session_cache` is the process-lifetime,
-// injected (not module-singleton) enrichment cache the Claude scan needs.
-// `reconcile_transcript` upgrades a `Weak<ChatManager>` set into
-// `DaemonChatDeps.chat_manager` after construction (`build_chat_manager`) and
-// delegates to `ChatManager::reconcile_transcript`, so the periodic
-// external-session sweep now reconciles transcript presence for chats the user
-// isn't viewing (#289). The `Weak` avoids a reference cycle: the manager is
-// built from these deps, so a strong back-reference would leak both forever.

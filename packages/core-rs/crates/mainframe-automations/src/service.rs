@@ -1,7 +1,6 @@
-//! `AutomationsEngine` — the Arc-shared facade (Node automations/service.ts).
-//! T9.2 builds construction + the route-facing surface + `stop()`; boot
-//! reconcile / sweep arming / event-source subscription land in `start()`
-//! (T10.1).
+//! `AutomationsEngine` — the Arc-shared facade: construction, the
+//! route-facing surface and `stop()`; boot reconcile / sweep arming /
+//! event-source subscription live in `start()`.
 
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
@@ -37,7 +36,7 @@ pub use summary::AutomationSummary;
 
 #[derive(Debug, thiserror::Error)]
 pub enum EngineError {
-    /// Schema/scope validation failures — plain-language, per-step (T1.3).
+    /// Schema/scope validation failures — plain-language, per-step.
     #[error("{}", summary::join_validation(errors))]
     Validation { errors: Vec<ValidationError> },
     #[error(transparent)]
@@ -63,9 +62,9 @@ pub struct AutomationsPorts {
     pub events: Arc<dyn EventSink>,
     pub projects: Arc<dyn ProjectRegistry>,
     pub clock: Arc<dyn Clock>,
-    /// Subscribed by `start()` (T10.1); `None` disables event triggers.
+    /// Subscribed by `start()`; `None` disables event triggers.
     pub event_source: Option<Arc<dyn EventSource>>,
-    /// Test seam (T10.2): a pre-built action registry. `None` → the launch
+    /// Test seam: a pre-built action registry. `None` → the launch
     /// catalog (`register_all_actions`). Production always passes `None`; the
     /// conformance suite injects recording fakes so a run never touches real
     /// GitHub/Notion HTTP or the user's home directory.
@@ -81,7 +80,7 @@ pub struct AutomationsEngine {
     registry: Arc<ActionRegistry>,
     credentials: Arc<dyn CredentialStore>,
     webhooks: WebhookProcessor,
-    /// T7 — the durable half of webhook state (the sample index is memory).
+    /// The durable half of webhook state (the sample index is memory).
     webhook_deliveries: WebhookStateStore,
     /// Armed by `start()` — the 30 s derived-state schedule driver.
     sweeper: Arc<ScheduleSweeper>,
@@ -107,8 +106,8 @@ impl AutomationsEngine {
         build::build(config, ports).await
     }
 
-    /// Ordered-shutdown hook (Node service.stop): drops the background tasks
-    /// `start()` armed. Safe before `start()` and safe to call twice.
+    /// Ordered-shutdown hook: drops the background tasks `start()` armed. Safe
+    /// before `start()` and safe to call twice.
     pub fn stop(&self) {
         let tasks: Vec<JoinHandle<()>> = {
             let mut guard = self.tasks.lock().unwrap_or_else(|e| e.into_inner());
@@ -119,7 +118,7 @@ impl AutomationsEngine {
         }
     }
 
-    // ── automations CRUD (routes/automations, T9.3) ─────────────────────────
+    // ── automations CRUD (routes/automations) ───────────────────────────────
 
     pub async fn list(&self) -> Result<Vec<AutomationSummary>, EngineError> {
         let records = self.automations.list().await?;
@@ -153,7 +152,7 @@ impl AutomationsEngine {
     }
 
     /// A4 — disabling disarms triggers (derived state: the sweep/router skip
-    /// disabled rows); manual runs stay allowed (Decision 11).
+    /// disabled rows); manual runs stay allowed.
     pub async fn set_enabled(
         &self,
         id: &str,
@@ -257,7 +256,7 @@ impl AutomationsEngine {
             .await
     }
 
-    /// T7 — provisions the hook's signing secret and reports its delivery
+    /// Provisions the hook's signing secret and reports its delivery
     /// state. `None` when the automation or the webhook trigger is gone.
     pub async fn arm_webhook(
         &self,
@@ -267,7 +266,7 @@ impl AutomationsEngine {
         registration::arm(self, automation_id, trigger_id).await
     }
 
-    /// T7 — the registration state of an already-armed hook, for embedding on
+    /// The registration state of an already-armed hook, for embedding on
     /// read. `None` for a hook nobody has registered.
     pub async fn webhook_state(&self, hook_id: &str) -> Result<Option<WebhookState>, EngineError> {
         registration::read(self, hook_id).await
@@ -295,12 +294,3 @@ mod credentials_accessor_tests;
 mod registration_tests;
 #[cfg(test)]
 mod service_tests;
-
-// PORT STATUS: packages/core/src/automations/service.ts (facade surface; arm/
-// disarm is derived state here, so create/update/setEnabled need no trigger
-// re-arming)
-// confidence: high
-// todos: 0
-// notes: start()/reconcile/sweep arming live in service/start.rs; `tasks` is
-//        the JoinHandle holder stop() drains; `agent_verb` re-attaches watches
-//        via resume_run_watches during reconcile.

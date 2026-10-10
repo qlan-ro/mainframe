@@ -1,15 +1,13 @@
-//! Ported from `src/server/ws-schemas.ts`.
-//!
 //! The wire shape of `ClientEvent` lives in `mainframe_types::events`; serde
 //! deserialization enforces the discriminated-union shape and required fields.
-//! The Zod *refinements* (min-length strings) have no serde analogue, so they
-//! live here as an explicit `validate()` — the §3.1 idiom.
+//! Refinements such as min-length strings have no serde analogue, so they live
+//! here as an explicit `validate()`.
 
 use mainframe_types::events::ClientEvent;
 
-/// The two failure modes `websocket.ts`'s `ws.on('message')` distinguishes: a
-/// `JSON.parse` throw (`Invalid JSON`) vs. a `safeParse` failure (`Invalid
-/// message: …`). Both are emitted to the client as `{ type: "error", error }`.
+/// The two failure modes an inbound WS message can hit: unparseable JSON
+/// (`Invalid JSON`) vs. a shape or validation failure (`Invalid message: …`).
+/// Both are emitted to the client as `{ type: "error", error }`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClientEventError {
     InvalidJson,
@@ -37,7 +35,7 @@ pub(crate) fn parse_client_event(raw: &str) -> Result<ClientEvent, ClientEventEr
     Ok(event)
 }
 
-/// The Zod refinements. Field presence/typing is already guaranteed by serde;
+/// The validation refinements. Field presence/typing is already guaranteed by serde;
 /// this adds the min-length, content-or-attachments, and identifier-charset rules.
 fn validate(event: &ClientEvent) -> Result<(), String> {
     match event {
@@ -136,14 +134,3 @@ mod tests {
         ));
     }
 }
-
-// PORT STATUS: src/server/ws-schemas.ts (ClientEventSchema + refinements)
-// confidence: high
-// todos: 0
-// notes: shape enforced by `serde_json::from_value::<ClientEvent>` (the type in
-// mainframe_types::events); the Zod `.min(1)` refinements are the explicit
-// `validate()` fn (§3.1). Error strings are best-effort (the wire contract
-// freezes only `{type:'error', error:<reason>}`, not the reason text). The
-// message.send/permission.respond arms died with the legacy chat dialect
-// (todo #350) — the command-name identifier rule now lives on the facade's
-// prompt path.

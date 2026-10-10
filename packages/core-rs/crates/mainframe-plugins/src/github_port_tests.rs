@@ -1,7 +1,6 @@
 //! `ctx.github` never panics and never reaches the network: without the
 //! `http:outbound` capability, or without a wired dependency (the automations
-//! engine failed to start), every call fails loudly with a readable reason
-//! (D2, fact 10).
+//! engine failed to start), every call fails loudly with a readable reason.
 
 use std::path::PathBuf;
 use std::sync::Arc;

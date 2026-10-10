@@ -1,4 +1,4 @@
-//! DTOs for the GitHub Issues client (todos-plugin GitHub sync, D1): the
+//! DTOs for the GitHub Issues client (todos-plugin GitHub sync): the
 //! domain-shaped read model (`IssueSnapshot`, `IssueFieldTimes`), the write
 //! inputs (`CreateIssue`, `IssuePatch`), the wire-shaped `Raw*` structs GitHub
 //! actually returns, and the failure taxonomy (`GitHubError`) callers match on.

@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/db/chats.ts`.
-
 use std::rc::Rc;
 
 use mainframe_runtime::time::now_iso8601;
@@ -50,7 +48,7 @@ pub(crate) const CHAT_SELECT_FIELDS: &str = "id, adapter_id as adapterId, projec
      AS activeDelegatedChildIds";
 
 /// The still-pending fork state stored in `chats.pending_fork` (JSON), read and
-/// written only through `get_pending_fork` / `clear_pending_fork` (todo #343) —
+/// written only through `get_pending_fork` / `clear_pending_fork` —
 /// deliberately absent from the `Chat` wire type, like `dismissed_worktrees`.
 /// Retired once the fork's first turn produces a result (`on_result`), which
 /// also removes `snapshot_dir` from disk.
@@ -97,7 +95,7 @@ pub struct ChatListFilters {
     pub include_temporary: bool,
 }
 
-/// Partial-update payload mirroring the TS `update(id, updates: Partial<Chat>)`.
+/// Partial-update payload for `ChatsRepository::update`.
 /// A `None` outer field means "not part of this update" (skipped). The six
 /// clearable columns use `Option<Option<T>>`: inner `None` writes SQL NULL
 /// (the `?? null` transforms in `updateColumnMap`).
@@ -354,8 +352,8 @@ impl ChatsRepository {
         self.get_inserted(&id)
     }
 
-    /// A single INSERT that seeds a new chat from its parent's resolved config
-    /// (todo #343): project, adapter, model, permission mode, plan mode, tuning,
+    /// A single INSERT that seeds a new chat from its parent's resolved config:
+    /// project, adapter, model, permission mode, plan mode, tuning,
     /// worktree, and a provisional title, plus the `parent_chat_id` lineage and
     /// the `pending_fork` payload the daemon resolves the first spawn from.
     /// Counters start at zero; the fork is unpinned, untagged, and carries no
@@ -461,7 +459,7 @@ impl ChatsRepository {
         let mut sets: Vec<&str> = Vec::new();
         let mut values: Vec<SqlValue> = Vec::new();
 
-        // Order mirrors ChatsRepository.updateColumnMap.
+        // Fixed column order.
         if let Some(v) = &updates.adapter_id {
             sets.push("adapter_id = ?");
             values.push(SqlValue::Text(v.clone()));
@@ -655,7 +653,7 @@ impl ChatsRepository {
     }
 
     /// The still-pending fork state for a chat whose first turn hasn't produced
-    /// a result yet (todo #343). Daemon-internal, like `dismissed_worktrees`.
+    /// a result yet. Daemon-internal, like `dismissed_worktrees`.
     pub fn get_pending_fork(&self, chat_id: &str) -> Result<Option<PendingFork>, DbError> {
         let raw = self.read_text_column("pending_fork", chat_id)?;
         match raw.filter(|s| !s.is_empty()) {
@@ -909,7 +907,7 @@ fn map_row(row: &rusqlite::Row<'_>) -> Result<Chat, DbError> {
         total_tokens_input: row.get("totalTokensInput")?,
         total_tokens_output: row.get("totalTokensOutput")?,
         last_context_tokens_input: row.get("lastContextTokensInput")?,
-        // null → None (TS `?? undefined`); stored INTEGER read as i64 then widened.
+        // null → None; stored INTEGER read as i64 then widened.
         last_context_total_tokens: row
             .get::<_, Option<i64>>("lastContextTotalTokens")?
             .map(|n| n as u64),
@@ -971,25 +969,3 @@ fn parse_todos(value: Option<String>) -> Option<Vec<TodoItem>> {
     let value = value.filter(|s| !s.is_empty())?;
     serde_json::from_str(&value).ok()
 }
-
-// PORT STATUS: src/db/chats.ts (405 lines)
-// confidence: high
-// notes: Main catch-up (#423/#424): SELECT + mapRow gain lastContextTotalTokens/
-// lastContextMaxTokens (null → None, stored INTEGER read as i64 → u64) and
-// transcriptMissing (Boolean(row) → Some(bool); column is DEFAULT 0 so always
-// present). ChatUpdate + update() field-map add the two token cols (after
-// lastContextTokensInput) and transcriptMissing (last, after planMode, `?1:0`).
-// New clear_session (NULL session id/file + transcript_missing=0) and clear_worktree
-// (NULL worktree_path/branch_name) mirror the degraded-recovery helpers. create()
-// and create_fork() insert, then read the row back through map_row.
-// notes(orig): CHAT_SELECT_FIELDS aliases every column to camelCase, read by that name.
-// mapRow's tri-state fields follow the types crate: processState/fast/ultracode/
-// adaptiveThinking are always present (Some(None) for NULL → serializes null);
-// effort uses .map(Some) so an invalid/absent value stays absent (None); todos
-// falls back to None (absent). parseJsonColumn is defensive (unwrap_or fallback,
-// never a propagating from_str) per §3. Partial<Chat> becomes ChatUpdate: outer
-// None = skip, and the six `?? null`-transform columns use Option<Option<T>> to
-// clear. update() preserves updateColumnMap's exact column order. transactions
-// are not needed here (all single-statement). Tests in tests/chats.rs +
-// tests/chats_tags.rs.
-// todos: 0

@@ -1,5 +1,5 @@
 //! Agent listing + CRUD: `.claude/agents/*.md`. The description shown in the
-//! `@` picker is derived by `crate::agent_description` (todo #317) — frontmatter
+//! `@` picker is derived by `crate::agent_description` — frontmatter
 //! first, heading heuristic as the no-frontmatter fallback.
 
 use std::path::{Path, PathBuf};
@@ -84,8 +84,8 @@ pub async fn create_agent(
         adapter_id: ADAPTER_ID.to_string(),
         name: input.name.clone(),
         description: input.description.clone(),
-        // No frontmatter is written for a freshly created agent (Decision D5),
-        // so there is nothing declared to carry as the complete value.
+        // No frontmatter is written for a freshly created agent, so there is
+        // nothing declared to carry as the complete value.
         full_description: None,
         scope: input.scope,
         file_path: file_path.to_string_lossy().into_owned(),

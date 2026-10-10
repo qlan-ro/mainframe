@@ -1,7 +1,7 @@
-//! `Arc<AppCtx>` test constructors (todo #346 review fix), split out of
-//! `chat_test_support`'s `StubAdapter`/`StubSession` scaffolding to keep that
-//! sibling file under 300 lines. Backs `AppCtx::test_ctx` and
-//! `AppCtx::test_ctx_with_chat_manager` — see those doc comments in `ctx.rs`.
+//! `Arc<AppCtx>` test constructors, split out of `chat_test_support`'s
+//! `StubAdapter`/`StubSession` scaffolding to keep that sibling file under 300
+//! lines. Backs `AppCtx::test_ctx` and `AppCtx::test_ctx_with_chat_manager` —
+//! see those doc comments in `ctx.rs`.
 #![cfg(test)]
 
 use std::path::PathBuf;
@@ -26,9 +26,8 @@ use crate::ctx::{AppCtx, GitFactory, Services};
 use crate::db::Db;
 
 /// Shared `AppCtx` literal for [`test_ctx`] and [`test_ctx_with_chat_manager`]
-/// — the two only ever differed in `db`/`broadcast`/`adapter_registry`/
-/// `chat_manager`/`data_dir` (todo #346 review fix: this used to be
-/// duplicated across both constructors).
+/// — the two only differ in `db`/`broadcast`/`adapter_registry`/
+/// `chat_manager`/`data_dir`.
 fn test_ctx_from(
     db: Db,
     broadcast: broadcast::Sender<DaemonEvent>,
@@ -94,12 +93,11 @@ pub(crate) fn test_ctx() -> Arc<AppCtx> {
 
 /// Like [`test_ctx`], but with a REAL `ChatManager` (via `build_chat_manager`,
 /// the same production `DaemonChatDeps` the daemon boot wires) so route tests
-/// can reach the create/discard/archive/unarchive/remove-project success
-/// paths those routes gate on `chat_manager` being `Some` (todo #346, AC 26)
-/// — [`test_ctx`]'s `chat_manager: None` can only reach each route's
-/// "unavailable" fallback. Register an adapter on the returned ctx's
-/// `adapter_registry` before creating a chat under its id (see
-/// `super::StubAdapter`).
+/// can reach the create/discard/archive/unarchive/remove-project success paths
+/// those routes gate on `chat_manager` being `Some` — [`test_ctx`]'s
+/// `chat_manager: None` can only reach each route's "unavailable" fallback.
+/// Register an adapter on the returned ctx's `adapter_registry` before creating
+/// a chat under its id (see `super::StubAdapter`).
 pub(crate) fn test_ctx_with_chat_manager() -> Arc<AppCtx> {
     let parts = chat_manager_parts();
     test_ctx_from(

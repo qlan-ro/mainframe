@@ -1,10 +1,8 @@
-//! Ported from `src/server/routes/projects.ts` — project registry CRUD.
+//! Project registry CRUD.
 //!
-//! Also hosts `parse_body`, the shared request-body parser the Phase-3 route
-//! modules use: it treats an empty/whitespace body as `{}` (Express's
-//! `express.json()` default) and yields `None` on malformed/ill-typed JSON so
-//! each caller can emit its own 400 envelope string (matching each route's exact
-//! Zod `safeParse` failure).
+//! Also hosts `parse_body`, the shared request-body parser the route modules
+//! use: it treats an empty/whitespace body as `{}` and yields `None` on
+//! malformed/ill-typed JSON so each caller can emit its own 400 envelope string.
 
 use std::sync::Arc;
 
@@ -26,7 +24,7 @@ use crate::respond::{fail, ok, ok_empty};
 
 /// Parse `body` into `T`, treating an empty/whitespace body as `{}`. Returns
 /// `None` on malformed JSON or a type mismatch — the caller maps that to its
-/// route-specific 400 envelope (the TS `validate()`/`safeParse()` 400 path).
+/// route-specific 400 envelope.
 pub(crate) fn parse_body<T: DeserializeOwned>(body: &Bytes) -> Option<T> {
     let slice: &[u8] = if body.iter().all(u8::is_ascii_whitespace) {
         b"{}"
@@ -123,12 +121,11 @@ fn removal_response(result: Result<(), String>) -> Response {
 }
 
 async fn remove(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
-    // ChatManager.remove_project stops the project's live sessions and tears
+    // `ChatManager::remove_project` stops the project's live sessions and tears
     // down its worktrees before deleting the row, then reports whether the row
     // delete itself succeeded so a failed delete answers with `fail()` instead
     // of a false `ok_empty()`. When the ChatManager is unwired the teardown
-    // cannot run, so the endpoint keeps the TS failure-path 500 envelope
-    // (ChatManager construction is a documented blocker).
+    // cannot run, so the endpoint answers with the failure-path 500 envelope.
     let Some(cm) = ctx.chat_manager.as_ref() else {
         tracing::warn!(
             project_id = %id,
@@ -201,7 +198,7 @@ mod tests {
         assert!(!ids.contains(&"mainframe-no-project".to_string()));
     }
 
-    // ── DELETE via a real ChatManager (todo #346, AC 10/26) ───────────────────
+    // ── DELETE via a real ChatManager ────────────────────────────────────────
 
     #[tokio::test]
     async fn removing_a_project_deletes_its_temporary_chat_and_stops_the_process() {
@@ -274,14 +271,3 @@ mod tests {
         assert_eq!(body["success"], false);
     }
 }
-
-// PORT STATUS: src/server/routes/projects.ts (4 endpoints, 57 lines)
-// confidence: medium
-// todos: 0
-// notes: GET list / GET :id / POST ported 1:1 over ctx.db.projects (list/get/
-// get_by_path/create). POST's 409 carries `data: existing` (a non-standard fail
-// envelope) so it is hand-built, not via `fail()`. CreateProjectBody path.min(1)
-// → serde String + explicit non-empty check. DELETE :id calls the real
-// ChatManager.remove_project (stops live sessions + tears down worktrees before
-// the row delete) and maps its Result through `removal_response()`; unwired
-// (Phase-3 harness) → the TS failure-path 500 string.

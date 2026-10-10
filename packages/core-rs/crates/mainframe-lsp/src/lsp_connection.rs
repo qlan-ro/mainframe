@@ -1,16 +1,12 @@
-//! Ported from `packages/core/src/lsp/lsp-connection.ts`.
-//!
 //! The upgrade path parser, the worktree-aware effective-path resolver, the
 //! pre-upgrade validation/decision logic, and the client-attach orchestration
 //! (cached-`initialize` replay for reconnecting clients, init-result capture for
 //! the first client).
 //!
-//! Transport seam: the TS handler wrote raw HTTP status lines to a Node socket
-//! and completed the upgrade via the `ws` library. The Rust server layer (axum)
-//! is a separate, currently-deferred crate, so `handle_upgrade` returns an
-//! [`UpgradeOutcome`] decision the server maps onto the socket, and
-//! `attach_client` drives the bridge over channel seams instead of a concrete
-//! `WebSocket`.
+//! Transport seam: the axum server layer (`mainframe-server::websocket`) owns
+//! the socket, so `handle_upgrade` returns an [`UpgradeOutcome`] decision the
+//! server maps onto the socket, and `attach_client_with_capture` drives the
+//! bridge over channel seams instead of a concrete `WebSocket`.
 
 use std::sync::Arc;
 
@@ -20,12 +16,12 @@ use tokio::sync::mpsc;
 use crate::lsp_manager::{LspManager, LspServerHandle};
 use crate::lsp_proxy::bridge_ws_to_process;
 
-/// Read-only project lookup (parity with `db.projects.get`).
+/// Read-only project lookup.
 pub trait ProjectStore: Send + Sync {
     fn get_project(&self, project_id: &str) -> Option<Project>;
 }
 
-/// Read-only chat lookup (parity with `chats.getChat`).
+/// Read-only chat lookup.
 pub trait ChatStore: Send + Sync {
     fn get_chat(&self, chat_id: &str) -> Option<Chat>;
 }
@@ -97,7 +93,7 @@ impl<P: ProjectStore, C: ChatStore> LspConnectionHandler<P, C> {
     }
 
     /// Validate an upgrade, closing any stale client and spawning the server.
-    /// Parity with `handleUpgrade` up to the point of completing the WS upgrade.
+    /// Stops short of completing the WS upgrade, which the server performs.
     pub async fn handle_upgrade(
         &self,
         project_id: &str,
@@ -191,8 +187,7 @@ impl<P: ProjectStore, C: ChatStore> LspConnectionHandler<P, C> {
     }
 }
 
-/// What to do with a reconnecting client's first message (parity with the
-/// `onFirstMessage` handler in `onConnection`'s reattach branch).
+/// What to do with a reconnecting client's first message.
 #[derive(Debug, PartialEq, Eq)]
 pub enum ReattachAction {
     /// `initialize` request with an id → replay the cached result under that id.
@@ -206,7 +201,7 @@ pub enum ReattachAction {
 /// Classify a reconnecting client's first message.
 pub fn classify_reattach_first(msg: &str) -> ReattachAction {
     let Ok(value) = serde_json::from_str::<serde_json::Value>(msg) else {
-        return ReattachAction::Forward; // parse error → forward (TS `catch` fallthrough)
+        return ReattachAction::Forward; // parse error → forward
     };
     let method = value.get("method").and_then(|m| m.as_str());
     if method == Some("initialize")
@@ -222,7 +217,7 @@ pub fn classify_reattach_first(msg: &str) -> ReattachAction {
 }
 
 /// If `msg` is an `initialize` response carrying `result.capabilities`, return the
-/// `result` to cache (parity with the `startBridgeWithInitCapture` sniff).
+/// `result` to cache.
 pub fn capture_initialize_result(msg: &str) -> Option<serde_json::Value> {
     let value = serde_json::from_str::<serde_json::Value>(msg).ok()?;
     let result = value.get("result")?;
@@ -245,9 +240,8 @@ pub fn cached_initialize_reply(id: &serde_json::Value, result: &serde_json::Valu
 /// The reattach fast path (cached-`initialize` replay) is composed from
 /// [`classify_reattach_first`] + [`cached_initialize_reply`] by the server before
 /// handing the (drained) stream here.
-// TODO(port): the server (axum) layer wires the accepted WebSocket to these
-// channels and installs the on-close -> `start_idle_timer` hook; that glue lands
-// with the deferred `mainframe-server` LSP mount.
+// The server (`mainframe-server::websocket::lsp_ws_handler`) wires the accepted
+// WebSocket to these channels and installs the on-close -> `start_idle_timer` hook.
 pub fn attach_client_with_capture(
     handle: &Arc<LspServerHandle>,
     incoming: mpsc::UnboundedReceiver<String>,
@@ -263,7 +257,7 @@ pub fn attach_client_with_capture(
     };
 
     // Intercept outgoing frames to capture the `initialize` result before it
-    // reaches the client (parity with wrapping `ws.send`).
+    // reaches the client.
     let (sniff_tx, mut sniff_rx) = mpsc::unbounded_channel::<String>();
     let handle_for_sniff = Arc::clone(handle);
     tokio::spawn(async move {
@@ -286,15 +280,3 @@ pub fn attach_client_with_capture(
 
 #[cfg(test)]
 mod tests;
-
-// PORT STATUS: packages/core/src/lsp/lsp-connection.ts (249 lines)
-// confidence: medium (parser + effective-path + validation are direct ports and
-//   tested; the WS-attach orchestration is ported over a channel seam because the
-//   axum WS wiring lives in the deferred `mainframe-server` LSP mount)
-// todos: 1 (server-side WS<->channel + on-close idle-timer glue — see TODO(port))
-// notes: `getEffectivePath` is re-derived here via trait seams (`ProjectStore`/
-//   `ChatStore`) rather than importing it from the server crate (would be a
-//   dependency cycle: server -> lsp). Raw `socket.write('HTTP/1.1 …')` + destroy
-//   becomes an `UpgradeOutcome::Reject(status)` the server writes. All log strings
-//   preserved. The reattach-replay and init-capture logic is factored into pure,
-//   tested helpers (`classify_reattach_first`, `capture_initialize_result`).

@@ -1,4 +1,3 @@
-//! Ported from `packages/core/src/db/__tests__/projects.test.ts`.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::rc::Rc;
@@ -136,7 +135,7 @@ fn delete_is_atomic() {
     assert_eq!(chats.list(&project.id).unwrap().len(), 0);
 }
 
-// ── hidden scratch project row (#346) ───────────────────────────────────────
+// ── hidden scratch project row ──────────────────────────────────────────────
 
 #[test]
 fn list_never_returns_the_hidden_scratch_project_row() {

@@ -1,9 +1,8 @@
-//! Engine-internal checkpoint markers. Node has no equivalent: Rust's
-//! attempt/branch bookkeeping needs its own entries because `walk_frame`
-//! treats an already-settled step as done and skips past it, so a replayed
-//! failed attempt/branch would otherwise read as a success. A marker is
-//! never a user step — `project_timeline` filters every kind here before it
-//! reaches the editor, which has no verb entry for one.
+//! Engine-internal checkpoint markers. Attempt/branch bookkeeping needs its own
+//! entries because `walk_frame` treats an already-settled step as done and
+//! skips past it, so a replayed failed attempt/branch would otherwise read as a
+//! success. A marker is never a user step — `project_timeline` filters every
+//! kind here before it reaches the editor, which has no verb entry for one.
 
 use crate::error::StoreError;
 use crate::store::{AutomationCheckpoint, StepStatus};
@@ -87,10 +86,3 @@ pub(crate) async fn mark_outcome(
         .await?;
     Ok(record.checkpoint)
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T4.2/Phase 4a), not a TS port
-// confidence: high
-// todos: 0
-// notes: RETRY_ATTEMPT_KIND predates this file (Phase 3); BRANCH_OUTCOME_KIND
-//        and REPEAT_WATERMARK_KIND are new for the Phase 4a concurrent
-//        branch driver + scheduler.

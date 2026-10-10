@@ -1,4 +1,4 @@
-//! `session/prompt` / `session/cancel` dispatch (todo #350, plan task 14).
+//! `session/prompt` / `session/cancel` dispatch.
 //!
 //! [`PromptPort`] is a narrow surface over a live `ChatManager` — deliberately
 //! not a dependency on `mainframe-chat` itself. That crate is `mainframe-acp`'s
@@ -10,9 +10,9 @@
 //! end-to-end proof that `ChatManager::send_message`/`interrupt_chat` produce
 //! the right chat-surface events instead lives in
 //! `mainframe-chat/src/chat_manager/tests/chat_surface_wiring.rs`; this
-//! module's tests cover the wire-frame shape (criterion 5's no-`queue.*`
-//! acceptance payload, criterion 6's cancel routing, the dead-session edge
-//! case) against a hand-written [`PromptPort`] fake.
+//! module's tests cover the wire-frame shape (the acceptance payload with no
+//! `queue.*` fields, cancel routing, the dead-session edge case) against a
+//! hand-written [`PromptPort`] fake.
 
 use std::future::Future;
 use std::pin::Pin;
@@ -60,13 +60,13 @@ pub trait PromptPort: Send + Sync {
     /// End the turn (cancelled stop reason) and cancel open gates —
     /// `ChatManager::interrupt_chat` already does both (`lifecycle_manager.rs`:
     /// `perms.clear` + `mark_interrupted`, which flows into `on_result`'s
-    /// stop-reason mapping via the chat-surface seam, task 10).
+    /// stop-reason mapping via the chat-surface seam).
     fn cancel<'a>(&'a self, session_id: &'a str) -> BoxFuture<'a, Result<(), PromptError>>;
 }
 
 /// `session/prompt` request → [`PromptPort::send_prompt`] → `PromptResponse`.
-/// No `queue.*` frame family exists on the facade (criterion 5): a queued
-/// acceptance is this same response shape with the extension `_meta` set.
+/// No `queue.*` frame family exists on the facade: a queued acceptance is this
+/// same response shape with the extension `_meta` set.
 pub async fn dispatch_prompt(request: JsonRpcRequest, port: &dyn PromptPort) -> JsonRpcResponse {
     let id = request.id;
     let Some(params) = request.params else {
@@ -125,10 +125,10 @@ fn validate_command(meta: &PromptSendMeta) -> Result<(), String> {
     Ok(())
 }
 
-/// The Mainframe send context riding `PromptRequest._meta` (desktop-cutover
-/// pass): uploaded attachment ids + the slash-command invocation. Absent or
-/// unparseable meta degrades to a plain text send — never an error, since a
-/// generic ACP client sends no meta at all.
+/// The Mainframe send context riding `PromptRequest._meta`: uploaded attachment
+/// ids + the slash-command invocation. Absent or unparseable meta degrades to a
+/// plain text send — never an error, since a generic ACP client sends no meta
+/// at all.
 fn extract_send_meta(meta: Option<&Value>) -> PromptSendMeta {
     meta.and_then(|value| value.get(MAINFRAME_META_NAMESPACE))
         .and_then(|ns| serde_json::from_value(ns.clone()).ok())

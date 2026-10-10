@@ -1,5 +1,5 @@
 //! `ChatManager::open_side_chat`, its discard path, and the archive cascade
-//! (todo #344, plan Task 2 — daemon-side-chats). A child module of `tests`, so
+//! (— daemon-side-chats). A child module of `tests`, so
 //! it sees `tests`' private `StoreDeps`.
 use super::*;
 
@@ -65,7 +65,7 @@ async fn a_missing_directory_is_refused_409() {
     assert_eq!(err.status_code(), 409);
 }
 
-// A temporary parent and a non-project parent are both allowed (plan rule 3).
+// A temporary parent and a non-project parent are both allowed.
 #[tokio::test]
 async fn a_temporary_non_side_chat_parent_may_open_a_side_chat() {
     let mut chat = parent_chat("c1");

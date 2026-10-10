@@ -1,4 +1,4 @@
-//! Side chats (todo #344): a parent chat has at most one side chat at a time.
+//! Side chats: a parent chat has at most one side chat at a time.
 //! Kept in its own file so `chats.rs` (996 lines) grows only by the
 //! `CHAT_SELECT_FIELDS` subquery, the row mapping, and the `list_filtered`
 //! exclusion clause.

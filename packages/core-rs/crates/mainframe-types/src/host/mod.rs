@@ -1,4 +1,4 @@
-//! Ported from `packages/types/src/host/` (host bridge/contract types).
+//! Host bridge/contract types from `packages/types/src/host/`.
 
 pub mod daemon_target;
 pub mod host_bridge;

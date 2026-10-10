@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/background-tasks/liveness.ts`.
-
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -446,17 +444,3 @@ mod tests {
         );
     }
 }
-
-// PORT STATUS: src/background-tasks/liveness.ts (136 lines)
-// confidence: high
-// todos: 0
-// notes: runLivenessSweep/getMissCount/setMiss/deleteMiss/startLivenessScheduler
-// ported 1:1. setInterval → a spawned task with `interval_at(now+period,…)` so the
-// first tick fires AFTER the interval (tokio's plain `interval` fires immediately,
-// which would diverge from setInterval); JoinHandle.abort() = clearInterval + the
-// `stopped` guard. `Date.now()` wallclock source is an injected Clock closure so
-// wake-detection is deterministic; the wake decision is extracted to `is_wake`.
-// lsof-writer liveness is bash-only (`kind != Bash` → skip); agents/workflows run
-// inside the CLI and have no writer. All 7 sweep cases + wake + stop() translated
-// from liveness.test.ts (the wake case drives run_liveness_sweep via is_wake rather
-// than the flaky async interval).

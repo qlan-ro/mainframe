@@ -1,6 +1,4 @@
-//! Ported from `packages/types/src/plugin.ts`.
-//!
-//! This module ports the **data** shapes only: capabilities, UI contribution
+//! This module holds the **data** shapes only: capabilities, UI contribution
 //! manifests, the public/chat event unions, and the service-summary DTOs. The
 //! behavioral interfaces (`PluginContext`, `PluginEventBus`, `PluginUIContext`,
 //! `PluginConfig`, `PluginDatabaseContext`, `PluginAttachmentContext`,
@@ -8,8 +6,7 @@
 //! are runtime contracts (they carry `pino.Logger`, an express `Router`, and
 //! method signatures). They belong to the `mainframe-plugins` crate as traits, not
 //! here as serde data.
-// TODO(port): the plugin behavioral traits live in mainframe-plugins; per PORTING.md
-// §2.9 v1 is builtin-only and external JS plugin loading is dropped.
+// Plugins are builtin-only; external JS plugin loading is not supported.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -309,17 +306,3 @@ mod tests {
         assert_eq!(serde_json::to_string(&s).unwrap(), json);
     }
 }
-
-// PORT STATUS: packages/types/src/plugin.ts (225 lines)
-// confidence: medium
-// todos: 1
-// notes: only the serde-data shapes are ported (capabilities, UI manifests, the
-// PublicDaemonEvent/ChatEvent tagged unions, ChatSummary/ProjectSummary/
-// PluginAttachmentMeta). Behavioral interfaces carrying pino.Logger / express
-// Router / method signatures are NOT ported here — they belong to
-// mainframe-plugins as traits (v1 builtin-only; external JS plugin loading dropped
-// per §2.9). PublicDaemonEventName / ChatEventName string-union aliases collapse
-// into the tagged-enum discriminants. cost/totalCost are f64 (fractional);
-// durationMs/sizeBytes are i64. ChatEvent.message is crate::chat::ChatMessage.
-// ChatSummary.title (string|null) is required-nullable → Option WITHOUT skip.
-// PublicDaemonEvent/ChatEvent/ChatSummary derive PartialEq (Value/f64 are not Eq).

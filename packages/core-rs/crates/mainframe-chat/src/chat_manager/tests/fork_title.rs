@@ -1,4 +1,4 @@
-//! `assign_initial_title`'s fork carve-out (todo #343 Group 3, plan item 4): a
+//! `assign_initial_title`'s fork carve-out: a
 //! fork's provisional title still triggers generation on the first send, even
 //! though it is non-empty, but a rename before that first message wins. A
 //! child module of `tests`, so it sees `tests`' private `StoreDeps`/`RecSession`/

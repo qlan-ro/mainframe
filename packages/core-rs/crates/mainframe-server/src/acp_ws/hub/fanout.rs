@@ -1,9 +1,9 @@
 //! Per-event fan-out: who receives a chat-surface event, and the critical
-//! section it is delivered in (todo #350, T5/T6). Every event becomes one
-//! [`StreamOp`], applied inside the SAME `locked_sessions()` guard it was
-//! computed under (R1.2) — so a diff can never be computed under the lock
-//! and enqueued after it, where a second diff for the same session could
-//! interleave ahead of it — or buffered there for a resume in flight.
+//! section it is delivered in. Every event becomes one [`StreamOp`], applied
+//! inside the SAME `locked_sessions()` guard it was computed under — so a diff
+//! can never be computed under the lock and enqueued after it, where a second
+//! diff for the same session could interleave ahead of it — or buffered there
+//! for a resume in flight.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -23,8 +23,8 @@ use super::{FacadeHub, now_ms};
 
 /// What a completing `session/resume` hands [`FacadeHub::reset_session`].
 pub struct ResumeSeed<'a> {
-    /// The snapshot the connection's stream is re-seeded to, per container
-    /// (todo #376 G4) — the same shape `ResumeReplay.containers` and
+    /// The snapshot the connection's stream is re-seeded to, per container —
+    /// the same shape `ResumeReplay.containers` and
     /// `encoder::encode_containers` produce, so the freshly seeded stream's
     /// container index lines up with the next live delta's ordinals with no
     /// re-flattening.
@@ -43,9 +43,9 @@ pub struct ResumeSeed<'a> {
     pub completed: Arc<AtomicBool>,
     /// The rpc id of the gate the replay redelivers on its own, if any.
     pub redelivered_gate: Option<&'a str>,
-    /// The tool-call ids the replay sent as result previews (spec Decision
-    /// 41, `ResumeReplay.preview_ids`) — the seeded stream trims the same ids
-    /// on every later revision. Empty for a connection that did not opt in.
+    /// The tool-call ids the replay sent as result previews
+    /// (`ResumeReplay.preview_ids`) — the seeded stream trims the same ids on
+    /// every later revision. Empty for a connection that did not opt in.
     pub preview_ids: &'a HashSet<String>,
 }
 
@@ -117,13 +117,13 @@ impl FacadeHub {
     }
 
     /// [`ChatSurfaceEvent::DisplayRevision`]'s handler. A revision buffered
-    /// during a resume merges into the one already waiting (todo #376 G4:
-    /// [`EncodedDelta::merge`], "latest wins" over the union of touched
+    /// during a resume merges into the one already waiting
+    /// ([`EncodedDelta::merge`], "latest wins" over the union of touched
     /// ordinals) rather than replacing it outright, and applying it is what
-    /// [`FacadeHub::reset_session`] does via `SessionStream::on_revision_delta`
-    /// (T5, R2.9). `cursor` (todo #377) is the chat's revision-log boundary
-    /// once this same revision was recorded — carried alongside the delta so
-    /// a buffered catch-up frame's cursor is exactly the one the live
+    /// [`FacadeHub::reset_session`] does via
+    /// `SessionStream::on_revision_delta`. `cursor` is the chat's revision-log
+    /// boundary once this same revision was recorded — carried alongside the
+    /// delta so a buffered catch-up frame's cursor is exactly the one the live
     /// revision would have sent.
     pub(super) fn on_display_revision(
         &self,
@@ -167,7 +167,7 @@ impl FacadeHub {
     /// between receive the request with no pending entry to correlate its
     /// answer against — the answer would then be discarded. Registration
     /// stays ahead of the send (it is unconditional and immediate; only the
-    /// send rides the throttle FIFO, R2.11), just per connection now.
+    /// send rides the throttle FIFO), just per connection now.
     pub(super) fn raise_gate(&self, chat_id: &str, request: &ControlRequest, payload: String) {
         let now = now_ms();
         let rpc_id = super::rpc_id_string(&request.request_id);
@@ -191,7 +191,7 @@ impl FacadeHub {
 
     /// A raw out-of-band notification (a gate raise, queue snapshot,
     /// transcript clear, compaction phase) — through the SAME per-session
-    /// throttle FIFO content updates ride (R2.11), so it cannot arrive ahead
+    /// throttle FIFO content updates ride, so it cannot arrive ahead
     /// of a still-buffered update it depends on. A gate raise goes through
     /// [`Self::raise_gate`] instead, which registers in the same pass.
     pub(super) fn push_raw_to_attached(&self, chat_id: &str, payload: String) {
@@ -232,10 +232,10 @@ pub(super) fn deliver_op(
 }
 
 /// Buffer `op` in arrival order — except a revision, which MERGES into any
-/// revision already waiting (todo #376 G4: `EncodedDelta::merge`) rather than
+/// revision already waiting (`EncodedDelta::merge`) rather than
 /// replacing or queueing behind it, so a container an earlier buffered delta
 /// touched but a later one did not stays in the merged result. The later
-/// op's `full` fallback and cursor (todo #377) win outright: `full` is never
+/// op's `full` fallback and cursor win outright: `full` is never
 /// forced from a buffered op regardless (the drain always hits an already-
 /// seeded stream), and the cursor is the later, higher one —
 /// `RevisionLog`'s monotonic revision counter guarantees that ordering.
@@ -271,16 +271,15 @@ fn buffer_op(pending: &mut Vec<StreamOp>, op: StreamOp) {
     };
 }
 
-/// The one interpreter for a [`StreamOp`], used live and on the resume
-/// drain. A retry marker emits nothing of its own — it rides the next
-/// upsert the stream produces (T16). `opted_in` (todo #377) gates whether a
-/// revision's cursor is threaded into the stream at all — a non-opted
-/// connection's `Throttle` FIFO never even enqueues a `Cursor` frame, not
-/// just drops it at send time (`facade_conn.rs::send_throttled`'s own
-/// check is the second, defensive gate). `full` (todo #376 G4) is forced at
-/// most once per `StreamOp::Revision`, shared across however many attached
-/// streams call it, by the `Arc`-backed closure `handle_display_revision`
-/// built.
+/// The one interpreter for a [`StreamOp`], used live and on the resume drain. A
+/// retry marker emits nothing of its own — it rides the next upsert the stream
+/// produces. `opted_in` gates whether a revision's cursor is threaded into the
+/// stream at all — a non-opted connection's `Throttle` FIFO never even enqueues
+/// a `Cursor` frame, not just drops it at send time
+/// (`facade_conn.rs::send_throttled`'s own check is the second, defensive
+/// gate). `full` is forced at most once per `StreamOp::Revision`, shared across
+/// however many attached streams call it, by the `Arc`-backed closure
+/// `handle_display_revision` built.
 pub(super) fn run_op(
     stream: &mut SessionStream,
     op: StreamOp,

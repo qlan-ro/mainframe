@@ -4,7 +4,7 @@
 //! the moment a completed block, retry, result, or exit supersedes it. Never
 //! enters the `MessageCache`.
 //!
-//! Keyed by `(chat_id, session_id)` (todo #350, T13, R3.19): a session that
+//! Keyed by `(chat_id, session_id)` : a session that
 //! calls `on_exit` after a newer session has already replaced it must only
 //! clear its OWN overlay entry, never a chat-id-only slot a superseding
 //! session already wrote to. Before this, `on_exit` racing a fresh session's

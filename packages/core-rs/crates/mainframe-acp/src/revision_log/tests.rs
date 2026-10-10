@@ -1,6 +1,6 @@
-//! `RevisionLog::record` and `::plan` (todo #377). `msg`/`tool` builders
-//! mirror `session_state/vanish_tests.rs`'s pattern: small, duplicated
-//! fixtures rather than a shared helper module.
+//! `RevisionLog::record` and `::plan`. `msg`/`tool` builders mirror
+//! `session_state/vanish_tests.rs`'s pattern: small, duplicated fixtures rather
+//! than a shared helper module.
 
 use mainframe_types::acp::content::ContentBlock;
 use mainframe_types::acp::tool_call::{ToolCallContent, ToolCallStatus, ToolKind};

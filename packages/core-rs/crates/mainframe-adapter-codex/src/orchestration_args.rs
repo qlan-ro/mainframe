@@ -2,8 +2,8 @@
 //!
 //! Each chat runs its own app-server process, so process-scoped `-c` config
 //! matches the credential's per-chat scope. The token reaches Codex only
-//! through `bearer_token_env_var`, never argv. Pending live verification
-//! (spec Gate 0): the three keys, whether streamable HTTP needs a feature
+//! through `bearer_token_env_var`, never argv. Pending live verification:
+//! the three keys, whether streamable HTTP needs a feature
 //! flag on the pinned version, and the elicitation request shape.
 
 use mainframe_types::orchestration::{
@@ -43,12 +43,9 @@ fn toml_string(value: &str) -> String {
 }
 
 /// The `turn/start.additionalContext` entry that carries the orchestration
-/// "when to delegate" guidance, mirroring T3 Code's channel choice for the
-/// same problem (`docs/research/2026-10-09-t3code-agent-instructions-and-mcp-
-/// tools.md`, section 1) rather than `collaborationMode.settings.
-/// developer_instructions`: T3's code comment on its Codex adapter explains
-/// that when the model catalog ships its own text for a mode, Codex uses
-/// that text and drops the client's `developer_instructions` entirely, so a
+/// "when to delegate" guidance in `additionalContext`. When the model
+/// catalog ships its own text for a collaboration mode, Codex drops the
+/// client's `developer_instructions`, so a
 /// client-supplied value there is not reliably seen by the model.
 /// `additionalContext` has no such override — confirmed against the
 /// installed codex-cli 0.155.1's own generated schema

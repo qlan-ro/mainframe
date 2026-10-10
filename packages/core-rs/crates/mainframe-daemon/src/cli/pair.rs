@@ -1,4 +1,4 @@
-//! Ported from `packages/core/src/cli/pair.ts` — `mainframe pair`.
+//! The `mainframe pair` command.
 //!
 //! Requests a pairing code from the running daemon, prints it (with a QR code when
 //! a tunnel is active), then polls `/api/auth/pair-status` until the device pairs
@@ -157,13 +157,6 @@ fn urlencode(value: &str) -> String {
     }
     out
 }
-
-// PORT STATUS: src/cli/pair.ts (86 lines)
-// confidence: medium
-// notes: reqwest against the loopback daemon; qrcode-terminal small mode → the
-// qrcode crate's Dense1x2 unicode renderer (cosmetic parity, not byte-exact). The
-// setInterval(2s)/setTimeout(5min) poll becomes a sleep loop against a deadline;
-// process::exit mirrors the TS exits. encodeURIComponent hand-rolled (no url crate).
 
 #[cfg(test)]
 mod tests;

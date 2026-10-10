@@ -1,8 +1,8 @@
 //! Basic fan-out, gate, and lifecycle characterization for `FacadeHub`.
 //! Gate-lifecycle cases moved to `gate_tests.rs`, out-of-band notification
-//! passthrough to `notification_tests.rs`, and resume/reset-session race
-//! cases to `resume_race_tests.rs` (todo #350, plan task 37, R2.13) — all
-//! three share this file's fixture builders via `use super::*`.
+//! passthrough to `notification_tests.rs`, and resume/reset-session race cases
+//! to `resume_race_tests.rs` — all three share this file's fixture builders via
+//! `use super::*`.
 
 mod awaiting_seed_lifecycle_tests;
 mod awaiting_seed_tests;
@@ -45,8 +45,8 @@ fn display_message(id: &str, text: &str) -> DisplayMessage {
     }
 }
 
-/// Wraps `messages` in a `full` `DisplayDelta` over a fresh `DisplaySnapshot`
-/// (todo #376) — the shape `emit_display_for` now emits.
+/// Wraps `messages` in a `full` `DisplayDelta` over a fresh `DisplaySnapshot` —
+/// the shape `emit_display_for` emits.
 fn full_delta(messages: Vec<DisplayMessage>) -> mainframe_display::DisplayDelta {
     mainframe_display::DisplayDelta {
         full: true,
@@ -85,11 +85,11 @@ fn reply(id: i64) -> mainframe_types::acp::jsonrpc::JsonRpcResponse {
     )
 }
 
-/// A connection that did not opt into replay result previews (spec Decision 41).
+/// A connection that did not opt into replay result previews.
 static NO_PREVIEWS: LazyLock<HashSet<String>> = LazyLock::new(HashSet::new);
 
-/// The common `ResumeSeed`: a snapshot (per-container, todo #376 G4) and its
-/// reply, with no gate the replay redelivers and a reply flag nobody reads.
+/// The common `ResumeSeed`: a snapshot (per-container) and its reply, with no
+/// gate the replay redelivers and a reply flag nobody reads.
 fn seed<'a>(containers: &'a [Vec<EncodedItem>], reply: &'a JsonRpcResponse) -> ResumeSeed<'a> {
     seed_with_flag(containers, reply, Arc::new(AtomicBool::new(false)))
 }
@@ -173,8 +173,8 @@ async fn a_growing_message_streams_as_chunks_after_its_first_frame() {
     );
 }
 
-/// Spec Decision 39: `encode_revision` (not `encode`) is what wires the
-/// overlay-backed item's `streaming` flag onto the live frame.
+/// `encode_revision` (not `encode`) is what wires the overlay-backed item's
+/// `streaming` flag onto the live frame.
 #[tokio::test]
 async fn a_live_revision_with_streaming_wires_the_flag() {
     let hub = hub();

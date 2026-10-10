@@ -268,9 +268,3 @@ fn walk(steps: &[Step], scope: &mut Vec<TokenInfo>, index: &mut NameIndex) {
         scope.extend(step_produces(step));
     }
 }
-
-// PORT STATUS: TS port of packages/types/src/automation-domain/variables.ts (T6)
-// confidence: high
-// todos: 0
-// notes: rename helpers stay TS-only — they rewrite editor drafts, which the
-//        runtime never does.

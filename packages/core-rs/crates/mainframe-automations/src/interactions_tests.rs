@@ -1,4 +1,4 @@
-//! T5.1 — ask_me pause (pending interaction + event + notification) and
+//! ask_me pause (pending interaction + event + notification) and
 //! respond (validate → one-transaction claim → advance).
 
 use std::sync::{Arc, Mutex};
@@ -401,11 +401,11 @@ async fn respond_to_unknown_interaction_is_not_found() {
     assert!(matches!(err, InteractionError::NotFound(_)));
 }
 
-// --- validate_form unit coverage (ported from Node ask-me.ts) ----------
+// --- validate_form unit coverage -----------------------------------------
 
 #[test]
 fn missing_required_fields_default_to_required() {
-    // `required` absent = required (Node: `required !== false`).
+    // `required` absent = required (only an explicit `false` opts out).
     let errors = validate_form(&form_fields(), &Map::new());
     assert_eq!(
         errors,

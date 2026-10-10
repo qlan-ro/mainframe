@@ -30,14 +30,14 @@ notify = "6"
 chrono = { version = "0.4", features = ["serde"] }
 dirs = "6"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
-# Pairing QR in the daemon's `pair` subcommand (Phase 5).
+# Pairing QR in the daemon's `pair` subcommand.
 qrcode = "0.14"
 # Cron parsing for the automations scheduler.
 croner = "3"
 # Test-only: temp dirs/files for db/git/fs tests (use as a dev-dependency).
 tempfile = "3"
 # Safe `getuid(2)` for the Claude CLI's per-user spool root (`/tmp/claude-<uid>`);
-# libc's binding is an unsafe extern and every crate here is `forbid(unsafe_code)`.
+# The safe wrapper avoids an unsafe extern in crates that forbid unsafe code.
 rustix = { version = "1", features = ["process"] }
 # Test-only: named timezones for the scheduler DST-edge tests (croner runs
 # in local time in prod; tests need a deterministic tz - use as a dev-dependency).
@@ -54,7 +54,7 @@ keyring = { version = "3", features = ["apple-native", "windows-native", "sync-s
 # async-compression already pulls in, so no second copy compiles.
 flate2 = "1"
 brotli = "8"
-# The ACP facade's compressed replay batches (spec Decision 42): zlib-deflated
+# The ACP facade's compressed replay batches: zlib-deflated
 # JSON carried as base64 text frames, so no WebSocket extension is needed.
 base64 = "0.22"
 # Pure-Rust search (PR 1): pinned to the exact versions ripgrep 14.1.1 itself
@@ -89,13 +89,13 @@ mainframe-acp = { path = "crates/mainframe-acp" }
 # clippy::unwrap_used and clippy::expect_used are enforced as deny at the workspace
 # level. Test code is exempted via `#![cfg_attr(test, allow(clippy::unwrap_used,
 # clippy::expect_used))]` at the top of each crate's lib.rs (idiomatic per-crate
-# override — workspace.lints has no per-cfg granularity), and per PORTING.md the
+# override — workspace.lints has no per-cfg granularity), and the
 # forbidden-pattern grep additionally excludes #[cfg(test)] modules and main.rs boot.
 [workspace.lints.clippy]
 unwrap_used = "deny"
 expect_used = "deny"
 
-# Full DWARF across 22 crates and every dep grew target/debug to 38 GB; line
+# Full DWARF across 21 crates and every dep grew target/debug to 38 GB; line
 # tables keep backtraces readable for a fraction of the disk.
 [profile.dev]
 debug = "line-tables-only"

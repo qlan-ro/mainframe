@@ -1,4 +1,4 @@
-//! Todo #378, end-to-end runtime coverage: a real `EventHandler` sink wired
+//! End-to-end runtime coverage: a real `EventHandler` sink wired
 //! to the real display pipeline (the production `IncrementalProjector`), driven by
 //! the Codex adapter's `handle_notification` replaying the captured
 //! `item/agentMessage/delta` stream (codex-cli 0.155.1). Pins the

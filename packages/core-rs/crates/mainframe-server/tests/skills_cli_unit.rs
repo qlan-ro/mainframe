@@ -1,12 +1,6 @@
-//! Unit-level tests for the not-yet-built `mainframe_server::skills_cli`
-//! module (todo #243, plan Group A — `rust-cli-tests`, tasks A1–A3). RED
-//! until Group B (`rust-cli-service`) lands `skills_cli/{mod,resolve,args,
-//! validate,run,manifest,probe_parse,locks}.rs`. Do not stub the module to
-//! make this compile — a module this file can't exercise proves nothing
-//! about Group B's behavior.
+//! Unit-level tests for the `mainframe_server::skills_cli` module.
 //!
-//! Contract pinned here (mirrors the plan's B1 skeleton and wire contract
-//! verbatim; Group B implements exactly this):
+//! Contract pinned here:
 //!
 //! ```ignore
 //! pub struct CommandSpec { pub program: String, pub args: Vec<String>, pub cwd: String }
@@ -28,7 +22,7 @@
 //! pub async fn uninstall(runner: &dyn SkillsCliRunner, path: &ResolvedPath, project_id: &str, project_path: &str, skills: &[String], scope: Scope, adapter_id: Option<&str>) -> Result<(), SkillsCliError>;
 //! ```
 //!
-//! Submodules exercised directly by later tasks: `skills_cli::validate`,
+//! Submodules exercised directly by later tests: `skills_cli::validate`,
 //! `skills_cli::manifest::{parse_entries, merge}`, `skills_cli::resolve::{resolve_cli, CliBinary}`,
 //! `skills_cli::run::{tail, TAIL_CHARS}`, `skills_cli::probe_parse::parse_probe`,
 //! `skills_cli::locks::acquire`.
@@ -435,10 +429,9 @@ async fn unknown_adapter_falls_back_to_claude_code() {
 }
 
 // ---------------------------------------------------------------------------
-// A2 — validation, manifest merge/parse, resolve, exit-mapping, probe-parse
-// (spec AC 9, 10, 13; R2, R3). Group B's validate.rs, manifest.rs, resolve.rs,
-// run.rs and probe_parse.rs each implement exactly the contract pinned by the
-// assertions below.
+// Validation, manifest merge/parse, resolve, exit-mapping, probe-parse.
+// validate.rs, manifest.rs, resolve.rs, run.rs and probe_parse.rs each
+// implement exactly the contract pinned by the assertions below.
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -856,10 +849,10 @@ async fn probe_with_no_skills_is_probed_with_an_empty_list_not_unparseable() {
 }
 
 // ---------------------------------------------------------------------------
-// A3 — per-project concurrency guard (spec AC 10; D3). Group B's locks.rs
-// implements exactly the module-level DashSet + RAII guard contract pinned
-// below: `acquire(project_id) -> Option<Guard>`, refusing a second
-// concurrent operation for the same project id and releasing on drop.
+// Per-project concurrency guard. locks.rs implements exactly the module-level
+// DashSet + RAII guard contract pinned below: `acquire(project_id) ->
+// Option<Guard>`, refusing a second concurrent operation for the same project
+// id and releasing on drop.
 // ---------------------------------------------------------------------------
 
 #[tokio::test]

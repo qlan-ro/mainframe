@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/background-tasks/spool-root.ts`.
-
 use std::path::PathBuf;
 
 /// Real uid of this process — the value `process.getuid()` returns inside the
@@ -79,13 +77,3 @@ mod tests {
         assert_eq!(claude_dir_name(), "claude");
     }
 }
-
-// PORT STATUS: src/background-tasks/spool-root.ts (15 lines)
-// confidence: high
-// todos: 0
-// notes: `process.getuid()` -> `rustix::process::getuid().as_raw()`, a safe call
-// behind `#[cfg(unix)]`; the crate's `forbid(unsafe_code)` ruled out `libc`,
-// whose binding needs an unsafe `extern` block. Windows keeps the bare `claude`
-// dir name and `std::env::temp_dir()` base, unchanged. `os.tmpdir()` on unix
-// stays the literal `/tmp`, matching the shipping CLI (never the process temp
-// dir). No fallback uid: `getuid(2)` cannot fail on unix.

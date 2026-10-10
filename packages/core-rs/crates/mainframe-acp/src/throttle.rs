@@ -1,8 +1,7 @@
-//! Server-side coalescing for the diff engine's output (todo #350, plan
-//! task 13) so fan-out volume stays bounded (spec decision 14) without this
-//! crate owning a timer — a pure decision function over an explicit clock
-//! (`now_ms`), so it stays unit-testable without a socket; `mainframe-server`
-//! owns the real ticker that calls it.
+//! Server-side coalescing for the diff engine's output so fan-out volume stays
+//! bounded without this crate owning a timer — a pure decision function over an
+//! explicit clock (`now_ms`), so it stays unit-testable without a socket;
+//! `mainframe-server` owns the real ticker that calls it.
 
 use mainframe_types::acp::content::ContentBlock;
 use mainframe_types::acp::extensions::RevisionCursor;
@@ -11,11 +10,11 @@ use serde_json::Value;
 
 /// One frame in the throttle's FIFO: a diff-engine update, coalescible, an
 /// opaque out-of-band notification (a gate raise, a queue snapshot, …) that
-/// rides the same queue so it cannot overtake still-buffered content it
-/// depends on (R2.11) — never coalesced, since its meaning is not a delta —
-/// or a revision-cursor boundary (todo #377), coalesced down to the last one
-/// per flushed batch (its meaning IS a delta, just not a content one: only
-/// the newest boundary matters once a batch is about to go out together).
+/// rides the same queue so it cannot overtake still-buffered content it depends
+/// on — never coalesced, since its meaning is not a delta — or a
+/// revision-cursor boundary, coalesced down to the last one per flushed batch
+/// (its meaning IS a delta, just not a content one: only the newest boundary
+/// matters once a batch is about to go out together).
 #[derive(Debug, Clone, PartialEq)]
 pub enum ThrottledFrame {
     Update(SessionUpdate),
@@ -49,13 +48,13 @@ impl Throttle {
     }
 
     /// Feed one raw out-of-band frame in, through the same FIFO as content
-    /// updates (R2.11) — never coalesced, but never allowed to jump ahead of
-    /// an update already queued in front of it either.
+    /// updates — never coalesced, but never allowed to jump ahead of an update
+    /// already queued in front of it either.
     pub fn push_raw(&mut self, now_ms: i64, frame: String) -> Vec<ThrottledFrame> {
         self.push_frame(now_ms, ThrottledFrame::Raw(frame))
     }
 
-    /// Feed one revision-cursor boundary in (todo #377), through the same
+    /// Feed one revision-cursor boundary in, through the same
     /// FIFO so it never overtakes the content frames of the display
     /// revision it describes — `coalesce` then drops every cursor but the
     /// last in whatever batch it ends up in, since only the newest boundary
@@ -100,11 +99,11 @@ impl Throttle {
 /// revision, and a raw frame additionally blocks the merge chain across it,
 /// preserving its position relative to the updates on either side.
 ///
-/// A cursor frame (todo #377) is pulled out of the batch entirely before the
-/// merge pass runs, so it never blocks chunks on either side of it from
-/// coalescing the way a raw frame does — only its newest value matters once
-/// a batch is about to flush together — then reappended once, at the end,
-/// once the content frames it was mixed in with have merged.
+/// A cursor frame is pulled out of the batch entirely before the merge pass
+/// runs, so it never blocks chunks on either side of it from coalescing the way
+/// a raw frame does — only its newest value matters once a batch is about to
+/// flush together — then reappended once, at the end, once the content frames
+/// it was mixed in with have merged.
 fn coalesce(frames: Vec<ThrottledFrame>) -> Vec<ThrottledFrame> {
     let mut last_cursor = None;
     let mut content = Vec::with_capacity(frames.len());

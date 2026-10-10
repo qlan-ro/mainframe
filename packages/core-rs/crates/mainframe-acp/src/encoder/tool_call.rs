@@ -4,8 +4,7 @@ use mainframe_types::tool_call_timing::ToolCallTiming;
 use super::*;
 
 /// Flatten a `tool_group` in place, stamping the daemon's membership on each
-/// visible member: the first visible member's id doubles as the group id —
-/// the same scheme the legacy projection used (`map-assistant-blocks.ts`).
+/// visible member: the first visible member's id doubles as the group id.
 pub(super) fn encode_tool_group(
     calls: &[DisplayContent],
     container: &Container<'_>,
@@ -95,11 +94,10 @@ pub(super) fn tool_call_item(
     }
 }
 
-/// `agent_id` doubles as the task group's stable id — it is the unique
-/// tool_use id the subagent-launching tool call carried, not a synthesized
-/// value (`display_helpers.rs` regression #184 comment: "use the unique
-/// tool_use id, not description"). `subagent: true` marks that `title` is
-/// the task description, not a tool name.
+/// `agent_id` doubles as the task group's stable id — it is the unique tool_use
+/// id the subagent-launching tool call carried, not a synthesized value such as
+/// the description. `subagent: true` marks that `title` is the task
+/// description, not a tool name.
 pub(super) fn task_group_item(
     agent_id: &str,
     task_args: &HashMap<String, Value>,

@@ -1,7 +1,7 @@
 //! `tool_call_patch`'s one characterization test, moved out of
-//! `session_state/tests.rs` (todo #350, plan task 37, R2.13) — a status
-//! change through the full `SessionState::diff` engine, landing here
-//! because it exercises this module's own patch grammar specifically.
+//! `session_state/tests.rs` — a status change through the full
+//! `SessionState::diff` engine, landing here because it exercises this module's
+//! own patch grammar specifically.
 
 use super::super::*;
 use crate::encoder::EncodedItem;

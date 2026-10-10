@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/chat/external-session-service.ts`.
-
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -29,10 +27,9 @@ pub struct ExternalChatUpdate {
 
 /// Injected surface — the `db.*` / `adapters.*` reads the service makes.
 ///
-/// `adapters.getAll().filter(a => a.listExternalSessions)` becomes
-/// `external_session_adapter_ids()` + `list_external_sessions(...)`; the
-/// `listExternalSessions` adapter method is not yet on the ported Adapter trait
-/// (adapter-api TODO), so it is abstracted here.
+/// External-session listing is not part of the `Adapter` trait, so it is
+/// abstracted here as `external_session_adapter_ids` +
+/// `list_external_sessions(...)`.
 pub trait ExternalSessionDeps: Send + Sync {
     fn projects_get(&self, project_id: &str) -> Option<Project>;
     fn get_imported_session_ids(&self, project_id: &str) -> Vec<String>;
@@ -45,7 +42,7 @@ pub trait ExternalSessionDeps: Send + Sync {
     fn emit_event(&self, event: DaemonEvent);
     /// Adapter-aware title generation (`adapters.get(adapterId)?.generateTitle`).
     /// `None` when the owning adapter has no `generateTitle` (deterministic import
-    /// title stands). Main catch-up (#430): title gen moved onto the adapter.
+    /// title stands).
     fn generate_title<'a>(
         &'a self,
         adapter_id: &'a str,
@@ -183,9 +180,8 @@ impl<D: ExternalSessionDeps + 'static> ExternalSessionService<D> {
     pub fn start_auto_scan(&self, project_id: &str) {
         self.stop_auto_scan(project_id);
 
-        // Initial scan (fire-and-forget). scan_page never rejects (per-adapter
-        // errors are logged inside), so the TS `.catch('Initial…failed')` guard is
-        // structurally unreachable and elided.
+        // Initial scan (fire-and-forget). scan_page never fails (per-adapter
+        // errors are logged inside), so there is no error to handle here.
         {
             let deps = self.deps.clone();
             let last_counts = self.last_counts.clone();
@@ -622,7 +618,7 @@ mod tests {
         );
     }
 
-    // ── generate_import_title observability (#287) ──────────────────────────
+    // ── generate_import_title observability ─────────────────────────────────
     // Each case installs a `LogCapture` guard and asserts the captured
     // `(level, reason)` event plus the title-retention invariants; only the
     // deps setup and the expected reason token differ between cases.
@@ -685,25 +681,3 @@ mod tests {
         assert_eq!(chat.title.as_deref(), Some("Fallback Title"));
     }
 }
-
-// PORT STATUS: src/chat/external-session-service.ts (198 lines)
-// confidence: medium
-// todos: 0
-// notes: Main catch-up (#424/#430): `sweepTranscriptPresence` (non-archived + has
-// notes: sessionId, reconcile each) runs on the auto-scan cadence (initial + every
-// notes: tick); the optional `reconcileTranscript` callback → a defaulted
-// notes: `reconcile_transcript` deps method (`None` = no-op sweep). Title gen is now
-// notes: adapter-aware via the `generate_title(adapterId,...)` deps method (the free
-// notes: `title_generator::generate_title` moved to the Claude adapter). external-
-// notes: session-sweep.test.ts ported ×2.
-// notes: TS DI (db + AdapterRegistry) → `ExternalSessionDeps` trait. The adapter
-// notes: `listExternalSessions` method is not yet on the ported Adapter trait, so
-// notes: `external_session_adapter_ids` + `list_external_sessions` abstract it.
-// notes: scanIntervals/lastCounts → `Arc<Mutex<HashMap<..>>>` (CONCURRENCY.tsv
-// notes: SHARED_MAP); `setInterval` → a spawned tokio interval task per project
-// notes: (JoinHandle aborted on stop). Merge-sort comparator (modifiedAt desc,
-// notes: sessionId desc tie-break) copied exactly; slice bounds clamped like JS
-// notes: `Array.slice`. Fire-and-forget title gen → `tokio::spawn`. The outer
-// notes: scanPage `.catch` guards are unreachable (deps don't throw) and elided.
-// notes: The only ported test is external-session-sweep.test.ts (the scan/import
-// notes: paths have no TS test file).

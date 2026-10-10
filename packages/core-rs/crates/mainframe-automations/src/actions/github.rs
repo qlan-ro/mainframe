@@ -1,10 +1,9 @@
-//! github connector (T7.1, moved off the `gh` CLI onto REST by the
-//! 2026-08-19 provider-connections plan): a bearer token stored under the
-//! `github` credential label, same shape as `notion`/`ado`. Params arrive
-//! pre-rendered plain strings — the run_action executor renders ChipText
-//! before invoking any action other than run_command. `github.create_pr`
-//! lives here; `github.list_prs` is `github_list_prs.rs` (split to stay
-//! under the file line cap, sharing `parse_json` from here).
+//! github connector over the REST API: a bearer token stored under the `github`
+//! credential label, same shape as `notion`/`ado`. Params arrive pre-rendered
+//! plain strings — the run_action executor renders ChipText before invoking any
+//! action other than run_command. `github.create_pr` lives here;
+//! `github.list_prs` is `github_list_prs.rs` (split to stay under the file line
+//! cap, sharing `parse_json` from here).
 
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -202,10 +201,3 @@ impl Action for GithubCreatePrAction {
         })
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T7.1;
-// REST migration off `gh` is the 2026-08-19 provider-connections plan), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors ado.rs/notion.rs's shape now (bearer token from ctx.creds,
-//        injectable base_url for wiremock tests) instead of shelling out.

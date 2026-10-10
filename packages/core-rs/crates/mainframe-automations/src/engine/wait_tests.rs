@@ -1,6 +1,6 @@
-//! `wait` step (Part 3 Phase 1): parks the run on a `wake_at` that the
-//! existing deadline sweep resumes. The sweep is the only clock — there is no
-//! timer — so these tests drive `sweep_due` with an explicit `now`.
+//! `wait` step: parks the run on a `wake_at` that the existing deadline sweep
+//! resumes. The sweep is the only clock — there is no timer — so these tests
+//! drive `sweep_due` with an explicit `now`.
 
 use std::sync::Arc;
 

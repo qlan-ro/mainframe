@@ -1,7 +1,5 @@
-//! Ported from `packages/core/src/messages/truncate-tool-content.ts`.
-//!
 //! Adapter-agnostic: truncates an oversized tool-result string for display. No
-//! Claude event/JSONL shapes (§2.5 display side).
+//! Claude event/JSONL shapes.
 
 pub const TRUNCATE_THRESHOLD_BYTES: usize = 32 * 1024;
 const HEAD_LINES: usize = 100;
@@ -25,13 +23,13 @@ pub fn truncate_tool_content(content: &str) -> TruncateResult {
     }
 
     let lines: Vec<&str> = content.split('\n').collect();
-    // Round to whole KB the same way JS `Math.round` does (half away from zero,
-    // which matches Math.round for the non-negative byte counts here).
+    // Round to whole KB, half away from zero (byte counts are non-negative, so
+    // this is the same as rounding half up).
     let kb = ((full_bytes as f64) / 1024.0).round() as i64;
 
     if lines.len() <= HEAD_LINES + TAIL_LINES {
-        // Very long single/few-line content: slice by UTF-16 code units so the
-        // head/tail boundaries match JS `String.prototype.slice`.
+        // Very long single/few-line content: keep the first and last `half`
+        // UTF-16 code units.
         let half = TRUNCATE_THRESHOLD_BYTES / 2;
         let head = slice_utf16_prefix(content, half);
         let tail = slice_utf16_suffix(content, half);
@@ -52,14 +50,16 @@ pub fn truncate_tool_content(content: &str) -> TruncateResult {
     }
 }
 
-/// Mirrors JS `content.slice(0, n)` where `n` counts UTF-16 code units.
+/// The first `n` UTF-16 code units of `content`; a surrogate pair split at the
+/// boundary decodes to U+FFFD.
 fn slice_utf16_prefix(content: &str, n: usize) -> String {
     let units: Vec<u16> = content.encode_utf16().collect();
     let end = n.min(units.len());
     String::from_utf16_lossy(&units[..end])
 }
 
-/// Mirrors JS `content.slice(-n)` where `n` counts UTF-16 code units.
+/// The last `n` UTF-16 code units of `content`; a surrogate pair split at the
+/// boundary decodes to U+FFFD.
 fn slice_utf16_suffix(content: &str, n: usize) -> String {
     let units: Vec<u16> = content.encode_utf16().collect();
     let start = units.len().saturating_sub(n);
@@ -109,14 +109,3 @@ mod tests {
         assert!(!truncate_tool_content(&exact).truncated);
     }
 }
-
-// PORT STATUS: src/messages/truncate-tool-content.ts (34 lines)
-// confidence: high
-// todos: 0
-// notes: §2.5 display side (pure string helper). `Buffer.byteLength(content,'utf8')`
-// notes: → `str::len()` (UTF-8 bytes). The few-lines branch mirrors JS
-// notes: `String.slice(0,n)`/`slice(-n)` which count UTF-16 code units, so it
-// notes: slices via encode_utf16 + from_utf16_lossy (a slice boundary landing mid
-// notes: surrogate-pair yields U+FFFD; V8 would emit a lone surrogate — an
-// notes: astral-plane-at-16384-boundary edge only). Marker literals (…, ·, —)
-// notes: copied verbatim. All four truncate-tool-content.test.ts cases ported.

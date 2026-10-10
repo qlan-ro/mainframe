@@ -1,6 +1,5 @@
-//! Integration test for `routes/commands.rs` — translated from `commands.test.ts`.
-//! The TS asserts an adapter command ('clear' from claude); that union is a
-//! Phase-4/5 seam (AdapterRegistry absent from AppCtx), so this asserts the
+//! Integration test for `routes/commands.rs`. Adapter commands are not listed
+//! (the `Adapter` trait has no `list_commands` method), so this asserts the
 //! built-in mainframe command from the services registry is returned.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 

@@ -1,5 +1,5 @@
 //! What a spawned session method owes the client when its dispatch never
-//! returns (todo #350, PR #688 review).
+//! returns.
 
 use mainframe_acp::prompt::{BoxFuture, PromptAcceptance, PromptError};
 use mainframe_types::acp::extensions::PromptSendMeta;
@@ -94,8 +94,8 @@ fn initialize_request(id: i64, opt_in: Option<bool>) -> JsonRpcRequest {
     }
 }
 
-/// todo #377: a successful `initialize` whose `_meta` opts in also marks the
-/// connection — the same call that marks it negotiated.
+/// A successful `initialize` whose `_meta` opts in also marks the connection
+/// — the same call that marks it negotiated.
 #[tokio::test]
 async fn a_successful_initialize_with_the_opt_in_meta_marks_the_connection() {
     let ctx = AppCtx::test_ctx();
@@ -114,7 +114,8 @@ async fn a_successful_initialize_with_the_opt_in_meta_marks_the_connection() {
 }
 
 /// An `initialize` with no opt-in key negotiates normally but does not mark
-/// revision-cursor support — byte-identical to a pre-#377 client.
+/// revision-cursor support — byte-identical to a client that predates
+/// revision cursors.
 #[tokio::test]
 async fn an_initialize_without_the_opt_in_meta_leaves_revision_cursors_off() {
     let ctx = AppCtx::test_ctx();

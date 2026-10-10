@@ -1,7 +1,7 @@
 //! `respond_to_permission`: the guards every answer passes (cancelled,
 //! stale/duplicate, no live session) and the branch it lands on. Split out of
-//! `permission_handler.rs` (todo #350, PR #688 review) — a pure move; the
-//! branches themselves live in `branches.rs`.
+//! `permission_handler.rs` — a pure move; the branches themselves live in
+//! `branches.rs`.
 
 use mainframe_types::adapter::{ControlBehavior, ControlResponse};
 use tracing::{info, warn};

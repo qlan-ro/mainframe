@@ -1,13 +1,9 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/pr-detection.ts`.
+//! The workspace has no `regex` crate in the allowlist (as with
+//! `mainframe-adapter-api::parse_version`), so every pattern here is
+//! hand-rolled.
 //!
-//! The TS module leans on JS regexes; the Rust workspace has no `regex` crate in
-//! the allowlist (mirroring `mainframe-adapter-api::parse_version`), so every
-//! pattern here is hand-rolled. The pure-function tests port assertion-for-
-//! assertion; the `.test()` boolean checks map to `parse_*(...).is_some()`.
-//!
-//! Moved here from `mainframe-adapter-claude::pr_detection` for todo #339: PR
-//! detection is adapter-neutral, so it lives next to the `SessionSink` trait it
-//! will decorate rather than inside one adapter crate.
+//! PR detection is adapter-neutral, so it lives next to the `SessionSink` trait
+//! it decorates rather than inside one adapter crate.
 
 pub mod command;
 pub mod history;
@@ -52,18 +48,3 @@ impl DetectedPrCore {
         }
     }
 }
-
-// PORT STATUS: src/plugins/builtin/claude/pr-detection.ts (127 lines)
-// confidence: high
-// todos: 0
-// notes: all JS regexes hand-rolled (no `regex` crate in the §8 allowlist), matching
-// notes: mainframe-adapter-api::parse_version's approach. `DetectedPrCore` =
-// notes: Omit<DetectedPr,'source'>. Pure-function tests ported assertion-for-assertion
-// notes: from pr-detection.test.ts + pr-mutation-detection.test.ts; the `handleStdout`
-// notes: integration blocks in those files belong to events.rs/user_event.rs (blocked
-// notes: on the session cluster) and are NOT ported here.
-// notes: moved from mainframe-adapter-claude::pr_detection to this adapter-neutral
-// notes: module for todo #339 (Codex PR detection); split into text/parse/command,
-// notes: unchanged matcher-for-matcher, to stay under the 300-line/file budget.
-// notes: history.rs is the daemon's cold-load rescan (moved verbatim from
-// notes: mainframe-server::chat_deps::scan_history_for_prs, task 4).

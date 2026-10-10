@@ -1,8 +1,7 @@
-//! Integration tests for `routes/auth.rs` — translated assertion-for-assertion
-//! from `src/server/routes/__tests__/auth.test.ts` against a real spawned app
-//! (reqwest + in-memory DB + real PushService). Rate-limit-recording cases use a
-//! distinct `X-Forwarded-For` so the process-global rate-limit bucket never
-//! collides across the parallel tests.
+//! Integration tests for `routes/auth.rs` against a real spawned app (reqwest +
+//! in-memory DB + real PushService). Rate-limit-recording cases use a distinct
+//! `X-Forwarded-For` so the process-global rate-limit bucket never collides
+//! across the parallel tests.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod support;
@@ -121,8 +120,8 @@ async fn confirm_accepts_device_name_from_mobile() {
 
 #[tokio::test]
 async fn confirm_rejects_empty_device_name() {
-    // confirmBodySchema.deviceName is `.min(1).optional()` — an empty-but-present
-    // deviceName is a Zod parse failure (400), it must NOT pair the device (200).
+    // deviceName is optional but non-empty — an empty-but-present deviceName is
+    // a body validation failure (400), it must NOT pair the device (200).
     let server = spawn_test_server(Some(SECRET.to_string())).await;
     let code = pair(&server).await;
     let resp = client()
@@ -139,8 +138,8 @@ async fn confirm_rejects_empty_device_name() {
 
 #[tokio::test]
 async fn confirm_rejects_empty_pairing_code() {
-    // confirmBodySchema.pairingCode is `.min(1)` — an empty code is a Zod parse
-    // failure (400), NOT the "invalid or expired" 401 an absent code produces.
+    // pairingCode must be non-empty — an empty code is a body validation failure
+    // (400), NOT the "invalid or expired" 401 an absent code produces.
     let server = spawn_test_server(Some(SECRET.to_string())).await;
     let resp = client()
         .post(server.http_url("/api/auth/confirm"))

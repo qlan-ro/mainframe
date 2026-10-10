@@ -1,4 +1,4 @@
-//! Todo #378 — `item/agentMessage/delta` streams through the partial overlay.
+//! `item/agentMessage/delta` streams through the partial overlay.
 //! Growing-text and completion-parity cases replay the real capture
 //! (`agent-message-delta-0.155.1.jsonl`, codex-cli 0.155.1); every guard case
 //! (child/unknown thread, stale turn, already-completed item, malformed

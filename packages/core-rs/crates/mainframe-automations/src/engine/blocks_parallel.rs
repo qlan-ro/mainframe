@@ -1,4 +1,4 @@
-//! `parallel` block execution (Phase 4b). Unlike `blocks_concurrent_repeat`,
+//! `parallel` block execution. Unlike `blocks_concurrent_repeat`,
 //! whose branches are the SAME body run once per item, a `parallel` block's
 //! branches are authored directly — so this is a thin caller of
 //! `blocks_concurrent::run_branches`, not a scheduler: every branch is ready
@@ -35,10 +35,3 @@ pub(crate) async fn run_parallel(
         .collect();
     run_branches(&block.id, &branches, checkpoint, ctx).await
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md Phase 4b), not a TS port
-// confidence: high
-// todos: 0
-// notes: validation (min 2 / max 32 branches, nested-product cap, break
-//        rejection) lives in domain/validate.rs + domain/validate_breaks.rs;
-//        this module only ever sees an already-valid ParallelBlock.

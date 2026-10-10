@@ -1,7 +1,7 @@
-//! Scaling gate (todo #376, G1 task 3): with an identical active turn, each
-//! partial's `ProjectionStats` must be identical whether it follows 100,
-//! 1,000, or 10,000 settled messages. This is the deterministic proxy for
-//! "a partial's cost is independent of settled history length."
+//! Scaling gate: with an identical active turn, each partial's
+//! `ProjectionStats` must be identical whether it follows 100, 1,000, or 10,000
+//! settled messages. This is the deterministic proxy for "a partial's cost is
+//! independent of settled history length."
 
 use mainframe_display::{
     DisplayProjector, ProjectionInput, ProjectionStats, RawChange, RawChanges,

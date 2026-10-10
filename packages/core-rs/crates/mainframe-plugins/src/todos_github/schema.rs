@@ -1,4 +1,4 @@
-//! Additive DDL for todo #286's GitHub sync tables, layered onto the todos
+//! Additive DDL for the GitHub sync tables, layered onto the todos
 //! plugin's `data.db`. `CREATE TABLE IF NOT EXISTS` makes every run idempotent
 //! (AC31), matching the pattern `todos::run_migrations` already uses.
 

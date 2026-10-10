@@ -1,6 +1,4 @@
-//! Ported from `packages/core/src/chat/idle-scanner.ts`; extended (todo #178)
-//! from a bare CLI-process kill into a trigger for the full idle whole-chat
-//! offload (`idle_offload.rs`).
+//! Scans for idle chats and triggers whole-chat offload (`idle_offload.rs`).
 
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -17,9 +15,8 @@ pub const IDLE_THRESHOLD_MS: i64 = 2 * 60 * 60 * 1000;
 /// 5 minutes.
 pub const IDLE_SCAN_INTERVAL_MS: u64 = 5 * 60 * 1000;
 
-/// The active-chat registry the scanner reads (CONCURRENCY.tsv: SHARED_MAP, the
-/// per-entity value is `Arc<Mutex<ActiveChat>>` until chat_manager promotes it to
-/// `ChatState`). The scanner is `SINGLE_TASK`: one spawned interval task.
+/// The active-chat registry the scanner reads. Each value is an
+/// `Arc<Mutex<ActiveChat>>`; one interval task runs the scanner.
 pub type ActiveChatRegistry = Arc<DashMap<String, Arc<Mutex<ActiveChat>>>>;
 
 type NowFn = Arc<dyn Fn() -> i64 + Send + Sync>;
@@ -31,8 +28,8 @@ pub trait IdleOffloader: Send + Sync {
     fn offload<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()>;
 }
 
-/// Periodically offloads (todo #178: CLI process + daemon cache + registry
-/// cell, as one unit) chats idle longer than the threshold. The chat record
+/// Periodically offloads chats idle longer than the threshold, removing their
+/// CLI process, daemon cache, and registry cell as one unit. The chat record
 /// and `claudeSessionId` are untouched, so the next user message re-spawns via
 /// `--resume`.
 pub struct IdleSessionScanner {
@@ -111,7 +108,7 @@ impl IdleSessionScanner {
     }
 }
 
-/// The single idle-eligibility rule (todo #381 "Design"), shared by
+/// The single idle-eligibility rule, shared by
 /// `select_idle_candidates` and `ChatOffload::recheck`: a spawned session's
 /// idle clock is still `session.last_activity_at()` alone (unchanged —
 /// `None` means "always active", exactly as before). Everything else — no
@@ -134,7 +131,7 @@ pub fn idle_since(session: Option<&Arc<dyn AdapterSession>>, last_used_at: i64) 
     })
 }
 
-/// Candidate selection (plan "Design"): a pure read of the registry, no I/O
+/// Candidate selection is a pure read of the registry, with no I/O
 /// and no chat-state mutation. A chat qualifies when `idle_since` (which
 /// covers both a spawned session and a session-less/unspawned cell) reports
 /// an idle clock past `threshold_ms`. Every other check (pending permission,
@@ -238,7 +235,7 @@ mod tests {
         assert!(select_idle_candidates(&reg, now, 100).is_empty());
     }
 
-    // ── todo #381: unspawned-cell eligibility ──────────────────────────────
+    // ── Unspawned-cell eligibility ──────────────────────────────
 
     #[test]
     fn a_session_less_cell_idle_past_the_threshold_is_selected() {
@@ -267,8 +264,7 @@ mod tests {
         assert_eq!(candidates, vec!["dead".to_string()]);
     }
 
-    /// The new rule (todo #381), replacing the old `skips_sessions_that_are_not_spawned`
-    /// coincidence: an unspawned cell's eligibility comes from `last_used_at`, not
+    /// An unspawned cell's eligibility comes from `last_used_at`, not
     /// from `is_spawned()` alone — a FRESH `last_used_at` keeps it out even when the
     /// session handle (if any) or the persisted chat's own timestamps are ancient.
     #[test]
@@ -319,22 +315,3 @@ mod tests {
         assert_eq!(offloader.calls.lock().unwrap().clone(), vec!["idle-chat"]);
     }
 }
-
-// PORT STATUS: src/chat/idle-scanner.ts (58 lines)
-// confidence: high
-// todos: 0
-// notes: `timer`/`setInterval` → a spawned tokio interval task + JoinHandle (SINGLE_TASK,
-// notes: CONCURRENCY.tsv); `stop()` aborts. The first interval tick is skipped so the
-// notes: loop fires after one period (setInterval semantics); `unref()` has no tokio
-// notes: analogue (dropped — ordered shutdown aborts the handle). `scan()` snapshots
-// notes: the SHARED_MAP via `select_idle_candidates` (no shard guard held across an
-// notes: `.await`, rules 2-3). Injected `now` closure mirrors the TS `now = () =>
-// notes: Date.now()` seam; all three original idle-scanner test cases ported as pure
-// notes: `select_idle_candidates` checks.
-// notes: todo #178 split the bare `session.kill()` into candidate selection (here,
-// notes: pure) + a full offload re-check-and-release sequence (`idle_offload.rs`,
-// notes: `IdleOffloader` trait object) so a race between the two steps always favors
-// notes: NOT offloading a chat that woke up (AC4). Behavioral offload coverage
-// notes: (kill/cache/registry/event, permission skip, race, idempotency — AC1-5)
-// notes: lives in `chat_manager::tests::offload`, where a real `ChatManager` wires the
-// notes: real `ChatOffload` end to end.

@@ -1,25 +1,8 @@
-//! Ported from `src/files/file-watcher.ts`.
-//!
-//! Node's per-file `fs.watch` becomes a `notify` watcher per subscription. To
-//! stay reliable on macOS FSEvents (which drops single-file watches) the watcher
-//! is placed on the file's parent directory and events are filtered to the target
-//! file by name; the event mapping and 200ms debounce are otherwise mirrored: any
-//! inbound change schedules a single trailing `file:changed` broadcast, and the
-//! reference count keeps one watcher per key and tears it down when the last
-//! subscriber leaves.
-//!
-//! Re-arm on atomic save (`file-watcher-rearm.test.ts`): the TS service re-arms
-//! `fs.watch` on every `rename` event because Node follows the file's INODE — an
-//! atomic rename-over (write sibling tmp, rename onto the target) swaps the inode
-//! and the kernel watch goes permanently silent. This port watches the file's
-//! PARENT DIRECTORY, whose inode is stable across a file replace, so the watch
-//! keeps firing after an atomic save with no re-arm. Verified empirically on
-//! macOS (FSEvents) and by construction on Linux (inotify directory watches
-//! survive member rename/replace — the reason directory watching is the standard
-//! way to track editor/agent atomic saves). Reproducing the close-then-reopen
-//! re-arm here would open an event gap mid-replace and regress the parent-dir
-//! watch, so it is intentionally not ported; `keeps_firing_after_atomic_rename_over`
-//! pins the guarantee the re-arm existed to provide.
+//! A `notify` watcher observes each subscribed file's parent directory and
+//! filters events by filename. Directory watching survives atomic replacement
+//! of the file and avoids single-file watch failures on macOS FSEvents. A 200 ms
+//! debounce emits one trailing `file:changed` event per burst. Reference counts
+//! keep each watcher alive until its final subscriber leaves.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -76,13 +59,10 @@ impl FileWatcherService {
     /// `file:changed` path — i.e. the client contract). `watch_path` is the path
     /// handed to `notify`.
     ///
-    /// These differ on purpose: Node's `fs.watch` and the `notify` FSEvents
-    /// backend disagree on macOS single-file watches — FSEvents delivers no events
-    /// for a real-path under `/private/var`, but does for the `/var` symlink form
-    /// libuv accepts. The caller (ws-file-watch) therefore passes the realpath as
-    /// `key` (unchanged wire behavior) and the original pre-realpath path as
-    /// `watch_path` so the backend actually fires. On paths without a symlinked
-    /// prefix (the normal case) the two are equal.
+    /// These differ on macOS: FSEvents can miss a real path under `/private/var`
+    /// while the original `/var` symlink path still fires. The caller passes the
+    /// real path as `key` for the wire event and the original path as `watch_path`.
+    /// On paths without a symlinked prefix the two are equal.
     pub fn subscribe(&self, key: &str, watch_path: &str) {
         {
             let mut map = self.lock();
@@ -255,7 +235,7 @@ fn cleanup(map: &WatcherMap, path: &str) {
     if let Some(handle) = entry.debounce.take() {
         handle.abort();
     }
-    // Dropping the watcher closes it (Node's `watcher.close()`).
+    // Dropping the watcher closes the subscription.
     drop(entry);
     tracing::debug!(module = "file-watcher", path = path, "file watch stopped");
 }
@@ -350,15 +330,8 @@ mod tests {
         None
     }
 
-    /// Re-arm parity (ports `file-watcher-rearm.test.ts`). Node's `fs.watch`
-    /// follows the file's inode: an atomic rename-over (write sibling tmp, rename
-    /// onto the target) swaps the inode, the kernel watch dies, and the TS service
-    /// re-arms on the `rename` event. The Rust port watches the file's PARENT
-    /// DIRECTORY (see `subscribe`), whose inode is stable across a file replace, so
-    /// the watch is inherently rename-proof and needs no re-arm dance. This test
-    /// pins the guarantee the re-arm existed to provide: `file:changed` keeps
-    /// firing after an atomic save — verified twice to prove the watch never goes
-    /// silent (the failure mode `fs.watch` had).
+    /// A parent-directory watch keeps emitting `file:changed` after an atomic
+    /// rename-over. Two replacements prove it stays armed after the first event.
     #[tokio::test]
     async fn keeps_firing_after_atomic_rename_over() {
         let dir = tempfile::tempdir().unwrap();
@@ -387,7 +360,7 @@ mod tests {
         }
 
         // Drain, then a SECOND atomic replace to prove the watch did not go silent
-        // (the exact regression the TS re-arm guarded against).
+        // (the watcher must stay armed across atomic replacement).
         while rx.try_recv().is_ok() {}
         tokio::time::sleep(Duration::from_millis(300)).await;
         atomic_replace(b"again", "watched.txt.tmp2");
@@ -398,8 +371,7 @@ mod tests {
         svc.stop_all();
     }
 
-    /// Ports the rearm test's "a re-armed watch keeps the existing refcount"
-    /// case: an atomic rename must not disturb ref-counting, so tear-down still
+    /// An atomic rename must not disturb ref-counting, so tear-down still
     /// waits for the last subscriber. The parent-dir watch is never re-created, so
     /// the entry (and its `ref_count`) survives the rename untouched.
     #[tokio::test]
@@ -432,7 +404,7 @@ mod tests {
 
     /// macOS behavior test: create + modify a real file in a tempdir and assert a
     /// debounced `file:changed` event is emitted for it (verifies the notify event
-    /// mapping matches Node's `fs.watch`).
+    /// mapping follows the platform file-watcher behavior).
     #[tokio::test]
     async fn broadcasts_file_changed_on_real_modify() {
         let dir = tempfile::tempdir().unwrap();
@@ -467,24 +439,3 @@ mod tests {
         }
     }
 }
-
-// PORT STATUS: src/files/file-watcher.ts (150 lines, incl. #433 re-arm)
-// confidence: medium
-// todos: 0
-// notes: fs.watch → notify RecommendedWatcher per path (SHARED_MAP class:
-// Arc<Mutex<HashMap>>; §3.3 allows RwLock<HashMap>, Mutex chosen for the
-// mutate-heavy entries). The notify callback runs on the backend thread and holds
-// only a Weak to the map (no Arc cycle → no leak; the strong Arc lives in the
-// service and drops with it). 200ms trailing debounce via a spawned task whose
-// JoinHandle is stored for abort (clearTimeout). Emit needs a tokio runtime
-// (captured Handle); without one it broadcasts immediately (graceful). Same
-// debug/warn messages as the TS. The macОС behavior test drives a real file
-// modify; the refcount/lifecycle tests use real (existing) temp files since
-// notify.watch (unlike the TS mock) fails on a missing path.
-// #433 re-arm-on-rename: NOT reproduced as close-then-reopen. The TS re-arms
-// because fs.watch follows the file inode and dies on an atomic rename-over; this
-// port watches the parent dir (stable inode), so the watch survives atomic saves
-// natively. Verified on macOS (keeps_firing_after_atomic_rename_over) and by
-// inotify semantics on Linux. Closing+reopening on rename would open an event gap
-// and regress the parent-dir watch, so the outcome (file:changed keeps firing) is
-// pinned by tests instead. See the module doc for the full reconciliation.

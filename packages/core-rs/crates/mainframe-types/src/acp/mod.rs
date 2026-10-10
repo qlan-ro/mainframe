@@ -1,9 +1,9 @@
 //! Vendored subset of ACP (Agent Client Protocol) v2 for the chat-surface
-//! facade (todo #350, `docs/specs/2026-08-28-todo-350-wire-protocol-payload-
-//! grammar.md`). Pinned snapshot: spec repo commit `d0370de50e16`, schema
+//! facade (`docs/specs/2026-08-28-todo-350-wire-protocol-payload-grammar.md`).
+//! Pinned snapshot: spec repo commit `d0370de50e16`, schema
 //! crate 1.7.0 (`docs/research/ACP-EVALUATION.md` sources table) — fetched at
 //! that commit from `schema/v2/schema.json` and `schema/v2/meta.json` to
-//! write these types (plan decision 1: hand-vendored, not the
+//! write these types (hand-vendored, not the
 //! `agent-client-protocol` crate, whose v2 sits behind an unstable feature
 //! with no semver protection).
 //!

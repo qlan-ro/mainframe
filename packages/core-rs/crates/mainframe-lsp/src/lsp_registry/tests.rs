@@ -1,6 +1,4 @@
-//! Translated from `packages/core/src/__tests__/lsp/lsp-registry.test.ts`, plus
-//! new bring-your-own discovery-order cases (no TS twin — the Node daemon
-//! resolved bundled servers via `require.resolve`, which has no Rust analogue).
+//! Registry lookups plus the bring-your-own discovery-order cases.
 
 use super::*;
 use std::os::unix::fs::PermissionsExt;

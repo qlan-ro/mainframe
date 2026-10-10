@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/ui-context.ts`.
-//!
 //! Panel/action registration + notifications. Every mutation emits a
 //! `DaemonEvent` through the injected sink; the context tracks its own live
 //! panel ids so `remove_panel(None)` can tear them all down.
@@ -192,10 +190,3 @@ mod tests {
         )));
     }
 }
-
-// PORT STATUS: src/plugins/ui-context.ts
-// confidence: high
-// todos: 0
-// notes: activePanelIds → Mutex<HashSet<String>>; remove_panel(None) tears down
-// all live panels (each emits its own panelId, as the TS loop does). notify gate
-// mirrors deps.isPluginNotifyEnabled (drop when the closure returns false).

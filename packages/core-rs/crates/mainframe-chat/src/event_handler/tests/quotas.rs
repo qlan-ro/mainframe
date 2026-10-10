@@ -65,8 +65,8 @@ fn sink_provider_quota_sparse_merges_into_the_quota_manager_and_fans_out() {
         now: Some(Box::new(|| NOW)),
     }));
 
-    // Seed a prior full blob (as a pull would) so the sparse push has a weekly
-    // window to retain.
+ // Seed a prior full blob (as a pull would) so the sparse push has a weekly
+ // window to retain.
     quota.ingest(
         "codex",
         full(
@@ -84,7 +84,7 @@ fn sink_provider_quota_sparse_merges_into_the_quota_manager_and_fans_out() {
     );
     let sink = handler.build_sink("c1", None);
 
-    // The live session path: Codex pushes a session-only partial (weekly omitted).
+ // The live session path: Codex pushes a session-only partial (weekly omitted).
     sink.on_provider_quota(
         "codex",
         full(Some(window(QuotaWindowKind::Session, 80.0)), None),

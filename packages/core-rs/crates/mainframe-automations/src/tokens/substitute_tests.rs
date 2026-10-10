@@ -1,6 +1,6 @@
-//! T3.1 — literal substitution (contract Decision 9): unset → '', numbers
-//! without a spurious `.0`, lists newline-joined, records via `field`
-//! dot-paths, builtins from the injected Clock.
+//! Literal substitution: unset → '', numbers without a spurious `.0`, lists
+//! newline-joined, records via `field` dot-paths, builtins from the injected
+//! Clock.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -126,7 +126,7 @@ fn whole_records_render_as_json() {
 
 #[test]
 fn current_item_field_dot_path_resolves() {
-    // The plan's canonical example: {stepId:"current", output:"item", field:"url"}.
+    // The canonical example: {stepId:"current", output:"item", field:"url"}.
     let scope = root();
     let mut iteration = scope.child_iteration(record(&[(
         "url",
@@ -165,7 +165,7 @@ fn dot_paths_descend_records_and_list_indexes() {
 #[test]
 fn builtins_come_from_the_injected_clock() {
     let scope = root();
-    // `today` is the LOCAL date; `now` is the UTC instant, Node toISOString form.
+    // `today` is the LOCAL date; `now` is the UTC instant, JS toISOString form.
     assert_eq!(render(&[token("builtin", "today")], &scope), "2026-07-12");
     assert_eq!(
         render(&[token("builtin", "now")], &scope),
