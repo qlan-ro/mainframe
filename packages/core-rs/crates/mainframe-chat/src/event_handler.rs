@@ -7,7 +7,6 @@ use mainframe_adapter_api::pr_detection::PrDetectionSink;
 use mainframe_display::DisplayProjector;
 #[cfg(test)]
 use mainframe_display::FullRebuildProjector;
-use mainframe_runtime::time::now_iso8601;
 use mainframe_types::adapter::{
     ContextUsage, ControlRequest, DetectedPr, MessageMetadata, ProviderQuota, SessionResult,
 };
@@ -21,6 +20,7 @@ use mainframe_types::display::{DisplayMessage, StreamingLeafKind, ToolCategories
 use mainframe_types::events::{
     ChatNotificationKind, ChatNotificationLevel, ChatUpdatedReason, DaemonEvent,
 };
+use mainframe_types::time::now_iso8601;
 use tracing::{debug, warn};
 
 use crate::attention_request::{AttentionDedupe, normalize_attention_body};
@@ -40,8 +40,8 @@ mod worktree_tool;
 const PUSH_BODY_MAX_LENGTH: usize = 200;
 /// `computeSessionFilePath` — encode a cwd the Claude way and point at the jsonl.
 pub fn compute_session_file_path(cwd: &str, session_id: &str) -> String {
-    let encoded = sanitize(cwd);
-    let safe_session = sanitize(session_id);
+    let encoded = mainframe_types::paths::encode_claude_project_path(cwd);
+    let safe_session = mainframe_types::paths::encode_claude_project_path(session_id);
     let home = dirs::home_dir().unwrap_or_default();
     home.join(".claude")
         .join("projects")
@@ -51,48 +51,10 @@ pub fn compute_session_file_path(cwd: &str, session_id: &str) -> String {
         .into_owned()
 }
 
-/// `s.replace(/[^a-zA-Z0-9-]/g, '-')`.
-fn sanitize(s: &str) -> String {
-    s.chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '-' {
-                c
-            } else {
-                '-'
-            }
-        })
-        .collect()
-}
-
 /// Truncate to [`PUSH_BODY_MAX_LENGTH`] chars, ending in an ellipsis; shared
 /// with `attention_request::normalize_attention_body`.
 pub(crate) fn truncate_push_body(text: &str) -> String {
-    if text.chars().count() <= PUSH_BODY_MAX_LENGTH {
-        return text.to_string();
-    }
-    let head: String = text.chars().take(PUSH_BODY_MAX_LENGTH - 1).collect();
-    format!("{head}\u{2026}")
-}
-
-fn get_last_assistant_text(msgs: Option<&Vec<ChatMessage>>) -> String {
-    let Some(msgs) = msgs else {
-        return String::new();
-    };
-    for msg in msgs.iter().rev() {
-        if msg.r#type != ChatMessageType::Assistant {
-            continue;
-        }
-        for block in msg.content.iter().rev() {
-            if let MessageContent::Leaf(LeafContent::Text { text, .. }) = block {
-                let text = text.trim();
-                if text.is_empty() {
-                    continue;
-                }
-                return truncate_push_body(text);
-            }
-        }
-    }
-    String::new()
+    mainframe_types::chat_text::truncate_with_ellipsis(text, PUSH_BODY_MAX_LENGTH)
 }
 
 pub struct EventHandler<D: EventHandlerDeps + 'static> {
@@ -240,9 +202,7 @@ struct SessionSinkImpl<D: EventHandlerDeps + 'static> {
     chat_surface: Arc<OnceLock<Arc<dyn ChatSurface>>>,
 }
 
-fn now_ms() -> i64 {
-    chrono::Utc::now().timestamp_millis()
-}
+use mainframe_types::time::now_ms;
 
 #[cfg(test)]
 mod attention_tests;

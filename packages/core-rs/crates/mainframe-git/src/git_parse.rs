@@ -1129,3 +1129,57 @@ mod tests {
         );
     }
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct WorktreeEntry {
+    pub path: String,
+    pub branch: Option<String>,
+}
+
+/// Parses `git worktree list --porcelain` records, including detached worktrees.
+pub fn parse_worktree_list(output: &str) -> Vec<WorktreeEntry> {
+    let mut entries = Vec::new();
+    let mut path: Option<String> = None;
+    let mut branch: Option<String> = None;
+    for line in output.split('\n') {
+        if let Some(value) = line.strip_prefix("worktree ") {
+            path = Some(value.to_string());
+            branch = None;
+        } else if let Some(value) = line.strip_prefix("branch ") {
+            branch = Some(value.to_string());
+        } else if line == "detached" {
+            branch = None;
+        } else if line.is_empty()
+            && let Some(path) = path.take()
+        {
+            entries.push(WorktreeEntry {
+                path,
+                branch: branch.take(),
+            });
+        }
+    }
+    entries
+}
+
+#[cfg(test)]
+mod worktree_tests {
+    use super::{WorktreeEntry, parse_worktree_list};
+
+    #[test]
+    fn parses_branch_and_detached_records() {
+        let output = "worktree /a\nbranch refs/heads/main\n\nworktree /b\ndetached\n\n";
+        assert_eq!(
+            parse_worktree_list(output),
+            vec![
+                WorktreeEntry {
+                    path: "/a".into(),
+                    branch: Some("refs/heads/main".into())
+                },
+                WorktreeEntry {
+                    path: "/b".into(),
+                    branch: None
+                },
+            ]
+        );
+    }
+}

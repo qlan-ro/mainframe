@@ -212,7 +212,7 @@ pub(crate) fn parse_db_enum<T: serde::de::DeserializeOwned>(
 }
 
 pub(crate) fn epoch_ms_now() -> i64 {
-    chrono::Utc::now().timestamp_millis()
+    mainframe_types::time::now_ms()
 }
 
 #[cfg(test)]

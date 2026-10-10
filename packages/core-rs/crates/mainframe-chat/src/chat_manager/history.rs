@@ -1,15 +1,7 @@
 //! History, context, and degraded-recovery delegations off the `ChatManager` facade.
 use super::*;
 
-/// `get_resume_snapshot`'s result: the display history, the `StreamingLeafKind`
-/// of the in-flight partial overlay projected into it (if any), and any
-/// still-open permission gate — the three inputs `session/resume` needs to
-/// `encode_revision` and redeliver a gate, gathered in one call.
-pub struct ResumeSnapshot {
-    pub messages: Vec<DisplayMessage>,
-    pub streaming: Option<mainframe_types::display::StreamingLeafKind>,
-    pub pending: Option<mainframe_types::adapter::ControlRequest>,
-}
+pub use mainframe_types::resume::ResumeSnapshot;
 
 impl ChatManager {
     /// Cached messages, falling back to a one-shot on-disk history load (Claude

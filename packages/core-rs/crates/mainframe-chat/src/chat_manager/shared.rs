@@ -151,6 +151,4 @@ pub(crate) fn remap_history(history: Vec<ChatMessage>, chat_id: &str) -> Vec<Cha
         .collect()
 }
 
-pub(super) fn now_ms() -> i64 {
-    chrono::Utc::now().timestamp_millis()
-}
+pub(super) use mainframe_types::time::now_ms;

@@ -25,7 +25,7 @@ impl RevisionLog {
                     .insert(item.id().to_string(), (self.revision, item.clone()));
             }
         }
-        self.set_container_index(containers);
+        self.containers.seed(containers);
     }
 
     /// Record one container delta. `full` is called only when this log is
@@ -50,13 +50,13 @@ impl RevisionLog {
         let flattened: Vec<EncodedItem> = containers.iter().flatten().cloned().collect();
         let outcome = self.record(&flattened);
         if !matches!(outcome, RecordOutcome::ToolCallVanished) {
-            self.set_container_index(containers);
+            self.containers.seed(containers);
         }
         outcome
     }
 
     fn record_incremental(&mut self, delta: &EncodedDelta) -> RecordOutcome {
-        let old_ids = self.old_ids_for(delta);
+        let old_ids = self.containers.old_ids_for(delta);
         let new_ids: HashSet<&str> = delta
             .changes
             .iter()
@@ -89,7 +89,7 @@ impl RevisionLog {
             .collect();
 
         if vanished_ids.is_empty() && changed_items.is_empty() {
-            self.update_container_index(delta);
+            self.containers.update(delta);
             return RecordOutcome::Unchanged;
         }
 
@@ -105,40 +105,8 @@ impl RevisionLog {
             self.items
                 .insert(item.id().to_string(), (rev, item.clone()));
         }
-        self.update_container_index(delta);
+        self.containers.update(delta);
         RecordOutcome::Recorded(rev)
-    }
-
-    /// The old ids owned by every ordinal this delta touches — the changed
-    /// ordinals, plus any ordinal at or above the new `len` (removed).
-    fn old_ids_for(&self, delta: &EncodedDelta) -> HashSet<String> {
-        let mut ids = HashSet::new();
-        for (ordinal, _) in &delta.changes {
-            if let Some(container_ids) = self.containers.get(*ordinal) {
-                ids.extend(container_ids.iter().cloned());
-            }
-        }
-        for container_ids in self.containers.iter().skip(delta.len) {
-            ids.extend(container_ids.iter().cloned());
-        }
-        ids
-    }
-
-    fn update_container_index(&mut self, delta: &EncodedDelta) {
-        if self.containers.len() < delta.len {
-            self.containers.resize(delta.len, Vec::new());
-        }
-        for (ordinal, items) in &delta.changes {
-            self.containers[*ordinal] = items.iter().map(|item| item.id().to_string()).collect();
-        }
-        self.containers.truncate(delta.len);
-    }
-
-    fn set_container_index(&mut self, containers: &[Vec<EncodedItem>]) {
-        self.containers = containers
-            .iter()
-            .map(|items| items.iter().map(|item| item.id().to_string()).collect())
-            .collect();
     }
 }
 

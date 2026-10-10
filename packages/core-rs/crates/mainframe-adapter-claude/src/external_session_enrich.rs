@@ -4,12 +4,12 @@
 use std::io::SeekFrom;
 
 use chrono::{DateTime, Utc};
-use mainframe_runtime::time::{now_iso8601, to_iso8601};
 use mainframe_types::adapter::ExternalSession;
+use mainframe_types::time::{now_iso8601, to_iso8601};
 use serde_json::Value;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 
-use crate::external_session_paths::cwd_belongs_to_project;
+use mainframe_types::paths::cwd_belongs_to_project;
 
 pub const SYNTHETIC_TITLE: &str = "(session)";
 const READ_BYTES: u64 = 64 * 1024;
@@ -227,7 +227,7 @@ pub(crate) async fn enrich_session(
     all.extend(tail_entries);
 
     let cwd = pick_string(&all, "cwd");
-    if !cwd_belongs_to_project(cwd.as_deref(), project_path) {
+    if !cwd_belongs_to_project(cwd.as_deref().filter(|cwd| !cwd.is_empty()), project_path) {
         return None;
     }
 

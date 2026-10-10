@@ -89,7 +89,7 @@ pub struct WorktreeOfferRegistry {
 
 impl WorktreeOfferRegistry {
     pub fn new(deps: Arc<dyn WorktreeOfferDeps>) -> Self {
-        Self::with_clock(deps, Arc::new(|| chrono::Utc::now().timestamp_millis()))
+        Self::with_clock(deps, Arc::new(mainframe_types::time::now_ms))
     }
 
     pub fn with_clock(deps: Arc<dyn WorktreeOfferDeps>, now: NowFn) -> Self {

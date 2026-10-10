@@ -297,7 +297,7 @@ impl FacadeConnection {
 /// remembered — the string form of [`gate_request_id`].
 pub fn rpc_id_string(request_id: &str) -> String {
     match gate_request_id(request_id) {
-        RequestId::Str(s) => s,
+        RequestId::String(s) => s,
         RequestId::Number(n) => n.to_string(),
     }
 }

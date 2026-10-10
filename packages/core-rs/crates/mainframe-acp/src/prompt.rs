@@ -14,9 +14,6 @@
 //! `queue.*` fields, cancel routing, the dead-session edge case) against a
 //! hand-written [`PromptPort`] fake.
 
-use std::future::Future;
-use std::pin::Pin;
-
 use mainframe_types::acp::extensions::{
     MAINFRAME_META_NAMESPACE, PromptSendMeta, QueuedPromptState,
 };
@@ -28,7 +25,7 @@ use serde_json::{Value, json};
 
 use crate::rpc;
 
-pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+pub use mainframe_types::BoxFuture;
 
 /// `session/prompt`'s acceptance (spec: "immediate acceptance distinct from
 /// turn completion"). `queued_position` mirrors `ChatManager::send_message`'s
@@ -111,11 +108,7 @@ fn validate_command(meta: &PromptSendMeta) -> Result<(), String> {
     let Some(command) = meta.command.as_ref() else {
         return Ok(());
     };
-    let name_ok = !command.name.is_empty()
-        && command
-            .name
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+    let name_ok = mainframe_types::ids::is_safe_identifier(&command.name);
     if !name_ok {
         return Err("command.name must match ^[a-zA-Z0-9_-]+$".to_string());
     }

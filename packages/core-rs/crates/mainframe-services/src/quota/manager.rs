@@ -391,11 +391,7 @@ impl QuotaManager {
 }
 
 fn default_now() -> i64 {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
-        .unwrap_or(0)
+    mainframe_types::time::now_ms()
 }
 
 fn get_current_blob<'a>(st: &'a QuotaState, adapter_id: &str) -> Option<&'a ProviderQuota> {

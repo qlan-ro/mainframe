@@ -172,9 +172,7 @@ async fn scan_registry(
     }
 }
 
-fn now_ms() -> i64 {
-    chrono::Utc::now().timestamp_millis()
-}
+use mainframe_types::time::now_ms;
 
 #[cfg(test)]
 mod tests {

@@ -13,7 +13,6 @@
 #![forbid(unsafe_code)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
-use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
@@ -28,6 +27,7 @@ pub mod plan_mode_actions;
 pub mod pr_detection;
 pub mod resolve_executable;
 pub mod title;
+pub mod version;
 
 pub use adapter::{
     Adapter, AdapterSession, ContextFiles, FORK_CUT_NOT_FOUND_REASON, ForkCut, ForkPinError,
@@ -43,7 +43,7 @@ pub use mainframe_types::adapter::{ControlRequest, ControlResponse};
 
 /// A boxed, `Send` future — the manual async-fn-in-trait building block used by
 /// every `dyn`-compatible async trait method in this crate.
-pub type BoxFuture<'a, T> = Pin<Box<dyn std::future::Future<Output = T> + Send + 'a>>;
+pub use mainframe_types::BoxFuture;
 
 /// Result of a spawned child process (`{ ok, stdout }`). Shared by `RefreshDeps`
 /// and the `resolve_executable` `Runner`.
@@ -63,41 +63,6 @@ pub enum AdapterError {
 }
 
 const REFRESH_LIST_CAP_MS: u64 = 2_000;
-
-/// `\d+\.\d+\.\d+` — the first `N.N.N` triple in `stdout`. Hand-rolled (no regex
-/// crate in the allowlist).
-fn parse_version(stdout: &str) -> Option<String> {
-    let b = stdout.as_bytes();
-    let n = b.len();
-    let mut i = 0;
-    while i < n {
-        if b[i].is_ascii_digit() {
-            let mut j = i;
-            while j < n && b[j].is_ascii_digit() {
-                j += 1;
-            }
-            if j < n && b[j] == b'.' {
-                j += 1;
-                let g2 = j;
-                while j < n && b[j].is_ascii_digit() {
-                    j += 1;
-                }
-                if j > g2 && j < n && b[j] == b'.' {
-                    j += 1;
-                    let g3 = j;
-                    while j < n && b[j].is_ascii_digit() {
-                        j += 1;
-                    }
-                    if j > g3 {
-                        return Some(stdout[i..j].to_string());
-                    }
-                }
-            }
-        }
-        i += 1;
-    }
-    None
-}
 
 /// Injected refresh dependencies, set once via `configure_refresh`.
 pub trait RefreshDeps: Send + Sync {
@@ -290,7 +255,7 @@ impl AdapterRegistry {
             .await;
         let mut installed = ver.ok;
         let mut version = if ver.ok {
-            parse_version(&ver.stdout)
+            crate::version::CliVersion::parse(&ver.stdout).map(|v| v.to_string())
         } else {
             None
         };

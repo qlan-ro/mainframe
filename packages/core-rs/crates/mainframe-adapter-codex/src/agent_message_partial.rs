@@ -174,10 +174,4 @@ fn emit_due(last: Option<i64>, interval_ms: i64, now_ms: i64) -> bool {
     last.is_none_or(|last| now_ms - last >= interval_ms)
 }
 
-fn now_ms() -> i64 {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
-}
+use mainframe_types::time::now_ms;

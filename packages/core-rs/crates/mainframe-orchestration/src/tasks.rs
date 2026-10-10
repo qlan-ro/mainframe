@@ -35,7 +35,7 @@ impl Outcome {
 
 /// The daemon's timestamp shape (`2026-10-06T12:00:00.000Z`).
 pub(crate) fn now() -> String {
-    chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+    mainframe_types::time::now_iso8601()
 }
 
 /// What a finished child reports: a failed last turn leads with its error.

@@ -174,7 +174,7 @@ async fn preset_mismatch_is_a_204_with_no_run() {
 async fn stale_delivery_is_dropped_with_204() {
     let h = automations_ctx().await;
     let automation_id = webhook_automation(&h, "h3", None).await;
-    let stale_ms = chrono::Utc::now().timestamp_millis() - 11 * 60 * 1000;
+    let stale_ms = mainframe_types::time::now_ms() - 11 * 60 * 1000;
     let payload = format!(r#"{{"event":"push","timestamp":{stale_ms},"id":"d-3"}}"#);
     let (status, _) = read(
         ingest(

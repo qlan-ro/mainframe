@@ -40,7 +40,7 @@ pub(crate) fn make_message(
         chat_id: chat_id.to_string(),
         r#type,
         content,
-        timestamp: mainframe_runtime::time::now_iso8601(),
+        timestamp: mainframe_types::time::now_iso8601(),
         metadata: None,
     }
 }

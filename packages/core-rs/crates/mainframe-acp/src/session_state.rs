@@ -40,7 +40,7 @@ use updates::{clear_update, create_patch, create_update, message_variant, upsert
 #[derive(Default)]
 pub struct SessionState {
     items: HashMap<String, EncodedItem>,
-    containers: Vec<Vec<String>>,
+    containers: crate::container_index::ContainerIndex,
     seeded: bool,
     items_compared: u64,
     previews: HashSet<String>,

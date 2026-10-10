@@ -35,7 +35,7 @@ pub trait AgentChatPort: Send + Sync {
         content: &'a str,
     ) -> BoxFuture<'a, Result<(), String>>;
     /// The last assistant text block — the step's `result` output and the A2
-    /// parse input (mirrors `get_last_assistant_text`, without the push cap).
+    /// parse input (without the push notification length cap).
     fn last_assistant_text<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, String>;
     /// Best-effort session stop (run-cancel sweep).
     fn interrupt<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()>;

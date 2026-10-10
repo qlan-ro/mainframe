@@ -4,12 +4,12 @@ use std::time::Duration;
 
 use dashmap::DashMap;
 use mainframe_adapter_api::{AdapterError, AdapterSession, BoxFuture, SessionSink};
-use mainframe_runtime::time::now_iso8601;
 use mainframe_services::settings::normalize_saved_default_model;
 use mainframe_types::adapter::{SessionOptions, SessionSpawnOptions};
 use mainframe_types::chat::{Chat, ChatMessage, ChatStatus, NewChat, ProcessState, ResolvedTuning};
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::settings::ExecutionMode;
+use mainframe_types::time::now_iso8601;
 use tokio::sync::Notify;
 use tracing::{debug, info, warn};
 
@@ -43,9 +43,7 @@ pub(crate) fn is_last_active_chat_for_scope(
 /// Registry of active chats (SHARED_MAP; per-entity values are `Arc<Mutex<ActiveChat>>`).
 pub type ActiveChatRegistry = Arc<DashMap<String, Arc<Mutex<ActiveChat>>>>;
 
-fn now_ms() -> i64 {
-    chrono::Utc::now().timestamp_millis()
-}
+use mainframe_types::time::now_ms;
 
 /// Partial `db.chats.update` patch for the lifecycle paths. Worktree fields are
 /// tri-state (`Some(None)` clears).

@@ -9,7 +9,7 @@ mod fetch;
 use std::sync::LazyLock;
 
 use dashmap::DashMap;
-use mainframe_runtime::time::now_iso8601;
+use mainframe_types::time::now_iso8601;
 
 use crate::PluginError;
 use crate::context::PluginContext;

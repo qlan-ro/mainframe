@@ -10,11 +10,11 @@ use serde_json::Value;
 /// JSON-RPC request id: a number, a string, or (discouraged but legal) `null`.
 /// `null` is represented by `Option<RequestId>::None`, which serializes to the
 /// wire `null` on the envelope's `id` field without a `skip_serializing_if`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum RequestId {
     Number(i64),
-    Str(String),
+    String(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

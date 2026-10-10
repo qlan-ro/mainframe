@@ -94,23 +94,9 @@ pub(crate) async fn resolve_target(
 /// A version with fewer than 3 numeric components, or a non-numeric major/minor,
 /// counts as unsupported.
 pub(crate) fn fork_supported(version: &str) -> bool {
-    let mut parts = version.split('.');
-    let (Some(major), Some(minor), Some(patch)) = (parts.next(), parts.next(), parts.next()) else {
-        return false;
-    };
-    let Ok(major) = major.parse::<u32>() else {
-        return false;
-    };
-    let Ok(minor) = minor.parse::<u32>() else {
-        return false;
-    };
-    // A trailing pre-release/build suffix (rare for `codex --version`) only
-    // affects the patch component; take its leading digits.
-    let patch_digits: String = patch.chars().take_while(char::is_ascii_digit).collect();
-    let Ok(patch) = patch_digits.parse::<u32>() else {
-        return false;
-    };
-    (major, minor, patch) >= FORK_MIN_CODEX_VERSION
+    mainframe_adapter_api::version::CliVersion::parse_leading(version)
+        .and_then(|parsed| parsed.components_u32())
+        .is_some_and(|parts| parts >= FORK_MIN_CODEX_VERSION)
 }
 
 /// `capabilities().fork`'s version-specific reason copy.
@@ -195,6 +181,7 @@ mod tests {
         assert!(!fork_supported("0.142.9"));
         assert!(fork_supported("0.143.0"));
         assert!(fork_supported("0.155.1"));
+        assert!(fork_supported("0.143.0-beta"));
     }
 
     #[test]

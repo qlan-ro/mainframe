@@ -88,7 +88,7 @@ pub async fn pull_codex_quota_via_temp_app_server(
     let result = pull_codex_quota(PullCodexQuotaDeps {
         run_rate_limits: &run_rate_limits,
         read_account: &read_account,
-        now: chrono::Utc::now().timestamp_millis(),
+        now: mainframe_types::time::now_ms(),
     })
     .await;
     client.close();

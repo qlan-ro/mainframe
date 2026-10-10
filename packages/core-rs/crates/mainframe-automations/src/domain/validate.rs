@@ -76,8 +76,7 @@ impl Ctx<'_> {
 /// CLAUDE.md's identifier charset (`^[a-zA-Z0-9_-]+$`) — enforced here
 /// because the engine's marker scheme reserves `@` and `#` for itself.
 fn is_valid_step_id(id: &str) -> bool {
-    id.chars()
-        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    id.is_empty() || mainframe_types::ids::is_safe_identifier(id)
 }
 
 fn automation_error(message: &str) -> ValidationError {

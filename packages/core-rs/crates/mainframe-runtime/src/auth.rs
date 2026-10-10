@@ -1,5 +1,6 @@
 //! Device-token minting and validation.
 
+pub mod hmac;
 pub mod token;
 pub mod validate_authed_token;
 

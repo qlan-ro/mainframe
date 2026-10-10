@@ -97,41 +97,6 @@ pub async fn default_run(
     }
 }
 
-/// `\d+\.\d+\.\d+` — the first `N.N.N` triple in `stdout`. Hand-rolled (no regex
-/// crate).
-fn parse_version(stdout: &str) -> Option<String> {
-    let b = stdout.as_bytes();
-    let n = b.len();
-    let mut i = 0;
-    while i < n {
-        if b[i].is_ascii_digit() {
-            let mut j = i;
-            while j < n && b[j].is_ascii_digit() {
-                j += 1;
-            }
-            if j < n && b[j] == b'.' {
-                j += 1;
-                let g2 = j;
-                while j < n && b[j].is_ascii_digit() {
-                    j += 1;
-                }
-                if j > g2 && j < n && b[j] == b'.' {
-                    j += 1;
-                    let g3 = j;
-                    while j < n && b[j].is_ascii_digit() {
-                        j += 1;
-                    }
-                    if j > g3 {
-                        return Some(stdout[i..j].to_string());
-                    }
-                }
-            }
-        }
-        i += 1;
-    }
-    None
-}
-
 /// `(valid, version)`: `(false, None)`, `(true, None)`, or `(true, Some(v))`.
 async fn validate(path: &str, run: &dyn Runner) -> (bool, Option<String>) {
     let r = run
@@ -140,7 +105,10 @@ async fn validate(path: &str, run: &dyn Runner) -> (bool, Option<String>) {
     if !r.ok {
         return (false, None);
     }
-    (true, parse_version(&r.stdout))
+    (
+        true,
+        crate::version::CliVersion::parse(&r.stdout).map(|v| v.to_string()),
+    )
 }
 
 pub async fn resolve_adapter_executable(

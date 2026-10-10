@@ -21,26 +21,18 @@ use crate::routes::projects::parse_body;
 #[cfg(test)]
 mod tests;
 
-/// The daemon's identifier convention (`^[a-zA-Z0-9_-]+$`).
-fn id_ok(id: &str) -> bool {
-    !id.is_empty()
-        && id
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
-}
-
 async fn switch_provider(
     State(ctx): State<Arc<AppCtx>>,
     Path(id): Path<String>,
     body: Bytes,
 ) -> Response {
-    if !id_ok(&id) {
+    if !mainframe_types::ids::is_safe_identifier(&id) {
         return fail(StatusCode::BAD_REQUEST, "Invalid chat id");
     }
     let Some(req) = parse_body::<SwitchProviderRequest>(&body) else {
         return fail(StatusCode::BAD_REQUEST, "Invalid request body");
     };
-    if !id_ok(&req.adapter_id) {
+    if !mainframe_types::ids::is_safe_identifier(&req.adapter_id) {
         return fail(StatusCode::BAD_REQUEST, "Invalid adapterId");
     }
     let Some(cm) = ctx.chat_manager.as_ref() else {
@@ -64,7 +56,7 @@ async fn switch_provider(
 }
 
 async fn list_segments(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
-    if !id_ok(&id) {
+    if !mainframe_types::ids::is_safe_identifier(&id) {
         return fail(StatusCode::BAD_REQUEST, "Invalid chat id");
     }
     let lookup = id.clone();

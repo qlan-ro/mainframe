@@ -285,7 +285,9 @@ impl Adapter for CodexAdapter {
                 Ok(out) if out.status.success() => {
                     let stdout = String::from_utf8_lossy(&out.stdout);
                     Ok(Some(
-                        parse_version(&stdout).unwrap_or_else(|| stdout.trim().to_string()),
+                        mainframe_adapter_api::version::CliVersion::parse(&stdout)
+                            .map(|v| v.to_string())
+                            .unwrap_or_else(|| stdout.trim().to_string()),
                     ))
                 }
                 _ => Ok(None),
@@ -400,40 +402,6 @@ impl Adapter for CodexAdapter {
             });
         }
     }
-}
-
-/// The first `N.N.N` triple in `stdout` (`/(\d+\.\d+\.\d+)/`).
-fn parse_version(stdout: &str) -> Option<String> {
-    let b = stdout.as_bytes();
-    let n = b.len();
-    let mut i = 0;
-    while i < n {
-        if b[i].is_ascii_digit() {
-            let mut j = i;
-            while j < n && b[j].is_ascii_digit() {
-                j += 1;
-            }
-            if j < n && b[j] == b'.' {
-                j += 1;
-                let g2 = j;
-                while j < n && b[j].is_ascii_digit() {
-                    j += 1;
-                }
-                if j > g2 && j < n && b[j] == b'.' {
-                    j += 1;
-                    let g3 = j;
-                    while j < n && b[j].is_ascii_digit() {
-                        j += 1;
-                    }
-                    if j > g3 {
-                        return Some(stdout[i..j].to_string());
-                    }
-                }
-            }
-        }
-        i += 1;
-    }
-    None
 }
 
 #[cfg(test)]

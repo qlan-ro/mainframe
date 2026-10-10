@@ -94,8 +94,7 @@ fn handle_account_rate_limits_updated(
     params: AccountRateLimitsUpdatedParams,
     sink: &Arc<dyn SessionSink>,
 ) {
-    let quota =
-        normalize_rate_limit_snapshot(&params.rate_limits, chrono::Utc::now().timestamp_millis());
+    let quota = normalize_rate_limit_snapshot(&params.rate_limits, mainframe_types::time::now_ms());
     // C2 (#268): a snapshot that recognizes zero windows must not ingest — it would
     // bump freshness with no data behind it. Warn only when slots were present but
     // unrecognized (a genuine format drift), staying quiet on a benign empty snapshot.

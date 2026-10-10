@@ -13,24 +13,16 @@
 //! could only log a failure, so `read`/`write` failures are logged inside
 //! `FileChildRegistry` and swallowed.
 
-use std::future::Future;
 use std::path::Path;
-use std::pin::Pin;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
 /// Boxed future returned by the object-safe `ChildRegistryPort` methods.
-pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+pub use mainframe_types::BoxFuture;
 
 /// Epoch milliseconds.
-pub fn now_ms() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
-}
+pub use mainframe_types::time::now_ms;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]

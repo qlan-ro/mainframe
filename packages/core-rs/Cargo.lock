@@ -1475,6 +1475,7 @@ dependencies = [
  "hex",
  "hmac",
  "keyring",
+ "mainframe-runtime",
  "mainframe-types",
  "nanoid",
  "rand 0.8.6",
@@ -1494,7 +1495,6 @@ dependencies = [
 name = "mainframe-background-tasks"
 version = "0.0.0"
 dependencies = [
- "chrono",
  "dashmap",
  "mainframe-types",
  "rustix",
@@ -1533,7 +1533,6 @@ dependencies = [
 name = "mainframe-claude-workflows"
 version = "0.0.0"
 dependencies = [
- "chrono",
  "dashmap",
  "mainframe-types",
  "serde",
@@ -1648,7 +1647,6 @@ name = "mainframe-orchestration"
 version = "0.0.0"
 dependencies = [
  "base64",
- "chrono",
  "mainframe-types",
  "rand 0.8.6",
  "serde",
@@ -1685,7 +1683,6 @@ dependencies = [
 name = "mainframe-runtime"
 version = "0.0.0"
 dependencies = [
- "chrono",
  "dirs",
  "hex",
  "hmac",
@@ -1756,6 +1753,7 @@ version = "0.0.0"
 dependencies = [
  "dirs",
  "mainframe-db",
+ "mainframe-git",
  "mainframe-types",
  "nanoid",
  "notify",
@@ -1773,6 +1771,8 @@ dependencies = [
 name = "mainframe-types"
 version = "0.0.0"
 dependencies = [
+ "base64",
+ "chrono",
  "serde",
  "serde_json",
 ]

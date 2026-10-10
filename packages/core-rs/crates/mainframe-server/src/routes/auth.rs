@@ -62,9 +62,7 @@ struct AuthState {
 
 static AUTH_STATE: LazyLock<Mutex<AuthState>> = LazyLock::new(|| Mutex::new(AuthState::default()));
 
-fn now_ms() -> i64 {
-    chrono::Utc::now().timestamp_millis()
-}
+use mainframe_types::time::now_ms;
 
 fn clean_recent_pairings(state: &mut AuthState) {
     let now = now_ms();

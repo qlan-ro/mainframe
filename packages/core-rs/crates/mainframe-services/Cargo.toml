@@ -20,6 +20,7 @@ nanoid = { workspace = true }
 rand = { workspace = true }
 mainframe-types = { workspace = true }
 mainframe-db = { workspace = true }
+mainframe-git = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

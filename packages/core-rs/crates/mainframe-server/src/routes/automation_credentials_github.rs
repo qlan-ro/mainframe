@@ -11,7 +11,6 @@
 //! (`GithubCredentialConnect.tsx`) — it never touches GitHub.
 
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::Router;
 use axum::body::Bytes;
@@ -134,10 +133,7 @@ async fn poll_and_respond(
 /// Wall-clock ms this many seconds from now, for a GitHub-App token's
 /// `expires_at` — GitHub reports expiry as a duration, not an instant.
 fn epoch_ms_after(seconds: u64) -> i64 {
-    let now_ms = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0);
+    let now_ms = mainframe_types::time::now_ms();
     now_ms + seconds as i64 * 1000
 }
 

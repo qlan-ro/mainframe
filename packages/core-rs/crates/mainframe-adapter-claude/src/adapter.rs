@@ -19,44 +19,12 @@ use crate::models::{claude_models, enrich_with_context_window, merge_older_model
 use crate::plan_mode_handler::ClaudePlanModeHandler;
 use crate::session::ClaudeSession;
 use crate::title_generator::generate_claude_title;
-use crate::transcript::{encode_project_path, get_session_jsonl_path, locate_claude_transcript};
+use crate::transcript::{get_session_jsonl_path, locate_claude_transcript};
+use mainframe_types::paths::encode_claude_project_path;
 
 /// The adapter's display name (there is no manifest asset, so the string is
 /// inlined).
 const CLAUDE_ADAPTER_NAME: &str = "Claude Code";
-
-/// `\d+\.\d+\.\d+` — the first N.N.N triple in `stdout` (no regex crate).
-/// `pub(crate)`: `partial_stream::supports_partial_messages` parses the same
-/// `--version` output for its capability gate.
-pub(crate) fn first_version_triple(stdout: &str) -> Option<String> {
-    let bytes = stdout.as_bytes();
-    let n = bytes.len();
-    let mut i = 0;
-    while i < n {
-        if bytes[i].is_ascii_digit() {
-            let start = i;
-            let mut dots = 0;
-            let mut j = i;
-            while j < n && (bytes[j].is_ascii_digit() || (bytes[j] == b'.' && dots < 2)) {
-                if bytes[j] == b'.' {
-                    // require a digit before and after each dot
-                    if j + 1 >= n || !bytes[j + 1].is_ascii_digit() {
-                        break;
-                    }
-                    dots += 1;
-                }
-                j += 1;
-            }
-            if dots == 2 {
-                return Some(stdout[start..j].to_string());
-            }
-            i = j.max(i + 1);
-        } else {
-            i += 1;
-        }
-    }
-    None
-}
 
 fn tool_category(names: &[&str]) -> std::collections::HashSet<String> {
     names.iter().map(|s| s.to_string()).collect()
@@ -115,7 +83,7 @@ impl Default for ClaudeAdapter {
 
 impl Adapter for ClaudeAdapter {
     fn initial_transcript_path(&self, session_id: &str, cwd: &str) -> Option<String> {
-        Some(get_session_jsonl_path(&encode_project_path(session_id), cwd).jsonl_path)
+        Some(get_session_jsonl_path(&encode_claude_project_path(session_id), cwd).jsonl_path)
     }
 
     fn id(&self) -> &str {
@@ -169,7 +137,9 @@ impl Adapter for ClaudeAdapter {
             {
                 Ok(o) if o.status.success() => {
                     let stdout = String::from_utf8_lossy(&o.stdout).to_string();
-                    Ok(first_version_triple(&stdout).or_else(|| Some(stdout.trim().to_string())))
+                    Ok(mainframe_adapter_api::version::CliVersion::parse(&stdout)
+                        .map(|v| v.to_string())
+                        .or_else(|| Some(stdout.trim().to_string())))
                 }
                 _ => Ok(None),
             }
@@ -430,11 +400,16 @@ mod tests {
     }
 
     #[test]
-    fn first_version_triple_extracts_semver() {
+    fn shared_version_parser_extracts_semver() {
         assert_eq!(
-            first_version_triple("claude 2.1.198 (build 7)"),
+            mainframe_adapter_api::version::CliVersion::parse("claude 2.1.198 (build 7)")
+                .map(|v| v.to_string()),
             Some("2.1.198".to_string())
         );
-        assert_eq!(first_version_triple("no version here"), None);
+        assert_eq!(
+            mainframe_adapter_api::version::CliVersion::parse("no version here")
+                .map(|v| v.to_string()),
+            None
+        );
     }
 }

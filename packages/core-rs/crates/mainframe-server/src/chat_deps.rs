@@ -30,9 +30,7 @@ use mainframe_adapter_claude::external_session_cache::{
 use mainframe_adapter_claude::external_sessions::ExternalSessionListOpts;
 use mainframe_adapter_claude::messages::display_pipeline::prepare_messages_for_client;
 use mainframe_adapter_claude::messages::message_parsing::strip_mainframe_command_tags;
-use mainframe_background_tasks::kill::{
-    KillTasksForChatArgs, SessionLike, StopResult, kill_tasks_for_chat,
-};
+use mainframe_background_tasks::kill::{KillTasksForChatArgs, SessionLike, kill_tasks_for_chat};
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_chat::attachment_processor;
 use mainframe_chat::chat_manager::{
@@ -50,7 +48,6 @@ use mainframe_chat::fork::PendingForkState;
 use mainframe_chat::resolve_tuning_for_chat::{ResolveTuningDeps, resolve_tuning_for_chat};
 use mainframe_claude_workflows::store::ClaudeWorkflowStore;
 use mainframe_runtime::ResolvedPath;
-use mainframe_runtime::time::now_iso8601;
 use mainframe_services::attachment::AttachmentStore;
 use mainframe_services::attachment::attachment_store::AttachmentKind;
 use mainframe_services::notifications::notification_config::{
@@ -74,6 +71,7 @@ use mainframe_types::context::{
 };
 use mainframe_types::display::{DisplayMessage, ToolCategories};
 use mainframe_types::events::DaemonEvent;
+use mainframe_types::time::now_iso8601;
 use tokio::sync::broadcast;
 
 use crate::chat_seams::{LaunchStopper, ScopeTunnelStopper};
@@ -633,7 +631,7 @@ impl ChatManagerDeps for DaemonChatDeps {
         session: Option<Arc<dyn AdapterSession>>,
     ) -> BoxFuture<'a, ()> {
         Box::pin(async move {
-            let wrapped = session.map(SessionKillAdapter);
+            let wrapped = session.map(crate::session_kill_bridge::SessionKillBridge);
             let session_ref = wrapped.as_ref().map(|w| w as &dyn SessionLike);
             kill_tasks_for_chat(KillTasksForChatArgs {
                 chat_id,
@@ -1246,30 +1244,6 @@ pub fn build_chat_manager(
     manager.attach_self();
     let _ = deps.chat_manager.set(Arc::downgrade(&manager));
     manager
-}
-
-/// Bridge `Arc<dyn AdapterSession>` → the `SessionLike` the kill sweep wants.
-/// `StopBackgroundTaskResult` and `StopResult` carry the same `{ ok, error }`
-/// shape; a kill/adapter error folds into `ok: false`.
-struct SessionKillAdapter(Arc<dyn AdapterSession>);
-
-impl SessionLike for SessionKillAdapter {
-    fn stop_background_task<'a>(&'a self, task_id: &'a str) -> BoxFuture<'a, StopResult> {
-        let session = Arc::clone(&self.0);
-        let task_id = task_id.to_string();
-        Box::pin(async move {
-            match session.stop_background_task(task_id).await {
-                Ok(r) => StopResult {
-                    ok: r.ok,
-                    error: r.error,
-                },
-                Err(err) => StopResult {
-                    ok: false,
-                    error: Some(err.to_string()),
-                },
-            }
-        })
-    }
 }
 
 /// A `Send + Sync` `ResolveTuningDeps` that routes the synchronous `db.chats.get`

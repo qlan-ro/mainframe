@@ -836,12 +836,7 @@ fn register_quota_identity_resolvers(quota: &Arc<QuotaManager>) {
 
 /// Wall-clock epoch-ms for the quota pullers' `observedAt` stamp (the harvesters
 /// take an injected `now`; the pure engine still derives status off its own clock).
-fn now_ms() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
-}
+use mainframe_types::time::now_ms;
 
 /// A single-entry read-only `SettingsWriter` snapshot: `get` returns the
 /// pre-fetched value for its one `(category, key)`, `set` is a no-op (the refresh

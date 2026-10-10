@@ -17,11 +17,9 @@ fn is_valid_skill_name(name: &str) -> bool {
     if parts.is_empty() || parts.len() > 2 {
         return false;
     }
-    parts.iter().all(|p| {
-        !p.is_empty()
-            && p.chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
-    })
+    parts
+        .iter()
+        .all(|p| mainframe_types::ids::is_safe_identifier(p))
 }
 
 fn home() -> PathBuf {

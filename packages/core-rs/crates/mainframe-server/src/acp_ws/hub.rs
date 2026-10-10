@@ -10,7 +10,6 @@
 
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use dashmap::DashMap;
 use mainframe_acp::revision_log::RevisionLog;
@@ -258,12 +257,7 @@ impl FacadeHub {
     }
 }
 
-fn now_ms() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
-}
+use mainframe_types::time::now_ms;
 
 #[cfg(test)]
 mod tests;

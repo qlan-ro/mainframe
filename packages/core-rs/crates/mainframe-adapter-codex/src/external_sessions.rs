@@ -6,7 +6,7 @@
 //! recorded in its session_meta is the project root or nested under it.
 
 use std::collections::{HashMap, HashSet};
-use std::path::{MAIN_SEPARATOR, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -85,17 +85,6 @@ pub(crate) fn codex_sessions_root() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from(".codex").join("sessions"))
 }
 
-/// Belongs to this project if cwd equals the root or is nested under it.
-fn cwd_belongs_to_project(cwd: Option<&str>, project_path: &str) -> bool {
-    let Some(cwd) = cwd else {
-        return false;
-    };
-    if cwd == project_path {
-        return true;
-    }
-    cwd.starts_with(&format!("{project_path}{MAIN_SEPARATOR}"))
-}
-
 fn system_time_to_ms(t: Option<SystemTime>) -> f64 {
     match t.and_then(|t| t.duration_since(UNIX_EPOCH).ok()) {
         Some(d) => d.as_secs() as f64 * 1000.0 + f64::from(d.subsec_nanos()) / 1_000_000.0,
@@ -132,34 +121,10 @@ fn parse_rollout_uuid(name: &str) -> Option<String> {
         return None;
     }
     let uuid: String = chars[uuid_start..base_len].iter().collect();
-    if !is_uuid(&uuid) {
+    if !mainframe_types::paths::is_uuid(&uuid) {
         return None;
     }
     Some(uuid)
-}
-
-fn is_uuid(s: &str) -> bool {
-    let c: Vec<char> = s.chars().collect();
-    if c.len() != 36 {
-        return false;
-    }
-    let groups = [8usize, 4, 4, 4, 12];
-    let mut idx = 0;
-    for (gi, &g) in groups.iter().enumerate() {
-        if gi > 0 {
-            if c[idx] != '-' {
-                return false;
-            }
-            idx += 1;
-        }
-        for _ in 0..g {
-            if !c[idx].is_ascii_hexdigit() {
-                return false;
-            }
-            idx += 1;
-        }
-    }
-    idx == 36
 }
 
 fn walk_rollouts<'a>(
@@ -316,7 +281,7 @@ async fn collect_candidates(root: &Path, exclude: &HashSet<String>) -> Vec<Candi
 /// `new Date(mtimeMs).toISOString()` (Date truncates fractional ms toward zero).
 fn ms_to_iso(mtime_ms: f64) -> String {
     DateTime::from_timestamp_millis(mtime_ms.trunc() as i64)
-        .map(mainframe_runtime::time::to_iso8601)
+        .map(mainframe_types::time::to_iso8601)
         .unwrap_or_default()
 }
 
@@ -365,7 +330,7 @@ pub async fn list_external_sessions(
     let mut matched: Vec<MatchedSession> = Vec::new();
     for candidate in &candidates {
         if let Some(meta) = load_meta(candidate).await
-            && cwd_belongs_to_project(meta.cwd.as_deref(), project_path)
+            && mainframe_types::paths::cwd_belongs_to_project(meta.cwd.as_deref(), project_path)
         {
             matched.push(MatchedSession {
                 meta,
@@ -418,9 +383,20 @@ mod tests {
 
     #[test]
     fn cwd_nesting() {
-        assert!(cwd_belongs_to_project(Some("/a/b"), "/a/b"));
-        assert!(cwd_belongs_to_project(Some("/a/b/c"), "/a/b"));
-        assert!(!cwd_belongs_to_project(Some("/a/bc"), "/a/b"));
-        assert!(!cwd_belongs_to_project(None, "/a/b"));
+        assert!(mainframe_types::paths::cwd_belongs_to_project(
+            Some("/a/b"),
+            "/a/b"
+        ));
+        assert!(mainframe_types::paths::cwd_belongs_to_project(
+            Some("/a/b/c"),
+            "/a/b"
+        ));
+        assert!(!mainframe_types::paths::cwd_belongs_to_project(
+            Some("/a/bc"),
+            "/a/b"
+        ));
+        assert!(!mainframe_types::paths::cwd_belongs_to_project(
+            None, "/a/b"
+        ));
     }
 }

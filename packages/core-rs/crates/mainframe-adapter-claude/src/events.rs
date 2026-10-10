@@ -78,7 +78,7 @@ fn handle_rate_limit_event(session: &ClaudeSession, event: &Value, sink: &dyn Se
         return;
     }
     let info = event.get("rate_limit_info");
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = mainframe_types::time::now_ms();
     if let Some(quota) = normalize_rate_limit_event(info, now) {
         sink.on_provider_quota("claude", quota);
     }
