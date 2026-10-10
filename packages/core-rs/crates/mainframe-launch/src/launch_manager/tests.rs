@@ -134,8 +134,8 @@ async fn poll_added(registry: &RecordingRegistry) -> ManagedChildEntry {
     panic!("no launch pid was recorded");
 }
 
-mod cases_0;
-
-mod cases_1;
-
-mod cases_2;
+mod child_registry;
+mod clean_env;
+mod events_and_output;
+mod exit_order;
+mod start_stop;

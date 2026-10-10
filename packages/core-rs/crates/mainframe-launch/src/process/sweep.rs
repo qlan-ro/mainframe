@@ -133,6 +133,12 @@ pub(crate) async fn default_process_cwd(pid: i64) -> Option<String> {
     mainframe_runtime::process::inspect::cwd(u32::try_from(pid).ok()?, None).await
 }
 
+/// Deliver a signal to `pid` or, for launch trees, its whole process group.
+///
+/// ESRCH (the orphan died between the identity check and the signal) counts
+/// as delivered: the process is gone, so the record is pruned now instead of
+/// being retained for the next boot's sweep. Any other failure (EPERM) returns
+/// `false` and keeps the record.
 pub(crate) fn default_kill(pid: i64, kind: Signal, group: bool) -> bool {
     use mainframe_runtime::process::{Target, signal};
     let Ok(pid) = u32::try_from(pid) else {

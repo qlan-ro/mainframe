@@ -130,12 +130,14 @@ impl LaunchManager {
         let pumps = self.pumps(&mut child, name, &tail);
         tokio::spawn(wait_for_exit_task(
             child,
-            inner.clone(),
-            name.clone(),
-            pid,
-            status.clone(),
-            tail,
-            exit_tx,
+            ExitWatch {
+                inner: inner.clone(),
+                name: name.clone(),
+                pid,
+                status: status.clone(),
+                stderr_tail: tail,
+                exit_tx,
+            },
             pumps,
         ));
         (pid, status)

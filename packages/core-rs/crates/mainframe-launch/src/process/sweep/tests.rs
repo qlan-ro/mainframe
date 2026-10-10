@@ -138,8 +138,6 @@ fn deps(process_command: ProcessQueryFn, process_cwd: ProcessQueryFn, kill: Kill
     }
 }
 
-// A failing kill dep returns `false`: the record is retained, not reaped.
-
-mod cases_0;
-
-mod cases_1;
+mod defaults;
+mod matching;
+mod reaping;
