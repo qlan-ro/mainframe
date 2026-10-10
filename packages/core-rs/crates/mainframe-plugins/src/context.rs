@@ -217,18 +217,16 @@ pub struct PluginContext {
 impl PluginContext {
     /// `onUnload(fn)` — register a teardown callback.
     pub fn on_unload(&self, cb: impl FnOnce() + Send + 'static) {
-        if let Ok(mut list) = self.on_unload.lock() {
-            list.push(Box::new(cb));
-        }
+        self.on_unload
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(Box::new(cb));
     }
 
     /// Drain and return the registered teardown callbacks (the manager runs them
     /// during `unloadAll`).
     pub fn take_unload_callbacks(&self) -> Vec<UnloadFn> {
-        self.on_unload
-            .lock()
-            .map(|mut list| std::mem::take(&mut *list))
-            .unwrap_or_default()
+        std::mem::take(&mut *self.on_unload.lock().unwrap_or_else(|e| e.into_inner()))
     }
 }
 

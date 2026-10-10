@@ -31,7 +31,7 @@ pub fn get_cached(
     mtime_ms: f64,
     size: u64,
 ) -> Option<ExternalSession> {
-    let map = cache.lock().ok()?;
+    let map = cache.lock().unwrap_or_else(|e| e.into_inner());
     let e = map.get(session_id)?;
     if e.mtime_ms != mtime_ms || e.size != size {
         return None;
@@ -46,22 +46,18 @@ pub fn set_cached(
     size: u64,
     meta: ExternalSession,
 ) {
-    if let Ok(mut map) = cache.lock() {
-        map.insert(
-            session_id.to_string(),
-            Entry {
-                mtime_ms,
-                size,
-                meta,
-            },
-        );
-    }
+    cache.lock().unwrap_or_else(|e| e.into_inner()).insert(
+        session_id.to_string(),
+        Entry {
+            mtime_ms,
+            size,
+            meta,
+        },
+    );
 }
 
 pub fn clear_external_session_cache(cache: &ExternalSessionCache) {
-    if let Ok(mut map) = cache.lock() {
-        map.clear();
-    }
+    cache.lock().unwrap_or_else(|e| e.into_inner()).clear();
 }
 
 #[cfg(test)]
@@ -113,6 +109,27 @@ mod tests {
         clear_external_session_cache(&cache);
         assert_eq!(get_cached(&cache, "a", 100.0, 50), None);
     }
+
+    #[test]
+    fn cached_session_write_survives_a_poisoned_lock() {
+        let cache = new_external_session_cache();
+        std::thread::scope(|scope| {
+            assert!(
+                scope
+                    .spawn(|| {
+                        let _guard = cache.lock().unwrap();
+                        panic!("poison external session cache");
+                    })
+                    .join()
+                    .is_err()
+            );
+        });
+
+        set_cached(&cache, "a", 100.0, 50, meta());
+        assert_eq!(get_cached(&cache, "a", 100.0, 50), Some(meta()));
+        clear_external_session_cache(&cache);
+        assert_eq!(get_cached(&cache, "a", 100.0, 50), None);
+    }
 }
 
 // PORT STATUS: src/plugins/builtin/claude/external-session-cache.ts (24 lines)
@@ -120,5 +137,5 @@ mod tests {
 // todos: 0
 // notes: SHARED_MAP per CONCURRENCY.tsv — the module-global Map is replaced by an
 // injected Arc<Mutex<HashMap>>; get/set/clear take the handle (no module state,
-// rule 8). Poisoned lock → miss/no-op (no unwrap). All 4 TS tests ported against
+// rule 8). All 4 TS tests ported against
 // a freshly-constructed cache handle (replacing the TS beforeEach(clear)).

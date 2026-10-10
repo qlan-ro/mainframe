@@ -184,15 +184,13 @@ impl AppCtx {
     pub fn tunnel_url(&self) -> Option<String> {
         self.tunnel_url
             .read()
-            .map(|guard| guard.clone())
-            .unwrap_or(None)
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 
     /// `setTunnelUrl(url)` — the mutator the tunnel routes call after start/stop.
     pub fn set_tunnel_url(&self, url: Option<String>) {
-        if let Ok(mut guard) = self.tunnel_url.write() {
-            *guard = url;
-        }
+        *self.tunnel_url.write().unwrap_or_else(|e| e.into_inner()) = url;
     }
 
     /// Worktree-aware effective path (`getEffectivePath(ctx, projectId, chatId)`
@@ -258,6 +256,30 @@ impl AppCtx {
     /// service attached as the daemon boot attaches it.
     pub(crate) fn test_ctx_with_orchestration() -> Arc<AppCtx> {
         crate::chat_test_support::test_ctx_with_orchestration()
+    }
+}
+
+#[cfg(test)]
+mod poisoned_lock_tests {
+    use super::*;
+
+    #[test]
+    fn tunnel_url_write_survives_a_poisoned_lock() {
+        let ctx = AppCtx::test_ctx();
+        std::thread::scope(|scope| {
+            assert!(
+                scope
+                    .spawn(|| {
+                        let _guard = ctx.tunnel_url.write().unwrap();
+                        panic!("poison tunnel URL");
+                    })
+                    .join()
+                    .is_err()
+            );
+        });
+
+        ctx.set_tunnel_url(Some("https://example.test".to_string()));
+        assert_eq!(ctx.tunnel_url().as_deref(), Some("https://example.test"));
     }
 }
 

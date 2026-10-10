@@ -69,11 +69,10 @@ fn now_ms() -> i64 {
 
 /// Test-only reset of the process-global pairing state (mirrors `_resetAuthState`).
 pub fn reset_auth_state() {
-    if let Ok(mut state) = AUTH_STATE.lock() {
-        state.pending.clear();
-        state.rate.clear();
-        state.recent.clear();
-    }
+    let mut state = AUTH_STATE.lock().unwrap_or_else(|e| e.into_inner());
+    state.pending.clear();
+    state.rate.clear();
+    state.recent.clear();
 }
 
 fn clean_recent_pairings(state: &mut AuthState) {
@@ -207,17 +206,16 @@ async fn pair(State(ctx): State<Arc<AppCtx>>) -> Response {
         return fail(StatusCode::BAD_REQUEST, "Auth not configured");
     }
     let code = generate_pairing_code();
-    if let Ok(mut state) = AUTH_STATE.lock() {
-        state.pending.insert(
-            code.clone(),
-            PendingPairing {
-                device_name: "Unknown Device".to_string(),
-                created_at: now_ms(),
-                failed_attempts: 0,
-            },
-        );
-        clean_expired_pairings(&mut state);
-    }
+    let mut state = AUTH_STATE.lock().unwrap_or_else(|e| e.into_inner());
+    state.pending.insert(
+        code.clone(),
+        PendingPairing {
+            device_name: "Unknown Device".to_string(),
+            created_at: now_ms(),
+            failed_attempts: 0,
+        },
+    );
+    clean_expired_pairings(&mut state);
     ok(json!({ "pairingCode": code }))
 }
 
@@ -240,9 +238,8 @@ async fn confirm(
 
     let Some(parsed): Option<ConfirmBody> = parse_body(&body) else {
         // Rate limit is checked before body parse in the TS; mirror that order.
-        if let Ok(mut state) = AUTH_STATE.lock()
-            && is_rate_limited(&mut state, &ip)
-        {
+        let mut state = AUTH_STATE.lock().unwrap_or_else(|e| e.into_inner());
+        if is_rate_limited(&mut state, &ip) {
             return fail(
                 StatusCode::TOO_MANY_REQUESTS,
                 "Too many attempts, try again later",
@@ -258,9 +255,8 @@ async fn confirm(
         || parsed.device_name.as_deref() == Some("")
         || !is_valid_uuid(&parsed.client_device_id)
     {
-        if let Ok(mut state) = AUTH_STATE.lock()
-            && is_rate_limited(&mut state, &ip)
-        {
+        let mut state = AUTH_STATE.lock().unwrap_or_else(|e| e.into_inner());
+        if is_rate_limited(&mut state, &ip) {
             return fail(
                 StatusCode::TOO_MANY_REQUESTS,
                 "Too many attempts, try again later",
@@ -270,9 +266,7 @@ async fn confirm(
     }
 
     let outcome = {
-        let Ok(mut state) = AUTH_STATE.lock() else {
-            return fail(StatusCode::INTERNAL_SERVER_ERROR, "Internal server error");
-        };
+        let mut state = AUTH_STATE.lock().unwrap_or_else(|e| e.into_inner());
         if is_rate_limited(&mut state, &ip) {
             return fail(
                 StatusCode::TOO_MANY_REQUESTS,
@@ -338,8 +332,11 @@ async fn confirm(
 
     let token = generate_token(&secret, &device_id, Some(epoch));
 
-    if let Ok(mut state) = AUTH_STATE.lock() {
-        state.recent.insert(
+    AUTH_STATE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .recent
+        .insert(
             parsed.pairing_code.clone(),
             RecentPairing {
                 device_id: device_id.clone(),
@@ -347,7 +344,6 @@ async fn confirm(
                 consumed_at: now_ms(),
             },
         );
-    }
 
     ok(json!({ "token": token, "deviceId": device_id }))
 }
@@ -414,9 +410,7 @@ async fn pair_status(Query(params): Query<HashMap<String, String>>) -> Response 
     if !is_valid_pair_code(code) {
         return fail(StatusCode::BAD_REQUEST, "Invalid code");
     }
-    let Ok(mut state) = AUTH_STATE.lock() else {
-        return fail(StatusCode::INTERNAL_SERVER_ERROR, "Internal server error");
-    };
+    let mut state = AUTH_STATE.lock().unwrap_or_else(|e| e.into_inner());
     clean_recent_pairings(&mut state);
     match state.recent.get(code) {
         None => ok(json!({ "paired": false })),
