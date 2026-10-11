@@ -97,6 +97,30 @@ async fn reimporting_the_same_issue_is_idempotent_and_reports_it_skipped() {
 }
 
 #[tokio::test]
+async fn an_issue_github_refuses_is_skipped_with_the_github_error_text() {
+    let fake = Arc::new(FakeGitHub::default().with_get_error(
+        11,
+        GitHubPortError::Request {
+            status: 410,
+            message: "issue was deleted".into(),
+        },
+    ));
+    let harness = setup(fake).await;
+    let ctx = &harness.ctx;
+    link_project(ctx, "p1").await;
+
+    let result = pairing::import_issues(ctx, "p1", &[11]).await.unwrap();
+
+    assert!(result.imported.is_empty());
+    assert_eq!(result.skipped.len(), 1);
+    assert_eq!(result.skipped[0].issue_number, 11);
+    assert_eq!(
+        result.skipped[0].reason,
+        "request failed (410): issue was deleted"
+    );
+}
+
+#[tokio::test]
 async fn publish_creates_the_issue_from_the_task_and_strips_workflow_labels() {
     let fake = Arc::new(FakeGitHub::default());
     let harness = setup(fake.clone()).await;

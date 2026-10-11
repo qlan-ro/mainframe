@@ -43,7 +43,7 @@ impl From<ActorError> for PluginError {
     fn from(error: ActorError) -> Self {
         match error {
             ActorError::Io(error) => Self::Io(error),
-            other => Self::Message(format!("plugin {other}")),
+            ActorError::Worker(what) => Self::Worker(what),
         }
     }
 }

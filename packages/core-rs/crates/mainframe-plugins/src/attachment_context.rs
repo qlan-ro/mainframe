@@ -43,9 +43,7 @@ impl PluginAttachments for FsAttachmentContext {
         let dir = self.entity_dir(entity_id);
         let entity_id = entity_id.to_string();
         Box::pin(async move {
-            let dir = dir.ok_or_else(|| {
-                PluginError::Message(format!("Invalid entityId path segment: {entity_id:?}"))
-            })?;
+            let dir = dir.ok_or(PluginError::InvalidEntityId(entity_id))?;
             tokio::fs::create_dir_all(&dir).await?;
             let id = nanoid::nanoid!();
             let safe_name = sanitize_file_name(&file.filename);

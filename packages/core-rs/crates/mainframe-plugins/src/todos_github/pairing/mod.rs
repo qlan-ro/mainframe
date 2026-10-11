@@ -133,9 +133,9 @@ pub(crate) async fn import_issues(
         match import::import_one(ctx, project_id, &link.credential_label, &repo, issue_number).await
         {
             Ok(imported) => result.imported.push(imported),
-            Err(reason) => result.skipped.push(Skipped {
+            Err(err) => result.skipped.push(Skipped {
                 issue_number,
-                reason,
+                reason: err.to_string(),
             }),
         }
     }

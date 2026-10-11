@@ -49,7 +49,7 @@ pub(crate) async fn post_todo(
     }
     match repo::fetch(&ctx, &id).await {
         Ok(Some(todo)) => json_response(StatusCode::CREATED, json!({ "todo": todo })),
-        Ok(None) => server_error(PluginError::Message("inserted row not found".into())),
+        Ok(None) => server_error(PluginError::Invariant("inserted row not found")),
         Err(err) => server_error(err),
     }
 }

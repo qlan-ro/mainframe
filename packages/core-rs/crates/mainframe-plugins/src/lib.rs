@@ -37,8 +37,8 @@ pub use github_port::{
 pub use mainframe_adapter_api::BoxFuture;
 pub use manager::PluginManager;
 
-/// Fallible-operation error for the plugin layer. `Message` and
-/// `CapabilityRequired` carry verbatim human-readable strings.
+/// Fallible-operation error for the plugin layer. Plugin routes answer every
+/// one of these with an opaque 500, so no text here is wire contract.
 #[derive(Debug, thiserror::Error)]
 pub enum PluginError {
     #[error(transparent)]
@@ -47,12 +47,24 @@ pub enum PluginError {
     Io(#[from] std::io::Error),
     #[error(transparent)]
     Json(#[from] serde_json::Error),
+    /// The worker thread that owns a plugin's `data.db` could not take or
+    /// answer the request.
+    #[error("plugin database worker {0}")]
+    Worker(&'static str),
+    /// A store failure that is not one of the flattened variants above (a
+    /// dead worker, a broken invariant).
+    #[error(transparent)]
+    Db(mainframe_db::DbError),
     /// Returned when a gated subsystem is used without its manifest
     /// capability.
     #[error("Plugin capability '{0}' is required but not declared in manifest")]
     CapabilityRequired(String),
+    /// An attachment entity id that is not a single safe path segment.
+    #[error("Invalid entityId path segment: {0:?}")]
+    InvalidEntityId(String),
+    /// A row the plugin just wrote could not be read back.
     #[error("{0}")]
-    Message(String),
+    Invariant(&'static str),
 }
 
 impl From<mainframe_db::DbError> for PluginError {
@@ -61,7 +73,7 @@ impl From<mainframe_db::DbError> for PluginError {
             mainframe_db::DbError::Sqlite(error) => Self::Sqlite(error),
             mainframe_db::DbError::Json(error) => Self::Json(error),
             mainframe_db::DbError::Io(error) => Self::Io(error),
-            mainframe_db::DbError::Message(message) => Self::Message(message),
+            other => Self::Db(other),
         }
     }
 }
