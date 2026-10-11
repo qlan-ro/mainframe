@@ -1,7 +1,7 @@
 //! Plan actions over shared chat state and lifecycle callbacks.
 
 use mainframe_types::chat_patch::ChatPatch;
-use mainframe_types::sync::LockExt as _;
+use mainframe_types::sync::LockExt;
 use std::sync::{Arc, Mutex};
 
 use mainframe_adapter_api::{
@@ -227,4 +227,5 @@ impl PlanActionContext for ChatPlanActionCtx {
 }
 
 #[cfg(test)]
+#[path = "plan_mode_actions_tests.rs"]
 mod tests;

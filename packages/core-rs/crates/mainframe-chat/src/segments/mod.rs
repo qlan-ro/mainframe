@@ -15,6 +15,7 @@ pub mod switch_plan;
 pub mod switch_rules;
 
 #[cfg(test)]
+#[path = "../segments_tests.rs"]
 mod tests;
 
 use mainframe_types::seam_error::SeamError;

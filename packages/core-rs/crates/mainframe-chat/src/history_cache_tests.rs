@@ -134,12 +134,13 @@ async fn write_in_background_eventually_lands_a_hit() {
     cache.write_in_background("c1".to_string(), fp.clone(), vec![msg("m1")]);
 
     let mut hit = None;
-    for _ in 0..50 {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while std::time::Instant::now() < deadline {
         if let Some(messages) = cache.read("c1", &fp).await {
             hit = Some(messages);
             break;
         }
-        tokio::time::sleep(Duration::from_millis(10)).await;
+        tokio::task::yield_now().await;
     }
     assert_eq!(hit, Some(vec![msg("m1")]));
 }
@@ -154,11 +155,15 @@ async fn pruning_keeps_only_the_newest_snapshots_by_mtime() {
         .await
         .unwrap();
 
-    for id in ["oldest", "middle", "newest"] {
+    for (index, id) in ["oldest", "middle", "newest"].into_iter().enumerate() {
         cache.write(id, fp.clone(), vec![msg(id)]).await.unwrap();
-        // Nudge mtimes apart — both macOS (APFS) and Linux (ext4) CI runners
-        // give sub-millisecond mtime resolution, so this stays fast and safe.
-        tokio::time::sleep(Duration::from_millis(20)).await;
+        std::fs::File::open(dir.path().join(format!("{id}.json")))
+            .unwrap()
+            .set_times(
+                std::fs::FileTimes::new()
+                    .set_modified(std::time::UNIX_EPOCH + Duration::from_secs(100 + index as u64)),
+            )
+            .unwrap();
     }
 
     assert!(cache.read("oldest", &fp).await.is_none());

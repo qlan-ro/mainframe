@@ -132,4 +132,5 @@ pub struct ChatManager {
 }
 
 #[cfg(test)]
+#[path = "chat_manager_tests.rs"]
 pub(crate) mod tests;

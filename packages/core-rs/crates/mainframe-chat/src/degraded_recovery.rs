@@ -13,7 +13,7 @@ use crate::event_handler::EventHandler;
 use mainframe_types::chat::Chat;
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::http_status::{HttpStatus, StatusKind};
-use mainframe_types::sync::LockExt as _;
+use mainframe_types::sync::LockExt;
 
 /// Errors surfaced by the recovery ops. The strings cross the wire (the routes
 /// return them verbatim).
@@ -142,4 +142,5 @@ fn emit_updated(shared: &ChatShared, chat_id: &str) {
 }
 
 #[cfg(test)]
+#[path = "degraded_recovery_tests.rs"]
 mod tests;

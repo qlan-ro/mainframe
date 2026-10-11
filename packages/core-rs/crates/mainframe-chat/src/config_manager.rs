@@ -1,4 +1,4 @@
-use mainframe_types::sync::LockExt as _;
+use mainframe_types::sync::LockExt;
 use std::sync::{Arc, Mutex};
 
 use crate::config_transcripts::RelocateError;
@@ -115,4 +115,5 @@ mod update;
 mod worktree;
 
 #[cfg(test)]
+#[path = "config_manager_tests.rs"]
 mod tests;

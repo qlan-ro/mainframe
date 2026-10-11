@@ -16,7 +16,7 @@
 //! This module owns the sync offer state machine; `rescan` owns the async half
 //! that fills it.
 
-use mainframe_types::sync::LockExt as _;
+use mainframe_types::sync::LockExt;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -219,4 +219,5 @@ fn resolved_event(
 }
 
 #[cfg(test)]
+#[path = "worktree_offer_tests.rs"]
 mod tests;

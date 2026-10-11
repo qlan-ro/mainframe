@@ -1,0 +1,186 @@
+use super::*;
+use serde_json::json;
+
+fn image(name: &str, media_type: &str, data: &str) -> StoredAttachment {
+    StoredAttachment {
+        name: name.to_string(),
+        media_type: media_type.to_string(),
+        size_bytes: 128,
+        kind: AttachmentKind::Image,
+        data: data.to_string(),
+        original_path: None,
+        materialized_path: None,
+    }
+}
+
+fn image_with_path(name: &str, media_type: &str, data: &str, path: &str) -> StoredAttachment {
+    StoredAttachment {
+        materialized_path: Some(path.to_string()),
+        ..image(name, media_type, data)
+    }
+}
+
+fn file(name: &str) -> StoredAttachment {
+    StoredAttachment {
+        name: name.to_string(),
+        media_type: "text/plain".to_string(),
+        size_bytes: 10,
+        kind: AttachmentKind::File,
+        data: String::new(),
+        original_path: Some("/tmp/notes.txt".to_string()),
+        materialized_path: None,
+    }
+}
+
+fn file_with_path(name: &str, path: &str) -> StoredAttachment {
+    StoredAttachment {
+        materialized_path: Some(path.to_string()),
+        ..file(name)
+    }
+}
+
+#[test]
+fn image_becomes_inline_content_and_image_input() {
+    let out = process_attachments(&[image("shot.png", "image/png", "BASE64DATA")]);
+
+    assert_eq!(out.images.len(), 1);
+    assert_eq!(out.images[0].media_type, "image/png");
+    assert_eq!(out.images[0].data, "BASE64DATA");
+
+    assert_eq!(out.message_content.len(), 1);
+    assert_eq!(
+        out.message_content[0],
+        MessageContent::Leaf(LeafContent::Image {
+            media_type: "image/png".to_string(),
+            data: "BASE64DATA".to_string(),
+            parent_tool_use_id: None,
+        })
+    );
+    assert!(out.text_prefix.is_empty());
+}
+
+#[test]
+fn file_becomes_text_prefix_tag_not_image() {
+    let out = process_attachments(&[file("notes.txt")]);
+
+    assert!(out.images.is_empty());
+    assert!(out.message_content.is_empty());
+    assert_eq!(
+        out.text_prefix,
+        vec![
+            "<attached_file_path name=\"notes.txt\" path=\"/tmp/notes.txt\" media_type=\"text/plain\" size_bytes=\"10\" />"
+                .to_string()
+        ]
+    );
+}
+
+#[test]
+fn preview_carries_camelcase_fields_and_omits_absent_paths() {
+    let out = process_attachments(&[image("shot.png", "image/png", "X")]);
+    assert_eq!(
+        out.attachment_previews[0],
+        json!({
+            "name": "shot.png",
+            "mediaType": "image/png",
+            "sizeBytes": 128,
+            "kind": "image",
+        })
+    );
+}
+
+#[test]
+fn preview_includes_original_path_when_present() {
+    let out = process_attachments(&[file("notes.txt")]);
+    assert_eq!(
+        out.attachment_previews[0],
+        json!({
+            "name": "notes.txt",
+            "mediaType": "text/plain",
+            "sizeBytes": 10,
+            "kind": "file",
+            "originalPath": "/tmp/notes.txt",
+        })
+    );
+}
+
+#[test]
+fn mixed_batch_preserves_order_and_kinds() {
+    let out = process_attachments(&[
+        image("a.png", "image/png", "AA"),
+        file("b.txt"),
+        image("c.jpg", "image/jpeg", "CC"),
+    ]);
+
+    assert_eq!(out.images.len(), 2);
+    assert_eq!(out.images[0].data, "AA");
+    assert_eq!(out.images[1].data, "CC");
+    assert_eq!(out.message_content.len(), 2);
+    assert_eq!(out.text_prefix.len(), 1);
+    assert_eq!(out.attachment_previews.len(), 3);
+}
+
+#[test]
+fn empty_input_yields_default() {
+    let out = process_attachments(&[]);
+    assert!(out.images.is_empty());
+    assert!(out.message_content.is_empty());
+    assert!(out.text_prefix.is_empty());
+    assert!(out.attachment_previews.is_empty());
+}
+
+#[test]
+fn image_input_carries_the_materialized_path() {
+    let out = process_attachments(&[image_with_path(
+        "shot.png",
+        "image/png",
+        "BASE64DATA",
+        "/tmp/chat/files/abc-shot.png",
+    )]);
+    assert_eq!(
+        out.images[0].path,
+        Some("/tmp/chat/files/abc-shot.png".to_string())
+    );
+    assert_eq!(out.images[0].media_type, "image/png");
+    assert_eq!(out.images[0].data, "BASE64DATA");
+}
+
+#[test]
+fn image_input_path_is_none_without_materialization() {
+    let out = process_attachments(&[image("shot.png", "image/png", "BASE64DATA")]);
+    assert_eq!(out.images[0].path, None);
+}
+
+#[test]
+fn image_preview_omits_materialized_path() {
+    let out = process_attachments(&[image_with_path(
+        "shot.png",
+        "image/png",
+        "X",
+        "/tmp/chat/files/abc-shot.png",
+    )]);
+    assert_eq!(
+        out.attachment_previews[0],
+        json!({
+            "name": "shot.png",
+            "mediaType": "image/png",
+            "sizeBytes": 128,
+            "kind": "image",
+        })
+    );
+}
+
+#[test]
+fn file_preview_still_includes_materialized_path() {
+    let out = process_attachments(&[file_with_path("notes.txt", "/tmp/chat/files/xyz-notes.txt")]);
+    assert_eq!(
+        out.attachment_previews[0],
+        json!({
+            "name": "notes.txt",
+            "mediaType": "text/plain",
+            "sizeBytes": 10,
+            "kind": "file",
+            "originalPath": "/tmp/notes.txt",
+            "materializedPath": "/tmp/chat/files/xyz-notes.txt",
+        })
+    );
+}

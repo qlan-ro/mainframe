@@ -10,7 +10,7 @@
 //! session already wrote to. Before this, `on_exit` racing a fresh session's
 //! first `on_message_partial` could drop the wrong overlay.
 
-use mainframe_types::sync::LockExt as _;
+use mainframe_types::sync::LockExt;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -57,6 +57,13 @@ fn overlay_message(chat_id: &str, overlay: &PartialOverlay) -> ChatMessage {
 pub struct PartialOverlays(Arc<Mutex<HashMap<(String, String), PartialOverlay>>>);
 
 impl PartialOverlays {
+    #[cfg(test)]
+    pub(crate) fn set_test_timestamp(&self, timestamp: &str) {
+        for overlay in self.0.lock_recover().values_mut() {
+            overlay.started_at = timestamp.to_string();
+        }
+    }
+
     pub fn new() -> Self {
         Self::default()
     }

@@ -13,12 +13,13 @@
 use crate::chat_manager::ChatShared;
 use mainframe_types::chat::{Chat, ProcessState};
 use mainframe_types::chat_patch::ChatPatch;
-use mainframe_types::sync::LockExt as _;
+use mainframe_types::sync::LockExt;
 use mainframe_types::transcript::TranscriptLocation;
 
 use crate::chat_cwd::chat_cwd;
 
 #[cfg(test)]
+#[path = "../transcript_presence_tests.rs"]
 mod tests;
 
 /// Reconcile the persisted `transcriptMissing` flag against the transcript file

@@ -1,4 +1,4 @@
-use mainframe_types::sync::LockExt as _;
+use mainframe_types::sync::LockExt;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
@@ -230,7 +230,7 @@ mod pr_detection_wiring_tests;
 mod stable_id_characterization_tests;
 
 #[cfg(test)]
-#[path = "event_handler/tests/support.rs"]
+#[path = "event_handler_tests_support.rs"]
 mod tests;
 
 mod tool_timing;
