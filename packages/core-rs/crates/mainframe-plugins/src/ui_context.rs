@@ -2,7 +2,7 @@
 //! `DaemonEvent` through the injected sink; the context tracks its own live
 //! panel ids so `remove_panel(None)` can tear them all down.
 
-use mainframe_types::sync::LockExt;
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashSet;
 use std::sync::Mutex;
 

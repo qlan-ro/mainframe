@@ -4,9 +4,13 @@
 //! tables. Split by route group to stay under the 300-line file cap; this
 //! module holds the shared harness helpers.
 
+#[path = "routes_tests_cascades.rs"]
 mod cascades;
+#[path = "routes_tests_link.rs"]
 mod link;
+#[path = "routes_tests_pairs.rs"]
 mod pairs;
+#[path = "routes_tests_sync.rs"]
 mod sync;
 
 use std::collections::HashMap;

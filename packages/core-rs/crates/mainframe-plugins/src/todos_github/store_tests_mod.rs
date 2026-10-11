@@ -2,9 +2,13 @@
 //! `Link`/`Pair`/`Run` CRUD surfaces. Split by table group to stay under the
 //! 300-line file cap; this module holds the shared harness/fixture helpers.
 
+#[path = "store_tests_link.rs"]
 mod link;
+#[path = "store_tests_migrations.rs"]
 mod migrations;
+#[path = "store_tests_pairs.rs"]
 mod pairs;
+#[path = "store_tests_runs.rs"]
 mod runs;
 
 use mainframe_types::time::now_iso8601;

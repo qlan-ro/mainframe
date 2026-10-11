@@ -3,8 +3,11 @@
 //! `reconcile/{fields,labels,state}.rs`. Split by submodule to stay under the
 //! 300-line file cap; this module holds the shared fixture builders.
 
+#[path = "reconcile_tests_fields.rs"]
 mod fields;
+#[path = "reconcile_tests_labels.rs"]
 mod labels;
+#[path = "reconcile_tests_state.rs"]
 mod state;
 
 use crate::todos_github::reconcile::{Baseline, LocalTask, RemoteIssueView, ReportRowDraft};

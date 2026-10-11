@@ -14,18 +14,28 @@
 //! `run_failure_tests.rs::a_rate_limited_error_stops_the_run_and_preserves_already_written_baselines`,
 //! `store_tests.rs::migration_creates_every_table_on_a_fresh_db` /
 //! `migration_is_additive_over_preexisting_todos`, and
-//! `routes_tests/sync.rs::post_sync_while_running_returns_409_with_readable_message`
+//! `routes_tests_sync.rs::post_sync_while_running_returns_409_with_readable_message`
 //! — so they are not duplicated here.
 
+#[path = "acceptance_tests_field_sync.rs"]
 mod field_sync;
+#[path = "acceptance_tests_labels_wire.rs"]
 mod labels_wire;
+#[path = "acceptance_tests_linking.rs"]
 mod linking;
+#[path = "acceptance_tests_local_recency.rs"]
 mod local_recency;
+#[path = "acceptance_tests_no_op_paths.rs"]
 mod no_op_paths;
+#[path = "acceptance_tests_resilience.rs"]
 mod resilience;
+#[path = "acceptance_tests_scope.rs"]
 mod scope;
+#[path = "acceptance_tests_state_local.rs"]
 mod state_local;
+#[path = "acceptance_tests_state_outbound.rs"]
 mod state_outbound;
+#[path = "acceptance_tests_state_remote.rs"]
 mod state_remote;
 
 use std::collections::HashMap;
