@@ -3,7 +3,7 @@
 //! staying untouched — all against the production `build_app` router (real
 //! spawned app, no mocks).
 //!
-//! `GET /api/chats/{id}/messages` self-gates on `ctx.chat_manager`, which this
+//! `GET /api/chats/{id}/messages` self-gates on `ctx.chat.chat_manager`, which this
 //! harness leaves `None`, so it never produces a large real payload here. The
 //! negotiation/byte-identity/threshold criteria are proven instead
 //! against `GET /api/projects/{id}/files?path=big.txt`, a large *real* payload

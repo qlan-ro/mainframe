@@ -1,6 +1,6 @@
 //! List / output / kill for a chat's background tasks.
 //!
-//! The dependencies come off `AppCtx`: the tracker is `ctx.background_tasks`,
+//! The dependencies come off `AppCtx`: the tracker is `ctx.core.background_tasks`,
 //! `ChatManager::get_session_for_chat` (an `Arc<dyn AdapterSession>`) is bridged
 //! into the `SessionLike` the kill helper expects, and the validator is the
 //! default platform spool-root validator.
@@ -39,7 +39,7 @@ async fn list(State(ctx): State<Arc<AppCtx>>, Path(chat_id): Path<String>) -> Re
     if chat_id.is_empty() {
         return fail(StatusCode::BAD_REQUEST, "bad request");
     }
-    ok(serde_json::json!({ "tasks": ctx.background_tasks.list(&chat_id) }))
+    ok(serde_json::json!({ "tasks": ctx.core.background_tasks.list(&chat_id) }))
 }
 
 #[derive(Deserialize)]
@@ -71,7 +71,7 @@ async fn output(
     {
         return fail(StatusCode::BAD_REQUEST, "bad request");
     }
-    let Some(task) = ctx.background_tasks.get(&chat_id, &task_id) else {
+    let Some(task) = ctx.core.background_tasks.get(&chat_id, &task_id) else {
         return fail(StatusCode::NOT_FOUND, "task not found");
     };
     let Some(output_path) = task.output_path.clone() else {
@@ -104,20 +104,20 @@ async fn kill(
     if chat_id.is_empty() || task_id.is_empty() {
         return fail(StatusCode::BAD_REQUEST, "bad request");
     }
-    if ctx.background_tasks.get(&chat_id, &task_id).is_none() {
+    if ctx.core.background_tasks.get(&chat_id, &task_id).is_none() {
         return fail(StatusCode::NOT_FOUND, "task not found");
     }
     // sessionForChat: null for recovered orphans (no live CLI).
     let session_like = ctx
+        .chat
         .chat_manager
-        .as_ref()
-        .and_then(|cm| cm.get_session_for_chat(&chat_id))
+        .get_session_for_chat(&chat_id)
         .map(crate::session_kill_bridge::SessionKillBridge);
     let result = kill_background_task(KillArgs {
         chat_id: &chat_id,
         task_id: &task_id,
         session: session_like.as_ref().map(|s| s as &dyn SessionLike),
-        tracker: &ctx.background_tasks,
+        tracker: &ctx.core.background_tasks,
     })
     .await;
     match result {
@@ -158,7 +158,7 @@ mod tests {
     }
 
     fn seed_task(ctx: &Arc<AppCtx>, chat_id: &str) -> String {
-        let task = ctx.background_tasks.start(
+        let task = ctx.core.background_tasks.start(
             chat_id,
             TaskSeed {
                 id: "task1".into(),
@@ -195,7 +195,8 @@ mod tests {
             run_id: None,
         };
         let id = task.id.clone();
-        ctx.background_tasks
+        ctx.core
+            .background_tasks
             .adopt(chat_id, task, AdoptOptions::default());
         id
     }

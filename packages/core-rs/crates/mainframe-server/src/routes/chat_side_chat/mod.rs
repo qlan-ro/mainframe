@@ -44,10 +44,7 @@ async fn open_side_chat(
     if parse_body::<OpenSideChatBody>(&body).is_none() {
         return fail(StatusCode::BAD_REQUEST, "Invalid request body");
     }
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "open_side_chat needs ChatManager (unwired)");
-        return fail(StatusCode::INTERNAL_SERVER_ERROR, "side chat unavailable");
-    };
+    let cm = &ctx.chat.chat_manager;
     match cm.open_side_chat(&id).await {
         Ok(chat) => ok(chat),
         Err(err) => {

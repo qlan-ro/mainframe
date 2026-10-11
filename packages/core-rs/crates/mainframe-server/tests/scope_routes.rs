@@ -11,6 +11,7 @@ async fn deleted_worktree_refuses_every_file_route_before_io() {
     let path = root.path().to_string_lossy().into_owned();
     let (project, chat) = server
         .ctx
+        .core
         .db
         .call(move |db| {
             let project = db.projects.create(&path, None)?;

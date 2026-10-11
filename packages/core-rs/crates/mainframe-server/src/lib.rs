@@ -79,3 +79,5 @@ mod start_tests {
         drop(blocker);
     }
 }
+
+pub mod wiring;

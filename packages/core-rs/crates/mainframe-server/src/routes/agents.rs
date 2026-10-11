@@ -27,7 +27,8 @@ const NOT_SUPPORTED: &str = "Adapter not found or does not support agents";
 /// Capability gate: the adapter must be registered and Claude (the only adapter
 /// with agent support).
 fn claude_supported(ctx: &AppCtx, adapter_id: &str) -> bool {
-    ctx.adapter_registry
+    ctx.core
+        .adapter_registry
         .get(adapter_id)
         .map(|a| a.id() == "claude")
         .unwrap_or(false)
@@ -51,7 +52,7 @@ async fn list(
     Path(adapter_id): Path<String>,
     Query(q): Query<ProjectPathQuery>,
 ) -> Response {
-    let Some(adapter) = ctx.adapter_registry.get(&adapter_id) else {
+    let Some(adapter) = ctx.core.adapter_registry.get(&adapter_id) else {
         return fail(StatusCode::NOT_FOUND, NOT_SUPPORTED);
     };
     let Some(project_path) = q.project_path.filter(|p| !p.is_empty()) else {
@@ -235,7 +236,8 @@ mod tests {
             .await
             .unwrap();
         let ctx = AppCtx::test_ctx();
-        ctx.adapter_registry
+        ctx.core
+            .adapter_registry
             .register(Arc::new(mainframe_adapter_mock::MockCliAdapter::default()));
 
         let response = list(

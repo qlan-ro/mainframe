@@ -132,7 +132,13 @@ async fn confirm_rejects_empty_device_name() {
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
-    let devices = server.ctx.db.call(|db| db.devices.get_all()).await.unwrap();
+    let devices = server
+        .ctx
+        .core
+        .db
+        .call(|db| db.devices.get_all())
+        .await
+        .unwrap();
     assert!(devices.is_empty());
 }
 
@@ -161,7 +167,13 @@ async fn confirm_persists_device_with_name_from_mobile() {
         .send()
         .await
         .unwrap();
-    let devices = server.ctx.db.call(|db| db.devices.get_all()).await.unwrap();
+    let devices = server
+        .ctx
+        .core
+        .db
+        .call(|db| db.devices.get_all())
+        .await
+        .unwrap();
     assert_eq!(devices.len(), 1);
     assert_eq!(devices[0].device_name, "My iPhone");
 }
@@ -173,7 +185,13 @@ async fn confirm_same_uuid_twice_returns_same_id_and_one_row() {
     assert_eq!(c1["data"]["deviceId"], format!("mobile-{UUID}"));
     let c2 = confirm_ok(&server, "iPhone Renamed").await;
     assert_eq!(c2["data"]["deviceId"], format!("mobile-{UUID}"));
-    let devices = server.ctx.db.call(|db| db.devices.get_all()).await.unwrap();
+    let devices = server
+        .ctx
+        .core
+        .db
+        .call(|db| db.devices.get_all())
+        .await
+        .unwrap();
     assert_eq!(devices.len(), 1);
 }
 
@@ -302,6 +320,7 @@ async fn status_invalid_for_stale_epoch() {
     let token = server.register_device_token(SECRET, "mobile-stale").await;
     server
         .ctx
+        .core
         .db
         .call(|db| db.devices.increment_auth_epoch("mobile-stale"))
         .await
@@ -351,6 +370,7 @@ async fn devices_lists_paired_devices() {
     let server = spawn_test_server(Some(SECRET.to_string())).await;
     server
         .ctx
+        .core
         .db
         .call(|db| {
             db.devices.add("mobile-l1", "iPhone")?;
@@ -374,6 +394,7 @@ async fn delete_device_removes_it() {
     let server = spawn_test_server(Some(SECRET.to_string())).await;
     server
         .ctx
+        .core
         .db
         .call(|db| db.devices.add("mobile-del", "iPhone"))
         .await
@@ -384,7 +405,13 @@ async fn delete_device_removes_it() {
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
-    let remaining = server.ctx.db.call(|db| db.devices.get_all()).await.unwrap();
+    let remaining = server
+        .ctx
+        .core
+        .db
+        .call(|db| db.devices.get_all())
+        .await
+        .unwrap();
     assert_eq!(remaining.len(), 0);
 }
 

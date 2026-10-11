@@ -1,12 +1,3 @@
-//! Session context, session-file content read, and add-mention.
-//!
-//! `session-file` resolves the chat and project via db, then reads the file
-//! through `resolve_readable_path`. `mentions` goes through
-//! `ChatManager::add_mention` (persists and emits `context.updated`) when the
-//! manager is wired, else persists via `db.chats.add_mention`, and returns the
-//! built mention. `context` needs `ChatManager::get_session_context` and returns
-//! the failure envelope when the manager is unwired.
-
 use axum::response::IntoResponse;
 use std::sync::Arc;
 
@@ -41,10 +32,7 @@ async fn context(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Resp
         Ok(value) => value,
         Err(error) => return error.into_response(),
     };
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "getSessionContext needs ChatManager (unwired)");
-        return fail(StatusCode::INTERNAL_SERVER_ERROR, "Operation failed");
-    };
+    let cm = &ctx.chat.chat_manager;
     let effective_path = chat.worktree_path.clone().unwrap_or(project.path);
     ok(cm.get_session_context(&id, &effective_path).await)
 }
@@ -117,16 +105,9 @@ async fn add_mention(
         path: b.path,
         timestamp: now_iso8601(),
     };
-    // `ChatManager::add_mention` persists the mention AND emits `context.updated`.
-    // When the manager is unwired (the test harness) the db write is the load-bearing
-    // effect; the WS emit is skipped (no broadcast bus without the manager).
-    if let Some(cm) = ctx.chat_manager.as_ref() {
+    {
+        let cm = &ctx.chat.chat_manager;
         cm.add_mention(&id, mention.clone());
-    } else {
-        let (cid, m) = (id, mention.clone());
-        if let Err(err) = ctx.db.call(move |db| db.chats.add_mention(&cid, &m)).await {
-            return crate::async_err::internal_error("add mention", &err);
-        }
     }
     ok(mention)
 }

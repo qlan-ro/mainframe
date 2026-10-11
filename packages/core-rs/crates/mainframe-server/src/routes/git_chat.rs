@@ -92,7 +92,7 @@ async fn resolve_chat_ctx(
             }
         }
     }
-    Ok((ctx.git.for_project(work_dir.clone()), work_dir))
+    Ok((ctx.core.git.for_project(work_dir.clone()), work_dir))
 }
 
 /// Git failure arm: log unless the error is "not a git repository", then
@@ -235,7 +235,7 @@ async fn compute_diff_since_main(
     base_path: &str,
     files: Option<&[String]>,
 ) -> Result<Value, GitServiceError> {
-    let svc = ctx.git.for_project(base_path.to_string());
+    let svc = ctx.core.git.for_project(base_path.to_string());
     let Some(bi) = svc.detect_base_branch().await? else {
         return Ok(json!({ "diffs": {}, "baseBranch": null, "mergeBase": null }));
     };

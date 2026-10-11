@@ -61,7 +61,7 @@ async fn create(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
         data: serde_json::json!({}),
         priority: PushPriority::Default,
     };
-    broadcast_and_push(&ctx.broadcast, &ctx.services.push, event, message).await;
+    broadcast_and_push(&ctx.core.broadcast, &ctx.services.push, event, message).await;
     ok_empty()
 }
 

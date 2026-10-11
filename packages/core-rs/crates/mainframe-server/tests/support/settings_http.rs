@@ -11,6 +11,7 @@ pub async fn set_setting(server: &TestServer, category: &str, key: &str, value: 
     let (c, k, v) = (category.to_string(), key.to_string(), value.to_string());
     server
         .ctx
+        .core
         .db
         .call(move |db| db.settings.set(&c, &k, &v))
         .await
@@ -22,6 +23,7 @@ pub async fn rows(server: &TestServer, category: &str) -> BTreeMap<String, Strin
     let c = category.to_string();
     let rows = server
         .ctx
+        .core
         .db
         .call(move |db| db.settings.get_by_category(&c))
         .await

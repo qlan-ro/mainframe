@@ -2,7 +2,7 @@
 //! edit/cancel (chat create lives in `chat_create`).
 //!
 //! Every route goes through the `ChatManager` facade and is gated on the manager
-//! being wired. Existence is checked against `ctx.db.chats` so 404s are honoured
+//! being wired. Existence is checked against `ctx.core.db.chats` so 404s are honoured
 //! before the facade call.
 
 use std::sync::Arc;
@@ -28,7 +28,7 @@ use crate::routes::projects::parse_body;
 /// check needs.
 async fn chat_exists(ctx: &Arc<AppCtx>, id: &str) -> Result<bool, crate::respond::ApiError> {
     let lookup = id.to_string();
-    match ctx.db.call(move |db| db.chats.get(&lookup)).await {
+    match ctx.core.db.call(move |db| db.chats.get(&lookup)).await {
         Ok(chat) => Ok(chat.is_some()),
         Err(err) => Err(crate::respond::ApiError::internal("get chat", &err)),
     }
@@ -74,13 +74,7 @@ async fn update_config(
         Ok(true) => {}
         Err(resp) => return resp.into_response(),
     }
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "updateChatConfig is a Phase-4 seam (ChatManager unavailable)");
-        return fail(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "updateChatConfig unavailable",
-        );
-    };
+    let cm = &ctx.chat.chat_manager;
     match cm
         .update_chat_config(
             &id,
@@ -109,10 +103,7 @@ async fn interrupt(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Re
         Ok(true) => {}
         Err(resp) => return resp.into_response(),
     }
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "interrupt is a Phase-4 seam (ChatManager unavailable)");
-        return fail(StatusCode::INTERNAL_SERVER_ERROR, "interrupt unavailable");
-    };
+    let cm = &ctx.chat.chat_manager;
     cm.interrupt_chat(&id).await;
     ok_empty()
 }
@@ -123,10 +114,7 @@ async fn resume(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Respo
         Ok(true) => {}
         Err(resp) => return resp.into_response(),
     }
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "resume is a Phase-4 seam (ChatManager unavailable)");
-        return fail(StatusCode::INTERNAL_SERVER_ERROR, "resume unavailable");
-    };
+    let cm = &ctx.chat.chat_manager;
     cm.resume_chat(&id).await;
     ok_empty()
 }
@@ -137,13 +125,7 @@ async fn trust_workspace(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>)
         Ok(true) => {}
         Err(resp) => return resp.into_response(),
     }
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "trustWorkspace is a Phase-4 seam (ChatManager unavailable)");
-        return fail(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "trustWorkspace unavailable",
-        );
-    };
+    let cm = &ctx.chat.chat_manager;
     match cm.trust_workspace(&id).await {
         Ok(()) => ok_empty(),
         Err(err) => {
@@ -174,10 +156,7 @@ async fn queue_edit(
         Ok(true) => {}
         Err(resp) => return resp.into_response(),
     }
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "queue.edit is a Phase-4 seam (ChatManager unavailable)");
-        return fail(StatusCode::INTERNAL_SERVER_ERROR, "queue.edit unavailable");
-    };
+    let cm = &ctx.chat.chat_manager;
     match cm.edit_queued_message(&id, &message_id, &content).await {
         Ok(()) => ok_empty(),
         Err(err) => {
@@ -196,13 +175,7 @@ async fn queue_cancel(
         Ok(true) => {}
         Err(resp) => return resp.into_response(),
     }
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "queue.cancel is a Phase-4 seam (ChatManager unavailable)");
-        return fail(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "queue.cancel unavailable",
-        );
-    };
+    let cm = &ctx.chat.chat_manager;
     match cm.cancel_queued_message(&id, &message_id).await {
         Ok(()) => ok_empty(),
         Err(err) => {

@@ -25,9 +25,7 @@ async fn cancel(
     if check_id("chatId", &chat_id).is_err() || check_id("entryId", &entry_id).is_err() {
         return fail(StatusCode::BAD_REQUEST, "Invalid id");
     }
-    let Some(service) = ctx.orchestration.as_ref() else {
-        return fail(StatusCode::SERVICE_UNAVAILABLE, "orchestration unavailable");
-    };
+    let service = &ctx.chat.orchestration;
     if service.cancel_outbox_entry(&chat_id, &entry_id).await {
         ok_empty()
     } else {

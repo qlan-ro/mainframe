@@ -50,7 +50,7 @@ async fn create_rejects_an_unknown_project_id_404_and_writes_no_row() {
     let (status, body) = read(resp).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(body["error"], "Project not found");
-    let rows = ctx.db.call(|db| db.chats.list_all()).await.unwrap();
+    let rows = ctx.core.db.call(|db| db.chats.list_all()).await.unwrap();
     assert!(rows.is_empty(), "a rejected create must write no chat row");
 }
 
@@ -107,9 +107,11 @@ async fn create_rejects_neither_project_nor_no_project_400() {
 #[tokio::test]
 async fn create_succeeds_with_a_project() {
     let ctx = AppCtx::test_ctx_with_chat_manager();
-    ctx.adapter_registry
+    ctx.core
+        .adapter_registry
         .register(crate::chat_test_support::StubAdapter::new("claude", false));
     let project = ctx
+        .core
         .db
         .call(|db| db.projects.create("/tmp/create-with-project", None))
         .await
@@ -128,14 +130,15 @@ async fn create_succeeds_with_a_project() {
     assert_eq!(body["data"]["projectId"], project.id);
     assert_eq!(body["data"]["temporary"], false);
 
-    let rows = ctx.db.call(|db| db.chats.list_all()).await.unwrap();
+    let rows = ctx.core.db.call(|db| db.chats.list_all()).await.unwrap();
     assert_eq!(rows.len(), 1);
 }
 
 #[tokio::test]
 async fn create_succeeds_with_no_project() {
     let ctx = AppCtx::test_ctx_with_chat_manager();
-    ctx.adapter_registry
+    ctx.core
+        .adapter_registry
         .register(crate::chat_test_support::StubAdapter::new("claude", false));
 
     let resp = create(
@@ -148,7 +151,7 @@ async fn create_succeeds_with_no_project() {
     assert_eq!(body["data"]["projectId"], NO_PROJECT_ID);
     assert_eq!(body["data"]["noProject"], true);
 
-    let rows = ctx.db.call(|db| db.chats.list_all()).await.unwrap();
+    let rows = ctx.core.db.call(|db| db.chats.list_all()).await.unwrap();
     assert_eq!(rows.len(), 1);
     assert!(
         rows[0].scratch_path.is_some(),
@@ -159,7 +162,8 @@ async fn create_succeeds_with_no_project() {
 #[tokio::test]
 async fn create_succeeds_with_temporary() {
     let ctx = AppCtx::test_ctx_with_chat_manager();
-    ctx.adapter_registry
+    ctx.core
+        .adapter_registry
         .register(crate::chat_test_support::StubAdapter::new("claude", false));
 
     let resp = create(
@@ -171,7 +175,7 @@ async fn create_succeeds_with_temporary() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["data"]["temporary"], true);
 
-    let rows = ctx.db.call(|db| db.chats.list_all()).await.unwrap();
+    let rows = ctx.core.db.call(|db| db.chats.list_all()).await.unwrap();
     assert_eq!(rows.len(), 1);
     assert!(rows[0].temporary);
 }

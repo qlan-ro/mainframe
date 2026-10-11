@@ -192,7 +192,7 @@ fn client_ip_from(peer: &SocketAddr, headers: &HeaderMap) -> String {
 }
 
 async fn pair(State(ctx): State<Arc<AppCtx>>) -> Response {
-    if ctx.auth_secret.is_none() {
+    if ctx.core.auth_secret.is_none() {
         return fail(StatusCode::BAD_REQUEST, "Auth not configured");
     }
     let code = generate_pairing_code();
@@ -221,7 +221,7 @@ async fn confirm(
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
-    let Some(secret) = ctx.auth_secret.clone() else {
+    let Some(secret) = ctx.core.auth_secret.clone() else {
         return fail(StatusCode::BAD_REQUEST, "Auth not configured");
     };
     let ip = client_ip_from(&peer, &headers);
@@ -309,6 +309,7 @@ async fn confirm(
     let did = device_id.clone();
     let dname = name.clone();
     let epoch = match ctx
+        .core
         .db
         .call(move |db| {
             db.devices.add(&did, &dname)?;
@@ -335,13 +336,13 @@ async fn confirm(
 }
 
 async fn status(State(ctx): State<Arc<AppCtx>>, headers: HeaderMap) -> Response {
-    let Some(secret) = ctx.auth_secret.clone() else {
+    let Some(secret) = ctx.core.auth_secret.clone() else {
         return ok(json!({ "valid": true, "authEnabled": false }));
     };
     let Some(token) = bearer_token(&headers) else {
         return ok(json!({ "valid": false }));
     };
-    match validate_device_token(&ctx.db, secret, token).await {
+    match validate_device_token(&ctx.core.db, secret, token).await {
         Some(payload) => ok(json!({ "valid": true, "deviceId": payload.device_id })),
         None => ok(json!({ "valid": false })),
     }
@@ -371,7 +372,7 @@ async fn register_push(
 }
 
 async fn list_devices(State(ctx): State<Arc<AppCtx>>) -> Response {
-    match ctx.db.call(|db| db.devices.get_all()).await {
+    match ctx.core.db.call(|db| db.devices.get_all()).await {
         Ok(devices) => ok(devices),
         Err(err) => crate::async_err::internal_error("list devices", &err),
     }
@@ -382,7 +383,7 @@ async fn delete_device(
     axum::extract::Path(device_id): axum::extract::Path<String>,
 ) -> Response {
     let did = device_id.clone();
-    if let Err(err) = ctx.db.call(move |db| db.devices.remove(&did)).await {
+    if let Err(err) = ctx.core.db.call(move |db| db.devices.remove(&did)).await {
         return crate::async_err::internal_error("remove device", &err);
     }
     ctx.services.push.unregister_device(&device_id);

@@ -92,13 +92,13 @@ pub(crate) async fn authenticate_ws_upgrade(
 ) -> bool {
     let forwarded = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok());
     let ip = trust_proxy_client_ip(&peer.ip().to_string(), forwarded);
-    let secret = ctx.auth_secret.clone();
+    let secret = ctx.core.auth_secret.clone();
 
     if !is_ws_auth_required(&ip, secret.as_deref()) {
         return true;
     }
     let authed = match (token, secret) {
-        (Some(token), Some(secret)) => validate_device_token(&ctx.db, secret, token)
+        (Some(token), Some(secret)) => validate_device_token(&ctx.core.db, secret, token)
             .await
             .is_some(),
         _ => false,
@@ -151,10 +151,7 @@ pub(crate) async fn lsp_ws_handler(
         return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
     }
 
-    let Some(manager) = ctx.lsp_manager.clone() else {
-        // No LSP manager wired — the `/lsp/...` route has nothing to serve.
-        return (StatusCode::NOT_FOUND, "Not Found").into_response();
-    };
+    let manager = ctx.infra.lsp_manager.clone();
 
     let scope = match ctx
         .resolve_scope(&project_id, query.chat_id.as_deref())
@@ -318,7 +315,7 @@ async fn handle_socket(mut socket: WebSocket, ctx: Arc<AppCtx>) {
     let client_id = nanoid::nanoid!();
     let (out_tx, mut out_rx) = mpsc::unbounded_channel::<String>();
     let subscriptions: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
-    ctx.ws_clients.insert(
+    ctx.infra.ws_clients.insert(
         client_id.clone(),
         ClientHandle {
             tx: out_tx.clone(),
@@ -337,7 +334,7 @@ async fn handle_socket(mut socket: WebSocket, ctx: Arc<AppCtx>) {
     // authoritative (the renderer resets on connect). The live probe broadcast
     // fires once at boot, before any client connects, so a reconnecting client
     // would otherwise never learn the catalog. Mirrors buildConnectReplayEvents.
-    for event in build_connect_replay_events(&ctx.adapter_registry.get_snapshots()) {
+    for event in build_connect_replay_events(&ctx.core.adapter_registry.get_snapshots()) {
         send(&out_tx, &event);
     }
 
@@ -370,7 +367,7 @@ async fn handle_socket(mut socket: WebSocket, ctx: Arc<AppCtx>) {
         }
     }
 
-    ctx.ws_clients.remove(&client_id);
+    ctx.infra.ws_clients.remove(&client_id);
     file_watch.unsubscribe_all(&ctx.services.watcher);
 }
 
@@ -405,11 +402,7 @@ async fn handle_client_event(
             subscriptions.lock_recover().insert(chat_id.clone());
             // Sent even when empty: this snapshot is the client's only re-seed
             // path for offers, so a reconnect must also clear stale ones.
-            let offers = ctx
-                .chat_manager
-                .as_ref()
-                .map(|cm| cm.worktree_offers_for_chat(&chat_id))
-                .unwrap_or_default();
+            let offers = ctx.chat.chat_manager.worktree_offers_for_chat(&chat_id);
             send(
                 out_tx,
                 &DaemonEvent::WorktreeOfferSnapshot {
@@ -458,7 +451,8 @@ async fn handle_subscribe_file(
         Some(path.clone())
     } else if let Some(project_id) = project_id.clone() {
         let chat_id = chat_id.clone();
-        ctx.db
+        ctx.core
+            .db
             .call(move |db| Ok(resolve_subscribe_base(db, &project_id, chat_id.as_deref())))
             .await
             .ok()
@@ -514,11 +508,11 @@ async fn handle_subscribe_file(
 /// delivers each event to the subscribed clients per the scoping rules. Mirrors
 /// `broadcastEvent`. Call once, after the runtime is up.
 pub fn spawn_broadcast_pump(ctx: Arc<AppCtx>) {
-    let mut rx = ctx.broadcast.subscribe();
+    let mut rx = ctx.core.broadcast.subscribe();
     tokio::spawn(async move {
         loop {
             match rx.recv().await {
-                Ok(event) => fanout(&ctx.ws_clients, &event),
+                Ok(event) => fanout(&ctx.infra.ws_clients, &event),
                 Err(broadcast::error::RecvError::Lagged(n)) => {
                     tracing::warn!(dropped = n, "ws broadcast lagged");
                 }
@@ -779,7 +773,7 @@ mod tests {
     #[tokio::test]
     async fn a_forged_leftmost_forwarded_for_cannot_claim_loopback() {
         let mut ctx = Arc::try_unwrap(AppCtx::test_ctx()).unwrap_or_else(|_| unreachable!());
-        ctx.auth_secret = Some("secret".to_string());
+        ctx.core.auth_secret = Some("secret".to_string());
         let ctx = Arc::new(ctx);
 
         let peer: SocketAddr = "127.0.0.1:9999".parse().unwrap();

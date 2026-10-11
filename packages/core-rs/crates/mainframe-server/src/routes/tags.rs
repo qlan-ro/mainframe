@@ -43,7 +43,7 @@ struct SetChatTagsBody {
 }
 
 async fn list(State(ctx): State<Arc<AppCtx>>) -> Response {
-    match ctx.db.call(|db| db.tags.list()).await {
+    match ctx.core.db.call(|db| db.tags.list()).await {
         Ok(tags) => ok(tags),
         Err(err) => crate::async_err::internal_error("list tags", &err),
     }
@@ -54,7 +54,12 @@ async fn create(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
         return fail(StatusCode::BAD_REQUEST, "Invalid request body");
     };
     let CreateBody { name, color } = parsed;
-    match ctx.db.call(move |db| db.tags.upsert(&name, color)).await {
+    match ctx
+        .core
+        .db
+        .call(move |db| db.tags.upsert(&name, color))
+        .await
+    {
         Ok(tag) => (StatusCode::CREATED, ok(tag)).into_response(),
         Err(err) => fail_or_internal("create tag", &err),
     }
@@ -69,7 +74,7 @@ async fn update(State(ctx): State<Arc<AppCtx>>, Path(name): Path<String>, body: 
     }
 
     let lookup = name.clone();
-    match ctx.db.call(move |db| db.tags.get(&lookup)).await {
+    match ctx.core.db.call(move |db| db.tags.get(&lookup)).await {
         Ok(Some(_)) => {}
         Ok(None) => return fail(StatusCode::NOT_FOUND, "Tag not found"),
         Err(err) => return crate::async_err::internal_error("get tag", &err),
@@ -77,6 +82,7 @@ async fn update(State(ctx): State<Arc<AppCtx>>, Path(name): Path<String>, body: 
 
     let PatchBody { rename, color } = parsed;
     let result = ctx
+        .core
         .db
         .call(move |db| {
             if let Some(ref new_name) = rename {
@@ -97,19 +103,24 @@ async fn update(State(ctx): State<Arc<AppCtx>>, Path(name): Path<String>, body: 
 
 async fn remove(State(ctx): State<Arc<AppCtx>>, Path(name): Path<String>) -> Response {
     let lookup = name.clone();
-    match ctx.db.call(move |db| db.tags.get(&lookup)).await {
+    match ctx.core.db.call(move |db| db.tags.get(&lookup)).await {
         Ok(Some(_)) => {}
         Ok(None) => return fail(StatusCode::NOT_FOUND, "Tag not found"),
         Err(err) => return crate::async_err::internal_error("get tag", &err),
     }
-    match ctx.db.call(move |db| db.tags.remove(&name)).await {
+    match ctx.core.db.call(move |db| db.tags.remove(&name)).await {
         Ok(()) => StatusCode::NO_CONTENT.into_response(),
         Err(err) => crate::async_err::internal_error("remove tag", &err),
     }
 }
 
 async fn list_chat_tags(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
-    match ctx.db.call(move |db| db.chat_tags.list_for_chat(&id)).await {
+    match ctx
+        .core
+        .db
+        .call(move |db| db.chat_tags.list_for_chat(&id))
+        .await
+    {
         Ok(tags) => ok(tags),
         Err(err) => crate::async_err::internal_error("list chat tags", &err),
     }
@@ -124,7 +135,7 @@ async fn set_chat_tags(
         return fail(StatusCode::BAD_REQUEST, "Invalid request body");
     };
     let lookup = id.clone();
-    match ctx.db.call(move |db| db.chats.get(&lookup)).await {
+    match ctx.core.db.call(move |db| db.chats.get(&lookup)).await {
         Ok(Some(chat)) => {
             if let Some(resp) = refuse_if_temporary(&chat, "tag") {
                 return resp;
@@ -135,6 +146,7 @@ async fn set_chat_tags(
     }
     let tags = parsed.tags;
     let result = ctx
+        .core
         .db
         .call(move |db| {
             db.chat_tags.set_for_chat(&id, &tags, &db.tags)?;
@@ -179,6 +191,7 @@ mod tests {
     async fn set_chat_tags_refuses_a_temporary_chat_409() {
         let ctx = AppCtx::test_ctx();
         let chat_id = ctx
+            .core
             .db
             .call(|db| {
                 let project = db.projects.create("/tmp/tags-temp", None)?;

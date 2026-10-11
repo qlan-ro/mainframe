@@ -1,6 +1,6 @@
 //! Per-port quick tunnels for the localhost chips.
 //!
-//! Three endpoints under `/api/tunnel/ports`, driving `ctx.port_tunnels`. Kept
+//! Three endpoints under `/api/tunnel/ports`, driving `ctx.infra.port_tunnels`. Kept
 //! out of `tunnel.rs`, which owns the single `daemon`-labelled remote-access
 //! tunnel and its persisted config; these tunnels are ephemeral and per-chat.
 
@@ -47,7 +47,7 @@ async fn start(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
     if body.port < MIN_PORT {
         return fail(StatusCode::BAD_REQUEST, "Port must be 1024 or higher");
     }
-    if body.port == ctx.port {
+    if body.port == ctx.core.port {
         return fail(
             StatusCode::BAD_REQUEST,
             "Cannot tunnel the daemon's own port",
@@ -55,7 +55,7 @@ async fn start(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
     }
 
     let chat_id = body.chat_id.clone();
-    let project_id = match ctx.db.call(move |db| db.chats.get(&chat_id)).await {
+    let project_id = match ctx.core.db.call(move |db| db.chats.get(&chat_id)).await {
         Ok(Some(chat)) => chat.project_id,
         Ok(None) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
         Err(err) => return crate::async_err::internal_error("get chat", &err),
@@ -97,13 +97,13 @@ async fn list(State(ctx): State<Arc<AppCtx>>) -> Response {
             })
         })
         .collect();
-    ok(json!({ "tunnels": tunnels, "daemonPort": ctx.port }))
+    ok(json!({ "tunnels": tunnels, "daemonPort": ctx.core.port }))
 }
 
 /// The registry plus a real listen port — `start` tunnels `http://localhost:{port}`
 /// and every route reports `daemonPort`, both meaningless on the route-unit ctx.
 fn available(ctx: &AppCtx) -> Option<&Arc<PortTunnelRegistry>> {
-    ctx.port_tunnels.as_ref().filter(|_| ctx.port != 0)
+    (ctx.core.port != 0).then_some(&ctx.infra.port_tunnels)
 }
 
 pub fn router() -> Router<Arc<AppCtx>> {
@@ -121,10 +121,10 @@ mod tests {
     async fn unknown_chat_returns_404_without_starting_tunnel() {
         let mut ctx = AppCtx::test_ctx();
         let inner = Arc::get_mut(&mut ctx).unwrap();
-        inner.port = 3210;
-        inner.port_tunnels = Some(Arc::new(PortTunnelRegistry::new(Arc::new(
+        inner.core.port = 3210;
+        inner.infra.port_tunnels = Arc::new(PortTunnelRegistry::new(Arc::new(
             mainframe_launch::TunnelManager::with_config(None, Default::default()),
-        ))));
+        )));
         let response = start(
             State(ctx),
             Bytes::from(r#"{"port":8080,"chatId":"missing"}"#),

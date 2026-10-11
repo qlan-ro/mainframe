@@ -1,10 +1,3 @@
-//! `GET /api/lsp/languages`.
-//!
-//! Reports, per registered language, whether its server binary resolves on this
-//! machine (`installed`) and whether a live process is running for the project
-//! (`active`). The `LspManager` is an optional handle on `AppCtx`; when it is unwired
-//! (route-unit harness) the endpoint reports an empty language list.
-
 use std::sync::Arc;
 
 use axum::Router;
@@ -38,11 +31,7 @@ async fn get_languages(State(ctx): State<Arc<AppCtx>>, Query(raw): Query<RawQuer
         Some(s) => s,
     };
 
-    let Some(manager) = ctx.lsp_manager.as_ref() else {
-        // No LSP manager wired — no languages to report ("none active, none
-        // installed" for the route-unit harness / a daemon without LSP).
-        return ok(serde_json::json!({ "languages": Vec::<LspLanguageStatus>::new() }));
-    };
+    let manager = &ctx.infra.lsp_manager;
 
     let active_languages = manager.get_active_languages(&project_id);
     let all_ids = manager.registry().get_all_language_ids();

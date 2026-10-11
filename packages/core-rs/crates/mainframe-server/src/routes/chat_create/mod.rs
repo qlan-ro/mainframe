@@ -113,17 +113,7 @@ async fn create(
     let (adapter_id, home) = validate_shape(&b)?;
     let resolved_project_id = resolve_project_id(&ctx, home).await?;
 
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(
-            project_id = %resolved_project_id,
-            %adapter_id,
-            "createChat is a Phase-4 seam (ChatManager unavailable)"
-        );
-        return Err(crate::respond::ApiError::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "createChatWithDefaults unavailable",
-        ));
-    };
+    let cm = &ctx.chat.chat_manager;
     let chat = cm
         .create_chat_with_defaults(
             NewChat {

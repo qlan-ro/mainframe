@@ -16,7 +16,7 @@ mod builtin_plugins;
 mod cli;
 mod e2e_mock;
 mod github_issues_port;
-mod plugin_host_db;
+use mainframe_server::wiring::plugin_host_db;
 mod shutdown;
 mod startup;
 
@@ -408,33 +408,33 @@ async fn run_daemon() {
     // it to gate the pull cadence on "at least one client connected".
     let ws_clients = Arc::new(dashmap::DashMap::new());
 
-    let ctx = Arc::new(AppCtx {
-        db: db.clone(),
-        git: GitFactory,
-        services,
-        broadcast: broadcast.clone(),
-        data_dir,
-        version: DAEMON_VERSION.to_string(),
-        port,
-        auth_secret,
-        resolved_path: resolved_path.clone(),
-        tunnel_url: Arc::new(RwLock::new(None)),
-        ws_clients: Arc::clone(&ws_clients),
-        facade_hub,
-        facade_heartbeat_interval_ms: mainframe_acp::DEFAULT_HEARTBEAT_INTERVAL_MS,
-        adapter_registry: Arc::clone(&adapters),
-        background_tasks: Arc::clone(&background_tasks),
-        claude_workflows: Arc::clone(&claude_workflows),
-        chat_manager: Some(Arc::clone(&chats)),
-        launch_registry: Some(Arc::clone(&launch_registry)),
-        tunnel_manager: Some(Arc::clone(&tunnel_manager)),
-        port_tunnels: Some(Arc::clone(&port_tunnels)),
-        lsp_manager: Some(Arc::clone(&lsp_manager)),
-        plugin_manager: Some(Arc::clone(&plugin_manager)),
-        automations: automations.clone(),
-        orchestration: Some(Arc::clone(&orchestration)),
-        quota: Some(quota_manager.clone() as Arc<dyn QuotaService>),
-    });
+    let ctx = Arc::new(
+        AppCtx::builder(db.clone(), data_dir)
+            .git(GitFactory)
+            .services(services)
+            .broadcast(broadcast.clone())
+            .version(DAEMON_VERSION.to_string())
+            .port(port)
+            .auth_secret(auth_secret)
+            .resolved_path(resolved_path.clone())
+            .tunnel_url(Arc::new(RwLock::new(None)))
+            .ws_clients(Arc::clone(&ws_clients))
+            .facade_hub(facade_hub)
+            .facade_heartbeat_interval_ms(mainframe_acp::DEFAULT_HEARTBEAT_INTERVAL_MS)
+            .adapter_registry(Arc::clone(&adapters))
+            .background_tasks(Arc::clone(&background_tasks))
+            .claude_workflows(Arc::clone(&claude_workflows))
+            .chat_manager(Some(Arc::clone(&chats)))
+            .launch_registry(Some(Arc::clone(&launch_registry)))
+            .tunnel_manager(Some(Arc::clone(&tunnel_manager)))
+            .port_tunnels(Some(Arc::clone(&port_tunnels)))
+            .lsp_manager(Some(Arc::clone(&lsp_manager)))
+            .plugin_manager(Some(Arc::clone(&plugin_manager)))
+            .automations(automations.clone())
+            .orchestration(Some(Arc::clone(&orchestration)))
+            .quota(Some(quota_manager.clone() as Arc<dyn QuotaService>))
+            .build(),
+    );
 
     spawn_broadcast_pump(Arc::clone(&ctx));
 

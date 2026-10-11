@@ -38,11 +38,7 @@ async fn list(
         tracing::warn!(%project_id, "invalid external-sessions query");
         return fail(StatusCode::BAD_REQUEST, "Invalid query params");
     }
-    let Some(service) = ctx
-        .chat_manager
-        .as_ref()
-        .and_then(|m| m.external_session_service())
-    else {
+    let Some(service) = ctx.chat.chat_manager.external_session_service() else {
         return fail(StatusCode::INTERNAL_SERVER_ERROR, SERVICE_UNAVAILABLE);
     };
     service.start_auto_scan(&project_id);
@@ -87,11 +83,7 @@ async fn import(
         tracing::warn!(%project_id, "invalid import request body");
         return fail(StatusCode::BAD_REQUEST, "Invalid request body");
     };
-    let Some(service) = ctx
-        .chat_manager
-        .as_ref()
-        .and_then(|m| m.external_session_service())
-    else {
+    let Some(service) = ctx.chat.chat_manager.external_session_service() else {
         return fail(StatusCode::INTERNAL_SERVER_ERROR, SERVICE_UNAVAILABLE);
     };
     let chat = service
@@ -148,7 +140,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn list_valid_query_without_chat_manager_500() {
+    async fn list_valid_query_uses_the_real_service() {
         let ctx = AppCtx::test_ctx();
         let resp = list(
             State(ctx.clone()),
@@ -160,8 +152,8 @@ mod tests {
         )
         .await;
         let (status, body) = read(resp).await;
-        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
-        assert_eq!(body["error"], SERVICE_UNAVAILABLE);
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["success"], true);
     }
 
     #[tokio::test]
@@ -179,7 +171,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn import_valid_body_without_chat_manager_500() {
+    async fn import_valid_body_uses_the_real_service() {
         let ctx = AppCtx::test_ctx();
         let resp = import(
             State(ctx.clone()),
@@ -188,7 +180,7 @@ mod tests {
         )
         .await;
         let (status, body) = read(resp).await;
-        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
-        assert_eq!(body["error"], SERVICE_UNAVAILABLE);
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["success"], true);
     }
 }

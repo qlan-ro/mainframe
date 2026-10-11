@@ -45,6 +45,7 @@ async fn create_chat(server: &TestServer, project_id: &str) -> String {
     let pid = project_id.to_string();
     server
         .ctx
+        .core
         .db
         .call(move |db| {
             db.chats.create(&mainframe_types::chat::NewChat {
@@ -63,6 +64,7 @@ async fn set_worktree(server: &TestServer, chat_id: &str, path: &str) {
     let wt = path.to_string();
     server
         .ctx
+        .core
         .db
         .call(move |db| {
             db.chats.update(

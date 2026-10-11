@@ -43,7 +43,7 @@ struct CreateProjectBody {
 }
 
 async fn list(State(ctx): State<Arc<AppCtx>>) -> Response {
-    match ctx.db.call(|db| db.projects.list()).await {
+    match ctx.core.db.call(|db| db.projects.list()).await {
         Ok(mut projects) => {
             for project in &mut projects {
                 stamp_availability(project).await;
@@ -55,7 +55,7 @@ async fn list(State(ctx): State<Arc<AppCtx>>) -> Response {
 }
 
 async fn get_one(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
-    match ctx.db.call(move |db| db.projects.get(&id)).await {
+    match ctx.core.db.call(move |db| db.projects.get(&id)).await {
         Ok(Some(mut project)) => {
             stamp_availability(&mut project).await;
             ok(project)
@@ -85,7 +85,12 @@ async fn create(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
     }
 
     let path = parsed.path.clone();
-    let existing = match ctx.db.call(move |db| db.projects.get_by_path(&path)).await {
+    let existing = match ctx
+        .core
+        .db
+        .call(move |db| db.projects.get_by_path(&path))
+        .await
+    {
         Ok(existing) => existing,
         Err(err) => return crate::async_err::internal_error("lookup project by path", &err),
     };
@@ -104,6 +109,7 @@ async fn create(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
     let path = parsed.path;
     let name = parsed.name;
     match ctx
+        .core
         .db
         .call(move |db| db.projects.create(&path, name.as_deref()))
         .await
@@ -123,21 +129,7 @@ fn removal_response(result: Result<(), RemoveProjectError>) -> Response {
 }
 
 async fn remove(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
-    // `ChatManager::remove_project` stops the project's live sessions and tears
-    // down its worktrees before deleting the row, then reports whether the row
-    // delete itself succeeded so a failed delete answers with `fail()` instead
-    // of a false `ok_empty()`. When the ChatManager is unwired the teardown
-    // cannot run, so the endpoint answers with the failure-path 500 envelope.
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(
-            project_id = %id,
-            "DELETE /api/projects/:id needs ChatManager.removeProject (unwired)"
-        );
-        return fail(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Failed to remove project",
-        );
-    };
+    let cm = &ctx.chat.chat_manager;
     removal_response(cm.remove_project(&id).await)
 }
 
@@ -207,20 +199,21 @@ mod tests {
     async fn removing_a_project_deletes_its_temporary_chat_and_stops_the_process() {
         let ctx = AppCtx::test_ctx_with_chat_manager();
         let adapter = crate::chat_test_support::StubAdapter::new("claude", false);
-        ctx.adapter_registry.register(adapter.clone());
+        ctx.core.adapter_registry.register(adapter.clone());
         let project_dir =
             std::env::temp_dir().join(format!("mf-remove-temp-{}", nanoid::nanoid!()));
         std::fs::create_dir_all(&project_dir).unwrap();
         let project_path = project_dir.to_string_lossy().into_owned();
         let project = ctx
+            .core
             .db
             .call(move |db| db.projects.create(&project_path, None))
             .await
             .unwrap();
         let chat = ctx
+            .chat
             .chat_manager
             .as_ref()
-            .unwrap()
             .create_chat_with_defaults(
                 mainframe_types::chat::NewChat {
                     project_id: project.id.clone(),
@@ -232,11 +225,7 @@ mod tests {
                 None,
             )
             .await;
-        ctx.chat_manager
-            .as_ref()
-            .unwrap()
-            .start_chat(&chat.id)
-            .await;
+        ctx.chat.chat_manager.as_ref().start_chat(&chat.id).await;
 
         let (status, _) =
             body_json(remove(State(ctx.clone()), Path(project.id.clone())).await).await;
@@ -248,7 +237,8 @@ mod tests {
         assert_eq!(status, StatusCode::OK);
 
         assert!(
-            ctx.db
+            ctx.core
+                .db
                 .call(move |db| db.chats.get(&chat.id))
                 .await
                 .unwrap()
@@ -256,7 +246,8 @@ mod tests {
             "the temporary chat's row must be deleted along with its project"
         );
         assert!(
-            ctx.db
+            ctx.core
+                .db
                 .call(move |db| db.projects.get(&project.id))
                 .await
                 .unwrap()

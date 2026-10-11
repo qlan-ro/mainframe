@@ -162,7 +162,10 @@ async fn branches(
         Ok(None) => return fail(StatusCode::NOT_FOUND, "Project not found"),
         Err(e) => return internal_error("Failed to resolve project path", &e),
     };
-    git_result(ctx.git.for_project(base_path).branches().await, "branches")
+    git_result(
+        ctx.core.git.for_project(base_path).branches().await,
+        "branches",
+    )
 }
 
 async fn checkout(
@@ -183,7 +186,7 @@ async fn checkout(
         return fail(StatusCode::BAD_REQUEST, "branch must not be empty");
     }
     git_empty(
-        ctx.git.for_project(path).checkout(&data.branch).await,
+        ctx.core.git.for_project(path).checkout(&data.branch).await,
         "checkout",
     )
 }
@@ -205,7 +208,13 @@ async fn commit(
     if data.message.is_empty() {
         return fail(StatusCode::BAD_REQUEST, "Commit message cannot be empty");
     }
-    match ctx.git.for_project(path).commit_all(&data.message).await {
+    match ctx
+        .core
+        .git
+        .for_project(path)
+        .commit_all(&data.message)
+        .await
+    {
         Ok(commit) => ok(json!({ "commit": commit })),
         Err(e) => {
             tracing::warn!(error = %e, "commit failed");
@@ -232,7 +241,8 @@ async fn create_branch(
         return fail(StatusCode::BAD_REQUEST, "Invalid branch name");
     }
     git_empty(
-        ctx.git
+        ctx.core
+            .git
             .for_project(path)
             .create_branch(&data.name, data.start_point.as_deref())
             .await,
@@ -255,7 +265,8 @@ async fn fetch(
         Err(m) => return fail_with(&m),
     };
     git_result(
-        ctx.git
+        ctx.core
+            .git
             .for_project(path)
             .fetch(data.remote.as_deref())
             .await,
@@ -286,7 +297,8 @@ async fn pull(
         );
     }
     git_result(
-        ctx.git
+        ctx.core
+            .git
             .for_project(path)
             .pull(
                 data.remote.as_deref(),
@@ -313,7 +325,8 @@ async fn push(
         Err(m) => return fail_with(&m),
     };
     git_result(
-        ctx.git
+        ctx.core
+            .git
             .for_project(path)
             .push(data.branch.as_deref(), data.remote.as_deref())
             .await,
@@ -338,7 +351,10 @@ async fn merge(
     if data.branch.is_empty() {
         return fail(StatusCode::BAD_REQUEST, "branch must not be empty");
     }
-    git_result(ctx.git.for_project(path).merge(&data.branch).await, "merge")
+    git_result(
+        ctx.core.git.for_project(path).merge(&data.branch).await,
+        "merge",
+    )
 }
 
 async fn rebase(
@@ -359,7 +375,7 @@ async fn rebase(
         return fail(StatusCode::BAD_REQUEST, "branch must not be empty");
     }
     git_result(
-        ctx.git.for_project(path).rebase(&data.branch).await,
+        ctx.core.git.for_project(path).rebase(&data.branch).await,
         "rebase",
     )
 }
@@ -374,7 +390,7 @@ async fn abort(
         Ok(v) => v,
         Err(r) => return r.into_response(),
     };
-    git_result(ctx.git.for_project(path).abort().await, "abort")
+    git_result(ctx.core.git.for_project(path).abort().await, "abort")
 }
 
 async fn rename_branch(
@@ -395,7 +411,8 @@ async fn rename_branch(
         return fail(StatusCode::BAD_REQUEST, "Invalid branch name");
     }
     git_empty(
-        ctx.git
+        ctx.core
+            .git
             .for_project(path)
             .rename_branch(&data.old_name, &data.new_name)
             .await,
@@ -421,7 +438,8 @@ async fn delete_branch(
         return fail(StatusCode::BAD_REQUEST, "name must not be empty");
     }
     git_result(
-        ctx.git
+        ctx.core
+            .git
             .for_project(path)
             .delete_branch(
                 &data.name,
@@ -443,7 +461,10 @@ async fn update_all(
         Ok(v) => v,
         Err(r) => return r.into_response(),
     };
-    git_result(ctx.git.for_project(path).update_all().await, "updateAll")
+    git_result(
+        ctx.core.git.for_project(path).update_all().await,
+        "updateAll",
+    )
 }
 
 pub fn router() -> Router<Arc<AppCtx>> {

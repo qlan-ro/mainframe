@@ -50,9 +50,6 @@ pub fn build_app(ctx: Arc<AppCtx>) -> Router {
         .merge(routes::git_write::router())
         .merge(routes::git_chat::router())
         .merge(routes::attachments::router())
-        // Chat lifecycle + orchestration surfaces; the ChatManager-backed
-        // handlers self-gate on `ctx.chat_manager` and fall back to the
-        // failure-path envelope when it is `None` (the route-unit harness).
         .merge(routes::chats::router())
         .merge(routes::chat_commands::router())
         .merge(routes::chat_fork::router())
@@ -97,7 +94,8 @@ pub fn build_app(ctx: Arc<AppCtx>) -> Router {
     // Plugin routes — the PluginManager owns a parent router (listing + per-plugin
     // sub-routers) mounted under `/api/plugins`, behind the auth layer. Its state
     // is already applied (Router<()>), so it nests as a service.
-    if let Some(plugin_manager) = ctx.plugin_manager.as_ref() {
+    {
+        let plugin_manager = &ctx.infra.plugin_manager;
         http = http.nest_service("/api/plugins", plugin_manager.router());
     }
 

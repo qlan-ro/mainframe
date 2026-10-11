@@ -39,7 +39,7 @@ pub(super) fn start_resume(
     // for the race argument).
     let (revision_log, resume_boundary) = session_id
         .as_deref()
-        .and_then(|id| ctx.facade_hub.begin_resume(connection, id))
+        .and_then(|id| ctx.chat.facade_hub.begin_resume(connection, id))
         .map_or((None, None), |(log, boundary)| (Some(log), Some(boundary)));
     // Queued here, on the socket loop, so arrival order is acquisition order.
     let wait = session_id
@@ -261,7 +261,7 @@ async fn deliver_resume(
         redelivered_gate: redelivered_gate.as_deref(),
         preview_ids: &replay.preview_ids,
     };
-    let hub = &ctx.facade_hub;
+    let hub = &ctx.chat.facade_hub;
     hub.reset_session(connection, &session_id, seed, |conn| {
         // An opted-in connection takes the replay as a few
         // compressed batches; every other arm below is unchanged either way.
@@ -292,10 +292,7 @@ async fn deliver_resume(
 /// The queued-prompt snapshot every resume replay closes with — empty when
 /// the harness runs without a `ChatManager`.
 fn queued_for(ctx: &Arc<AppCtx>, session_id: &str) -> Vec<mainframe_types::chat::QueuedMessageRef> {
-    ctx.chat_manager
-        .as_ref()
-        .map(|cm| cm.get_queued_for_chat(session_id))
-        .unwrap_or_default()
+    ctx.chat.chat_manager.get_queued_for_chat(session_id)
 }
 
 /// The rpc id of the gate this replay redelivers itself, which the hub's

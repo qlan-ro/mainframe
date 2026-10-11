@@ -70,7 +70,7 @@ fn group_provider_rows(raw: &HashMap<String, String>) -> Map<String, Value> {
 }
 
 pub(super) async fn get_providers(State(ctx): State<Arc<AppCtx>>) -> Response {
-    let raw = match ctx.db.get_by_category(PROVIDER).await {
+    let raw = match ctx.core.db.get_by_category(PROVIDER).await {
         Ok(raw) => raw,
         Err(err) => return internal_error("get provider settings", &err),
     };
@@ -80,7 +80,7 @@ pub(super) async fn get_providers(State(ctx): State<Arc<AppCtx>>) -> Response {
     // `provider.<id>.executablePath` setting, so a snapshot of the already-fetched
     // rows backs it: no second db round-trip.
     let mut ids: Vec<String> = providers.keys().cloned().collect();
-    for adapter in ctx.adapter_registry.get_all() {
+    for adapter in ctx.core.adapter_registry.get_all() {
         let id = adapter.id().to_string();
         if !ids.contains(&id) {
             ids.push(id);
@@ -93,8 +93,8 @@ pub(super) async fn get_providers(State(ctx): State<Arc<AppCtx>>) -> Response {
             &id,
             &ResolverDeps {
                 settings: &settings,
-                run: &DefaultRunner::new(ctx.resolved_path.clone()),
-                path: &ctx.resolved_path,
+                run: &DefaultRunner::new(ctx.core.resolved_path.clone()),
+                path: &ctx.core.resolved_path,
             },
         )
         .await;
@@ -125,6 +125,7 @@ pub(super) async fn put_provider(
         return fail(StatusCode::BAD_REQUEST, "Invalid provider setting");
     }
     let result = ctx
+        .core
         .db
         .call(move |db| {
             // `""` clears a field; setting `defaultMode` retires the legacy

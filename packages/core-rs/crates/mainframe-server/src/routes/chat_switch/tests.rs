@@ -31,20 +31,23 @@ async fn switch(
 async fn setup() -> (Arc<AppCtx>, Chat) {
     std::fs::create_dir_all("/tmp/chat-switch-route").unwrap();
     let ctx = crate::ctx::AppCtx::test_ctx_with_chat_manager();
-    ctx.adapter_registry
+    ctx.core
+        .adapter_registry
         .register(crate::chat_test_support::StubAdapter::new("claude", false));
-    ctx.adapter_registry
+    ctx.core
+        .adapter_registry
         .register(crate::chat_test_support::StubAdapter::new("codex", false));
-    ctx.adapter_registry.seed_static_snapshots();
+    ctx.core.adapter_registry.seed_static_snapshots();
     let project = ctx
+        .core
         .db
         .call(|db| db.projects.create("/tmp/chat-switch-route", None))
         .await
         .unwrap();
     let chat = ctx
+        .chat
         .chat_manager
         .as_ref()
-        .unwrap()
         .create_chat_with_defaults(
             NewChat {
                 project_id: project.id.clone(),

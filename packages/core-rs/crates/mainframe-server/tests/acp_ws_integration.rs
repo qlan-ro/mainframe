@@ -17,6 +17,7 @@ async fn server_with_mock_adapter() -> TestServer {
     let server = spawn_test_server(None).await;
     server
         .ctx
+        .core
         .adapter_registry
         .register(std::sync::Arc::new(MockCliAdapter::default()));
     server
@@ -73,6 +74,7 @@ async fn upgrade_rejects_invalid_token_from_non_localhost() {
     let server = spawn_test_server(Some("test-secret".to_string())).await;
     server
         .ctx
+        .core
         .adapter_registry
         .register(std::sync::Arc::new(MockCliAdapter::default()));
     match WsClient::connect(server.addr, "/acp/mock-cli?token=garbage", Some("2.2.2.2")).await {
@@ -264,6 +266,7 @@ async fn heartbeat_arrives_periodically_at_the_configured_cadence() {
     .await;
     server
         .ctx
+        .core
         .adapter_registry
         .register(std::sync::Arc::new(MockCliAdapter::default()));
     let mut ws = WsClient::connect(server.addr, "/acp/mock-cli", None)
@@ -287,21 +290,25 @@ async fn heartbeat_arrives_periodically_at_the_configured_cadence() {
 #[tokio::test]
 async fn connecting_registers_a_facade_client_and_disconnecting_unregisters_it() {
     let server = server_with_mock_adapter().await;
-    assert_eq!(server.ctx.facade_hub.connection_count(), 0);
+    assert_eq!(server.ctx.chat.facade_hub.connection_count(), 0);
 
     let ws = WsClient::connect(server.addr, "/acp/mock-cli", None)
         .await
         .unwrap();
     let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
-    while server.ctx.facade_hub.connection_count() == 0 && tokio::time::Instant::now() < deadline {
+    while server.ctx.chat.facade_hub.connection_count() == 0
+        && tokio::time::Instant::now() < deadline
+    {
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
-    assert_eq!(server.ctx.facade_hub.connection_count(), 1);
+    assert_eq!(server.ctx.chat.facade_hub.connection_count(), 1);
 
     drop(ws);
     let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
-    while server.ctx.facade_hub.connection_count() != 0 && tokio::time::Instant::now() < deadline {
+    while server.ctx.chat.facade_hub.connection_count() != 0
+        && tokio::time::Instant::now() < deadline
+    {
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
-    assert_eq!(server.ctx.facade_hub.connection_count(), 0);
+    assert_eq!(server.ctx.chat.facade_hub.connection_count(), 0);
 }

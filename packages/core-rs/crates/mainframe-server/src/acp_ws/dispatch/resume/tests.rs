@@ -93,7 +93,7 @@ async fn next_frame(rx: &mut mpsc::UnboundedReceiver<String>) -> Value {
 #[tokio::test]
 async fn a_panicked_resume_settles_the_promise_and_asks_for_a_resync() {
     let ctx = AppCtx::test_ctx();
-    let (_client_id, connection, mut rx) = ctx.facade_hub.register("mock-cli".to_string());
+    let (_client_id, connection, mut rx) = ctx.chat.facade_hub.register("mock-cli".to_string());
 
     start_resume(
         resume_request(7, "chat-1"),
@@ -127,8 +127,8 @@ async fn a_panicked_resume_settles_the_promise_and_asks_for_a_resync() {
 #[tokio::test]
 async fn a_failure_after_the_reply_closes_the_replay_before_the_resync() {
     let ctx = AppCtx::test_ctx();
-    let (_client_id, connection, mut rx) = ctx.facade_hub.register("mock-cli".to_string());
-    ctx.facade_hub.attach(&connection, "chat-1");
+    let (_client_id, connection, mut rx) = ctx.chat.facade_hub.register("mock-cli".to_string());
+    ctx.chat.facade_hub.attach(&connection, "chat-1");
 
     fail_resume(ResumeFailure {
         connection: &connection,
@@ -162,8 +162,8 @@ async fn a_failure_after_the_reply_closes_the_replay_before_the_resync() {
 #[tokio::test]
 async fn a_delivery_that_already_completed_sends_no_second_marker() {
     let ctx = AppCtx::test_ctx();
-    let (_client_id, connection, mut rx) = ctx.facade_hub.register("mock-cli".to_string());
-    ctx.facade_hub.attach(&connection, "chat-1");
+    let (_client_id, connection, mut rx) = ctx.chat.facade_hub.register("mock-cli".to_string());
+    ctx.chat.facade_hub.attach(&connection, "chat-1");
 
     fail_resume(ResumeFailure {
         connection: &connection,
@@ -187,7 +187,7 @@ async fn a_delivery_that_already_completed_sends_no_second_marker() {
 #[tokio::test]
 async fn a_normal_close_carries_no_aborted_key() {
     let ctx = AppCtx::test_ctx();
-    let (_client_id, connection, mut rx) = ctx.facade_hub.register("mock-cli".to_string());
+    let (_client_id, connection, mut rx) = ctx.chat.facade_hub.register("mock-cli".to_string());
 
     start_resume(
         resume_request(1, "chat-1"),
@@ -212,7 +212,7 @@ async fn a_normal_close_carries_no_aborted_key() {
 #[tokio::test]
 async fn a_failure_before_the_reply_sends_no_replay_complete() {
     let ctx = AppCtx::test_ctx();
-    let (_client_id, connection, mut rx) = ctx.facade_hub.register("mock-cli".to_string());
+    let (_client_id, connection, mut rx) = ctx.chat.facade_hub.register("mock-cli".to_string());
 
     start_resume(
         resume_request(7, "chat-1"),
@@ -236,7 +236,7 @@ async fn a_failure_before_the_reply_sends_no_replay_complete() {
 #[tokio::test]
 async fn a_repeatedly_failing_resume_asks_for_one_resync_only() {
     let ctx = AppCtx::test_ctx();
-    let (_client_id, connection, mut rx) = ctx.facade_hub.register("mock-cli".to_string());
+    let (_client_id, connection, mut rx) = ctx.chat.facade_hub.register("mock-cli".to_string());
 
     for id in [1, 2] {
         start_resume(
@@ -255,7 +255,7 @@ async fn a_repeatedly_failing_resume_asks_for_one_resync_only() {
 #[tokio::test]
 async fn a_resume_that_succeeds_clears_the_failure_count() {
     let ctx = AppCtx::test_ctx();
-    let (_client_id, connection, mut rx) = ctx.facade_hub.register("mock-cli".to_string());
+    let (_client_id, connection, mut rx) = ctx.chat.facade_hub.register("mock-cli".to_string());
 
     start_resume(
         resume_request(1, "chat-1"),
@@ -340,7 +340,7 @@ fn methods(frames: &[Value]) -> Vec<String> {
 #[tokio::test]
 async fn an_opted_in_connection_takes_its_replay_as_one_compressed_batch() {
     let ctx = AppCtx::test_ctx();
-    let (_client_id, connection, mut rx) = ctx.facade_hub.register("mock-cli".to_string());
+    let (_client_id, connection, mut rx) = ctx.chat.facade_hub.register("mock-cli".to_string());
     connection.mark_compressed_replay_opted_in();
 
     start_resume(
@@ -369,7 +369,7 @@ async fn an_opted_in_connection_takes_its_replay_as_one_compressed_batch() {
 #[tokio::test]
 async fn a_connection_that_did_not_opt_in_keeps_the_per_update_replay() {
     let ctx = AppCtx::test_ctx();
-    let (_client_id, connection, mut rx) = ctx.facade_hub.register("mock-cli".to_string());
+    let (_client_id, connection, mut rx) = ctx.chat.facade_hub.register("mock-cli".to_string());
 
     start_resume(
         resume_request(7, "chat-1"),

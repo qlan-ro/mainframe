@@ -84,7 +84,7 @@ pub(crate) async fn resolve_chat_path(
     chat_id: &str,
 ) -> Result<Option<String>, DbError> {
     let cid = chat_id.to_owned();
-    let Some(chat) = ctx.db.call(move |db| db.chats.get(&cid)).await? else {
+    let Some(chat) = ctx.core.db.call(move |db| db.chats.get(&cid)).await? else {
         return Ok(None);
     };
     get_effective_path(ctx, &chat.project_id, Some(chat_id)).await
@@ -92,7 +92,7 @@ pub(crate) async fn resolve_chat_path(
 
 pub(crate) async fn chat_worktree_missing(ctx: &AppCtx, chat_id: &str) -> Result<bool, DbError> {
     let cid = chat_id.to_owned();
-    let Some(chat) = ctx.db.call(move |db| db.chats.get(&cid)).await? else {
+    let Some(chat) = ctx.core.db.call(move |db| db.chats.get(&cid)).await? else {
         return Ok(false);
     };
     match ctx.resolve_scope(&chat.project_id, Some(chat_id)).await {
@@ -115,7 +115,13 @@ async fn status(
         Ok(None) => return fail(StatusCode::NOT_FOUND, "Project not found"),
         Err(e) => return internal_error("Failed to resolve project path", &e),
     };
-    match ctx.git.for_project(base_path.clone()).status_raw().await {
+    match ctx
+        .core
+        .git
+        .for_project(base_path.clone())
+        .status_raw()
+        .await
+    {
         Ok(raw) => ok(json!({ "files": parse_status_lines(&raw) })),
         Err(e) => {
             if !is_not_git_repo_err(&e) {
@@ -137,7 +143,13 @@ async fn working_stat(
         Ok(None) => return fail(StatusCode::NOT_FOUND, "Project not found"),
         Err(e) => return internal_error("Failed to resolve project path", &e),
     };
-    match ctx.git.for_project(base_path.clone()).working_stat().await {
+    match ctx
+        .core
+        .git
+        .for_project(base_path.clone())
+        .working_stat()
+        .await
+    {
         Ok(stat) => ok(stat),
         Err(e) => {
             tracing::warn!(error = %e, base_path, "Failed to compute working stat");
@@ -158,6 +170,7 @@ async fn branch(
         Err(e) => return internal_error("Failed to resolve project path", &e),
     };
     match ctx
+        .core
         .git
         .for_project(base_path.clone())
         .current_branch()
@@ -184,7 +197,7 @@ async fn branch_diffs(
         Ok(None) => return fail(StatusCode::NOT_FOUND, "Project not found"),
         Err(e) => return internal_error("Failed to resolve project path", &e),
     };
-    let svc = ctx.git.for_project(base_path.clone());
+    let svc = ctx.core.git.for_project(base_path.clone());
     match compute_branch_diffs(&svc).await {
         Ok(v) => ok(v),
         Err(e) => {
@@ -236,7 +249,7 @@ async fn diff(
         Err(e) => return internal_error("Failed to resolve project path", &e),
     };
 
-    let svc = ctx.git.for_project(base_path.clone());
+    let svc = ctx.core.git.for_project(base_path.clone());
     let diff_args: Vec<String> = match (&q.file, &q.base) {
         (Some(f), Some(b)) => vec![format!("{b}..HEAD"), "--".into(), f.clone()],
         (Some(f), None) => vec!["--".into(), f.clone()],

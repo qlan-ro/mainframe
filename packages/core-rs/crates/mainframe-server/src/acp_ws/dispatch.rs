@@ -45,10 +45,10 @@ pub async fn handle_inbound(
             return Some(wire(&rpc::error_response(None, error)));
         }
     };
-    let ports = ManagerPorts::new(ctx.chat_manager.clone());
+    let ports = ManagerPorts::new(Some(ctx.chat.chat_manager.clone()));
     match frame {
         InboundFrame::Response(response) => {
-            handle_gate_answer(response, &ctx.facade_hub, &ports, connection).await;
+            handle_gate_answer(response, &ctx.chat.facade_hub, &ports, connection).await;
             None
         }
         InboundFrame::Request(request) if request.method == "session/resume" => {
@@ -109,7 +109,7 @@ fn handle_session_method(
     if connection.is_negotiated()
         && let Some(session_id) = &session_id
     {
-        ctx.facade_hub.attach(connection, session_id);
+        ctx.chat.facade_hub.attach(connection, session_id);
     }
     spawn_session_method(
         frame,

@@ -34,6 +34,7 @@ async fn tunnel_server(stub: TunnelStub) -> TestServer {
 async fn seed_chat(server: &TestServer) -> String {
     server
         .ctx
+        .core
         .db
         .call(|db| {
             let project = db.projects.create("/tmp/port-tunnels-proj", Some("p"))?;

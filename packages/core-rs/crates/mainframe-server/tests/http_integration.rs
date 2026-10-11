@@ -187,6 +187,7 @@ async fn rejects_token_with_stale_epoch() {
     let stale_token = server.register_device_token(SECRET, "mobile-1").await;
     server
         .ctx
+        .core
         .db
         .call(|db| db.devices.increment_auth_epoch("mobile-1"))
         .await

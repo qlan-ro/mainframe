@@ -19,6 +19,7 @@ use crate::ctx::AppCtx;
 async fn resolve_session(ctx: &AppCtx, chat_id: &str) -> Option<(String, String)> {
     let chat_id_owned = chat_id.to_string();
     let chat = ctx
+        .core
         .db
         .call(move |db| db.chats.get(&chat_id_owned))
         .await
@@ -29,12 +30,12 @@ async fn resolve_session(ctx: &AppCtx, chat_id: &str) -> Option<(String, String)
     Some((session_id, cwd))
 }
 
-/// Folds `ctx.claude_workflows`'s retained runs with on-disk `wf_<runId>.json`
+/// Folds `ctx.core.claude_workflows`'s retained runs with on-disk `wf_<runId>.json`
 /// records for `chat_id`'s current session, per the store contract's
 /// `merge_runs` precedence. Returns the in-memory runs unchanged when the chat
 /// has no Claude session or resolvable cwd (logged at `debug`).
 pub(crate) async fn workflow_runs_for_chat(ctx: &AppCtx, chat_id: &str) -> Vec<ClaudeWorkflowRun> {
-    let memory = ctx.claude_workflows.runs_for_chat(chat_id);
+    let memory = ctx.core.claude_workflows.runs_for_chat(chat_id);
     let Some((session_id, cwd)) = resolve_session(ctx, chat_id).await else {
         tracing::debug!(
             chat_id,

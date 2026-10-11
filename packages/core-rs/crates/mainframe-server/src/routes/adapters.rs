@@ -1,6 +1,6 @@
 //! `GET /api/adapters`.
 //!
-//! `ctx.adapter_registry.list()` runs the registry's installed/version probing
+//! `ctx.core.adapter_registry.list()` runs the registry's installed/version probing
 //! (single-flight + 2s cap live in the registry itself) and returns the
 //! `AdapterInfo` snapshots verbatim.
 
@@ -15,7 +15,7 @@ use crate::ctx::AppCtx;
 use crate::respond::ok;
 
 async fn list(State(ctx): State<Arc<AppCtx>>) -> Response {
-    let adapters_list = ctx.adapter_registry.list().await;
+    let adapters_list = ctx.core.adapter_registry.list().await;
     ok(adapters_list)
 }
 
@@ -45,43 +45,35 @@ mod tests {
         let db = Db::spawn(|| DatabaseManager::open(Path::new(":memory:"))).unwrap();
         let (broadcast, _keep) = tokio::sync::broadcast::channel::<DaemonEvent>(16);
         let watcher = FileWatcherService::new(|_| {});
-        Arc::new(AppCtx {
-            db,
-            git: GitFactory,
-            services: Services {
-                attachments: Arc::new(AttachmentStore::new(
-                    std::env::temp_dir().join("mf-adapters-test"),
-                )),
-                push: Arc::new(PushService::new()),
-                watcher: Arc::new(watcher),
-            },
-            broadcast,
-            adapter_registry: Arc::new(mainframe_adapter_api::AdapterRegistry::new()),
-            background_tasks: Arc::new(
-                mainframe_background_tasks::tracker::BackgroundTaskTracker::new(),
-            ),
-            claude_workflows: Arc::new(
-                mainframe_claude_workflows::store::ClaudeWorkflowStore::new(),
-            ),
-            chat_manager: None,
-            launch_registry: None,
-            tunnel_manager: None,
-            port_tunnels: None,
-            lsp_manager: None,
-            plugin_manager: None,
-            automations: None,
-            orchestration: None,
-            quota: None,
-            data_dir: std::env::temp_dir(),
-            version: "0.0.0-test".into(),
-            port: 0,
-            auth_secret: None,
-            resolved_path: mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
-            tunnel_url: Arc::new(std::sync::RwLock::new(None)),
-            ws_clients: Arc::new(DashMap::new()),
-            facade_hub: Arc::new(crate::acp_ws::FacadeHub::default()),
-            facade_heartbeat_interval_ms: mainframe_acp::DEFAULT_HEARTBEAT_INTERVAL_MS,
-        })
+        Arc::new(
+            AppCtx::builder(db, std::env::temp_dir())
+                .git(GitFactory)
+                .services(Services {
+                    attachments: Arc::new(AttachmentStore::new(
+                        std::env::temp_dir().join("mf-adapters-test"),
+                    )),
+                    push: Arc::new(PushService::new()),
+                    watcher: Arc::new(watcher),
+                })
+                .broadcast(broadcast)
+                .adapter_registry(Arc::new(mainframe_adapter_api::AdapterRegistry::new()))
+                .background_tasks(Arc::new(
+                    mainframe_background_tasks::tracker::BackgroundTaskTracker::new(),
+                ))
+                .claude_workflows(Arc::new(
+                    mainframe_claude_workflows::store::ClaudeWorkflowStore::new(),
+                ))
+                .automations(None)
+                .version("0.0.0-test".into())
+                .port(0)
+                .auth_secret(None)
+                .resolved_path(mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"))
+                .tunnel_url(Arc::new(std::sync::RwLock::new(None)))
+                .ws_clients(Arc::new(DashMap::new()))
+                .facade_hub(Arc::new(crate::acp_ws::FacadeHub::default()))
+                .facade_heartbeat_interval_ms(mainframe_acp::DEFAULT_HEARTBEAT_INTERVAL_MS)
+                .build(),
+        )
     }
 
     #[tokio::test]
@@ -99,9 +91,10 @@ mod tests {
     #[tokio::test]
     async fn every_adapter_reports_no_persistence_capability() {
         let ctx = test_ctx();
-        ctx.adapter_registry
+        ctx.core
+            .adapter_registry
             .register(Arc::new(mainframe_adapter_mock::MockCliAdapter::default()));
-        ctx.adapter_registry.seed_static_snapshots();
+        ctx.core.adapter_registry.seed_static_snapshots();
 
         let resp = list(State(ctx)).await;
         assert_eq!(resp.status(), StatusCode::OK);

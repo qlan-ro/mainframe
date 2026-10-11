@@ -58,7 +58,7 @@ fn reply_with_id(frames: &[Value], id: i64) -> &Value {
 #[tokio::test]
 async fn an_opted_in_resume_reply_carries_cursor_meta() {
     let ctx = AppCtx::test_ctx();
-    let (_client_id, connection, mut rx) = ctx.facade_hub.register("mock-cli".to_string());
+    let (_client_id, connection, mut rx) = ctx.chat.facade_hub.register("mock-cli".to_string());
     connection.mark_revision_cursors_opted_in();
 
     start_resume(
@@ -89,7 +89,7 @@ async fn an_opted_in_resume_reply_carries_cursor_meta() {
 #[tokio::test]
 async fn a_second_resume_with_the_returned_cursor_is_incremental() {
     let ctx = AppCtx::test_ctx();
-    let (_client_id, connection, mut rx) = ctx.facade_hub.register("mock-cli".to_string());
+    let (_client_id, connection, mut rx) = ctx.chat.facade_hub.register("mock-cli".to_string());
     connection.mark_revision_cursors_opted_in();
 
     start_resume(
@@ -127,7 +127,7 @@ async fn a_second_resume_with_the_returned_cursor_is_incremental() {
 #[tokio::test]
 async fn a_non_opted_connection_gets_no_cursor_meta() {
     let ctx = AppCtx::test_ctx();
-    let (_client_id, connection, mut rx) = ctx.facade_hub.register("mock-cli".to_string());
+    let (_client_id, connection, mut rx) = ctx.chat.facade_hub.register("mock-cli".to_string());
 
     start_resume(
         resume_request(1, "chat-1"),

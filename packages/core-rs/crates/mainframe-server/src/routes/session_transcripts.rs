@@ -63,7 +63,7 @@ async fn resolve(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
 async fn resolve_one(ctx: &Arc<AppCtx>, chat_id: String) -> TranscriptResolution {
     let chat = {
         let id = chat_id.clone();
-        match ctx.db.call(move |db| db.chats.get(&id)).await {
+        match ctx.core.db.call(move |db| db.chats.get(&id)).await {
             Ok(Some(chat)) => chat,
             Ok(None) | Err(_) => return TranscriptResolution::Unknown { chat_id },
         }
@@ -77,13 +77,18 @@ async fn resolve_one(ctx: &Arc<AppCtx>, chat_id: String) -> TranscriptResolution
     };
 
     let project_id = chat.project_id.clone();
-    let project_path = match ctx.db.call(move |db| db.projects.get(&project_id)).await {
+    let project_path = match ctx
+        .core
+        .db
+        .call(move |db| db.projects.get(&project_id))
+        .await
+    {
         Ok(Some(project)) => project.path,
         Ok(None) | Err(_) => return TranscriptResolution::Unknown { chat_id },
     };
     let cwd = chat.worktree_path.clone().unwrap_or(project_path);
 
-    let Some(adapter) = ctx.adapter_registry.get(&chat.adapter_id) else {
+    let Some(adapter) = ctx.core.adapter_registry.get(&chat.adapter_id) else {
         return TranscriptResolution::Unknown { chat_id };
     };
 
@@ -220,12 +225,14 @@ mod tests {
     async fn seed_chat(ctx: &Arc<AppCtx>, adapter_id: &str, with_session: bool) -> String {
         let path = format!("/tmp/session-transcripts-test-{}", nanoid::nanoid!());
         let project = ctx
+            .core
             .db
             .call(move |db| db.projects.create(&path, None))
             .await
             .unwrap();
         let adapter_id = adapter_id.to_string();
         let chat = ctx
+            .core
             .db
             .call(move |db| {
                 db.chats.create(&mainframe_types::chat::NewChat {
@@ -238,7 +245,8 @@ mod tests {
             .unwrap();
         if with_session {
             let id = chat.id.clone();
-            ctx.db
+            ctx.core
+                .db
                 .call(move |db| {
                     db.chats.update(
                         &id,
@@ -271,7 +279,7 @@ mod tests {
             "claude",
             Some(TranscriptLocation::Present("/p.jsonl".into())),
         );
-        ctx.adapter_registry.register(stub.clone());
+        ctx.core.adapter_registry.register(stub.clone());
         let chat_id = seed_chat(&ctx, "claude", true).await;
 
         let (status, body) = post_resolve(&ctx, &format!(r#"{{"chatIds":["{chat_id}"]}}"#)).await;
@@ -286,7 +294,7 @@ mod tests {
     async fn reports_unavailable_transcript_missing_when_the_adapter_says_missing() {
         let ctx = AppCtx::test_ctx();
         let stub = StubAdapter::new("claude", Some(TranscriptLocation::Missing));
-        ctx.adapter_registry.register(stub.clone());
+        ctx.core.adapter_registry.register(stub.clone());
         let chat_id = seed_chat(&ctx, "claude", true).await;
 
         let (_, body) = post_resolve(&ctx, &format!(r#"{{"chatIds":["{chat_id}"]}}"#)).await;
@@ -303,7 +311,7 @@ mod tests {
             "claude",
             Some(TranscriptLocation::Present("/p.jsonl".into())),
         );
-        ctx.adapter_registry.register(stub.clone());
+        ctx.core.adapter_registry.register(stub.clone());
         let chat_id = seed_chat(&ctx, "claude", false).await;
 
         let (_, body) = post_resolve(&ctx, &format!(r#"{{"chatIds":["{chat_id}"]}}"#)).await;
@@ -321,7 +329,7 @@ mod tests {
             "codex",
             Some(TranscriptLocation::Present("/rollout.jsonl".into())),
         );
-        ctx.adapter_registry.register(stub.clone());
+        ctx.core.adapter_registry.register(stub.clone());
         let chat_id = seed_chat(&ctx, "codex", true).await;
 
         let (_, body) = post_resolve(&ctx, &format!(r#"{{"chatIds":["{chat_id}"]}}"#)).await;
@@ -334,9 +342,11 @@ mod tests {
     #[tokio::test]
     async fn reports_unknown_for_a_default_adapter_and_an_unregistered_adapter() {
         let ctx = AppCtx::test_ctx();
-        ctx.adapter_registry.register(Arc::new(DefaultOnlyAdapter {
-            adapter_id: "default-only".to_string(),
-        }));
+        ctx.core
+            .adapter_registry
+            .register(Arc::new(DefaultOnlyAdapter {
+                adapter_id: "default-only".to_string(),
+            }));
         let default_chat = seed_chat(&ctx, "default-only", true).await;
         let unregistered_chat = seed_chat(&ctx, "no-such-adapter", true).await;
 

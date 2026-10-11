@@ -40,6 +40,7 @@ async fn github_remotes(
         Err(e) => return internal_error("Failed to resolve project path", &e),
     };
     let raw_remotes = match ctx
+        .core
         .git
         .for_project(base_path.clone())
         .remotes_with_urls()
@@ -129,6 +130,7 @@ mod tests {
 
         let ctx = AppCtx::test_ctx();
         let project = ctx
+            .core
             .db
             .call({
                 let path = dir.to_string_lossy().into_owned();
@@ -182,6 +184,7 @@ mod tests {
 
         let ctx = AppCtx::test_ctx();
         let project = ctx
+            .core
             .db
             .call({
                 let path = dir.to_string_lossy().into_owned();

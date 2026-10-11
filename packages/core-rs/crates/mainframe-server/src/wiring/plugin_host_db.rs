@@ -3,8 +3,8 @@
 //! `call_blocking` (the same SYNC-DB BRIDGE the `ChatManagerDeps` accessors
 //! use); settings go through `Db`'s `SettingsKv`.
 
+use crate::db::{Db, notification_config_blocking};
 use mainframe_plugins::PluginHostDb;
-use mainframe_server::db::{Db, notification_config_blocking};
 use mainframe_types::chat::Chat;
 use mainframe_types::settings::NotificationConfig;
 use mainframe_types::settings_kv::SettingsKv;

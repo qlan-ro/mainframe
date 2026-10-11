@@ -105,37 +105,30 @@ async fn harness(fork_capable: bool, update: ChatPatch) -> Harness {
         data_dir.path().to_path_buf(),
     );
 
-    let ctx = Arc::new(AppCtx {
-        db: db.clone(),
-        git: GitFactory,
-        services: Services {
-            attachments,
-            push,
-            watcher: Arc::new(watcher),
-        },
-        broadcast,
-        adapter_registry: registry,
-        background_tasks: tracker,
-        claude_workflows: workflows,
-        chat_manager: Some(manager),
-        launch_registry: None,
-        tunnel_manager: None,
-        port_tunnels: None,
-        lsp_manager: None,
-        plugin_manager: None,
-        automations: None,
-        orchestration: None,
-        quota: None,
-        data_dir: data_dir.path().to_path_buf(),
-        version: "0.0.0-test".to_string(),
-        port: 0,
-        auth_secret: None,
-        resolved_path: mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
-        tunnel_url: Arc::new(std::sync::RwLock::new(None)),
-        ws_clients: Arc::new(DashMap::new()),
-        facade_hub: Arc::new(mainframe_server::FacadeHub::default()),
-        facade_heartbeat_interval_ms: mainframe_acp::DEFAULT_HEARTBEAT_INTERVAL_MS,
-    });
+    let ctx = Arc::new(
+        AppCtx::builder(db.clone(), data_dir.path().to_path_buf())
+            .git(GitFactory)
+            .services(Services {
+                attachments,
+                push,
+                watcher: Arc::new(watcher),
+            })
+            .broadcast(broadcast)
+            .adapter_registry(registry)
+            .background_tasks(tracker)
+            .claude_workflows(workflows)
+            .chat_manager(Some(manager))
+            .automations(None)
+            .version("0.0.0-test".to_string())
+            .port(0)
+            .auth_secret(None)
+            .resolved_path(mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"))
+            .tunnel_url(Arc::new(std::sync::RwLock::new(None)))
+            .ws_clients(Arc::new(DashMap::new()))
+            .facade_hub(Arc::new(mainframe_server::FacadeHub::default()))
+            .facade_heartbeat_interval_ms(mainframe_acp::DEFAULT_HEARTBEAT_INTERVAL_MS)
+            .build(),
+    );
     spawn_broadcast_pump(Arc::clone(&ctx));
 
     let app = build_app(Arc::clone(&ctx));

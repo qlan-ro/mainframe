@@ -57,10 +57,7 @@ async fn fork(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>, body: Byte
     let Some(point) = fork_point(&body) else {
         return fail(StatusCode::BAD_REQUEST, "Invalid request body");
     };
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "fork is a Phase-4 seam (ChatManager unavailable)");
-        return fail(StatusCode::INTERNAL_SERVER_ERROR, "fork unavailable");
-    };
+    let cm = &ctx.chat.chat_manager;
     match cm.fork_chat(&id, point).await {
         Ok(chat) => ok(chat),
         Err(ForkChatError::NotFound(_)) => fail(StatusCode::NOT_FOUND, "Not found"),

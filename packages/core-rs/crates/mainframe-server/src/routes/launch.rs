@@ -3,7 +3,7 @@
 //! Four endpoints under `/api/projects/:id/launch`: `status`, `configs`,
 //! `:name/start`, `:name/stop`. Each resolves the worktree-aware effective path
 //! (`AppCtx::effective_path`) from the `:id` param + `?chatId`, then delegates to the
-//! per-project `LaunchManager` obtained from `ctx.launch_registry`. Launch configs
+//! per-project `LaunchManager` obtained from `ctx.infra.launch_registry`. Launch configs
 //! are always read + validated from disk — never trusted from the request body.
 
 use std::collections::HashMap;
@@ -84,22 +84,12 @@ async fn get_status(
     let Some(path) = resolve_launch_path(&ctx, &project_id, q.chat_id.as_deref()).await else {
         return fail(StatusCode::NOT_FOUND, "Project not found");
     };
-    let manager = ctx
-        .launch_registry
-        .as_ref()
-        .map(|r| r.get_or_create(&project_id, &path));
-    let statuses = manager
-        .as_ref()
-        .map(|m| m.get_all_statuses())
-        .unwrap_or_default();
+    let manager = ctx.infra.launch_registry.get_or_create(&project_id, &path);
+    let statuses = manager.get_all_statuses();
 
     // Include tunnel URLs for running processes (keyed `preview:<name>`).
     let mut tunnel_urls: HashMap<String, String> = HashMap::new();
-    if let Some(tunnel_manager) = ctx
-        .launch_registry
-        .as_ref()
-        .and_then(|r| r.tunnel_manager.as_ref())
-    {
+    if let Some(tunnel_manager) = ctx.infra.launch_registry.tunnel_manager.as_ref() {
         for name in statuses.keys() {
             if let Some(url) = tunnel_manager.get_url(&format!("preview:{name}")) {
                 tunnel_urls.insert(name.clone(), url);
@@ -112,9 +102,7 @@ async fn get_status(
     let mut output_buffer = serde_json::Map::new();
     for name in statuses.keys() {
         let entries: Vec<serde_json::Value> = manager
-            .as_ref()
-            .map(|m| m.get_output_buffer(name))
-            .unwrap_or_default()
+            .get_output_buffer(name)
             .into_iter()
             .map(|e| json!({ "stream": e.stream, "data": e.data }))
             .collect();
@@ -194,12 +182,7 @@ async fn start(
             format!("Configuration \"{name}\" not found in launch.json"),
         );
     };
-    let Some(registry) = ctx.launch_registry.as_ref() else {
-        return fail(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "LaunchRegistry not available",
-        );
-    };
+    let registry = &ctx.infra.launch_registry;
     let manager = registry.get_or_create(&project_id, &path);
     match manager.start(&config).await {
         Ok(()) => ok_empty(),
@@ -224,7 +207,8 @@ async fn stop(
     let Some(path) = resolve_launch_path(&ctx, &project_id, q.chat_id.as_deref()).await else {
         return fail(StatusCode::NOT_FOUND, "Project not found");
     };
-    if let Some(registry) = ctx.launch_registry.as_ref() {
+    {
+        let registry = &ctx.infra.launch_registry;
         registry.get_or_create(&project_id, &path).stop(&name).await;
     }
     ok_empty()

@@ -35,9 +35,7 @@ pub fn router() -> Router<Arc<AppCtx>> {
 }
 
 async fn handle(State(ctx): State<Arc<AppCtx>>, req: Request) -> Response {
-    let Some(service) = ctx.orchestration.as_ref() else {
-        return StatusCode::SERVICE_UNAVAILABLE.into_response();
-    };
+    let service = &ctx.chat.orchestration;
     if req.method() != Method::POST {
         let mut resp = StatusCode::METHOD_NOT_ALLOWED.into_response();
         resp.headers_mut()

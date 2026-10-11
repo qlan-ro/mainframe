@@ -25,7 +25,7 @@ pub(super) async fn resolve(
     Path(adapter_id): Path<String>,
     Query(query): Query<ModelQuery>,
 ) -> Response {
-    let Some(adapter) = ctx.adapter_registry.get(&adapter_id) else {
+    let Some(adapter) = ctx.core.adapter_registry.get(&adapter_id) else {
         return fail(StatusCode::NOT_FOUND, "Adapter not found");
     };
     if let Some(id) = &query.chat_id {
@@ -36,7 +36,7 @@ pub(super) async fn resolve(
         Err(response) => return response.into_response(),
     };
     let key = format!("{adapter_id}.executablePath");
-    let executable = match ctx.db.get("provider", &key).await {
+    let executable = match ctx.core.db.get("provider", &key).await {
         Ok(value) => value.filter(|value| !value.is_empty()),
         Err(err) => return crate::async_err::internal_error("get provider executable", &err),
     };
@@ -49,9 +49,7 @@ async fn observed_model(
     chat_id: &str,
     project_id: Option<&str>,
 ) -> Response {
-    let Some(manager) = ctx.chat_manager.as_ref() else {
-        return fail(StatusCode::NOT_FOUND, "Chat not found");
-    };
+    let manager = &ctx.chat.chat_manager;
     let Some(chat) = manager.get_chat(chat_id) else {
         return fail(StatusCode::NOT_FOUND, "Chat not found");
     };
@@ -89,7 +87,7 @@ async fn project_path(
                 )
             });
     };
-    match ctx.db.call(move |db| db.projects.get(&id)).await {
+    match ctx.core.db.call(move |db| db.projects.get(&id)).await {
         Ok(Some(project)) => Ok(project.path),
         Ok(None) => Err(crate::respond::ApiError::new(
             StatusCode::NOT_FOUND,

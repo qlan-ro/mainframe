@@ -87,7 +87,7 @@ pub(crate) async fn auth_middleware(
     mut req: Request,
     next: Next,
 ) -> Response {
-    let Some(secret) = ctx.auth_secret.clone() else {
+    let Some(secret) = ctx.core.auth_secret.clone() else {
         return next.run(req).await;
     };
 
@@ -106,7 +106,7 @@ pub(crate) async fn auth_middleware(
     if is_localhost(&ip) {
         // Loopback: never rejected; attach `req.auth` only if a valid token rode along.
         if let Some(token) = bearer_token(&req)
-            && let Some(payload) = validate_device_token(&ctx.db, secret, token).await
+            && let Some(payload) = validate_device_token(&ctx.core.db, secret, token).await
         {
             req.extensions_mut().insert(payload);
         }
@@ -117,7 +117,7 @@ pub(crate) async fn auth_middleware(
     let Some(token) = bearer_token(&req) else {
         return unauthorized(&path, "missing bearer");
     };
-    let Some(payload) = validate_device_token(&ctx.db, secret, token).await else {
+    let Some(payload) = validate_device_token(&ctx.core.db, secret, token).await else {
         return unauthorized(&path, "invalid token");
     };
     req.extensions_mut().insert(payload);

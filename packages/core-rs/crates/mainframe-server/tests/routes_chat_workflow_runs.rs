@@ -26,6 +26,7 @@ async fn succeeds_for_a_real_chat_row_with_no_claude_session_yet() {
     let project_id = server.create_project("/tmp/wf-runs-project").await;
     let chat_id = server
         .ctx
+        .core
         .db
         .call({
             let project_id = project_id.clone();

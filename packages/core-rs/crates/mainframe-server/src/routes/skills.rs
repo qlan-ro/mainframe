@@ -22,7 +22,8 @@ use crate::routes::projects::parse_body;
 const NOT_SUPPORTED: &str = "Adapter not found or does not support skills";
 
 fn claude_supported(ctx: &AppCtx, adapter_id: &str) -> bool {
-    ctx.adapter_registry
+    ctx.core
+        .adapter_registry
         .get(adapter_id)
         .map(|a| a.id() == "claude")
         .unwrap_or(false)
@@ -46,7 +47,7 @@ async fn list(
     Path(adapter_id): Path<String>,
     Query(q): Query<ProjectPathQuery>,
 ) -> Response {
-    let Some(adapter) = ctx.adapter_registry.get(&adapter_id) else {
+    let Some(adapter) = ctx.core.adapter_registry.get(&adapter_id) else {
         return fail(StatusCode::NOT_FOUND, NOT_SUPPORTED);
     };
     let Some(project_path) = q.project_path.filter(|p| !p.is_empty()) else {
@@ -56,7 +57,7 @@ async fn list(
         "claude" => ok(skills::list_skills(&project_path).await),
         "codex" => match mainframe_adapter_codex::skills::list_skills(
             &project_path,
-            ctx.resolved_path.as_str(),
+            ctx.core.resolved_path.as_str(),
         )
         .await
         {
@@ -227,9 +228,10 @@ done
 "#).unwrap();
         std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o755)).unwrap();
         let mut ctx = AppCtx::test_ctx();
-        Arc::get_mut(&mut ctx).unwrap().resolved_path =
+        Arc::get_mut(&mut ctx).unwrap().core.resolved_path =
             mainframe_runtime::ResolvedPath::from_value(temp.path().to_str().unwrap());
-        ctx.adapter_registry
+        ctx.core
+            .adapter_registry
             .register(Arc::new(mainframe_adapter_codex::CodexAdapter::default()));
         let response = list(
             State(ctx),
@@ -287,7 +289,8 @@ done
         .await
         .unwrap();
         let ctx = AppCtx::test_ctx();
-        ctx.adapter_registry
+        ctx.core
+            .adapter_registry
             .register(Arc::new(mainframe_adapter_mock::MockCliAdapter::default()));
 
         let response = list(

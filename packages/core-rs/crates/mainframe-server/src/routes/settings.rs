@@ -3,7 +3,7 @@
 //! GET general serialises `GeneralConfig` built from the stored `general` rows
 //! (other `general` keys pass through as strings). GET providers assembles the
 //! stored provider rows (skipPermissions→yolo, strip skipPermissions), unions
-//! `ctx.adapter_registry.get_all()` ids, and attaches a `resolvedExecutable` per
+//! `ctx.core.adapter_registry.get_all()` ids, and attaches a `resolvedExecutable` per
 //! adapter via `resolve_adapter_executable`. The PUTs validate enum-valued fields
 //! by deserialising the enum, then write their rows inside one database job so a
 //! notification read-merge-write cannot interleave with another PUT. The
@@ -37,7 +37,7 @@ const GENERAL: &str = "general";
 // ── general settings ───────────────────────────────────────────────────────────
 
 async fn get_general(State(ctx): State<Arc<AppCtx>>) -> Response {
-    let raw = match ctx.db.get_by_category(GENERAL).await {
+    let raw = match ctx.core.db.get_by_category(GENERAL).await {
         Ok(raw) => raw,
         Err(err) => return internal_error("get general settings", &err),
     };
@@ -136,6 +136,7 @@ async fn put_general(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
         return fail(StatusCode::BAD_REQUEST, message);
     }
     match ctx
+        .core
         .db
         .call(move |db| write_general(&db.settings, patch))
         .await

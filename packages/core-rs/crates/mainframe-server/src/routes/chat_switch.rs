@@ -36,13 +36,7 @@ async fn switch_provider(
     if !mainframe_types::ids::is_safe_identifier(&req.adapter_id) {
         return fail(StatusCode::BAD_REQUEST, "Invalid adapterId");
     }
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "switch_provider needs ChatManager (unwired)");
-        return fail(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "provider switch unavailable",
-        );
-    };
+    let cm = &ctx.chat.chat_manager;
     match cm.switch_provider(&id, &req).await {
         Ok(chat) => ok(chat),
         Err(err) => {
@@ -61,6 +55,7 @@ async fn list_segments(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -
     }
     let lookup = id.clone();
     let result = ctx
+        .core
         .db
         .call(move |db| match db.chats.get(&lookup)? {
             Some(_) => db.segments.list_wire(&lookup).map(Some),

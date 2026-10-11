@@ -28,39 +28,33 @@ async fn health_endpoint_serves_expected_shape_and_shuts_down_gracefully() {
     let db = Db::spawn(|| DatabaseManager::open(std::path::Path::new(":memory:"))).unwrap();
     let (broadcast, _keepalive) = tokio::sync::broadcast::channel::<DaemonEvent>(64);
     let watcher_tx = broadcast.clone();
-    let ctx = Arc::new(AppCtx {
-        db,
-        git: GitFactory,
-        services: Services {
-            attachments: Arc::new(AttachmentStore::new(data_dir.path().join("attachments"))),
-            push: Arc::new(PushService::new()),
-            watcher: Arc::new(FileWatcherService::new(move |event| {
-                let _ = watcher_tx.send(event);
-            })),
-        },
-        broadcast,
-        data_dir: data_dir.path().to_path_buf(),
-        version: "0.0.0-test".to_string(),
-        port: 0,
-        auth_secret: None,
-        resolved_path: mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
-        tunnel_url: Arc::new(std::sync::RwLock::new(None)),
-        ws_clients: Arc::new(DashMap::new()),
-        facade_hub: Arc::new(mainframe_server::FacadeHub::default()),
-        facade_heartbeat_interval_ms: mainframe_acp::DEFAULT_HEARTBEAT_INTERVAL_MS,
-        adapter_registry: Arc::new(AdapterRegistry::new()),
-        background_tasks: Arc::new(BackgroundTaskTracker::new()),
-        claude_workflows: Arc::new(mainframe_claude_workflows::store::ClaudeWorkflowStore::new()),
-        chat_manager: None,
-        launch_registry: None,
-        tunnel_manager: None,
-        port_tunnels: None,
-        lsp_manager: None,
-        plugin_manager: None,
-        automations: None,
-        orchestration: None,
-        quota: None,
-    });
+    let ctx = Arc::new(
+        AppCtx::builder(db, data_dir.path().to_path_buf())
+            .git(GitFactory)
+            .services(Services {
+                attachments: Arc::new(AttachmentStore::new(data_dir.path().join("attachments"))),
+                push: Arc::new(PushService::new()),
+                watcher: Arc::new(FileWatcherService::new(move |event| {
+                    let _ = watcher_tx.send(event);
+                })),
+            })
+            .broadcast(broadcast)
+            .version("0.0.0-test".to_string())
+            .port(0)
+            .auth_secret(None)
+            .resolved_path(mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"))
+            .tunnel_url(Arc::new(std::sync::RwLock::new(None)))
+            .ws_clients(Arc::new(DashMap::new()))
+            .facade_hub(Arc::new(mainframe_server::FacadeHub::default()))
+            .facade_heartbeat_interval_ms(mainframe_acp::DEFAULT_HEARTBEAT_INTERVAL_MS)
+            .adapter_registry(Arc::new(AdapterRegistry::new()))
+            .background_tasks(Arc::new(BackgroundTaskTracker::new()))
+            .claude_workflows(Arc::new(
+                mainframe_claude_workflows::store::ClaudeWorkflowStore::new(),
+            ))
+            .automations(None)
+            .build(),
+    );
     spawn_broadcast_pump(Arc::clone(&ctx));
 
     let app = build_app(Arc::clone(&ctx));

@@ -36,10 +36,7 @@ async fn discard(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Resp
     if !chat.temporary {
         return fail(StatusCode::CONFLICT, "chat is not temporary");
     }
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "discard is a Phase-4 seam (ChatManager unavailable)");
-        return fail(StatusCode::INTERNAL_SERVER_ERROR, "discard unavailable");
-    };
+    let cm = &ctx.chat.chat_manager;
     match cm.discard_chat(&id).await {
         Ok(()) => ok_empty(),
         Err(err) => {
@@ -81,11 +78,13 @@ mod tests {
     async fn discard_refuses_a_non_temporary_chat() {
         let ctx = AppCtx::test_ctx();
         let project = ctx
+            .core
             .db
             .call(|db| db.projects.create("/tmp/discard-not-temp", None))
             .await
             .unwrap();
         let chat = ctx
+            .core
             .db
             .call(move |db| {
                 db.chats.create(&NewChat {
@@ -128,12 +127,13 @@ mod tests {
     #[tokio::test]
     async fn discard_deletes_the_row_and_scratch_dir_and_404s_on_the_next_get() {
         let ctx = AppCtx::test_ctx_with_chat_manager();
-        ctx.adapter_registry
+        ctx.core
+            .adapter_registry
             .register(crate::chat_test_support::StubAdapter::new("claude", false));
         let created = ctx
+            .chat
             .chat_manager
             .as_ref()
-            .unwrap()
             .create_chat_with_defaults(
                 NewChat {
                     project_id: mainframe_types::chat::NO_PROJECT_ID.to_string(),
@@ -148,6 +148,7 @@ mod tests {
         let chat_id = created.id;
 
         let scratch_path = ctx
+            .core
             .db
             .call({
                 let chat_id = chat_id.clone();
@@ -168,7 +169,8 @@ mod tests {
         );
         let lookup = chat_id.clone();
         assert!(
-            ctx.db
+            ctx.core
+                .db
                 .call(move |db| db.chats.get(&lookup))
                 .await
                 .unwrap()

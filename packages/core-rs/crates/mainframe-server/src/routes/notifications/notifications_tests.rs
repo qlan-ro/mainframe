@@ -14,7 +14,7 @@ async fn body_json(resp: axum::response::Response) -> (StatusCode, serde_json::V
 #[tokio::test]
 async fn posting_a_notification_broadcasts_and_returns_ok() {
     let ctx = AppCtx::test_ctx();
-    let mut rx = ctx.broadcast.subscribe();
+    let mut rx = ctx.core.broadcast.subscribe();
     let body = Bytes::from(r#"{"title":"todo 12 lane","body":"pipeline:qa"}"#);
 
     let (status, json) = body_json(create(State(ctx), body).await).await;
