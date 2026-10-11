@@ -5,17 +5,17 @@ pub(super) async fn scan_page_impl<D: ExternalSessionDeps>(
     project_id: &str,
     offset: i64,
     limit: i64,
-) -> ExternalSessionPage {
+) -> Result<ExternalSessionPage, SeamError> {
     let Some(project) = deps.projects_get_path(project_id) else {
-        return ExternalSessionPage {
+        return Ok(ExternalSessionPage {
             sessions: Vec::new(),
             total: 0,
             next_offset: None,
-        };
+        });
     };
 
     let adapter_ids = deps.external_session_adapter_ids();
-    let exclude_ids = deps.get_imported_session_ids(project_id);
+    let exclude_ids = deps.get_imported_session_ids(project_id)?;
 
     // Count-only: each adapter returns its total without enriching.
     if limit <= 0 {
@@ -34,11 +34,11 @@ pub(super) async fn scan_page_impl<D: ExternalSessionDeps>(
                 }
             }
         }
-        return ExternalSessionPage {
+        return Ok(ExternalSessionPage {
             sessions: Vec::new(),
             total,
             next_offset: None,
-        };
+        });
     }
 
     // Over-fetch each adapter's prefix [0, offset+limit), then merge-sort across
@@ -92,15 +92,16 @@ pub(super) async fn scan_page_impl<D: ExternalSessionDeps>(
     } else {
         None
     };
-    ExternalSessionPage {
+    Ok(ExternalSessionPage {
         sessions,
         total,
         next_offset,
-    }
+    })
 }
 
 pub(super) async fn generate_import_title<D: ExternalSessionDeps>(
     deps: &D,
+    shared: &ChatShared,
     chat: &mut Chat,
     content: &str,
     adapter_id: &str,
@@ -139,17 +140,16 @@ pub(super) async fn generate_import_title<D: ExternalSessionDeps>(
     };
 
     chat.title = Some(title.clone());
-    deps.chats_update(
-        &chat.id,
-        &ChatPatch {
-            title: Some(title),
-            ..Default::default()
-        },
+    storage_event!(
+        shared,
+        shared.update_and_emit(
+            chat.clone(),
+            &ChatPatch {
+                title: Some(title),
+                ..Default::default()
+            }
+        )
     );
-    deps.emit_event(DaemonEvent::ChatUpdated {
-        chat: chat.clone(),
-        reason: None,
-    });
 }
 
 pub(super) async fn emit_count<D: ExternalSessionDeps>(
@@ -157,7 +157,17 @@ pub(super) async fn emit_count<D: ExternalSessionDeps>(
     last_counts: &Mutex<HashMap<String, i64>>,
     project_id: &str,
 ) {
-    let page = scan_page_impl(deps, project_id, 0, 0).await; // count-only (no enrichment)
+    let page = match scan_page_impl(deps, project_id, 0, 0).await {
+        Ok(page) => page,
+        Err(error) => {
+            tracing::error!(%error, project_id, "external session scan failed");
+            deps.emit_event(DaemonEvent::Error {
+                chat_id: None,
+                error: error.to_string(),
+            });
+            return;
+        }
+    }; // count-only (no enrichment)
     let total = page.total;
     let last = last_counts.lock_recover().get(project_id).copied();
     if last != Some(total) {

@@ -149,7 +149,7 @@ impl ChatManager {
 
     /// On boot: reset orphaned `processState: 'working'` chats to idle.
     pub fn recover_stale_working_state(&self) {
-        let count = self.shared.deps.chats_reset_working_to_idle();
+        let count = storage_event!(self.shared, self.shared.deps.chats_reset_working_to_idle());
         info!(count, "reset orphaned working chats to idle on boot");
     }
 

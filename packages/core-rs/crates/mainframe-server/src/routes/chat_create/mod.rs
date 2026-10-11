@@ -123,7 +123,8 @@ async fn create(
             b.worktree_path.as_deref(),
             b.branch_name.as_deref(),
         )
-        .await;
+        .await
+        .map_err(|error| crate::respond::ApiError::from_domain(&error))?;
     Ok(ok(chat))
 }
 

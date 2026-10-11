@@ -31,7 +31,7 @@ pub trait PlanActionContext: Send + Sync {
     fn chat_id(&self) -> String;
 
     /// Mutate the in-memory `Chat` and persist via `db.chats.update`.
-    fn update_chat(&self, patch: PlanChatUpdate);
+    fn update_chat(&self, patch: PlanChatUpdate) -> Result<(), AdapterError>;
     /// `ctx.emitEvent({ type: 'chat.updated', chat: ctx.chat })`.
     fn emit_chat_updated(&self);
     fn emit_event(&self, event: DaemonEvent);
@@ -79,7 +79,7 @@ pub async fn clear_context_and_restart(
         plan_mode: Some(false),
         permission_mode: Some(response.execution_mode.unwrap_or(ExecutionMode::Default)),
         clear_claude_session_id: true,
-    });
+    })?;
     ctx.emit_chat_updated();
 
     ctx.clear_messages();

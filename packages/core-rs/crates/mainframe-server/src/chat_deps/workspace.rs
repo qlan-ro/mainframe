@@ -105,11 +105,9 @@ impl WorkspacePort for DaemonChatDeps {
         project_path: &'a str,
         session: Option<Arc<dyn AdapterSession>>,
         adapter_id: Option<String>,
-    ) -> BoxFuture<'a, mainframe_types::context::SessionContext> {
+    ) -> BoxFuture<'a, Result<mainframe_types::context::SessionContext, SeamError>> {
         Box::pin(async move {
-            let ctx_db = CtxDbHandle {
-                db: self.db.clone(),
-            };
+            let ctx_db = self.db.clone();
             let lister = AttachmentListerHandle {
                 store: Arc::clone(&self.attachments),
             };
@@ -136,10 +134,8 @@ impl WorkspacePort for DaemonChatDeps {
             }
         })
     }
-    fn extract_mentions_from_text(&self, chat_id: &str, text: &str) -> bool {
-        let ctx = CtxDbHandle {
-            db: self.db.clone(),
-        };
+    fn extract_mentions_from_text(&self, chat_id: &str, text: &str) -> Result<bool, SeamError> {
+        let ctx = self.db.clone();
         extract_mentions_from_text(chat_id, Some(text), &ctx)
     }
 }

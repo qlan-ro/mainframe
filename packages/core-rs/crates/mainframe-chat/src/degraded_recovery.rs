@@ -19,6 +19,8 @@ use mainframe_types::sync::LockExt as _;
 /// return them verbatim).
 #[derive(Debug, thiserror::Error)]
 pub enum DegradedRecoveryError {
+    #[error(transparent)]
+    Store(#[from] mainframe_types::seam_error::SeamError),
     #[error("Chat {0} not found")]
     ChatNotFound(String),
     #[error("Chat has no worktree")]
@@ -36,6 +38,7 @@ impl HttpStatus for DegradedRecoveryError {
     /// chat with no worktree to act on is a bad request.
     fn status_kind(&self) -> StatusKind {
         match self {
+            Self::Store(_) => StatusKind::Internal,
             Self::ChatNotFound(_) | Self::ProjectNotFound(_) => StatusKind::NotFound,
             Self::BranchGone(_) => StatusKind::Conflict,
             Self::NoWorktree | Self::NoWorktreeToRecreate => StatusKind::BadRequest,
@@ -46,7 +49,7 @@ impl HttpStatus for DegradedRecoveryError {
 fn require_chat(shared: &ChatShared, chat_id: &str) -> Result<Chat, DegradedRecoveryError> {
     shared
         .deps
-        .chats_get(chat_id)
+        .chats_get(chat_id)?
         .ok_or_else(|| DegradedRecoveryError::ChatNotFound(chat_id.to_string()))
 }
 
@@ -73,7 +76,7 @@ pub(crate) async fn continue_here(
 ) -> Result<(), DegradedRecoveryError> {
     require_chat(shared, chat_id)?;
     kill_spawned_session(shared, chat_id).await;
-    shared.deps.chats_clear_session(chat_id);
+    shared.deps.chats_clear_session(chat_id)?;
     if let Some(cell) = shared.active(chat_id) {
         let mut active = cell.lock_recover();
         active.chat.claude_session_id = None;
@@ -95,7 +98,7 @@ pub(crate) async fn continue_in_project_root(
         return Err(DegradedRecoveryError::NoWorktree);
     }
     kill_spawned_session(shared, chat_id).await;
-    shared.deps.chats_clear_worktree(chat_id);
+    shared.deps.chats_clear_worktree(chat_id)?;
     if let Some(cell) = shared.active(chat_id) {
         let mut active = cell.lock_recover();
         active.chat.worktree_path = None;

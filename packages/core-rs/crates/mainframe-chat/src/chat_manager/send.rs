@@ -26,11 +26,9 @@ impl ChatManager {
     fn assign_initial_title(&self, cell: &Arc<Mutex<ActiveChat>>, chat_id: &str, content: &str) {
         let current_title = cell.lock_recover().chat.title.clone().unwrap_or_default();
         let title_empty = current_title.is_empty();
-        let is_untouched_fork_title = self
-            .shared
-            .deps
-            .get_pending_fork(chat_id)
-            .is_some_and(|pending| pending.provisional_title == current_title);
+        let is_untouched_fork_title =
+            storage_event!(self.shared, self.shared.deps.get_pending_fork(chat_id))
+                .is_some_and(|pending| pending.provisional_title == current_title);
         if !title_empty && !is_untouched_fork_title {
             return;
         }
@@ -46,12 +44,15 @@ impl ChatManager {
                 guard.chat.title = Some(title.clone());
             }
             let chat = cell.lock_recover().chat.clone();
-            self.shared.update_and_emit(
-                chat,
-                &ChatPatch {
-                    title: Some(title),
-                    ..Default::default()
-                },
+            storage_event!(
+                self.shared,
+                self.shared.update_and_emit(
+                    chat,
+                    &ChatPatch {
+                        title: Some(title),
+                        ..Default::default()
+                    },
+                )
             );
         }
         // Title generation runs WITHOUT awaiting: it shells out to the CLI, so
@@ -194,9 +195,7 @@ impl ChatManager {
                 .await?;
         }
         let now = now_iso8601();
-        self.set_working(post, chat_id, &now);
-        let chat = post.lock_recover().chat.clone();
-        self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
+        self.set_working(post, &now)?;
         // Commands are never queued behind a running turn, so acceptance
         // (send_entry.rs) and start are the same moment — UNLESS a turn was
         // already running: the command still bypasses the queue and runs
@@ -276,7 +275,7 @@ impl ChatManager {
                 if self
                     .shared
                     .deps
-                    .extract_mentions_from_text(chat_id, content)
+                    .extract_mentions_from_text(chat_id, content)?
                 {
                     self.emit(DaemonEvent::ContextUpdated {
                         chat_id: chat_id.to_string(),
@@ -307,7 +306,7 @@ impl ChatManager {
         if self
             .shared
             .deps
-            .extract_mentions_from_text(chat_id, content)
+            .extract_mentions_from_text(chat_id, content)?
         {
             self.emit(DaemonEvent::ContextUpdated {
                 chat_id: chat_id.to_string(),
@@ -318,9 +317,7 @@ impl ChatManager {
         self.assign_initial_title(post, chat_id, content);
 
         let now = now_iso8601();
-        self.set_working(post, chat_id, &now);
-        let chat = post.lock_recover().chat.clone();
-        self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
+        self.set_working(post, &now)?;
 
         let uuid = Some(message_uuid.clone());
         // The provider gets the handoff block; the stored message keeps

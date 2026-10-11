@@ -22,14 +22,13 @@ use mainframe_background_tasks::kill::{KillTasksForChatArgs, SessionLike, kill_t
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_chat::attachment_processor;
 use mainframe_chat::chat_manager::{
-    AdapterForkInfo, ChatManager, ChatManagerDeps, ForkCreateInput, ProcessedAttachments,
+    AdapterForkInfo, ChatManager, ChatManagerDeps, ProcessedAttachments,
 };
 use mainframe_chat::context_tracker::{
     AttachmentLister, ContextDb, extract_mentions_from_text, get_session_context,
 };
 use mainframe_chat::event_handler::PushOut;
 use mainframe_chat::external_session_service::ExternalSessionDeps;
-use mainframe_chat::fork::PendingForkState;
 use mainframe_chat::resolve_tuning_for_chat::resolve_tuning_for_chat;
 use mainframe_claude_workflows::store::ClaudeWorkflowStore;
 use mainframe_services::attachment::AttachmentStore;
@@ -38,16 +37,13 @@ use mainframe_services::notifications::should_notify_permission;
 use mainframe_services::push::PushService;
 use mainframe_services::push::push_service::{PushMessage, PushPriority};
 use mainframe_services::quota::{IngestMode, QuotaManager};
-use mainframe_types::adapter::{DetectedPr, ExternalSessionPage, ProviderQuota, SessionOptions};
+use mainframe_types::adapter::{ExternalSessionPage, ProviderQuota, SessionOptions};
 use mainframe_types::background_task::BackgroundTask;
 use mainframe_types::chat::{
-    Chat, ChatMessage, ChatMessageType, MessageContent, NewChat, ResolvedTuning, TodoItem,
+    Chat, ChatMessage, ChatMessageType, MessageContent, NewChat, ResolvedTuning,
 };
-use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::content::LeafContent;
-use mainframe_types::context::{
-    SessionAttachment, SessionAttachmentKind, SessionMention, SkillFileEntry,
-};
+use mainframe_types::context::{SessionAttachment, SessionAttachmentKind};
 use mainframe_types::display::{DisplayMessage, ToolCategories};
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::seam_error::SeamError;
@@ -104,7 +100,7 @@ mod scan;
 mod segments;
 mod store;
 mod workspace;
-use bridges::{AttachmentListerHandle, CtxDbHandle};
+use bridges::AttachmentListerHandle;
 pub use build::{ChatManagerParams, build_chat_manager};
 #[cfg(test)]
 use scan::scan_history_for_mentions;

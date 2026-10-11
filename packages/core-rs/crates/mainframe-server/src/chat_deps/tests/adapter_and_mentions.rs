@@ -87,18 +87,18 @@ struct RecordingCtxDb {
 }
 
 impl ContextDb for RecordingCtxDb {
-    fn add_mention(&self, _chat_id: &str, mention: &SessionMention) -> bool {
+    fn add_mention(&self, _chat_id: &str, mention: &SessionMention) -> Result<bool, SeamError> {
         self.added.lock().unwrap().push(mention.clone());
-        true
+        Ok(true)
     }
-    fn get_mentions(&self, _chat_id: &str) -> Vec<SessionMention> {
-        Vec::new()
+    fn get_mentions(&self, _chat_id: &str) -> Result<Vec<SessionMention>, SeamError> {
+        Ok(Vec::new())
     }
-    fn get_plan_files(&self, _chat_id: &str) -> Vec<String> {
-        Vec::new()
+    fn get_plan_files(&self, _chat_id: &str) -> Result<Vec<String>, SeamError> {
+        Ok(Vec::new())
     }
-    fn get_skill_files(&self, _chat_id: &str) -> Vec<SkillFileEntry> {
-        Vec::new()
+    fn get_skill_files(&self, _chat_id: &str) -> Result<Vec<SkillFileEntry>, SeamError> {
+        Ok(Vec::new())
     }
 }
 
@@ -110,7 +110,7 @@ fn scan_history_for_mentions_extracts_at_reference_from_user_text() {
         "please review @src/foo.ts",
     )];
     let ctx_db = RecordingCtxDb::default();
-    scan_history_for_mentions("c1", &history, &ctx_db);
+    scan_history_for_mentions("c1", &history, &ctx_db).unwrap();
     let added = ctx_db.added.lock().unwrap();
     assert_eq!(added.len(), 1);
     assert_eq!(added[0].kind, MentionKind::File);
@@ -126,7 +126,7 @@ fn scan_history_for_mentions_skips_mainframe_command_injection_blocks() {
         "<mainframe-command>@src/foo.ts</mainframe-command>",
     )];
     let ctx_db = RecordingCtxDb::default();
-    scan_history_for_mentions("c1", &history, &ctx_db);
+    scan_history_for_mentions("c1", &history, &ctx_db).unwrap();
     assert!(ctx_db.added.lock().unwrap().is_empty());
 }
 
@@ -134,7 +134,7 @@ fn scan_history_for_mentions_skips_mainframe_command_injection_blocks() {
 fn scan_history_for_mentions_ignores_non_user_messages() {
     let history = vec![text_msg("m1", ChatMessageType::Assistant, "@src/foo.ts")];
     let ctx_db = RecordingCtxDb::default();
-    scan_history_for_mentions("c1", &history, &ctx_db);
+    scan_history_for_mentions("c1", &history, &ctx_db).unwrap();
     assert!(ctx_db.added.lock().unwrap().is_empty());
 }
 

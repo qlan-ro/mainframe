@@ -35,7 +35,7 @@ async fn a_forks_first_message_replaces_the_provisional_title_with_the_generated
     settle().await;
 
     assert_eq!(
-        deps.chats_get("chat-1").unwrap().title,
+        deps.chats_get("chat-1").unwrap().unwrap().title,
         Some("Fix the actually flaky test".to_string())
     );
     assert_eq!(deps.adapters.generate_title_calls.lock().unwrap().len(), 1);
@@ -55,7 +55,7 @@ async fn a_forks_provisional_title_stays_when_generation_produces_nothing() {
     settle().await;
 
     assert_eq!(
-        deps.chats_get("chat-1").unwrap().title,
+        deps.chats_get("chat-1").unwrap().unwrap().title,
         Some(PROVISIONAL.to_string())
     );
 }
@@ -74,7 +74,7 @@ async fn a_rename_before_the_first_message_is_never_regenerated() {
     settle().await;
 
     assert_eq!(
-        deps.chats_get("chat-1").unwrap().title,
+        deps.chats_get("chat-1").unwrap().unwrap().title,
         Some("My custom title".to_string())
     );
     assert!(
@@ -98,7 +98,7 @@ async fn a_non_fork_titled_chat_is_unaffected() {
     settle().await;
 
     assert_eq!(
-        deps.chats_get("chat-1").unwrap().title,
+        deps.chats_get("chat-1").unwrap().unwrap().title,
         Some("Test chat".to_string())
     );
     assert!(

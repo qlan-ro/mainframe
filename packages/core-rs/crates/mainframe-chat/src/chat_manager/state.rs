@@ -82,13 +82,28 @@ impl ChatShared {
     pub(crate) fn chat_or_db(&self, chat_id: &str) -> Option<Chat> {
         self.active(chat_id)
             .map(|c| c.lock_recover().chat.clone())
-            .or_else(|| self.deps.chats_get(chat_id))
+            .or_else(|| storage_event!(self, self.deps.chats_get(chat_id), None))
     }
 }
 
 impl ChatShared {
-    pub(crate) fn update_and_emit(&self, chat: Chat, patch: &ChatPatch) {
-        self.deps.chats_update(&chat.id, patch);
+    pub(crate) fn update_and_emit(
+        &self,
+        chat: Chat,
+        patch: &ChatPatch,
+    ) -> Result<(), mainframe_types::seam_error::SeamError> {
+        self.deps.chats_update(&chat.id, patch)?;
         self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
+        Ok(())
+    }
+}
+
+impl ChatShared {
+    pub(crate) fn report_storage_error(&self, error: &mainframe_types::seam_error::SeamError) {
+        tracing::error!(%error, "chat storage operation failed");
+        self.emit(DaemonEvent::Error {
+            chat_id: None,
+            error: error.to_string(),
+        });
     }
 }

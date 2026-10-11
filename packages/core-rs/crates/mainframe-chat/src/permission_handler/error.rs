@@ -5,6 +5,8 @@ use mainframe_adapter_api::AdapterError;
 /// Errors surfaced by permission handling. Strings cross the wire, copied verbatim.
 #[derive(Debug, thiserror::Error)]
 pub enum PermissionError {
+    #[error(transparent)]
+    Store(#[from] mainframe_types::seam_error::SeamError),
     /// The chat has no live session to answer the gate on.
     #[error("No session for chat {0}")]
     NoSession(String),

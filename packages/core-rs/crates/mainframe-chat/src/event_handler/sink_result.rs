@@ -13,7 +13,10 @@ impl SessionSinkImpl {
         let totals = self.result_totals(&cell, &data);
         let now = now_iso8601();
         let refs_after = self.reconcile_result_queue();
-        self.persist_result(&cell, &data, totals, refs_after.len(), now);
+        storage_event!(
+            self.shared,
+            self.persist_result(&cell, &data, totals, refs_after.len(), now)
+        );
         self.record_segment_result(&data);
         let (reason, was_interrupted, is_error) = self.result_reason(&data);
         self.emit_result_state(&cell, reason, was_interrupted, is_error);
@@ -22,8 +25,14 @@ impl SessionSinkImpl {
     }
 
     fn retire_fork(&self) {
-        if let Some(pending) = self.shared.deps.get_pending_fork(&self.chat_id) {
-            self.shared.deps.clear_pending_fork(&self.chat_id);
+        if let Some(pending) = storage_event!(
+            self.shared,
+            self.shared.deps.get_pending_fork(&self.chat_id)
+        ) {
+            storage_event!(
+                self.shared,
+                self.shared.deps.clear_pending_fork(&self.chat_id)
+            );
             let chat_id = self.chat_id.clone();
             let snapshot_dir = pending.snapshot_dir;
             tokio::spawn(async move {
@@ -73,7 +82,7 @@ impl SessionSinkImpl {
         totals: (f64, i64, i64),
         queue_remaining: usize,
         now: String,
-    ) {
+    ) -> Result<(), mainframe_types::seam_error::SeamError> {
         let next_process_state = if queue_remaining > 0 {
             ProcessState::Working
         } else {
@@ -99,7 +108,7 @@ impl SessionSinkImpl {
                 updated_at: Some(now.clone()),
                 ..Default::default()
             },
-        );
+        )?;
         {
             let mut guard = cell.lock_recover();
             guard.chat.total_cost = totals.0;
@@ -111,6 +120,7 @@ impl SessionSinkImpl {
             guard.chat.process_state = Some(Some(next_process_state));
             guard.chat.updated_at = now;
         }
+        Ok(())
     }
     fn result_reason(&self, data: &SessionResult) -> (ChatUpdatedReason, bool, bool) {
         let was_interrupted = self

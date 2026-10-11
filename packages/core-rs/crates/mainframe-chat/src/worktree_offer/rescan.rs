@@ -76,13 +76,16 @@ impl WorktreeOfferRegistry {
             Some(path) => Some(canon(&path).await),
             None => None,
         };
-        let other_chat_worktrees = self.canonical_others(&project_id, chat_id).await;
-        let dismissed: HashSet<String> = self
-            .shared
-            .deps
-            .get_dismissed_worktrees(chat_id)
-            .into_iter()
-            .collect();
+        let other_chat_worktrees = storage_event!(
+            self.shared,
+            self.canonical_others(&project_id, chat_id).await
+        );
+        let dismissed: HashSet<String> = storage_event!(
+            self.shared,
+            self.shared.deps.get_dismissed_worktrees(chat_id)
+        )
+        .into_iter()
+        .collect();
 
         let seen = identities(&listing).await;
         let Some((baseline, pending)) = self.baseline_and_pending(chat_id, &seen) else {
@@ -188,11 +191,15 @@ impl WorktreeOfferRegistry {
     }
 
     /// Every *other* chat's worktree path in this project, canonicalized.
-    async fn canonical_others(&self, project_id: &str, chat_id: &str) -> HashSet<String> {
+    async fn canonical_others(
+        &self,
+        project_id: &str,
+        chat_id: &str,
+    ) -> Result<HashSet<String>, mainframe_types::seam_error::SeamError> {
         let raw: Vec<String> = self
             .shared
             .deps
-            .chats_list(project_id)
+            .chats_list(project_id)?
             .into_iter()
             .filter(|chat| chat.id != chat_id)
             .filter_map(|chat| chat.worktree_path)
@@ -201,7 +208,7 @@ impl WorktreeOfferRegistry {
         for path in raw {
             canonical.insert(canon(&path).await);
         }
-        canonical
+        Ok(canonical)
     }
 }
 

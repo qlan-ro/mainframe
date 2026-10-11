@@ -1,3 +1,5 @@
+mod fork_input;
+pub use fork_input::ForkCreateInput;
 mod row;
 use crate::chat_assignments::ChatAssignments;
 use crate::sql_types::FromRow;

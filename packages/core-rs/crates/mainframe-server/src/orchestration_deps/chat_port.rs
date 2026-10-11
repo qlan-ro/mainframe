@@ -103,16 +103,17 @@ impl OrchestrationPort for DaemonOrchestrationPort {
         &'a self,
         project_id: &'a str,
         include_archived: bool,
-    ) -> BoxFuture<'a, Vec<ChatView>> {
+    ) -> BoxFuture<'a, Result<Vec<ChatView>, PortError>> {
         Box::pin(async move {
-            let chats =
-                self.chats
-                    .list_filtered(Some(project_id), None, false, include_archived, false);
+            let chats = self
+                .chats
+                .list_filtered(Some(project_id), None, false, include_archived, false)
+                .map_err(|error| PortError::Internal(error.to_string()))?;
             let mut views = Vec::with_capacity(chats.len());
             for chat in chats {
                 views.push(self.view(chat).await);
             }
-            views
+            Ok(views)
         })
     }
 

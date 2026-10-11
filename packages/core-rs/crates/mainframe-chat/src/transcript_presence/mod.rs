@@ -106,12 +106,15 @@ fn record_path(shared: &ChatShared, chat: &mut Chat, path: String) {
     if chat.session_file_path.as_deref() == Some(path.as_str()) {
         return;
     }
-    shared.deps.chats_update(
-        &chat.id,
-        &ChatPatch {
-            session_file_path: Some(path.clone()),
-            ..Default::default()
-        },
+    storage_event!(
+        shared,
+        shared.deps.chats_update(
+            &chat.id,
+            &ChatPatch {
+                session_file_path: Some(path.clone()),
+                ..Default::default()
+            },
+        )
     );
     if let Some(cell) = shared.active(&chat.id) {
         cell.lock_recover().chat.session_file_path = Some(path.clone());
@@ -125,11 +128,14 @@ fn apply_flag(shared: &ChatShared, chat: &mut Chat, missing: bool) {
     if let Some(cell) = shared.active(&chat.id) {
         cell.lock_recover().chat.transcript_missing = Some(missing);
     }
-    shared.update_and_emit(
-        chat.clone(),
-        &ChatPatch {
-            transcript_missing: Some(missing),
-            ..Default::default()
-        },
+    storage_event!(
+        shared,
+        shared.update_and_emit(
+            chat.clone(),
+            &ChatPatch {
+                transcript_missing: Some(missing),
+                ..Default::default()
+            },
+        )
     );
 }

@@ -153,7 +153,7 @@ pub trait OrchestrationPort: Send + Sync {
         &'a self,
         project_id: &'a str,
         include_archived: bool,
-    ) -> BoxFuture<'a, Vec<ChatView>>;
+    ) -> BoxFuture<'a, Result<Vec<ChatView>, PortError>>;
     fn project_exists<'a>(&'a self, project_id: &'a str) -> BoxFuture<'a, bool>;
     /// The chat's cached transcript. May load history from disk; never spawns
     /// the chat's CLI.

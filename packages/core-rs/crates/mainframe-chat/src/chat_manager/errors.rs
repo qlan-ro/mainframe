@@ -56,7 +56,7 @@ pub enum TrustWorkspaceError {
     #[error("Project {0} not found")]
     ProjectNotFound(String),
     #[error(transparent)]
-    Write(SeamError),
+    Write(#[from] SeamError),
 }
 
 impl HttpStatus for TrustWorkspaceError {
@@ -95,7 +95,7 @@ pub enum DiscardError {
     /// The scratch directory could not be removed, so the row was kept and a
     /// retry stays possible.
     #[error(transparent)]
-    ScratchDir(SeamError),
+    ScratchDir(#[from] SeamError),
 }
 
 impl HttpStatus for DiscardError {
@@ -115,7 +115,7 @@ pub enum RemoveProjectError {
     #[error("cannot remove the hidden scratch project")]
     ScratchProject,
     #[error(transparent)]
-    Store(SeamError),
+    Store(#[from] SeamError),
 }
 
 impl HttpStatus for RemoveProjectError {

@@ -7,11 +7,24 @@
 #![forbid(unsafe_code)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
+macro_rules! storage_event {
+    ($shared:expr, $result:expr $(, $fallback:expr)?) => {
+        match $result {
+            Ok(value) => value,
+            Err(error) => {
+                $shared.report_storage_error(&error);
+                return $($fallback)?;
+            }
+        }
+    };
+}
+
 pub mod attachment_processor;
 pub mod attention_request;
 pub mod chat_cwd;
 pub mod chat_manager;
 pub mod chat_surface;
+
 mod chat_teardown;
 pub mod config_manager;
 pub mod config_respawn_guard;
@@ -52,3 +65,5 @@ pub mod test_support;
 mod test_support_chat;
 
 mod tool_call_timing;
+
+mod chat_store;

@@ -2,12 +2,13 @@ use super::*;
 
 impl AdapterPort for DaemonChatDeps {
     fn get_tool_categories(&self, chat_id: &str) -> Option<ToolCategories> {
-        let id = chat_id.to_string();
-        let chat = self
-            .db
-            .call_blocking(move |d| d.chats.get(&id))
-            .ok()
-            .flatten()?;
+        let chat = match self.chats_get(chat_id) {
+            Ok(chat) => chat?,
+            Err(error) => {
+                self.emit_storage_error(chat_id, error);
+                return None;
+            }
+        };
         let layout = mainframe_chat::segments::SegmentStore::layout(self, chat_id);
         let adapters = segment_adapters(&chat.adapter_id, layout.as_ref());
         union_categories(adapters.iter().filter_map(|adapter_id| {
@@ -85,7 +86,13 @@ impl AdapterPort for DaemonChatDeps {
     }
     fn resolve_tuning<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, Option<ResolvedTuning>> {
         Box::pin(async move {
-            let chat = self.chats_get(chat_id)?;
+            let chat = match self.chats_get(chat_id) {
+                Ok(chat) => chat?,
+                Err(error) => {
+                    self.emit_storage_error(chat_id, error);
+                    return None;
+                }
+            };
             let models = match self.adapters.get(&chat.adapter_id) {
                 Some(adapter) => adapter.list_models().await.unwrap_or_default(),
                 None => Vec::new(),

@@ -657,7 +657,7 @@ fn minimal_new_chat() -> NewChat {
 async fn unspawned_never_sent_cell_offloads_once_backdated_past_the_threshold() {
     let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps.clone());
-    let chat = mgr.create_chat(minimal_new_chat()).await;
+    let chat = mgr.create_chat(minimal_new_chat()).await.unwrap();
     mgr.shared
         .messages
         .lock()
@@ -688,7 +688,10 @@ async fn unspawned_never_sent_cell_offloads_once_backdated_past_the_threshold() 
         !mgr.shared.messages.lock().unwrap().is_pinned(&chat.id),
         "the pin is released"
     );
-    let stored = deps.chats_get(&chat.id).expect("the chat row survives");
+    let stored = deps
+        .chats_get(&chat.id)
+        .unwrap()
+        .expect("the chat row survives");
     assert_ne!(stored.status, ChatStatus::Archived, "not archived");
     assert_eq!(offloaded_events(&deps), vec![chat.id.clone()]);
 }
@@ -757,7 +760,7 @@ async fn unspawned_session_handle_offloads_and_a_later_send_resumes_cleanly() {
 async fn a_freshly_created_chat_is_not_offloaded_by_a_scan() {
     let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps.clone());
-    let chat = mgr.create_chat(minimal_new_chat()).await;
+    let chat = mgr.create_chat(minimal_new_chat()).await.unwrap();
 
     mgr.scan_idle_sessions().await;
 
@@ -954,7 +957,7 @@ async fn update_chat_config_rebuilds_an_offloaded_cell_and_applies_the_new_model
         "the cell is back"
     );
     assert_eq!(
-        deps.chats_get("c1").unwrap().model,
+        deps.chats_get("c1").unwrap().unwrap().model,
         Some("new-model".to_string()),
         "the stored chat carries the new model"
     );
@@ -1006,7 +1009,7 @@ async fn disable_worktree_rebuilds_an_offloaded_cell_and_clears_the_binding() {
         "the cell is back"
     );
     assert_eq!(
-        deps.chats_get("c1").unwrap().worktree_path,
+        deps.chats_get("c1").unwrap().unwrap().worktree_path,
         None,
         "the stored binding is cleared"
     );

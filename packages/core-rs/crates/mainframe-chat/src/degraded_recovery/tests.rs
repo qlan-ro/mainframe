@@ -58,7 +58,7 @@ async fn continue_here_clears_session_drops_messages_and_broadcasts() {
         .await
         .unwrap();
 
-    let row = deps.deps.chats_get("chat-1").unwrap();
+    let row = deps.deps.chats_get("chat-1").unwrap().unwrap();
     assert_eq!(row.claude_session_id, None);
     assert_eq!(row.session_file_path, None);
     assert_eq!(row.transcript_missing, Some(false));
@@ -107,7 +107,7 @@ async fn continue_in_project_root_detaches_worktree_and_broadcasts() {
         .await
         .unwrap();
 
-    let row = deps.deps.chats_get("chat-1").unwrap();
+    let row = deps.deps.chats_get("chat-1").unwrap().unwrap();
     assert_eq!(row.worktree_path, None);
     assert_eq!(row.branch_name, None);
     assert_eq!(deps.deps.events().len(), 1);

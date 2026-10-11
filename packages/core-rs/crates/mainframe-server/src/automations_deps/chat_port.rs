@@ -23,7 +23,7 @@ pub trait AgentChatPort: Send + Sync {
         permission_mode: Option<&'a str>,
         branch_name: Option<&'a str>,
         automation_run_id: &'a str,
-    ) -> BoxFuture<'a, String>;
+    ) -> BoxFuture<'a, Result<String, mainframe_chat::lifecycle_manager::LifecycleError>>;
     fn enable_worktree<'a>(
         &'a self,
         chat_id: &'a str,
@@ -61,9 +61,10 @@ impl AgentChatPort for ChatManagerPort {
         permission_mode: Option<&'a str>,
         branch_name: Option<&'a str>,
         automation_run_id: &'a str,
-    ) -> BoxFuture<'a, String> {
+    ) -> BoxFuture<'a, Result<String, mainframe_chat::lifecycle_manager::LifecycleError>> {
         Box::pin(async move {
-            self.chats
+            Ok(self
+                .chats
                 .create_chat_with_defaults(
                     NewChat {
                         project_id: project_id.to_string(),
@@ -80,8 +81,8 @@ impl AgentChatPort for ChatManagerPort {
                     None,
                     branch_name,
                 )
-                .await
-                .id
+                .await?
+                .id)
         })
     }
 

@@ -156,3 +156,9 @@ impl From<mainframe_services::workspace::ScopeError> for ApiError {
         }
     }
 }
+
+impl From<mainframe_types::seam_error::SeamError> for ApiError {
+    fn from(error: mainframe_types::seam_error::SeamError) -> Self {
+        Self::internal("chat storage operation", error)
+    }
+}

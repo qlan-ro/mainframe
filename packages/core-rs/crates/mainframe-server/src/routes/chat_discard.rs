@@ -141,7 +141,8 @@ mod tests {
                 None,
                 None,
             )
-            .await;
+            .await
+            .unwrap();
         let chat_id = created.id;
 
         let scratch_path = ctx

@@ -144,10 +144,16 @@ fn update_chat_with_clear_claude_session_id_calls_chats_clear_session_and_nulls_
         plan_mode: Some(false),
         permission_mode: None,
         clear_claude_session_id: true,
-    });
+    })
+    .unwrap();
 
     assert_eq!(
-        ctx.shared.deps.chats_get("c1").unwrap().claude_session_id,
+        ctx.shared
+            .deps
+            .chats_get("c1")
+            .unwrap()
+            .unwrap()
+            .claude_session_id,
         None
     );
     assert_eq!(
@@ -166,10 +172,16 @@ fn update_chat_without_it_never_calls_chats_clear_session() {
         plan_mode: Some(false),
         permission_mode: None,
         clear_claude_session_id: false,
-    });
+    })
+    .unwrap();
 
     assert_eq!(
-        ctx.shared.deps.chats_get("c1").unwrap().claude_session_id,
+        ctx.shared
+            .deps
+            .chats_get("c1")
+            .unwrap()
+            .unwrap()
+            .claude_session_id,
         Some("sess-1".to_string())
     );
     assert_eq!(

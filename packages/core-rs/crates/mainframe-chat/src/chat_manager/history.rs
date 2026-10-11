@@ -223,7 +223,11 @@ impl ChatManager {
         }
     }
 
-    pub async fn get_session_context(&self, chat_id: &str, project_path: &str) -> SessionContext {
+    pub async fn get_session_context(
+        &self,
+        chat_id: &str,
+        project_path: &str,
+    ) -> Result<SessionContext, mainframe_types::seam_error::SeamError> {
         let session = self.get_session_for_chat(chat_id);
         let adapter_id = self.get_chat(chat_id).map(|c| c.adapter_id);
         self.shared

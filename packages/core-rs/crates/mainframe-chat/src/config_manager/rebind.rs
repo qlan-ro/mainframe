@@ -8,7 +8,7 @@ impl ChatConfigManager {
         worktree_path: Option<String>,
         branch_name: Option<String>,
         session_file_path: Option<String>,
-    ) {
+    ) -> Result<(), ConfigError> {
         {
             let mut guard = cell.lock_recover();
             guard.chat.worktree_path = worktree_path.clone();
@@ -26,9 +26,10 @@ impl ChatConfigManager {
                 session_file_path,
                 ..Default::default()
             },
-        );
+        )?;
         self.worktree_offers
             .on_binding_changed(chat_id, worktree_path.as_deref());
+        Ok(())
     }
 
     pub(super) async fn rebind_live_session(
@@ -78,7 +79,7 @@ impl ChatConfigManager {
             Some(rebind.worktree_path),
             rebind.branch_name,
             moved_transcript,
-        );
+        )?;
         self.lifecycle.start_chat(chat_id).await;
         Ok(())
     }

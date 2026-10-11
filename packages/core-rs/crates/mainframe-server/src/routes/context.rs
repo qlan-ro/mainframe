@@ -26,7 +26,7 @@ async fn context(
     let project = ctx.require_project(&project_id).await?;
     let cm = &ctx.chat.chat_manager;
     let effective_path = chat.worktree_path.clone().unwrap_or(project.path);
-    Ok(ok(cm.get_session_context(&id, &effective_path).await))
+    Ok(ok(cm.get_session_context(&id, &effective_path).await?))
 }
 
 #[derive(Deserialize)]

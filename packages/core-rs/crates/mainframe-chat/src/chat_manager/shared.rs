@@ -79,7 +79,17 @@ pub(crate) async fn compose_if_multi(
     let layout = store
         .layout(chat_id)
         .filter(mainframe_types::segment::SegmentLayout::is_multi_segment)?;
-    let chat = deps.chats_get(chat_id)?;
+    let chat = match deps.chats_get(chat_id) {
+        Ok(chat) => chat?,
+        Err(error) => {
+            tracing::error!(%error, chat_id, "history storage read failed");
+            deps.emit_event(DaemonEvent::Error {
+                chat_id: Some(chat_id.into()),
+                error: error.to_string(),
+            });
+            return None;
+        }
+    };
     Some(crate::segments::compose::compose(deps, &chat, &layout).await)
 }
 
@@ -96,7 +106,18 @@ pub(crate) fn build_history_session(
     chat_id: &str,
 ) -> Option<Arc<dyn AdapterSession>> {
     let own_id = chat.claude_session_id.clone();
-    let fork_source = deps.get_pending_fork(chat_id).map(|p| p.fork_source);
+    let fork_source = match deps.get_pending_fork(chat_id) {
+        Ok(value) => value,
+        Err(error) => {
+            tracing::error!(%error, chat_id, "pending fork read failed");
+            deps.emit_event(DaemonEvent::Error {
+                chat_id: Some(chat_id.into()),
+                error: error.to_string(),
+            });
+            return None;
+        }
+    }
+    .map(|p| p.fork_source);
     if own_id.is_none() && fork_source.is_none() {
         return None;
     }

@@ -227,7 +227,8 @@ async fn aliased_worktree_stop_reaches_launch_preview_and_port_tunnel_before_rem
         .chat
         .chat_manager
         .stop_worktree_services(&f.project, &format!("{}/", alias.display()))
-        .await;
+        .await
+        .unwrap();
     assert_eq!(affected, vec![f.chat.clone()]);
     assert!(f.worktree.path().exists());
     assert!(!mainframe_runtime::process::is_alive(f.tunnel_pid));

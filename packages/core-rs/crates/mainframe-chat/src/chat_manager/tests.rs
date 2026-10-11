@@ -526,7 +526,7 @@ async fn resets_a_working_chat_to_idle() {
     let mgr = ChatManager::new(deps.clone());
     mgr.recover_stale_working_state();
     assert_eq!(
-        deps.chats_get("c-working").unwrap().process_state,
+        deps.chats_get("c-working").unwrap().unwrap().process_state,
         Some(Some(ProcessState::Idle))
     );
 }
@@ -540,7 +540,7 @@ async fn leaves_an_already_idle_chat_unchanged() {
     let mgr = ChatManager::new(deps.clone());
     mgr.recover_stale_working_state();
     assert_eq!(
-        deps.chats_get("c-idle").unwrap().process_state,
+        deps.chats_get("c-idle").unwrap().unwrap().process_state,
         Some(Some(ProcessState::Idle))
     );
 }
@@ -550,7 +550,10 @@ async fn does_not_touch_a_chat_whose_process_state_is_null() {
     let deps = FakeDeps::with_chats(vec![stored("c-null", Some(None))]);
     let mgr = ChatManager::new(deps.clone());
     mgr.recover_stale_working_state();
-    assert_eq!(deps.chats_get("c-null").unwrap().process_state, Some(None));
+    assert_eq!(
+        deps.chats_get("c-null").unwrap().unwrap().process_state,
+        Some(None)
+    );
 }
 
 #[tokio::test]
@@ -570,15 +573,15 @@ async fn resets_every_working_chat_when_multiple_are_stale() {
     let mgr = ChatManager::new(deps.clone());
     mgr.recover_stale_working_state();
     assert_eq!(
-        deps.chats_get("w1").unwrap().process_state,
+        deps.chats_get("w1").unwrap().unwrap().process_state,
         Some(Some(ProcessState::Idle))
     );
     assert_eq!(
-        deps.chats_get("w2").unwrap().process_state,
+        deps.chats_get("w2").unwrap().unwrap().process_state,
         Some(Some(ProcessState::Idle))
     );
     assert_eq!(
-        deps.chats_get("ok").unwrap().process_state,
+        deps.chats_get("ok").unwrap().unwrap().process_state,
         Some(Some(ProcessState::Idle))
     );
 }
@@ -802,7 +805,7 @@ async fn provider_command_first_message_sets_the_fallback_title() {
     );
 
     assert_eq!(
-        deps.chats_get("chat-1").unwrap().title,
+        deps.chats_get("chat-1").unwrap().unwrap().title,
         Some("/compact".to_string())
     );
     assert!(events.iter().any(
@@ -828,7 +831,7 @@ async fn mainframe_command_first_message_titles_from_typed_text_not_the_wrapper(
     .unwrap();
     settle().await;
 
-    let title = deps.chats_get("chat-1").unwrap().title;
+    let title = deps.chats_get("chat-1").unwrap().unwrap().title;
     assert_eq!(title.as_deref(), Some("/greet Say hello to the team"));
     let title = title.unwrap();
     assert!(!title.contains("<mainframe-command"));
@@ -889,7 +892,7 @@ async fn command_first_message_generated_title_overwrites_the_fallback() {
         vec!["/compact".to_string(), "Compact the session".to_string()]
     );
     assert_eq!(
-        deps.chats_get("chat-1").unwrap().title,
+        deps.chats_get("chat-1").unwrap().unwrap().title,
         Some("Compact the session".to_string())
     );
 }
@@ -962,7 +965,7 @@ async fn title_generation_is_not_awaited_by_a_command_send() {
     settle().await;
 
     assert_eq!(
-        deps.chats_get("chat-1").unwrap().title,
+        deps.chats_get("chat-1").unwrap().unwrap().title,
         Some("Compacted session".to_string())
     );
 }
@@ -976,7 +979,7 @@ async fn plain_text_first_message_still_titles_in_the_same_event_order() {
         .unwrap();
 
     assert_eq!(
-        deps.chats_get("chat-1").unwrap().title,
+        deps.chats_get("chat-1").unwrap().unwrap().title,
         Some("Hello world".to_string())
     );
 
@@ -1012,7 +1015,7 @@ async fn plain_text_first_message_with_a_session_reference_titles_from_the_visib
     settle().await;
 
     assert_eq!(
-        deps.chats_get("chat-1").unwrap().title,
+        deps.chats_get("chat-1").unwrap().unwrap().title,
         Some("what did they change?".to_string()),
         "the fallback title must not leak the raw reference preamble"
     );
@@ -1042,7 +1045,7 @@ async fn command_first_fallback_survives_a_generation_that_returns_nothing() {
     settle().await;
 
     assert_eq!(
-        deps.chats_get("chat-1").unwrap().title,
+        deps.chats_get("chat-1").unwrap().unwrap().title,
         Some("/compact".to_string())
     );
     assert_eq!(deps.adapters.generate_title_calls.lock().unwrap().len(), 1);
@@ -1239,7 +1242,7 @@ async fn discard_chat_stops_the_process_deletes_the_row_and_removes_the_scratch_
         &["/tmp/mf-scratch/c1".to_string()]
     );
     assert!(
-        deps.chats_get("c1").is_none(),
+        deps.chats_get("c1").unwrap().is_none(),
         "the row must be deleted (a subsequent GET 404s)"
     );
 }
@@ -1260,14 +1263,14 @@ async fn discard_chat_whose_scratch_dir_removal_fails_leaves_the_chat_discardabl
         (StatusKind::Internal, "permission denied".to_string())
     );
     assert!(
-        deps.chats_get("c1").is_some(),
+        deps.chats_get("c1").unwrap().is_some(),
         "a failed removal must leave the row (and a retry) intact"
     );
 
     // Retry, this time the removal succeeds.
     *deps.workspace.fail_remove_scratch_dir.lock().unwrap() = None;
     assert!(mgr.discard_chat("c1").await.is_ok());
-    assert!(deps.chats_get("c1").is_none());
+    assert!(deps.chats_get("c1").unwrap().is_none());
 }
 
 #[tokio::test]
@@ -1696,7 +1699,7 @@ async fn with_external_sessions_wires_scan_page_through_the_facade() {
     let mgr = ChatManager::new(ext.clone()).with_external_sessions(ext.clone());
 
     let facade = mgr.external_session_service().expect("service injected");
-    let page = facade.scan_page("p1", 0, 50).await;
+    let page = facade.scan_page("p1", 0, 50).await.unwrap();
 
     assert_eq!(page.total, 1);
     assert_eq!(page.sessions[0].session_id, "s1");
@@ -1710,7 +1713,8 @@ async fn with_external_sessions_wires_import_session_through_the_facade() {
     let facade = mgr.external_session_service().expect("service injected");
     let chat = facade
         .import_session("p1", "s1", "claude", None, None, None)
-        .await;
+        .await
+        .unwrap();
 
     assert_eq!(chat.project_id, "p1");
     assert_eq!(chat.adapter_id, "claude");
@@ -1741,7 +1745,8 @@ async fn import_session_title_drops_the_session_reference_preamble() {
             None,
             None,
         )
-        .await;
+        .await
+        .unwrap();
 
     assert_eq!(chat.title.as_deref(), Some("look at this"));
 }

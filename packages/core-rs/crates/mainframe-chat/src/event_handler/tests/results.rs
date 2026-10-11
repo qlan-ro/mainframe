@@ -17,7 +17,7 @@ async fn on_result_retires_a_pending_fork_and_removes_its_snapshot_dir() {
     sink.on_result(result("success", Some(false)));
 
     // The DB column clears synchronously, inside `on_result` itself.
-    assert!(h.deps.get_pending_fork("c1").is_none());
+    assert!(h.deps.get_pending_fork("c1").unwrap().is_none());
 
     // The directory removal is spawned fire-and-forget; poll for it rather
     // than assume a fixed delay.
@@ -40,7 +40,7 @@ async fn on_result_is_a_no_op_for_a_chat_with_no_pending_fork() {
 
     sink.on_result(result("success", Some(false)));
 
-    assert!(h.deps.get_pending_fork("c1").is_none());
+    assert!(h.deps.get_pending_fork("c1").unwrap().is_none());
 }
 
 #[test]

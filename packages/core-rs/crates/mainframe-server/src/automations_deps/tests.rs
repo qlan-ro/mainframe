@@ -49,14 +49,14 @@ impl AgentChatPort for FakeChatPort {
         permission_mode: Option<&'a str>,
         branch_name: Option<&'a str>,
         automation_run_id: &'a str,
-    ) -> BoxFuture<'a, String> {
+    ) -> BoxFuture<'a, Result<String, mainframe_chat::lifecycle_manager::LifecycleError>> {
         self.record(format!(
             "create:{project_id}:{adapter_id}:{}:{}:{}:{automation_run_id}",
             model.unwrap_or("-"),
             permission_mode.unwrap_or("-"),
             branch_name.unwrap_or("-"),
         ));
-        Box::pin(async { "chat_1".to_string() })
+        Box::pin(async { Ok("chat_1".to_string()) })
     }
 
     fn enable_worktree<'a>(

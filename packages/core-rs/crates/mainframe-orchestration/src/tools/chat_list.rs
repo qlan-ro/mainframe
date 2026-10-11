@@ -92,7 +92,7 @@ pub(super) async fn run(
     let mut chats: Vec<ChatView> = svc
         .port
         .list_chats(&project_id, include_archived)
-        .await
+        .await?
         .into_iter()
         .filter(|c| input.keeps(c))
         .collect();

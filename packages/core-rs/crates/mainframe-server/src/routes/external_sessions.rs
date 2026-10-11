@@ -11,7 +11,7 @@ use axum::routing::{get, post};
 use serde::Deserialize;
 
 use crate::ctx::AppCtx;
-use crate::respond::{fail, ok};
+use crate::respond::fail;
 use crate::routes::body::parse_body;
 
 const SERVICE_UNAVAILABLE: &str = "external session service unavailable";
@@ -38,7 +38,7 @@ async fn list(
     };
     service.start_auto_scan(&project_id);
     let page = service.scan_page(&project_id, offset, limit).await;
-    ok(page)
+    crate::respond::storage(page)
 }
 
 #[derive(Deserialize)]
@@ -91,7 +91,7 @@ async fn import(
             body.modified_at.as_deref(),
         )
         .await;
-    ok(chat)
+    crate::respond::storage(chat)
 }
 
 pub fn router() -> Router<Arc<AppCtx>> {
@@ -168,14 +168,34 @@ mod tests {
     #[tokio::test]
     async fn import_valid_body_uses_the_real_service() {
         let ctx = AppCtx::test_ctx();
+        let project = ctx
+            .core
+            .db
+            .call(|db| db.projects.create("/project", None))
+            .await
+            .unwrap();
         let resp = import(
             State(ctx.clone()),
-            Path("p".into()),
+            Path(project.id),
             axum::body::Bytes::from(r#"{"sessionId":"abc-123","adapterId":"claude"}"#),
         )
         .await;
         let (status, body) = read(resp).await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body["success"], true);
+    }
+
+    #[tokio::test]
+    async fn import_into_a_missing_project_does_not_return_an_unsaved_chat() {
+        let resp = import(
+            State(AppCtx::test_ctx()),
+            Path("missing".into()),
+            axum::body::Bytes::from(r#"{"sessionId":"abc-123","adapterId":"claude"}"#),
+        )
+        .await;
+        let (status, body) = read(resp).await;
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(body["success"], false);
+        assert!(body.get("data").is_none());
     }
 }

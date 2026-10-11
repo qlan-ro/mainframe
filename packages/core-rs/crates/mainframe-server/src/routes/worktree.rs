@@ -180,10 +180,7 @@ async fn delete_worktree(
         .await
     {
         Ok(()) => ok_empty(),
-        Err(err) => crate::respond::fail_domain(
-            format!("delete-worktree failed id={id} worktree_path={worktree_path}"),
-            &err,
-        ),
+        Err(err) => err.into_response(),
     }
 }
 
@@ -197,7 +194,7 @@ async fn validate_and_delete_worktree(
     project_path: &str,
     worktree_path: &str,
     branch_name: Option<String>,
-) -> Result<(), InputError> {
+) -> Result<(), crate::respond::ApiError> {
     let real_project_path = tokio::fs::canonicalize(project_path)
         .await
         .map(|p| p.to_string_lossy().into_owned())
@@ -207,7 +204,7 @@ async fn validate_and_delete_worktree(
         .map(|p| p.to_string_lossy().into_owned())
         .map_err(|_| InputError::Rejected("Worktree path does not exist"))?;
     if real_worktree_path == real_project_path {
-        return Err(InputError::Rejected("Cannot delete the main worktree"));
+        return Err(InputError::Rejected("Cannot delete the main worktree").into());
     }
 
     let worktrees = get_worktrees(project_path).await;
@@ -217,14 +214,13 @@ async fn validate_and_delete_worktree(
     let Some(matched) = matched else {
         return Err(InputError::Rejected(
             "Worktree path is not a registered worktree of this project",
-        ));
+        )
+        .into());
     };
     let resolved_branch =
         branch_name.or_else(|| matched.branch.as_ref().map(|b| short_branch(b).to_string()));
     let Some(resolved_branch) = resolved_branch else {
-        return Err(InputError::Rejected(
-            "Cannot determine branch name for worktree",
-        ));
+        return Err(InputError::Rejected("Cannot determine branch name for worktree").into());
     };
 
     // Kill background tasks for every chat whose worktree resolves to this one.
@@ -269,7 +265,7 @@ async fn validate_and_delete_worktree(
     let cm = &ctx.chat.chat_manager;
     let affected = cm
         .stop_worktree_services(project_id, &real_worktree_path)
-        .await;
+        .await?;
     remove_worktree(project_path, &real_worktree_path, &resolved_branch).await;
     for chat_id in affected {
         cm.emit_chat_updated(&chat_id);

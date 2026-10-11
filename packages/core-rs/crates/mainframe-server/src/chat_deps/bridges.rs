@@ -3,11 +3,17 @@ use super::*;
 impl ProjectPaths for DaemonChatDeps {
     fn projects_get_path(&self, project_id: &str) -> Option<String> {
         let pid = project_id.to_string();
-        self.db
-            .call_blocking(move |d| d.projects.get(&pid))
-            .ok()
-            .flatten()
-            .map(|p| p.path)
+        match self.db.call_blocking(move |d| d.projects.get(&pid)) {
+            Ok(project) => project.map(|p| p.path),
+            Err(error) => {
+                tracing::error!(%error, project_id, "chat project read failed");
+                self.emit_event(DaemonEvent::Error {
+                    chat_id: None,
+                    error: error.to_string(),
+                });
+                None
+            }
+        }
     }
     fn projects_remove(&self, project_id: &str) -> Result<(), SeamError> {
         let pid = project_id.to_string();
@@ -118,42 +124,6 @@ impl Pusher for DaemonChatDeps {
         tokio::spawn(async move {
             push.send_push(message).await;
         });
-    }
-}
-
-/// A `Send + Sync` `ContextDb` that routes `context-tracker`'s synchronous
-/// `db.chats.*` reads/writes through the actor bridge.
-pub(super) struct CtxDbHandle {
-    pub(super) db: Db,
-}
-
-impl ContextDb for CtxDbHandle {
-    fn add_mention(&self, chat_id: &str, mention: &SessionMention) -> bool {
-        let (id, mention) = (chat_id.to_string(), mention.clone());
-        self.db
-            .call_blocking(move |d| d.chats.add_mention(&id, &mention))
-            .unwrap_or(false)
-    }
-
-    fn get_mentions(&self, chat_id: &str) -> Vec<SessionMention> {
-        let id = chat_id.to_string();
-        self.db
-            .call_blocking(move |d| d.chats.get_mentions(&id))
-            .unwrap_or_default()
-    }
-
-    fn get_plan_files(&self, chat_id: &str) -> Vec<String> {
-        let id = chat_id.to_string();
-        self.db
-            .call_blocking(move |d| d.chats.get_plan_files(&id))
-            .unwrap_or_default()
-    }
-
-    fn get_skill_files(&self, chat_id: &str) -> Vec<SkillFileEntry> {
-        let id = chat_id.to_string();
-        self.db
-            .call_blocking(move |d| d.chats.get_skill_files(&id))
-            .unwrap_or_default()
     }
 }
 

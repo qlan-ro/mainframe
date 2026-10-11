@@ -42,18 +42,20 @@ pub(crate) struct ChatPlanModeCtx {
 }
 
 impl PlanModeContext for ChatPlanModeCtx {
-    fn chats_update(&self, chat_id: &str, permission_mode: ExecutionMode, plan_mode: bool) {
-        self.shared.deps.chats_update(
-            chat_id,
+    fn update_and_emit(
+        &self,
+        chat: mainframe_types::chat::Chat,
+        permission_mode: ExecutionMode,
+        plan_mode: bool,
+    ) -> Result<(), mainframe_types::seam_error::SeamError> {
+        self.shared.update_and_emit(
+            chat,
             &ChatPatch {
                 permission_mode: Some(permission_mode),
                 plan_mode: Some(plan_mode),
                 ..Default::default()
             },
-        );
-    }
-    fn emit_event(&self, event: DaemonEvent) {
-        self.host.emit_event(event);
+        )
     }
     fn resolve_plan_mode_handler(
         &self,
@@ -97,7 +99,24 @@ impl PlanActionContext for ChatPlanActionCtx {
         self.chat_id.clone()
     }
 
-    fn update_chat(&self, patch: PlanChatUpdate) {
+    fn update_chat(&self, patch: PlanChatUpdate) -> Result<(), AdapterError> {
+        self.shared
+            .deps
+            .chats_update(
+                &self.chat_id,
+                &ChatPatch {
+                    permission_mode: patch.permission_mode,
+                    plan_mode: patch.plan_mode,
+                    ..Default::default()
+                },
+            )
+            .map_err(|error| AdapterError::Message(error.to_string()))?;
+        if patch.clear_claude_session_id {
+            self.shared
+                .deps
+                .chats_clear_session(&self.chat_id)
+                .map_err(|error| AdapterError::Message(error.to_string()))?;
+        }
         if let Some(active) = self.active() {
             let mut guard = active.lock_recover();
             if let Some(plan_mode) = patch.plan_mode {
@@ -110,17 +129,7 @@ impl PlanActionContext for ChatPlanActionCtx {
                 guard.chat.claude_session_id = None;
             }
         }
-        self.shared.deps.chats_update(
-            &self.chat_id,
-            &ChatPatch {
-                permission_mode: patch.permission_mode,
-                plan_mode: patch.plan_mode,
-                ..Default::default()
-            },
-        );
-        if patch.clear_claude_session_id {
-            self.shared.deps.chats_clear_session(&self.chat_id);
-        }
+        Ok(())
     }
 
     fn emit_chat_updated(&self) {
@@ -194,7 +203,11 @@ impl PlanActionContext for ChatPlanActionCtx {
     }
 
     fn add_plan_file(&self, path: String) -> bool {
-        self.shared.deps.add_plan_file(&self.chat_id, &path)
+        storage_event!(
+            self.shared,
+            self.shared.deps.add_plan_file(&self.chat_id, &path),
+            false
+        )
     }
 
     fn clear_messages(&self) {

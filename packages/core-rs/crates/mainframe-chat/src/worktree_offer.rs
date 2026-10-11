@@ -34,6 +34,8 @@ pub type NowFn = Arc<dyn Fn() -> i64 + Send + Sync>;
 /// Errors surfaced by the offer routes; the messages cross the wire verbatim.
 #[derive(Debug, thiserror::Error)]
 pub enum OfferError {
+    #[error(transparent)]
+    Store(#[from] mainframe_types::seam_error::SeamError),
     #[error("No pending worktree offer for that path")]
     NotPending,
     #[error("A worktree switch is already in progress")]
@@ -50,6 +52,7 @@ pub enum OfferError {
 impl HttpStatus for OfferError {
     fn status_kind(&self) -> StatusKind {
         match self {
+            Self::Store(_) => StatusKind::Internal,
             OfferError::SwitchInProgress | OfferError::ChatBusy => StatusKind::Conflict,
             OfferError::NotPending | OfferError::Vanished => StatusKind::BadRequest,
             OfferError::Rebind(err) => err.status_kind(),
@@ -135,7 +138,7 @@ impl WorktreeOfferRegistry {
         }
         self.shared
             .deps
-            .add_dismissed_worktree(chat_id, worktree_path);
+            .add_dismissed_worktree(chat_id, worktree_path)?;
         self.shared.emit(resolved_event(
             chat_id,
             worktree_path,

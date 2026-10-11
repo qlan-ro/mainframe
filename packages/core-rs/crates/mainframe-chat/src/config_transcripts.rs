@@ -11,6 +11,14 @@ use mainframe_services::workspace::session_files::SessionFilesError;
 use crate::chat_manager::ChatManagerDeps;
 use crate::event_handler::compute_session_file_path;
 
+#[derive(Debug, thiserror::Error)]
+pub enum RelocateError {
+    #[error(transparent)]
+    Files(#[from] SessionFilesError),
+    #[error(transparent)]
+    Store(#[from] mainframe_types::seam_error::SeamError),
+}
+
 const CLAUDE: &str = "claude";
 
 /// One provider session a chat owns (never a borrowed one).
@@ -38,8 +46,8 @@ pub(crate) async fn relocate_claude_transcripts(
     active: ActiveSession<'_>,
     old_dir: &str,
     new_dir: &str,
-) -> Result<Option<String>, SessionFilesError> {
-    let sessions = claude_sessions(deps, chat_id, &active);
+) -> Result<Option<String>, RelocateError> {
+    let sessions = claude_sessions(deps, chat_id, &active)?;
     let old_project = get_claude_project_dir(old_dir);
     let new_project = get_claude_project_dir(new_dir);
     let mut active_path = None;
@@ -52,7 +60,7 @@ pub(crate) async fn relocate_claude_transcripts(
         .await?;
         let path = compute_session_file_path(new_dir, &session_id);
         if let Some(native_ref) = &native_ref {
-            deps.set_native_session_file_path(native_ref, &path);
+            deps.set_native_session_file_path(native_ref, &path)?;
         }
         if active.session_id == Some(session_id.as_str()) {
             active_path = Some(path);
@@ -66,20 +74,20 @@ fn claude_sessions(
     deps: &dyn ChatManagerDeps,
     chat_id: &str,
     active: &ActiveSession<'_>,
-) -> Vec<(Option<String>, String)> {
+) -> Result<Vec<(Option<String>, String)>, RelocateError> {
     let owned: Vec<(Option<String>, String)> = deps
-        .owned_native_sessions(chat_id)
+        .owned_native_sessions(chat_id)?
         .into_iter()
         .filter(|s| s.adapter_id == CLAUDE)
         .map(|s| (Some(s.native_ref), s.session_id))
         .collect();
     if !owned.is_empty() {
-        return owned;
+        return Ok(owned);
     }
-    match active.session_id {
+    Ok(match active.session_id {
         Some(id) if active.adapter_id == CLAUDE => vec![(None, id.to_string())],
         _ => Vec::new(),
-    }
+    })
 }
 
 #[cfg(test)]

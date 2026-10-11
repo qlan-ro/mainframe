@@ -157,7 +157,8 @@ async fn saved_default_outside_the_catalog_is_preserved() {
             None,
             None,
         )
-        .await;
+        .await
+        .unwrap();
 
     assert_eq!(chat.model.as_deref(), Some("model-retired"));
     let reread = h.manager.get_chat(&chat.id).expect("chat must exist");
@@ -181,7 +182,8 @@ async fn saved_default_present_in_the_catalog_survives() {
             None,
             None,
         )
-        .await;
+        .await
+        .unwrap();
 
     assert_eq!(chat.model.as_deref(), Some("model-live"));
 }
@@ -201,7 +203,8 @@ async fn an_adapter_without_a_snapshot_keeps_the_saved_default() {
             None,
             None,
         )
-        .await;
+        .await
+        .unwrap();
 
     assert_eq!(chat.model.as_deref(), Some("model-retired"));
 }

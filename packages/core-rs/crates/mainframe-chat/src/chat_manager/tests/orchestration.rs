@@ -85,7 +85,7 @@ async fn delegated_waiting_follows_a_gate_on_an_unfinished_child() {
     assert_eq!(waiting.orchestration.delegated_waiting, Some(true));
     // The child's gate never becomes the parent's own pending state.
     assert_ne!(waiting.display_status, Some(DisplayStatus::Waiting));
-    let listed = mgr.list_all_chats();
+    let listed = mgr.list_all_chats().unwrap();
     let parent_row = listed.iter().find(|c| c.id == "parent").unwrap();
     assert_eq!(parent_row.orchestration.delegated_waiting, Some(true));
 }

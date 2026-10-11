@@ -4,20 +4,32 @@ use mainframe_types::sync::LockExt as _;
 
 impl ChatManager {
     pub fn get_chat(&self, chat_id: &str) -> Option<Chat> {
-        let mut chat = self
-            .get_active(chat_id)
-            .map(|c| c.lock_recover().chat.clone())
-            .or_else(|| self.shared.deps.chats_get(chat_id))?;
-        self.shared.enrich(&mut chat);
-        Some(chat)
+        storage_event!(self.shared, self.try_get_chat(chat_id), None)
     }
 
-    pub fn list_chats(&self, project_id: &str) -> Vec<Chat> {
-        self.enrich_all(self.shared.deps.chats_list(project_id))
+    pub fn try_get_chat(
+        &self,
+        chat_id: &str,
+    ) -> Result<Option<Chat>, mainframe_types::seam_error::SeamError> {
+        let chat = match self.get_active(chat_id) {
+            Some(cell) => Some(cell.lock_recover().chat.clone()),
+            None => self.shared.deps.chats_get(chat_id)?,
+        };
+        Ok(chat.map(|mut chat| {
+            self.shared.enrich(&mut chat);
+            chat
+        }))
     }
 
-    pub fn list_all_chats(&self) -> Vec<Chat> {
-        self.enrich_all(self.shared.deps.chats_list_all())
+    pub fn list_chats(
+        &self,
+        project_id: &str,
+    ) -> Result<Vec<Chat>, mainframe_types::seam_error::SeamError> {
+        Ok(self.enrich_all(self.shared.deps.chats_list(project_id)?))
+    }
+
+    pub fn list_all_chats(&self) -> Result<Vec<Chat>, mainframe_types::seam_error::SeamError> {
+        Ok(self.enrich_all(self.shared.deps.chats_list_all()?))
     }
 
     fn enrich_all(&self, mut chats: Vec<Chat>) -> Vec<Chat> {
@@ -75,14 +87,14 @@ impl ChatManager {
         has_worktree: bool,
         include_archived: bool,
         include_temporary: bool,
-    ) -> Vec<Chat> {
-        self.enrich_all(self.shared.deps.chats_list_filtered(
+    ) -> Result<Vec<Chat>, mainframe_types::seam_error::SeamError> {
+        Ok(self.enrich_all(self.shared.deps.chats_list_filtered(
             project_id,
             tags_all,
             has_worktree,
             include_archived,
             include_temporary,
-        ))
+        )?))
     }
 
     /// Working directory for `chatId`: the worktree path when present and still on
@@ -141,7 +153,7 @@ impl ChatManager {
     /// cell keeps what was read when the chat loaded.
     pub fn refresh_agent_lineage(&self, chat_id: &str) {
         if let Some(cell) = self.get_active(chat_id)
-            && let Some(row) = self.shared.deps.chats_get(chat_id)
+            && let Some(row) = storage_event!(self.shared, self.shared.deps.chats_get(chat_id))
         {
             let mut guard = cell.lock_recover();
             guard.chat.orchestration = row.orchestration;
@@ -154,14 +166,14 @@ impl ChatManager {
         &self,
         project_id: &str,
         worktree_path: &str,
-    ) -> Vec<String> {
+    ) -> Result<Vec<String>, mainframe_types::seam_error::SeamError> {
         let canonical = tokio::fs::canonicalize(worktree_path).await.ok();
         let mut paths = std::collections::HashSet::from([worktree_path.to_string()]);
         if let Some(path) = &canonical {
             paths.insert(path.to_string_lossy().into_owned());
         }
         let mut chats = Vec::new();
-        for chat in self.shared.deps.chats_list_all() {
+        for chat in self.shared.deps.chats_list_all()? {
             if chat.project_id != project_id {
                 continue;
             }
@@ -183,11 +195,14 @@ impl ChatManager {
                 stop.await;
             }
         }
-        chats
+        Ok(chats)
     }
 
     pub async fn notify_worktree_deleted(&self, project_id: &str, worktree_path: &str) {
-        for chat_id in self.stop_worktree_services(project_id, worktree_path).await {
+        for chat_id in storage_event!(
+            self.shared,
+            self.stop_worktree_services(project_id, worktree_path).await
+        ) {
             self.emit_chat_updated(&chat_id);
         }
     }
@@ -199,7 +214,10 @@ impl ChatManager {
 
     /// Record a mention and refresh the session context.
     pub fn add_mention(&self, chat_id: &str, mention: SessionMention) {
-        self.shared.deps.chats_add_mention(chat_id, &mention);
+        storage_event!(
+            self.shared,
+            self.shared.deps.chats_add_mention(chat_id, &mention)
+        );
         self.emit(DaemonEvent::ContextUpdated {
             chat_id: chat_id.to_string(),
             file_paths: None,

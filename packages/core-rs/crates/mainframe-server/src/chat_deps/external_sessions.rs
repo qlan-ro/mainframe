@@ -5,21 +5,6 @@ use super::*;
 /// dispatches to the concrete Claude/Codex scan functions directly by adapter
 /// id rather than through the registry.
 impl ExternalSessionDeps for DaemonChatDeps {
-    fn get_imported_session_ids(&self, project_id: &str) -> Vec<String> {
-        let pid = project_id.to_string();
-        self.db
-            .call_blocking(move |d| d.chats.get_imported_session_ids(&pid))
-            .unwrap_or_default()
-    }
-
-    fn find_by_external_session_id(&self, session_id: &str, project_id: &str) -> Option<Chat> {
-        let (sid, pid) = (session_id.to_string(), project_id.to_string());
-        self.db
-            .call_blocking(move |d| d.chats.find_by_external_session_id(&sid, &pid))
-            .ok()
-            .flatten()
-    }
-
     /// `adapters.getAll().filter(a => a.listExternalSessions)` — the claude/codex
     /// scan functions are free functions (not on the polymorphic `Adapter`
     /// trait), so registration is keyed by id rather than a capability check.

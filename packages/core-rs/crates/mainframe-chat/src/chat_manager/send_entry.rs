@@ -147,20 +147,26 @@ impl ChatManager {
         Ok((post, session))
     }
 
-    pub(super) fn set_working(&self, cell: &Arc<Mutex<ActiveChat>>, chat_id: &str, now: &str) {
-        {
+    pub(super) fn set_working(
+        &self,
+        cell: &Arc<Mutex<ActiveChat>>,
+        now: &str,
+    ) -> Result<(), SendError> {
+        let chat = {
             let mut guard = cell.lock_recover();
             guard.chat.process_state = Some(Some(ProcessState::Working));
             guard.chat.updated_at = now.to_string();
-        }
-        self.shared.deps.chats_update(
-            chat_id,
+            guard.chat.clone()
+        };
+        self.shared.update_and_emit(
+            chat,
             &ChatPatch {
                 process_state: Some(Some(ProcessState::Working)),
                 updated_at: Some(now.to_string()),
                 ..Default::default()
             },
-        );
+        )?;
+        Ok(())
     }
 
     pub async fn edit_queued_message(

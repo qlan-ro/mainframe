@@ -25,7 +25,7 @@ impl PlanModeActionHandler for ClaudePlanModeHandler {
                 plan_mode: Some(false),
                 permission_mode: Some(exec),
                 clear_claude_session_id: false,
-            });
+            })?;
             ctx.emit_chat_updated();
 
             if ctx.session_is_spawned() {
@@ -144,8 +144,9 @@ mod tests {
         fn chat_id(&self) -> String {
             "c1".to_string()
         }
-        fn update_chat(&self, patch: PlanChatUpdate) {
+        fn update_chat(&self, patch: PlanChatUpdate) -> Result<(), AdapterError> {
             self.rec().updates.push(patch);
+            Ok(())
         }
         fn emit_chat_updated(&self) {
             self.rec().chat_updated += 1;

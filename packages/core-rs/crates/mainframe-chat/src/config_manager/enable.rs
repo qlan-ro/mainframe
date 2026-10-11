@@ -111,7 +111,7 @@ impl ChatConfigManager {
             Some(info.worktree_path),
             Some(info.branch_name),
             None,
-        );
+        )?;
         Ok(())
     }
 }

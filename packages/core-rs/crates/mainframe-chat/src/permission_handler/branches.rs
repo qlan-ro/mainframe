@@ -30,7 +30,7 @@ impl ChatPermissionHandler {
             && is_exit_plan_mode(&response)
             && let Some(active) = &active
         {
-            self.plan_mode.handle_no_process(chat_id, active, &response);
+            self.plan_mode.handle_no_process(active, &response)?;
         }
 
         self.lifecycle.start_chat(chat_id).await;
@@ -43,15 +43,13 @@ impl ChatPermissionHandler {
                 guard.chat.process_state = Some(Some(ProcessState::Working));
                 guard.chat.clone()
             };
-            self.shared.deps.chats_update(
-                chat_id,
+            self.shared.update_and_emit(
+                chat,
                 &ChatPatch {
                     process_state: Some(Some(ProcessState::Working)),
                     ..Default::default()
                 },
-            );
-            self.shared
-                .emit(DaemonEvent::ChatUpdated { chat, reason: None });
+            )?;
             let session = started.lock_recover().session.clone();
             if let Some(session) = session {
                 session.respond_to_permission(response).await?;

@@ -12,12 +12,24 @@ impl DaemonChatDeps {
     /// spawn). Correctness (the rollout's injected preamble
     /// must never feed the mention scan) outweighs the extra I/O here.
     pub(super) fn session_for_scan(&self, chat_id: &str) -> Option<Arc<dyn AdapterSession>> {
-        let chat = self.chats_get(chat_id)?;
+        let chat = match self.chats_get(chat_id) {
+            Ok(chat) => chat?,
+            Err(error) => {
+                self.emit_storage_error(chat_id, error);
+                return None;
+            }
+        };
         // An unsent fork has no `claude_session_id` yet; it scans
         // its pending fork's snapshot instead, same as every other session
         // builder (`build_history_session`/`do_load_chat`/`do_start_chat`).
         let own_id = chat.claude_session_id.clone();
-        let fork_source = ChatStore::get_pending_fork(self, chat_id).map(|p| p.fork_source);
+        let fork_source = match ChatStore::get_pending_fork(self, chat_id) {
+            Ok(value) => value.map(|p| p.fork_source),
+            Err(error) => {
+                self.emit_storage_error(chat_id, error);
+                return None;
+            }
+        };
         if own_id.is_none() && fork_source.is_none() {
             return None;
         }
@@ -48,7 +60,13 @@ impl DaemonChatDeps {
         if scanned.is_empty() {
             return;
         }
-        let persisted = self.add_detected_prs(chat_id, &scanned);
+        let persisted = match self.add_detected_prs(chat_id, &scanned) {
+            Ok(value) => value,
+            Err(error) => {
+                self.emit_storage_error(chat_id, error);
+                return;
+            }
+        };
         for pr in persisted {
             EventEmitter::emit_event(
                 self,
@@ -67,10 +85,10 @@ impl DaemonChatDeps {
     /// (`<recommended_plugins>` + AGENTS.md/CLAUDE.md body) that `thread/read`
     /// never returns and that the mention extractor has no guard against.
     pub(super) fn scan_and_persist_mentions(&self, chat_id: &str, history: &[ChatMessage]) {
-        let ctx_db = CtxDbHandle {
-            db: self.db.clone(),
-        };
-        scan_history_for_mentions(chat_id, history, &ctx_db);
+        let ctx_db = self.db.clone();
+        if let Err(error) = scan_history_for_mentions(chat_id, history, &ctx_db) {
+            self.emit_storage_error(chat_id, error);
+        }
     }
 
     /// `Promise.all([extractPlanFiles(), extractSkillFiles()])` — either failing
@@ -86,10 +104,16 @@ impl DaemonChatDeps {
             return;
         };
         for p in plan_paths {
-            self.add_plan_file(chat_id, &p);
+            if let Err(error) = self.add_plan_file(chat_id, &p) {
+                self.emit_storage_error(chat_id, error);
+                return;
+            }
         }
         for entry in skill_paths {
-            self.add_skill_file(chat_id, &entry);
+            if let Err(error) = self.add_skill_file(chat_id, &entry) {
+                self.emit_storage_error(chat_id, error);
+                return;
+            }
         }
     }
 }
@@ -102,7 +126,7 @@ pub(super) fn scan_history_for_mentions(
     chat_id: &str,
     history: &[ChatMessage],
     ctx_db: &dyn ContextDb,
-) {
+) -> Result<(), SeamError> {
     for msg in history {
         if msg.r#type != ChatMessageType::User {
             continue;
@@ -115,7 +139,8 @@ pub(super) fn scan_history_for_mentions(
             if text.contains("<mainframe-command") || text.contains("<command-name>") {
                 continue;
             }
-            extract_mentions_from_text(chat_id, Some(text.as_str()), ctx_db);
+            extract_mentions_from_text(chat_id, Some(text.as_str()), ctx_db)?;
         }
     }
+    Ok(())
 }

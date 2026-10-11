@@ -7,6 +7,7 @@ use super::*;
 
 #[derive(Default)]
 struct Recorded {
+    update_events: usize,
     updates: Vec<PlanChatUpdate>,
     responded: Vec<ControlResponse>,
     kills: usize,
@@ -20,6 +21,7 @@ struct Recorded {
 }
 
 struct MockCtx {
+    fail_update: bool,
     has_session: bool,
     rec: Mutex<Recorded>,
 }
@@ -27,6 +29,7 @@ struct MockCtx {
 impl MockCtx {
     fn new(has_session: bool) -> Self {
         Self {
+            fail_update: false,
             has_session,
             rec: Mutex::new(Recorded::default()),
         }
@@ -40,10 +43,16 @@ impl PlanActionContext for MockCtx {
     fn chat_id(&self) -> String {
         "chat-1".to_string()
     }
-    fn update_chat(&self, patch: PlanChatUpdate) {
+    fn update_chat(&self, patch: PlanChatUpdate) -> Result<(), AdapterError> {
+        if self.fail_update {
+            return Err(AdapterError::Message("database unavailable".into()));
+        }
         self.rec().updates.push(patch);
+        Ok(())
     }
-    fn emit_chat_updated(&self) {}
+    fn emit_chat_updated(&self) {
+        self.rec().update_events += 1;
+    }
     fn emit_event(&self, _event: DaemonEvent) {}
     fn session_is_spawned(&self) -> bool {
         self.has_session
@@ -182,4 +191,25 @@ async fn approving_without_clear_context_leaves_the_transcript_alone() {
             clear_claude_session_id: false,
         }]
     );
+}
+
+#[tokio::test]
+async fn failed_plan_write_does_not_announce_or_restart_the_chat() {
+    for clear_context in [false, true] {
+        let mut ctx = MockCtx::new(false);
+        ctx.fail_update = true;
+        let result = if clear_context {
+            MockPlanModeHandler
+                .on_approve_and_clear_context(approval(), &ctx)
+                .await
+        } else {
+            MockPlanModeHandler.on_approve(approval(), &ctx).await
+        };
+        assert!(result.is_err());
+        let rec = ctx.rec();
+        assert_eq!(rec.update_events, 0);
+        assert_eq!(rec.cleared_messages, 0);
+        assert_eq!(rec.started, 0);
+        assert!(rec.sent.is_empty());
+    }
 }

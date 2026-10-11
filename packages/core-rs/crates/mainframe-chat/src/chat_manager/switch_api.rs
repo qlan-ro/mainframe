@@ -35,7 +35,7 @@ impl ChatManager {
     ) -> Result<Chat, SwitchError> {
         // An unsent fork's pre-send history bounds its borrowed pin. Read it
         // before the claim: a history read waits out the claim.
-        let fork_history = match self.shared.deps.get_pending_fork(chat_id) {
+        let fork_history = match self.shared.deps.get_pending_fork(chat_id)? {
             Some(_) => self.get_messages(chat_id).await,
             None => Vec::new(),
         };
@@ -107,7 +107,7 @@ impl ChatManager {
             .deps
             .segment_store()
             .ok_or(SwitchError::Unavailable)?;
-        let unsent_fork = self.shared.deps.get_pending_fork(chat_id).is_some();
+        let unsent_fork = self.shared.deps.get_pending_fork(chat_id)?.is_some();
         if !unsent_fork && !store.has_native_id(chat_id) {
             let target_plan_mode = self
                 .shared
@@ -178,7 +178,11 @@ impl ChatManager {
         layout: &mut SegmentLayout,
         messages: &[ChatMessage],
     ) -> Option<BorrowConversion> {
-        let pending = self.shared.deps.get_pending_fork(&chat.id)?;
+        let pending = storage_event!(
+            self.shared,
+            self.shared.deps.get_pending_fork(&chat.id),
+            None
+        )?;
         let parent_layout = chat
             .parent_chat_id
             .clone()
@@ -218,7 +222,7 @@ impl ChatManager {
         let fresh = self
             .shared
             .deps
-            .chats_get(chat_id)
+            .chats_get(chat_id)?
             .ok_or_else(|| SwitchError::NotFound(chat_id.to_string()))?;
         if let Some(cell) = self.get_active(chat_id) {
             cell.lock_recover().chat = fresh;

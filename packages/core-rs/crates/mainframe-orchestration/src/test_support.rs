@@ -150,15 +150,15 @@ impl OrchestrationPort for FakePort {
         &'a self,
         project_id: &'a str,
         _archived: bool,
-    ) -> BoxFuture<'a, Vec<ChatView>> {
+    ) -> BoxFuture<'a, Result<Vec<ChatView>, PortError>> {
         Box::pin(async move {
             let state = self.lock();
-            state
+            Ok(state
                 .chats
                 .values()
                 .filter(|c| c.project_id == project_id)
                 .cloned()
-                .collect()
+                .collect())
         })
     }
 

@@ -205,24 +205,24 @@ impl WorkspacePort for FakeDeps {
         _project_path: &'a str,
         _session: Option<Arc<dyn AdapterSession>>,
         _adapter_id: Option<String>,
-    ) -> BoxFuture<'a, SessionContext> {
+    ) -> BoxFuture<'a, Result<SessionContext, SeamError>> {
         Box::pin(async {
-            SessionContext {
+            Ok(SessionContext {
                 global_files: Vec::new(),
                 project_files: Vec::new(),
                 mentions: Vec::new(),
                 attachments: Vec::new(),
                 modified_files: Vec::new(),
                 skill_files: Vec::new(),
-            }
+            })
         })
     }
     fn is_working_tree_dirty<'a>(&'a self, _project_path: &'a str) -> BoxFuture<'a, bool> {
         let dirty = *self.workspace.dirty.lock_recover();
         Box::pin(async move { dirty })
     }
-    fn extract_mentions_from_text(&self, _chat_id: &str, _text: &str) -> bool {
-        *self.workspace.mentions_found.lock_recover()
+    fn extract_mentions_from_text(&self, _chat_id: &str, _text: &str) -> Result<bool, SeamError> {
+        Ok(*self.workspace.mentions_found.lock_recover())
     }
     fn list_worktrees<'a>(&'a self, _project_path: &'a str) -> BoxFuture<'a, Vec<WorktreeEntry>> {
         self.workspace.list_calls.fetch_add(1, Ordering::SeqCst);

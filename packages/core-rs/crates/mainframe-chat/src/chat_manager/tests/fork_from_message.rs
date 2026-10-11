@@ -198,7 +198,10 @@ async fn after_a_restart_the_pending_fork_still_resumes_the_pinned_point() {
     drop(mgr);
 
     let restarted = ChatManager::new(deps.clone());
-    let pending = deps.get_pending_fork(&fork.id).expect("pending fork kept");
+    let pending = deps
+        .get_pending_fork(&fork.id)
+        .unwrap()
+        .expect("pending fork kept");
     assert_eq!(pending.fork_source.last_turn_id.as_deref(), Some("u2"));
 
     restarted.get_messages(&fork.id).await;

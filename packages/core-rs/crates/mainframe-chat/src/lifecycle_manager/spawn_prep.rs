@@ -68,12 +68,15 @@ impl ChatLifecycleManager {
         cell: &Arc<Mutex<ActiveChat>>,
         no_persistence: bool,
     ) {
-        self.shared.deps.chats_update(
-            chat_id,
-            &ChatPatch {
-                vendor_session_ephemeral: Some(no_persistence),
-                ..Default::default()
-            },
+        storage_event!(
+            self.shared,
+            self.shared.deps.chats_update(
+                chat_id,
+                &ChatPatch {
+                    vendor_session_ephemeral: Some(no_persistence),
+                    ..Default::default()
+                },
+            )
         );
         cell.lock_recover().chat.vendor_session_ephemeral = no_persistence;
     }

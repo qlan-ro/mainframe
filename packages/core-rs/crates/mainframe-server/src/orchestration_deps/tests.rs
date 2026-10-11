@@ -35,7 +35,8 @@ async fn setup() -> (Arc<AppCtx>, DaemonOrchestrationPort, String, String) {
             adapter_id: "claude".into(),
             ..Default::default()
         })
-        .await;
+        .await
+        .unwrap();
     let port = DaemonOrchestrationPort::new(
         chats,
         ctx.core.db.clone(),
@@ -99,7 +100,7 @@ async fn launch_creates_a_chat_with_provenance_mode_plan_and_title() {
     assert_eq!(chat.title.as_deref(), Some("Review"));
     assert_eq!(chat.parent_chat_id, None);
 
-    let listed = port.list_chats(&project_id, false).await;
+    let listed = port.list_chats(&project_id, false).await.unwrap();
     let found = listed.iter().find(|c| c.id == chat.id).unwrap();
     assert_eq!(found.created_by_chat_id.as_deref(), Some(caller.as_str()));
 }
@@ -107,7 +108,7 @@ async fn launch_creates_a_chat_with_provenance_mode_plan_and_title() {
 #[tokio::test]
 async fn invalid_workspaces_are_refused_before_anything_is_created() {
     let (_ctx, port, project_id, caller) = setup().await;
-    let before = port.list_chats(&project_id, true).await.len();
+    let before = port.list_chats(&project_id, true).await.unwrap().len();
     let bad_branch = LaunchWorkspace::NewWorktree {
         base_branch: "main".into(),
         branch_name: "-oops".into(),
@@ -134,7 +135,10 @@ async fn invalid_workspaces_are_refused_before_anything_is_created() {
         .await
         .unwrap_err();
     assert_eq!(code(err), Some(ErrorCode::WorkspaceInvalid));
-    assert_eq!(port.list_chats(&project_id, true).await.len(), before);
+    assert_eq!(
+        port.list_chats(&project_id, true).await.unwrap().len(),
+        before
+    );
 }
 
 #[tokio::test]
@@ -179,7 +183,7 @@ async fn a_delegated_child_reports_its_task_and_boot_interrupts_open_tasks() {
     let view = port.chat(&child.id).await.unwrap();
     assert_eq!(view.task_id.as_deref(), Some("task_1"));
     assert_eq!(view.parent_chat_id.as_deref(), Some(caller.as_str()));
-    let listed = port.list_chats(&project_id, false).await;
+    let listed = port.list_chats(&project_id, false).await.unwrap();
     let row = listed.iter().find(|c| c.id == child.id).unwrap();
     assert_eq!(row.task_id.as_deref(), Some("task_1"));
 

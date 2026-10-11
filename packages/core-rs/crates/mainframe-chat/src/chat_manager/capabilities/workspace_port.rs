@@ -84,11 +84,11 @@ pub trait WorkspacePort: Send + Sync {
         project_path: &'a str,
         session: Option<Arc<dyn AdapterSession>>,
         adapter_id: Option<String>,
-    ) -> BoxFuture<'a, SessionContext>;
+    ) -> BoxFuture<'a, Result<SessionContext, SeamError>>;
 
     fn is_working_tree_dirty<'a>(&'a self, project_path: &'a str) -> BoxFuture<'a, bool>;
 
-    fn extract_mentions_from_text(&self, chat_id: &str, text: &str) -> bool;
+    fn extract_mentions_from_text(&self, chat_id: &str, text: &str) -> Result<bool, SeamError>;
 
     /// `git worktree list` for the project. Defaults to the real git call; a
     /// fake overrides it.

@@ -1,9 +1,9 @@
 use mainframe_types::sync::LockExt as _;
 use std::sync::{Arc, Mutex};
 
+use crate::config_transcripts::RelocateError;
 use mainframe_adapter_api::{AdapterError, AdapterSession};
 use mainframe_services::settings::read_setting;
-use mainframe_services::workspace::session_files::SessionFilesError;
 use mainframe_services::workspace::worktree::WorktreeError;
 use mainframe_services::workspace::{create_worktree, remove_worktree};
 use mainframe_types::adapter::model_endpoint;
@@ -28,6 +28,8 @@ use mainframe_runtime::sync::KeyedMutex;
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
     #[error(transparent)]
+    Store(#[from] mainframe_types::seam_error::SeamError),
+    #[error(transparent)]
     NotFound(#[from] NotFound),
     /// The chat's state refuses the change; the text says why and what to do
     /// instead.
@@ -42,14 +44,14 @@ pub enum ConfigError {
     /// The chat's transcripts could not follow it into the worktree; the chat
     /// keeps running on its previous binding.
     #[error("{TRANSCRIPT_MOVE_FAILED}")]
-    TranscriptMoveFailed(#[source] SessionFilesError),
+    TranscriptMoveFailed(#[source] RelocateError),
     #[error(
         "The worktree was created at {worktree_path}, but moving the session's history failed. The chat kept its previous binding; some history files may have moved."
     )]
     WorktreeCreated {
         worktree_path: String,
         #[source]
-        source: SessionFilesError,
+        source: RelocateError,
     },
     #[error(transparent)]
     Adapter(#[from] AdapterError),
@@ -58,6 +60,7 @@ pub enum ConfigError {
 impl HttpStatus for ConfigError {
     fn status_kind(&self) -> StatusKind {
         match self {
+            Self::Store(_) => StatusKind::Internal,
             Self::NotFound(_) => StatusKind::NotFound,
             Self::Refused(_) | Self::Worktree(WorktreeError::Git(_)) => StatusKind::BadRequest,
             Self::ChatBusy => StatusKind::Conflict,

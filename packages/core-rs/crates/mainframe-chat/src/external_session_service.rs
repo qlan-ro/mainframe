@@ -1,3 +1,4 @@
+use mainframe_types::seam_error::SeamError;
 use mainframe_types::sync::LockExt as _;
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -26,9 +27,7 @@ const SCAN_INTERVAL_MS: u64 = 5 * 60 * 1000;
 /// abstracted here as `external_session_adapter_ids` +
 /// `list_external_sessions(...)`.
 pub trait ExternalSessionDeps: ChatManagerDeps {
-    fn get_imported_session_ids(&self, project_id: &str) -> Vec<String>;
-    fn find_by_external_session_id(&self, session_id: &str, project_id: &str) -> Option<Chat>;
-    fn create_imported_chat(&self, project_id: &str, adapter_id: &str) -> Chat {
+    fn create_imported_chat(&self, project_id: &str, adapter_id: &str) -> Result<Chat, SeamError> {
         self.chats_create(&NewChat {
             project_id: project_id.into(),
             adapter_id: adapter_id.into(),
@@ -78,7 +77,7 @@ impl<D: ExternalSessionDeps + 'static> ExternalSessionService<D> {
         project_id: &str,
         offset: i64,
         limit: i64,
-    ) -> ExternalSessionPage {
+    ) -> Result<ExternalSessionPage, SeamError> {
         scan_page_impl(self.deps.as_ref(), project_id, offset, limit).await
     }
 
@@ -91,15 +90,15 @@ impl<D: ExternalSessionDeps + 'static> ExternalSessionService<D> {
         title: Option<&str>,
         created_at: Option<&str>,
         modified_at: Option<&str>,
-    ) -> Chat {
+    ) -> Result<Chat, SeamError> {
         if let Some(existing) = self
             .deps
-            .find_by_external_session_id(session_id, project_id)
+            .find_by_external_session_id(session_id, project_id)?
         {
-            return existing;
+            return Ok(existing);
         }
 
-        let mut chat = self.deps.create_imported_chat(project_id, adapter_id);
+        let mut chat = self.deps.create_imported_chat(project_id, adapter_id)?;
         let mut updates = ChatPatch {
             claude_session_id: Some(session_id.to_string()),
             ..Default::default()
@@ -124,7 +123,7 @@ impl<D: ExternalSessionDeps + 'static> ExternalSessionService<D> {
         if let Some(modified) = modified_at {
             updates.updated_at = Some(modified.to_string());
         }
-        self.deps.chats_update(&chat.id, &updates);
+        self.deps.chats_update(&chat.id, &updates)?;
         // Object.assign(chat, updates)
         chat.claude_session_id = updates.claude_session_id.clone();
         if let Some(t) = &updates.title {
@@ -150,21 +149,27 @@ impl<D: ExternalSessionDeps + 'static> ExternalSessionService<D> {
         if let Some(ct) = clean_title {
             let deps = self.deps.clone();
             let mut chat_for_title = chat.clone();
+            let shared = self.shared.clone();
             let adapter_id = adapter_id.to_string();
             tokio::spawn(async move {
-                generate_import_title(deps.as_ref(), &mut chat_for_title, &ct, &adapter_id).await;
+                generate_import_title(
+                    deps.as_ref(),
+                    &shared,
+                    &mut chat_for_title,
+                    &ct,
+                    &adapter_id,
+                )
+                .await;
             });
         }
 
-        chat
+        Ok(chat)
     }
 
     /// Start auto-scanning for a project (on project open).
     pub fn start_auto_scan(&self, project_id: &str) {
         self.stop_auto_scan(project_id);
 
-        // Initial scan (fire-and-forget). scan_page never fails (per-adapter
-        // errors are logged inside), so there is no error to handle here.
         {
             let deps = self.deps.clone();
             let shared = self.shared.clone();

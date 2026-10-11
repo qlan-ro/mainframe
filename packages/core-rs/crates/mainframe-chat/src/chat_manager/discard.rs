@@ -55,7 +55,7 @@ impl ChatManager {
     /// other temporary chat discards its own side chat first (AC 7), so a side
     /// chat never outlives the chat it belongs to.
     pub async fn discard_chat(&self, chat_id: &str) -> Result<(), DiscardError> {
-        let Some(chat) = self.shared.deps.chats_get(chat_id) else {
+        let Some(chat) = self.shared.deps.chats_get(chat_id)? else {
             return Err(NotFound::unnamed("Chat").into());
         };
         let side_chat = is_side_chat(&chat);
@@ -76,7 +76,7 @@ impl ChatManager {
                 .await
                 .map_err(DiscardError::ScratchDir)?;
         }
-        self.shared.deps.chats_delete(chat_id);
+        self.shared.deps.chats_delete(chat_id)?;
         self.shared.deps.emit_event(DaemonEvent::ChatEnded {
             chat_id: chat_id.to_string(),
         });

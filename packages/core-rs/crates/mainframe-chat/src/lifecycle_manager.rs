@@ -52,6 +52,8 @@ use mainframe_types::time::now_ms;
 /// Errors surfaced by lifecycle ops (strings cross the wire; copied verbatim).
 #[derive(Debug, thiserror::Error)]
 pub enum LifecycleError {
+    #[error(transparent)]
+    Store(#[from] mainframe_types::seam_error::SeamError),
     /// The chat, its project or its adapter is gone.
     #[error(transparent)]
     NotFound(#[from] NotFound),
@@ -72,6 +74,7 @@ pub enum LifecycleError {
 impl HttpStatus for LifecycleError {
     fn status_kind(&self) -> StatusKind {
         match self {
+            Self::Store(_) => StatusKind::Internal,
             Self::NotFound(_) => StatusKind::NotFound,
             Self::WorktreeMissing(_) | Self::ProjectDirMissing(_) | Self::DirtyWorkingTree => {
                 StatusKind::Conflict
@@ -177,7 +180,7 @@ impl ChatLifecycleManager {
     fn chat_or_db(&self, chat_id: &str) -> Option<Chat> {
         self.get_active(chat_id)
             .map(|c| c.lock_recover().chat.clone())
-            .or_else(|| self.shared.deps.chats_get(chat_id))
+            .or_else(|| storage_event!(self.shared, self.shared.deps.chats_get(chat_id), None))
     }
 
     pub async fn create_chat(
@@ -185,10 +188,10 @@ impl ChatLifecycleManager {
         new_chat: NewChat,
         worktree_path: Option<&str>,
         branch_name: Option<&str>,
-    ) -> Chat {
+    ) -> Result<Chat, LifecycleError> {
         let project_id = new_chat.project_id.clone();
         let adapter_id = new_chat.adapter_id.clone();
-        let mut chat = self.shared.deps.chats_create(&new_chat);
+        let mut chat = self.shared.deps.chats_create(&new_chat)?;
         if let (Some(wt), Some(branch)) = (worktree_path, branch_name) {
             self.shared.deps.chats_update(
                 &chat.id,
@@ -197,7 +200,7 @@ impl ChatLifecycleManager {
                     branch_name: Some(Some(branch.to_string())),
                     ..Default::default()
                 },
-            );
+            )?;
             chat.worktree_path = Some(wt.to_string());
             chat.branch_name = Some(branch.to_string());
         }
@@ -217,7 +220,7 @@ impl ChatLifecycleManager {
             chat: chat.clone(),
             source: None,
         });
-        chat
+        Ok(chat)
     }
 
     pub async fn create_chat_with_defaults(
@@ -225,7 +228,7 @@ impl ChatLifecycleManager {
         mut new_chat: NewChat,
         worktree_path: Option<&str>,
         branch_name: Option<&str>,
-    ) -> Chat {
+    ) -> Result<Chat, LifecycleError> {
         let adapter_id = new_chat.adapter_id.clone();
         let mut effective_plan_mode = false;
 
@@ -249,7 +252,9 @@ impl ChatLifecycleManager {
             }
         }
 
-        let mut chat = self.create_chat(new_chat, worktree_path, branch_name).await;
+        let mut chat = self
+            .create_chat(new_chat, worktree_path, branch_name)
+            .await?;
         if effective_plan_mode {
             chat.plan_mode = Some(true);
             self.shared.deps.chats_update(
@@ -258,9 +263,9 @@ impl ChatLifecycleManager {
                     plan_mode: Some(true),
                     ..Default::default()
                 },
-            );
+            )?;
         }
-        chat
+        Ok(chat)
     }
 
     pub async fn resume_chat(&self, chat_id: &str) {
@@ -503,7 +508,7 @@ impl ChatLifecycleManager {
             (&chat, &project_path, &effective_path)
         {
             let last_user = is_last_active_chat_for_scope(
-                &self.shared.deps.chats_list(&chat.project_id),
+                &storage_event!(self.shared, self.shared.deps.chats_list(&chat.project_id)),
                 project_path,
                 effective_path,
                 chat_id,
@@ -541,12 +546,15 @@ impl ChatLifecycleManager {
         }
 
         self.shared.deps.attachment_delete_chat(chat_id).await;
-        self.shared.deps.chats_update(
-            chat_id,
-            &ChatPatch {
-                status: Some(ChatStatus::Archived),
-                ..Default::default()
-            },
+        storage_event!(
+            self.shared,
+            self.shared.deps.chats_update(
+                chat_id,
+                &ChatPatch {
+                    status: Some(ChatStatus::Archived),
+                    ..Default::default()
+                },
+            )
         );
         info!(chat_id, "chat archived");
         self.shared.emit(DaemonEvent::ChatEnded {
@@ -592,12 +600,15 @@ impl ChatLifecycleManager {
         }
         self.shared.orchestration.revoke(chat_id);
 
-        self.shared.deps.chats_update(
-            chat_id,
-            &ChatPatch {
-                status: Some(ChatStatus::Ended),
-                ..Default::default()
-            },
+        storage_event!(
+            self.shared,
+            self.shared.deps.chats_update(
+                chat_id,
+                &ChatPatch {
+                    status: Some(ChatStatus::Ended),
+                    ..Default::default()
+                },
+            )
         );
         self.shared.emit(DaemonEvent::ChatEnded {
             chat_id: chat_id.to_string(),
@@ -639,7 +650,7 @@ impl ChatLifecycleManager {
                 None,
                 None,
             )
-            .await;
+            .await?;
         // The `enableWorktree(newChatId, base, branch)` step is owned by
         // chat_manager (it holds the config_manager); it invokes this via the
         // returned new chat id.
@@ -713,12 +724,15 @@ impl ChatLifecycleManager {
             guard.chat.title = Some(title.clone());
             guard.chat.clone()
         };
-        self.shared.update_and_emit(
-            chat,
-            &ChatPatch {
-                title: Some(title),
-                ..Default::default()
-            },
+        storage_event!(
+            self.shared,
+            self.shared.update_and_emit(
+                chat,
+                &ChatPatch {
+                    title: Some(title),
+                    ..Default::default()
+                },
+            )
         );
     }
 
@@ -733,7 +747,10 @@ impl ChatLifecycleManager {
         if !no_persistence::take_context_loss(chat, &now) {
             return;
         }
-        self.shared.deps.mark_context_lost(chat_id, &now);
+        storage_event!(
+            self.shared,
+            self.shared.deps.mark_context_lost(chat_id, &now)
+        );
         if let Some(cell) = self.get_active(chat_id) {
             cell.lock_recover().chat = chat.clone();
         }
@@ -754,7 +771,9 @@ impl ChatLifecycleManager {
     /// first send after `session/resume` — raises no resync: "no previous
     /// entry" counts as changed, an unchanged list does not.
     async fn do_load_chat(&self, chat_id: &str) -> bool {
-        let Some(mut chat) = self.shared.deps.chats_get(chat_id) else {
+        let Some(mut chat) =
+            storage_event!(self.shared, self.shared.deps.chats_get(chat_id), false)
+        else {
             warn!(chat_id, "doLoadChat: chat not found");
             return false;
         };
@@ -803,11 +822,12 @@ impl ChatLifecycleManager {
         // returning early below would hide the earlier segments.
         let composed = self.compose_history(chat_id).await;
         let own_id = chat.claude_session_id.clone();
-        let fork_source = self
-            .shared
-            .deps
-            .get_pending_fork(chat_id)
-            .map(|pending| pending.fork_source);
+        let fork_source = storage_event!(
+            self.shared,
+            self.shared.deps.get_pending_fork(chat_id),
+            false
+        )
+        .map(|pending| pending.fork_source);
         if own_id.is_none() && fork_source.is_none() {
             return match composed {
                 Some(history) => self.finish_load(chat_id, Some(history)).await,
@@ -953,7 +973,7 @@ impl ChatLifecycleManager {
         let fork_source = self
             .shared
             .deps
-            .get_pending_fork(chat_id)
+            .get_pending_fork(chat_id)?
             .map(|pending| pending.fork_source);
         let session = self
             .shared

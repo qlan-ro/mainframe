@@ -80,7 +80,7 @@ impl ChatManager {
         if let Some(cell) = self.get_active(parent_id) {
             cell.lock_recover().chat.side_chat_id = side_chat_id;
         }
-        if let Some(chat) = self.shared.deps.chats_get(parent_id) {
+        if let Some(chat) = storage_event!(self.shared, self.shared.deps.chats_get(parent_id)) {
             self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
         }
     }

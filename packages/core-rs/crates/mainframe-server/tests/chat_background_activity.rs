@@ -167,13 +167,14 @@ async fn read_paths_enrich_background_activity() {
     seed(&h, "w-1", BackgroundWorkKind::Workflow, "deploy");
 
     assert_live(&h.manager.get_chat(&h.chat_id).expect("chat must exist"), 1);
-    let listed = h.manager.list_chats(&h.project_id);
+    let listed = h.manager.list_chats(&h.project_id).unwrap();
     assert_live(listed.iter().find(|c| c.id == h.chat_id).unwrap(), 1);
-    let listed_all = h.manager.list_all_chats();
+    let listed_all = h.manager.list_all_chats().unwrap();
     assert_live(listed_all.iter().find(|c| c.id == h.chat_id).unwrap(), 1);
     let filtered = h
         .manager
-        .list_filtered(Some(&h.project_id), None, false, false, false);
+        .list_filtered(Some(&h.project_id), None, false, false, false)
+        .unwrap();
     assert_live(filtered.iter().find(|c| c.id == h.chat_id).unwrap(), 1);
 }
 

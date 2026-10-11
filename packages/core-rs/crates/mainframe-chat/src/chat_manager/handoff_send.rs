@@ -106,7 +106,7 @@ impl ChatManager {
         let layout = store.replace_active_native(&chat.id)?;
         if let (Some(cell), Some(fresh)) = (
             self.get_active(&chat.id),
-            self.shared.deps.chats_get(&chat.id),
+            self.shared.deps.chats_get(&chat.id)?,
         ) {
             cell.lock_recover().chat = fresh;
         }

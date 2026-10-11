@@ -74,7 +74,14 @@ async fn import_with_title_generation_disabled_logs_and_keeps_the_title() {
 
     let (subscriber, events) = crate::test_support::LogCapture::install();
     let _guard = tracing::subscriber::set_default(subscriber);
-    generate_import_title(deps.as_ref(), &mut chat, "first message", "claude").await;
+    generate_import_title(
+        deps.as_ref(),
+        &ChatShared::new(deps.clone()),
+        &mut chat,
+        "first message",
+        "claude",
+    )
+    .await;
 
     assert_logged_once_and_title_untouched(&events, "disabled_by_setting", &deps);
     assert_eq!(chat.title.as_deref(), Some("Fallback Title"));
@@ -88,7 +95,14 @@ async fn import_with_no_title_logs_no_title_and_keeps_the_title() {
 
     let (subscriber, events) = crate::test_support::LogCapture::install();
     let _guard = tracing::subscriber::set_default(subscriber);
-    generate_import_title(deps.as_ref(), &mut chat, "first message", "claude").await;
+    generate_import_title(
+        deps.as_ref(),
+        &ChatShared::new(deps.clone()),
+        &mut chat,
+        "first message",
+        "claude",
+    )
+    .await;
 
     assert_logged_once_and_title_untouched(&events, "no_title", &deps);
     assert_eq!(chat.title.as_deref(), Some("Fallback Title"));

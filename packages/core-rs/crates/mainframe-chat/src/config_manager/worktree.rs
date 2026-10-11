@@ -55,7 +55,7 @@ impl ChatConfigManager {
             Some(worktree_path.to_string()),
             branch_name,
             None,
-        );
+        )?;
         Ok(())
     }
 
@@ -106,7 +106,7 @@ impl ChatConfigManager {
             .await;
         }
 
-        self.apply_worktree_update(&cell, chat_id, None, None, None);
+        self.apply_worktree_update(&cell, chat_id, None, None, None)?;
         Ok(())
     }
 }

@@ -154,7 +154,8 @@ impl AgentPort for DaemonAgentPort {
                     branch_name,
                     &request.run_id,
                 )
-                .await;
+                .await
+                .map_err(step_error)?;
 
             if let Some(worktree) = &request.worktree {
                 let base = self
