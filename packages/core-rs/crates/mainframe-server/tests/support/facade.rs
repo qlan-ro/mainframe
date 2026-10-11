@@ -1,9 +1,4 @@
-//! A `TestServer` with a REAL `ChatManager` wired as `ctx.chat.chat_manager` and
-//! the facade hub as its chat surface — the fixture the `acp_ws_*` live-wiring
-//! tests need, since the plain `spawn_test_server` harness runs with
-//! `chat_manager: None`. Mirrors `chat_background_activity.rs`'s harness, plus
-//! the facade hub and a pre-created project/chat so a test can prompt a real
-//! session immediately.
+//! A test server with a facade-backed chat manager and a pre-created project/chat.
 
 use mainframe_types::settings_kv::MemorySettings;
 use std::net::SocketAddr;

@@ -4,10 +4,10 @@
 //! exposes its bare handler instead). `http.rs` mounts them (see the mount table
 //! there).
 
+pub mod adapter_catalog;
 mod adapter_model;
 pub mod adapters;
 pub mod agent_outbox;
-pub mod agents;
 pub mod attachments;
 pub mod auth;
 pub mod automation_admin;
@@ -46,7 +46,6 @@ pub mod search;
 pub mod session_transcripts;
 pub mod settings;
 pub mod setup_advisor;
-pub mod skills;
 pub mod skills_cli;
 pub mod skills_registry;
 pub mod suggestions;
@@ -55,3 +54,5 @@ pub mod tunnel;
 pub mod tunnel_ports;
 pub mod worktree;
 pub mod worktree_offer;
+
+pub(crate) mod body;

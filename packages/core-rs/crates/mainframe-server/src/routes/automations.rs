@@ -21,7 +21,7 @@ use serde_json::json;
 
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok, ok_empty};
-use crate::routes::projects::parse_body;
+use crate::routes::body::parse_body;
 
 const OUTPUT_PREVIEW_MAX_BYTES: usize = 32 * 1024;
 

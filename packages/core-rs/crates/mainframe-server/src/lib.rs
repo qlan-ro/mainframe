@@ -83,3 +83,5 @@ mod start_tests {
 pub mod wiring;
 
 pub mod bootstrap;
+
+mod lsp_websocket;

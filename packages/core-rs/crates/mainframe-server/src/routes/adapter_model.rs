@@ -51,7 +51,7 @@ async fn observed_model(
 ) -> Response {
     let manager = &ctx.chat.chat_manager;
     let Some(chat) = manager.get_chat(chat_id) else {
-        return fail(StatusCode::NOT_FOUND, "Chat not found");
+        return crate::respond::ApiError::chat_not_found().into_response();
     };
     if chat.adapter_id != adapter_id || project_id.is_some_and(|id| id != chat.project_id) {
         return fail(
@@ -87,12 +87,5 @@ async fn project_path(
                 )
             });
     };
-    match ctx.core.db.call(move |db| db.projects.get(&id)).await {
-        Ok(Some(project)) => Ok(project.path),
-        Ok(None) => Err(crate::respond::ApiError::new(
-            StatusCode::NOT_FOUND,
-            "Project not found",
-        )),
-        Err(err) => Err(crate::respond::ApiError::internal("get project", &err)),
-    }
+    Ok(ctx.require_project(&id).await?.path)
 }

@@ -19,7 +19,7 @@ struct Server {
 
 impl Server {
     async fn start() -> Self {
-        let ctx = AppCtx::test_ctx_with_orchestration();
+        let ctx = AppCtx::test_ctx();
         let app = crate::http::build_app(Arc::clone(&ctx));
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();

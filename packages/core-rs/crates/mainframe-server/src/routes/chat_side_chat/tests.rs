@@ -36,7 +36,7 @@ async fn setup() -> (Arc<AppCtx>, mainframe_types::chat::Project, Chat) {
     // gating (the archived/side-chat/id checks) to be what each test below
     // is really about.
     std::fs::create_dir_all("/tmp/side-chat-route").unwrap();
-    let ctx = crate::ctx::AppCtx::test_ctx_with_chat_manager();
+    let ctx = crate::ctx::AppCtx::test_ctx();
     ctx.core
         .adapter_registry
         .register(crate::chat_test_support::StubAdapter::new("claude", false));
@@ -90,7 +90,7 @@ async fn an_empty_body_is_accepted() {
 
 #[tokio::test]
 async fn an_unknown_parent_404s() {
-    let ctx = AppCtx::test_ctx_with_chat_manager();
+    let ctx = AppCtx::test_ctx();
     let (status, body) = open(&ctx, "nope", b"").await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert!(body["error"].as_str().unwrap().contains("not found"));
@@ -188,7 +188,7 @@ async fn filter_temporary_drops_a_side_chat_even_when_include_temporary_is_set()
     // Pure unit coverage of the DB-level exclusion through the same filters
     // the wired `list` route builds.
     std::fs::create_dir_all("/tmp/side-chat-filtered").unwrap();
-    let ctx = AppCtx::test_ctx_with_chat_manager();
+    let ctx = AppCtx::test_ctx();
     ctx.core
         .adapter_registry
         .register(crate::chat_test_support::StubAdapter::new("claude", false));

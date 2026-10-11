@@ -142,7 +142,7 @@ async fn search_files(
         return ok(Vec::<FileHit>::new());
     }
     if tokio::fs::canonicalize(&base).await.is_err() {
-        return fail(StatusCode::NOT_FOUND, "Project not found");
+        return crate::respond::ApiError::project_not_found().into_response();
     }
     let limit = parse_limit(qget(&q, "limit"), 50, 200);
     let scan_limit = limit.saturating_mul(4);
@@ -225,7 +225,7 @@ async fn files_list(
     };
     let limit = parse_limit(qget(&q, "limit"), 5000, 5000);
     if tokio::fs::canonicalize(&base).await.is_err() {
-        return fail(StatusCode::NOT_FOUND, "Project not found");
+        return crate::respond::ApiError::project_not_found().into_response();
     }
 
     let mut files: Vec<String> = Vec::new();

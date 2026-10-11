@@ -1,6 +1,7 @@
 //! `POST /api/chats/{id}/discard`, and the temporary-chat refusal shared by the
 //! pin/tag/archive/unarchive guards.
 
+#[cfg(test)]
 use axum::response::IntoResponse;
 use std::sync::Arc;
 
@@ -27,23 +28,18 @@ pub(crate) fn refuse_if_temporary(chat: &Chat, action: &str) -> Option<Response>
     })
 }
 
-async fn discard(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
-    let lookup = id.clone();
-    let chat = match ctx.require_chat(&lookup).await {
-        Ok(value) => value,
-        Err(error) => return error.into_response(),
-    };
+async fn discard(
+    State(ctx): State<Arc<AppCtx>>,
+    Path(id): Path<String>,
+) -> Result<Response, crate::respond::ApiError> {
+    let chat = ctx.require_chat(&id).await?;
     if !chat.temporary {
-        return fail(StatusCode::CONFLICT, "chat is not temporary");
+        return Err(crate::respond::ApiError::Conflict(
+            "chat is not temporary".into(),
+        ));
     }
-    let cm = &ctx.chat.chat_manager;
-    match cm.discard_chat(&id).await {
-        Ok(()) => ok_empty(),
-        Err(err) => {
-            tracing::error!(chat_id = %id, %err, "discard failed");
-            crate::respond::fail_with(&err)
-        }
-    }
+    ctx.chat.chat_manager.discard_chat(&id).await?;
+    Ok(ok_empty())
 }
 
 pub fn router() -> Router<Arc<AppCtx>> {
@@ -57,7 +53,8 @@ mod tests {
     use super::*;
     use mainframe_types::chat::NewChat;
 
-    async fn read(resp: Response) -> (StatusCode, serde_json::Value) {
+    async fn read(resp: impl IntoResponse) -> (StatusCode, serde_json::Value) {
+        let resp = resp.into_response();
         let status = resp.status();
         let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
         (
@@ -126,7 +123,7 @@ mod tests {
 
     #[tokio::test]
     async fn discard_deletes_the_row_and_scratch_dir_and_404s_on_the_next_get() {
-        let ctx = AppCtx::test_ctx_with_chat_manager();
+        let ctx = AppCtx::test_ctx();
         ctx.core
             .adapter_registry
             .register(crate::chat_test_support::StubAdapter::new("claude", false));

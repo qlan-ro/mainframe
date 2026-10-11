@@ -28,7 +28,7 @@ use serde_json::{Value, json};
 use crate::async_err::internal_error;
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok, ok_empty};
-use crate::routes::projects::parse_body;
+use crate::routes::body::parse_body;
 
 mod providers;
 

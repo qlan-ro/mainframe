@@ -29,9 +29,9 @@ use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::transcript::TranscriptLocation;
 
 use crate::ctx::AppCtx;
-use crate::respond::{fail, ok};
+use crate::respond::{ApiError, fail, ok};
+use crate::routes::body::parse_body;
 use crate::routes::chat_discard::refuse_if_temporary;
-use crate::routes::projects::parse_body;
 
 const TAG_ALLOWED: fn(char) -> bool = |c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-';
 
@@ -117,7 +117,7 @@ pub(crate) async fn list_for_project(
 pub(crate) async fn get_one(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
     match ctx.chat.chat_manager.get_chat(&id) {
         Some(chat) => ok(chat),
-        None => fail(StatusCode::NOT_FOUND, "Chat not found"),
+        None => crate::respond::ApiError::chat_not_found().into_response(),
     }
 }
 
@@ -178,22 +178,16 @@ async fn set_title(
     State(ctx): State<Arc<AppCtx>>,
     Path(id): Path<String>,
     body: Bytes,
-) -> Response {
+) -> Result<Response, ApiError> {
     let title = match parse_body::<TitleBody>(&body).and_then(|b| b.title) {
         Some(t) if !t.trim().is_empty() => t.trim().to_string(),
-        _ => return fail(StatusCode::BAD_REQUEST, "Title is required"),
+        _ => return Err(ApiError::BadRequest("Title is required".into())),
     };
-    // The wired path uses the facade rename (emits chat.updated); when the manager
-    // is not wired (the test harness) the db write is the load-bearing effect.
     {
         let cm = &ctx.chat.chat_manager;
         cm.rename_chat(&id, &title);
     }
-    match ctx.core.db.call(move |db| db.chats.get(&id)).await {
-        Ok(Some(chat)) => ok(chat),
-        Ok(None) => fail(StatusCode::NOT_FOUND, "Chat not found"),
-        Err(err) => crate::async_err::internal_error("get chat", &err),
-    }
+    Ok(ok(ctx.require_chat(&id).await?))
 }
 
 #[derive(Deserialize)]
@@ -205,17 +199,14 @@ async fn set_pinned(
     State(ctx): State<Arc<AppCtx>>,
     Path(id): Path<String>,
     body: Bytes,
-) -> Response {
+) -> Result<Response, ApiError> {
     let Some(pinned) = parse_body::<PinnedBody>(&body).and_then(|b| b.pinned) else {
-        return fail(StatusCode::BAD_REQUEST, "pinned (boolean) is required");
+        return Err(ApiError::BadRequest("pinned (boolean) is required".into()));
     };
     let lookup = id.clone();
-    let existing = match ctx.require_chat(&lookup).await {
-        Ok(value) => value,
-        Err(error) => return error.into_response(),
-    };
+    let existing = ctx.require_chat(&lookup).await?;
     if let Some(resp) = refuse_if_temporary(&existing, "pin") {
-        return resp;
+        return Ok(resp);
     }
     let cid = id.clone();
     if let Err(err) = ctx
@@ -232,13 +223,10 @@ async fn set_pinned(
         })
         .await
     {
-        return crate::async_err::internal_error("update pinned", &err);
+        return Err(ApiError::internal("update pinned", err));
     }
     let lookup = id.clone();
-    let chat = match ctx.require_chat(&lookup).await {
-        Ok(value) => value,
-        Err(error) => return error.into_response(),
-    };
+    let chat = ctx.require_chat(&lookup).await?;
     {
         let cm = &ctx.chat.chat_manager;
         cm.sync_chat_fields(
@@ -249,7 +237,7 @@ async fn set_pinned(
             },
         );
     }
-    ok(chat)
+    Ok(ok(chat))
 }
 
 fn parse_effort_field(v: &serde_json::Value) -> Result<Option<EffortLevel>, ()> {
@@ -292,7 +280,11 @@ fn tuning_update(obj: &serde_json::Map<String, serde_json::Value>) -> Result<Cha
 /// follow-ups — `sync_chat_fields` (mirror the cache), fire-and-forget
 /// `apply_tuning` (live re-apply, no-op without a session), `emit_chat_updated`
 /// (broadcast).
-async fn apply_and_return(ctx: &Arc<AppCtx>, id: String, update: ChatPatch) -> Response {
+async fn apply_and_return(
+    ctx: &Arc<AppCtx>,
+    id: String,
+    update: ChatPatch,
+) -> Result<Response, ApiError> {
     let partial = update.clone();
     let cid = id.clone();
     if let Err(err) = ctx
@@ -301,13 +293,10 @@ async fn apply_and_return(ctx: &Arc<AppCtx>, id: String, update: ChatPatch) -> R
         .call(move |db| db.chats.update(&cid, &update))
         .await
     {
-        return crate::async_err::internal_error("update tuning", &err);
+        return Err(ApiError::internal("update tuning", err));
     }
     let lookup = id.clone();
-    let chat = match ctx.require_chat(&lookup).await {
-        Ok(value) => value,
-        Err(error) => return error.into_response(),
-    };
+    let chat = ctx.require_chat(&lookup).await?;
     {
         let cm = ctx.chat.chat_manager.clone();
         cm.sync_chat_fields(&id, partial);
@@ -315,7 +304,7 @@ async fn apply_and_return(ctx: &Arc<AppCtx>, id: String, update: ChatPatch) -> R
         tokio::spawn(async move { apply_cm.apply_tuning(&apply_id).await });
         cm.emit_chat_updated(&id);
     }
-    ok(chat)
+    Ok(ok(chat))
 }
 
 async fn set_tuning(
@@ -330,7 +319,7 @@ async fn set_tuning(
     let Ok(update) = tuning_update(&obj) else {
         return fail(StatusCode::BAD_REQUEST, "invalid tuning payload");
     };
-    apply_and_return(&ctx, id, update).await
+    apply_and_return(&ctx, id, update).await.into_response()
 }
 
 async fn set_effort(
@@ -364,7 +353,7 @@ async fn set_effort(
         },
         ..Default::default()
     };
-    apply_and_return(&ctx, id, update).await
+    apply_and_return(&ctx, id, update).await.into_response()
 }
 
 async fn unarchive(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
@@ -376,7 +365,7 @@ async fn unarchive(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Re
     }
     match cm.unarchive_chat(&id) {
         Some(chat) => ok(chat),
-        None => fail(StatusCode::NOT_FOUND, "Chat not found"),
+        None => crate::respond::ApiError::chat_not_found().into_response(),
     }
 }
 
@@ -392,20 +381,17 @@ async fn session_files(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -
 async fn tool_result(
     State(ctx): State<Arc<AppCtx>>,
     Path((id, tool_use_id)): Path<(String, String)>,
-) -> Response {
+) -> Result<Response, ApiError> {
     if id.is_empty() || !mainframe_types::ids::is_safe_identifier(&tool_use_id) {
-        return fail(StatusCode::BAD_REQUEST, "Invalid parameters");
+        return Err(ApiError::BadRequest("Invalid parameters".into()));
     }
     let lookup_id = id.clone();
-    let chat = match ctx.require_chat(&lookup_id).await {
-        Ok(value) => value,
-        Err(error) => return error.into_response(),
-    };
+    let chat = ctx.require_chat(&lookup_id).await?;
 
     let file_path = match resolve_tool_result_path(&ctx, &chat).await {
         Ok(Some(path)) => path,
-        Err(response) => return response.into_response(),
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "No session file for chat"),
+        Err(error) => return Err(error),
+        Ok(None) => return Err(ApiError::NotFound("No session file for chat".into())),
     };
     // A Codex chat's session file is a rollout, where the tool call's display
     // id is the rollout `call_id`; everything else is a Claude JSONL.
@@ -423,8 +409,8 @@ async fn tool_result(
         .await
     };
     match content {
-        Some(content) => ok(serde_json::json!({ "content": content })),
-        None => fail(StatusCode::NOT_FOUND, "Tool result not available"),
+        Some(content) => Ok(ok(serde_json::json!({ "content": content }))),
+        None => Err(ApiError::NotFound("Tool result not available".into())),
     }
 }
 
@@ -512,7 +498,8 @@ mod tests {
     use mainframe_types::chat_patch::ChatPatch;
     use std::collections::HashMap;
 
-    async fn read(resp: Response) -> (StatusCode, serde_json::Value) {
+    async fn read(resp: impl IntoResponse) -> (StatusCode, serde_json::Value) {
+        let resp = resp.into_response();
         let status = resp.status();
         let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
         let body = serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null);
@@ -976,7 +963,7 @@ mod tests {
 
     #[tokio::test]
     async fn archive_refuses_a_temporary_chat_409() {
-        let ctx = AppCtx::test_ctx_with_chat_manager();
+        let ctx = AppCtx::test_ctx();
         ctx.core
             .adapter_registry
             .register(crate::chat_test_support::StubAdapter::new("claude", false));
@@ -999,7 +986,7 @@ mod tests {
 
     #[tokio::test]
     async fn unarchive_refuses_a_temporary_chat_409() {
-        let ctx = AppCtx::test_ctx_with_chat_manager();
+        let ctx = AppCtx::test_ctx();
         ctx.core
             .adapter_registry
             .register(crate::chat_test_support::StubAdapter::new("claude", false));

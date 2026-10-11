@@ -1,8 +1,5 @@
 //! Project registry CRUD.
 //!
-//! Also hosts `parse_body`, the shared request-body parser the route modules
-//! use: it treats an empty/whitespace body as `{}` and yields `None` on
-//! malformed/ill-typed JSON so each caller can emit its own 400 envelope string.
 
 use std::sync::Arc;
 
@@ -13,7 +10,6 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Json, Response};
 use axum::routing::get;
 use serde::Deserialize;
-use serde::de::DeserializeOwned;
 use serde_json::json;
 
 use mainframe_services::workspace::worktree::is_directory_present_async;
@@ -23,18 +19,7 @@ use mainframe_chat::chat_manager::RemoveProjectError;
 
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok, ok_empty};
-
-/// Parse `body` into `T`, treating an empty/whitespace body as `{}`. Returns
-/// `None` on malformed JSON or a type mismatch — the caller maps that to its
-/// route-specific 400 envelope.
-pub(crate) fn parse_body<T: DeserializeOwned>(body: &Bytes) -> Option<T> {
-    let slice: &[u8] = if body.iter().all(u8::is_ascii_whitespace) {
-        b"{}"
-    } else {
-        body
-    };
-    serde_json::from_slice(slice).ok()
-}
+use crate::routes::body::parse_body;
 
 #[derive(Deserialize)]
 struct CreateProjectBody {
@@ -60,7 +45,7 @@ async fn get_one(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Resp
             stamp_availability(&mut project).await;
             ok(project)
         }
-        Ok(None) => fail(StatusCode::NOT_FOUND, "Project not found"),
+        Ok(None) => crate::respond::ApiError::project_not_found().into_response(),
         Err(err) => crate::async_err::internal_error("get project", &err),
     }
 }
@@ -197,7 +182,7 @@ mod tests {
 
     #[tokio::test]
     async fn removing_a_project_deletes_its_temporary_chat_and_stops_the_process() {
-        let ctx = AppCtx::test_ctx_with_chat_manager();
+        let ctx = AppCtx::test_ctx();
         let adapter = crate::chat_test_support::StubAdapter::new("claude", false);
         ctx.core.adapter_registry.register(adapter.clone());
         let project_dir =
@@ -259,7 +244,7 @@ mod tests {
     /// the request is what is wrong, so it is now a 400 with the same text.
     #[tokio::test]
     async fn delete_refuses_the_hidden_scratch_project() {
-        let ctx = AppCtx::test_ctx_with_chat_manager();
+        let ctx = AppCtx::test_ctx();
         let (status, body) =
             body_json(remove(State(ctx.clone()), Path("mainframe-no-project".to_string())).await)
                 .await;

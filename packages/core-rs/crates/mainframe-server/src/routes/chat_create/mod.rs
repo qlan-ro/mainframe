@@ -4,7 +4,6 @@
 use std::sync::Arc;
 
 use axum::Router;
-use axum::body::Bytes;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::Response;
@@ -15,7 +14,7 @@ use mainframe_types::chat::{NO_PROJECT_ID, NewChat};
 
 use crate::ctx::AppCtx;
 use crate::respond::ok;
-use crate::routes::projects::parse_body;
+use crate::routes::body::RequestJson;
 
 #[cfg(test)]
 mod tests;
@@ -103,13 +102,9 @@ async fn resolve_project_id(
 
 async fn create(
     State(ctx): State<Arc<AppCtx>>,
-    body: Bytes,
+    body: RequestJson<CreateChatBody>,
 ) -> Result<Response, crate::respond::ApiError> {
-    let Some(b) = parse_body::<CreateChatBody>(&body) else {
-        return Err(crate::respond::ApiError::BadRequest(
-            "Invalid request body".into(),
-        ));
-    };
+    let b = body.0?;
     let (adapter_id, home) = validate_shape(&b)?;
     let resolved_project_id = resolve_project_id(&ctx, home).await?;
 

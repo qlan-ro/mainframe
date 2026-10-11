@@ -35,6 +35,7 @@ async fn deleted_worktree_refuses_every_file_route_before_io() {
     for suffix in [
         "tree",
         "search/files",
+        "search/content",
         "files-list",
         "files",
         "paths/resolve",
@@ -53,6 +54,41 @@ async fn deleted_worktree_refuses_every_file_route_before_io() {
     let response = client
         .put(server.http_url(&format!("/api/projects/{}/files", project.id)))
         .json(&serde_json::json!({"chatId":chat.id,"path":"README.md","content":"new"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 404);
+    for suffix in ["launch/status", "launch/configs"] {
+        let response = client
+            .get(server.http_url(&format!(
+                "/api/projects/{}/{suffix}?chatId={}",
+                project.id, chat.id
+            )))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 404, "{suffix}");
+    }
+    for suffix in ["launch/dev/start", "launch/dev/stop"] {
+        let response = client
+            .post(server.http_url(&format!(
+                "/api/projects/{}/{suffix}?chatId={}",
+                project.id, chat.id
+            )))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 404, "{suffix}");
+    }
+    let response = client
+        .get(server.http_url(&format!(
+            "/lsp/{}/typescript?chatId={}",
+            project.id, chat.id
+        )))
+        .header("connection", "upgrade")
+        .header("upgrade", "websocket")
+        .header("sec-websocket-version", "13")
+        .header("sec-websocket-key", "dGhlIHNhbXBsZSBub25jZQ==")
         .send()
         .await
         .unwrap();

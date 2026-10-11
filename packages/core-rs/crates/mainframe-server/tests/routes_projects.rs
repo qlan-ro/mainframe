@@ -124,10 +124,8 @@ async fn create_duplicate_path_returns_409_with_existing() {
     assert_eq!(body["data"]["id"], existing_id);
 }
 
-// DELETE relies on `ChatManager::remove_project` (session + worktree teardown);
-// this harness wires no ChatManager, so it pins the failure response.
 #[tokio::test]
-async fn delete_is_phase4_seam_returns_500() {
+async fn delete_removes_the_registered_project() {
     let server = spawn_test_server(None).await;
     let created: serde_json::Value = reqwest::Client::new()
         .post(server.http_url("/api/projects"))
@@ -144,7 +142,11 @@ async fn delete_is_phase4_seam_returns_500() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(resp.status(), StatusCode::OK);
+    let response = reqwest::get(server.http_url(&format!("/api/projects/{id}")))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }
 
 // ── availability ────────────────────────────────────────────────────────────

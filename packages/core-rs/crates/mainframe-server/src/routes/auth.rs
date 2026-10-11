@@ -29,7 +29,7 @@ use crate::ctx::AppCtx;
 use crate::middleware::auth::validate_device_token;
 use crate::net::trust_proxy_client_ip;
 use crate::respond::{fail, ok, ok_empty};
-use crate::routes::projects::parse_body;
+use crate::routes::body::parse_body;
 
 const PAIRING_EXPIRY_MS: i64 = 5 * 60 * 1000;
 const MAX_PAIRING_ATTEMPTS: u32 = 5;

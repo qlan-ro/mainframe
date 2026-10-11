@@ -12,7 +12,7 @@ use std::sync::Arc;
 use axum::Router;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use mainframe_launch::parse_launch_config;
 use serde::Deserialize;
@@ -82,7 +82,7 @@ async fn get_status(
     Query(q): Query<ChatQuery>,
 ) -> Response {
     let Some(path) = resolve_launch_path(&ctx, &project_id, q.chat_id.as_deref()).await else {
-        return fail(StatusCode::NOT_FOUND, "Project not found");
+        return crate::respond::ApiError::project_not_found().into_response();
     };
     let manager = ctx.infra.launch_registry.get_or_create(&project_id, &path);
     let statuses = manager.get_all_statuses();
@@ -123,7 +123,7 @@ async fn get_configs(
     Query(q): Query<ChatQuery>,
 ) -> Response {
     let Some(path) = resolve_launch_path(&ctx, &project_id, q.chat_id.as_deref()).await else {
-        return fail(StatusCode::NOT_FOUND, "Project not found");
+        return crate::respond::ApiError::project_not_found().into_response();
     };
     let launch_json_path = std::path::Path::new(&path)
         .join(".mainframe")
@@ -153,7 +153,7 @@ async fn start(
     Query(q): Query<ChatQuery>,
 ) -> Response {
     let Some(path) = resolve_launch_path(&ctx, &project_id, q.chat_id.as_deref()).await else {
-        return fail(StatusCode::NOT_FOUND, "Project not found");
+        return crate::respond::ApiError::project_not_found().into_response();
     };
 
     // Read + validate the launch config from disk — never trust the client body.
@@ -205,7 +205,7 @@ async fn stop(
     Query(q): Query<ChatQuery>,
 ) -> Response {
     let Some(path) = resolve_launch_path(&ctx, &project_id, q.chat_id.as_deref()).await else {
-        return fail(StatusCode::NOT_FOUND, "Project not found");
+        return crate::respond::ApiError::project_not_found().into_response();
     };
     {
         let registry = &ctx.infra.launch_registry;

@@ -106,7 +106,7 @@ pub enum DaemonEvent {
     ChatEnded { chat_id: String },
     /// Idle whole-chat offload: the daemon released the chat's CLI
     /// process, cached history, and registry cell as one unit. Connection-global
-    /// (see `mainframe-server::websocket::CONNECTION_GLOBAL_EVENT_TYPES`) so a
+    /// (see `DaemonEvent::is_connection_global`) so a
     /// client reaches every subscriber, not only one subscribed to this chat.
     #[serde(rename = "chat.offloaded")]
     ChatOffloaded { chat_id: String },
@@ -767,3 +767,5 @@ mod tests {
         }));
     }
 }
+
+mod scope;

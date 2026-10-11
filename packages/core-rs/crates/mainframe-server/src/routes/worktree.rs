@@ -16,7 +16,7 @@ use crate::input_error::InputError;
 use crate::orchestration_deps::branch_name_ok;
 use crate::respond::{fail, ok, ok_empty};
 use crate::respond::{fail_with, status_of};
-use crate::routes::projects::parse_body;
+use crate::routes::body::parse_body;
 
 // The `Err` carries a built axum `Response` (intentionally large); boxing it
 // would only add an allocation for a value we return by move once.
@@ -122,7 +122,7 @@ async fn fork_worktree(
 async fn list_worktrees(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
     let path = match project_path(&ctx, &id).await {
         Ok(Some(path)) => path,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Project not found"),
+        Ok(None) => return crate::respond::ApiError::project_not_found().into_response(),
         Err(resp) => return resp.into_response(),
     };
     let worktrees = get_worktrees(&path).await;
@@ -183,7 +183,7 @@ async fn delete_worktree(
 ) -> Response {
     let project_path = match project_path(&ctx, &id).await {
         Ok(Some(path)) => path,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Project not found"),
+        Ok(None) => return crate::respond::ApiError::project_not_found().into_response(),
         Err(resp) => return resp.into_response(),
     };
     let parsed = parse_body::<DeleteWorktreeBody>(&body).unwrap_or(DeleteWorktreeBody {
@@ -332,7 +332,7 @@ mod tests {
     /// 400; the chat is missing, so it is now a 404 with the same text.
     #[tokio::test]
     async fn enable_on_an_unknown_chat_is_404() {
-        let ctx = AppCtx::test_ctx_with_chat_manager();
+        let ctx = AppCtx::test_ctx();
         let resp = enable_worktree(
             State(ctx.clone()),
             Path("ghost".into()),
@@ -348,7 +348,7 @@ mod tests {
     /// 500; it is now a 404 with the same text.
     #[tokio::test]
     async fn fork_of_an_unknown_chat_is_404() {
-        let ctx = AppCtx::test_ctx_with_chat_manager();
+        let ctx = AppCtx::test_ctx();
         let resp = fork_worktree(
             State(ctx.clone()),
             Path("ghost".into()),

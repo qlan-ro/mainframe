@@ -19,7 +19,7 @@ use mainframe_types::transcript::{
 
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok};
-use crate::routes::projects::parse_body;
+use crate::routes::body::parse_body;
 use mainframe_types::ids::is_safe_identifier;
 
 const MAX_CHAT_IDS: usize = 500;

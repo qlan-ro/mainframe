@@ -23,8 +23,9 @@ use crate::ctx::AppCtx;
 use crate::input_error::InputError;
 use crate::respond::fail_with;
 use crate::respond::{fail, ok, ok_empty};
+use crate::routes::body::parse_json_body;
 
-use super::git::{ChatIdQuery, get_effective_path, git_error_message, parse_json_body};
+use super::git::{ChatIdQuery, get_effective_path, git_error_message};
 
 // ── body schemas ─────────────────────────────────────────────────────────────
 
@@ -159,7 +160,7 @@ async fn branches(
 ) -> Response {
     let base_path = match get_effective_path(&ctx, &id, q.chat_id.as_deref()).await {
         Ok(Some(p)) => p,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Project not found"),
+        Ok(None) => return crate::respond::ApiError::project_not_found().into_response(),
         Err(e) => return internal_error("Failed to resolve project path", &e),
     };
     git_result(

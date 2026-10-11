@@ -7,7 +7,7 @@ use std::sync::Arc;
 use axum::Router;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 
 use crate::ctx::AppCtx;
@@ -42,7 +42,7 @@ async fn run(ctx: &Arc<AppCtx>, chat_id: &str, action: RecoveryAction) -> Respon
     let label = action.label();
     let cm = &ctx.chat.chat_manager;
     if cm.get_chat(chat_id).is_none() {
-        return fail(StatusCode::NOT_FOUND, "Chat not found");
+        return crate::respond::ApiError::chat_not_found().into_response();
     }
     let result = match action {
         RecoveryAction::RecreateWorktree => cm.recreate_worktree(chat_id).await,

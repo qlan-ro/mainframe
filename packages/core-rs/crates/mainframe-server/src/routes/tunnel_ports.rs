@@ -17,8 +17,8 @@ use serde::Deserialize;
 use serde_json::json;
 
 use crate::ctx::AppCtx;
-use crate::respond::{fail, ok, ok_empty};
-use crate::routes::projects::parse_body;
+use crate::respond::{ApiError, fail, ok, ok_empty};
+use crate::routes::body::parse_body;
 
 /// Ports below 1024 are privileged and never a dev server; the client applies
 /// the same floor in `isTunnelEligiblePort` (`@qlan-ro/mainframe-types`).
@@ -37,37 +37,34 @@ struct StopBody {
     port: u16,
 }
 
-async fn start(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
+async fn start(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Result<Response, ApiError> {
     let Some(registry) = available(&ctx) else {
-        return fail(StatusCode::BAD_REQUEST, "Tunnel not available");
+        return Err(ApiError::BadRequest("Tunnel not available".into()));
     };
     let Some(body) = parse_body::<StartBody>(&body) else {
-        return fail(StatusCode::BAD_REQUEST, "Invalid request body");
+        return Err(ApiError::BadRequest("Invalid request body".into()));
     };
     if body.port < MIN_PORT {
-        return fail(StatusCode::BAD_REQUEST, "Port must be 1024 or higher");
+        return Err(ApiError::BadRequest("Port must be 1024 or higher".into()));
     }
     if body.port == ctx.core.port {
-        return fail(
-            StatusCode::BAD_REQUEST,
-            "Cannot tunnel the daemon's own port",
-        );
+        return Err(ApiError::BadRequest(
+            "Cannot tunnel the daemon's own port".into(),
+        ));
     }
 
-    let chat_id = body.chat_id.clone();
-    let project_id = match ctx.core.db.call(move |db| db.chats.get(&chat_id)).await {
-        Ok(Some(chat)) => chat.project_id,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
-        Err(err) => return crate::async_err::internal_error("get chat", &err),
-    };
+    let project_id = ctx.require_chat(&body.chat_id).await?.project_id;
 
     let scope = PortTunnelScope {
         project_id,
         chat_id: body.chat_id,
     };
     match registry.start(body.port, scope).await {
-        Ok(url) => ok(json!({ "url": url, "port": body.port })),
-        Err(error) => fail(StatusCode::INTERNAL_SERVER_ERROR, error.to_string()),
+        Ok(url) => Ok(ok(json!({ "url": url, "port": body.port }))),
+        Err(error) => Err(ApiError::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            error.to_string(),
+        )),
     }
 }
 
@@ -116,6 +113,7 @@ pub fn router() -> Router<Arc<AppCtx>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::response::IntoResponse;
 
     #[tokio::test]
     async fn unknown_chat_returns_404_without_starting_tunnel() {
@@ -129,7 +127,8 @@ mod tests {
             State(ctx),
             Bytes::from(r#"{"port":8080,"chatId":"missing"}"#),
         )
-        .await;
+        .await
+        .into_response();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
         let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
             .await

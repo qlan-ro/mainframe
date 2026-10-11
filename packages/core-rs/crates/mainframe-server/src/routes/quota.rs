@@ -39,21 +39,16 @@ pub fn router() -> Router<Arc<AppCtx>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ctx::{GitFactory, Services};
-    use crate::db::Db;
+
     use axum::body::to_bytes;
-    use dashmap::DashMap;
-    use mainframe_db::DatabaseManager;
-    use mainframe_services::attachment::AttachmentStore;
-    use mainframe_services::files::FileWatcherService;
-    use mainframe_services::push::PushService;
+
     use mainframe_services::quota::QuotaService;
     use mainframe_types::adapter::{
         ProviderQuota, ProviderQuotaStatus, QuotaWindow, QuotaWindowKind,
     };
-    use mainframe_types::events::DaemonEvent;
+
     use std::future::Future;
-    use std::path::Path as FsPath;
+
     use std::pin::Pin;
 
     fn blob(used_percent: f64) -> ProviderQuota {
@@ -92,41 +87,12 @@ mod tests {
         }
     }
 
-    fn test_ctx(quota: Option<Arc<dyn QuotaService>>) -> Arc<AppCtx> {
-        let db = Db::spawn(|| DatabaseManager::open(FsPath::new(":memory:"))).unwrap();
-        let (broadcast, _keep) = tokio::sync::broadcast::channel::<DaemonEvent>(16);
-        std::mem::forget(_keep);
-        let watcher = FileWatcherService::new(|_| {});
-        Arc::new(
-            AppCtx::builder(db, std::env::temp_dir())
-                .git(GitFactory)
-                .services(Services {
-                    attachments: Arc::new(AttachmentStore::new(
-                        std::env::temp_dir().join("mf-quota-test"),
-                    )),
-                    push: Arc::new(PushService::new()),
-                    watcher: Arc::new(watcher),
-                })
-                .broadcast(broadcast)
-                .adapter_registry(Arc::new(mainframe_adapter_api::AdapterRegistry::new()))
-                .background_tasks(Arc::new(
-                    mainframe_background_tasks::tracker::BackgroundTaskTracker::new(),
-                ))
-                .claude_workflows(Arc::new(
-                    mainframe_claude_workflows::store::ClaudeWorkflowStore::new(),
-                ))
-                .automations(None)
-                .quota(quota)
-                .version("0.0.0-test".into())
-                .port(0)
-                .auth_secret(None)
-                .resolved_path(mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"))
-                .tunnel_url(Arc::new(std::sync::RwLock::new(None)))
-                .ws_clients(Arc::new(DashMap::new()))
-                .facade_hub(Arc::new(crate::acp_ws::FacadeHub::default()))
-                .facade_heartbeat_interval_ms(mainframe_acp::DEFAULT_HEARTBEAT_INTERVAL_MS)
-                .build(),
-        )
+    fn with_quota(quota: Option<Arc<dyn QuotaService>>) -> Arc<AppCtx> {
+        let mut ctx = AppCtx::test_ctx();
+        if let Some(quota) = quota {
+            Arc::get_mut(&mut ctx).unwrap().services.quota = quota;
+        }
+        ctx
     }
 
     async fn body_json(resp: Response) -> (StatusCode, serde_json::Value) {
@@ -141,7 +107,7 @@ mod tests {
             get_result: Some(blob(42.0)),
             refresh_result: None,
         });
-        let ctx = test_ctx(Some(quota));
+        let ctx = with_quota(Some(quota));
         let (status, body) = body_json(get_quota(State(ctx), Path("claude".into())).await).await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body["success"], serde_json::json!(true));
@@ -157,7 +123,7 @@ mod tests {
             get_result: None,
             refresh_result: None,
         });
-        let ctx = test_ctx(Some(quota));
+        let ctx = with_quota(Some(quota));
         let (status, body) = body_json(get_quota(State(ctx), Path("claude".into())).await).await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body, serde_json::json!({ "success": true }));
@@ -169,7 +135,7 @@ mod tests {
             get_result: None,
             refresh_result: None,
         });
-        let ctx = test_ctx(Some(quota));
+        let ctx = with_quota(Some(quota));
         // Axum has already percent-decoded `cla%20ude` into `cla ude` by here.
         let (status, body) = body_json(get_quota(State(ctx), Path("cla ude".into())).await).await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
@@ -185,7 +151,7 @@ mod tests {
             get_result: None,
             refresh_result: Some(blob(77.0)),
         });
-        let ctx = test_ctx(Some(quota));
+        let ctx = with_quota(Some(quota));
         let (status, body) =
             body_json(refresh_quota(State(ctx), Path("claude".into())).await).await;
         assert_eq!(status, StatusCode::OK);
@@ -201,7 +167,7 @@ mod tests {
             get_result: None,
             refresh_result: None,
         });
-        let ctx = test_ctx(Some(quota));
+        let ctx = with_quota(Some(quota));
         let (status, body) = body_json(refresh_quota(State(ctx), Path("codex".into())).await).await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body, serde_json::json!({ "success": true }));
@@ -209,7 +175,7 @@ mod tests {
 
     #[tokio::test]
     async fn default_quota_service_returns_success_without_a_puller() {
-        let ctx = test_ctx(None);
+        let ctx = with_quota(None);
         let (status, body) =
             body_json(refresh_quota(State(ctx), Path("claude".into())).await).await;
         assert_eq!(status, StatusCode::OK);

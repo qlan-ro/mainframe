@@ -15,7 +15,7 @@ use crate::chat_test_support::StubAdapter;
 use crate::ctx::AppCtx;
 
 async fn setup() -> (Arc<AppCtx>, DaemonOrchestrationPort, String, String) {
-    let ctx = AppCtx::test_ctx_with_orchestration();
+    let ctx = AppCtx::test_ctx();
     ctx.core
         .adapter_registry
         .register(StubAdapter::new("claude", false));

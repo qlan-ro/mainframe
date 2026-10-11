@@ -145,6 +145,14 @@ domain_errors!(
     mainframe_chat::chat_manager::ForkError,
     mainframe_chat::chat_manager::DiscardError,
     mainframe_chat::chat_manager::RemoveProjectError,
+    mainframe_chat::chat_manager::OpenSideChatError,
+    mainframe_chat::chat_manager::TrustWorkspaceError,
+    mainframe_chat::config_manager::ConfigError,
+    mainframe_chat::lifecycle_manager::LifecycleError,
+    mainframe_chat::degraded_recovery::DegradedRecoveryError,
+    mainframe_chat::worktree_offer::OfferError,
+    mainframe_chat::segments::switch_rules::SwitchError,
+    mainframe_chat::fork::ForkChatError,
 );
 
 impl From<mainframe_services::workspace::ScopeError> for ApiError {

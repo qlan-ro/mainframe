@@ -21,9 +21,9 @@ use serde::Deserialize;
 
 use crate::ctx::AppCtx;
 use crate::respond::fail_or_internal;
-use crate::respond::{fail, ok};
+use crate::respond::{ApiError, fail, ok};
+use crate::routes::body::parse_body;
 use crate::routes::chat_discard::refuse_if_temporary;
-use crate::routes::projects::parse_body;
 
 #[derive(Deserialize)]
 struct CreateBody {
@@ -130,19 +130,13 @@ async fn set_chat_tags(
     State(ctx): State<Arc<AppCtx>>,
     Path(id): Path<String>,
     body: Bytes,
-) -> Response {
+) -> Result<Response, ApiError> {
     let Some(parsed): Option<SetChatTagsBody> = parse_body(&body) else {
-        return fail(StatusCode::BAD_REQUEST, "Invalid request body");
+        return Err(ApiError::BadRequest("Invalid request body".into()));
     };
-    let lookup = id.clone();
-    match ctx.core.db.call(move |db| db.chats.get(&lookup)).await {
-        Ok(Some(chat)) => {
-            if let Some(resp) = refuse_if_temporary(&chat, "tag") {
-                return resp;
-            }
-        }
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
-        Err(err) => return crate::async_err::internal_error("get chat", &err),
+    let chat = ctx.require_chat(&id).await?;
+    if let Some(response) = refuse_if_temporary(&chat, "tag") {
+        return Ok(response);
     }
     let tags = parsed.tags;
     let result = ctx
@@ -156,8 +150,8 @@ async fn set_chat_tags(
     match result {
         // `ChatManager::sync_chat_tags` (mirrors the tags onto the cached active
         // chat) is not called here.
-        Ok(persisted) => ok(persisted),
-        Err(err) => fail_or_internal("set chat tags", &err),
+        Ok(persisted) => Ok(ok(persisted)),
+        Err(err) => Ok(fail_or_internal("set chat tags", &err)),
     }
 }
 
@@ -178,7 +172,8 @@ mod tests {
     use super::*;
     use crate::ctx::AppCtx;
 
-    async fn read(resp: Response) -> (StatusCode, serde_json::Value) {
+    async fn read(resp: impl IntoResponse) -> (StatusCode, serde_json::Value) {
+        let resp = resp.into_response();
         let status = resp.status();
         let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
         (

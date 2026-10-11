@@ -16,7 +16,7 @@ use serde::Deserialize;
 use crate::ctx::AppCtx;
 use crate::respond::status_of;
 use crate::respond::{fail, ok_empty};
-use crate::routes::projects::parse_body;
+use crate::routes::body::parse_body;
 
 #[derive(Deserialize)]
 struct OfferBody {

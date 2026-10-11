@@ -23,7 +23,7 @@ use mainframe_types::transcript::TranscriptLocation;
 
 mod app_ctx;
 
-pub(crate) use app_ctx::test_ctx;
+pub(crate) use app_ctx::build_test_context;
 
 static NEXT_SESSION_ID: AtomicUsize = AtomicUsize::new(1);
 

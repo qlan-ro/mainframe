@@ -19,7 +19,7 @@ use mainframe_types::settings::ExecutionMode;
 
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok, ok_empty};
-use crate::routes::projects::parse_body;
+use crate::routes::body::parse_body;
 
 /// serde only invokes this when the key is present, so a plain `Option<T>`
 /// would collapse an explicit JSON `null` into the same `None` as an absent
@@ -70,7 +70,7 @@ async fn update_config(
         return fail(StatusCode::BAD_REQUEST, "projectId cannot be changed");
     }
     match chat_exists(&ctx, &id).await {
-        Ok(false) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
+        Ok(false) => return crate::respond::ApiError::chat_not_found().into_response(),
         Ok(true) => {}
         Err(resp) => return resp.into_response(),
     }
@@ -87,7 +87,7 @@ async fn update_config(
     {
         Ok(()) => match cm.get_chat(&id) {
             Some(chat) => ok(chat),
-            None => fail(StatusCode::NOT_FOUND, "Chat not found"),
+            None => crate::respond::ApiError::chat_not_found().into_response(),
         },
         Err(err) => {
             tracing::error!(chat_id = %id, %err, "updateChatConfig failed");
@@ -99,7 +99,7 @@ async fn update_config(
 /// Shared command scaffold: 404 when the chat is unknown, else run + okEmpty.
 async fn interrupt(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
     match chat_exists(&ctx, &id).await {
-        Ok(false) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
+        Ok(false) => return crate::respond::ApiError::chat_not_found().into_response(),
         Ok(true) => {}
         Err(resp) => return resp.into_response(),
     }
@@ -110,7 +110,7 @@ async fn interrupt(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Re
 
 async fn resume(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
     match chat_exists(&ctx, &id).await {
-        Ok(false) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
+        Ok(false) => return crate::respond::ApiError::chat_not_found().into_response(),
         Ok(true) => {}
         Err(resp) => return resp.into_response(),
     }
@@ -121,7 +121,7 @@ async fn resume(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Respo
 
 async fn trust_workspace(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
     match chat_exists(&ctx, &id).await {
-        Ok(false) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
+        Ok(false) => return crate::respond::ApiError::chat_not_found().into_response(),
         Ok(true) => {}
         Err(resp) => return resp.into_response(),
     }
@@ -152,7 +152,7 @@ async fn queue_edit(
         return fail(StatusCode::BAD_REQUEST, "content is required");
     };
     match chat_exists(&ctx, &id).await {
-        Ok(false) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
+        Ok(false) => return crate::respond::ApiError::chat_not_found().into_response(),
         Ok(true) => {}
         Err(resp) => return resp.into_response(),
     }
@@ -171,7 +171,7 @@ async fn queue_cancel(
     Path((id, message_id)): Path<(String, String)>,
 ) -> Response {
     match chat_exists(&ctx, &id).await {
-        Ok(false) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
+        Ok(false) => return crate::respond::ApiError::chat_not_found().into_response(),
         Ok(true) => {}
         Err(resp) => return resp.into_response(),
     }

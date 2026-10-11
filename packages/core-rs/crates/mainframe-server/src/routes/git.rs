@@ -10,18 +10,16 @@ use std::sync::Arc;
 use axum::Router;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use mainframe_db::DbError;
 use mainframe_git::git_parse::{is_not_git_repo, parse_diff_name_status, parse_status_lines};
 use mainframe_git::git_service::GitServiceError;
 use serde::Deserialize;
-use serde::de::DeserializeOwned;
 use serde_json::json;
 
 use crate::async_err::internal_error;
 use crate::ctx::AppCtx;
-use crate::input_error::InputError;
 use crate::respond::{fail, ok};
 use mainframe_runtime::fs::resolve_and_validate_path;
 
@@ -56,12 +54,6 @@ pub(crate) fn is_not_git_repo_err(err: &GitServiceError) -> bool {
 /// failure envelopes.
 pub(crate) fn git_error_message(err: &GitServiceError) -> String {
     err.to_string()
-}
-
-/// Parse a JSON request body into `T` (an empty/malformed body becomes a
-/// validation error → 400).
-pub(crate) fn parse_json_body<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, InputError> {
-    Ok(serde_json::from_slice(bytes)?)
 }
 
 /// The project-scoped effective-path resolver.
@@ -112,7 +104,7 @@ async fn status(
 ) -> Response {
     let base_path = match get_effective_path(&ctx, &id, q.chat_id.as_deref()).await {
         Ok(Some(p)) => p,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Project not found"),
+        Ok(None) => return crate::respond::ApiError::project_not_found().into_response(),
         Err(e) => return internal_error("Failed to resolve project path", &e),
     };
     match ctx
@@ -140,7 +132,7 @@ async fn working_stat(
 ) -> Response {
     let base_path = match get_effective_path(&ctx, &id, q.chat_id.as_deref()).await {
         Ok(Some(p)) => p,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Project not found"),
+        Ok(None) => return crate::respond::ApiError::project_not_found().into_response(),
         Err(e) => return internal_error("Failed to resolve project path", &e),
     };
     match ctx
@@ -166,7 +158,7 @@ async fn branch(
 ) -> Response {
     let base_path = match get_effective_path(&ctx, &id, q.chat_id.as_deref()).await {
         Ok(Some(p)) => p,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Project not found"),
+        Ok(None) => return crate::respond::ApiError::project_not_found().into_response(),
         Err(e) => return internal_error("Failed to resolve project path", &e),
     };
     match ctx
@@ -194,7 +186,7 @@ async fn branch_diffs(
 ) -> Response {
     let base_path = match get_effective_path(&ctx, &id, q.chat_id.as_deref()).await {
         Ok(Some(p)) => p,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Project not found"),
+        Ok(None) => return crate::respond::ApiError::project_not_found().into_response(),
         Err(e) => return internal_error("Failed to resolve project path", &e),
     };
     let svc = ctx.core.git.for_project(base_path.clone());
@@ -245,7 +237,7 @@ async fn diff(
     }
     let base_path = match get_effective_path(&ctx, &id, q.chat_id.as_deref()).await {
         Ok(Some(p)) => p,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Project not found"),
+        Ok(None) => return crate::respond::ApiError::project_not_found().into_response(),
         Err(e) => return internal_error("Failed to resolve project path", &e),
     };
 

@@ -25,11 +25,12 @@ use crate::async_err::internal_error;
 use crate::ctx::AppCtx;
 use crate::respond::fail_with;
 use crate::respond::{fail, ok, ok_empty};
+use crate::routes::body::parse_json_body;
 use mainframe_runtime::fs::resolve_and_validate_path;
 
 use super::git::{
     chat_worktree_missing, get_effective_path, git_error_message, is_not_git_repo_err,
-    parse_json_body, resolve_chat_path,
+    resolve_chat_path,
 };
 
 #[derive(Debug, Deserialize)]
@@ -227,7 +228,7 @@ async fn diff_since_main_not_found(ctx: &AppCtx, chat_id: Option<&str>) -> Respo
             Err(e) => return internal_error("Failed to resolve project path", &e),
         }
     }
-    fail(StatusCode::NOT_FOUND, "Project not found")
+    crate::respond::ApiError::project_not_found().into_response()
 }
 
 async fn compute_diff_since_main(

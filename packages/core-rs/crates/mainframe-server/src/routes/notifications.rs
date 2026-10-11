@@ -24,7 +24,7 @@ use serde::Deserialize;
 use crate::automations_deps::broadcast_and_push;
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok_empty};
-use crate::routes::projects::parse_body;
+use crate::routes::body::parse_body;
 
 #[derive(Deserialize)]
 struct NotifyBody {

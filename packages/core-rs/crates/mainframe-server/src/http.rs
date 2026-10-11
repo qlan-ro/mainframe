@@ -22,10 +22,11 @@ use tower_http::limit::RequestBodyLimitLayer;
 use crate::acp_ws::acp_ws_handler;
 use crate::cors_origin::is_allowed_origin;
 use crate::ctx::AppCtx;
+use crate::lsp_websocket::lsp_ws_handler;
 use crate::middleware::auth::auth_middleware;
 use crate::middleware::compression::compression_layer;
 use crate::routes;
-use crate::websocket::{lsp_ws_handler, ws_handler};
+use crate::websocket::ws_handler;
 
 /// 30mb JSON body limit. Public so integration tests can assert both edges of
 /// the limit against this value instead of hardcoding it.
@@ -66,8 +67,7 @@ pub fn build_app(ctx: Arc<AppCtx>) -> Router {
         .merge(routes::external_sessions::router())
         .merge(routes::background_tasks::router())
         .merge(routes::adapters::router())
-        .merge(routes::agents::router())
-        .merge(routes::skills::router())
+        .merge(routes::adapter_catalog::router())
         .merge(routes::skills_cli::router())
         .merge(routes::skills_registry::router())
         .merge(routes::suggestions::router())

@@ -119,7 +119,7 @@ async fn content_search(
         Ok(p) => p.to_string_lossy().into_owned(),
         Err(err) => {
             tracing::warn!(error = %err, raw_base, "Project base path not resolvable");
-            return fail(StatusCode::NOT_FOUND, "Project not found");
+            return crate::respond::ApiError::project_not_found().into_response();
         }
     };
 

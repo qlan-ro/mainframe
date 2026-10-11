@@ -211,13 +211,7 @@ impl AppCtx {
 #[cfg(test)]
 impl AppCtx {
     pub(crate) fn test_ctx() -> Arc<AppCtx> {
-        crate::chat_test_support::test_ctx()
-    }
-    pub(crate) fn test_ctx_with_chat_manager() -> Arc<AppCtx> {
-        Self::test_ctx()
-    }
-    pub(crate) fn test_ctx_with_orchestration() -> Arc<AppCtx> {
-        Self::test_ctx()
+        crate::chat_test_support::build_test_context()
     }
 }
 

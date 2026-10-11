@@ -18,7 +18,7 @@ use super::set_or_delete;
 use crate::async_err::internal_error;
 use crate::ctx::{AppCtx, DefaultRunner};
 use crate::respond::{fail, ok, ok_empty};
-use crate::routes::projects::parse_body;
+use crate::routes::body::parse_body;
 
 const PROVIDER: &str = "provider";
 

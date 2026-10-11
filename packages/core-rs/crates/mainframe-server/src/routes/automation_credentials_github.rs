@@ -28,7 +28,7 @@ use serde_json::json;
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok};
 use crate::routes::automations::{engine, unavailable};
-use crate::routes::projects::parse_body;
+use crate::routes::body::parse_body;
 
 const GITHUB_CREDENTIAL_LABEL: &str = "github";
 

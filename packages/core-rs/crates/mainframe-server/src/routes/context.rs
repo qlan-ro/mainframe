@@ -1,4 +1,3 @@
-use axum::response::IntoResponse;
 use std::sync::Arc;
 
 use axum::Router;
@@ -14,27 +13,20 @@ use mainframe_types::time::now_iso8601;
 
 use crate::ctx::AppCtx;
 use crate::path_utils::resolve_readable_path;
-use crate::respond::{fail, ok};
-use crate::routes::projects::parse_body;
+use crate::respond::{ApiError, fail, ok};
+use crate::routes::body::parse_body;
 
-async fn context(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
-    // The chat/project 404 resolution reads the db directly (the effective path
-    // uses the raw worktreePath, so enrichment is irrelevant here);
-    // `get_session_context` needs the AdapterRegistry + AttachmentStore that only
-    // the ChatManager holds.
+async fn context(
+    State(ctx): State<Arc<AppCtx>>,
+    Path(id): Path<String>,
+) -> Result<Response, ApiError> {
     let lookup = id.clone();
-    let chat = match ctx.require_chat(&lookup).await {
-        Ok(value) => value,
-        Err(error) => return error.into_response(),
-    };
+    let chat = ctx.require_chat(&lookup).await?;
     let project_id = chat.project_id.clone();
-    let project = match ctx.require_project(&project_id).await {
-        Ok(value) => value,
-        Err(error) => return error.into_response(),
-    };
+    let project = ctx.require_project(&project_id).await?;
     let cm = &ctx.chat.chat_manager;
     let effective_path = chat.worktree_path.clone().unwrap_or(project.path);
-    ok(cm.get_session_context(&id, &effective_path).await)
+    Ok(ok(cm.get_session_context(&id, &effective_path).await))
 }
 
 #[derive(Deserialize)]
@@ -46,30 +38,26 @@ async fn session_file(
     State(ctx): State<Arc<AppCtx>>,
     Path(id): Path<String>,
     Query(q): Query<SessionFileQuery>,
-) -> Response {
+) -> Result<Response, ApiError> {
     let lookup = id.clone();
-    let chat = match ctx.require_chat(&lookup).await {
-        Ok(value) => value,
-        Err(error) => return error.into_response(),
-    };
+    let chat = ctx.require_chat(&lookup).await?;
     let project_id = chat.project_id.clone();
-    let project = match ctx.require_project(&project_id).await {
-        Ok(value) => value,
-        Err(error) => return error.into_response(),
-    };
+    let project = ctx.require_project(&project_id).await?;
     let Some(file_path) = q.path.filter(|p| !p.is_empty()) else {
-        return fail(StatusCode::BAD_REQUEST, "path query required");
+        return Err(ApiError::BadRequest("path query required".into()));
     };
 
     let session_base = chat.worktree_path.clone().unwrap_or(project.path);
     let Some(full_path) = resolve_readable_path(&session_base, &file_path).await else {
-        return fail(StatusCode::FORBIDDEN, "Path outside project");
+        return Err(ApiError::new(StatusCode::FORBIDDEN, "Path outside project"));
     };
     match tokio::fs::read_to_string(&full_path).await {
-        Ok(content) => ok(serde_json::json!({ "path": file_path, "content": content })),
+        Ok(content) => Ok(ok(
+            serde_json::json!({ "path": file_path, "content": content }),
+        )),
         Err(err) => {
             tracing::warn!(path = %file_path, %err, "Failed to read session file");
-            fail(StatusCode::NOT_FOUND, "File not found")
+            Err(ApiError::NotFound("File not found".into()))
         }
     }
 }
@@ -123,8 +111,10 @@ pub fn router() -> Router<Arc<AppCtx>> {
 mod tests {
     use super::*;
     use axum::body::to_bytes;
+    use axum::response::IntoResponse;
 
-    async fn read(resp: Response) -> (StatusCode, serde_json::Value) {
+    async fn read(resp: impl IntoResponse) -> (StatusCode, serde_json::Value) {
+        let resp = resp.into_response();
         let status = resp.status();
         let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
         (

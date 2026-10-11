@@ -17,7 +17,7 @@ use mainframe_chat::chat_manager::OpenSideChatError;
 use crate::ctx::AppCtx;
 use crate::respond::status_of;
 use crate::respond::{fail, ok};
-use crate::routes::projects::parse_body;
+use crate::routes::body::parse_body;
 use mainframe_types::ids::is_safe_identifier;
 
 #[cfg(test)]

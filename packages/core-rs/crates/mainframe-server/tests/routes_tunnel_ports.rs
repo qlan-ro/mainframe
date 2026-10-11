@@ -247,7 +247,7 @@ async fn an_unknown_chat_is_rejected() {
     )
     .await;
 
-    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(body, json!({ "success": false, "error": "Chat not found" }));
     assert_eq!(server.tunnel_spawn_count(), 0);
 }
@@ -279,7 +279,7 @@ async fn a_stop_body_without_a_port_is_rejected() {
 }
 
 #[tokio::test]
-async fn every_route_reports_unavailable_without_a_registry() {
+async fn every_route_reports_unavailable_without_a_listen_port() {
     let server = spawn_test_server(None).await;
     let expected = json!({ "success": false, "error": "Tunnel not available" });
 

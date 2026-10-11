@@ -19,7 +19,7 @@ use serde_json::json;
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok, ok_empty};
 use crate::routes::automations::{engine, engine_error, unavailable};
-use crate::routes::projects::parse_body;
+use crate::routes::body::parse_body;
 
 fn invalid_label(label: &str) -> Response {
     fail(

@@ -17,7 +17,7 @@ async fn create_rejects_missing_fields_400() {
     let ctx = AppCtx::test_ctx();
     let resp = create(
         State(ctx.clone()),
-        axum::body::Bytes::from(r#"{"projectId":"p"}"#),
+        RequestJson::from_bytes(r#"{"projectId":"p"}"#),
     )
     .await;
     assert_eq!(read(resp).await.0, StatusCode::BAD_REQUEST);
@@ -28,7 +28,7 @@ async fn create_rejects_worktree_without_branch_400() {
     let ctx = AppCtx::test_ctx();
     let resp = create(
         State(ctx.clone()),
-        axum::body::Bytes::from(r#"{"projectId":"p","adapterId":"claude","worktreePath":"/wt"}"#),
+        RequestJson::from_bytes(r#"{"projectId":"p","adapterId":"claude","worktreePath":"/wt"}"#),
     )
     .await;
     let (status, body) = read(resp).await;
@@ -44,7 +44,7 @@ async fn create_rejects_an_unknown_project_id_404_and_writes_no_row() {
     let ctx = AppCtx::test_ctx();
     let resp = create(
         State(ctx.clone()),
-        axum::body::Bytes::from(r#"{"projectId":"nope","adapterId":"claude"}"#),
+        RequestJson::from_bytes(r#"{"projectId":"nope","adapterId":"claude"}"#),
     )
     .await;
     let (status, body) = read(resp).await;
@@ -59,7 +59,7 @@ async fn create_rejects_the_scratch_project_id_as_an_unknown_project_404() {
     let ctx = AppCtx::test_ctx();
     let resp = create(
         State(ctx.clone()),
-        axum::body::Bytes::from(r#"{"projectId":"mainframe-no-project","adapterId":"claude"}"#),
+        RequestJson::from_bytes(r#"{"projectId":"mainframe-no-project","adapterId":"claude"}"#),
     )
     .await;
     assert_eq!(read(resp).await.0, StatusCode::NOT_FOUND);
@@ -70,7 +70,7 @@ async fn create_rejects_no_project_together_with_a_project_id_400() {
     let ctx = AppCtx::test_ctx();
     let resp = create(
         State(ctx.clone()),
-        axum::body::Bytes::from(r#"{"projectId":"p","noProject":true,"adapterId":"claude"}"#),
+        RequestJson::from_bytes(r#"{"projectId":"p","noProject":true,"adapterId":"claude"}"#),
     )
     .await;
     assert_eq!(read(resp).await.0, StatusCode::BAD_REQUEST);
@@ -81,7 +81,7 @@ async fn create_rejects_no_project_with_a_worktree_400() {
     let ctx = AppCtx::test_ctx();
     let resp = create(
         State(ctx.clone()),
-        axum::body::Bytes::from(
+        RequestJson::from_bytes(
             r#"{"noProject":true,"adapterId":"claude","worktreePath":"/wt","branchName":"b"}"#,
         ),
     )
@@ -96,7 +96,7 @@ async fn create_rejects_neither_project_nor_no_project_400() {
     let ctx = AppCtx::test_ctx();
     let resp = create(
         State(ctx.clone()),
-        axum::body::Bytes::from(r#"{"adapterId":"claude"}"#),
+        RequestJson::from_bytes(r#"{"adapterId":"claude"}"#),
     )
     .await;
     assert_eq!(read(resp).await.0, StatusCode::BAD_REQUEST);
@@ -106,7 +106,7 @@ async fn create_rejects_neither_project_nor_no_project_400() {
 
 #[tokio::test]
 async fn create_succeeds_with_a_project() {
-    let ctx = AppCtx::test_ctx_with_chat_manager();
+    let ctx = AppCtx::test_ctx();
     ctx.core
         .adapter_registry
         .register(crate::chat_test_support::StubAdapter::new("claude", false));
@@ -119,7 +119,7 @@ async fn create_succeeds_with_a_project() {
 
     let resp = create(
         State(ctx.clone()),
-        axum::body::Bytes::from(format!(
+        RequestJson::from_bytes(format!(
             r#"{{"projectId":"{}","adapterId":"claude"}}"#,
             project.id
         )),
@@ -136,14 +136,14 @@ async fn create_succeeds_with_a_project() {
 
 #[tokio::test]
 async fn create_succeeds_with_no_project() {
-    let ctx = AppCtx::test_ctx_with_chat_manager();
+    let ctx = AppCtx::test_ctx();
     ctx.core
         .adapter_registry
         .register(crate::chat_test_support::StubAdapter::new("claude", false));
 
     let resp = create(
         State(ctx.clone()),
-        axum::body::Bytes::from(r#"{"noProject":true,"adapterId":"claude"}"#),
+        RequestJson::from_bytes(r#"{"noProject":true,"adapterId":"claude"}"#),
     )
     .await;
     let (status, body) = read(resp).await;
@@ -161,14 +161,14 @@ async fn create_succeeds_with_no_project() {
 
 #[tokio::test]
 async fn create_succeeds_with_temporary() {
-    let ctx = AppCtx::test_ctx_with_chat_manager();
+    let ctx = AppCtx::test_ctx();
     ctx.core
         .adapter_registry
         .register(crate::chat_test_support::StubAdapter::new("claude", false));
 
     let resp = create(
         State(ctx.clone()),
-        axum::body::Bytes::from(r#"{"noProject":true,"adapterId":"claude","temporary":true}"#),
+        RequestJson::from_bytes(r#"{"noProject":true,"adapterId":"claude","temporary":true}"#),
     )
     .await;
     let (status, body) = read(resp).await;

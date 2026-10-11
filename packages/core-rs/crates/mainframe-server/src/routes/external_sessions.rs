@@ -17,7 +17,7 @@ use serde::Deserialize;
 
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok};
-use crate::routes::projects::parse_body;
+use crate::routes::body::parse_body;
 
 const SERVICE_UNAVAILABLE: &str = "external session service unavailable";
 

@@ -120,6 +120,9 @@ pub(crate) fn resolve_subscribe_base(
     project_id: &str,
     chat_id: Option<&str>,
 ) -> Option<String> {
+    if let Some(chat_id) = chat_id {
+        db.chats.get(chat_id).ok().flatten()?;
+    }
     match mainframe_services::workspace::resolve_scope(db, project_id, chat_id) {
         Ok(scope) => Some(scope.path),
         Err(error) => {
@@ -134,4 +137,23 @@ pub(crate) fn resolve_subscribe_base(
 /// `resolveSubscribePath`.
 pub(crate) async fn validate_relative(base: &str, requested_path: &str) -> Option<String> {
     resolve_and_validate_path(base, requested_path).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn file_subscription_rejects_unknown_chat_but_accepts_project_scope() {
+        let db = DatabaseManager::open(std::path::Path::new(":memory:")).unwrap();
+        let project = db.projects.create("/workspace", None).unwrap();
+        assert_eq!(
+            resolve_subscribe_base(&db, &project.id, Some("unknown")),
+            None
+        );
+        assert_eq!(
+            resolve_subscribe_base(&db, &project.id, None),
+            Some(project.path)
+        );
+    }
 }

@@ -29,56 +29,13 @@ pub fn router() -> Router<Arc<AppCtx>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ctx::{GitFactory, Services};
-    use crate::db::Db;
+
     use axum::body::to_bytes;
     use axum::http::StatusCode;
-    use dashmap::DashMap;
-    use mainframe_db::DatabaseManager;
-    use mainframe_services::attachment::AttachmentStore;
-    use mainframe_services::files::FileWatcherService;
-    use mainframe_services::push::PushService;
-    use mainframe_types::events::DaemonEvent;
-    use std::path::Path;
-
-    fn test_ctx() -> Arc<AppCtx> {
-        let db = Db::spawn(|| DatabaseManager::open(Path::new(":memory:"))).unwrap();
-        let (broadcast, _keep) = tokio::sync::broadcast::channel::<DaemonEvent>(16);
-        let watcher = FileWatcherService::new(|_| {});
-        Arc::new(
-            AppCtx::builder(db, std::env::temp_dir())
-                .git(GitFactory)
-                .services(Services {
-                    attachments: Arc::new(AttachmentStore::new(
-                        std::env::temp_dir().join("mf-adapters-test"),
-                    )),
-                    push: Arc::new(PushService::new()),
-                    watcher: Arc::new(watcher),
-                })
-                .broadcast(broadcast)
-                .adapter_registry(Arc::new(mainframe_adapter_api::AdapterRegistry::new()))
-                .background_tasks(Arc::new(
-                    mainframe_background_tasks::tracker::BackgroundTaskTracker::new(),
-                ))
-                .claude_workflows(Arc::new(
-                    mainframe_claude_workflows::store::ClaudeWorkflowStore::new(),
-                ))
-                .automations(None)
-                .version("0.0.0-test".into())
-                .port(0)
-                .auth_secret(None)
-                .resolved_path(mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"))
-                .tunnel_url(Arc::new(std::sync::RwLock::new(None)))
-                .ws_clients(Arc::new(DashMap::new()))
-                .facade_hub(Arc::new(crate::acp_ws::FacadeHub::default()))
-                .facade_heartbeat_interval_ms(mainframe_acp::DEFAULT_HEARTBEAT_INTERVAL_MS)
-                .build(),
-        )
-    }
 
     #[tokio::test]
     async fn empty_registry_returns_success_empty_list() {
-        let ctx = test_ctx();
+        let ctx = AppCtx::test_ctx();
         let resp = list(State(ctx)).await;
         assert_eq!(resp.status(), StatusCode::OK);
         let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
@@ -90,7 +47,7 @@ mod tests {
     /// gated behind an adapter id check.
     #[tokio::test]
     async fn every_adapter_reports_no_persistence_capability() {
-        let ctx = test_ctx();
+        let ctx = AppCtx::test_ctx();
         ctx.core
             .adapter_registry
             .register(Arc::new(mainframe_adapter_mock::MockCliAdapter::default()));

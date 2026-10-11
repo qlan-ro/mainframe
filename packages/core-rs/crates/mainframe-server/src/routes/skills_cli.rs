@@ -17,8 +17,8 @@ use serde_json::json;
 
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok, ok_empty};
+use crate::routes::body::parse_body;
 use crate::routes::files::resolve_base;
-use crate::routes::projects::parse_body;
 use crate::skills_cli::{
     self, ManifestOutcome, ProbeOutcome, ProcessRunner, Scope, SkillsCliError,
 };
