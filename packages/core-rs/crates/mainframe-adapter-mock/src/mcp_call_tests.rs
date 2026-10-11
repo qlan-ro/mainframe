@@ -46,7 +46,7 @@ impl SessionSink for Captured {
 fn step(arg: Value) -> RecordedEvent {
     RecordedEvent {
         dir: EventDirection::Out,
-        method: MCP_CALL_METHOD.into(),
+        method: crate::recorded_method::RecordedMethod::McpCall,
         args: vec![arg],
         delay_ms: 0,
         files: Vec::new(),
@@ -117,7 +117,7 @@ fn the_e2e_delegate_recording_carries_a_valid_mcp_call_step() {
     let events = crate::parse_fixture(text).unwrap();
     let steps: Vec<_> = events
         .iter()
-        .filter(|e| e.method == MCP_CALL_METHOD)
+        .filter(|e| e.method == crate::recorded_method::RecordedMethod::McpCall)
         .collect();
     assert_eq!(steps.len(), 1);
     let call = parse_call(steps[0]).unwrap();

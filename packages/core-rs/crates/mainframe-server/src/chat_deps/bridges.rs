@@ -105,6 +105,7 @@ impl Pusher for DaemonChatDeps {
         tokio::spawn(async move {
             let delegated = match msg.push_type.as_str() {
                 "permission" => {
+                    // This DB await lets later non-permission pushes arrive first; WS events are unaffected.
                     crate::orchestration_deps::push::delegated_permission_push(&db, &msg.chat_id)
                         .await
                 }

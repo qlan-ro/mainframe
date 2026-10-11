@@ -8,9 +8,10 @@ publish.workspace = true
 workspace = true
 
 [features]
-test-support = ["mainframe-runtime/test-support"]
+test-support = ["mainframe-runtime/test-support", "dep:mainframe-adapter-claude"]
 
 [dependencies]
+mainframe-adapter-claude = { workspace = true, optional = true }
 tokio = { workspace = true }
 dashmap = { workspace = true }
 thiserror = { workspace = true }
@@ -31,9 +32,4 @@ mainframe-background-tasks = { workspace = true }
 [dev-dependencies]
 tempfile = { workspace = true }
 mainframe-runtime = { workspace = true, features = ["test-support"] }
-# The real production projector: a fake like
-# `FullRebuildProjector` can never reproduce an empty-groups seed bug, so the
-# `display_snapshot`-then-`append` regression test needs the actual
-# `IncrementalProjector`, not the deps-trait fake every other test here uses.
-# The handoff marker round trip through the Codex history loaders.
-mainframe-adapter-codex = { workspace = true }
+mainframe-adapter-claude = { workspace = true }

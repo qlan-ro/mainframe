@@ -7,8 +7,7 @@
 //! `ChatState` holds `Arc<dyn AdapterSession>`, so both are trait objects. Rust
 //! async-fn-in-trait is not `dyn`-compatible and the workspace has no
 //! `async-trait`, so every async method returns `BoxFuture<'_, ..>` by hand (the
-//! same manual pattern already used in
-//! `mainframe-services::workspace::session_files`). `SessionSink`'s methods are
+//! same manual pattern used by the other adapter capabilities). `SessionSink`'s methods are
 //! synchronous fire-and-forget calls: the implementations emit over channels
 //! (`broadcast`/`mpsc` sends, non-blocking), so no method needs to return a future.
 
@@ -131,32 +130,14 @@ pub trait Adapter: Send + Sync {
         Box::pin(async { Ok(None) })
     }
 
-    fn supports_external_sessions(&self) -> bool {
-        false
-    }
-    fn list_external_sessions(
-        &self,
-        _project: String,
-        _exclude: Vec<String>,
-        _offset: i64,
-        _limit: i64,
-    ) -> BoxFuture<'_, mainframe_types::adapter::ExternalSessionPage> {
-        Box::pin(async {
-            mainframe_types::adapter::ExternalSessionPage {
-                sessions: Vec::new(),
-                total: 0,
-                next_offset: None,
-            }
-        })
+    fn external_sessions(&self) -> Option<Arc<dyn crate::ExternalSessions>> {
+        None
     }
     fn read_tool_result(&self, _path: String, _tool_id: String) -> BoxFuture<'_, Option<String>> {
         Box::pin(async { None })
     }
     fn config_conflicts(&self) -> BoxFuture<'_, Vec<String>> {
         Box::pin(async { Vec::new() })
-    }
-    fn refresh_in_e2e(&self) -> bool {
-        false
     }
 
     fn quota_source(&self) -> Option<Arc<dyn crate::QuotaSource>> {

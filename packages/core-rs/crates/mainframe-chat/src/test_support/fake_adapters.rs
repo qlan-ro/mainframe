@@ -92,12 +92,13 @@ impl AdapterPort for FakeDeps {
     }
     fn prepare_messages_for_client(
         &self,
+        _chat_id: &str,
         raw: &[ChatMessage],
         categories: Option<&ToolCategories>,
     ) -> Vec<DisplayMessage> {
         FakeAdapterPort::convert(raw, categories)
     }
-    fn display_projector(&self) -> Box<dyn mainframe_display::DisplayProjector> {
+    fn display_projector(&self, _chat_id: &str) -> Box<dyn mainframe_display::DisplayProjector> {
         if let Some(factory) = self.adapters.projector_factory {
             return factory();
         }

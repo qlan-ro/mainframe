@@ -1,66 +1,61 @@
 [
   {
-    "id": "mock-0",
+    "id": "mock-history-0",
     "chatId": "golden",
     "type": "user",
     "content": [
       {
         "type": "text",
-        "text": "Inspect files"
+        "text": "Read index.ts, then tell me what it exports"
       }
     ],
     "timestamp": "2026-10-07T12:00:00Z"
   },
   {
-    "id": "mock-1",
+    "id": "mock-history-4",
     "chatId": "golden",
     "type": "assistant",
     "content": [
       {
         "type": "text",
-        "text": "<mainframe-command-response id=\"x\">Working 🦀</mainframe-command-response>"
-      }
-    ],
-    "timestamp": "2026-10-07T12:00:00Z"
-  },
-  {
-    "id": "mock-2",
-    "chatId": "golden",
-    "type": "assistant",
-    "content": [
+        "text": "SEGMENT-ONE: reading index.ts first."
+      },
       {
         "type": "tool_use",
-        "id": "read",
+        "id": "toolu_e2e_stream_read",
         "name": "Read",
         "input": {
-          "file_path": "a.rs"
+          "file_path": "{{PROJECT_PATH}}/index.ts"
+        },
+        "caller": {
+          "type": "direct"
         }
       }
     ],
     "timestamp": "2026-10-07T12:00:00Z"
   },
   {
-    "id": "mock-3",
+    "id": "mock-history-5",
     "chatId": "golden",
     "type": "tool_result",
     "content": [
       {
         "type": "tool_result",
-        "toolUseId": "read",
-        "content": "hello",
+        "toolUseId": "toolu_e2e_stream_read",
+        "content": "1\texport const greeting = \"hello\";\n2\t",
         "isError": false
       }
     ],
     "timestamp": "2026-10-07T12:00:00Z"
   },
   {
-    "id": "mock-4",
+    "id": "mock-history-7",
     "chatId": "golden",
     "type": "assistant",
     "content": [
       {
         "type": "text",
-        "text": "Answer é"
+        "text": "SEGMENT-TWO: the file exports one greeting constant."
       }
     ],
     "timestamp": "2026-10-07T12:00:00Z"

@@ -1,3 +1,4 @@
+use crate::recorded_method::RecordedMethod;
 use mainframe_types::sync::LockExt as _;
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
@@ -176,7 +177,7 @@ impl ReplaySession {
         }
     }
 
-    pub(crate) async fn advance(&self, expected: &str) {
+    pub(crate) async fn advance(&self, expected: RecordedMethod) {
         let (batch, base, error) = self.take_interaction(expected);
         if let Some(message) = error {
             if let Some(sink) = self.sink() {
@@ -187,7 +188,10 @@ impl ReplaySession {
         self.emit(batch, base).await;
     }
 
-    fn take_interaction(&self, expected: &str) -> (Vec<RecordedEvent>, i64, Option<String>) {
+    fn take_interaction(
+        &self,
+        expected: RecordedMethod,
+    ) -> (Vec<RecordedEvent>, i64, Option<String>) {
         let mut state = self.state.lock_recover();
         pump::take_interaction(&mut state, expected)
     }

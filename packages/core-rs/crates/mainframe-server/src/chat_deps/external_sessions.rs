@@ -5,7 +5,7 @@ impl ExternalSessionDeps for DaemonChatDeps {
         self.adapters
             .get_all()
             .into_iter()
-            .filter(|adapter| adapter.supports_external_sessions())
+            .filter(|adapter| adapter.external_sessions().is_some())
             .map(|adapter| adapter.id().to_string())
             .collect()
     }
@@ -18,7 +18,11 @@ impl ExternalSessionDeps for DaemonChatDeps {
         limit: i64,
     ) -> BoxFuture<'a, Result<ExternalSessionPage, AdapterError>> {
         Box::pin(async move {
-            let Some(adapter) = self.adapters.get(adapter_id) else {
+            let Some(adapter) = self
+                .adapters
+                .get(adapter_id)
+                .and_then(|adapter| adapter.external_sessions())
+            else {
                 tracing::warn!(adapter_id, "list_external_sessions: unknown adapter id");
                 return Ok(ExternalSessionPage {
                     sessions: Vec::new(),
@@ -27,7 +31,7 @@ impl ExternalSessionDeps for DaemonChatDeps {
                 });
             };
             Ok(adapter
-                .list_external_sessions(
+                .list(
                     project_path.to_string(),
                     exclude_ids.to_vec(),
                     offset,

@@ -1,0 +1,12 @@
+{
+  "explore": [],
+  "hidden": [
+    "todo_list"
+  ],
+  "progress": [
+    "todo_list"
+  ],
+  "subagent": [
+    "CollabAgent"
+  ]
+}

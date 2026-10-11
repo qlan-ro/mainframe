@@ -7,26 +7,8 @@ impl Adapter for CodexAdapter {
         ))
     }
 
-    fn supports_external_sessions(&self) -> bool {
-        true
-    }
-    fn list_external_sessions(
-        &self,
-        project: String,
-        exclude: Vec<String>,
-        offset: i64,
-        limit: i64,
-    ) -> BoxFuture<'_, ExternalSessionPage> {
-        Box::pin(async move {
-            crate::list_external_sessions(
-                &project,
-                &exclude,
-                Some(offset.max(0) as usize),
-                Some(limit.max(0) as usize),
-                None,
-            )
-            .await
-        })
+    fn external_sessions(&self) -> Option<Arc<dyn mainframe_adapter_api::ExternalSessions>> {
+        Some(Arc::new(crate::external_sessions_provider::Provider))
     }
     fn read_tool_result(&self, path: String, tool_id: String) -> BoxFuture<'_, Option<String>> {
         Box::pin(async move {

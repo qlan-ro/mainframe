@@ -1,98 +1,177 @@
 [
   {
-    "id": "codex-0",
     "chatId": "golden",
-    "type": "user",
     "content": [
       {
-        "type": "text",
-        "text": "Inspect files"
+        "text": "Inspect and fix the parser",
+        "type": "text"
       }
     ],
-    "timestamp": "2026-10-07T12:00:00Z"
-  },
-  {
-    "id": "codex-1",
-    "chatId": "golden",
-    "type": "assistant",
-    "content": [
-      {
-        "type": "text",
-        "text": "<mainframe-command-response id=\"x\">Working 🦀</mainframe-command-response>"
-      }
-    ],
+    "id": "u1",
     "timestamp": "2026-10-07T12:00:00Z",
-    "metadata": {
-      "transcriptPresentation": {
-        "version": 1,
-        "provider": "codex",
-        "turnId": "turn-1",
-        "state": "running",
-        "phase": "commentary",
-        "finalEligible": false
-      }
-    }
+    "type": "user"
   },
   {
-    "id": "codex-2",
     "chatId": "golden",
-    "type": "assistant",
     "content": [
       {
-        "type": "tool_use",
-        "id": "read",
-        "name": "Read",
+        "text": "Checking the parser.",
+        "type": "text"
+      }
+    ],
+    "id": "a1",
+    "timestamp": "2026-10-07T12:00:00Z",
+    "type": "assistant"
+  },
+  {
+    "chatId": "golden",
+    "content": [
+      {
+        "id": "todo-live",
         "input": {
-          "file_path": "a.rs"
-        }
+          "items": [
+            {
+              "completed": false,
+              "text": "Inspect parser"
+            }
+          ]
+        },
+        "name": "todo_list",
+        "type": "tool_use"
       }
     ],
+    "id": "todo-live",
     "timestamp": "2026-10-07T12:00:00Z",
-    "metadata": {
-      "transcriptPresentation": {
-        "version": 1,
-        "provider": "codex",
-        "turnId": "turn-1",
-        "state": "running",
-        "phase": "work",
-        "finalEligible": false
-      }
-    }
+    "type": "assistant"
   },
   {
-    "id": "codex-3",
     "chatId": "golden",
-    "type": "tool_result",
     "content": [
       {
-        "type": "tool_result",
-        "toolUseId": "read",
-        "content": "hello",
-        "isError": false
+        "commandExecution": {
+          "commandActions": [
+            {
+              "command": "cat src/parser.rs",
+              "name": "parser.rs",
+              "path": "src/parser.rs",
+              "type": "read"
+            }
+          ],
+          "reportedDurationMs": 1234
+        },
+        "id": "cmd",
+        "input": {
+          "command": "cat src/parser.rs"
+        },
+        "name": "Bash",
+        "type": "tool_use"
       }
     ],
-    "timestamp": "2026-10-07T12:00:00Z"
+    "id": "cmd",
+    "timestamp": "2026-10-07T12:00:00Z",
+    "type": "assistant"
   },
   {
-    "id": "codex-4",
     "chatId": "golden",
-    "type": "assistant",
     "content": [
       {
-        "type": "text",
-        "text": "Answer é"
+        "content": "fn parse() {}",
+        "isError": false,
+        "toolUseId": "cmd",
+        "type": "tool_result"
       }
     ],
+    "id": "cmd:result",
     "timestamp": "2026-10-07T12:00:00Z",
-    "metadata": {
-      "transcriptPresentation": {
-        "version": 1,
-        "provider": "codex",
-        "turnId": "turn-1",
-        "state": "running",
-        "phase": "final_answer",
-        "finalEligible": true
+    "type": "tool_result"
+  },
+  {
+    "chatId": "golden",
+    "content": [
+      {
+        "id": "file:0",
+        "input": {
+          "file_path": "src/parser.rs",
+          "new_string": "",
+          "old_string": ""
+        },
+        "name": "Edit",
+        "type": "tool_use"
       }
-    }
+    ],
+    "id": "file:0",
+    "timestamp": "2026-10-07T12:00:00Z",
+    "type": "assistant"
+  },
+  {
+    "chatId": "golden",
+    "content": [
+      {
+        "content": "OK",
+        "isError": false,
+        "structuredPatch": [
+          {
+            "lines": [
+              "-fn parse() {}",
+              "+fn parse() { validate(); }",
+              ""
+            ],
+            "newLines": 1,
+            "newStart": 1,
+            "oldLines": 1,
+            "oldStart": 1
+          }
+        ],
+        "toolUseId": "file:0",
+        "type": "tool_result"
+      }
+    ],
+    "id": "file:0:result",
+    "timestamp": "2026-10-07T12:00:00Z",
+    "type": "tool_result"
+  },
+  {
+    "chatId": "golden",
+    "content": [
+      {
+        "id": "collab",
+        "input": {
+          "description": "Sub-agent",
+          "prompt": "",
+          "subagent_type": "Sub-agent"
+        },
+        "name": "CollabAgent",
+        "type": "tool_use"
+      }
+    ],
+    "id": "collab",
+    "timestamp": "2026-10-07T12:00:00Z",
+    "type": "assistant"
+  },
+  {
+    "chatId": "golden",
+    "content": [
+      {
+        "content": "Parser reviewed",
+        "isError": false,
+        "toolUseId": "collab",
+        "type": "tool_result"
+      }
+    ],
+    "id": "collab:result",
+    "timestamp": "2026-10-07T12:00:00Z",
+    "type": "tool_result"
+  },
+  {
+    "chatId": "golden",
+    "content": [
+      {
+        "text": "Parser fixed and reviewed.",
+        "type": "text"
+      }
+    ],
+    "id": "a2",
+    "timestamp": "2026-10-07T12:00:00Z",
+    "type": "assistant"
   }
 ]

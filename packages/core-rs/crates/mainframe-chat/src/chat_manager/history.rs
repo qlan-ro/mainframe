@@ -141,10 +141,10 @@ impl ChatManager {
     pub async fn get_display_messages(&self, chat_id: &str) -> ChatHistoryPayload {
         let raw = self.get_messages(chat_id).await;
         let categories = self.shared.deps.get_tool_categories(chat_id);
-        let messages = self
-            .shared
-            .deps
-            .prepare_messages_for_client(&raw, categories.as_ref());
+        let messages =
+            self.shared
+                .deps
+                .prepare_messages_for_client(chat_id, &raw, categories.as_ref());
         let transcript_missing = match self.get_chat(chat_id) {
             Some(mut chat) => self.reconcile_transcript(&mut chat).await,
             None => false,

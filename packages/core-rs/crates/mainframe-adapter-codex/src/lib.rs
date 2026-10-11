@@ -84,3 +84,5 @@ mod transcript_presentation;
 mod skills_provider;
 
 mod quota_source;
+
+mod external_sessions_provider;

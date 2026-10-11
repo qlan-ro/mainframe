@@ -181,7 +181,7 @@ impl EventHandler {
         let mut msgs = self.messages.lock_recover();
         let materialized =
             msgs.display_snapshot(chat_id, raw, overlay.as_ref(), categories.as_ref(), || {
-                self.shared.deps.display_projector()
+                self.shared.deps.display_projector(chat_id)
             });
         let streaming = overlay
             .as_ref()

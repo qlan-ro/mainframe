@@ -19,25 +19,29 @@ impl AdapterPort for DaemonChatDeps {
     }
     fn prepare_messages_for_client(
         &self,
+        chat_id: &str,
         raw: &[ChatMessage],
         categories: Option<&ToolCategories>,
     ) -> Vec<DisplayMessage> {
         mainframe_display::display_pipeline::prepare_messages_with_decoders(
             raw,
             categories,
-            self.display_decoders().as_ref(),
+            self.display_decoders(chat_id).as_ref(),
         )
     }
 
-    fn display_projector(&self) -> Box<dyn mainframe_display::DisplayProjector> {
+    fn display_projector(&self, chat_id: &str) -> Box<dyn mainframe_display::DisplayProjector> {
         Box::new(
             mainframe_display::incremental::IncrementalProjector::with_decoders(
-                self.display_decoders(),
+                self.display_decoders(chat_id),
             ),
         )
     }
     fn strip_command_tags(&self, text: &str) -> String {
-        self.display_decoders().strip_command_tags(text)
+        mainframe_display::ToolResultDecoders::strip_command_tags(
+            &mainframe_display::decoders::MainframeDecoders,
+            text,
+        )
     }
     fn initial_transcript_path(
         &self,
@@ -224,14 +228,39 @@ impl AdapterPort for DaemonChatDeps {
 }
 
 impl DaemonChatDeps {
-    fn display_decoders(&self) -> Arc<dyn mainframe_display::ToolResultDecoders> {
-        let mut adapters = self.adapters.get_all();
-        adapters.sort_by(|a, b| a.id().cmp(b.id()));
-        Arc::new(mainframe_display::decoders::DecoderSet(
-            adapters
-                .iter()
-                .map(|adapter| adapter.display_decoders())
-                .collect(),
-        ))
+    fn display_decoders(&self, chat_id: &str) -> Arc<dyn mainframe_display::ToolResultDecoders> {
+        let layout = mainframe_chat::segments::SegmentStore::layout(self, chat_id);
+        let initial = layout
+            .as_ref()
+            .and_then(|layout| {
+                layout
+                    .segments
+                    .first()
+                    .and_then(|s| layout.native(&s.native_session_ref))
+            })
+            .map(|native| native.adapter_id.clone())
+            .or_else(|| match self.chats_get(chat_id) {
+                Ok(chat) => chat.map(|chat| chat.adapter_id),
+                Err(error) => {
+                    self.emit_storage_error(chat_id, error);
+                    None
+                }
+            })
+            .unwrap_or_default();
+        decoder_set(&self.adapters, initial)
     }
+}
+
+pub(super) fn decoder_set(
+    adapters: &AdapterRegistry,
+    initial: String,
+) -> Arc<dyn mainframe_display::ToolResultDecoders> {
+    Arc::new(mainframe_display::decoders::DecoderSet::new(
+        initial,
+        adapters
+            .get_all()
+            .iter()
+            .map(|adapter| (adapter.id().to_string(), adapter.display_decoders()))
+            .collect(),
+    ))
 }

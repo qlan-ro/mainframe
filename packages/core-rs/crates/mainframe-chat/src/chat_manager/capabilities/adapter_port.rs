@@ -5,11 +5,12 @@ pub trait AdapterPort: Send + Sync {
 
     fn prepare_messages_for_client(
         &self,
+        chat_id: &str,
         raw: &[ChatMessage],
         categories: Option<&ToolCategories>,
     ) -> Vec<DisplayMessage>;
 
-    fn display_projector(&self) -> Box<dyn mainframe_display::DisplayProjector>;
+    fn display_projector(&self, chat_id: &str) -> Box<dyn mainframe_display::DisplayProjector>;
 
     fn strip_command_tags(&self, text: &str) -> String;
 

@@ -3,11 +3,11 @@
     "chatId": "golden",
     "content": [
       {
-        "text": "Inspect files",
+        "text": "Read index.ts, then tell me what it exports",
         "type": "text"
       }
     ],
-    "id": "mock-0",
+    "id": "mock-history-0",
     "timestamp": "2026-10-07T12:00:00Z",
     "type": "user"
   },
@@ -15,28 +15,28 @@
     "chatId": "golden",
     "content": [
       {
-        "text": "Working 🦀",
+        "text": "SEGMENT-ONE: reading index.ts first.",
         "type": "text"
       },
       {
-        "category": "default",
-        "id": "read",
+        "category": "explore",
+        "id": "toolu_e2e_stream_read",
         "input": {
-          "file_path": "a.rs"
+          "file_path": "{{PROJECT_PATH}}/index.ts"
         },
         "name": "Read",
         "result": {
-          "content": "hello",
+          "content": "1\texport const greeting = \"hello\";\n2\t",
           "isError": false
         },
         "type": "tool_call"
       },
       {
-        "text": "Answer é",
+        "text": "SEGMENT-TWO: the file exports one greeting constant.",
         "type": "text"
       }
     ],
-    "id": "mock-1",
+    "id": "mock-history-4",
     "timestamp": "2026-10-07T12:00:00Z",
     "type": "assistant"
   }

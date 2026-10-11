@@ -70,7 +70,7 @@ impl WorkspacePort for FakeDeps {
             if adapter != "claude" {
                 return Ok(None);
             }
-            let project = mainframe_services::workspace::get_claude_project_dir(destination);
+            let project = mainframe_adapter_claude::layout::get_claude_project_dir(destination);
             if let Some(error) = self.workspace.move_files_error.lock_recover().clone() {
                 return Err(std::io::Error::other(error).into());
             }

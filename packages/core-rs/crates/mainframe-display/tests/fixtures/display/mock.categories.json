@@ -1,0 +1,17 @@
+{
+  "explore": [
+    "LS",
+    "Read",
+    "Glob",
+    "Grep"
+  ],
+  "hidden": [],
+  "progress": [
+    "TaskCreate",
+    "TaskUpdate"
+  ],
+  "subagent": [
+    "Task",
+    "Agent"
+  ]
+}

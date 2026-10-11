@@ -184,10 +184,6 @@ fn model(
 }
 
 impl Adapter for MockCliAdapter {
-    fn refresh_in_e2e(&self) -> bool {
-        true
-    }
-
     fn skills(&self) -> Option<Arc<dyn mainframe_adapter_api::SkillsProvider>> {
         Some(Arc::new(crate::skills_provider::Provider))
     }

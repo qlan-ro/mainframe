@@ -12,9 +12,7 @@ impl Adapter for ClaudeAdapter {
         new_dir: String,
     ) -> BoxFuture<'_, Result<Option<String>, AdapterError>> {
         Box::pin(async move {
-            use mainframe_runtime::session_files::{
-                SessionFilesError, get_claude_project_dir, move_session_files,
-            };
+            use crate::layout::{SessionFilesError, get_claude_project_dir, move_session_files};
             let old = get_claude_project_dir(&old_dir);
             let new = get_claude_project_dir(&new_dir);
             move_session_files(&session, &old.to_string_lossy(), &new.to_string_lossy())
@@ -24,28 +22,10 @@ impl Adapter for ClaudeAdapter {
         })
     }
 
-    fn supports_external_sessions(&self) -> bool {
-        true
-    }
-    fn list_external_sessions(
-        &self,
-        project: String,
-        exclude: Vec<String>,
-        offset: i64,
-        limit: i64,
-    ) -> BoxFuture<'_, mainframe_types::adapter::ExternalSessionPage> {
-        Box::pin(async move {
-            crate::external_sessions::list_external_sessions(
-                &project,
-                &exclude,
-                Some(crate::external_sessions::ExternalSessionListOpts {
-                    offset: Some(offset),
-                    limit: Some(limit),
-                }),
-                &self.external_session_cache,
-            )
-            .await
-        })
+    fn external_sessions(&self) -> Option<Arc<dyn mainframe_adapter_api::ExternalSessions>> {
+        Some(Arc::new(crate::external_sessions_provider::Provider(
+            self.external_session_cache.clone(),
+        )))
     }
     fn read_tool_result(&self, path: String, tool_id: String) -> BoxFuture<'_, Option<String>> {
         Box::pin(async move {

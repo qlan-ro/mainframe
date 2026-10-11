@@ -1,3 +1,8 @@
+//! Worktree moves relocate every provider session the chat owns, including
+//! earlier segments that can be resumed after switching back. Claude keys its
+//! files by project directory; Codex rollouts are not project-keyed. Borrowed
+//! sessions belong to another chat and must remain at their original location.
+
 use crate::chat_manager::ChatManagerDeps;
 #[cfg(test)]
 use crate::event_handler::compute_session_file_path;
@@ -24,6 +29,7 @@ pub struct ActiveSession<'a> {
     pub session_id: Option<&'a str>,
 }
 
+/// Stops at the first failure; sessions already moved retain their updated paths.
 pub(crate) async fn relocate_transcripts(
     deps: &dyn ChatManagerDeps,
     chat_id: &str,

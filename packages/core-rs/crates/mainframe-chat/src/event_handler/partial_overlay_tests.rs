@@ -18,7 +18,7 @@ use mainframe_types::display::{DisplayContent, DisplayMessageType, StreamingLeaf
 
 /// Deps with a 1:1 prepare (each raw message becomes one display message with
 /// the same id) — enough pipeline to observe id continuity on the revision
-/// stream without the Claude-specific grouping (which the adapter crate's own
+/// stream without the shared display grouping (which the display crate's own
 /// suites pin). The mainframe tag strip stands in for `strip_command_tags`.
 fn overlay_deps(group_consecutive_flag: bool) -> Arc<FakeDeps> {
     let deps = FakeDeps::arc();
@@ -27,11 +27,7 @@ fn overlay_deps(group_consecutive_flag: bool) -> Arc<FakeDeps> {
         .lock()
         .unwrap()
         .push("<mainframe-tag/>".to_string());
-    // When grouping, a trailing run of same-type messages collapses into one
-    // `DisplayMessage` keyed by the run's FIRST message (id + timestamp) — just
-    // enough of the real `group_messages` behavior (owned by
-    // `mainframe-adapter-claude`, out of this crate's dep set) to prove the
-    // overlay's own frozen timestamp survives into the group it opens.
+    // First-message grouping proves the overlay's frozen timestamp survives the group it opens.
     *deps.adapters.projector.lock().unwrap() = Some(Arc::new(move |raw, overlay, _categories| {
         let combined: Vec<ChatMessage> = match overlay {
             Some(o) => raw

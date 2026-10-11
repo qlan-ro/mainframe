@@ -28,6 +28,8 @@ pub enum RecordedMethod {
     OnWorkflowRun,
     SendMessage,
     Interrupt,
+    RespondToPermission,
+    McpCall,
     Unknown(String),
 }
 impl RecordedMethod {
@@ -59,6 +61,8 @@ impl RecordedMethod {
             Self::OnWorkflowRun => "onWorkflowRun",
             Self::SendMessage => "sendMessage",
             Self::Interrupt => "interrupt",
+            Self::RespondToPermission => "respondToPermission",
+            Self::McpCall => "mcp_call",
             Self::Unknown(value) => value,
         }
     }
@@ -92,13 +96,10 @@ impl From<&str> for RecordedMethod {
             "onWorkflowRun" => Self::OnWorkflowRun,
             "sendMessage" => Self::SendMessage,
             "interrupt" => Self::Interrupt,
+            "respondToPermission" => Self::RespondToPermission,
+            "mcp_call" => Self::McpCall,
             value => Self::Unknown(value.to_string()),
         }
-    }
-}
-impl PartialEq<&str> for RecordedMethod {
-    fn eq(&self, other: &&str) -> bool {
-        self.as_str() == *other
     }
 }
 impl std::fmt::Display for RecordedMethod {

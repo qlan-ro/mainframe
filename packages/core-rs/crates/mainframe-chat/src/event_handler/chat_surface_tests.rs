@@ -185,10 +185,7 @@ fn on_message_notifies_display_revision_with_the_legacy_emitter_snapshot() {
         None,
     );
 
-    // The shared fake projects 1:1 (no Claude-specific pipeline injected
-    // here), so the revision carries the one message — the point under test
-    // is that it fires at all, alongside (not instead of) the legacy
-    // `display.message.added` path.
+    // The 1:1 fake isolates revision emission from display grouping.
     assert!(
         surface.events().iter().any(
             |e| matches!(e, ChatSurfaceEvent::DisplayRevision { delta, .. } if delta.len == 1)

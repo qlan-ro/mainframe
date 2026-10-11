@@ -1,3 +1,7 @@
+//! Merges consecutive assistant/tool_use messages into a single turn and
+//! attaches tool_result data so assistant-ui can show both invocation and
+//! result.
+
 use std::collections::{HashMap, HashSet};
 
 use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent, MessageContentNode};

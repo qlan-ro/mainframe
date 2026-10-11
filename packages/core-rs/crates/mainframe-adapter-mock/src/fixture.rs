@@ -1,3 +1,4 @@
+use crate::recorded_method::RecordedMethod;
 use mainframe_adapter_api::AdapterError;
 use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent};
 use mainframe_types::content::LeafContent;
@@ -79,17 +80,17 @@ impl ReplayState {
 
     pub(crate) fn drain_optional_interrupts(&mut self) -> Vec<RecordedEvent> {
         let mut drained = Vec::new();
-        while self.peek_input("interrupt") {
+        while self.peek_input(&RecordedMethod::Interrupt) {
             self.cursor += 1;
             drained.extend(self.drain_outputs());
         }
         drained
     }
 
-    pub(crate) fn peek_input(&self, method: &str) -> bool {
+    pub(crate) fn peek_input(&self, method: &RecordedMethod) -> bool {
         self.events
             .get(self.cursor)
-            .map(|event| event.dir == EventDirection::In && event.method == method)
+            .map(|event| event.dir == EventDirection::In && &event.method == method)
             .unwrap_or(false)
     }
 }

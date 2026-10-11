@@ -224,7 +224,7 @@ fn display_projector_emits_non_full_deltas_on_a_partial() {
     use mainframe_display::{ProjectionInput, RawChange, RawChanges};
 
     let deps = test_deps();
-    let mut projector = deps.display_projector();
+    let mut projector = deps.display_projector("c");
 
     let m1 = text_msg("m1", ChatMessageType::User, "hello");
     let seed = projector.project(ProjectionInput {

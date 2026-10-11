@@ -36,15 +36,86 @@ fn optional_decoder_is_used_by_full_and_incremental_conversion() {
 }
 
 #[test]
-fn decoder_sets_do_not_decode_the_same_wrapper_twice() {
+fn segment_decoder_selection_survives_append_overlay_and_rewind() {
     use mainframe_display::{ToolResultDecoders, decoders::DecoderSet};
-    let set = DecoderSet(vec![
-        Arc::new(MainframeDecoders),
-        Arc::new(MainframeDecoders),
-    ]);
-    let text = "<mainframe-command-response id=\"outer\"><mainframe-command-response id=\"inner\">answer</mainframe-command-response></mainframe-command-response>";
-    assert_eq!(
-        set.strip_command_tags(text),
-        MainframeDecoders.strip_command_tags(text)
+    let set = Arc::new(DecoderSet::new(
+        "first".into(),
+        [
+            (
+                "first".into(),
+                Arc::new(NoopDecoders) as Arc<dyn ToolResultDecoders>,
+            ),
+            (
+                "second".into(),
+                Arc::new(MainframeDecoders) as Arc<dyn ToolResultDecoders>,
+            ),
+        ]
+        .into(),
+    ));
+    let divider: ChatMessage = serde_json::from_value(json!({"id":"divider","chatId":"c","type":"system","timestamp":"t","content":[{"type":"provider_switch","marker":{
+        "segmentId":"s2", "kind":"provider_switch", "fromAdapterId":"first", "toAdapterId":"second", "fromAdapterName":"First", "toAdapterName":"Second", "resumed":false,
+        "previous":{"adapterId":"first","turnCount":0,"totalCost":0,"totalTokensInput":0,"totalTokensOutput":0}
+    }}]})).unwrap();
+    let raw = vec![message("before"), divider, message("after")];
+    let expected = prepare_messages_with_decoders(&raw, None, set.as_ref());
+    assert!(
+        serde_json::to_string(&expected[0])
+            .unwrap()
+            .contains("mainframe-command-response")
+    );
+    assert!(
+        !serde_json::to_string(&expected[2])
+            .unwrap()
+            .contains("mainframe-command-response")
+    );
+    assert_incremental_routes(set, raw, expected);
+}
+
+fn message(id: &str) -> ChatMessage {
+    let wrapped = "<mainframe-command-response id=\"x\">visible</mainframe-command-response>";
+    serde_json::from_value(json!({"id":id,"chatId":"c","type":"assistant","timestamp":"t","content":[{"type":"text","text":wrapped}]})).unwrap()
+}
+
+fn assert_incremental_routes(
+    set: Arc<dyn mainframe_display::ToolResultDecoders>,
+    raw: Vec<ChatMessage>,
+    expected: Vec<mainframe_types::display::DisplayMessage>,
+) {
+    use mainframe_display::RawChange;
+    let mut projector = IncrementalProjector::with_decoders(set);
+    for end in 1..=raw.len() {
+        let delta = projector.project(ProjectionInput {
+            raw: &raw[..end],
+            overlay: None,
+            categories: None,
+            changes: [RawChange::Appended].into_iter().collect(),
+        });
+        if end == raw.len() {
+            assert_eq!(delta.snapshot.materialize(), expected);
+        }
+    }
+    let overlay = message("overlay");
+    let delta = projector.project(ProjectionInput {
+        raw: &raw,
+        overlay: Some(&overlay),
+        categories: None,
+        changes: RawChanges::new(),
+    });
+    assert!(
+        !serde_json::to_string(delta.snapshot.materialize().last().unwrap())
+            .unwrap()
+            .contains("mainframe-command-response")
+    );
+    let rewound = vec![message("before"), message("after")];
+    let delta = projector.project(ProjectionInput {
+        raw: &rewound,
+        overlay: None,
+        categories: None,
+        changes: [RawChange::Structural(1)].into_iter().collect(),
+    });
+    assert!(
+        serde_json::to_string(&delta.snapshot.materialize())
+            .unwrap()
+            .contains("mainframe-command-response")
     );
 }

@@ -261,3 +261,7 @@ mod agent_tests;
 #[cfg(test)]
 #[path = "adapter_catalog/skill_tests.rs"]
 mod skill_tests;
+
+#[cfg(test)]
+#[path = "adapter_catalog/parity_tests.rs"]
+mod parity_tests;

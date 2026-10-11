@@ -42,24 +42,26 @@ impl Daemon {
 
     fn start_catalog_refresh(&self) {
         let adapters = self.ctx.core.adapter_registry.clone();
-        adapters.allow_refresh();
+        if std::env::var_os("E2E_MODE").is_some() {
+            adapters.allow_refresh_for(
+                adapters
+                    .get_all()
+                    .iter()
+                    .filter(|adapter| adapter.id().starts_with("mock-cli"))
+                    .map(|adapter| adapter.id().to_string()),
+            );
+        } else {
+            adapters.allow_refresh();
+        }
         tokio::spawn(async move {
             adapters.refresh_all().await;
         });
     }
 
     fn start_quota_scheduler(&self) -> ClaudeQuotaScheduler {
-        let sources: Vec<_> = self
-            .ctx
-            .core
-            .adapter_registry
-            .get_all()
+        let sources: Vec<_> = crate::wiring::quota::quota_sources(&self.ctx.core.adapter_registry)
             .into_iter()
-            .filter_map(|adapter| {
-                adapter
-                    .quota_source()
-                    .map(|source| (adapter.id().to_string(), source.poll()))
-            })
+            .map(|source| (source.id, source.poll))
             .collect();
         let periodic: Vec<_> = sources
             .iter()

@@ -139,6 +139,7 @@ pub struct AdapterRegistry {
     snapshots: Arc<DashMap<String, AdapterInfo>>,
     deps: OnceLock<Arc<dyn RefreshDeps>>,
     refresh_allowed: AtomicBool,
+    refresh_ids: OnceLock<std::collections::HashSet<String>>,
     /// Concurrent refreshes share a cancellation-safe completion claim.
     in_flight: SingleFlight,
     succeeded: Arc<DashSet<String>>,
@@ -175,6 +176,11 @@ impl AdapterRegistry {
 
     pub fn allow_refresh(&self) {
         self.refresh_allowed.store(true, Ordering::SeqCst);
+    }
+
+    pub fn allow_refresh_for(&self, ids: impl IntoIterator<Item = String>) {
+        let _ = self.refresh_ids.set(ids.into_iter().collect()); // expected: boot configures this once
+        self.allow_refresh();
     }
 
     /// STATIC-ONLY seed: no CLI spawn. Safe to call before server start.
@@ -255,12 +261,16 @@ impl AdapterRegistry {
         let Some(adapter) = self.adapters.get(adapter_id).map(|e| e.value().clone()) else {
             return Ok(());
         };
-        if !adapter.refresh_in_e2e() && std::env::var_os("E2E_MODE").is_some() {
-            return Ok(());
-        }
         let Some(deps) = self.deps.get().cloned() else {
             return Ok(());
         };
+        if self
+            .refresh_ids
+            .get()
+            .is_some_and(|ids| !ids.contains(adapter_id))
+        {
+            return Ok(());
+        }
         let exe_path = deps.resolve_executable_path(adapter_id.to_string()).await;
         // One `--version` spawn covers installed AND version (use the resolved path).
         let ver = deps
@@ -422,3 +432,6 @@ pub use skills::SkillsProvider;
 
 pub mod quota;
 pub use quota::QuotaSource;
+
+mod external_sessions;
+pub use external_sessions::ExternalSessions;

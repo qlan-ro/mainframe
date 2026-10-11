@@ -11,28 +11,23 @@ pub(crate) fn register_quota_sources(
     db: &Db,
     resolved_path: &mainframe_runtime::ResolvedPath,
 ) {
-    for adapter in adapters.get_all() {
-        let Some(source) = adapter.quota_source() else {
-            continue;
-        };
-        let mode = if source.merge_sparse() {
-            IngestMode::Push
-        } else {
-            IngestMode::Pull
-        };
+    for registration in quota_sources(adapters) {
+        let source = registration.source;
+        let adapter_id = registration.id;
+        let mode = registration.mode;
         let identity = source.clone();
         quota.register_identity_resolver(
-            adapter.id(),
+            &adapter_id,
             Arc::new(move || {
                 let identity = identity.clone();
                 Box::pin(async move { identity.identity().await })
             }),
         );
-        let id = adapter.id().to_string();
+        let id = adapter_id.clone();
         let db = db.clone();
         let path = resolved_path.clone();
         quota.register_puller(
-            adapter.id(),
+            &adapter_id,
             mode,
             Arc::new(move || {
                 let (source, id, db, path) = (source.clone(), id.clone(), db.clone(), path.clone());
@@ -48,4 +43,31 @@ pub(crate) fn register_quota_sources(
             }),
         );
     }
+}
+
+pub(crate) struct QuotaRegistration {
+    pub(crate) id: String,
+    pub(crate) mode: IngestMode,
+    pub(crate) poll: bool,
+    source: Arc<dyn mainframe_adapter_api::QuotaSource>,
+}
+
+pub(crate) fn quota_sources(adapters: &AdapterRegistry) -> Vec<QuotaRegistration> {
+    adapters
+        .get_all()
+        .into_iter()
+        .filter_map(|adapter| {
+            let source = adapter.quota_source()?;
+            Some(QuotaRegistration {
+                id: adapter.id().to_string(),
+                mode: if source.merge_sparse() {
+                    IngestMode::Push
+                } else {
+                    IngestMode::Pull
+                },
+                poll: source.poll(),
+                source,
+            })
+        })
+        .collect()
 }

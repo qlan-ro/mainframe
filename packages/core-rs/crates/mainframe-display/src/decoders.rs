@@ -4,6 +4,14 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 pub trait ToolResultDecoders: Send + Sync {
+    fn prepare(&self, _messages: &[mainframe_types::chat::ChatMessage], _rewind: Option<usize>) {}
+    fn for_message(
+        &self,
+        _message: &mainframe_types::chat::ChatMessage,
+    ) -> Option<std::sync::Arc<dyn ToolResultDecoders>> {
+        None
+    }
+
     fn ask_user_question(
         &self,
         _content: &str,
@@ -44,30 +52,75 @@ impl ToolResultDecoders for MainframeDecoders {
     }
 }
 
-// A transcript can contain segments produced by several registered adapters.
-pub struct DecoderSet(pub Vec<std::sync::Arc<dyn ToolResultDecoders>>);
-impl ToolResultDecoders for DecoderSet {
-    fn ask_user_question(
-        &self,
-        content: &str,
-        input: Option<&HashMap<String, Value>>,
-    ) -> Option<Vec<AskUserQuestionAnswer>> {
-        self.0
-            .iter()
-            .find_map(|decoder| decoder.ask_user_question(content, input))
+pub struct DecoderSet {
+    initial: String,
+    adapters: HashMap<String, std::sync::Arc<dyn ToolResultDecoders>>,
+    routes: std::sync::RwLock<Routes>,
+}
+
+#[derive(Default)]
+struct Routes {
+    ids: Vec<String>,
+    adapters: HashMap<String, String>,
+    current: String,
+}
+
+impl DecoderSet {
+    pub fn new(
+        initial: String,
+        adapters: HashMap<String, std::sync::Arc<dyn ToolResultDecoders>>,
+    ) -> Self {
+        Self {
+            initial,
+            adapters,
+            routes: Default::default(),
+        }
     }
-    fn strip_command_tags(&self, text: &str) -> String {
-        for decoder in &self.0 {
-            let decoded = decoder.strip_command_tags(text);
-            if decoded != text {
-                return decoded;
+}
+
+impl ToolResultDecoders for DecoderSet {
+    fn prepare(&self, messages: &[mainframe_types::chat::ChatMessage], rewind: Option<usize>) {
+        use mainframe_types::chat::{MessageContent, MessageContentNode};
+        let mut routes = self.routes.write().unwrap_or_else(|e| e.into_inner());
+        let start = rewind
+            .unwrap_or(routes.ids.len())
+            .min(routes.ids.len())
+            .min(messages.len());
+        while routes.ids.len() > start {
+            if let Some(id) = routes.ids.pop() {
+                routes.adapters.remove(&id);
             }
         }
-        text.to_string()
+        let mut adapter = routes
+            .ids
+            .last()
+            .and_then(|id| routes.adapters.get(id))
+            .unwrap_or(&self.initial)
+            .clone();
+        for message in &messages[start..] {
+            for content in &message.content {
+                if let MessageContent::Node(MessageContentNode::ProviderSwitch { marker }) = content
+                {
+                    adapter = marker.to_adapter_id.clone();
+                }
+            }
+            routes.adapters.insert(message.id.clone(), adapter.clone());
+            routes.ids.push(message.id.clone());
+        }
+        routes.current = adapter;
     }
-    fn parse_command(&self, text: &str) -> Option<ParsedCommand> {
-        self.0
-            .iter()
-            .find_map(|decoder| decoder.parse_command(text))
+
+    fn for_message(
+        &self,
+        message: &mainframe_types::chat::ChatMessage,
+    ) -> Option<std::sync::Arc<dyn ToolResultDecoders>> {
+        let routes = self.routes.read().unwrap_or_else(|e| e.into_inner());
+        let adapter = routes.adapters.get(&message.id).unwrap_or(&routes.current);
+        Some(
+            self.adapters
+                .get(adapter)
+                .cloned()
+                .unwrap_or_else(|| std::sync::Arc::new(NoopDecoders)),
+        )
     }
 }

@@ -1,3 +1,9 @@
+//! Cross-message pass that gives every task_progress item a resolvable subject.
+//! The CLI's TaskUpdate carries only { taskId, status }; the subject lives on the
+//! TaskCreate (possibly in an earlier grouped message). This walks the display
+//! list in order, records taskId → subject from TaskCreates, and injects
+//! `subject` into later TaskUpdate inputs that lack one.
+
 use std::collections::HashMap;
 
 use mainframe_types::display::{

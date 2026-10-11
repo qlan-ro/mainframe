@@ -27,6 +27,7 @@ pub fn prepare_messages_with_decoders(
     categories: Option<&ToolCategories>,
     decoders: &dyn crate::ToolResultDecoders,
 ) -> Vec<DisplayMessage> {
+    decoders.prepare(messages, Some(0));
     if messages.is_empty() {
         return Vec::new();
     }
@@ -77,6 +78,8 @@ pub(crate) fn convert_grouped_to_display(
     categories: Option<&ToolCategories>,
     decoders: &dyn crate::ToolResultDecoders,
 ) -> Option<DisplayMessage> {
+    let selected = decoders.for_message(&msg.base);
+    let decoders = selected.as_deref().unwrap_or(decoders);
     let id = msg.base.id.clone();
     let chat_id = msg.base.chat_id.clone();
     let timestamp = msg.base.timestamp.clone();

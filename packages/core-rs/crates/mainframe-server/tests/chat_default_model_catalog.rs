@@ -19,7 +19,7 @@ use tempfile::TempDir;
 use tokio::sync::broadcast;
 
 /// A minimal `Adapter` double whose only purpose is to advertise a fixed model
-/// catalog via `get_fallback_models()` so `AdapterRegistry::seed_static_snapshots`
+/// catalog via `catalog()` so `AdapterRegistry::seed_static_snapshots`
 /// can populate a snapshot without spawning a CLI. The test never starts a
 /// session, so `create_session` is unreachable.
 struct CatalogAdapter {
