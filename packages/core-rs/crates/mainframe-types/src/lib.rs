@@ -58,3 +58,5 @@ pub mod transcript_presentation;
 pub mod sync;
 
 pub mod chat_patch;
+
+pub mod todo_normalize;

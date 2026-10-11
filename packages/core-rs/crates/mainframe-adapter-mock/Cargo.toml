@@ -8,6 +8,7 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+mainframe-display = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -17,7 +18,6 @@ tracing = { workspace = true }
 mainframe-types = { workspace = true }
 mainframe-adapter-api = { workspace = true }
 mainframe-background-tasks = { workspace = true }
-mainframe-claude-workflows = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

@@ -12,7 +12,7 @@ use mainframe_types::adapter::{
 use mainframe_types::display::ToolCategories;
 
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
-use mainframe_claude_workflows::store::ClaudeWorkflowStore;
+use mainframe_background_tasks::workflow_sink::WorkflowSink;
 
 use crate::plan_mode_handler::MockPlanModeHandler;
 use crate::session::{ReplayCache, ReplaySession};
@@ -25,7 +25,7 @@ pub struct MockCliAdapter {
     /// Present only when the daemon wired its tracker in. Without it the replay
     /// behaves exactly as before: transcripts, but no background-task events.
     tracker: Option<Arc<BackgroundTaskTracker>>,
-    workflows: Option<Arc<ClaudeWorkflowStore>>,
+    workflows: Option<Arc<dyn WorkflowSink>>,
     /// Reported by `capabilities().no_persistence`. Defaults to false; tests that
     /// need the no-persistence chat behavior opt in via `with_no_persistence`
     /// (the mock adapter must be able to report either value).
@@ -51,7 +51,7 @@ impl MockCliAdapter {
     /// the CLI's own task notifications.
     pub fn with_tracker(
         tracker: Arc<BackgroundTaskTracker>,
-        workflows: Arc<ClaudeWorkflowStore>,
+        workflows: Arc<dyn WorkflowSink>,
     ) -> Self {
         Self {
             tracker: Some(tracker),

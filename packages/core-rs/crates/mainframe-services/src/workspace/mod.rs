@@ -1,7 +1,7 @@
 //! Workspace paths, worktrees, and project helpers.
 
 pub use mainframe_git::git_parse::{WorktreeEntry, parse_worktree_list};
-pub mod session_files;
+pub use mainframe_runtime::session_files;
 pub mod worktree;
 
 pub use session_files::{get_claude_project_dir, move_session_files};

@@ -19,12 +19,39 @@ pub(crate) fn mock_adapters(
     env: impl Fn(&str) -> Option<String>,
 ) -> Vec<MockCliAdapter> {
     let flag = |name: &str| env(name).as_deref() == Some("1");
-    let build = || MockCliAdapter::with_tracker(Arc::clone(tracker), Arc::clone(workflows));
+    let build = || {
+        MockCliAdapter::with_tracker(
+            Arc::clone(tracker),
+            Arc::new(WorkflowBridge(workflows.clone())),
+        )
+    };
     let mut adapters = vec![build().with_fork_capable(flag("E2E_MOCK_FORK"))];
     if flag("E2E_MOCK_SWITCH") {
         adapters.push(build().with_identity(SECOND_MOCK_ID, SECOND_MOCK_NAME));
     }
     adapters
+}
+
+struct WorkflowBridge(Arc<ClaudeWorkflowStore>);
+impl mainframe_background_tasks::workflow_sink::WorkflowSink for WorkflowBridge {
+    fn seed(&self, chat_id: &str, task_id: &str, name: Option<String>) {
+        self.0.seed(chat_id, task_id, name);
+    }
+    fn apply_record(
+        &self,
+        chat_id: &str,
+        run: mainframe_types::claude_workflow::ClaudeWorkflowRun,
+    ) {
+        self.0.apply_record(chat_id, run);
+    }
+    fn stamp_status(
+        &self,
+        chat_id: &str,
+        task_id: &str,
+        status: mainframe_types::claude_workflow::ClaudeWorkflowRunStatus,
+    ) {
+        self.0.stamp_status(chat_id, task_id, status);
+    }
 }
 
 #[cfg(test)]

@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use mainframe_background_tasks::tracker::{BackgroundTaskTracker, TaskSeed, TerminalUpdate};
-use mainframe_claude_workflows::store::ClaudeWorkflowStore;
+use mainframe_background_tasks::workflow_sink::WorkflowSink;
 use mainframe_types::background_task::{
     BackgroundTaskStatus, BackgroundTaskToolName, BackgroundWorkKind,
 };
@@ -35,7 +35,7 @@ const WORKFLOW_TOOL: &str = "Workflow";
 
 pub(crate) struct TaskBridge {
     tracker: Arc<BackgroundTaskTracker>,
-    workflows: Option<Arc<ClaudeWorkflowStore>>,
+    workflows: Option<Arc<dyn WorkflowSink>>,
     /// tool_use_id → task_id, so a later tool_result can end the right task.
     started: Mutex<HashMap<String, String>>,
 }
@@ -43,7 +43,7 @@ pub(crate) struct TaskBridge {
 impl TaskBridge {
     pub(crate) fn new(
         tracker: Arc<BackgroundTaskTracker>,
-        workflows: Option<Arc<ClaudeWorkflowStore>>,
+        workflows: Option<Arc<dyn WorkflowSink>>,
     ) -> Self {
         Self {
             tracker,
@@ -210,6 +210,34 @@ impl TaskBridge {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[derive(Default)]
+    struct RecordingWorkflows(std::sync::Mutex<Vec<ClaudeWorkflowRun>>);
+    impl RecordingWorkflows {
+        fn runs_for_chat(&self, _: &str) -> Vec<ClaudeWorkflowRun> {
+            self.0.lock_recover().clone()
+        }
+    }
+    impl WorkflowSink for RecordingWorkflows {
+        fn seed(&self, _: &str, task: &str, name: Option<String>) {
+            self.0
+                .lock_recover()
+                .push(ClaudeWorkflowRun::new_seed(task, name));
+        }
+        fn apply_record(&self, _: &str, run: ClaudeWorkflowRun) {
+            *self.0.lock_recover() = vec![run];
+        }
+        fn stamp_status(&self, _: &str, task: &str, status: ClaudeWorkflowRunStatus) {
+            for run in self
+                .0
+                .lock_recover()
+                .iter_mut()
+                .filter(|run| run.task_id == task)
+            {
+                run.status = status;
+            }
+        }
+    }
+
     use serde_json::json;
 
     fn event(method: &str, args: serde_json::Value) -> RecordedEvent {
@@ -293,8 +321,8 @@ mod tests {
     #[test]
     fn workflow_tool_use_starts_a_workflow_row_and_seeds_a_run() {
         let tracker = Arc::new(BackgroundTaskTracker::new());
-        let workflows = Arc::new(ClaudeWorkflowStore::new());
-        let bridge = TaskBridge::new(Arc::clone(&tracker), Some(Arc::clone(&workflows)));
+        let workflows = Arc::new(RecordingWorkflows::default());
+        let bridge = TaskBridge::new(Arc::clone(&tracker), Some(workflows.clone()));
         bridge.observe(
             "chat-1",
             &event(
@@ -321,8 +349,8 @@ mod tests {
     #[test]
     fn a_recorded_run_snapshot_replaces_the_seed() {
         let tracker = Arc::new(BackgroundTaskTracker::new());
-        let workflows = Arc::new(ClaudeWorkflowStore::new());
-        let bridge = TaskBridge::new(Arc::clone(&tracker), Some(Arc::clone(&workflows)));
+        let workflows = Arc::new(RecordingWorkflows::default());
+        let bridge = TaskBridge::new(Arc::clone(&tracker), Some(workflows.clone()));
         bridge.observe(
             "chat-1",
             &event(

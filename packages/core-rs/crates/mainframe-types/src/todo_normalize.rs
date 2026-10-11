@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use mainframe_types::chat::{TodoItem, TodoStatus};
+use crate::chat::{TodoItem, TodoStatus};
 use serde_json::Value;
 
 /// The three sources that can produce a TodoItem list.

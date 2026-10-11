@@ -16,7 +16,7 @@ use crate::history_collab_resolve::{
 use crate::item_types::{PatchChangeKind, ThreadItem};
 use crate::thread_item_render::{dynamic_tool_call_input, dynamic_tool_call_name};
 use crate::thread_registry::AgentMetadata;
-use crate::unified_diff::parse_unified_diff;
+use mainframe_display::parse_unified_diff::parse_unified_diff;
 
 pub fn convert_thread_items(
     items: &[ThreadItem],
