@@ -1,6 +1,6 @@
 //! RED tests for the plan-mode dispatcher wiring: `ChatManager::respond_to_permission`
 //! must forward the three `PhDeps::plan_mode_*` branches to a resolved adapter handler.
-//! A child module of `tests`, so it sees `tests`' private `StoreDeps`/`RecSession`/`seed_active`.
+//! A child module of `tests`, so it sees `tests`' private `FakeDeps`/`RecSession`/`seed_active`.
 
 use super::*;
 use mainframe_adapter_api::PlanActionContext;
@@ -103,8 +103,8 @@ fn exit_plan_response(
     }
 }
 
-fn no_session_chat(chat_id: &str) -> (Arc<StoreDeps>, ChatManager) {
-    let deps = StoreDeps::arc();
+fn no_session_chat(chat_id: &str) -> (Arc<FakeDeps>, ChatManager) {
+    let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps.clone());
     let mut chat = test_chat(chat_id);
     chat.plan_mode = Some(true);
@@ -118,8 +118,9 @@ fn no_session_chat(chat_id: &str) -> (Arc<StoreDeps>, ChatManager) {
 #[tokio::test]
 async fn forwards_an_exit_plan_mode_approval_to_the_adapter_handler() {
     let handler = RecordingHandler::arc();
-    let deps = StoreDeps::arc();
-    *deps.plan_handler.lock().unwrap() = Some(handler.clone() as Arc<dyn PlanModeActionHandler>);
+    let deps = FakeDeps::arc();
+    *deps.adapters.plan_handler.lock().unwrap() =
+        Some(handler.clone() as Arc<dyn PlanModeActionHandler>);
     let mgr = ChatManager::new(deps);
     let session = RecSession::new("s1", false, true);
     seed_active(&mgr, "c1", test_chat("c1"), session);
@@ -136,8 +137,9 @@ async fn forwards_an_exit_plan_mode_approval_to_the_adapter_handler() {
 #[tokio::test]
 async fn forwards_a_clear_context_approval_to_the_adapter_handler() {
     let handler = RecordingHandler::arc();
-    let deps = StoreDeps::arc();
-    *deps.plan_handler.lock().unwrap() = Some(handler.clone() as Arc<dyn PlanModeActionHandler>);
+    let deps = FakeDeps::arc();
+    *deps.adapters.plan_handler.lock().unwrap() =
+        Some(handler.clone() as Arc<dyn PlanModeActionHandler>);
     let mgr = ChatManager::new(deps);
     let session = RecSession::new("s1", false, true);
     seed_active(&mgr, "c1", test_chat("c1"), session);
@@ -154,13 +156,14 @@ async fn forwards_a_clear_context_approval_to_the_adapter_handler() {
 async fn persists_permission_mode_and_plan_mode_false_with_no_live_session() {
     let handler = RecordingHandler::arc();
     let (deps, mgr) = no_session_chat("c1");
-    *deps.plan_handler.lock().unwrap() = Some(handler.clone() as Arc<dyn PlanModeActionHandler>);
+    *deps.adapters.plan_handler.lock().unwrap() =
+        Some(handler.clone() as Arc<dyn PlanModeActionHandler>);
 
     let response = exit_plan_response("r1", Some(ExecutionMode::AcceptEdits), None);
     mgr.respond_to_permission("c1", response).await.unwrap();
 
     assert!(handler.calls.lock().unwrap().is_empty());
-    let updates = deps.updates.lock().unwrap();
+    let updates = deps.store.updates.lock().unwrap();
     assert!(updates.iter().any(|(id, patch)| id == "c1"
         && patch.permission_mode == Some(ExecutionMode::AcceptEdits)
         && patch.plan_mode == Some(false)));
@@ -178,7 +181,7 @@ async fn defaults_a_missing_execution_mode_to_interactive() {
     let response = exit_plan_response("r1", None, None);
     mgr.respond_to_permission("c1", response).await.unwrap();
 
-    let updates = deps.updates.lock().unwrap();
+    let updates = deps.store.updates.lock().unwrap();
     assert!(updates.iter().any(|(id, patch)| id == "c1"
         && patch.permission_mode == Some(ExecutionMode::Default)
         && patch.plan_mode == Some(false)));
@@ -186,7 +189,7 @@ async fn defaults_a_missing_execution_mode_to_interactive() {
 
 #[tokio::test]
 async fn warns_and_no_ops_when_the_adapter_has_no_handler() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps.clone());
     let session = RecSession::new("s1", false, true);
     seed_active(&mgr, "c1", test_chat("c1"), session);
@@ -195,15 +198,16 @@ async fn warns_and_no_ops_when_the_adapter_has_no_handler() {
     let result = mgr.respond_to_permission("c1", response).await;
 
     assert!(result.is_ok());
-    assert!(deps.updates.lock().unwrap().is_empty());
+    assert!(deps.store.updates.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
 async fn answers_the_escalation_on_the_wire_exactly_once_via_the_permission_handler_and_once_via_the_handler()
  {
     let handler = RecordingHandler::arc();
-    let deps = StoreDeps::arc();
-    *deps.plan_handler.lock().unwrap() = Some(handler.clone() as Arc<dyn PlanModeActionHandler>);
+    let deps = FakeDeps::arc();
+    *deps.adapters.plan_handler.lock().unwrap() =
+        Some(handler.clone() as Arc<dyn PlanModeActionHandler>);
     let mgr = ChatManager::new(deps);
     let session = RecSession::new("s1", false, true);
     seed_active(&mgr, "c1", test_chat("c1"), session.clone());
@@ -226,8 +230,9 @@ async fn answers_the_escalation_on_the_wire_exactly_once_via_the_permission_hand
 #[tokio::test]
 async fn clear_context_follow_up_send_fails_closed_when_chatmanager_is_never_attached() {
     let handler = RecordingHandler::arc();
-    let deps = StoreDeps::arc();
-    *deps.plan_handler.lock().unwrap() = Some(handler.clone() as Arc<dyn PlanModeActionHandler>);
+    let deps = FakeDeps::arc();
+    *deps.adapters.plan_handler.lock().unwrap() =
+        Some(handler.clone() as Arc<dyn PlanModeActionHandler>);
     let mgr = ChatManager::new(deps);
     let session = RecSession::new("s1", false, true);
     seed_active(&mgr, "c1", test_chat("c1"), session);

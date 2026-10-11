@@ -44,11 +44,11 @@ pub(super) fn text_message(id: &str, kind: ChatMessageType, text: &str) -> ChatM
     }
 }
 
-fn setup(layout: SegmentLayout, adapter: &str) -> (Arc<StoreDeps>, Arc<FakeStore>, ChatManager) {
+fn setup(layout: SegmentLayout, adapter: &str) -> (Arc<FakeDeps>, Arc<FakeStore>, ChatManager) {
     let mut chat = test_chat("c1");
     chat.adapter_id = adapter.into();
     chat.claude_session_id = (adapter == "claude").then(|| "c-1".to_string());
-    let deps = StoreDeps::with_chats(vec![chat.clone()]);
+    let deps = FakeDeps::with_chats(vec![chat.clone()]);
     let store = Arc::new(FakeStore {
         layout: Mutex::new(layout),
         ..Default::default()
@@ -216,7 +216,7 @@ async fn a_switch_before_the_first_message_clears_plan_mode_the_target_cannot_su
     let mut chat = test_chat("c1");
     chat.adapter_id = "claude".into();
     chat.plan_mode = Some(true);
-    let deps = StoreDeps::with_chats(vec![chat]);
+    let deps = FakeDeps::with_chats(vec![chat]);
     let store = Arc::new(FakeStore {
         layout: Mutex::new(layout),
         ..Default::default()

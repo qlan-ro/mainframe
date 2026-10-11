@@ -39,13 +39,13 @@ fn reply(id: &str) -> ChatMessage {
 }
 
 /// A Codex parent whose Claude turn (u1) came before the switch, then x1, x2.
-fn setup_parent() -> (Arc<StoreDeps>, Arc<FakeStore>, ChatManager) {
+fn setup_parent() -> (Arc<FakeDeps>, Arc<FakeStore>, ChatManager) {
     std::fs::create_dir_all("/tmp/test").expect("create the fake project dir");
     let mut chat = test_chat("c1");
     chat.adapter_id = "codex".into();
     chat.claude_session_id = Some("x-1".into());
     chat.status = ChatStatus::Active;
-    let deps = StoreDeps::with_chats(vec![chat]);
+    let deps = FakeDeps::with_chats(vec![chat]);
     deps.set_fork_capable(true);
     let layout = claude_then_codex();
     let store = FakeStore::with_layout(layout.clone());
@@ -146,13 +146,13 @@ async fn a_single_segment_parent_sends_no_plan() {
 }
 
 /// An unsent Claude fork of c1: one segment on an id-less pinned row.
-fn setup_unsent_fork() -> (Arc<StoreDeps>, Arc<FakeStore>, ChatManager) {
+fn setup_unsent_fork() -> (Arc<FakeDeps>, Arc<FakeStore>, ChatManager) {
     std::fs::create_dir_all("/tmp/test").expect("create the fake project dir");
     let mut fork = test_chat("fork-1");
     fork.adapter_id = "claude".into();
     fork.parent_chat_id = Some(Some("c1".into()));
     fork.created_at = "2026-10-06T12:00:00Z".into();
-    let deps = StoreDeps::with_chats(vec![fork]);
+    let deps = FakeDeps::with_chats(vec![fork]);
     let mut layout = SegmentLayout {
         segments: vec![segment("s0", 0, "ns_f", SegmentKind::Initial)],
         natives: vec![native("ns_f", "claude", None)],

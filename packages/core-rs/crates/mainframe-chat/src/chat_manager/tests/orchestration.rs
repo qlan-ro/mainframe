@@ -8,7 +8,7 @@ use mainframe_types::orchestration::{AgentOutboxEntry, OrchestrationMcpLaunch};
 use crate::orchestration_hooks::OrchestrationHooks;
 
 fn chat(id: &str) -> Chat {
-    // `enrich_chat` stats StoreDeps's fixed project path; keep it present.
+    // `enrich_chat` stats FakeDeps's fixed project path; keep it present.
     std::fs::create_dir_all("/tmp/test").expect("create the fake project dir");
     let mut c = test_chat(id);
     c.status = ChatStatus::Active;
@@ -57,7 +57,7 @@ impl OrchestrationHooks for OutboxHooks {
 async fn delegated_waiting_follows_a_gate_on_an_unfinished_child() {
     let mut parent = chat("parent");
     parent.orchestration.active_child_ids = vec!["kid".into()];
-    let deps = StoreDeps::with_chats(vec![parent, chat("plain")]);
+    let deps = FakeDeps::with_chats(vec![parent, chat("plain")]);
     let mgr = ChatManager::new(deps);
 
     assert_eq!(
@@ -92,7 +92,7 @@ async fn delegated_waiting_follows_a_gate_on_an_unfinished_child() {
 
 #[tokio::test]
 async fn the_agent_outbox_comes_from_the_attached_hooks_on_reads_and_emits() {
-    let deps = StoreDeps::with_chats(vec![chat("target"), chat("other")]);
+    let deps = FakeDeps::with_chats(vec![chat("target"), chat("other")]);
     let mgr = ChatManager::new(deps.clone());
     assert_eq!(
         mgr.get_chat("target").unwrap().orchestration.agent_outbox,
@@ -121,7 +121,7 @@ async fn the_agent_outbox_comes_from_the_attached_hooks_on_reads_and_emits() {
 
 #[tokio::test]
 async fn refresh_agent_lineage_rereads_the_row_and_announces_the_chat() {
-    let deps = StoreDeps::with_chats(vec![chat("c1")]);
+    let deps = FakeDeps::with_chats(vec![chat("c1")]);
     let mgr = ChatManager::new(deps.clone());
     // A loaded cell, which `get_chat` prefers over the row.
     mgr.shared.active_chats.insert(
@@ -129,7 +129,7 @@ async fn refresh_agent_lineage_rereads_the_row_and_announces_the_chat() {
         Arc::new(Mutex::new(ActiveChat::new(chat("c1"), None))),
     );
     {
-        let mut store = deps.store.lock().unwrap();
+        let mut store = deps.store.chats.lock().unwrap();
         let row = store.get_mut("c1").unwrap();
         row.orchestration.created_by_chat_id = Some("boss".into());
         row.parent_chat_id = Some(Some("boss".into()));

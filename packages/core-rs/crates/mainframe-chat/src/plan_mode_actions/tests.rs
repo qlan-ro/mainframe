@@ -1,5 +1,5 @@
 //! Unit tests for `ChatPlanActionCtx` against a fake `PlanHost` plus a real
-//! `PermissionManager`/`MessageCache` and the crate's recording `StoreDeps`
+//! `PermissionManager`/`MessageCache` and the crate's recording `FakeDeps`
 //! (`chat_manager::tests`, exposed `pub(crate)` for reuse here rather than
 //! duplicating a second `ChatManagerDeps` fake). The `PlanHostImpl`-specific
 //! "no ChatManager attached" case lives beside it in `chat_manager/tests/`
@@ -7,7 +7,7 @@
 //! `PlanHostImpl` needs both.
 
 use super::*;
-use crate::chat_manager::tests::StoreDeps;
+use crate::test_support::FakeDeps;
 use crate::test_support::test_chat;
 use mainframe_types::adapter::ControlRequest;
 use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent};
@@ -43,7 +43,7 @@ fn ctx_with(
     request_id: &str,
     chat: mainframe_types::chat::Chat,
 ) -> ChatPlanActionCtx {
-    let deps = StoreDeps::with_chats(vec![chat.clone()]);
+    let deps = FakeDeps::with_chats(vec![chat.clone()]);
     let shared = ChatShared::new(deps);
     shared.active_chats.insert(
         chat_id.to_string(),

@@ -1,6 +1,6 @@
 //! `ChatManager::fork_chat(.., ForkPoint::BeforeMessage(id))` — the
 //! from-message fork (`docs/specs/2026-10-06-fork-from-message.md`). A child
-//! module of `tests`, so it sees `tests`' private `StoreDeps`; `StoreDeps`
+//! module of `tests`, so it sees `tests`' private `FakeDeps`; `FakeDeps`
 //! records each `ForkPinRequest` and echoes a cut back as the pinned turn.
 
 use super::*;
@@ -8,7 +8,7 @@ use mainframe_adapter_api::ForkCut;
 use mainframe_types::http_status::StatusKind;
 
 fn parent() -> Chat {
-    // `enrich_chat` stats StoreDeps's fixed project path; keep it present so
+    // `enrich_chat` stats FakeDeps's fixed project path; keep it present so
     // these tests are about the fork rules, not directory presence.
     std::fs::create_dir_all("/tmp/test").expect("create the fake project dir");
     let mut c = test_chat("c1");
@@ -41,8 +41,8 @@ fn turns(prefix: &str) -> Vec<ChatMessage> {
         .collect()
 }
 
-fn setup(chat: Chat) -> (Arc<StoreDeps>, ChatManager) {
-    let deps = StoreDeps::with_chats(vec![chat]);
+fn setup(chat: Chat) -> (Arc<FakeDeps>, ChatManager) {
+    let deps = FakeDeps::with_chats(vec![chat]);
     deps.set_fork_capable(true);
     deps.set_history(turns("u"));
     let mgr = ChatManager::new(deps.clone());
@@ -61,7 +61,7 @@ fn before(id: &str) -> ForkPoint {
     ForkPoint::BeforeMessage(id.to_string())
 }
 
-fn pinned_cut(deps: &StoreDeps) -> Option<ForkCut> {
+fn pinned_cut(deps: &FakeDeps) -> Option<ForkCut> {
     deps.pin_requests().last().and_then(|r| r.cut.clone())
 }
 

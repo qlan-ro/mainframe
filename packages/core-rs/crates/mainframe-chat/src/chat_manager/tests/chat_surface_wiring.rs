@@ -14,7 +14,7 @@
 //! tests cover the wire-frame shape with a hand-written fake port; a full
 //! `ChatManagerDeps` fake wired into that crate as a dev-dependency was
 //! judged disproportionate to this task's verification bar (no existing
-//! reusable harness — `StoreDeps` here is private to this module) — see the
+//! reusable harness — `FakeDeps` here is private to this module) — see the
 //! implementer's decisions.
 
 use super::*;
@@ -49,7 +49,7 @@ fn has_turn_started(events: &[ChatSurfaceEvent]) -> bool {
 
 #[tokio::test]
 async fn a_queued_prompt_is_accepted_immediately_but_not_started_until_dequeued() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let surface = RecordingSurface::arc();
     let mgr = ChatManager::new(deps).with_chat_surface(surface.clone());
     seed_active(
@@ -87,7 +87,7 @@ async fn a_queued_prompt_is_accepted_immediately_but_not_started_until_dequeued(
 
 #[tokio::test]
 async fn a_command_sent_mid_turn_reports_no_queue_position() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let surface = RecordingSurface::arc();
     let mgr = ChatManager::new(deps).with_chat_surface(surface.clone());
     seed_active(
@@ -124,7 +124,7 @@ async fn a_command_sent_mid_turn_reports_no_queue_position() {
 
 #[tokio::test]
 async fn queue_changes_announce_full_snapshots_on_the_seam() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let surface = RecordingSurface::arc();
     let mgr = ChatManager::new(deps).with_chat_surface(surface.clone());
     let session = RecSession::new("c1", true, true);
@@ -183,7 +183,7 @@ async fn queue_changes_announce_full_snapshots_on_the_seam() {
 
 #[tokio::test]
 async fn interrupt_ends_the_turn_cancelled_and_leaves_no_answerable_gate() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let surface = RecordingSurface::arc();
     let mgr = ChatManager::new(deps).with_chat_surface(surface.clone());
     seed_active(

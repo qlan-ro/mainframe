@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn enriched_chat_events_match_baseline_wire_bytes() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let manager = ChatManager::new(deps.clone());
     let mut chat = test_chat("wire-chat");
     chat.no_project = true;

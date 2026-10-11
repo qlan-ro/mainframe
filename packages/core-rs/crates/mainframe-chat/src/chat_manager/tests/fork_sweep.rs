@@ -1,6 +1,6 @@
 //! `ChatManager::sweep_unreferenced_fork_snapshots` removes a snapshot directory no
 //! chat's `pending_fork` references. A child module of `tests`, so it sees
-//! `tests`' private `StoreDeps`.
+//! `tests`' private `FakeDeps`.
 
 use super::*;
 
@@ -22,7 +22,7 @@ async fn removes_a_snapshot_dir_no_chat_references() {
     let orphan = root.path().join("orphan-1");
     std::fs::create_dir_all(&orphan).unwrap();
 
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     deps.set_fork_snapshots_dir(&root.path().to_string_lossy());
     let mgr = ChatManager::new(deps);
 
@@ -40,7 +40,7 @@ async fn keeps_a_snapshot_dir_a_pending_fork_still_references() {
 
     let mut chat = test_chat("fork-1");
     chat.claude_session_id = None;
-    let deps = StoreDeps::with_chats(vec![chat]);
+    let deps = FakeDeps::with_chats(vec![chat]);
     deps.set_fork_snapshots_dir(&root.path().to_string_lossy());
     deps.set_pending_fork("fork-1", pending_for(&kept_str));
     let mgr = ChatManager::new(deps);
@@ -57,7 +57,7 @@ async fn a_missing_snapshots_root_is_a_no_op() {
     let root = tempfile::tempdir().unwrap();
     let missing_root = root.path().join("never-created");
 
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     deps.set_fork_snapshots_dir(&missing_root.to_string_lossy());
     let mgr = ChatManager::new(deps);
 

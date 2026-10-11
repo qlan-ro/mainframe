@@ -84,7 +84,7 @@ fn history_message(id: &str) -> ChatMessage {
     }
 }
 
-fn offloaded_events(deps: &StoreDeps) -> Vec<String> {
+fn offloaded_events(deps: &FakeDeps) -> Vec<String> {
     deps.events()
         .into_iter()
         .filter_map(|e| match e {
@@ -115,11 +115,11 @@ fn seed_idle_chat(mgr: &ChatManager, activity: Option<i64>) -> Arc<FakeSession> 
 /// offloadable.
 fn seed_offloadable_chat_with_transcript(
     history: Vec<ChatMessage>,
-) -> (Arc<StoreDeps>, ChatManager) {
+) -> (Arc<FakeDeps>, ChatManager) {
     let mut chat = test_chat("c1");
     chat.claude_session_id = Some("sess-1".to_string());
-    let deps = StoreDeps::with_chats(vec![chat.clone()]);
-    *deps.history.lock().unwrap() = Some(history.clone());
+    let deps = FakeDeps::with_chats(vec![chat.clone()]);
+    *deps.adapters.history.lock().unwrap() = Some(history.clone());
     let mgr = ChatManager::new(deps.clone());
     let session = FakeSession::with_activity(true, Some(long_idle()));
     seed_active(&mgr, "c1", chat, session);
@@ -146,7 +146,7 @@ fn enqueue_pending_permission(mgr: &ChatManager) {
 
 #[tokio::test]
 async fn ac1_offloads_a_chat_idle_past_the_threshold() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps.clone());
     let session = seed_idle_chat(&mgr, Some(long_idle()));
     mgr.worktree_offers.seed_pending_for_test("c1", "/tmp/wt");
@@ -174,7 +174,7 @@ async fn ac1_offloads_a_chat_idle_past_the_threshold() {
 
 #[tokio::test]
 async fn ac2_a_pending_permission_blocks_offload_even_at_8_hours_idle() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps.clone());
     let eight_hours_ms = 8 * 60 * 60 * 1000;
     let session = seed_idle_chat(&mgr, Some(now_ms() - eight_hours_ms));
@@ -214,7 +214,7 @@ async fn ac3_ineligible_chats_are_untouched() {
         ),
         ("no activity time reported", true, None),
     ] {
-        let deps = StoreDeps::arc();
+        let deps = FakeDeps::arc();
         let mgr = ChatManager::new(deps.clone());
         let session = FakeSession::with_activity(spawned, activity);
         seed_active(&mgr, "c1", test_chat("c1"), session.clone());
@@ -247,7 +247,7 @@ async fn ac3_ineligible_chats_are_untouched() {
 
 #[tokio::test]
 async fn ac4_a_pending_permission_injected_after_selection_keeps_the_chat_live() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps.clone());
     let session = seed_idle_chat(&mgr, Some(long_idle()));
 
@@ -277,7 +277,7 @@ async fn ac4_a_pending_permission_injected_after_selection_keeps_the_chat_live()
 /// (`offloader_for`, module doc above) is what actually exercises `recheck`.
 #[tokio::test]
 async fn ac4_activity_injected_after_selection_keeps_the_chat_live() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps.clone());
     let session = seed_idle_chat(&mgr, Some(long_idle()));
 
@@ -302,7 +302,7 @@ async fn ac4_activity_injected_after_selection_keeps_the_chat_live() {
 
 #[tokio::test]
 async fn ac4_an_in_flight_send_injected_after_selection_keeps_the_chat_live() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps.clone());
     let session = seed_idle_chat(&mgr, Some(long_idle()));
 
@@ -328,7 +328,7 @@ async fn ac4_an_in_flight_send_injected_after_selection_keeps_the_chat_live() {
 
 #[tokio::test]
 async fn ac5_scanning_twice_offloads_once() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps.clone());
     let session = seed_idle_chat(&mgr, Some(long_idle()));
 
@@ -368,7 +368,9 @@ async fn ac6_display_history_survives_offload_and_loads_once_for_concurrent_read
     );
     assert_eq!(ids(&b), expected_ids);
     assert_eq!(
-        deps.history_loads.load(std::sync::atomic::Ordering::SeqCst),
+        deps.adapters
+            .history_loads
+            .load(std::sync::atomic::Ordering::SeqCst),
         1,
         "two concurrent readers, one transcript load"
     );
@@ -466,7 +468,9 @@ async fn ac7_send_after_offload_reloads_prior_history_via_the_resume_path() {
     );
 
     assert_eq!(
-        deps.history_loads.load(std::sync::atomic::Ordering::SeqCst),
+        deps.adapters
+            .history_loads
+            .load(std::sync::atomic::Ordering::SeqCst),
         1,
         "one resume, one transcript load"
     );
@@ -524,7 +528,7 @@ async fn resend_from_an_attached_chat_after_offload_resyncs_instead_of_scramblin
 /// `last_activity_at` alone can't see that.
 #[tokio::test]
 async fn a_working_chat_is_never_offloaded() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps.clone());
     let mut chat = test_chat("c1");
     chat.process_state = Some(Some(mainframe_types::chat::ProcessState::Working));
@@ -557,8 +561,9 @@ async fn a_working_chat_is_never_offloaded() {
 async fn a_cold_opened_chat_sends_without_resync() {
     let mut chat = test_chat("c1");
     chat.claude_session_id = Some("sess-1".to_string());
-    let deps = StoreDeps::with_chats(vec![chat]);
-    *deps.history.lock().unwrap() = Some(vec![history_message("m1"), history_message("m2")]);
+    let deps = FakeDeps::with_chats(vec![chat]);
+    *deps.adapters.history.lock().unwrap() =
+        Some(vec![history_message("m1"), history_message("m2")]);
     deps.set_spawn_ok(true);
     let mgr = ChatManager::new(deps.clone());
     let surface = RecordingSurface::arc();
@@ -589,8 +594,9 @@ async fn worktree_missing_error_keeps_the_loaded_history() {
     // the fixture needs a worktree path that is actually absent rather than
     // the flag set directly.
     chat.worktree_path = Some("/tmp/mainframe-test-missing-worktree-r1".to_string());
-    let deps = StoreDeps::with_chats(vec![chat]);
-    *deps.history.lock().unwrap() = Some(vec![history_message("m1"), history_message("m2")]);
+    let deps = FakeDeps::with_chats(vec![chat]);
+    *deps.adapters.history.lock().unwrap() =
+        Some(vec![history_message("m1"), history_message("m2")]);
     let mgr = ChatManager::new(deps.clone());
 
     mgr.send_message("c1", "hello", None, None)
@@ -652,7 +658,7 @@ fn minimal_new_chat() -> NewChat {
 /// but the chat row survives, unarchived.
 #[tokio::test]
 async fn unspawned_never_sent_cell_offloads_once_backdated_past_the_threshold() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps.clone());
     let chat = mgr.create_chat(minimal_new_chat()).await;
     mgr.shared
@@ -700,8 +706,8 @@ async fn unspawned_session_handle_offloads_and_a_later_send_resumes_cleanly() {
     let mut chat = test_chat("c1");
     chat.claude_session_id = Some("sess-1".to_string());
     let history = vec![history_message("m1"), history_message("m2")];
-    let deps = StoreDeps::with_chats(vec![chat.clone()]);
-    *deps.history.lock().unwrap() = Some(history.clone());
+    let deps = FakeDeps::with_chats(vec![chat.clone()]);
+    *deps.adapters.history.lock().unwrap() = Some(history.clone());
     deps.set_spawn_ok(true);
     let mgr = ChatManager::new(deps.clone());
     let session: Arc<dyn AdapterSession> = FakeSession::with_activity(false, None);
@@ -752,7 +758,7 @@ async fn unspawned_session_handle_offloads_and_a_later_send_resumes_cleanly() {
 /// the fresh `last_used_at` an insertion stamps keeps it live.
 #[tokio::test]
 async fn a_freshly_created_chat_is_not_offloaded_by_a_scan() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps.clone());
     let chat = mgr.create_chat(minimal_new_chat()).await;
 
@@ -768,8 +774,8 @@ async fn a_freshly_created_chat_is_not_offloaded_by_a_scan() {
 #[tokio::test]
 async fn a_freshly_loaded_chat_is_not_offloaded_by_a_scan() {
     let chat = test_chat("c1");
-    let deps = StoreDeps::with_chats(vec![chat]);
-    *deps.history.lock().unwrap() = Some(Vec::new());
+    let deps = FakeDeps::with_chats(vec![chat]);
+    *deps.adapters.history.lock().unwrap() = Some(Vec::new());
     let mgr = ChatManager::new(deps.clone());
 
     mgr.load_chat("c1").await;
@@ -786,7 +792,7 @@ async fn a_freshly_loaded_chat_is_not_offloaded_by_a_scan() {
 /// refuses the claim outright, same as the spawned-session AC4 case.
 #[tokio::test]
 async fn an_in_flight_send_injected_after_selection_keeps_an_unspawned_cell_live() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps.clone());
     seed_cell(&mgr, "c1", test_chat("c1"), None, long_idle());
     mgr.shared
@@ -822,7 +828,7 @@ async fn an_in_flight_send_injected_after_selection_keeps_an_unspawned_cell_live
 /// otherwise just re-filter the candidate out before `recheck` ever ran.
 #[tokio::test]
 async fn a_touch_injected_after_selection_keeps_an_unspawned_cell_live() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps.clone());
     seed_cell(&mgr, "c1", test_chat("c1"), None, long_idle());
     mgr.shared
@@ -856,7 +862,7 @@ async fn a_touch_injected_after_selection_keeps_an_unspawned_cell_live() {
 
 #[tokio::test]
 async fn a_pending_permission_blocks_offload_of_an_unspawned_backdated_cell() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps.clone());
     seed_cell(&mgr, "c1", test_chat("c1"), None, long_idle());
     mgr.shared
@@ -874,7 +880,7 @@ async fn a_pending_permission_blocks_offload_of_an_unspawned_backdated_cell() {
 
 #[tokio::test]
 async fn a_queued_message_blocks_offload_of_an_unspawned_backdated_cell() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps.clone());
     seed_cell(&mgr, "c1", test_chat("c1"), None, long_idle());
     mgr.shared
@@ -903,7 +909,7 @@ async fn a_queued_message_blocks_offload_of_an_unspawned_backdated_cell() {
 
 #[tokio::test]
 async fn a_working_process_state_blocks_offload_of_an_unspawned_backdated_cell() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps.clone());
     let mut chat = test_chat("c1");
     chat.process_state = Some(Some(ProcessState::Working));
@@ -926,8 +932,8 @@ async fn a_working_process_state_blocks_offload_of_an_unspawned_backdated_cell()
 async fn update_chat_config_rebuilds_an_offloaded_cell_and_applies_the_new_model() {
     let mut chat = test_chat("c1");
     chat.model = Some("old-model".to_string());
-    let deps = StoreDeps::with_chats(vec![chat.clone()]);
-    *deps.history.lock().unwrap() = Some(Vec::new());
+    let deps = FakeDeps::with_chats(vec![chat.clone()]);
+    *deps.adapters.history.lock().unwrap() = Some(Vec::new());
     let mgr = ChatManager::new(deps.clone());
     seed_cell(&mgr, "c1", chat, None, long_idle());
     mgr.shared
@@ -978,8 +984,8 @@ async fn disable_worktree_rebuilds_an_offloaded_cell_and_clears_the_binding() {
     let mut chat = test_chat("c1");
     chat.worktree_path = Some("/tmp/mainframe-test-todo-381-wt".to_string());
     chat.branch_name = Some("feat/old".to_string());
-    let deps = StoreDeps::with_chats(vec![chat.clone()]);
-    *deps.history.lock().unwrap() = Some(Vec::new());
+    let deps = FakeDeps::with_chats(vec![chat.clone()]);
+    *deps.adapters.history.lock().unwrap() = Some(Vec::new());
     let mgr = ChatManager::new(deps.clone());
     seed_cell(&mgr, "c1", chat, None, long_idle());
     mgr.shared

@@ -252,6 +252,15 @@ impl AdapterSession for FakeSession {
 
 pub use crate::test_support_chat::test_chat;
 
+mod fake_adapters;
+mod fake_deps;
+mod fake_events;
+mod fake_paths;
+mod fake_push;
+mod fake_store;
+mod fake_workspace;
+pub(crate) use fake_deps::FakeDeps;
+
 /// An empty settings store, for fakes whose every settings read is unset.
 pub fn no_settings() -> &'static mainframe_types::settings_kv::MemorySettings {
     static EMPTY: std::sync::LazyLock<mainframe_types::settings_kv::MemorySettings> =

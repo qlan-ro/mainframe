@@ -96,22 +96,22 @@ fn tool_result_content(tool_use_id: &str) -> MessageContent {
 async fn a_resume_snapshot_loads_the_transcript_once() {
     let mut chat = test_chat("c1");
     chat.claude_session_id = Some("sess-1".to_string());
-    let deps = StoreDeps::with_chats(vec![chat]);
+    let deps = FakeDeps::with_chats(vec![chat]);
     // An EMPTY history on purpose: a non-empty one populates the message
     // cache, and the second lookup would then never reach the disk — the case
     // that leaks is the cold chat with nothing cached, which reloads per
     // caller.
-    *deps.history.lock().unwrap() = Some(Vec::new());
+    *deps.adapters.history.lock().unwrap() = Some(Vec::new());
     // Transcript present: reconcile leaves the chat's session id in place, so
     // the pending-permission lookup can still reach a history session.
-    *deps.transcript_present.lock().unwrap() = Some(true);
+    *deps.adapters.transcript_present.lock().unwrap() = Some(true);
     let mgr = ChatManager::new(deps.clone());
 
     let snapshot = mgr.get_resume_snapshot("c1").await;
 
     assert!(snapshot.pending.is_none(), "this fixture has no open gate");
     assert_eq!(
-        deps.history_loads.load(Ordering::SeqCst),
+        deps.adapters.history_loads.load(Ordering::SeqCst),
         1,
         "one resume, one transcript load"
     );
@@ -124,10 +124,10 @@ async fn a_resume_snapshot_loads_the_transcript_once() {
 async fn warm_and_cold_snapshots_agree_past_two_thousand() {
     let mut chat = test_chat("c1");
     chat.claude_session_id = Some("sess-1".to_string());
-    let deps = StoreDeps::with_chats(vec![chat]);
+    let deps = FakeDeps::with_chats(vec![chat]);
     let history: Vec<ChatMessage> = (0..2_100).map(numbered_message).collect();
-    *deps.history.lock().unwrap() = Some(history.clone());
-    *deps.transcript_present.lock().unwrap() = Some(true);
+    *deps.adapters.history.lock().unwrap() = Some(history.clone());
+    *deps.adapters.transcript_present.lock().unwrap() = Some(true);
     let mgr = ChatManager::new(deps.clone());
 
     let cold_messages = mgr.get_resume_snapshot("c1").await.messages;
@@ -148,7 +148,7 @@ async fn warm_and_cold_snapshots_agree_past_two_thousand() {
         "a cold load and the cache it filled agree"
     );
     assert_eq!(
-        deps.history_loads.load(Ordering::SeqCst),
+        deps.adapters.history_loads.load(Ordering::SeqCst),
         1,
         "the second call is served warm, from the cache, not a second disk read"
     );
@@ -161,10 +161,10 @@ async fn warm_and_cold_snapshots_agree_past_two_thousand() {
 async fn first_live_revision_extends_the_snapshot_prefix() {
     let mut chat = test_chat("c1");
     chat.claude_session_id = Some("sess-1".to_string());
-    let deps = StoreDeps::with_chats(vec![chat]);
+    let deps = FakeDeps::with_chats(vec![chat]);
     let history: Vec<ChatMessage> = (0..2_100).map(numbered_message).collect();
-    *deps.history.lock().unwrap() = Some(history.clone());
-    *deps.transcript_present.lock().unwrap() = Some(true);
+    *deps.adapters.history.lock().unwrap() = Some(history.clone());
+    *deps.adapters.transcript_present.lock().unwrap() = Some(true);
     let mgr = ChatManager::new(deps.clone());
     let surface = RecordingSurface::arc();
     let mgr = mgr.with_chat_surface(surface.clone());
@@ -206,7 +206,7 @@ async fn first_live_revision_extends_the_snapshot_prefix() {
 /// failed resume delivery, neither of which this mix exercises.
 #[tokio::test]
 async fn crossing_two_thousand_raises_no_resync() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps.clone());
     let surface = RecordingSurface::arc();
     let mgr = mgr.with_chat_surface(surface.clone());
@@ -258,7 +258,7 @@ async fn tool_timing_resume_reads_preserve_running_completed_and_legacy_calls() 
     use serde_json::json;
     use std::sync::atomic::AtomicU64;
 
-    let mgr = ChatManager::new(StoreDeps::with_chats(vec![test_chat("c1")]));
+    let mgr = ChatManager::new(FakeDeps::with_chats(vec![test_chat("c1")]));
     let clock = Arc::new(AtomicU64::new(1000));
     let now = clock.clone();
     *mgr.shared.messages.lock().unwrap() =
