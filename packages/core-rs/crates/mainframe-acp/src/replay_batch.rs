@@ -46,12 +46,21 @@ pub fn replay_batch_notifications(
         .collect()
 }
 
+/// Why one replay batch could not be encoded (it is logged and dropped).
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum EncodeBatchError {
+    #[error(transparent)]
+    Json(#[from] serde_json::Error),
+    #[error(transparent)]
+    Deflate(#[from] std::io::Error),
+}
+
 /// The payload for one batch: base64 of the zlib-deflated JSON array.
-pub(crate) fn encode_batch(updates: &[SessionUpdate]) -> Result<String, String> {
-    let json = serde_json::to_vec(updates).map_err(|err| err.to_string())?;
+pub(crate) fn encode_batch(updates: &[SessionUpdate]) -> Result<String, EncodeBatchError> {
+    let json = serde_json::to_vec(updates)?;
     let mut encoder = ZlibEncoder::new(Vec::new(), Compression::fast());
-    encoder.write_all(&json).map_err(|err| err.to_string())?;
-    let bytes = encoder.finish().map_err(|err| err.to_string())?;
+    encoder.write_all(&json)?;
+    let bytes = encoder.finish()?;
     Ok(STANDARD.encode(bytes))
 }
 
