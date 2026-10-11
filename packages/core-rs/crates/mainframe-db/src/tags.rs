@@ -44,7 +44,7 @@ impl TagsRepository {
     pub fn upsert(&self, raw_name: &str, color: Option<TagColor>) -> Result<Tag, DbError> {
         let normalized = match validate_tag_name(raw_name) {
             ValidateResult::Ok { normalized } => normalized,
-            ValidateResult::Err { error } => return Err(DbError::Message(error)),
+            ValidateResult::Err { error } => return Err(DbError::Invalid(error)),
         };
         if let Some(existing) = self.get(&normalized)? {
             return Ok(existing);
@@ -69,7 +69,10 @@ impl TagsRepository {
             rusqlite::params![crate::enum_to_db_string(&color)?, normalized],
         )?;
         if changes == 0 {
-            return Err(DbError::Message(format!("Tag not found: {normalized}")));
+            return Err(DbError::NotFound {
+                entity: "Tag",
+                id: normalized,
+            });
         }
         Ok(())
     }
@@ -79,7 +82,7 @@ impl TagsRepository {
         let from = self.normalize(from_raw);
         let to = match validate_tag_name(to_raw) {
             ValidateResult::Ok { normalized } => normalized,
-            ValidateResult::Err { error } => return Err(DbError::Message(error)),
+            ValidateResult::Err { error } => return Err(DbError::Invalid(error)),
         };
         if from == to {
             return Ok(());
@@ -111,7 +114,10 @@ impl TagsRepository {
         tx.execute("DELETE FROM chat_tags WHERE tag = ?", [&normalized])?;
         let changes = tx.execute("DELETE FROM tags WHERE name = ?", [&normalized])?;
         if changes == 0 {
-            return Err(DbError::Message(format!("Tag not found: {normalized}")));
+            return Err(DbError::NotFound {
+                entity: "Tag",
+                id: normalized,
+            });
         }
         tx.commit()?;
         Ok(())

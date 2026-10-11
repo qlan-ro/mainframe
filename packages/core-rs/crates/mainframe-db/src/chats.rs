@@ -196,7 +196,7 @@ impl ChatsRepository {
             && !tags_all.is_empty()
         {
             let Some(chat_tags) = &self.chat_tags else {
-                return Err(DbError::Message(
+                return Err(DbError::Invariant(
                     "listFiltered with tagsAll requires ChatTagsRepository".to_string(),
                 ));
             };
@@ -242,7 +242,7 @@ impl ChatsRepository {
     /// read and carries the same keys.
     pub(crate) fn get_inserted(&self, id: &str) -> Result<Chat, DbError> {
         self.get(id)?
-            .ok_or_else(|| DbError::Message(format!("chat {id} insert did not round-trip")))
+            .ok_or_else(|| DbError::Invariant(format!("chat {id} insert did not round-trip")))
     }
 
     /// `new_chat.scratch_root` is required and used only when `project_id ==

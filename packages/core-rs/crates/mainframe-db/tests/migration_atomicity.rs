@@ -20,7 +20,7 @@ fn failed_step_rolls_back_ddl_data_and_version_but_keeps_prior_steps() {
             version: 2,
             up: |db| {
                 db.execute_batch("CREATE TABLE discarded(value INTEGER); UPDATE kept SET value=9")?;
-                Err(DbError::Message("migration failed".into()))
+                Err(DbError::Invariant("migration failed".into()))
             },
         },
     ];

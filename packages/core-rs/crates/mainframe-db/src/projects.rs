@@ -103,7 +103,7 @@ impl ProjectsRepository {
     /// cascade-delete every non-project chat's row.
     pub fn remove(&self, id: &str) -> Result<(), DbError> {
         if id == NO_PROJECT_ID {
-            return Err(DbError::Message(
+            return Err(DbError::Invalid(
                 "cannot remove the hidden scratch project".to_string(),
             ));
         }

@@ -108,7 +108,7 @@ fn remove_drained_sidecars(db_path: &Path) -> Result<(), DbError> {
     let wal = with_suffix(db_path, "-wal");
     match fs::metadata(&wal) {
         Ok(meta) if meta.len() > 0 => {
-            return Err(DbError::Message(format!(
+            return Err(DbError::Invariant(format!(
                 "{} still holds {} bytes after a checkpoint",
                 wal.display(),
                 meta.len()
@@ -174,7 +174,7 @@ fn copy_synced(source: &Path, target: &Path) -> Result<(), DbError> {
     file.sync_all()?;
     let written = file.metadata()?.len();
     if written != expected {
-        return Err(DbError::Message(format!(
+        return Err(DbError::Invariant(format!(
             "copy of {} to {} has {written} bytes, expected {expected}",
             source.display(),
             target.display()

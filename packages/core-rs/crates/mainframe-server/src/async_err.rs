@@ -24,7 +24,7 @@ mod tests {
 
     #[tokio::test]
     async fn internal_error_maps_to_opaque_500_envelope() {
-        let err = DbError::Message("secret table `devices` is missing".into());
+        let err = DbError::Invariant("secret table `devices` is missing".into());
         let resp = internal_error("loading devices", &err);
         assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
         let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();

@@ -82,7 +82,7 @@ impl From<mainframe_db::DbError> for StoreError {
             mainframe_db::DbError::Sqlite(error) => Self::Sqlite(error),
             mainframe_db::DbError::Json(error) => Self::Json(error),
             mainframe_db::DbError::Io(error) => Self::Io(error),
-            mainframe_db::DbError::Message(message) => Self::Task(message),
+            other => Self::Task(other.to_string()),
         }
     }
 }
