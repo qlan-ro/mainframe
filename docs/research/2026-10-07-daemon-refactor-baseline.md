@@ -30,8 +30,7 @@ landed in #787 and validation stabilization in #800. The implementation PRs targ
 | R10 | #796 |
 | R11 | #806 |
 | R12 | #810 |
-| R13 | Pending enforcement PR |
-
+| R13 | #811 |
 
 Read-only audit of the Rust daemon, October 2026. Goal: name the trendline the
 iterative work took, show the evidence, and propose the refactors that bring
