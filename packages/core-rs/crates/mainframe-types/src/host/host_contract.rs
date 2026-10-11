@@ -3,6 +3,7 @@
 //! (Tauri) shell conforms via serde to the same documented contract. Platform /
 //! DaemonStatus enums are defined HERE and re-exported from host_bridge.
 
+use crate::validation::RefinementError;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -52,12 +53,12 @@ pub struct TerminalCreateOpts {
 
 impl TerminalCreateOpts {
     /// `id`/`cwd` non-empty; `cols`/`rows` positive integers.
-    pub fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), RefinementError> {
         if self.id.is_empty() || self.cwd.is_empty() {
-            return Err("id and cwd must be non-empty".to_string());
+            return Err(RefinementError::Empty("id and cwd"));
         }
         if self.cols <= 0 || self.rows <= 0 {
-            return Err("cols and rows must be positive".to_string());
+            return Err(RefinementError::NotPositive("cols and rows"));
         }
         Ok(())
     }
