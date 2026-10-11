@@ -32,6 +32,18 @@ pub struct RecordedEvent {
     pub deleted: Vec<String>,
 }
 
+/// Why a recorded event's arguments could not be replayed.
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum RecordedEventError {
+    #[error("missing argument {0}")]
+    MissingArgument(usize),
+    #[error(transparent)]
+    Json(#[from] serde_json::Error),
+    /// An `onError` argument that is neither a string nor `{ message }`.
+    #[error("invalid recorded error")]
+    InvalidError,
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct ReplayState {
     pub events: Vec<RecordedEvent>,

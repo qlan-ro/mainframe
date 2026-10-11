@@ -81,9 +81,7 @@ impl AdapterSession for CodexSession {
     ) -> BoxFuture<'_, Result<(), AdapterError>> {
         Box::pin(async move {
             if let Some(approval) = self.approval_handler.lock_recover().as_ref() {
-                approval
-                    .resolve(&response)
-                    .map_err(|error| AdapterError::Message(error.0))?;
+                approval.resolve(&response).map_err(AdapterError::from)?;
             }
             Ok(())
         })

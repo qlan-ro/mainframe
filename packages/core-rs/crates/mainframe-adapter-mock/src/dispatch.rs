@@ -9,15 +9,15 @@ use mainframe_types::context::SkillFileEntry;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
-use crate::fixture::RecordedEvent;
+use crate::fixture::{RecordedEvent, RecordedEventError};
 
-fn arg<T: DeserializeOwned>(event: &RecordedEvent, index: usize) -> Result<T, String> {
+fn arg<T: DeserializeOwned>(event: &RecordedEvent, index: usize) -> Result<T, RecordedEventError> {
     let value = event
         .args
         .get(index)
         .cloned()
-        .ok_or_else(|| format!("missing argument {index}"))?;
-    serde_json::from_value(value).map_err(|error| error.to_string())
+        .ok_or(RecordedEventError::MissingArgument(index))?;
+    Ok(serde_json::from_value(value)?)
 }
 
 pub(crate) fn emit_event(sink: Arc<dyn SessionSink>, event: RecordedEvent) {
@@ -26,7 +26,7 @@ pub(crate) fn emit_event(sink: Arc<dyn SessionSink>, event: RecordedEvent) {
     }
 }
 
-fn dispatch(sink: &Arc<dyn SessionSink>, event: &RecordedEvent) -> Result<(), String> {
+fn dispatch(sink: &Arc<dyn SessionSink>, event: &RecordedEvent) -> Result<(), RecordedEventError> {
     match event.method.as_str() {
         "onInit" => sink.on_init(&arg::<String>(event, 0)?),
         "onMessage" => sink.on_message(
@@ -87,11 +87,12 @@ fn dispatch(sink: &Arc<dyn SessionSink>, event: &RecordedEvent) -> Result<(), St
     Ok(())
 }
 
-fn recorded_error(event: &RecordedEvent) -> Result<String, String> {
+/// The recorded CLI error text, which replays verbatim as `AdapterError::Message`.
+fn recorded_error(event: &RecordedEvent) -> Result<String, RecordedEventError> {
     let value = event
         .args
         .first()
-        .ok_or_else(|| "missing argument 0".to_string())?;
+        .ok_or(RecordedEventError::MissingArgument(0))?;
     if let Some(message) = value.as_str() {
         return Ok(message.to_string());
     }
@@ -99,7 +100,7 @@ fn recorded_error(event: &RecordedEvent) -> Result<String, String> {
         .get("message")
         .and_then(Value::as_str)
         .map(str::to_string)
-        .ok_or_else(|| "invalid recorded error".to_string())
+        .ok_or(RecordedEventError::InvalidError)
 }
 
 #[cfg(test)]

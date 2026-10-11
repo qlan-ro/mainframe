@@ -17,7 +17,7 @@ pub(crate) fn steer_params(
 ) -> Result<Value, AdapterError> {
     let crate::user_input::TurnInput { input, .. } =
         crate::user_input::build_turn_input(message, &[]);
-    let input = serde_json::to_value(&input).map_err(|e| AdapterError::Message(e.to_string()))?;
+    let input = serde_json::to_value(&input).map_err(AdapterError::from)?;
     Ok(json!({ "threadId": thread_id, "expectedTurnId": turn_id, "input": input }))
 }
 
@@ -29,16 +29,13 @@ impl CodexSession {
             (st.thread_id.clone(), st.current_turn_id.clone())
         };
         let (Some(client), Some(thread_id), Some(turn_id)) = (client, thread_id, turn_id) else {
-            return Err(AdapterError::Message(format!(
-                "Session {} has no active turn to steer",
-                self.id
-            )));
+            return Err(AdapterError::NoActiveTurn(self.id.clone()));
         };
         let params = steer_params(&thread_id, &turn_id, &message)?;
         client
             .request("turn/steer", Some(params))
             .await
-            .map_err(|e| AdapterError::Message(e.0))?;
+            .map_err(AdapterError::from)?;
         Ok(())
     }
 }

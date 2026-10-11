@@ -21,19 +21,13 @@ impl ClaudeSession {
             }
             Err(error @ StdinWriteError::Full) => {
                 tracing::warn!(session_id = %self.id, %error, "stdin write rejected");
-                Err(AdapterError::Message(format!(
-                    "Session {} stdin queue is full",
-                    self.id
-                )))
+                Err(AdapterError::StdinFull(self.id.clone()))
             }
         }
     }
     pub async fn send_command(&self, command: String, args: String) -> Result<(), AdapterError> {
         if !self.is_spawned() {
-            return Err(AdapterError::Message(format!(
-                "Session {} not spawned",
-                self.id
-            )));
+            return Err(AdapterError::NotSpawned(self.id.clone()));
         }
         let chat_id = self.state().chat_id.clone();
         let text = format!(
@@ -54,10 +48,7 @@ impl ClaudeSession {
         uuid: Option<String>,
     ) -> Result<(), AdapterError> {
         if !self.is_spawned() {
-            return Err(AdapterError::Message(format!(
-                "Session {} not spawned",
-                self.id
-            )));
+            return Err(AdapterError::NotSpawned(self.id.clone()));
         }
         let chat_id = self.state().chat_id.clone();
         let payload =
@@ -69,10 +60,7 @@ impl ClaudeSession {
     /// tool batches (`terminal_reason: "aborted_tools"`).
     pub async fn steer(&self, message: String, uuid: Option<String>) -> Result<(), AdapterError> {
         if !self.is_spawned() {
-            return Err(AdapterError::Message(format!(
-                "Session {} not spawned",
-                self.id
-            )));
+            return Err(AdapterError::NotSpawned(self.id.clone()));
         }
         let chat_id = self.state().chat_id.clone();
         let payload = crate::user_payload::build_steer_payload(&chat_id, &message, uuid.as_deref());

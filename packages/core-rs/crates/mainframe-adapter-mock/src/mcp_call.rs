@@ -17,7 +17,7 @@ use mainframe_types::orchestration::{MCP_SERVER_NAME, OrchestrationMcpLaunch};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::fixture::RecordedEvent;
+use crate::fixture::{RecordedEvent, RecordedEventError};
 
 pub const MCP_CALL_METHOD: &str = "mcp_call";
 
@@ -52,9 +52,13 @@ impl McpOutcome {
     }
 }
 
-pub(crate) fn parse_call(event: &RecordedEvent) -> Result<McpCall, String> {
-    let arg = event.args.first().cloned().ok_or("missing argument 0")?;
-    serde_json::from_value(arg).map_err(|error| error.to_string())
+pub(crate) fn parse_call(event: &RecordedEvent) -> Result<McpCall, RecordedEventError> {
+    let arg = event
+        .args
+        .first()
+        .cloned()
+        .ok_or(RecordedEventError::MissingArgument(0))?;
+    Ok(serde_json::from_value(arg)?)
 }
 
 /// One `tools/call` against the spawn's endpoint. Never panics: a refused or

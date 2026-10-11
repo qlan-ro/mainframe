@@ -7,10 +7,7 @@ impl CodexSession {
     ) -> Result<AdapterProcess, AdapterError> {
         let (options, sink) = self.configure_spawn(options, sink);
         if std::fs::metadata(&self.project_path).is_err() {
-            return Err(AdapterError::Message(format!(
-                "Project directory does not exist or is not accessible: {}",
-                self.project_path
-            )));
+            return Err(AdapterError::ProjectDirMissing(self.project_path.clone()));
         }
 
         let child = self.spawn_process(&options)?;
@@ -45,7 +42,7 @@ impl CodexSession {
         }
 
         self.get_process_info()
-            .ok_or_else(|| AdapterError::Message("no process info".to_string()))
+            .ok_or(AdapterError::Invariant("no process info"))
     }
     fn configure_spawn(
         &self,
@@ -94,12 +91,12 @@ impl CodexSession {
                 client.notify("initialized", None);
                 *self.status.lock_recover() = AdapterProcessStatus::Ready;
             }
-            Ok(Err(e)) => return Err(AdapterError::Message(e.0)),
+            Ok(Err(e)) => return Err(e.into()),
             Err(_) => {
                 tracing::error!(module = "codex:session", session_id = %self.id, "codex handshake timeout");
-                sink.on_error(AdapterError::Message("handshake timeout".to_string()));
+                sink.on_error(AdapterError::Timeout("handshake timeout"));
                 client.close();
-                return Err(AdapterError::Message("handshake timeout".to_string()));
+                return Err(AdapterError::Timeout("handshake timeout"));
             }
         }
         Ok(())
@@ -122,9 +119,7 @@ impl CodexSession {
             &mut cmd,
             options.orchestration_mcp.as_ref(),
         );
-        let child = cmd
-            .spawn()
-            .map_err(|e| AdapterError::Message(e.to_string()))?;
+        let child = cmd.spawn()?;
         self.pid
             .store(child.id().map(|p| p as i64).unwrap_or(0), Ordering::SeqCst);
         *self.status.lock_recover() = AdapterProcessStatus::Starting;
@@ -166,9 +161,7 @@ pub(crate) async fn spawn_temp_app_server(
     path: &str,
 ) -> Result<Arc<JsonRpcClient>, AdapterError> {
     let mut cmd = build_app_server_command(executable, cwd, path);
-    let child = cmd
-        .spawn()
-        .map_err(|e| AdapterError::Message(e.to_string()))?;
+    let child = cmd.spawn()?;
     let client = Arc::new(JsonRpcClient::new(
         child,
         JsonRpcHandlers {
@@ -181,7 +174,7 @@ pub(crate) async fn spawn_temp_app_server(
     client
         .request("initialize", Some(initialize_params(with_capabilities)))
         .await
-        .map_err(|e| AdapterError::Message(e.0))?;
+        .map_err(AdapterError::from)?;
     client.notify("initialized", None);
     Ok(client)
 }

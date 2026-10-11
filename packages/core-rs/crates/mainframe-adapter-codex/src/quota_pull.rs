@@ -64,8 +64,8 @@ pub async fn pull_codex_quota_via_temp_app_server(
                 let value = client
                     .request("account/rateLimits/read", None)
                     .await
-                    .map_err(|err| AdapterError::Message(err.0))?;
-                serde_json::from_value(value).map_err(|err| AdapterError::Message(err.to_string()))
+                    .map_err(AdapterError::from)?;
+                serde_json::from_value(value).map_err(AdapterError::from)
             })
         })
     };
@@ -77,9 +77,9 @@ pub async fn pull_codex_quota_via_temp_app_server(
                 let value = client
                     .request("account/read", None)
                     .await
-                    .map_err(|err| AdapterError::Message(err.0))?;
-                let result: GetAccountResult = serde_json::from_value(value)
-                    .map_err(|err| AdapterError::Message(err.to_string()))?;
+                    .map_err(AdapterError::from)?;
+                let result: GetAccountResult =
+                    serde_json::from_value(value).map_err(AdapterError::from)?;
                 Ok(result.account)
             })
         })

@@ -180,5 +180,8 @@ async fn resolve_env_fails_loudly_with_an_actionable_message() {
     let error = resolve_env(Some("/nonexistent/cliproxyapi.conf"), None, "gpt-5.6-sol")
         .await
         .expect_err("no proxy");
-    assert!(error.contains("brew services start cliproxyapi"), "{error}");
+    assert_eq!(
+        error.to_string(),
+        "CLIProxyAPI is not reachable — start it with `brew services start cliproxyapi`, or pick a Claude model."
+    );
 }

@@ -77,11 +77,11 @@ pub async fn spawn_claude_usage(binary: &str, path: &str) -> Result<String, Adap
     .await
     .map_err(|error| match error {
         mainframe_runtime::process::ExecError::Timeout => {
-            AdapterError::Message("claude /usage pull timed out".into())
+            AdapterError::Timeout("claude /usage pull timed out")
         }
         mainframe_runtime::process::ExecError::Spawn(error)
         | mainframe_runtime::process::ExecError::Io(error) => AdapterError::from(error),
-        error => AdapterError::Message(error.to_string()),
+        error => AdapterError::Exec(error),
     })?;
 
     usage_output_to_result(
@@ -112,9 +112,10 @@ fn usage_output_to_result(
         .take(STDERR_SNIPPET_LEN)
         .collect();
     let code = code.map_or_else(|| "signal".to_string(), |c| c.to_string());
-    Err(AdapterError::Message(format!(
-        "claude /usage pull exited with code {code}: {snippet}"
-    )))
+    Err(AdapterError::Exited {
+        what: "claude /usage pull",
+        detail: format!("code {code}: {snippet}"),
+    })
 }
 
 #[cfg(test)]

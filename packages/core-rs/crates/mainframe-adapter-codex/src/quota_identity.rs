@@ -123,8 +123,7 @@ async fn read_default_auth_file(path: &Path) -> Result<Option<CodexAuthFile>, Ad
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(err) => return Err(AdapterError::from(err)),
     };
-    let parsed: CodexAuthFile =
-        serde_json::from_str(&raw).map_err(|err| AdapterError::Message(err.to_string()))?;
+    let parsed: CodexAuthFile = serde_json::from_str(&raw).map_err(AdapterError::from)?;
     Ok(Some(parsed))
 }
 

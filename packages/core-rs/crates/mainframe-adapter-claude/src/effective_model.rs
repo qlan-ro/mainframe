@@ -26,9 +26,7 @@ pub(crate) async fn required_probe(
     path: &str,
     cwd: &str,
 ) -> Result<String, AdapterError> {
-    probe(executable, path, cwd).await.ok_or_else(|| {
-        AdapterError::Message("Could not resolve the CLI configured model. Select a model explicitly or check the CLI settings.".into())
-    })
+    probe(executable, path, cwd).await.ok_or(AdapterError::Unavailable("Could not resolve the CLI configured model. Select a model explicitly or check the CLI settings."))
 }
 
 pub(crate) async fn probe(executable: &str, path: &str, cwd: &str) -> Option<String> {

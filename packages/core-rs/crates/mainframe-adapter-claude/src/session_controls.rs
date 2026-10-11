@@ -2,10 +2,7 @@ use super::*;
 impl ClaudeSession {
     pub async fn set_permission_mode(&self, mode: ExecutionMode) -> Result<(), AdapterError> {
         if !self.is_spawned() {
-            return Err(AdapterError::Message(format!(
-                "Session {} not spawned",
-                self.id
-            )));
+            return Err(AdapterError::NotSpawned(self.id.clone()));
         }
         let cli_mode = execution_mode_cli(mode).to_string();
         *self.base_permission_mode.lock_recover() = cli_mode.clone();
@@ -14,10 +11,7 @@ impl ClaudeSession {
     }
     pub async fn set_plan_mode(&self, on: bool) -> Result<(), AdapterError> {
         if !self.is_spawned() {
-            return Err(AdapterError::Message(format!(
-                "Session {} not spawned",
-                self.id
-            )));
+            return Err(AdapterError::NotSpawned(self.id.clone()));
         }
         let mode = if on {
             "plan".to_string()
@@ -67,14 +61,14 @@ impl ClaudeSession {
             .and_then(|v| v.get("error"))
             .and_then(Value::as_str)
             .unwrap_or("timeout");
-        Err(AdapterError::Message(format!("{subtype} failed: {err}")))
+        Err(AdapterError::ControlFailed {
+            subtype: subtype.to_string(),
+            reason: err.to_string(),
+        })
     }
     pub async fn set_model(&self, model: String) -> Result<(), AdapterError> {
         if !self.is_spawned() {
-            return Err(AdapterError::Message(format!(
-                "Session {} not spawned",
-                self.id
-            )));
+            return Err(AdapterError::NotSpawned(self.id.clone()));
         }
         let model = if model == "default" {
             let executable = self.executable.lock_recover().clone();
@@ -96,10 +90,7 @@ impl ClaudeSession {
     }
     pub async fn apply_tuning(&self, tuning: ResolvedTuning) -> Result<(), AdapterError> {
         if !self.is_spawned() {
-            return Err(AdapterError::Message(format!(
-                "Session {} not spawned",
-                self.id
-            )));
+            return Err(AdapterError::NotSpawned(self.id.clone()));
         }
         self.require_success(
             json!({ "subtype": "apply_flag_settings", "settings": tuning_to_flag_settings(&tuning) }),
