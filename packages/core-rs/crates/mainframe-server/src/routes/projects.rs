@@ -19,6 +19,8 @@ use serde_json::json;
 use mainframe_services::workspace::worktree::is_directory_present_async;
 use mainframe_types::chat::Project;
 
+use mainframe_chat::chat_manager::RemoveProjectError;
+
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok, ok_empty};
 
@@ -113,10 +115,10 @@ async fn create(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
 
 /// `ChatManager::remove_project`'s result → the route envelope. Split out
 /// because the route harness cannot build a ChatManager to reach the Err arm.
-fn removal_response(result: Result<(), String>) -> Response {
+fn removal_response(result: Result<(), RemoveProjectError>) -> Response {
     match result {
         Ok(()) => ok_empty(),
-        Err(err) => fail(StatusCode::INTERNAL_SERVER_ERROR, err),
+        Err(err) => crate::error_status::fail_with(&err),
     }
 }
 
@@ -148,6 +150,7 @@ pub fn router() -> Router<Arc<AppCtx>> {
 #[cfg(test)]
 mod tests {
     use axum::body::to_bytes;
+    use mainframe_types::seam_error::SeamError;
 
     use super::*;
 
@@ -166,8 +169,8 @@ mod tests {
 
     #[tokio::test]
     async fn removal_response_err_emits_the_failure_envelope_with_the_message() {
-        let (status, body) =
-            body_json(removal_response(Err("database is locked".to_string()))).await;
+        let store = RemoveProjectError::Store(SeamError::msg("database is locked"));
+        let (status, body) = body_json(removal_response(Err(store))).await;
         assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
         assert_eq!(
             body,
@@ -261,13 +264,18 @@ mod tests {
         );
     }
 
+    /// Intentional change: refusing the hidden scratch project answered 500;
+    /// the request is what is wrong, so it is now a 400 with the same text.
     #[tokio::test]
     async fn delete_refuses_the_hidden_scratch_project() {
         let ctx = AppCtx::test_ctx_with_chat_manager();
         let (status, body) =
             body_json(remove(State(ctx.clone()), Path("mainframe-no-project".to_string())).await)
                 .await;
-        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
-        assert_eq!(body["success"], false);
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            body,
+            json!({ "success": false, "error": "cannot remove the hidden scratch project" })
+        );
     }
 }

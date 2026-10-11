@@ -15,6 +15,7 @@ use axum::routing::{get, post};
 use mainframe_types::segment::SwitchProviderRequest;
 
 use crate::ctx::AppCtx;
+use crate::error_status::status_of;
 use crate::respond::{fail, ok};
 use crate::routes::projects::parse_body;
 
@@ -45,8 +46,7 @@ async fn switch_provider(
     match cm.switch_provider(&id, &req).await {
         Ok(chat) => ok(chat),
         Err(err) => {
-            let status =
-                StatusCode::from_u16(err.status()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+            let status = status_of(&err);
             if status == StatusCode::INTERNAL_SERVER_ERROR {
                 tracing::error!(chat_id = %id, %err, "provider switch failed");
             }

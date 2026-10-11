@@ -67,6 +67,7 @@ use mainframe_types::context::{
 };
 use mainframe_types::display::{DisplayMessage, ToolCategories};
 use mainframe_types::events::DaemonEvent;
+use mainframe_types::seam_error::SeamError;
 use mainframe_types::settings_kv::SettingsKv;
 use tokio::sync::broadcast;
 
@@ -339,13 +340,13 @@ impl ChatManagerDeps for DaemonChatDeps {
     fn remove_scratch_dir<'a>(
         &'a self,
         scratch_path: &'a str,
-    ) -> BoxFuture<'a, Result<(), String>> {
+    ) -> BoxFuture<'a, Result<(), SeamError>> {
         let path = scratch_path.to_string();
         Box::pin(async move {
             match tokio::fs::remove_dir_all(&path).await {
                 Ok(()) => Ok(()),
                 Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
-                Err(err) => Err(err.to_string()),
+                Err(err) => Err(SeamError::new(err)),
             }
         })
     }
@@ -443,24 +444,24 @@ impl ChatManagerDeps for DaemonChatDeps {
             .initial_transcript_path(session_id, cwd)
     }
 
-    fn projects_remove(&self, project_id: &str) -> Result<(), String> {
+    fn projects_remove(&self, project_id: &str) -> Result<(), SeamError> {
         let pid = project_id.to_string();
         self.db
             .call_blocking(move |d| d.projects.remove(&pid))
             .map_err(|err| {
                 tracing::warn!(%err, project_id, "projects.remove failed");
-                err.to_string()
+                SeamError::new(err)
             })
     }
 
     fn write_workspace_trust<'a>(
         &'a self,
         project_path: &'a str,
-    ) -> BoxFuture<'a, Result<(), String>> {
+    ) -> BoxFuture<'a, Result<(), SeamError>> {
         Box::pin(async move {
             mainframe_adapter_claude::trust_store::write_workspace_trust(project_path, None)
                 .await
-                .map_err(|err| err.to_string())
+                .map_err(SeamError::new)
         })
     }
 
@@ -901,7 +902,7 @@ impl ChatManagerDeps for DaemonChatDeps {
         })
     }
 
-    fn create_fork(&self, insert: &ForkCreateInput) -> Result<Chat, String> {
+    fn create_fork(&self, insert: &ForkCreateInput) -> Result<Chat, SeamError> {
         let input = insert.clone();
         let db_pending = to_db_pending_fork(&input.pending_fork);
         self.db
@@ -909,7 +910,7 @@ impl ChatManagerDeps for DaemonChatDeps {
                 let fork_insert = to_db_fork_insert(&input, &db_pending);
                 d.chats.create_fork(&fork_insert)
             })
-            .map_err(|err| err.to_string())
+            .map_err(SeamError::new)
     }
 
     fn get_pending_fork(&self, chat_id: &str) -> Option<PendingForkState> {
@@ -946,11 +947,11 @@ impl ChatManagerDeps for DaemonChatDeps {
             .into_owned()
     }
 
-    fn chats_find_or_create_side_chat(&self, parent: &Chat) -> Result<(Chat, bool), String> {
+    fn chats_find_or_create_side_chat(&self, parent: &Chat) -> Result<(Chat, bool), SeamError> {
         let parent = parent.clone();
         self.db
             .call_blocking(move |d| d.chats.find_or_create_side_chat(&parent))
-            .map_err(|err| err.to_string())
+            .map_err(SeamError::new)
     }
 
     fn segment_store(&self) -> Option<&dyn mainframe_chat::segments::SegmentStore> {

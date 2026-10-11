@@ -67,7 +67,7 @@ async fn start(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
     };
     match registry.start(body.port, scope).await {
         Ok(url) => ok(json!({ "url": url, "port": body.port })),
-        Err(error) => fail(StatusCode::INTERNAL_SERVER_ERROR, error),
+        Err(error) => fail(StatusCode::INTERNAL_SERVER_ERROR, error.to_string()),
     }
 }
 

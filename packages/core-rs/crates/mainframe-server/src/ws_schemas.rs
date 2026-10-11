@@ -4,24 +4,21 @@
 //! here as an explicit `validate()`.
 
 use mainframe_types::events::ClientEvent;
+use mainframe_types::validation::RefinementError;
 
-/// The two failure modes an inbound WS message can hit: unparseable JSON
-/// (`Invalid JSON`) vs. a shape or validation failure (`Invalid message: …`).
-/// Both are emitted to the client as `{ type: "error", error }`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// The failure modes an inbound WS message can hit: unparseable JSON
+/// (`Invalid JSON`) vs. a shape or refinement failure (`Invalid message: …`).
+/// The text is the `error` the client receives in a `{ type: "error", error }`
+/// frame.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ClientEventError {
+    #[error("Invalid JSON")]
     InvalidJson,
+    /// The frame is JSON but not a `ClientEvent`; carries serde's reason.
+    #[error("Invalid message: {0}")]
     Invalid(String),
-}
-
-impl ClientEventError {
-    /// The `error` string sent in the `error` frame.
-    pub fn message(&self) -> String {
-        match self {
-            ClientEventError::InvalidJson => "Invalid JSON".to_string(),
-            ClientEventError::Invalid(reason) => format!("Invalid message: {reason}"),
-        }
-    }
+    #[error("Invalid message: {0}")]
+    Refinement(#[from] RefinementError),
 }
 
 /// Parse a raw WS text frame into a validated `ClientEvent`, mirroring
@@ -31,13 +28,13 @@ pub(crate) fn parse_client_event(raw: &str) -> Result<ClientEvent, ClientEventEr
         serde_json::from_str(raw).map_err(|_| ClientEventError::InvalidJson)?;
     let event: ClientEvent =
         serde_json::from_value(value).map_err(|e| ClientEventError::Invalid(e.to_string()))?;
-    validate(&event).map_err(ClientEventError::Invalid)?;
+    validate(&event)?;
     Ok(event)
 }
 
 /// The validation refinements. Field presence/typing is already guaranteed by serde;
 /// this adds the min-length, content-or-attachments, and identifier-charset rules.
-fn validate(event: &ClientEvent) -> Result<(), String> {
+fn validate(event: &ClientEvent) -> Result<(), RefinementError> {
     match event {
         ClientEvent::Subscribe { chat_id } | ClientEvent::Unsubscribe { chat_id } => {
             non_empty(chat_id, "chatId")
@@ -59,15 +56,15 @@ fn validate(event: &ClientEvent) -> Result<(), String> {
     }
 }
 
-fn non_empty(value: &str, field: &str) -> Result<(), String> {
+fn non_empty(value: &str, field: &'static str) -> Result<(), RefinementError> {
     if value.is_empty() {
-        Err(format!("{field} must be non-empty"))
+        Err(RefinementError::Empty(field))
     } else {
         Ok(())
     }
 }
 
-fn opt_non_empty(value: Option<&str>, field: &str) -> Result<(), String> {
+fn opt_non_empty(value: Option<&str>, field: &'static str) -> Result<(), RefinementError> {
     match value {
         Some(v) => non_empty(v, field),
         None => Ok(()),
@@ -102,18 +99,15 @@ mod tests {
 
     #[test]
     fn rejects_empty_chat_id() {
-        assert!(matches!(
-            parse_client_event(r#"{"type":"subscribe","chatId":""}"#),
-            Err(ClientEventError::Invalid(_))
-        ));
+        let err = parse_client_event(r#"{"type":"subscribe","chatId":""}"#).unwrap_err();
+        assert_eq!(err.to_string(), "Invalid message: chatId must be non-empty");
+        assert_eq!(ClientEventError::InvalidJson.to_string(), "Invalid JSON");
     }
 
     #[test]
     fn rejects_subscribe_file_with_empty_path() {
-        assert!(matches!(
-            parse_client_event(r#"{"type":"subscribe:file","path":""}"#),
-            Err(ClientEventError::Invalid(_))
-        ));
+        let err = parse_client_event(r#"{"type":"subscribe:file","path":""}"#).unwrap_err();
+        assert_eq!(err.to_string(), "Invalid message: path must be non-empty");
     }
 
     #[test]

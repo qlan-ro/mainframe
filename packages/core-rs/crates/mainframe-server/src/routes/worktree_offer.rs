@@ -14,6 +14,7 @@ use axum::routing::post;
 use serde::Deserialize;
 
 use crate::ctx::AppCtx;
+use crate::error_status::status_of;
 use crate::respond::{fail, ok_empty};
 use crate::routes::projects::parse_body;
 
@@ -53,8 +54,7 @@ async fn accept_worktree_offer(
     match cm.accept_worktree_offer(&id, &path).await {
         Ok(()) => ok_empty(),
         Err(err) => {
-            let status = StatusCode::from_u16(err.status_code())
-                .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+            let status = status_of(&err);
             tracing::warn!(chat_id = %id, %err, "accept-worktree-offer failed");
             fail(status, err.to_string())
         }
@@ -79,8 +79,7 @@ async fn dismiss_worktree_offer(
     match cm.dismiss_worktree_offer(&id, &path) {
         Ok(()) => ok_empty(),
         Err(err) => {
-            let status = StatusCode::from_u16(err.status_code())
-                .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+            let status = status_of(&err);
             tracing::warn!(chat_id = %id, %err, "dismiss-worktree-offer failed");
             fail(status, err.to_string())
         }

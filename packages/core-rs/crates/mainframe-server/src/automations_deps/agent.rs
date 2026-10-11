@@ -163,7 +163,7 @@ impl AgentPort for DaemonAgentPort {
                 self.chats
                     .enable_worktree(&chat_id, &base, &worktree.branch_name)
                     .await
-                    .map_err(AgentPortError)?;
+                    .map_err(step_error)?;
             }
 
             // Subscribe BEFORE the send so the terminal event cannot race the
@@ -174,7 +174,7 @@ impl AgentPort for DaemonAgentPort {
 
             if let Err(err) = self.chats.send_message(&chat_id, &request.prompt).await {
                 self.pending.lock_recover().remove(&chat_id);
-                return Err(AgentPortError(err));
+                return Err(step_error(err));
             }
             Ok(AgentHandle { chat_id })
         })
@@ -200,7 +200,7 @@ impl AgentPort for DaemonAgentPort {
             self.chats
                 .send_message(chat_id, correction)
                 .await
-                .map_err(AgentPortError)?;
+                .map_err(step_error)?;
             self.wait_terminal(chat_id, rx).await
         })
     }
@@ -211,4 +211,9 @@ impl AgentPort for DaemonAgentPort {
             Ok(())
         })
     }
+}
+
+/// A chat-system refusal becomes the ask_agent step's error, by its text.
+fn step_error(err: impl std::fmt::Display) -> AgentPortError {
+    AgentPortError(err.to_string())
 }

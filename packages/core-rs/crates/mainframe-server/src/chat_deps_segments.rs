@@ -3,6 +3,7 @@
 //! A child module of `chat_deps` so it can reach the private `db` handle.
 
 use mainframe_chat::segments::SegmentStore;
+use mainframe_types::seam_error::SeamError;
 use mainframe_types::segment::{
     HandoffRecord, HandoffStatus, SegmentLayout, SegmentResultDelta, SwitchCommit,
 };
@@ -21,30 +22,30 @@ impl SegmentStore for DaemonChatDeps {
         }
     }
 
-    fn commit_switch(&self, commit: &SwitchCommit) -> Result<SegmentLayout, String> {
+    fn commit_switch(&self, commit: &SwitchCommit) -> Result<SegmentLayout, SeamError> {
         let commit = commit.clone();
         self.db
             .call_blocking(move |d| d.segments.commit_switch(&commit))
-            .map_err(|err| err.to_string())
+            .map_err(SeamError::new)
     }
 
-    fn replace_active_native(&self, chat_id: &str) -> Result<SegmentLayout, String> {
+    fn replace_active_native(&self, chat_id: &str) -> Result<SegmentLayout, SeamError> {
         let id = chat_id.to_string();
         self.db
             .call_blocking(move |d| d.segments.replace_active_native(&id))
-            .map_err(|err| err.to_string())
+            .map_err(SeamError::new)
     }
 
     fn insert_pending_handoff(
         &self,
         record: &HandoffRecord,
         start_marker: &str,
-    ) -> Result<(), String> {
+    ) -> Result<(), SeamError> {
         let record = record.clone();
         let marker = start_marker.to_string();
         self.db
             .call_blocking(move |d| d.handoffs.insert_pending(&record, &marker))
-            .map_err(|err| err.to_string())
+            .map_err(SeamError::new)
     }
 
     fn set_handoff_status(&self, handoff_id: &str, status: HandoffStatus) -> bool {

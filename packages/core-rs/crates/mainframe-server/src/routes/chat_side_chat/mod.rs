@@ -15,6 +15,7 @@ use serde::Deserialize;
 use mainframe_chat::chat_manager::OpenSideChatError;
 
 use crate::ctx::AppCtx;
+use crate::error_status::status_of;
 use crate::respond::{fail, ok};
 use crate::routes::projects::parse_body;
 use mainframe_types::ids::is_safe_identifier;
@@ -29,7 +30,7 @@ mod tests;
 struct OpenSideChatBody {}
 
 fn status_for(err: &OpenSideChatError) -> StatusCode {
-    StatusCode::from_u16(err.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR)
+    status_of(err)
 }
 
 async fn open_side_chat(

@@ -69,7 +69,7 @@ async fn search(Query(params): Query<SearchQuery>) -> Response {
     match catalog::search(&HttpFetcher, query).await {
         Ok(entries) => ok(json!({ "entries": search_json(entries) })),
         Err(reason) => {
-            tracing::warn!(reason, "skills registry search failed");
+            tracing::warn!(%reason, "skills registry search failed");
             fail(StatusCode::BAD_GATEWAY, "Skills registry search failed")
         }
     }

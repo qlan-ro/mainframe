@@ -11,6 +11,7 @@ use axum::response::Response;
 use axum::routing::post;
 
 use crate::ctx::AppCtx;
+use crate::error_status::fail_with;
 use crate::respond::{fail, ok_empty};
 
 /// Which recovery op a route runs, mapped to its ChatManager method + log label.
@@ -56,14 +57,10 @@ async fn run(ctx: &Arc<AppCtx>, chat_id: &str, action: RecoveryAction) -> Respon
     match result {
         Ok(()) => ok_empty(),
         Err(err) => {
-            // Honor `err.statusCode` (recreateChatWorktree tags branch-gone 409),
-            // else the default 400; the error message crosses the wire verbatim.
-            let status = err
-                .status_code()
-                .and_then(|code| StatusCode::from_u16(code).ok())
-                .unwrap_or(StatusCode::BAD_REQUEST);
+            // The error's own class picks the status; its message crosses
+            // the wire verbatim.
             tracing::warn!(chat_id, %err, "{label} failed");
-            fail(status, err.to_string())
+            fail_with(&err)
         }
     }
 }

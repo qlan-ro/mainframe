@@ -63,7 +63,7 @@ impl GatePort for FlakyPort {
             let mut remaining = self.remaining_failures.lock().unwrap();
             if *remaining > 0 {
                 *remaining -= 1;
-                Err(PermissionError::Message("transport failure".to_string()))
+                Err(PermissionError::NoSession("c1".to_string()))
             } else {
                 Ok(())
             }

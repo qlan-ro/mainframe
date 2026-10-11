@@ -20,6 +20,7 @@ use serde::Deserialize;
 use mainframe_chat::chat_manager::{ForkChatError, ForkPoint};
 
 use crate::ctx::AppCtx;
+use crate::error_status::status_of;
 use crate::respond::{fail, ok};
 use crate::routes::projects::parse_body;
 use mainframe_types::ids::is_safe_identifier;
@@ -64,8 +65,7 @@ async fn fork(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>, body: Byte
         Ok(chat) => ok(chat),
         Err(ForkChatError::NotFound(_)) => fail(StatusCode::NOT_FOUND, "Not found"),
         Err(err) => {
-            let status = StatusCode::from_u16(err.status_code())
-                .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+            let status = status_of(&err);
             if status == StatusCode::INTERNAL_SERVER_ERROR {
                 tracing::error!(chat_id = %id, %err, "fork failed");
             }

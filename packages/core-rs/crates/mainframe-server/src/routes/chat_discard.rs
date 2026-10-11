@@ -44,7 +44,7 @@ async fn discard(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Resp
         Ok(()) => ok_empty(),
         Err(err) => {
             tracing::error!(chat_id = %id, %err, "discard failed");
-            fail(StatusCode::INTERNAL_SERVER_ERROR, err)
+            crate::error_status::fail_with(&err)
         }
     }
 }

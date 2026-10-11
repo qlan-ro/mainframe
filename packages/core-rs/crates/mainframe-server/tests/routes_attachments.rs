@@ -169,3 +169,18 @@ async fn get_returns_the_stored_attachment_in_the_envelope() {
     assert_eq!(body["data"]["name"], "a.png");
     assert_eq!(body["data"]["mediaType"], "image/png");
 }
+
+/// Intentional change: a chat id that is not a safe path segment used to fall
+/// through to the opaque 500; it is the request that is wrong, so it is a 400
+/// naming the id.
+#[tokio::test]
+async fn returns_400_when_the_chat_id_is_not_a_safe_path_segment() {
+    let server = spawn_test_server(None).await;
+    let resp = post_attachments(&server, "bad.id", json!({ "attachments": [small_image()] })).await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    let body: Value = resp.json().await.unwrap();
+    assert_eq!(
+        body,
+        json!({ "success": false, "error": "Invalid chatId path segment: \"bad.id\"" })
+    );
+}

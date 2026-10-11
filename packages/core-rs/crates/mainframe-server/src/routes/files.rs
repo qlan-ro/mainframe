@@ -22,6 +22,7 @@ use serde::Serialize;
 use crate::async_err::internal_error;
 use crate::ctx::AppCtx;
 use crate::fs_utils::{has_binary_extension, is_ignored_dir, path_resolve, relative};
+use crate::input_error::InputError;
 use crate::path_utils::resolve_readable_path;
 use crate::respond::{fail, ok};
 use crate::ripgrep::{ListFilesOptions, list_files_with_ripgrep};
@@ -365,7 +366,7 @@ async fn write_file(
     let chat_id = parsed.get("chatId").and_then(|v| v.as_str());
     let file_path = match require_nonempty_string(&parsed, "path") {
         Ok(p) => p,
-        Err(msg) => return fail(StatusCode::BAD_REQUEST, msg),
+        Err(err) => return crate::error_status::fail_with(&err),
     };
     // `content` must be a string (an empty string is valid). Missing/non-string
     // returns the Zod v4 type-mismatch message.
@@ -705,25 +706,29 @@ fn parse_booleanish(raw: Option<&str>) -> Result<bool, ()> {
 /// Zod v4 message for `z.string()` receiving a non-string value: the `received`
 /// suffix is the JSON typeof.
 fn zod_type_mismatch(v: &serde_json::Value) -> String {
-    let received = match v {
+    InputError::ExpectedString(json_typeof(v)).to_string()
+}
+
+/// The JSON `typeof` zod names in a type-mismatch message.
+fn json_typeof(v: &serde_json::Value) -> &'static str {
+    match v {
         serde_json::Value::Null => "null",
         serde_json::Value::Bool(_) => "boolean",
         serde_json::Value::Number(_) => "number",
         serde_json::Value::Array(_) => "array",
         serde_json::Value::Object(_) => "object",
         serde_json::Value::String(_) => "string",
-    };
-    format!("Invalid input: expected string, received {received}")
+    }
 }
 
-fn require_nonempty_string<'a>(v: &'a serde_json::Value, key: &str) -> Result<&'a str, String> {
+fn require_nonempty_string<'a>(v: &'a serde_json::Value, key: &str) -> Result<&'a str, InputError> {
     match v.get(key) {
-        None => Err("Invalid input: expected string, received undefined".to_string()),
-        Some(serde_json::Value::String(s)) if s.is_empty() => {
-            Err("Too small: expected string to have >=1 characters".to_string())
-        }
+        None => Err(InputError::ExpectedString("undefined")),
+        Some(serde_json::Value::String(s)) if s.is_empty() => Err(InputError::Rejected(
+            "Too small: expected string to have >=1 characters",
+        )),
         Some(serde_json::Value::String(s)) => Ok(s),
-        Some(other) => Err(zod_type_mismatch(other)),
+        Some(other) => Err(InputError::ExpectedString(json_typeof(other))),
     }
 }
 
