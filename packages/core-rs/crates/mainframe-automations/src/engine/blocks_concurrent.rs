@@ -6,11 +6,11 @@
 
 use crate::domain::Step;
 use crate::error::StoreError;
-use crate::store::{AutomationCheckpoint, StepStatus};
+use crate::store::{AutomationCheckpoint, StepKind, StepStatus};
 
 use super::WalkResult;
 use super::checkpoint::WalkFrame;
-use super::markers::{BRANCH_OUTCOME_KIND, branch_marker, mark_outcome};
+use super::markers::{branch_marker, mark_outcome};
 use super::walk::{StepsResult, WalkCtx, walk_frame};
 
 /// One concurrently-run branch: its own walk frame (so a `#<index>`-suffixed
@@ -54,7 +54,7 @@ async fn advance_branch(
                 ctx,
                 marker,
                 block_id,
-                BRANCH_OUTCOME_KIND,
+                StepKind::BranchOutcome,
                 StepStatus::Succeeded,
                 None,
             )
@@ -66,7 +66,7 @@ async fn advance_branch(
                 ctx,
                 marker,
                 block_id,
-                BRANCH_OUTCOME_KIND,
+                StepKind::BranchOutcome,
                 StepStatus::Failed,
                 Some(error),
             )

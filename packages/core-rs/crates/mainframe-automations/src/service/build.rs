@@ -43,7 +43,7 @@ pub(super) async fn build(
         ports.clock.clone(),
     ));
 
-    let agent_verb = AgentVerb::new(ports.agent, runs.clone(), ports.events.clone());
+    let agent_verb = AgentVerb::new(ports.agent, runs.clone());
     let verb_ports = EngineVerbPorts {
         agent: agent_verb.clone(),
         ask_me: AskMeVerb::new(

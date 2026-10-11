@@ -52,7 +52,7 @@ pub(crate) async fn seed_automation(h: &StoreHarness, name: &str) -> AutomationR
 pub(crate) fn step_entry(step_id: &str, status: StepStatus) -> CheckpointStep {
     CheckpointStep {
         step_id: step_id.to_string(),
-        kind: "notify".to_string(),
+        kind: super::StepKind::Notify,
         status,
         outputs: None,
         error: None,

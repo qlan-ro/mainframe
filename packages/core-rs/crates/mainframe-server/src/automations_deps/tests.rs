@@ -4,13 +4,13 @@
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
 
-use mainframe_automations::engine::BoxFuture;
 use mainframe_automations::ports::{
     AgentOutcome, AgentPort, AgentRequest, AutomationEvent, CuratedEvent, EventSink, EventSource,
     Notification, NotificationLinks, Notifier, RunSummary, RunTriggerSummary, WorktreeRequest,
 };
 use mainframe_db::DatabaseManager;
 use mainframe_services::push::PushService;
+use mainframe_types::BoxFuture;
 use mainframe_types::automation::{AutomationRunStatus, AutomationTriggerKind};
 use mainframe_types::chat::Chat;
 use mainframe_types::events::{ChatUpdatedReason, DaemonEvent};

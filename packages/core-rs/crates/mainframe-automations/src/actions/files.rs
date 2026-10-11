@@ -2,15 +2,16 @@
 //! outputs; read exposes `content` only (text, or trimmed non-empty lines with
 //! `outputAs: "lines"`).
 
+use mainframe_types::BoxFuture;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::domain::OutputAs;
-use crate::engine::BoxFuture;
 use crate::tokens::TokenValue;
 
 use super::manifest::{
-    ActionAuth, ActionField, ActionGroup, ActionManifest, ActionOutput, ActionOutputType,
+    ActionAuth, ActionField, ActionGroup, ActionManifest, ActionMeta, ActionOutput,
+    ActionOutputType, ActionParam,
 };
 use super::{Action, ActionCtx, ActionError, ActionOutputs, expand_user_path, parse_input};
 
@@ -33,9 +34,15 @@ pub struct FilesAppendAction;
 pub struct FilesWriteAction;
 pub struct FilesReadAction;
 
+/// The manifest, readable without building the action (see
+/// `actions::known_manifest`).
+pub(crate) fn append_manifest() -> ActionManifest {
+    write_manifest("files.append", "Append to file", false)
+}
+
 impl Action for FilesAppendAction {
     fn manifest(&self) -> ActionManifest {
-        write_manifest("files.append", "Append to file", false)
+        append_manifest()
     }
 
     fn execute<'a>(
@@ -63,11 +70,17 @@ impl Action for FilesAppendAction {
     }
 }
 
+/// The manifest, readable without building the action (see
+/// `actions::known_manifest`).
+pub(crate) fn overwrite_manifest() -> ActionManifest {
+    // Truncating write is restart-safe (idempotent: true) — blindly
+    // re-running converges on the same file body.
+    write_manifest("files.write", "Write file (overwrite)", true)
+}
+
 impl Action for FilesWriteAction {
     fn manifest(&self) -> ActionManifest {
-        // Truncating write is restart-safe (idempotent: true) — blindly
-        // re-running converges on the same file body.
-        write_manifest("files.write", "Write file (overwrite)", true)
+        overwrite_manifest()
     }
 
     fn execute<'a>(
@@ -89,28 +102,37 @@ impl Action for FilesWriteAction {
     }
 }
 
-impl Action for FilesReadAction {
-    fn manifest(&self) -> ActionManifest {
-        ActionManifest {
+/// The manifest, readable without building the action (see
+/// `actions::known_manifest`).
+pub(crate) fn read_manifest() -> ActionManifest {
+    ActionManifest::new(
+        ActionMeta {
             id: "files.read",
             title: "Read file",
             group: ActionGroup::Builtin,
             auth: ActionAuth::None,
             credential_label_hint: None,
-            params_schema: json!({
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string"},
-                    "outputAs": {"type": "string", "enum": ["text", "lines"]}
-                },
-                "required": ["path"],
-                "additionalProperties": false
-            }),
-            fields: vec![ActionField::chip("path", "File").placeholder("~/notes/log.md")],
-            has_output_as: true,
             outputs: vec![ActionOutput::new("content", ActionOutputType::Text)],
             idempotent: true,
-        }
+        },
+        vec![
+            ActionParam::field(
+                ActionField::chip("path", "File").placeholder("~/notes/log.md"),
+                json!({"type": "string"}),
+            )
+            .required(),
+            ActionParam::hidden(
+                "outputAs",
+                json!({"type": "string", "enum": ["text", "lines"]}),
+            ),
+        ],
+        Value::Bool(false),
+    )
+}
+
+impl Action for FilesReadAction {
+    fn manifest(&self) -> ActionManifest {
+        read_manifest()
     }
 
     fn execute<'a>(
@@ -159,27 +181,28 @@ fn io_error(action_id: &str, path: &str, err: &std::io::Error) -> ActionError {
 }
 
 fn write_manifest(id: &'static str, title: &'static str, idempotent: bool) -> ActionManifest {
-    ActionManifest {
-        id,
-        title,
-        group: ActionGroup::Builtin,
-        auth: ActionAuth::None,
-        credential_label_hint: None,
-        params_schema: json!({
-            "type": "object",
-            "properties": {
-                "path": {"type": "string"},
-                "content": {"type": "string"}
-            },
-            "required": ["path", "content"],
-            "additionalProperties": false
-        }),
-        fields: vec![
-            ActionField::chip("path", "File").placeholder("~/notes/log.md"),
-            ActionField::chiparea("content", "Text"),
+    ActionManifest::new(
+        ActionMeta {
+            id,
+            title,
+            group: ActionGroup::Builtin,
+            auth: ActionAuth::None,
+            credential_label_hint: None,
+            outputs: vec![],
+            idempotent,
+        },
+        vec![
+            ActionParam::field(
+                ActionField::chip("path", "File").placeholder("~/notes/log.md"),
+                json!({"type": "string"}),
+            )
+            .required(),
+            ActionParam::field(
+                ActionField::chiparea("content", "Text"),
+                json!({"type": "string"}),
+            )
+            .required(),
         ],
-        has_output_as: false,
-        outputs: vec![],
-        idempotent,
-    }
+        Value::Bool(false),
+    )
 }

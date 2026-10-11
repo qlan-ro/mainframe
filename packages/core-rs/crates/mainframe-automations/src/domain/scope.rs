@@ -1,6 +1,7 @@
 //! Token scope model backing validation: which named outputs each step
-//! produces (contract §5's frozen table), plus builtin/trigger tokens and
-//! the comparator/type compatibility table (the TypeScript copy is
+//! produces (run_action outputs come from the launch action manifests via
+//! `catalog`), plus builtin/trigger tokens and the comparator/type
+//! compatibility table (the TypeScript copy is
 //! packages/types/src/automation-domain/{tokens,comparators}.ts).
 
 use super::catalog::{action_outputs, capitalize, output_label};
@@ -88,18 +89,6 @@ pub(crate) fn current_item_info() -> TokenInfo {
             "Repeat",
         )
     }
-}
-
-/// The scope a block's nested body starts from: a copy of the enclosing
-/// scope, plus `Current item` inside a `repeat`. Every body is isolated, so
-/// what it produces stays in the copy; only `if` hands its branches' outputs
-/// back out, through `step_produces`.
-pub(crate) fn body_scope(block: &Step, enclosing: &[TokenInfo]) -> Vec<TokenInfo> {
-    let mut scope = enclosing.to_vec();
-    if matches!(block, Step::Repeat(_)) {
-        scope.push(current_item_info());
-    }
-    scope
 }
 
 pub(crate) fn builtin_tokens() -> Vec<TokenInfo> {
@@ -249,9 +238,9 @@ fn produced_by(step: &Step) -> Vec<TokenInfo> {
             })
             .collect(),
         Step::RunAction(s) => action_outputs(&s.action_id)
-            .iter()
+            .into_iter()
             .map(|(name, token_type)| {
-                info(&s.id, name, *token_type, &output_label(name), &s.action_id)
+                info(&s.id, &name, token_type, &output_label(&name), &s.action_id)
             })
             .collect(),
         Step::Notify(_)

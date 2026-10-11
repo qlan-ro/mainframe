@@ -10,10 +10,10 @@ use serde_json::{Map, Value};
 use crate::domain::Step;
 use crate::error::StoreError;
 use crate::ports::{AutomationEvent, Clock, EventSink, to_run_summary};
-use crate::store::{AutomationCheckpoint, RunRecord, RunStore, StepStatus, epoch_ms_now};
+use crate::store::{AutomationCheckpoint, RunRecord, RunStore, StepKind, StepStatus, epoch_ms_now};
 use crate::tokens::{NameIndex, NameMap, render};
 
-use super::checkpoint::{WalkFrame, build_scope, park_step, set_step};
+use super::checkpoint::{WalkFrame, build_scope};
 use super::{BoxFuture, StepOutcome, VerbContext, VerbPorts, WalkResult, blocks, blocks_parallel};
 
 pub(crate) struct WalkCtx<'a> {
@@ -161,7 +161,7 @@ async fn run_leaf(
             let record = ctx
                 .store
                 .patch_checkpoint(ctx.run_id, move |cp| {
-                    park_step(cp, &step_ref_owned, &step_id, &kind, wake_at);
+                    cp.park_step(&step_ref_owned, &step_id, kind, wake_at);
                 })
                 .await?;
             Ok(StepsResult {
@@ -195,12 +195,8 @@ fn emit_settled(ctx: &WalkCtx<'_>, record: &RunRecord) {
     });
 }
 
-fn commit_keys(step: &Step, step_ref: &str) -> (String, String, String) {
-    (
-        step_ref.to_string(),
-        step.id().to_string(),
-        step.kind_name().to_string(),
-    )
+fn commit_keys(step: &Step, step_ref: &str) -> (String, String, StepKind) {
+    (step_ref.to_string(), step.id().to_string(), step.kind())
 }
 
 async fn commit(
@@ -214,7 +210,7 @@ async fn commit(
     let (step_ref, step_id, kind) = commit_keys(step, step_ref);
     ctx.store
         .patch_checkpoint(ctx.run_id, move |cp| {
-            set_step(cp, &step_ref, &step_id, &kind, status, outputs, error, None);
+            cp.set_step(&step_ref, &step_id, kind, status, outputs, error, None);
         })
         .await
 }

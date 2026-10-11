@@ -5,10 +5,10 @@ use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex as StdMutex};
 
-use mainframe_automations::engine::BoxFuture;
 use mainframe_automations::ports::{
     AgentHandle, AgentOutcome, AgentPort, AgentPortError, AgentRequest,
 };
+use mainframe_types::BoxFuture;
 use mainframe_types::events::{ChatUpdatedReason, DaemonEvent};
 use tokio::sync::broadcast;
 

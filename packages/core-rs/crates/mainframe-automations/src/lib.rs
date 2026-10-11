@@ -14,13 +14,15 @@ pub use mainframe_github::USER_AGENT;
 pub mod actions;
 pub mod credentials;
 pub mod domain;
-pub mod engine;
+pub(crate) mod engine;
 pub mod error;
 pub mod interactions;
 pub mod ports;
-pub mod scheduler;
-pub mod service;
+pub(crate) mod scheduler;
+pub(crate) mod service;
 pub mod store;
+#[cfg(any(test, feature = "testkit"))]
+pub mod testkit;
 pub mod tokens;
 pub mod triggers;
 

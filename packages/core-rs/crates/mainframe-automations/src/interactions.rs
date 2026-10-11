@@ -9,16 +9,15 @@ use std::sync::Arc;
 use serde_json::{Map, Value};
 
 use crate::domain::AskMeStep;
-use crate::engine::checkpoint::{recompute_wake_at, set_step};
 use crate::engine::{RunAdvancer, StepOutcome, VerbContext};
 use crate::error::StoreError;
 use crate::ports::{
     AutomationEvent, EventSink, Notification, NotificationLinks, Notifier, to_interaction_summary,
 };
 use crate::store::{
-    AutomationStore, InteractionRecord, InteractionStatus, InteractionStore, RunStore, StepStatus,
+    AutomationStore, InteractionRecord, InteractionStatus, InteractionStore, RunStore, StepKind,
+    StepStatus,
 };
-
 mod form;
 
 pub(crate) use form::validate_form;
@@ -114,11 +113,10 @@ impl AskMeVerb {
         let parked = self
             .runs
             .patch_checkpoint(ctx.run_id, move |cp| {
-                set_step(
-                    cp,
+                cp.set_step(
                     &step_ref,
                     &step_id,
-                    "ask_me",
+                    StepKind::AskMe,
                     StepStatus::Waiting,
                     None,
                     None,
@@ -130,7 +128,7 @@ impl AskMeVerb {
                 // A sibling branch may still hold an armed deadline — an
                 // ask_me park never carries one of its own, so recompute
                 // instead of clobbering the run-level min with None.
-                recompute_wake_at(cp);
+                cp.recompute_wake_at();
             })
             .await;
         match parked {
@@ -179,14 +177,14 @@ impl AskMeVerb {
     }
 }
 
-pub struct InteractionService {
+pub(crate) struct InteractionService {
     interactions: InteractionStore,
     advancer: Arc<dyn RunAdvancer>,
     events: Arc<dyn EventSink>,
 }
 
 impl InteractionService {
-    pub fn new(
+    pub(crate) fn new(
         interactions: InteractionStore,
         advancer: Arc<dyn RunAdvancer>,
         events: Arc<dyn EventSink>,

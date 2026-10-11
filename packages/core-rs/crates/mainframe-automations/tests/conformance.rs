@@ -5,9 +5,6 @@
 //! harness compiled once; the scenario modules live under `conformance/`.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-#[path = "conformance/fakes.rs"]
-mod fakes;
-
 #[path = "conformance/fake_actions.rs"]
 mod fake_actions;
 

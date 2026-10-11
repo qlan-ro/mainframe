@@ -2,20 +2,16 @@
 //! own id — only leaf verbs do — so re-entering one on resume is always safe:
 //! the nested walk short-circuits on already-terminal steps.
 
-use crate::domain::{IfBlock, LoopBlock, LoopMode, RepeatBlock, RetryBlock};
+use crate::domain::{IfBlock, LoopBlock, LoopMode, MAX_REPEAT_ITEMS, RepeatBlock, RetryBlock};
 use crate::error::StoreError;
-use crate::store::{AutomationCheckpoint, StepStatus};
+use crate::store::{AutomationCheckpoint, StepKind, StepStatus};
 use crate::tokens::{TokenValue, evaluate};
 
 use super::WalkResult;
 use super::blocks_concurrent_repeat;
 use super::checkpoint::{WalkFrame, build_scope};
-use super::markers::{RETRY_ATTEMPT_KIND, mark_outcome};
+use super::markers::mark_outcome;
 use super::walk::{StepsResult, WalkCtx, walk_frame};
-
-/// Contract §2: an unbounded Repeat rewrites the whole checkpoint JSON per
-/// advance() (O(N²)); cap fan-out instead of discovering it in production.
-pub(crate) const MAX_REPEAT_ITEMS: usize = 500;
 
 pub(crate) async fn run_if(
     block: &IfBlock,
@@ -185,7 +181,15 @@ async fn mark_attempt(
     status: StepStatus,
     error: Option<String>,
 ) -> Result<AutomationCheckpoint, StoreError> {
-    mark_outcome(ctx, marker, &block.id, RETRY_ATTEMPT_KIND, status, error).await
+    mark_outcome(
+        ctx,
+        marker,
+        &block.id,
+        StepKind::RetryAttempt,
+        status,
+        error,
+    )
+    .await
 }
 
 /// Condition loop. Unlike `run_repeat`, the continue test is re-evaluated

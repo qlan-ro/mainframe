@@ -4,28 +4,21 @@
 
 use std::sync::Arc;
 
-use chrono::DateTime;
 use serde_json::Number;
 
 use crate::domain::{
     Comparator, ConditionMatch, ConditionRow, ConditionValue, ScalarValue, TokenRef,
 };
-use crate::ports::Clock;
+use crate::testkit::FakeClock;
 
 use super::compare::evaluate;
 use super::scope::Scope;
 use super::value::TokenValue;
 
-struct FakeClock;
-
-impl Clock for FakeClock {
-    fn now(&self) -> chrono::DateTime<chrono::FixedOffset> {
-        DateTime::parse_from_rfc3339("2026-07-12T21:30:00+02:00").unwrap()
-    }
-}
-
 fn scope_with(bindings: &[(&str, &str, TokenValue)]) -> Scope<'static> {
-    let mut scope = Scope::root(Arc::new(FakeClock));
+    let mut scope = Scope::root(Arc::new(
+        FakeClock::at("2026-07-12T21:30:00+02:00").unwrap(),
+    ));
     for (step, output, value) in bindings {
         scope.bind(step, output, value.clone());
     }

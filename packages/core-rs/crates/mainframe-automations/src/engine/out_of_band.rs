@@ -1,90 +1,180 @@
-//! Out-of-band step failure: the one write shared by the two paths that fail
-//! a parked step outside the walk — the agent settle path
-//! (`agent_settle::fail_waiting_step`) and the deadline sweep
-//! (`deadline::fail_step`). One body so the two cannot drift apart.
+//! Out-of-band settlement: the one path that settles a parked step outside
+//! the walk. The agent settle path (`agent_settle`) and the deadline sweep
+//! (`deadline`) both go through `Interpreter::settle_out_of_band`, so the
+//! success and failure writes, the branch marker and the `RunUpdated` emit
+//! cannot drift apart.
+//!
+//! A cancel or a competing settle can win between the caller's read and the
+//! write. The waiting check, the keepGoing policy and the enclosing branch
+//! are all read inside the checkpoint transaction, and the write changes
+//! nothing unless the entry is still `waiting`; a run that cancel already
+//! finalized surfaces as `StoreError::TerminalRun` (A8). Either way the loser
+//! neither writes, emits nor advances.
 
+use serde_json::{Map, Value};
+
+use crate::domain::{Step, enclosing_concurrent_branch, find_step_by_id};
 use crate::error::StoreError;
-use crate::ports::{AutomationEvent, EventSink, to_run_summary};
-use crate::store::{AutomationCheckpoint, RunStore, StepStatus};
+use crate::store::{AutomationCheckpoint, RunRecord, RunStore, StepStatus, TerminalStatus};
 
-use super::checkpoint::{fail_step_entry, recompute_wake_at};
+use super::OutOfBandOutcome;
+use super::advance::Interpreter;
 use super::markers::fail_enclosing_branch;
 
-/// What the caller must do once the failure is written.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum AfterFailure {
-    /// `keepGoing`, or another entry is still waiting: re-advance the run.
-    Advance,
-    /// Nothing else can settle the run: finalize it `failed`.
-    FailRun,
+/// Which stage of an out-of-band settle failed, so callers can tell a lost
+/// write from a failed follow-up.
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum SettleError {
+    /// The checkpoint write itself failed.
+    #[error("settle write failed")]
+    Write(#[source] StoreError),
+    /// The outcome was written but re-advancing the run failed.
+    #[error("advance after settle failed")]
+    Advance(#[source] StoreError),
+    /// The failure was written but finalizing the run failed.
+    #[error("run finalize after settle failed")]
+    Finalize(#[source] StoreError),
 }
 
-/// The failing step as the caller resolved it from the checkpoint.
-pub(super) struct FailingStep<'a> {
-    pub run_id: &'a str,
-    pub step_ref: &'a str,
-    pub keep_going: bool,
-    /// `(block_id, branch_ref_suffix)` of the nearest enclosing concurrent
-    /// Repeat, if any.
-    pub enclosing_branch: Option<(String, String)>,
+impl SettleError {
+    pub(crate) fn into_store_error(self) -> StoreError {
+        match self {
+            Self::Write(err) | Self::Advance(err) | Self::Finalize(err) => err,
+        }
+    }
 }
 
-/// Fails one step outside the walk and streams the transition (A6).
-///
-/// A step inside a concurrent branch bypasses `blocks_concurrent`'s own
-/// driver here, so when `keepGoing` is false this is the only place that
-/// branch's marker is ever written; without it the driver replays the
-/// leaf's `Failed` entry, skips past it, and launders the branch into
-/// `Succeeded`. `keepGoing: true` skips the marker on purpose, leaving the
-/// driver free to walk the branch's remaining steps, matching sequential
-/// `run_repeat`'s absorption of the same failure.
-///
-/// A run with an outstanding `Waiting` entry must never finalize
-/// out-of-band, or it orphans whatever that entry is waiting on, so a
-/// still-waiting sibling forces [`AfterFailure::Advance`] regardless of
-/// `keepGoing`.
-///
-/// `Ok(None)` means cancel already finalized the run (A8): nothing to do.
-pub(super) async fn fail_step_out_of_band(
-    store: &RunStore,
-    events: &dyn EventSink,
-    step: FailingStep<'_>,
-    error: &str,
-) -> Result<Option<AfterFailure>, StoreError> {
-    let FailingStep {
-        run_id,
-        step_ref,
-        keep_going,
-        enclosing_branch,
-    } = step;
-    let step_ref_owned = step_ref.to_string();
-    let error_owned = error.to_string();
-    let patched = store
-        .patch_checkpoint(run_id, move |cp| {
-            fail_step_entry(cp, &step_ref_owned, &error_owned);
+impl Interpreter {
+    /// Settles the parked `step_ref` with `outcome`, streams the transition
+    /// (A6) and moves the run on. A no-op when the run is gone or terminal,
+    /// or the entry is no longer `waiting`.
+    pub(crate) async fn settle_out_of_band(
+        &self,
+        run_id: &str,
+        step_ref: &str,
+        outcome: OutOfBandOutcome,
+    ) -> Result<(), SettleError> {
+        match outcome {
+            OutOfBandOutcome::Succeeded(outputs) => {
+                self.settle_success(run_id, step_ref, outputs).await
+            }
+            OutOfBandOutcome::Failed(error) => self.settle_failure(run_id, step_ref, error).await,
+        }
+    }
+
+    async fn settle_success(
+        &self,
+        run_id: &str,
+        step_ref: &str,
+        outputs: Map<String, Value>,
+    ) -> Result<(), SettleError> {
+        let step_ref = step_ref.to_string();
+        let settled = patch_if_changed(&self.deps.store, run_id, move |cp| {
+            cp.succeed_waiting_step(&step_ref, Some(outputs))
+        })
+        .await
+        .map_err(SettleError::Write)?;
+        let Some(record) = settled else {
+            return Ok(());
+        };
+        self.emit(&record);
+        self.advance(run_id).await.map_err(SettleError::Advance)
+    }
+
+    /// Fails the step with the keepGoing policy the walk applies: without
+    /// keepGoing the run finalizes here, since a later advance skips `failed`
+    /// entries without consulting it.
+    ///
+    /// A step inside a concurrent branch bypasses `blocks_concurrent`'s
+    /// driver, so when keepGoing is false this is the only place that
+    /// branch's marker is written; without it the driver replays the leaf's
+    /// `Failed` entry, skips past it, and launders the branch into
+    /// `Succeeded`. keepGoing skips the marker on purpose, leaving the driver
+    /// free to walk the branch's remaining steps, as sequential `run_repeat`
+    /// absorbs the same failure.
+    ///
+    /// A run with another `waiting` entry must never finalize out-of-band, or
+    /// it orphans whatever that entry waits on, so a still-waiting sibling
+    /// forces an advance regardless of keepGoing.
+    async fn settle_failure(
+        &self,
+        run_id: &str,
+        step_ref: &str,
+        error: String,
+    ) -> Result<(), SettleError> {
+        let (step_ref_owned, error_owned) = (step_ref.to_string(), error.clone());
+        let settled = patch_if_changed(&self.deps.store, run_id, move |cp| {
+            if !is_waiting(cp, &step_ref_owned) {
+                return false;
+            }
+            let (keep_going, enclosing_branch) = failure_policy(cp, &step_ref_owned);
+            cp.fail_step_entry(&step_ref_owned, &error_owned);
             if !keep_going {
                 fail_enclosing_branch(cp, &enclosing_branch, &error_owned);
             }
             // A sibling branch may still be waiting: recompute rather than
             // clobbering its deadline with None.
-            recompute_wake_at(cp);
+            cp.recompute_wake_at();
+            true
         })
-        .await;
-    let record = match patched {
-        Ok(record) => record,
-        Err(StoreError::TerminalRun { .. }) => return Ok(None),
-        Err(err) => return Err(err),
-    };
-    events.emit(AutomationEvent::RunUpdated {
-        run: to_run_summary(&record),
-    });
-    Ok(Some(
+        .await
+        .map_err(SettleError::Write)?;
+        let Some(record) = settled else {
+            return Ok(());
+        };
+        self.emit(&record);
+        // The definition is frozen in the checkpoint, so the policy read
+        // back from the written record is the one the write applied.
+        let (keep_going, _) = failure_policy(&record.checkpoint, step_ref);
         if keep_going || has_waiting_entry(&record.checkpoint) {
-            AfterFailure::Advance
+            self.advance(run_id).await.map_err(SettleError::Advance)
         } else {
-            AfterFailure::FailRun
-        },
-    ))
+            self.finalize_and_emit(run_id, TerminalStatus::Failed, Some(error))
+                .await
+                .map_err(SettleError::Finalize)
+        }
+    }
+}
+
+/// Applies `transition` inside the checkpoint transaction and returns the
+/// updated run only if the transition reports a change; a transition that
+/// returns false writes nothing. `None` also means the run is gone or was
+/// already terminal (cancel won, A8).
+pub(super) async fn patch_if_changed(
+    store: &RunStore,
+    run_id: &str,
+    transition: impl FnOnce(&mut AutomationCheckpoint) -> bool + Send + 'static,
+) -> Result<Option<RunRecord>, StoreError> {
+    match store.patch_checkpoint_if(run_id, transition).await {
+        Ok(record) => Ok(record),
+        Err(StoreError::TerminalRun { .. } | StoreError::NotFound { .. }) => Ok(None),
+        Err(err) => Err(err),
+    }
+}
+
+fn is_waiting(checkpoint: &AutomationCheckpoint, step_ref: &str) -> bool {
+    checkpoint
+        .steps
+        .get(step_ref)
+        .is_some_and(|entry| entry.status == StepStatus::Waiting)
+}
+
+/// The failing step's keepGoing plus, if it lives inside a concurrent
+/// branch, that branch's `(block_id, ref_suffix)`.
+fn failure_policy(
+    checkpoint: &AutomationCheckpoint,
+    step_ref: &str,
+) -> (bool, Option<(String, String)>) {
+    let Some(entry) = checkpoint.steps.get(step_ref) else {
+        return (false, None);
+    };
+    let steps = &checkpoint.definition.steps;
+    let keep_going = find_step_by_id(steps, &entry.step_id).is_some_and(Step::keep_going);
+    let ref_suffix = step_ref
+        .strip_prefix(entry.step_id.as_str())
+        .unwrap_or_default();
+    let branch = enclosing_concurrent_branch(steps, &entry.step_id, ref_suffix);
+    (keep_going, branch)
 }
 
 /// True while some entry is still `waiting`. Consulted AFTER the failure is

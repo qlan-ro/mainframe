@@ -4,6 +4,7 @@
 //! scheduler state derived).
 
 pub mod automation_store;
+mod checkpoint_mutation;
 pub mod db;
 pub mod interaction_store;
 pub(crate) mod run_rows;
@@ -28,7 +29,8 @@ use crate::error::StoreError;
 // the engine keeps its own local names via aliases.
 pub use mainframe_types::automation::{
     AutomationInteractionStatus as InteractionStatus, AutomationRunStatus as RunStatus,
-    AutomationStepStatus as StepStatus, AutomationTriggerKind as RunTriggerKind,
+    AutomationStepKind as StepKind, AutomationStepStatus as StepStatus,
+    AutomationTriggerKind as RunTriggerKind,
 };
 
 /// The statuses `RunStore::finalize` may set (a run never re-enters
@@ -82,7 +84,7 @@ impl RunTriggerContext {
 #[serde(rename_all = "camelCase")]
 pub struct CheckpointStep {
     pub step_id: String,
-    pub kind: String,
+    pub kind: StepKind,
     pub status: StepStatus,
     #[serde(default)]
     pub outputs: Option<serde_json::Map<String, Value>>,
@@ -135,7 +137,7 @@ impl AutomationCheckpoint {
     pub(crate) fn agent_chat_ids(&self) -> Vec<String> {
         let mut chat_ids = Vec::new();
         for entry in self.steps.values() {
-            if entry.kind == "ask_agent"
+            if entry.kind == StepKind::AskAgent
                 && let Some(chat_id) = &entry.chat_id
                 && !chat_ids.contains(chat_id)
             {

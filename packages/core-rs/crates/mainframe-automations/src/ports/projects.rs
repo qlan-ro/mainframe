@@ -3,7 +3,7 @@
 //! project, else the daemon cwd. Production impl lives in mainframe-server over
 //! the projects repository.
 
-use crate::engine::BoxFuture;
+use mainframe_types::BoxFuture;
 
 pub trait ProjectRegistry: Send + Sync {
     /// Resolve the containment root for a run's actions. Never fails: the

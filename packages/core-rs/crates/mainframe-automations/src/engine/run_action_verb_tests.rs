@@ -11,19 +11,11 @@ use crate::credentials::{
 };
 use crate::domain::{OutputAs, RunActionStep};
 use crate::engine::run_action_verb::{RunActionVerb, build_action_input};
-use crate::engine::test_support::{FakeClock, harness, text, token};
+use crate::engine::test_support::{fake_clock, harness, text, token};
 use crate::engine::{BoxFuture, StepOutcome, VerbContext};
-use crate::ports::ProjectRegistry;
+use crate::testkit::FixedProjects;
 use crate::tokens::NameMap;
 use crate::tokens::{Scope, TokenValue};
-
-struct FixedProjects(String);
-
-impl ProjectRegistry for FixedProjects {
-    fn resolve_project_root<'a>(&'a self, _project_id: Option<&'a str>) -> BoxFuture<'a, String> {
-        Box::pin(async move { self.0.clone() })
-    }
-}
 
 fn step(action_id: &str, params: Vec<(&str, Vec<crate::domain::ChipPart>)>) -> RunActionStep {
     RunActionStep {
@@ -41,7 +33,7 @@ fn step(action_id: &str, params: Vec<(&str, Vec<crate::domain::ChipPart>)>) -> R
 }
 
 fn scope_with(step_id: &str, output: &str, value: TokenValue) -> Scope<'static> {
-    let mut scope = Scope::root(Arc::new(FakeClock));
+    let mut scope = Scope::root(fake_clock());
     scope.bind(step_id, output, value);
     scope
 }
@@ -84,7 +76,7 @@ fn run_command_script_keeps_chip_boundaries() {
 
 #[test]
 fn unset_script_chip_renders_empty() {
-    let scope = Scope::root(Arc::new(FakeClock));
+    let scope = Scope::root(fake_clock());
     let cmd = step(
         "run_command",
         vec![("script", vec![token("ghost", "out", None)])],
@@ -95,7 +87,7 @@ fn unset_script_chip_renders_empty() {
 
 #[test]
 fn output_as_is_not_injected_into_other_actions() {
-    let scope = Scope::root(Arc::new(FakeClock));
+    let scope = Scope::root(fake_clock());
     let mut row = step("notion.add_row", vec![("Name", vec![text("v")])]);
     row.output_as = Some(OutputAs::Text);
     let input = build_action_input(&row, &scope, &NameMap::new());
@@ -112,10 +104,7 @@ async fn missing_credential_fails_with_an_actionable_error() {
     let automations = crate::store::AutomationStore::new(h.db.clone());
     let verb = RunActionVerb::new(
         Arc::new(registry),
-        Arc::new(RefreshingCredentialStore::new(
-            credentials,
-            Arc::new(FakeClock),
-        )),
+        Arc::new(RefreshingCredentialStore::new(credentials, fake_clock())),
         Arc::new(FixedProjects(dir.path().to_string_lossy().into_owned())),
         h.store.clone(),
         automations,
@@ -123,7 +112,7 @@ async fn missing_credential_fails_with_an_actionable_error() {
 
     let mut pr = step("github.create_pr", vec![]);
     pr.credential = Some("gh".to_string());
-    let scope = Scope::root(Arc::new(FakeClock));
+    let scope = Scope::root(fake_clock());
     let outcome = verb
         .execute(
             &pr,
@@ -203,10 +192,7 @@ async fn a_pre_migration_github_step_resolves_the_default_credential_label() {
     let automations = crate::store::AutomationStore::new(h.db.clone());
     let verb = RunActionVerb::new(
         Arc::new(registry),
-        Arc::new(RefreshingCredentialStore::new(
-            credentials,
-            Arc::new(FakeClock),
-        )),
+        Arc::new(RefreshingCredentialStore::new(credentials, fake_clock())),
         Arc::new(FixedProjects(dir.path().to_string_lossy().into_owned())),
         h.store.clone(),
         automations,
@@ -215,7 +201,7 @@ async fn a_pre_migration_github_step_resolves_the_default_credential_label() {
     // A step exactly as an old, pre-migration definition would carry it:
     // `action_id` set, `credential` absent.
     let list_prs = step("github.list_prs", vec![]);
-    let scope = Scope::root(Arc::new(FakeClock));
+    let scope = Scope::root(fake_clock());
     let outcome = verb
         .execute(
             &list_prs,
@@ -247,17 +233,14 @@ async fn a_pre_migration_github_step_with_no_connection_names_the_default_label(
     let automations = crate::store::AutomationStore::new(h.db.clone());
     let verb = RunActionVerb::new(
         Arc::new(registry),
-        Arc::new(RefreshingCredentialStore::new(
-            credentials,
-            Arc::new(FakeClock),
-        )),
+        Arc::new(RefreshingCredentialStore::new(credentials, fake_clock())),
         Arc::new(FixedProjects(dir.path().to_string_lossy().into_owned())),
         h.store.clone(),
         automations,
     );
 
     let list_prs = step("github.list_prs", vec![]);
-    let scope = Scope::root(Arc::new(FakeClock));
+    let scope = Scope::root(fake_clock());
     let outcome = verb
         .execute(
             &list_prs,

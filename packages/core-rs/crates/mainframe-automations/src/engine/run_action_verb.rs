@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use serde_json::{Map, Value};
 
-use crate::actions::{ActionCtx, ActionRegistry};
+use crate::actions::{ActionCtx, ActionRegistry, known_manifest};
 use crate::credentials::RefreshingCredentialStore;
 use crate::domain::{ChipPart, ChipText, RunActionStep};
 use crate::ports::ProjectRegistry;
@@ -15,9 +15,6 @@ use crate::store::{AutomationStore, RunStore};
 use crate::tokens::{NameMap, Scope, render};
 
 use super::{StepOutcome, VerbContext};
-
-/// The only two actions whose input schema declares `outputAs` (contract §5).
-const ACTIONS_WITH_OUTPUT_AS: [&str; 2] = ["run_command", "files.read"];
 
 pub struct RunActionVerb {
     registry: Arc<ActionRegistry>,
@@ -140,7 +137,7 @@ pub(crate) fn build_action_input(
         input.insert(key.clone(), value);
     }
     if let Some(output_as) = step.output_as
-        && ACTIONS_WITH_OUTPUT_AS.contains(&step.action_id.as_str())
+        && known_manifest(&step.action_id).is_some_and(|manifest| manifest.has_output_as)
         && let Ok(value) = serde_json::to_value(output_as)
     {
         input.insert("outputAs".to_string(), value);

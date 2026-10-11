@@ -3,6 +3,7 @@
 
 use std::sync::{Arc, Mutex};
 
+use mainframe_types::BoxFuture;
 use serde_json::{Map, Value, json};
 
 use crate::domain::{
@@ -12,30 +13,10 @@ use crate::domain::{
 use crate::engine::test_support::{
     FakePorts, completed, definition, empty_outputs, harness, manual, text, token_ref,
 };
-use crate::engine::{BoxFuture, Interpreter, StepOutcome, VerbContext, VerbPorts};
+use crate::engine::{Interpreter, StepOutcome, VerbContext, VerbPorts};
 use crate::interactions::{AskMeVerb, InteractionError, InteractionService, validate_form};
-use crate::ports::{Notification, Notifier, NotifyError};
 use crate::store::{InteractionStatus, RunStatus, StepStatus};
-
-#[derive(Default)]
-pub(crate) struct FakeNotifier {
-    pub notifications: Mutex<Vec<Notification>>,
-    pub fail: bool,
-}
-
-impl Notifier for FakeNotifier {
-    fn notify(&self, notification: Notification) -> BoxFuture<'_, Result<(), NotifyError>> {
-        self.notifications.lock().unwrap().push(notification);
-        let fail = self.fail;
-        Box::pin(async move {
-            if fail {
-                Err(NotifyError("push channel down".to_string()))
-            } else {
-                Ok(())
-            }
-        })
-    }
-}
+use crate::testkit::FakeNotifier;
 
 struct AskMeWiredPorts {
     ask_me: Arc<AskMeVerb>,
@@ -86,9 +67,10 @@ struct Rig {
 
 async fn rig_with(fallback: FakePorts, notifier_fails: bool) -> Rig {
     let h = harness().await;
-    let notifier = Arc::new(FakeNotifier {
-        fail: notifier_fails,
-        ..FakeNotifier::default()
+    let notifier = Arc::new(if notifier_fails {
+        FakeNotifier::failing()
+    } else {
+        FakeNotifier::default()
     });
     let ask_me = AskMeVerb::new(
         h.interactions.clone(),
@@ -185,14 +167,14 @@ async fn ask_me_parks_with_a_pending_interaction_event_and_notification() {
     );
 
     // Wire event: automation.interaction.created carries the summary.
-    let created = rig.h.sink.interaction_created();
+    let created = rig.h.sink.interactions_created();
     assert_eq!(created.len(), 1);
     assert_eq!(created[0].id, pending[0].id);
     assert_eq!(created[0].status, InteractionStatus::Pending);
 
     // Best-effort notification: automation name + form title.
     {
-        let notifications = rig.notifier.notifications.lock().unwrap();
+        let notifications = rig.notifier.sent.lock().unwrap();
         assert_eq!(notifications.len(), 1);
         assert_eq!(notifications[0].title, "A");
         assert_eq!(notifications[0].body, "Log your day");
@@ -223,7 +205,7 @@ async fn a_failing_notifier_does_not_fail_the_pause() {
         rig.h.store.get_run(&run.id).await.unwrap().unwrap().status,
         RunStatus::Waiting
     );
-    assert_eq!(rig.notifier.notifications.lock().unwrap().len(), 1);
+    assert_eq!(rig.notifier.sent.lock().unwrap().len(), 1);
 }
 
 #[tokio::test]
@@ -284,7 +266,7 @@ async fn respond_claims_answers_in_one_transaction_and_resumes() {
     );
     assert_eq!(resolved_mood.lock().unwrap().as_deref(), Some("great"));
 
-    let resolved = rig.h.sink.interaction_resolved();
+    let resolved = rig.h.sink.interactions_resolved();
     assert_eq!(resolved, vec![(interaction.id.clone(), run.id.clone())]);
 }
 
