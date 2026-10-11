@@ -6,7 +6,6 @@
 //! automation with ⟨its result⟩.
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use serde_json::{Map, json};
 use tempfile::TempDir;
@@ -448,12 +447,13 @@ async fn event_loop_subscribes_and_dispatches() {
 
     tx.send(session_finished("chat-1")).unwrap();
     let mut fired = false;
-    for _ in 0..100 {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while std::time::Instant::now() < deadline {
         if h.runs.list_runs(&watcher, 10).await.unwrap().len() == 1 {
             fired = true;
             break;
         }
-        tokio::time::sleep(Duration::from_millis(20)).await;
+        tokio::task::yield_now().await;
     }
     handle.abort();
     assert!(fired, "the subscribed loop dispatched the event to a run");

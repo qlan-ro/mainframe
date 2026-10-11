@@ -154,7 +154,8 @@ async fn cancel_aborts_the_in_flight_walk_and_the_run_never_continues() {
     let advance = tokio::spawn(async move { spawned.advance(&run_id).await });
 
     // Wait for the pre-effect running marker so the walk is provably in-flight.
-    for _ in 0..200 {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while std::time::Instant::now() < deadline {
         let status = h
             .store
             .get_run(&run.id)
@@ -168,7 +169,7 @@ async fn cancel_aborts_the_in_flight_walk_and_the_run_never_continues() {
         if status == Some(StepStatus::Running) {
             break;
         }
-        tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+        tokio::task::yield_now().await;
     }
 
     engine.cancel_run(&run.id).await.unwrap();
@@ -297,11 +298,12 @@ async fn cancelled_run_plus_agent_port_completion_never_resurrects() {
     rig.engine.cancel_run(&run.id).await.unwrap();
 
     // The chat itself is told to stop (spawned, so poll briefly).
-    for _ in 0..200 {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while std::time::Instant::now() < deadline {
         if !rig.port.cancels.lock().unwrap().is_empty() {
             break;
         }
-        tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+        tokio::task::yield_now().await;
     }
     assert_eq!(
         *rig.port.cancels.lock().unwrap(),
@@ -315,7 +317,12 @@ async fn cancelled_run_plus_agent_port_completion_never_resurrects() {
             final_text: "too late".to_string(),
         }),
     );
-    tokio::time::sleep(std::time::Duration::from_millis(30)).await;
+    tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        rig.port.wait_for_deliveries("chat-1", 1),
+    )
+    .await
+    .unwrap();
 
     let finished = rig.h.store.get_run(&run.id).await.unwrap().unwrap();
     assert_eq!(finished.status, RunStatus::Cancelled);

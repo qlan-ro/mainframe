@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use mainframe_types::BoxFuture;
-use mainframe_types::sync::LockExt as _;
+use mainframe_types::sync::LockExt;
 use tokio::sync::mpsc;
 
 use crate::ports::{AgentHandle, AgentOutcome, AgentPort, AgentPortError, AgentRequest};
@@ -14,6 +14,8 @@ type OutcomeResult = Result<AgentOutcome, AgentPortError>;
 
 struct Chan {
     tx: mpsc::UnboundedSender<OutcomeResult>,
+    delivered: AtomicUsize,
+    changed: tokio::sync::Notify,
     rx: tokio::sync::Mutex<mpsc::UnboundedReceiver<OutcomeResult>>,
 }
 
@@ -65,6 +67,24 @@ impl FakeAgentPort {
         }
     }
 
+    pub async fn wait_for_deliveries(&self, chat_id: &str, count: usize) {
+        let chan = self.chan(chat_id);
+        loop {
+            let changed = chan.changed.notified();
+            tokio::pin!(changed);
+            changed.as_mut().enable();
+            if chan.delivered.load(Ordering::SeqCst) >= count {
+                return;
+            }
+            changed.await;
+        }
+    }
+
+    pub async fn pending_outcomes(&self, chat_id: &str) -> usize {
+        let chan = self.chan(chat_id);
+        chan.rx.lock().await.len()
+    }
+
     pub fn started_requests(&self) -> Vec<AgentRequest> {
         self.started.lock_recover().clone()
     }
@@ -88,6 +108,8 @@ impl FakeAgentPort {
                 let (tx, rx) = mpsc::unbounded_channel();
                 Arc::new(Chan {
                     tx,
+                    delivered: AtomicUsize::new(0),
+                    changed: tokio::sync::Notify::new(),
                     rx: tokio::sync::Mutex::new(rx),
                 })
             })
@@ -101,9 +123,13 @@ impl FakeAgentPort {
         }
         let chan = self.chan(chat_id);
         let mut rx = chan.rx.lock().await;
-        rx.recv()
+        let outcome = rx
+            .recv()
             .await
-            .unwrap_or_else(|| Err(AgentPortError("watch channel closed".to_string())))
+            .unwrap_or_else(|| Err(AgentPortError("watch channel closed".to_string())));
+        chan.delivered.fetch_add(1, Ordering::SeqCst);
+        chan.changed.notify_waiters();
+        outcome
     }
 }
 

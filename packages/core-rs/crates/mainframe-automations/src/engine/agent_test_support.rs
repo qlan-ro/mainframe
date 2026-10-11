@@ -2,7 +2,6 @@
 //! real AgentVerb over the testkit's controllable `FakeAgentPort`.
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use crate::domain::{AskAgentStep, AskMeStep, NotifyStep, RunActionStep};
 use crate::store::{RunRecord, RunStore};
@@ -90,12 +89,13 @@ pub(crate) async fn wait_for_run(
     run_id: &str,
     pred: impl Fn(&RunRecord) -> bool,
 ) -> RunRecord {
-    for _ in 0..400 {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while std::time::Instant::now() < deadline {
         let run = store.get_run(run_id).await.unwrap().unwrap();
         if pred(&run) {
             return run;
         }
-        tokio::time::sleep(Duration::from_millis(5)).await;
+        tokio::task::yield_now().await;
     }
     panic!("run {run_id} never reached the expected state");
 }

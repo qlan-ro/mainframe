@@ -9,7 +9,6 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::Duration;
 
 use hmac::{Hmac, Mac};
 use serde_json::{Map, Value};
@@ -137,7 +136,8 @@ impl Rig {
     /// The chat cancel rides a detached task, so it can land after the run is
     /// already `Cancelled` — poll for it instead of reading it once.
     pub async fn wait_chat_cancel(&self, chat_id: &str) {
-        for _ in 0..600 {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while std::time::Instant::now() < deadline {
             let told = self
                 .agent
                 .cancels
@@ -147,7 +147,7 @@ impl Rig {
             if told {
                 return;
             }
-            tokio::time::sleep(Duration::from_millis(5)).await;
+            tokio::task::yield_now().await;
         }
         panic!("chat {chat_id} was never told to stop");
     }
@@ -169,13 +169,14 @@ impl Rig {
 }
 
 pub async fn wait_status(engine: &AutomationsEngine, run_id: &str, status: RunStatus) -> RunRecord {
-    for _ in 0..600 {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while std::time::Instant::now() < deadline {
         if let Some(run) = engine.get_run(run_id).await.unwrap()
             && run.status == status
         {
             return run;
         }
-        tokio::time::sleep(Duration::from_millis(5)).await;
+        tokio::task::yield_now().await;
     }
     let actual = engine.get_run(run_id).await.unwrap().map(|r| r.status);
     panic!("run {run_id} never reached {status:?} (last: {actual:?})");
@@ -183,11 +184,12 @@ pub async fn wait_status(engine: &AutomationsEngine, run_id: &str, status: RunSt
 
 /// Poll until a fake action has been invoked at least `count` times.
 pub async fn wait_action(recorder: &ActionRecorder, action_id: &str, count: usize) {
-    for _ in 0..600 {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while std::time::Instant::now() < deadline {
         if recorder.count(action_id) >= count {
             return;
         }
-        tokio::time::sleep(Duration::from_millis(5)).await;
+        tokio::task::yield_now().await;
     }
     panic!("action {action_id} never reached {count} call(s)");
 }

@@ -135,4 +135,5 @@ impl AutomationCheckpoint {
 }
 
 #[cfg(test)]
+#[path = "checkpoint_mutation_tests.rs"]
 mod tests;

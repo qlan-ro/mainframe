@@ -251,11 +251,12 @@ async fn resume_after_restart_watches_waiting_agent_entries() {
     verb2.resume_run_watches(&parked);
 
     // Poll: the watch attach is a spawned task.
-    for _ in 0..200 {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while std::time::Instant::now() < deadline {
         if !port2.watch_calls.lock().unwrap().is_empty() {
             break;
         }
-        tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+        tokio::task::yield_now().await;
     }
     assert_eq!(
         *port2.watch_calls.lock().unwrap(),
@@ -387,7 +388,7 @@ async fn a_late_watch_error_after_success_is_dropped() {
     // A second outcome for the same chat has nobody waiting — nothing changes.
     rig.port
         .complete("chat-1", Err(AgentPortError("boom".to_string())));
-    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    assert_eq!(rig.port.pending_outcomes("chat-1").await, 1);
     assert_eq!(
         rig.h.store.get_run(&run.id).await.unwrap().unwrap().status,
         RunStatus::Succeeded
