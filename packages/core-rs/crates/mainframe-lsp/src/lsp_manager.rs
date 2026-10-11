@@ -2,7 +2,7 @@
 //! idle-timeout reaper, and the graceful shutdown handshake (shutdown request ->
 //! exit notification -> SIGTERM/SIGKILL fallback).
 
-use mainframe_types::sync::LockExt as _;
+use mainframe_types::sync::LockExt;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -201,6 +201,7 @@ impl LspManager {
 }
 
 #[cfg(test)]
+#[path = "lsp_manager_tests.rs"]
 mod tests;
 
 mod handle;

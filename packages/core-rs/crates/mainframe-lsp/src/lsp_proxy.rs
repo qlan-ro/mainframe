@@ -180,4 +180,5 @@ where
 }
 
 #[cfg(test)]
+#[path = "lsp_proxy_tests.rs"]
 mod tests;

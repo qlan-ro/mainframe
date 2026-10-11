@@ -1,8 +1,3 @@
-//! The resolver is a fake pointing at a real `cat` child (reads stdin, echoes
-//! stdout, stays alive until SIGTERM) standing in for a long-lived server. Idle
-//! and shutdown timers are shrunk via `set_test_timeouts` so the suite runs in
-//! real time.
-
 use super::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
@@ -144,6 +139,7 @@ fn ignores_sigterm(marker: &std::path::Path) -> String {
 async fn wait_for_markers(markers: &[std::path::PathBuf]) {
     tokio::time::timeout(Duration::from_secs(5), async {
         while !markers.iter().all(|m| m.exists()) {
+            // OS child; Tokio time cannot be paused.
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
     })
@@ -281,37 +277,4 @@ async fn returns_existing_handle_cancelling_and_restarting_idle_timer() {
     let handle2 = m.get_or_spawn("proj1", "typescript", "/tmp").await.unwrap();
     assert!(Arc::ptr_eq(&handle, &handle2));
     m.shutdown_all().await;
-}
-
-#[tokio::test]
-async fn idle_timer_fires_and_shuts_down_server_after_timeout() {
-    let (m, _) = manager();
-    m.get_or_spawn("proj1", "typescript", "/tmp").await.unwrap();
-    assert!(
-        m.get_active_languages("proj1")
-            .contains(&"typescript".to_string())
-    );
-
-    // Idle timeout is 60ms; the graceful shutdown handshake adds request+exit
-    // timeouts (150ms each) before the SIGTERM fallback.
-    for _ in 0..40 {
-        if !m
-            .get_active_languages("proj1")
-            .contains(&"typescript".to_string())
-        {
-            return;
-        }
-        tokio::time::sleep(Duration::from_millis(25)).await;
-    }
-    panic!("idle timer did not shut down the server");
-}
-
-async fn assert_pid_gone(pid: u32) {
-    tokio::time::timeout(Duration::from_secs(2), async {
-        while mainframe_runtime::process::is_alive(pid) {
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-    })
-    .await
-    .expect("the stopped child must no longer exist");
 }

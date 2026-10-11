@@ -214,4 +214,5 @@ impl Default for LspRegistry {
 }
 
 #[cfg(test)]
+#[path = "lsp_registry_tests.rs"]
 mod tests;

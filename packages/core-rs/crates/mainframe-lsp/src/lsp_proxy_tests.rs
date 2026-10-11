@@ -101,13 +101,7 @@ async fn cleanup_aborts_the_pump_tasks() {
 
     let bridge = bridge_ws_to_process(incoming_rx, outgoing_tx, stdin_tx, so_r, se_r);
     bridge.cleanup();
-    // Give the abort a moment to take effect.
-    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
-
-    // After cleanup the stdin pump is gone: the send either fails (its receiver
-    // was dropped with the aborted task) or is never framed. Either way nothing
-    // reaches stdin.
-    let _ = incoming_tx.send("{}".to_string());
-    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
-    assert!(stdin_rx.try_recv().is_err());
+    incoming_tx.closed().await;
+    assert!(incoming_tx.send("{}".to_string()).is_err());
+    assert!(stdin_rx.recv().await.is_none());
 }
