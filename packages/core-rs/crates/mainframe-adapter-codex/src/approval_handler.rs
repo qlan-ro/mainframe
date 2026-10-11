@@ -11,6 +11,7 @@ use mainframe_adapter_api::{ControlResponse, SessionSink};
 use serde_json::{Value, json};
 
 use crate::event_mapper::CurrentTurnPlan;
+use crate::jsonrpc::JsonRpcError;
 use crate::types::RequestId;
 
 mod answers;
@@ -20,7 +21,8 @@ mod intake;
 use answers::{answer_approval, answer_user_input};
 
 /// `respond(id, result)` — the JSON-RPC reply callback captured per request.
-pub type RespondFn = Box<dyn Fn(RequestId, Value) + Send + Sync>;
+/// An `Err` means the reply never reached the app-server.
+pub type RespondFn = Box<dyn Fn(RequestId, Value) -> Result<(), JsonRpcError> + Send + Sync>;
 
 #[derive(Debug, Clone, Default)]
 pub struct PlanContext {
@@ -61,7 +63,9 @@ impl ApprovalHandler {
         *self.plan_context.lock_recover() = ctx;
     }
 
-    pub fn resolve(&self, response: &ControlResponse) {
+    /// Answer the pending request `response` resolves. `Err` when the answer
+    /// could not be written, so the turn would otherwise wait on it silently.
+    pub fn resolve(&self, response: &ControlResponse) -> Result<(), JsonRpcError> {
         let entry = self.pending.lock_recover().remove(&response.request_id);
         let Some(entry) = entry else {
             tracing::warn!(
@@ -69,22 +73,25 @@ impl ApprovalHandler {
                 request_id = %response.request_id,
                 "codex: no pending approval for requestId"
             );
-            return;
+            return Ok(());
         };
         if entry.method == "item/tool/requestUserInput" {
-            answer_user_input(entry, response);
+            answer_user_input(entry, response)
         } else {
-            answer_approval(entry, response);
+            answer_approval(entry, response)
         }
     }
 
     pub(crate) fn reject_all(&self) {
         let mut pending = self.pending.lock_recover();
         for (_, entry) in pending.drain() {
-            if entry.method == "item/tool/requestUserInput" {
-                (entry.respond)(entry.json_rpc_id, json!({ "answers": {} }));
+            let result = if entry.method == "item/tool/requestUserInput" {
+                (entry.respond)(entry.json_rpc_id, json!({ "answers": {} }))
             } else {
-                (entry.respond)(entry.json_rpc_id, json!({ "decision": "decline" }));
+                (entry.respond)(entry.json_rpc_id, json!({ "decision": "decline" }))
+            };
+            if let Err(error) = result {
+                tracing::warn!(module = "codex:approvals", %error, "codex: pending approval not rejected");
             }
         }
     }

@@ -86,10 +86,9 @@ impl CodexSession {
                 &method,
                 &params,
                 id,
-                Box::new(move |rpc_id, result| {
-                    if let Some(c) = cs.lock_recover().as_ref() {
-                        c.respond(rpc_id, result);
-                    }
+                Box::new(move |rpc_id, result| match cs.lock_recover().as_ref() {
+                    Some(c) => c.respond(rpc_id, result),
+                    None => Ok(()),
                 }),
             );
         })

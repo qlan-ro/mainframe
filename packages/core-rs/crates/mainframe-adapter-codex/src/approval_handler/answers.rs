@@ -6,10 +6,14 @@ use mainframe_types::adapter::{ControlBehavior, PermissionScope};
 use serde_json::{Value, json};
 
 use super::PendingApproval;
+use crate::jsonrpc::JsonRpcError;
 
 /// Answer a `requestUserInput`, which expects
 /// `{ answers: { [questionId]: { answers: string[] } } }`.
-pub(super) fn answer_user_input(entry: PendingApproval, response: &ControlResponse) {
+pub(super) fn answer_user_input(
+    entry: PendingApproval,
+    response: &ControlResponse,
+) -> Result<(), JsonRpcError> {
     let Some(answer_string) = choose_request_user_input_answer(&entry, response) else {
         tracing::info!(
             module = "codex:approvals",
@@ -17,8 +21,7 @@ pub(super) fn answer_user_input(entry: PendingApproval, response: &ControlRespon
             tool_name = %entry.tool_name,
             "codex user input declined"
         );
-        (entry.respond)(entry.json_rpc_id, json!({ "answers": {} }));
-        return;
+        return (entry.respond)(entry.json_rpc_id, json!({ "answers": {} }));
     };
     let mut answers = serde_json::Map::new();
     for qid in collect_question_ids(&entry, response) {
@@ -35,11 +38,14 @@ pub(super) fn answer_user_input(entry: PendingApproval, response: &ControlRespon
     (entry.respond)(
         entry.json_rpc_id,
         json!({ "answers": Value::Object(answers) }),
-    );
+    )
 }
 
 /// Answer an approval with the decision string Codex names.
-pub(super) fn answer_approval(entry: PendingApproval, response: &ControlResponse) {
+pub(super) fn answer_approval(
+    entry: PendingApproval,
+    response: &ControlResponse,
+) -> Result<(), JsonRpcError> {
     // Session-scoped allow reaches Codex's own "stop asking
     // this session" decision, distinct from a one-off accept.
     let decision = match (response.behavior, response.scope) {
@@ -48,7 +54,7 @@ pub(super) fn answer_approval(entry: PendingApproval, response: &ControlResponse
         (ControlBehavior::Deny, _) => "decline",
     };
     tracing::info!(module = "codex:approvals", request_id = %response.request_id, decision, "codex approval resolved");
-    (entry.respond)(entry.json_rpc_id, json!({ "decision": decision }));
+    (entry.respond)(entry.json_rpc_id, json!({ "decision": decision }))
 }
 
 /// Gather the question IDs that need an `answers` entry. Prefer the ids captured

@@ -90,13 +90,33 @@ impl JsonRpcClient {
         }
     }
 
-    pub fn respond(&self, id: RequestId, result: Value) {
+    /// Answer a server request (an approval or user-input reply). A closed
+    /// client or stdin is the exit path's business and is only logged; a full
+    /// queue is the caller's error, since the server would otherwise wait on
+    /// an answer that never arrives.
+    pub fn respond(&self, id: RequestId, result: Value) -> Result<(), JsonRpcError> {
         if self.closed.load(Ordering::SeqCst) {
-            return;
+            tracing::debug!(
+                module = "codex:jsonrpc",
+                ?id,
+                "response skipped: client closed"
+            );
+            return Ok(());
         }
         let msg = serde_json::json!({ "id": id, "result": result });
-        if let Err(error) = self.write(&msg) {
-            tracing::warn!(module = "codex:jsonrpc", ?id, %error, "response not written");
+        match self.write(&msg) {
+            Ok(()) => Ok(()),
+            Err(error @ mainframe_runtime::process::StdinWriteError::Closed) => {
+                tracing::debug!(module = "codex:jsonrpc", ?id, %error, "response not written");
+                Ok(())
+            }
+            Err(error @ mainframe_runtime::process::StdinWriteError::Full) => {
+                tracing::warn!(module = "codex:jsonrpc", ?id, %error, "response not written");
+                Err(JsonRpcError(format!(
+                    "Response to request {} not written: {error}",
+                    serde_json::to_string(&id).unwrap_or_default()
+                )))
+            }
         }
     }
 
@@ -142,8 +162,9 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    // Pure framing tests (the client-level request/respond/close/dispatch cases
-    // need a mock child process and are a known test gap).
+    // Pure framing tests. A full stdin queue is covered in `write_tests.rs`;
+    // the process-backed close/dispatch cases need a mock child process and
+    // are a known test gap.
 
     #[test]
     fn parses_a_single_json_object_line() {
@@ -183,6 +204,8 @@ mod dispatch;
 mod parsing;
 mod process;
 mod stderr;
+#[cfg(test)]
+mod write_tests;
 use dispatch::dispatch;
 use parsing::{parse_jsonrpc_messages, request_id_from_value};
 use stderr::{is_panic_line, is_tracing_line};
