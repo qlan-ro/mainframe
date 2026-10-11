@@ -120,33 +120,13 @@ pub(crate) fn resolve_subscribe_base(
     project_id: &str,
     chat_id: Option<&str>,
 ) -> Option<String> {
-    if let Some(cid) = chat_id {
-        // Only reject when the chat exists AND belongs to a different project.
-        if let Ok(Some(chat)) = db.chats.get(cid)
-            && chat.project_id != project_id
-        {
-            return None;
+    match mainframe_services::workspace::resolve_scope(db, project_id, chat_id) {
+        Ok(scope) => Some(scope.path),
+        Err(error) => {
+            tracing::debug!(%error, "file subscription scope unavailable");
+            None
         }
     }
-    match chat_id {
-        Some(cid) => effective_path(db, cid),
-        None => project_path(db, project_id),
-    }
-}
-
-/// `ChatManager.getEffectivePath(chatId)` approximation: the chat's stored
-/// worktree path if set, else its project's path.
-fn effective_path(db: &DatabaseManager, chat_id: &str) -> Option<String> {
-    let chat = db.chats.get(chat_id).ok().flatten()?;
-    match chat.worktree_path {
-        Some(worktree) => Some(worktree),
-        None => project_path(db, &chat.project_id),
-    }
-}
-
-/// `ChatManager.getProjectPath(projectId)`: the project's root path.
-fn project_path(db: &DatabaseManager, project_id: &str) -> Option<String> {
-    db.projects.get(project_id).ok().flatten().map(|p| p.path)
 }
 
 /// Containment-validate a relative `requested_path` against `base` (async

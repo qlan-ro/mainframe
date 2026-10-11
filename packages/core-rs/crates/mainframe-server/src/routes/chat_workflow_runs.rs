@@ -25,18 +25,7 @@ async fn resolve_session(ctx: &AppCtx, chat_id: &str) -> Option<(String, String)
         .ok()
         .flatten()?;
     let session_id = chat.claude_session_id?;
-    let cwd = match chat.worktree_path {
-        Some(path) => path,
-        None => {
-            let project_id = chat.project_id.clone();
-            ctx.db
-                .call(move |db| db.projects.get(&project_id))
-                .await
-                .ok()
-                .flatten()?
-                .path
-        }
-    };
+    let cwd = ctx.effective_path(&chat.project_id, Some(chat_id)).await?;
     Some((session_id, cwd))
 }
 

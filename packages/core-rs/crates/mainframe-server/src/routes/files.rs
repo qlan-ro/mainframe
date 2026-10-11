@@ -15,11 +15,8 @@ use axum::extract::{Path as AxPath, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
-use mainframe_db::{DatabaseManager, DbError};
-use mainframe_types::chat::{Chat, Project};
 use serde::Serialize;
 
-use crate::async_err::internal_error;
 use crate::ctx::AppCtx;
 use crate::fs_utils::{has_binary_extension, is_ignored_dir, path_resolve, relative};
 use crate::input_error::InputError;
@@ -39,62 +36,15 @@ struct FsEntry {
     path: String,
 }
 
-// ── effective-path resolution ────────────────────────────────────────────────
-
-/// Sync effective-path resolution (runs on the DB thread): project not found →
-/// `None`; a `chatId` from a different project → `None`; a live worktree wins
-/// over the project root. `worktreeMissing` is a ChatManager runtime field
-/// absent from the DB (always `None` here), so the missing-worktree
-/// short-circuit is inert.
-pub(crate) fn effective_path_sync(
-    db: &DatabaseManager,
-    project_id: &str,
-    chat_id: Option<&str>,
-) -> Result<Option<String>, DbError> {
-    let Some(project) = db.projects.get(project_id)? else {
-        return Ok(None);
-    };
-    if let Some(cid) = chat_id
-        && let Some(chat) = db.chats.get(cid)?
-    {
-        if chat.project_id != project_id {
-            return Ok(None);
-        }
-        if let Some(worktree) = chat.worktree_path {
-            // TODO: honor ChatManager's runtime worktreeMissing.
-            if chat.worktree_missing == Some(true) {
-                return Ok(None);
-            }
-            return Ok(Some(worktree));
-        }
-    }
-    Ok(Some(project.path))
-}
-
-/// Handler-side base resolver: `Ok(base)` or an already-built `404`/`500`
-/// response. Wraps [`effective_path_sync`] on the DB thread.
 pub(crate) async fn resolve_base(
     ctx: &AppCtx,
     project_id: &str,
     chat_id: Option<&str>,
 ) -> Result<String, crate::respond::ApiError> {
-    let pid = project_id.to_string();
-    let cid = chat_id.map(str::to_string);
-    match ctx
-        .db
-        .call(move |db| effective_path_sync(db, &pid, cid.as_deref()))
+    ctx.resolve_scope(project_id, chat_id)
         .await
-    {
-        Ok(Some(base)) => Ok(base),
-        Ok(None) => Err(crate::respond::ApiError::new(
-            StatusCode::NOT_FOUND,
-            "Project not found",
-        )),
-        Err(err) => Err(crate::respond::ApiError::internal(
-            "resolving effective path",
-            &err,
-        )),
-    }
+        .map(|scope| scope.path)
+        .map_err(Into::into)
 }
 
 fn qget<'a>(q: &'a HashMap<String, String>, key: &str) -> Option<&'a str> {
@@ -427,31 +377,12 @@ async fn resolve_path(
     };
     let chat_id = qget(&q, "chatId").map(str::to_string);
 
-    let pid = id.clone();
-    let cid = chat_id.clone();
-    let lookup = ctx
-        .db
-        .call(move |db| Ok((db.projects.get(&pid)?, chat_lookup(db, cid.as_deref())?)))
-        .await;
-    let (project, chat) = match lookup {
-        Ok(v) => v,
-        Err(err) => return internal_error("resolving path", &err),
+    let scope = match ctx.resolve_scope(&id, chat_id.as_deref()).await {
+        Ok(scope) => scope,
+        Err(error) => return crate::respond::ApiError::from(error).into_response(),
     };
-    let Some(project) = project else {
-        return fail(StatusCode::NOT_FOUND, "Project not found");
-    };
-    // worktreeMissing is a ChatManager runtime field (always None from the DB) —
-    // the 409 branch is structurally present but inert here.
-    if let Some(chat) = &chat
-        && chat.worktree_missing == Some(true)
-    {
-        return fail(StatusCode::CONFLICT, "Worktree missing");
-    }
-    let Some(base) = effective_from(&project, chat.as_ref(), &id) else {
-        return fail(StatusCode::NOT_FOUND, "Project not found");
-    };
-
-    let base_kind = if base != project.path {
+    let base = scope.path;
+    let base_kind = if base != scope.project_path {
         "worktree"
     } else {
         "project"
@@ -470,28 +401,6 @@ async fn resolve_path(
         "basePath": real_base,
         "contained": contained,
     }))
-}
-
-fn chat_lookup(db: &DatabaseManager, chat_id: Option<&str>) -> Result<Option<Chat>, DbError> {
-    match chat_id {
-        Some(cid) => db.chats.get(cid),
-        None => Ok(None),
-    }
-}
-
-fn effective_from(project: &Project, chat: Option<&Chat>, project_id: &str) -> Option<String> {
-    if let Some(chat) = chat {
-        if chat.project_id != project_id {
-            return None;
-        }
-        if let Some(worktree) = &chat.worktree_path {
-            if chat.worktree_missing == Some(true) {
-                return None;
-            }
-            return Some(worktree.clone());
-        }
-    }
-    Some(project.path.clone())
 }
 
 /// Resolve `requested` against `base`: strict containment → `contained:true`;

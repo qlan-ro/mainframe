@@ -16,7 +16,7 @@ use mainframe_adapter_api::BoxFuture;
 use mainframe_launch::{LaunchRegistry, PortTunnelRegistry};
 
 use crate::db::Db;
-use crate::routes::files::effective_path_sync;
+use mainframe_services::workspace::resolve_scope;
 
 /// The launch-process control surface the `ChatManager` needs before it tears
 /// down a worktree: look up the scope's launch manager and, if there is one,
@@ -129,11 +129,14 @@ impl RegistryScopeTunnelStopper {
         let cid = chat_id.to_string();
         let resolved = self
             .db
-            .call(move |db| effective_path_sync(db, &pid, Some(&cid)))
+            .call(move |db| Ok(resolve_scope(db, &pid, Some(&cid))))
             .await;
         match resolved {
-            Ok(Some(path)) => path == effective_path,
-            Ok(None) => true,
+            Ok(Ok(scope)) => scope.path == effective_path,
+            Ok(Err(error)) => {
+                tracing::debug!(%error, "tunnel scope unavailable");
+                true
+            }
             Err(err) => {
                 tracing::warn!(%err, project_id, chat_id, "port-tunnel scope resolution failed");
                 false

@@ -27,17 +27,15 @@ use axum::response::{IntoResponse, Response};
 use dashmap::DashMap;
 use mainframe_lsp::lsp_connection::attach_client_with_capture;
 use mainframe_lsp::{
-    ChatStore, ClientRef, LspConnectionHandler, LspServerHandle, ProjectStore, ReattachAction,
-    UpgradeOutcome, bridge_ws_to_process, cached_initialize_reply, classify_reattach_first,
+    ClientRef, LspConnectionHandler, LspServerHandle, ReattachAction, UpgradeOutcome,
+    bridge_ws_to_process, cached_initialize_reply, classify_reattach_first,
 };
-use mainframe_types::chat::{Chat, Project};
 use mainframe_types::events::{ClientEvent, DaemonEvent};
 use mainframe_types::http_status::StatusKind;
 use serde::Deserialize;
 use tokio::sync::{broadcast, mpsc};
 
 use crate::ctx::AppCtx;
-use crate::db::Db;
 use crate::middleware::auth::validate_device_token;
 use crate::net::{is_localhost, trust_proxy_client_ip};
 use crate::ws_file_watch::{WsFileWatch, resolve_subscribe_base, validate_relative};
@@ -138,36 +136,6 @@ pub(crate) struct LspWsQuery {
     chat_id: Option<String>,
 }
 
-/// Read-only `ProjectStore` over the DB actor (`db.projects.get`).
-struct DbProjectStore {
-    db: Db,
-}
-
-impl ProjectStore for DbProjectStore {
-    fn get_project(&self, project_id: &str) -> Option<Project> {
-        let id = project_id.to_string();
-        self.db
-            .call_blocking(move |d| d.projects.get(&id))
-            .ok()
-            .flatten()
-    }
-}
-
-/// Read-only `ChatStore` over the DB actor (`db.chats.get`).
-struct DbChatStore {
-    db: Db,
-}
-
-impl ChatStore for DbChatStore {
-    fn get_chat(&self, chat_id: &str) -> Option<Chat> {
-        let id = chat_id.to_string();
-        self.db
-            .call_blocking(move |d| d.chats.get(&id))
-            .ok()
-            .flatten()
-    }
-}
-
 /// The `/lsp/:projectId/:language` WS route handler. Self-authenticates (token
 /// query param unless loopback), validates + spawns the language server via the
 /// `LspConnectionHandler`, then bridges the accepted socket to the child process.
@@ -188,13 +156,20 @@ pub(crate) async fn lsp_ws_handler(
         return (StatusCode::NOT_FOUND, "Not Found").into_response();
     };
 
-    let handler = LspConnectionHandler::with_chats(
-        Arc::clone(&manager),
-        Arc::new(DbProjectStore { db: ctx.db.clone() }),
-        Arc::new(DbChatStore { db: ctx.db.clone() }),
-    );
+    let scope = match ctx
+        .resolve_scope(&project_id, query.chat_id.as_deref())
+        .await
+    {
+        Ok(scope) => scope,
+        Err(mainframe_services::workspace::ScopeError::Database(error)) => {
+            tracing::error!(%error, "LSP scope resolution failed");
+            return reject_response(StatusKind::Internal);
+        }
+        Err(_) => return reject_response(StatusKind::NotFound),
+    };
+    let handler = LspConnectionHandler::new(Arc::clone(&manager));
     match handler
-        .handle_upgrade(&project_id, &language, query.chat_id.as_deref())
+        .handle_upgrade(&project_id, &language, &scope.path)
         .await
     {
         UpgradeOutcome::Reject(status_line) => reject_response(status_line),

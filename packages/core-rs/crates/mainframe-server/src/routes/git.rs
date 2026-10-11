@@ -72,69 +72,34 @@ pub(crate) async fn get_effective_path(
     project_id: &str,
     chat_id: Option<&str>,
 ) -> Result<Option<String>, DbError> {
-    let pid = project_id.to_string();
-    let Some(project) = ctx.db.call(move |db| db.projects.get(&pid)).await? else {
-        return Ok(None);
-    };
-    if let Some(chat_id) = chat_id {
-        let cid = chat_id.to_string();
-        if let Some(chat) = ctx.db.call(move |db| db.chats.get(&cid)).await? {
-            if chat.project_id != project_id {
-                return Ok(None);
-            }
-            if let Some(wt) = chat.worktree_path {
-                if worktree_missing(&wt).await {
-                    return Ok(None);
-                }
-                return Ok(Some(wt));
-            }
-        }
+    match ctx.resolve_scope(project_id, chat_id).await {
+        Ok(scope) => Ok(Some(scope.path)),
+        Err(mainframe_services::workspace::ScopeError::Database(error)) => Err(error),
+        Err(_) => Ok(None),
     }
-    Ok(Some(project.path))
 }
 
-/// The chat-scoped effective-path resolver (no projectId, so no cross-project
-/// guard). `Ok(None)` = chat unknown, project unknown, or worktree deleted.
 pub(crate) async fn resolve_chat_path(
     ctx: &AppCtx,
     chat_id: &str,
 ) -> Result<Option<String>, DbError> {
-    let cid = chat_id.to_string();
+    let cid = chat_id.to_owned();
     let Some(chat) = ctx.db.call(move |db| db.chats.get(&cid)).await? else {
         return Ok(None);
     };
-    if let Some(wt) = chat.worktree_path {
-        if worktree_missing(&wt).await {
-            return Ok(None);
-        }
-        return Ok(Some(wt));
-    }
-    let pid = chat.project_id.clone();
-    Ok(ctx
-        .db
-        .call(move |db| db.projects.get(&pid))
-        .await?
-        .map(|p| p.path))
+    get_effective_path(ctx, &chat.project_id, Some(chat_id)).await
 }
 
-/// Whether the chat's worktree is missing — the flag callers check to turn a
-/// `null` effective path into a 409 (vs a 404).
 pub(crate) async fn chat_worktree_missing(ctx: &AppCtx, chat_id: &str) -> Result<bool, DbError> {
-    let cid = chat_id.to_string();
-    let chat = ctx.db.call(move |db| db.chats.get(&cid)).await?;
-    match chat.and_then(|c| c.worktree_path) {
-        Some(wt) => Ok(worktree_missing(&wt).await),
-        None => Ok(false),
+    let cid = chat_id.to_owned();
+    let Some(chat) = ctx.db.call(move |db| db.chats.get(&cid)).await? else {
+        return Ok(false);
+    };
+    match ctx.resolve_scope(&chat.project_id, Some(chat_id)).await {
+        Err(mainframe_services::workspace::ScopeError::Database(error)) => Err(error),
+        Err(mainframe_services::workspace::ScopeError::WorktreeMissing) => Ok(true),
+        _ => Ok(false),
     }
-}
-
-/// Whether the worktree directory is gone. The filesystem check runs on the
-/// blocking pool so it never stalls an async executor thread.
-async fn worktree_missing(worktree_path: &str) -> bool {
-    let wt = worktree_path.to_string();
-    !tokio::task::spawn_blocking(move || mainframe_services::workspace::is_worktree_present(&wt))
-        .await
-        .unwrap_or(false)
 }
 
 // ── handlers ─────────────────────────────────────────────────────────────────

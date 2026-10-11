@@ -208,38 +208,33 @@ impl AppCtx {
         *self.tunnel_url.write_recover() = url;
     }
 
-    /// Worktree-aware effective path: the chat's worktree when the chatId points
-    /// to a live worktree of this project; the project root otherwise. `None` on an
-    /// unknown project, a cross-project chat, or a missing worktree.
-    pub async fn effective_path(&self, project_id: &str, chat_id: Option<&str>) -> Option<String> {
-        let pid = project_id.to_string();
-        let cid = chat_id.map(str::to_string);
+    pub async fn resolve_scope(
+        &self,
+        project_id: &str,
+        chat_id: Option<&str>,
+    ) -> Result<mainframe_services::workspace::ScopePath, mainframe_services::workspace::ScopeError>
+    {
+        let pid = project_id.to_owned();
+        let cid = chat_id.map(str::to_owned);
         self.db
-            .call(move |d| {
-                let Some(project) = d.projects.get(&pid)? else {
-                    return Ok(None);
-                };
-                if let Some(cid) = &cid
-                    && let Some(chat) = d.chats.get(cid)?
-                {
-                    // Reject cross-project access.
-                    if chat.project_id != pid {
-                        return Ok(None);
-                    }
-                    if let Some(worktree_path) = &chat.worktree_path
-                        && !worktree_path.is_empty()
-                    {
-                        if chat.worktree_missing == Some(true) {
-                            return Ok(None);
-                        }
-                        return Ok(Some(worktree_path.clone()));
-                    }
-                }
-                Ok(Some(project.path))
+            .call(move |db| {
+                Ok(mainframe_services::workspace::resolve_scope(
+                    db,
+                    &pid,
+                    cid.as_deref(),
+                ))
             })
-            .await
-            .ok()
-            .flatten()
+            .await?
+    }
+
+    pub async fn effective_path(&self, project_id: &str, chat_id: Option<&str>) -> Option<String> {
+        match self.resolve_scope(project_id, chat_id).await {
+            Ok(scope) => Some(scope.path),
+            Err(error) => {
+                tracing::debug!(%error, "scope unavailable");
+                None
+            }
+        }
     }
 }
 

@@ -146,3 +146,15 @@ domain_errors!(
     mainframe_chat::chat_manager::DiscardError,
     mainframe_chat::chat_manager::RemoveProjectError,
 );
+
+impl From<mainframe_services::workspace::ScopeError> for ApiError {
+    fn from(error: mainframe_services::workspace::ScopeError) -> Self {
+        use mainframe_services::workspace::ScopeError;
+        match error {
+            ScopeError::Database(error) => error.into(),
+            ScopeError::ChatNotFound => Self::chat_not_found(),
+            ScopeError::WorktreeMissing => Self::NotFound("Worktree missing".into()),
+            ScopeError::ProjectNotFound | ScopeError::CrossProject => Self::project_not_found(),
+        }
+    }
+}
