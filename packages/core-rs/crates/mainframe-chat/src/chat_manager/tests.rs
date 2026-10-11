@@ -2149,10 +2149,11 @@ async fn notify_worktree_deleted_emits_only_for_matching_worktree() {
     let mut with_wt = test_chat("c1");
     with_wt.worktree_path = Some("/wt/x".to_string());
     let without = test_chat("c2");
+    let project_id = with_wt.project_id.clone();
     let deps = StoreDeps::with_chats(vec![with_wt, without]);
     let mgr = ChatManager::new(deps.clone());
 
-    mgr.notify_worktree_deleted("/wt/x");
+    mgr.notify_worktree_deleted(&project_id, "/wt/x").await;
 
     let updated: Vec<String> = deps
         .events()

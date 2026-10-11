@@ -8,6 +8,8 @@ pub struct ReadyDaemon {
 
 impl Daemon {
     pub async fn post_bind(self) -> ReadyDaemon {
+        info!(addr = %format!("127.0.0.1:{}", self.ctx.core.port), version = %self.ctx.core.version, "mainframe-daemon listening");
+        // Bind is the single-instance guard; sweep before spawning our tunnel.
         let sweep =
             sweep_stray_children(self.handles.child_registry.as_ref(), &default_sweep_deps()).await;
         if sweep.reaped > 0 || sweep.skipped > 0 {
@@ -104,6 +106,7 @@ impl Daemon {
     }
 
     async fn shutdown(ctx: Arc<AppCtx>, handles: DaemonHandles) {
+        info!("Shutting down...");
         if let Some(automations) = &ctx.services.automations {
             automations.stop();
         }

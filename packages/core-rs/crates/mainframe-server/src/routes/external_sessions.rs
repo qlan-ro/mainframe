@@ -1,9 +1,4 @@
-//! List and import external CLI sessions.
-//!
-//! Both endpoints go through `ChatManager::external_session_service()`, wired in
-//! `chat_deps::build_chat_manager` via `ExternalSessionDeps for DaemonChatDeps`.
-//! When no `ChatManager` is present (e.g. the route-unit test harness), they fall
-//! back to the "external session service unavailable" 500.
+//! Lists and imports CLI sessions through ChatManager external-session services.
 
 use std::sync::Arc;
 

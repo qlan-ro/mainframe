@@ -125,7 +125,7 @@ pub async fn spawn_facade_server_with(
         .unwrap();
 
     let ctx = Arc::new(
-        AppCtx::builder(db, data_dir.path().to_path_buf())
+        AppCtx::test_builder(db, data_dir.path().to_path_buf())
             .git(GitFactory)
             .services(Services {
                 attachments: Arc::new(AttachmentStore::new(data_dir.path().join("attachments"))),
@@ -136,7 +136,7 @@ pub async fn spawn_facade_server_with(
             .adapter_registry(adapter_registry)
             .background_tasks(tracker)
             .claude_workflows(Arc::new(ClaudeWorkflowStore::new()))
-            .chat_manager(Some(manager))
+            .chat_manager(manager)
             .automations(None)
             .version("0.0.0-test".to_string())
             .port(0)
@@ -146,7 +146,8 @@ pub async fn spawn_facade_server_with(
             .ws_clients(Arc::new(DashMap::new()))
             .facade_hub(facade_hub)
             .facade_heartbeat_interval_ms(heartbeat_interval_ms)
-            .build(),
+            .build()
+            .unwrap(),
     );
     spawn_broadcast_pump(Arc::clone(&ctx));
 

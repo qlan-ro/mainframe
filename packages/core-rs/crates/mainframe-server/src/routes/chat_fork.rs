@@ -64,7 +64,11 @@ async fn fork(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>, body: Byte
         Err(err) => {
             let status = status_of(&err);
             if status == StatusCode::INTERNAL_SERVER_ERROR {
-                tracing::error!(chat_id = %id, %err, "fork failed");
+                return crate::respond::fail_internal(
+                    format!("fork failed chat_id={id}"),
+                    &err,
+                    err.to_string(),
+                );
             }
             fail(status, err.to_string())
         }

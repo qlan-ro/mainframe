@@ -1,15 +1,4 @@
-//! Chat registry reads, archive, title/pinned/tuning/effort PATCH, unarchive,
-//! messages/display-messages, session-files and tool-result.
-//!
-//! Reads (`list_filtered`/`list_chats`/`get_chat`) route through the ChatManager
-//! facade when it is wired (enriched: displayStatus/isRunning/worktreeMissing),
-//! else the raw `ctx.core.db.chats` path (the test harness). The pinned/tuning/effort
-//! PATCH routes persist via `ctx.core.db.chats.update`, then run the tuning follow-ups
-//! (`sync_chat_fields` + fire-and-forget `apply_tuning` + `emit_chat_updated`)
-//! through the facade when wired. Live-session-orchestration routes (archive,
-//! `get_display_messages`, `get_messages_from_disk`, `get_pending_permission`,
-//! unarchive) call the real facade methods, falling back to the failure envelope
-//! when it is unavailable.
+//! Chat registry reads, history, archive, and tuning updates through ChatManager.
 
 use axum::response::IntoResponse;
 use std::sync::Arc;

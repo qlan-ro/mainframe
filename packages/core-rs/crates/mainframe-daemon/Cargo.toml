@@ -25,6 +25,7 @@ mainframe-runtime = { workspace = true }
 mainframe-types = { workspace = true }
 
 [dev-dependencies]
+mainframe-server = { workspace = true, features = ["test-support"] }
 tempfile = { workspace = true }
 wiremock = { workspace = true }
 

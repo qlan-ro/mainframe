@@ -246,13 +246,7 @@ async fn handle_subscribe_file(
     let base = if path.starts_with('/') {
         Some(path.clone())
     } else if let Some(project_id) = project_id.clone() {
-        let chat_id = chat_id.clone();
-        ctx.core
-            .db
-            .call(move |db| Ok(resolve_subscribe_base(db, &project_id, chat_id.as_deref())))
-            .await
-            .ok()
-            .flatten()
+        resolve_subscribe_base(ctx, &project_id, chat_id.as_deref()).await
     } else {
         tracing::warn!(
             path,

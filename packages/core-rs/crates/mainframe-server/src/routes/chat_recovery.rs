@@ -11,7 +11,6 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 
 use crate::ctx::AppCtx;
-use crate::respond::fail_with;
 use crate::respond::{fail, ok_empty};
 
 /// Which recovery op a route runs, mapped to its ChatManager method + log label.
@@ -51,12 +50,7 @@ async fn run(ctx: &Arc<AppCtx>, chat_id: &str, action: RecoveryAction) -> Respon
     };
     match result {
         Ok(()) => ok_empty(),
-        Err(err) => {
-            // The error's own class picks the status; its message crosses
-            // the wire verbatim.
-            tracing::warn!(chat_id, %err, "{label} failed");
-            fail_with(&err)
-        }
+        Err(err) => crate::respond::fail_domain(format!("{label} failed chat_id={chat_id}"), &err),
     }
 }
 

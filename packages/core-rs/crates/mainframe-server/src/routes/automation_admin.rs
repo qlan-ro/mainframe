@@ -118,13 +118,11 @@ async fn put_credential(
     };
     match engine.set_credential(&label, parsed.token).await {
         Ok(()) => ok_empty(),
-        Err(err) => {
-            tracing::error!(label, error = %err, "set credential failed");
-            fail(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "failed to save credential",
-            )
-        }
+        Err(err) => crate::respond::fail_internal(
+            format!("set credential failed label={}", label),
+            &err,
+            "failed to save credential",
+        ),
     }
 }
 
@@ -137,13 +135,11 @@ async fn delete_credential(State(ctx): State<Arc<AppCtx>>, Path(label): Path<Str
     }
     match engine.delete_credential(&label).await {
         Ok(()) => ok_empty(),
-        Err(err) => {
-            tracing::error!(label, error = %err, "delete credential failed");
-            fail(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "failed to delete credential",
-            )
-        }
+        Err(err) => crate::respond::fail_internal(
+            format!("delete credential failed label={}", label),
+            &err,
+            "failed to delete credential",
+        ),
     }
 }
 

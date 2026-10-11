@@ -96,7 +96,7 @@ pub async fn spawn_test_server_with(opts: TestServerOptions) -> TestServer {
     });
     let port_tunnels = tunnel.map(|stub| build_port_tunnels(data_dir.path(), stub, &broadcast));
     let ctx = Arc::new(
-        AppCtx::builder(db, data_dir.path().to_path_buf())
+        AppCtx::test_builder(db, data_dir.path().to_path_buf())
             .git(GitFactory)
             .services(Services {
                 attachments: Arc::new(AttachmentStore::new(data_dir.path().join("attachments"))),
@@ -111,7 +111,11 @@ pub async fn spawn_test_server_with(opts: TestServerOptions) -> TestServer {
             .claude_workflows(Arc::new(
                 mainframe_claude_workflows::store::ClaudeWorkflowStore::new(),
             ))
-            .port_tunnels(port_tunnels)
+            .port_tunnels(port_tunnels.unwrap_or_else(|| {
+                Arc::new(mainframe_launch::PortTunnelRegistry::new(Arc::new(
+                    mainframe_launch::TunnelManager::new(None),
+                )))
+            }))
             .automations(None)
             .version("0.0.0-test".to_string())
             .port(port)
@@ -121,7 +125,8 @@ pub async fn spawn_test_server_with(opts: TestServerOptions) -> TestServer {
             .ws_clients(Arc::new(DashMap::new()))
             .facade_hub(Arc::new(mainframe_server::FacadeHub::default()))
             .facade_heartbeat_interval_ms(facade_heartbeat_interval_ms)
-            .build(),
+            .build()
+            .unwrap(),
     );
     spawn_broadcast_pump(Arc::clone(&ctx));
 

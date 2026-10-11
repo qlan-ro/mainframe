@@ -17,7 +17,7 @@ pub(super) fn app(data_dir: &tempfile::TempDir, tunnels: Arc<TunnelManager>) -> 
         let _ = watcher_tx.send(event);
     });
     let ctx = Arc::new(
-        AppCtx::builder(db, data_dir.path().to_path_buf())
+        AppCtx::test_builder(db, data_dir.path().to_path_buf())
             .git(GitFactory)
             .services(Services {
                 attachments: Arc::new(AttachmentStore::new(data_dir.path().join("attachments"))),
@@ -32,7 +32,7 @@ pub(super) fn app(data_dir: &tempfile::TempDir, tunnels: Arc<TunnelManager>) -> 
             .claude_workflows(Arc::new(
                 mainframe_claude_workflows::store::ClaudeWorkflowStore::new(),
             ))
-            .tunnel_manager(Some(tunnels))
+            .tunnel_manager(tunnels)
             .automations(None)
             .version("0.0.0-test".to_string())
             .port(31415)
@@ -42,7 +42,8 @@ pub(super) fn app(data_dir: &tempfile::TempDir, tunnels: Arc<TunnelManager>) -> 
             .ws_clients(Arc::new(DashMap::new()))
             .facade_hub(Arc::new(crate::FacadeHub::default()))
             .facade_heartbeat_interval_ms(1000)
-            .build(),
+            .build()
+            .unwrap(),
     );
     crate::routes::tunnel::router().with_state(ctx)
 }

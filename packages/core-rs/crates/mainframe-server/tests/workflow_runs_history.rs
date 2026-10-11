@@ -45,6 +45,7 @@ impl Drop for RemoveDirOnDrop {
 }
 
 struct Harness {
+    ctx: Arc<AppCtx>,
     addr: SocketAddr,
     store: Arc<ClaudeWorkflowStore>,
     chat_id: String,
@@ -122,7 +123,7 @@ async fn harness(session_id: &str) -> Harness {
     );
 
     let ctx = Arc::new(
-        AppCtx::builder(db, data_dir.path().to_path_buf())
+        AppCtx::test_builder(db, data_dir.path().to_path_buf())
             .git(GitFactory)
             .services(Services {
                 attachments,
@@ -133,7 +134,7 @@ async fn harness(session_id: &str) -> Harness {
             .adapter_registry(Arc::new(AdapterRegistry::new()))
             .background_tasks(tracker)
             .claude_workflows(Arc::clone(&store))
-            .chat_manager(Some(manager))
+            .chat_manager(manager)
             .automations(None)
             .version("0.0.0-test".to_string())
             .port(0)
@@ -143,7 +144,8 @@ async fn harness(session_id: &str) -> Harness {
             .ws_clients(Arc::new(DashMap::new()))
             .facade_hub(Arc::new(mainframe_server::FacadeHub::default()))
             .facade_heartbeat_interval_ms(mainframe_acp::DEFAULT_HEARTBEAT_INTERVAL_MS)
-            .build(),
+            .build()
+            .unwrap(),
     );
     spawn_broadcast_pump(Arc::clone(&ctx));
 
@@ -162,6 +164,7 @@ async fn harness(session_id: &str) -> Harness {
     tokio::time::sleep(Duration::from_millis(20)).await;
 
     Harness {
+        ctx,
         addr,
         store,
         chat_id: chat.id,
@@ -380,4 +383,41 @@ async fn a_retained_snapshots_phases_and_agents_survive_the_route() {
     assert_eq!(runs[0]["agents"].as_array().unwrap().len(), 1);
     assert_eq!(runs[0]["agents"][0]["agentId"], "agent-alpha");
     assert_eq!(runs[0]["agents"][0]["state"], "progress");
+}
+
+#[tokio::test]
+async fn deleted_worktree_keeps_disk_workflow_runs_in_messages() {
+    let h = harness("sess-deleted-worktree").await;
+    let worktree = tempfile::tempdir().unwrap();
+    let path = worktree.path().to_string_lossy().into_owned();
+    let _cleanup = write_record(
+        &path,
+        "sess-deleted-worktree",
+        "run-deleted",
+        "task-deleted",
+    );
+    h.ctx
+        .core
+        .db
+        .call({
+            let id = h.chat_id.clone();
+            move |db| {
+                db.chats.update(
+                    &id,
+                    &ChatPatch {
+                        worktree_path: Some(Some(path)),
+                        ..Default::default()
+                    },
+                )
+            }
+        })
+        .await
+        .unwrap();
+    worktree.close().unwrap();
+    let body = h.messages().await;
+    assert_eq!(body["success"], true);
+    let runs = body["data"]["workflowRuns"].as_array().unwrap();
+    assert_eq!(runs.len(), 1);
+    assert_eq!(runs[0]["runId"], "run-deleted");
+    assert_eq!(runs[0]["source"], "record");
 }

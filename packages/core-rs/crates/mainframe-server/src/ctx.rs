@@ -137,11 +137,17 @@ pub struct ServicesCtx {
 }
 
 mod builder;
-pub use builder::AppCtxBuilder;
+pub use builder::{AppCtxBuilder, BuildError};
 
 impl AppCtx {
     pub fn builder(db: Db, data_dir: PathBuf) -> AppCtxBuilder {
         AppCtxBuilder::new(db, data_dir)
+    }
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn test_builder(db: Db, data_dir: PathBuf) -> AppCtxBuilder {
+        let mut builder = AppCtxBuilder::new(db, data_dir);
+        builder.test_defaults = true;
+        builder
     }
     pub async fn require_chat(
         &self,
@@ -185,7 +191,8 @@ impl AppCtx {
     {
         let pid = project_id.to_owned();
         let cid = chat_id.map(str::to_owned);
-        self.core
+        let scope = self
+            .core
             .db
             .call(move |db| {
                 Ok(mainframe_services::workspace::resolve_scope(
@@ -194,7 +201,8 @@ impl AppCtx {
                     cid.as_deref(),
                 ))
             })
-            .await?
+            .await??;
+        mainframe_services::workspace::check_scope_presence(scope).await
     }
 
     pub async fn effective_path(&self, project_id: &str, chat_id: Option<&str>) -> Option<String> {

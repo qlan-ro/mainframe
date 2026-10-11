@@ -90,10 +90,11 @@ async fn output(
             text,
         )
             .into_response(),
-        Err(err) => {
-            tracing::warn!(%output_path, %err, "failed to read spool file");
-            fail(StatusCode::INTERNAL_SERVER_ERROR, "read failed")
-        }
+        Err(err) => crate::respond::fail_internal(
+            format!("failed to read spool file output_path={}", output_path),
+            &err,
+            "read failed",
+        ),
     }
 }
 

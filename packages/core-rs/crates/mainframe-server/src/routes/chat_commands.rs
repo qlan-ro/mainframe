@@ -1,9 +1,4 @@
-//! Chat config PATCH, interrupt/resume/trust-workspace commands, and queue
-//! edit/cancel (chat create lives in `chat_create`).
-//!
-//! Every route goes through the `ChatManager` facade and is gated on the manager
-//! being wired. Existence is checked against `ctx.core.db.chats` so 404s are honoured
-//! before the facade call.
+//! Chat configuration, interrupt/resume/trust commands, and queue edits through ChatManager.
 
 use std::sync::Arc;
 
@@ -89,10 +84,11 @@ async fn update_config(
             Some(chat) => ok(chat),
             None => crate::respond::ApiError::chat_not_found().into_response(),
         },
-        Err(err) => {
-            tracing::error!(chat_id = %id, %err, "updateChatConfig failed");
-            fail(StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
-        }
+        Err(err) => crate::respond::fail_internal(
+            format!("updateChatConfig failed chat_id={}", id),
+            &err,
+            err.to_string(),
+        ),
     }
 }
 
@@ -128,10 +124,7 @@ async fn trust_workspace(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>)
     let cm = &ctx.chat.chat_manager;
     match cm.trust_workspace(&id).await {
         Ok(()) => ok_empty(),
-        Err(err) => {
-            tracing::error!(chat_id = %id, %err, "trust-workspace failed");
-            crate::respond::fail_with(&err)
-        }
+        Err(err) => crate::respond::fail_domain(format!("trust-workspace failed id={id}"), &err),
     }
 }
 
@@ -159,10 +152,11 @@ async fn queue_edit(
     let cm = &ctx.chat.chat_manager;
     match cm.edit_queued_message(&id, &message_id, &content).await {
         Ok(()) => ok_empty(),
-        Err(err) => {
-            tracing::error!(chat_id = %id, %err, "queue.edit failed");
-            fail(StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
-        }
+        Err(err) => crate::respond::fail_internal(
+            format!("queue.edit failed chat_id={}", id),
+            &err,
+            err.to_string(),
+        ),
     }
 }
 
@@ -178,10 +172,11 @@ async fn queue_cancel(
     let cm = &ctx.chat.chat_manager;
     match cm.cancel_queued_message(&id, &message_id).await {
         Ok(()) => ok_empty(),
-        Err(err) => {
-            tracing::error!(chat_id = %id, %err, "queue.cancel failed");
-            fail(StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
-        }
+        Err(err) => crate::respond::fail_internal(
+            format!("queue.cancel failed chat_id={}", id),
+            &err,
+            err.to_string(),
+        ),
     }
 }
 

@@ -22,12 +22,12 @@ use mainframe_launch::{
 };
 use mainframe_lsp::{LspManager, LspRegistry};
 use mainframe_plugins::manager::PluginManagerDeps;
-use mainframe_plugins::{EmitSink, GitHubIssues, PluginHostDb, PluginManager};
+use mainframe_plugins::{EmitSink, GitHubIssues, PluginManager};
 use mainframe_services::attachment::AttachmentStore;
 use mainframe_services::files::FileWatcherService;
 use mainframe_services::push::PushService;
 use mainframe_services::quota::{
-    ClaudeQuotaScheduler, ClaudeQuotaSchedulerDeps, QuotaManager, QuotaManagerDeps, QuotaService,
+    ClaudeQuotaScheduler, ClaudeQuotaSchedulerDeps, QuotaManager, QuotaManagerDeps,
 };
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::seam_error::SeamError;
@@ -48,6 +48,8 @@ pub use lifecycle::ReadyDaemon;
 
 #[derive(Debug, thiserror::Error)]
 pub enum BootError {
+    #[error(transparent)]
+    Context(#[from] crate::ctx::BuildError),
     #[error("listener: {0}")]
     Listener(#[from] std::io::Error),
     #[error("database: {0}")]
@@ -86,6 +88,7 @@ impl Bootstrap {
     }
 
     pub async fn bind(self) -> Result<BoundBootstrap, BootError> {
+        info!(data_dir = %self.paths.data_dir.display(), "data directory");
         let paths = self.paths.clone();
         let (listener, db) =
             crate::wiring::startup::bind_before_database(self.config.port, move || {
@@ -103,7 +106,7 @@ impl Bootstrap {
 }
 
 impl BoundBootstrap {
-    pub async fn build(self) -> Daemon {
+    pub async fn build(self) -> Result<Daemon, BootError> {
         let resources = resources::Resources::new(&self).await;
         assemble::assemble(self, resources).await
     }

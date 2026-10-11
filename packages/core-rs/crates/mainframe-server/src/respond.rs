@@ -26,6 +26,31 @@ pub fn fail(status: StatusCode, error: impl Into<String>) -> Response {
     ApiError::from_status(status, error.into()).into_response()
 }
 
+pub fn fail_internal(
+    context: impl Into<String>,
+    source: impl std::fmt::Display,
+    message: impl Into<String>,
+) -> Response {
+    ApiError::Internal {
+        context: context.into(),
+        source: mainframe_types::seam_error::SeamError::msg(source.to_string()),
+        public_message: Some(message.into()),
+    }
+    .into_response()
+}
+
+pub fn fail_domain(
+    context: impl Into<String>,
+    error: &(impl mainframe_types::http_status::HttpStatus + std::fmt::Display),
+) -> Response {
+    let status = status_of(error);
+    if status.is_server_error() {
+        fail_internal(context, error, error.to_string())
+    } else {
+        fail(status, error.to_string())
+    }
+}
+
 mod error;
 pub use error::ApiError;
 pub use error::{fail_or_internal, fail_with, status_code, status_of};

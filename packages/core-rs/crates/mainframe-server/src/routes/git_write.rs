@@ -131,8 +131,7 @@ fn git_result<T: serde::Serialize>(
     match result {
         Ok(v) => ok(v),
         Err(e) => {
-            tracing::warn!(error = %e, "{label} failed");
-            fail(StatusCode::INTERNAL_SERVER_ERROR, git_error_message(&e))
+            crate::respond::fail_internal(format!("{label} failed"), &e, git_error_message(&e))
         }
     }
 }
@@ -145,8 +144,7 @@ fn git_empty(
     match result {
         Ok(()) => ok_empty(),
         Err(e) => {
-            tracing::warn!(error = %e, "{label} failed");
-            fail(StatusCode::INTERNAL_SERVER_ERROR, git_error_message(&e))
+            crate::respond::fail_internal(format!("{label} failed"), &e, git_error_message(&e))
         }
     }
 }
@@ -217,10 +215,7 @@ async fn commit(
         .await
     {
         Ok(commit) => ok(json!({ "commit": commit })),
-        Err(e) => {
-            tracing::warn!(error = %e, "commit failed");
-            fail(StatusCode::INTERNAL_SERVER_ERROR, git_error_message(&e))
-        }
+        Err(e) => crate::respond::fail_internal("commit failed", &e, git_error_message(&e)),
     }
 }
 

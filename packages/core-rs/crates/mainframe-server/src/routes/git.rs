@@ -89,7 +89,7 @@ pub(crate) async fn chat_worktree_missing(ctx: &AppCtx, chat_id: &str) -> Result
     };
     match ctx.resolve_scope(&chat.project_id, Some(chat_id)).await {
         Err(mainframe_services::workspace::ScopeError::Database(error)) => Err(error),
-        Err(mainframe_services::workspace::ScopeError::WorktreeMissing) => Ok(true),
+        Err(mainframe_services::workspace::ScopeError::WorktreeMissing(_)) => Ok(true),
         _ => Ok(false),
     }
 }
@@ -143,10 +143,11 @@ async fn working_stat(
         .await
     {
         Ok(stat) => ok(stat),
-        Err(e) => {
-            tracing::warn!(error = %e, base_path, "Failed to compute working stat");
-            fail(StatusCode::INTERNAL_SERVER_ERROR, git_error_message(&e))
-        }
+        Err(e) => crate::respond::fail_internal(
+            format!("Failed to compute working stat base_path={}", base_path),
+            &e,
+            git_error_message(&e),
+        ),
     }
 }
 

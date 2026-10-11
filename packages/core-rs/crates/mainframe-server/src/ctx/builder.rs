@@ -1,6 +1,8 @@
 use super::*;
 
 pub struct AppCtxBuilder {
+    #[cfg(any(test, feature = "test-support"))]
+    pub(super) test_defaults: bool,
     db: Db,
     data_dir: PathBuf,
     git: Option<GitFactory>,
@@ -31,6 +33,8 @@ pub struct AppCtxBuilder {
 impl AppCtxBuilder {
     pub(super) fn new(db: Db, data_dir: PathBuf) -> Self {
         Self {
+            #[cfg(any(test, feature = "test-support"))]
+            test_defaults: false,
             db,
             data_dir,
             git: None,
@@ -94,40 +98,40 @@ impl AppCtxBuilder {
         self.claude_workflows = Some(value);
         self
     }
-    pub fn chat_manager(mut self, value: Option<Arc<ChatManager>>) -> Self {
-        self.chat_manager = value;
+    pub fn chat_manager(mut self, value: Arc<ChatManager>) -> Self {
+        self.chat_manager = Some(value);
         self
     }
-    pub fn launch_registry(mut self, value: Option<Arc<LaunchRegistry>>) -> Self {
-        self.launch_registry = value;
+    pub fn launch_registry(mut self, value: Arc<LaunchRegistry>) -> Self {
+        self.launch_registry = Some(value);
         self
     }
-    pub fn tunnel_manager(mut self, value: Option<Arc<TunnelManager>>) -> Self {
-        self.tunnel_manager = value;
+    pub fn tunnel_manager(mut self, value: Arc<TunnelManager>) -> Self {
+        self.tunnel_manager = Some(value);
         self
     }
-    pub fn port_tunnels(mut self, value: Option<Arc<PortTunnelRegistry>>) -> Self {
-        self.port_tunnels = value;
+    pub fn port_tunnels(mut self, value: Arc<PortTunnelRegistry>) -> Self {
+        self.port_tunnels = Some(value);
         self
     }
-    pub fn lsp_manager(mut self, value: Option<Arc<LspManager>>) -> Self {
-        self.lsp_manager = value;
+    pub fn lsp_manager(mut self, value: Arc<LspManager>) -> Self {
+        self.lsp_manager = Some(value);
         self
     }
-    pub fn plugin_manager(mut self, value: Option<Arc<PluginManager>>) -> Self {
-        self.plugin_manager = value;
+    pub fn plugin_manager(mut self, value: Arc<PluginManager>) -> Self {
+        self.plugin_manager = Some(value);
         self
     }
     pub fn automations(mut self, value: Option<Arc<AutomationsEngine>>) -> Self {
         self.automations = Some(value);
         self
     }
-    pub fn orchestration(mut self, value: Option<Arc<OrchestrationService>>) -> Self {
-        self.orchestration = value;
+    pub fn orchestration(mut self, value: Arc<OrchestrationService>) -> Self {
+        self.orchestration = Some(value);
         self
     }
-    pub fn quota(mut self, value: Option<Arc<dyn QuotaService>>) -> Self {
-        self.quota = value;
+    pub fn quota(mut self, value: Arc<dyn QuotaService>) -> Self {
+        self.quota = Some(value);
         self
     }
     pub fn version(mut self, value: String) -> Self {
@@ -150,9 +154,28 @@ impl AppCtxBuilder {
         self.tunnel_url = Some(value);
         self
     }
-    pub fn build(self) -> AppCtx {
+    pub fn build(self) -> Result<AppCtx, BuildError> {
         self.assemble()
     }
 }
 
 mod assemble;
+
+pub use assemble::BuildError;
+#[cfg(any(test, feature = "test-support"))]
+mod test_defaults;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn production_builder_rejects_missing_dependencies() {
+        let db =
+            Db::spawn(|| mainframe_db::DatabaseManager::open(std::path::Path::new(":memory:")))
+                .unwrap();
+        let result = AppCtx::builder(db, PathBuf::from("/unused")).build();
+        assert!(
+            matches!(result, Err(error) if error.to_string() == "missing application context dependency: services")
+        );
+    }
+}

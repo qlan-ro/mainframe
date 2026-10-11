@@ -90,7 +90,7 @@ pub trait ScopeTunnelStopper: Send + Sync {
     ) -> Option<BoxFuture<'a, ()>>;
 }
 
-/// No registry (route-unit harness / a daemon booted without tunnels).
+/// No-op tunnel teardown for test harnesses.
 pub struct NoopScopeTunnelStopper;
 
 impl ScopeTunnelStopper for NoopScopeTunnelStopper {
@@ -117,8 +117,7 @@ impl RegistryScopeTunnelStopper {
         Self { registry, db }
     }
 
-    /// `None` also means "stop": the owning chat is gone or its worktree
-    /// vanished, so no live scope can claim the tunnel.
+    /// Stop unclaimed tunnels when their owning chat no longer exists.
     async fn belongs_to_scope(
         &self,
         project_id: &str,

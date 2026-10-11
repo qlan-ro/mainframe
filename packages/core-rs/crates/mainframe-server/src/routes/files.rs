@@ -346,10 +346,11 @@ async fn write_file(
     };
     match tokio::fs::write(&full, content).await {
         Ok(()) => ok(serde_json::json!({ "path": file_path })),
-        Err(err) => {
-            tracing::warn!(error = %err, path = file_path, "Failed to write file");
-            fail(StatusCode::INTERNAL_SERVER_ERROR, "Failed to write file")
-        }
+        Err(err) => crate::respond::fail_internal(
+            format!("Failed to write file path={}", file_path),
+            &err,
+            "Failed to write file",
+        ),
     }
 }
 
@@ -506,10 +507,11 @@ async fn external_file_content(Query(q): Query<HashMap<String, String>>) -> Resp
                 )
             }
         }
-        Err(err) => {
-            tracing::warn!(error = %err, path = resolved, "Failed to read external file");
-            fail(StatusCode::INTERNAL_SERVER_ERROR, "Failed to read file")
-        }
+        Err(err) => crate::respond::fail_internal(
+            format!("Failed to read external file path={}", resolved),
+            &err,
+            "Failed to read file",
+        ),
     }
 }
 

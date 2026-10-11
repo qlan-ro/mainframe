@@ -5,7 +5,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use mainframe_db::DatabaseManager;
+use crate::ctx::AppCtx;
 use mainframe_services::files::FileWatcherService;
 
 use mainframe_runtime::fs::resolve_and_validate_path;
@@ -107,23 +107,13 @@ impl WsFileWatch {
     }
 }
 
-/// The base directory for a *relative* `subscribe:file`, with the chat→project
-/// ownership check. Runs on the DB thread (sync repo access) — the caller then
-/// containment-validates the requested path against this base. This is the
-/// relative-path branch; returns `None` (reject) on a missing projectId, an
-/// ownership mismatch, or an unresolvable base.
-///
-/// Absolute paths are handled by the caller (returned as-is, no base) exactly as
-/// the TS `if (requestedPath.startsWith('/')) return requestedPath;` fast-path.
-pub(crate) fn resolve_subscribe_base(
-    db: &DatabaseManager,
+/// Rejects unknown chats and missing worktrees before relative-path containment checks.
+pub(crate) async fn resolve_subscribe_base(
+    ctx: &AppCtx,
     project_id: &str,
     chat_id: Option<&str>,
 ) -> Option<String> {
-    if let Some(chat_id) = chat_id {
-        db.chats.get(chat_id).ok().flatten()?;
-    }
-    match mainframe_services::workspace::resolve_scope(db, project_id, chat_id) {
+    match ctx.resolve_scope(project_id, chat_id).await {
         Ok(scope) => Some(scope.path),
         Err(error) => {
             tracing::debug!(%error, "file subscription scope unavailable");
@@ -143,16 +133,21 @@ pub(crate) async fn validate_relative(base: &str, requested_path: &str) -> Optio
 mod tests {
     use super::*;
 
-    #[test]
-    fn file_subscription_rejects_unknown_chat_but_accepts_project_scope() {
-        let db = DatabaseManager::open(std::path::Path::new(":memory:")).unwrap();
-        let project = db.projects.create("/workspace", None).unwrap();
+    #[tokio::test]
+    async fn file_subscription_rejects_unknown_chat_but_accepts_project_scope() {
+        let ctx = AppCtx::test_ctx();
+        let project = ctx
+            .core
+            .db
+            .call(|db| db.projects.create("/workspace", None))
+            .await
+            .unwrap();
         assert_eq!(
-            resolve_subscribe_base(&db, &project.id, Some("unknown")),
+            resolve_subscribe_base(&ctx, &project.id, Some("unknown")).await,
             None
         );
         assert_eq!(
-            resolve_subscribe_base(&db, &project.id, None),
+            resolve_subscribe_base(&ctx, &project.id, None).await,
             Some(project.path)
         );
     }

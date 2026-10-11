@@ -69,7 +69,11 @@ async fn run_daemon() {
         Ok(bound) => bound,
         Err(error) => fatal("daemon boot failed", &error),
     };
-    if let Err(error) = bound.build().await.serve(shutdown_signal()).await {
+    let daemon = match bound.build().await {
+        Ok(daemon) => daemon,
+        Err(error) => fatal("daemon assembly failed", &error),
+    };
+    if let Err(error) = daemon.serve(shutdown_signal()).await {
         fatal("daemon server failed", &error);
     }
 }

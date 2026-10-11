@@ -13,9 +13,7 @@ use mainframe_types::claude_workflow::ClaudeWorkflowRun;
 
 use crate::ctx::AppCtx;
 
-/// Resolves the chat's Claude session id and effective cwd (worktree path,
-/// falling back to the project path), mirroring `chat_manager.rs`'s
-/// `build_history_session`. `None` when either is missing.
+/// Uses the stored cwd because transcript records outlive deleted worktrees.
 async fn resolve_session(ctx: &AppCtx, chat_id: &str) -> Option<(String, String)> {
     let chat_id_owned = chat_id.to_string();
     let chat = ctx
@@ -26,7 +24,14 @@ async fn resolve_session(ctx: &AppCtx, chat_id: &str) -> Option<(String, String)
         .ok()
         .flatten()?;
     let session_id = chat.claude_session_id?;
-    let cwd = ctx.effective_path(&chat.project_id, Some(chat_id)).await?;
+    let project = ctx
+        .core
+        .db
+        .call(move |db| db.projects.get(&chat.project_id))
+        .await
+        .ok()
+        .flatten()?;
+    let cwd = chat.worktree_path.unwrap_or(project.path);
     Some((session_id, cwd))
 }
 

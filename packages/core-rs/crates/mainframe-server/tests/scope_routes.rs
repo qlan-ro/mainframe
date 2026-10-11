@@ -58,7 +58,7 @@ async fn deleted_worktree_refuses_every_file_route_before_io() {
         .await
         .unwrap();
     assert_eq!(response.status(), 404);
-    for suffix in ["launch/status", "launch/configs"] {
+    for (suffix, expected) in [("launch/status", 200), ("launch/configs", 404)] {
         let response = client
             .get(server.http_url(&format!(
                 "/api/projects/{}/{suffix}?chatId={}",
@@ -67,9 +67,9 @@ async fn deleted_worktree_refuses_every_file_route_before_io() {
             .send()
             .await
             .unwrap();
-        assert_eq!(response.status(), 404, "{suffix}");
+        assert_eq!(response.status(), expected, "{suffix}");
     }
-    for suffix in ["launch/dev/start", "launch/dev/stop"] {
+    for (suffix, expected) in [("launch/dev/start", 404), ("launch/dev/stop", 200)] {
         let response = client
             .post(server.http_url(&format!(
                 "/api/projects/{}/{suffix}?chatId={}",
@@ -78,7 +78,7 @@ async fn deleted_worktree_refuses_every_file_route_before_io() {
             .send()
             .await
             .unwrap();
-        assert_eq!(response.status(), 404, "{suffix}");
+        assert_eq!(response.status(), expected, "{suffix}");
     }
     let response = client
         .get(server.http_url(&format!(

@@ -106,7 +106,7 @@ async fn harness(fork_capable: bool, update: ChatPatch) -> Harness {
     );
 
     let ctx = Arc::new(
-        AppCtx::builder(db.clone(), data_dir.path().to_path_buf())
+        AppCtx::test_builder(db.clone(), data_dir.path().to_path_buf())
             .git(GitFactory)
             .services(Services {
                 attachments,
@@ -117,7 +117,7 @@ async fn harness(fork_capable: bool, update: ChatPatch) -> Harness {
             .adapter_registry(registry)
             .background_tasks(tracker)
             .claude_workflows(workflows)
-            .chat_manager(Some(manager))
+            .chat_manager(manager)
             .automations(None)
             .version("0.0.0-test".to_string())
             .port(0)
@@ -127,7 +127,8 @@ async fn harness(fork_capable: bool, update: ChatPatch) -> Harness {
             .ws_clients(Arc::new(DashMap::new()))
             .facade_hub(Arc::new(mainframe_server::FacadeHub::default()))
             .facade_heartbeat_interval_ms(mainframe_acp::DEFAULT_HEARTBEAT_INTERVAL_MS)
-            .build(),
+            .build()
+            .unwrap(),
     );
     spawn_broadcast_pump(Arc::clone(&ctx));
 

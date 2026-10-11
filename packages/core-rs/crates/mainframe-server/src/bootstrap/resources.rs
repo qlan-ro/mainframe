@@ -136,7 +136,9 @@ fn adapters(
     spawn_task_event_bridge(Arc::clone(background_tasks), broadcast.clone());
     spawn_workflow_run_bridge(Arc::clone(claude_workflows), broadcast.clone());
 
+    // Kill adapters and cloudflared before the default panic hook to avoid orphaning them.
     install_panic_cleanup(&adapters, tunnel_manager);
+    // Configure before serve so no request can trigger an unconfigured probe.
     adapters.configure_refresh(Arc::new(DaemonRefreshDeps {
         db: db.clone(),
         broadcast: broadcast.clone(),
@@ -153,6 +155,7 @@ fn install_panic_cleanup(adapters: &Arc<AdapterRegistry>, tunnel_manager: &Arc<T
         let default_hook = std::panic::take_hook();
         std::panic::set_hook(Box::new(move |info| {
             tracing::error!(panic = %info, "Uncaught exception");
+            // Launch teardown needs async I/O; the next boot sweep handles those children.
             panic_adapters.kill_all();
             panic_tunnel.signal_all_on_panic();
             default_hook(info);

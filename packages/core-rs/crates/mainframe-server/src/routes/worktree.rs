@@ -15,12 +15,8 @@ use crate::ctx::AppCtx;
 use crate::input_error::InputError;
 use crate::orchestration_deps::branch_name_ok;
 use crate::respond::{fail, ok, ok_empty};
-use crate::respond::{fail_with, status_of};
 use crate::routes::body::parse_body;
 
-// The `Err` carries a built axum `Response` (intentionally large); boxing it
-// would only add an allocation for a value we return by move once.
-#[allow(clippy::result_large_err)]
 async fn project_path(
     ctx: &Arc<AppCtx>,
     project_id: &str,
@@ -42,7 +38,6 @@ struct WorktreeBody {
 
 // Parse + validate the enable/fork body, returning the (baseBranch, branchName)
 // pair. The first failing check wins.
-#[allow(clippy::result_large_err)]
 fn validate_enable_fork(body: &Bytes) -> Result<(String, String), crate::respond::ApiError> {
     let Some(b) = parse_body::<WorktreeBody>(body) else {
         return Err(crate::respond::ApiError::new(
@@ -81,10 +76,7 @@ async fn enable_worktree(
     let cm = &ctx.chat.chat_manager;
     match cm.enable_worktree(&id, &base, &branch).await {
         Ok(()) => ok_empty(),
-        Err(err) => {
-            tracing::warn!(chat_id = %id, %err, "enable-worktree failed");
-            fail_with(&err)
-        }
+        Err(err) => crate::respond::fail_domain(format!("enable-worktree failed id={id}"), &err),
     }
 }
 
@@ -92,10 +84,7 @@ async fn disable_worktree(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>
     let cm = &ctx.chat.chat_manager;
     match cm.disable_worktree(&id).await {
         Ok(()) => ok_empty(),
-        Err(err) => {
-            tracing::warn!(chat_id = %id, %err, "disable-worktree failed");
-            fail_with(&err)
-        }
+        Err(err) => crate::respond::fail_domain(format!("disable-worktree failed id={id}"), &err),
     }
 }
 
@@ -111,11 +100,7 @@ async fn fork_worktree(
     let cm = &ctx.chat.chat_manager;
     match cm.fork_to_worktree(&id, &base, &branch).await {
         Ok(new_chat_id) => ok(serde_json::json!({ "chatId": new_chat_id })),
-        Err(err) => {
-            let status = status_of(&err);
-            tracing::warn!(chat_id = %id, %err, "fork-worktree failed");
-            fail(status, err.to_string())
-        }
+        Err(err) => crate::respond::fail_domain(format!("fork-worktree failed id={id}"), &err),
     }
 }
 
@@ -161,10 +146,7 @@ async fn attach_worktree(
         .await
     {
         Ok(()) => ok_empty(),
-        Err(err) => {
-            tracing::warn!(chat_id = %id, %err, "attach-worktree failed");
-            fail_with(&err)
-        }
+        Err(err) => crate::respond::fail_domain(format!("attach-worktree failed id={id}"), &err),
     }
 }
 
@@ -198,10 +180,10 @@ async fn delete_worktree(
         .await
     {
         Ok(()) => ok_empty(),
-        Err(err) => {
-            tracing::warn!(project_id = %id, worktree_path = %worktree_path, %err, "delete-worktree failed");
-            fail_with(&err)
-        }
+        Err(err) => crate::respond::fail_domain(
+            format!("delete-worktree failed id={id} worktree_path={worktree_path}"),
+            &err,
+        ),
     }
 }
 
@@ -287,7 +269,7 @@ async fn validate_and_delete_worktree(
     remove_worktree(project_path, worktree_path, &resolved_branch).await;
     {
         let cm = &ctx.chat.chat_manager;
-        cm.notify_worktree_deleted(worktree_path);
+        cm.notify_worktree_deleted(project_id, worktree_path).await;
     }
     Ok(())
 }

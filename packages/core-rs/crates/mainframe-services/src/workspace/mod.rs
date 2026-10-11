@@ -11,4 +11,4 @@ pub use worktree::{
 };
 
 mod scope;
-pub use scope::{ScopeError, ScopePath, resolve_scope};
+pub use scope::{ScopeError, ScopePath, check_scope_presence, resolve_scope};

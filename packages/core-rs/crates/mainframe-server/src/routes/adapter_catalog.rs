@@ -65,13 +65,11 @@ async fn list<const SKILL: bool>(
         .await
         {
             Ok(skills) => ok(skills),
-            Err(error) => {
-                tracing::warn!(?error, "Failed to list Codex skills");
-                fail(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "Failed to list Codex skills",
-                )
-            }
+            Err(error) => crate::respond::fail_internal(
+                "Failed to list Codex skills",
+                &error,
+                "Failed to list Codex skills",
+            ),
         },
         "mock-cli" if SKILL => ok(mainframe_adapter_mock::skills::list_skills(&project_path).await),
         "mock-cli" => ok(mainframe_adapter_mock::skills::list_agents(&project_path).await),
@@ -136,10 +134,14 @@ async fn create<const SKILL: bool>(
     };
     match result {
         Ok(skill) => ok(skill),
-        Err(err) => {
-            tracing::warn!(%adapter_id, name = %input.name, ?err, "Failed to create skill");
-            fail(StatusCode::INTERNAL_SERVER_ERROR, "Operation failed")
-        }
+        Err(err) => crate::respond::fail_internal(
+            format!(
+                "Failed to create skill name={} adapter_id={}",
+                input.name, adapter_id
+            ),
+            &err,
+            "Operation failed",
+        ),
     }
 }
 
@@ -179,10 +181,11 @@ async fn update<const SKILL: bool>(
     };
     match result {
         Ok(skill) => ok(skill),
-        Err(err) => {
-            tracing::warn!(skill_id = %id, ?err, "Failed to update skill");
-            fail(StatusCode::INTERNAL_SERVER_ERROR, "Operation failed")
-        }
+        Err(err) => crate::respond::fail_internal(
+            format!("Failed to update skill skill_id={}", id),
+            &err,
+            "Operation failed",
+        ),
     }
 }
 
@@ -215,10 +218,11 @@ async fn delete<const SKILL: bool>(
     };
     match result {
         Ok(()) => crate::respond::ok_empty(),
-        Err(err) => {
-            tracing::warn!(skill_id = %id, ?err, "Failed to delete skill");
-            fail(StatusCode::INTERNAL_SERVER_ERROR, "Operation failed")
-        }
+        Err(err) => crate::respond::fail_internal(
+            format!("Failed to delete skill skill_id={}", id),
+            &err,
+            "Operation failed",
+        ),
     }
 }
 

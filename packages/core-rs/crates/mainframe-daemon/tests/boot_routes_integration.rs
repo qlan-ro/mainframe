@@ -55,7 +55,8 @@ async fn boot_serves_launch_plugins_and_lsp_happy_paths() {
     .await
     .unwrap()
     .build()
-    .await;
+    .await
+    .unwrap();
     let ctx = daemon.ctx.clone();
     let project = ctx
         .core

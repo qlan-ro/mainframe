@@ -50,7 +50,11 @@ async fn open_side_chat(
         Err(err) => {
             let status = status_for(&err);
             if status == StatusCode::INTERNAL_SERVER_ERROR {
-                tracing::error!(chat_id = %id, %err, "open_side_chat failed");
+                return crate::respond::fail_internal(
+                    format!("open_side_chat failed chat_id={id}"),
+                    &err,
+                    err.to_string(),
+                );
             }
             fail(status, err.to_string())
         }

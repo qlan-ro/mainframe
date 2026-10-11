@@ -152,12 +152,18 @@ impl ChatManager {
 
     /// Re-emit `chat.updated` for every non-archived chat bound to `worktree_path`
     /// so clients pick up the new `worktreeMissing` flag.
-    pub fn notify_worktree_deleted(&self, worktree_path: &str) {
+    pub async fn notify_worktree_deleted(&self, project_id: &str, worktree_path: &str) {
+        if let Some(stop) = self.deps.stop_launch_processes(project_id, worktree_path) {
+            stop.await;
+        }
+        if let Some(stop) = self.deps.stop_scope_tunnels(project_id, worktree_path) {
+            stop.await;
+        }
         for chat in self.deps.chats_list_all() {
-            if chat.worktree_path.as_deref() != Some(worktree_path) {
-                continue;
+            if chat.project_id == project_id && chat.worktree_path.as_deref() == Some(worktree_path)
+            {
+                self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
             }
-            self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
         }
     }
 

@@ -15,7 +15,7 @@ pub enum ScopeError {
     #[error("Project not found")]
     CrossProject,
     #[error("Worktree missing")]
-    WorktreeMissing,
+    WorktreeMissing(ScopePath),
     #[error(transparent)]
     Database(#[from] DbError),
 }
@@ -30,7 +30,7 @@ pub fn resolve_scope(
         .get(project_id)?
         .ok_or(ScopeError::ProjectNotFound)?;
     let chat = match chat_id {
-        Some(id) => db.chats.get(id)?,
+        Some(id) => Some(db.chats.get(id)?.ok_or(ScopeError::ChatNotFound)?),
         None => None,
     };
     if let Some(chat) = chat {
@@ -38,9 +38,6 @@ pub fn resolve_scope(
             return Err(ScopeError::CrossProject);
         }
         if let Some(path) = chat.worktree_path.filter(|path| !path.is_empty()) {
-            if !super::is_worktree_present(&path) {
-                return Err(ScopeError::WorktreeMissing);
-            }
             return Ok(ScopePath {
                 path,
                 project_path: project.path,
@@ -53,14 +50,25 @@ pub fn resolve_scope(
     })
 }
 
+pub async fn check_scope_presence(scope: ScopePath) -> Result<ScopePath, ScopeError> {
+    if scope.path != scope.project_path
+        && tokio::fs::metadata(std::path::Path::new(&scope.path).join(".git"))
+            .await
+            .is_err()
+    {
+        return Err(ScopeError::WorktreeMissing(scope));
+    }
+    Ok(scope)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use mainframe_types::chat::NewChat;
     use mainframe_types::chat_patch::ChatPatch;
 
-    #[test]
-    fn resolves_project_and_worktree_and_checks_disk_without_runtime_flag() {
+    #[tokio::test]
+    async fn resolves_stored_scope_then_checks_presence_without_runtime_flag() {
         let db = DatabaseManager::open(std::path::Path::new(":memory:")).unwrap();
         let root = tempfile::tempdir().unwrap();
         let project = db
@@ -83,12 +91,10 @@ mod tests {
             resolve_scope(&db, &project.id, None).unwrap().path,
             project.path
         );
-        assert_eq!(
-            resolve_scope(&db, &project.id, Some("unknown"))
-                .unwrap()
-                .path,
-            project.path
-        );
+        assert!(matches!(
+            resolve_scope(&db, &project.id, Some("unknown")),
+            Err(ScopeError::ChatNotFound)
+        ));
         let worktree = tempfile::tempdir().unwrap();
         std::fs::write(worktree.path().join(".git"), "gitdir: unused").unwrap();
         let path = worktree.path().to_string_lossy().into_owned();
@@ -112,10 +118,11 @@ mod tests {
             None
         );
         worktree.close().unwrap();
-        assert!(matches!(
-            resolve_scope(&db, &project.id, Some(&chat.id)),
-            Err(ScopeError::WorktreeMissing)
-        ));
+        let stored = resolve_scope(&db, &project.id, Some(&chat.id)).unwrap();
+        assert_eq!(stored.path, path);
+        assert!(
+            matches!(check_scope_presence(stored).await, Err(ScopeError::WorktreeMissing(scope)) if scope.path == path)
+        );
         let other = db.projects.create("/other", None).unwrap();
         assert!(matches!(
             resolve_scope(&db, &other.id, Some(&chat.id)),

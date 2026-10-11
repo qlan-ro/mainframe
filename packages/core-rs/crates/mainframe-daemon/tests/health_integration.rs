@@ -29,7 +29,7 @@ async fn health_endpoint_serves_expected_shape_and_shuts_down_gracefully() {
     let (broadcast, _keepalive) = tokio::sync::broadcast::channel::<DaemonEvent>(64);
     let watcher_tx = broadcast.clone();
     let ctx = Arc::new(
-        AppCtx::builder(db, data_dir.path().to_path_buf())
+        AppCtx::test_builder(db, data_dir.path().to_path_buf())
             .git(GitFactory)
             .services(Services {
                 attachments: Arc::new(AttachmentStore::new(data_dir.path().join("attachments"))),
@@ -53,7 +53,8 @@ async fn health_endpoint_serves_expected_shape_and_shuts_down_gracefully() {
                 mainframe_claude_workflows::store::ClaudeWorkflowStore::new(),
             ))
             .automations(None)
-            .build(),
+            .build()
+            .unwrap(),
     );
     spawn_broadcast_pump(Arc::clone(&ctx));
 

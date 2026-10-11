@@ -42,7 +42,11 @@ async fn switch_provider(
         Err(err) => {
             let status = status_of(&err);
             if status == StatusCode::INTERNAL_SERVER_ERROR {
-                tracing::error!(chat_id = %id, %err, "provider switch failed");
+                return crate::respond::fail_internal(
+                    format!("provider switch failed chat_id={id}"),
+                    &err,
+                    err.to_string(),
+                );
             }
             fail(status, err.to_string())
         }
