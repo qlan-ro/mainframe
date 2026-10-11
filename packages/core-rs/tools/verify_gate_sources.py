@@ -32,10 +32,14 @@ def braces(masked: str) -> dict[int, int]:
     return pairs
 
 
-def test_spans(masked: str) -> list[tuple[int, int]]:
+def test_spans(masked: str, text: str | None = None) -> list[tuple[int, int]]:
     pairs = braces(masked)
     spans = []
-    for attr in CFG_TEST.finditer(masked):
+    attrs = list(CFG_TEST.finditer(masked))
+    if text is not None:
+        pattern = r'#\[cfg\(any\(test,\s*feature\s*=\s*"test-support"\)\)\]'
+        attrs.extend(m for m in re.finditer(pattern, text) if masked[m.start()] == '#')
+    for attr in attrs:
         end = re.search(r'[;{]', masked[attr.end():])
         if end:
             pos = attr.end() + end.start()
@@ -97,7 +101,7 @@ def module_targets(path: Path, text: str, masked: str):
 
 def references(path: Path, text: str):
     masked = mask_code(text)
-    spans = test_spans(masked)
+    spans = test_spans(masked, text)
     for pos, target in module_targets(path, text, masked):
         if target.is_file():
             yield target.resolve(), in_test_span(spans, pos)

@@ -1,3 +1,4 @@
+from test_gate_conventions import ConventionTests
 import tempfile
 import unittest
 from pathlib import Path

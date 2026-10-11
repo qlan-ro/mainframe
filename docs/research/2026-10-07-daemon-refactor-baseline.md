@@ -1,5 +1,38 @@
 # Daemon refactor baseline (`packages/core-rs`)
 
+## Status (2026-10)
+
+The original audit below describes the pre-refactor tree. Baseline documentation
+landed in #787 and validation stabilization in #800. The implementation PRs target
+`refactor/daemon-baseline`; R13 also completes R10’s generated architecture table.
+
+| Item | PR |
+|---|---|
+| D1 | #791 |
+| D2 | #788 |
+| D3 | #798 |
+| D4 | #794 |
+| D5 | #793 |
+| D6 | #789 |
+| D7 | #795 |
+| D8 | #792 |
+| D9 | #790 |
+| D10 | #797 |
+| R1 | #808 |
+| R2 | #809 |
+| R3 | #802 |
+| R4 | #807 |
+| R5 | #803 |
+| R6 | #801 |
+| R7 | #805 |
+| R8 | #804 |
+| R9 | #799 |
+| R10 | #796 |
+| R11 | #806 |
+| R12 | #810 |
+| R13 | Pending enforcement PR |
+
+
 Read-only audit of the Rust daemon, October 2026. Goal: name the trendline the
 iterative work took, show the evidence, and propose the refactors that bring
 the workspace back to a baseline future work can build on.

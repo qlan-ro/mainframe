@@ -1,5 +1,5 @@
 {
   "_provenance": "synthetic",
   "type": "file:changed",
-  "path": "packages/core/src/server/ws.ts"
+  "path": "packages/core-rs/crates/mainframe-server/src/websocket.rs"
 }

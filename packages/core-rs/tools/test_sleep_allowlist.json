@@ -1,0 +1,23 @@
+{
+  "mainframe-adapter-codex/tests/model_probe_cleanup.rs": "Poll for the rejected Codex probe child to exit.",
+  "mainframe-automations/src/actions/run_command_tests.rs": "Allow shell startup before aborting, then wait past its sentinel deadline to prove cancellation kills it.",
+  "mainframe-launch/src/launch_manager_tests.rs": "Poll until the real launch child PID is recorded.",
+  "mainframe-launch/src/launch_manager_tests_child_registry.rs": "Poll registry cleanup after the real child exits.",
+  "mainframe-launch/src/launch_manager_tests_exit_order.rs": "Poll real-child retirement while an inherited pipe remains open.",
+  "mainframe-launch/src/launch_manager_tests_start_stop.rs": "Observe that the real child survives the rejected process-group signal.",
+  "mainframe-launch/src/launch_registry_shutdown_tests.rs": "Poll real child setup before timing group shutdown.",
+  "mainframe-launch/src/launch_registry_tests.rs": "Poll real child setup before testing forced tunnel shutdown.",
+  "mainframe-launch/src/port_tunnel_registry_tests.rs": "Poll the real child teardown boundary for overlapping starts.",
+  "mainframe-launch/src/process/sweep_tests_defaults.rs": "Poll real child PID-file readiness and process disappearance under timeout.",
+  "mainframe-launch/src/test_support.rs": "Poll a marker confirming the shell installed its signal trap.",
+  "mainframe-launch/src/tunnel_manager/behavior_tests.rs": "Let the real child emit post-start output before checking it remains alive.",
+  "mainframe-launch/src/tunnel_manager/shutdown_tests.rs": "Poll until the cancelled real child is removed from the live registry.",
+  "mainframe-launch/src/tunnel_manager_tests.rs": "Poll until the real tunnel child PID is registered.",
+  "mainframe-lsp/src/lsp_manager/shutdown_tests.rs": "Poll a marker written by the real child; no in-process notification.",
+  "mainframe-lsp/src/lsp_manager_tests_part_1.rs": "Poll marker files written by the real LSP child.",
+  "mainframe-lsp/src/lsp_manager_tests_part_2.rs": "Poll until the real LSP server has been shut down by its idle timer.",
+  "mainframe-runtime/src/test_support.rs": "The polling helper sleeps between predicates; the executable probe retries an OS child race.",
+  "mainframe-server/src/wiring/shutdown/fixture.rs": "Poll a PID marker written by the child.",
+  "mainframe-server/tests/deleted_worktree_launch.rs": "Poll until the real preview-tunnel child publishes its URL before worktree deletion.",
+  "mainframe-server/tests/worktree_delete_order.rs": "Poll the real launch child readiness marker before worktree deletion."
+}
