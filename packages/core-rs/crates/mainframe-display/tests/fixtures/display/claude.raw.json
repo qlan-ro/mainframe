@@ -143,6 +143,38 @@
     "timestamp": "2026-10-07T12:00:00Z"
   },
   {
+    "id": "task-subagent-child-call",
+    "chatId": "golden",
+    "type": "assistant",
+    "content": [
+      {
+        "type": "tool_use",
+        "id": "toolu_child_read",
+        "name": "Read",
+        "input": {
+          "file_path": "index.ts"
+        },
+        "parentToolUseId": "toolu_task_1"
+      }
+    ],
+    "timestamp": "2026-10-07T12:00:00Z"
+  },
+  {
+    "id": "task-subagent-child-result",
+    "chatId": "golden",
+    "type": "tool_result",
+    "content": [
+      {
+        "type": "tool_result",
+        "toolUseId": "toolu_child_read",
+        "content": "export const greeting = \"Hello\";",
+        "isError": false,
+        "parentToolUseId": "toolu_task_1"
+      }
+    ],
+    "timestamp": "2026-10-07T12:00:00Z"
+  },
+  {
     "id": "task-subagent-6",
     "chatId": "golden",
     "type": "user",
@@ -297,13 +329,40 @@
     "timestamp": "2026-10-07T12:00:00Z"
   },
   {
+    "id": "attachment-only",
+    "chatId": "golden",
+    "type": "user",
+    "content": [],
+    "timestamp": "2026-10-07T12:00:00Z",
+    "metadata": {
+      "attachments": [
+        {
+          "name": "notes.txt",
+          "kind": "file"
+        }
+      ]
+    }
+  },
+  {
+    "id": "attachment-path-only",
+    "chatId": "golden",
+    "type": "user",
+    "content": [
+      {
+        "type": "text",
+        "text": "<attached_file_path name=\"notes &amp; draft.txt\" path=\"/tmp/notes.txt\" />"
+      }
+    ],
+    "timestamp": "2026-10-07T12:00:00Z"
+  },
+  {
     "id": "slash",
     "chatId": "golden",
     "type": "user",
     "content": [
       {
         "type": "text",
-        "text": "<command-name>/review</command-name><command-args>src/main.rs</command-args>"
+        "text": "<command-message>review</command-message>\n<command-name>/review</command-name>\n<command-args>src/main.rs</command-args>"
       }
     ],
     "timestamp": "2026-10-07T12:00:00Z"

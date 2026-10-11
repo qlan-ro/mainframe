@@ -89,7 +89,22 @@
       },
       {
         "agentId": "toolu_task_1",
-        "calls": [],
+        "calls": [
+          {
+            "category": "explore",
+            "id": "toolu_child_read",
+            "input": {
+              "file_path": "index.ts"
+            },
+            "name": "Read",
+            "parentToolUseId": "toolu_task_1",
+            "result": {
+              "content": "export const greeting = \"Hello\";",
+              "isError": false
+            },
+            "type": "tool_call"
+          }
+        ],
         "taskArgs": {
           "description": "Find the greeting export",
           "model": "claude-haiku-4-5-20251001",
@@ -182,6 +197,54 @@
     "id": "composer-attachments-3",
     "timestamp": "2026-10-07T12:00:00Z",
     "type": "assistant"
+  },
+  {
+    "chatId": "golden",
+    "content": [],
+    "id": "attachment-only",
+    "metadata": {
+      "attachments": [
+        {
+          "kind": "file",
+          "name": "notes.txt"
+        }
+      ]
+    },
+    "timestamp": "2026-10-07T12:00:00Z",
+    "type": "user"
+  },
+  {
+    "chatId": "golden",
+    "content": [],
+    "id": "attachment-path-only",
+    "metadata": {
+      "attachedFiles": [
+        {
+          "name": "notes & draft.txt"
+        }
+      ]
+    },
+    "timestamp": "2026-10-07T12:00:00Z",
+    "type": "user"
+  },
+  {
+    "chatId": "golden",
+    "content": [
+      {
+        "text": "/review src/main.rs",
+        "type": "text"
+      }
+    ],
+    "id": "slash",
+    "metadata": {
+      "cleanText": "src/main.rs",
+      "command": {
+        "name": "review",
+        "userText": "src/main.rs"
+      }
+    },
+    "timestamp": "2026-10-07T12:00:00Z",
+    "type": "user"
   },
   {
     "chatId": "golden",

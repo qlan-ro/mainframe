@@ -31,6 +31,7 @@ mod refold;
 mod rewind;
 
 #[cfg(test)]
+#[path = "../incremental_tests.rs"]
 mod tests;
 
 pub use projector::IncrementalProjector;
