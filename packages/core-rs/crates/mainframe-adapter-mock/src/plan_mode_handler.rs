@@ -71,4 +71,5 @@ impl PlanModeActionHandler for MockPlanModeHandler {
 }
 
 #[cfg(test)]
+#[path = "plan_mode_handler_tests.rs"]
 mod tests;
