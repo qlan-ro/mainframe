@@ -16,7 +16,16 @@ pub enum Signal {
     Sigkill,
 }
 
-type TreeKillFuture = Pin<Box<dyn Future<Output = Result<(), String>> + Send>>;
+/// A tree signal that did not reach every pid in the tree.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("{detail}")]
+pub struct TreeKillError {
+    /// The root pid itself failed, not only some of its descendants.
+    pub root_failed: bool,
+    pub detail: String,
+}
+
+type TreeKillFuture = Pin<Box<dyn Future<Output = Result<(), TreeKillError>> + Send>>;
 type TreeKillFn = Arc<dyn Fn(u32, Signal) -> TreeKillFuture + Send + Sync>;
 type PsCommFuture = Pin<Box<dyn Future<Output = String> + Send>>;
 type PsCommFn = Arc<dyn Fn(u32) -> PsCommFuture + Send + Sync>;
@@ -56,7 +65,7 @@ async fn tree_kill(
     process: &crate::process::ProcessDeps,
     pid: u32,
     signal: Signal,
-) -> Result<(), String> {
+) -> Result<(), TreeKillError> {
     let f = lock_kill_seam(process).tree_kill.clone();
     f(pid, signal).await
 }
@@ -65,7 +74,7 @@ async fn real_tree_kill(
     pid: u32,
     kind: Signal,
     path: mainframe_runtime::ResolvedPath,
-) -> Result<(), String> {
+) -> Result<(), TreeKillError> {
     use mainframe_runtime::process::{Target, inspect, signal};
     let mut all = vec![pid];
     all.extend(inspect::descendants(pid, Some(&path)).await);
@@ -79,18 +88,21 @@ async fn real_tree_kill(
 /// Signal every pid in `pids` (parent first), continuing past failures so one
 /// EPERM never leaves the rest of the tree unsignalled; a pid already gone
 /// (ESRCH) is not a failure. Only after every pid was tried does it report
-/// the ones that failed, so the caller's "not killed" path is reached only
-/// when something really was left running.
+/// the ones that failed, and whether the root (`pids[0]`) was among them, so
+/// a caller can tell a surviving root from an unsignalled descendant.
 pub(super) fn signal_each(
     pids: &[u32],
     mut send: impl FnMut(u32) -> std::io::Result<()>,
-) -> Result<(), String> {
+) -> Result<(), TreeKillError> {
+    let mut root_failed = false;
     let failures: Vec<String> = pids
         .iter()
-        .filter_map(|&pid| match send(pid) {
+        .enumerate()
+        .filter_map(|(index, &pid)| match send(pid) {
             Ok(()) => None,
             Err(error) => {
                 tracing::warn!(target: "background-tasks:kill", pid, %error, "tree kill signal failed");
+                root_failed |= index == 0;
                 Some(format!("pid {pid}: {error}"))
             }
         })
@@ -98,7 +110,10 @@ pub(super) fn signal_each(
     if failures.is_empty() {
         Ok(())
     } else {
-        Err(failures.join("; "))
+        Err(TreeKillError {
+            root_failed,
+            detail: failures.join("; "),
+        })
     }
 }
 
@@ -110,14 +125,16 @@ pub(super) async fn sigterm_then_kill(
         tracing::warn!(target: "background-tasks:kill", pid, err = %sig_err, "SIGTERM failed; trying SIGKILL");
     }
     tokio::time::sleep(Duration::from_millis(GRACE_MS)).await;
+    // `ok` reports the root; descendants the SIGKILL missed ride along in
+    // `error` so the caller can log them without disowning a killed root.
     match tree_kill(process, pid, Signal::Sigkill).await {
-        Err(kill_err) => StopResult {
-            ok: false,
-            error: Some(kill_err),
-        },
         Ok(()) => StopResult {
             ok: true,
             error: None,
+        },
+        Err(kill_err) => StopResult {
+            ok: !kill_err.root_failed,
+            error: Some(kill_err.detail),
         },
     }
 }

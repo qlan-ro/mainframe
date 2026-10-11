@@ -15,9 +15,24 @@ fn signals_every_pid_in_the_tree_even_when_one_fails() {
     });
     assert_eq!(*attempted.lock_recover(), vec![100, 200, 300]);
     let error = result.unwrap_err();
-    assert!(error.starts_with("pid 200: "), "{error}");
-    assert!(!error.contains("pid 100"), "{error}");
-    assert!(!error.contains("pid 300"), "{error}");
+    assert!(!error.root_failed);
+    assert!(error.detail.starts_with("pid 200: "), "{error}");
+    assert!(!error.detail.contains("pid 100"), "{error}");
+    assert!(!error.detail.contains("pid 300"), "{error}");
+}
+
+#[test]
+fn flags_a_failure_of_the_root_pid() {
+    let result = os::signal_each(&[100, 200], |pid| {
+        if pid == 100 {
+            Err(io::Error::from_raw_os_error(1)) // EPERM
+        } else {
+            Ok(())
+        }
+    });
+    let error = result.unwrap_err();
+    assert!(error.root_failed);
+    assert!(error.detail.starts_with("pid 100: "), "{error}");
 }
 
 #[test]

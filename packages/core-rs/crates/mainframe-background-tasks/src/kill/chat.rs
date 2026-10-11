@@ -163,6 +163,9 @@ async fn sweep_file(
                 command: command.clone(),
             });
             tracing::info!(target: "background-tasks:kill", pid, command = %command, file = %file, "worktree sweep killed pid");
+            if let Some(error) = &r.error {
+                tracing::warn!(target: "background-tasks:kill", pid, command = %command, err = %error, "worktree sweep left descendants unsignalled");
+            }
         } else {
             tracing::error!(target: "background-tasks:kill", pid, command = %command, err = ?r.error, "worktree sweep kill failed");
         }
