@@ -23,7 +23,7 @@ pub struct RecordedFile {
 #[serde(rename_all = "camelCase")]
 pub struct RecordedEvent {
     pub dir: EventDirection,
-    pub method: String,
+    pub method: crate::recorded_method::RecordedMethod,
     pub args: Vec<Value>,
     pub delay_ms: i64,
     #[serde(default)]
@@ -114,14 +114,18 @@ pub(crate) fn messages_from_events(events: &[RecordedEvent], chat_id: &str) -> V
 }
 
 fn event_message(event: &RecordedEvent, index: usize, chat_id: &str) -> Option<ChatMessage> {
-    let (r#type, content) = match (event.dir.clone(), event.method.as_str()) {
-        (EventDirection::Out, "onMessage") => (ChatMessageType::Assistant, event_content(event)?),
-        (EventDirection::Out, "onToolResult") => {
+    let (r#type, content) = match (event.dir.clone(), &event.method) {
+        (EventDirection::Out, crate::recorded_method::RecordedMethod::OnMessage) => {
+            (ChatMessageType::Assistant, event_content(event)?)
+        }
+        (EventDirection::Out, crate::recorded_method::RecordedMethod::OnToolResult) => {
             (ChatMessageType::ToolResult, event_content(event)?)
         }
         // A recorded prompt is a user turn, as in a real CLI's transcript —
         // a from-message fork resolves its cut against these.
-        (EventDirection::In, "sendMessage") => (ChatMessageType::User, prompt_content(event)?),
+        (EventDirection::In, crate::recorded_method::RecordedMethod::SendMessage) => {
+            (ChatMessageType::User, prompt_content(event)?)
+        }
         _ => return None,
     };
     Some(ChatMessage {

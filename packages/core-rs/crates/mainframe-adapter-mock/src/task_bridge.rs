@@ -12,6 +12,7 @@
 //! `tool_use` naming a subagent tool starts a task, and the matching `tool_result`
 //! ends it. Work that a recording never resolves stays running, which is exactly
 //! what a fixture wants when the point is to show live work.
+use crate::recorded_method::RecordedMethod;
 use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -59,12 +60,12 @@ impl TaskBridge {
         // `task_progress` snapshots the recorder never captured, so a recording
         // carries the finished `ClaudeWorkflowRun` instead. Everything downstream —
         // the run panel, the phase list, the agent grid — reads the same record.
-        if event.method == "onWorkflowRun" {
+        if event.method == RecordedMethod::OnWorkflowRun {
             self.apply_run(chat_id, event);
             return;
         }
-        let blocks: Vec<MessageContent> = match event.method.as_str() {
-            "onMessage" | "onToolResult" => match event.args.first() {
+        let blocks: Vec<MessageContent> = match &event.method {
+            RecordedMethod::OnMessage | RecordedMethod::OnToolResult => match event.args.first() {
                 Some(value) => match serde_json::from_value(value.clone()) {
                     Ok(blocks) => blocks,
                     Err(_) => return,

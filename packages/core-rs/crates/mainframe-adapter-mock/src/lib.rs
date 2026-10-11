@@ -19,3 +19,5 @@ pub use fixture::{RecordedEvent, parse_fixture};
 pub use session::ReplaySession;
 
 mod skills_provider;
+
+pub mod recorded_method;
