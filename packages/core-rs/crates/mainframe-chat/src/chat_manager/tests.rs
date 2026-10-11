@@ -1066,7 +1066,7 @@ impl AdapterSession for RecSession {
 }
 
 fn seed_active(mgr: &ChatManager, chat_id: &str, chat: Chat, session: Arc<dyn AdapterSession>) {
-    mgr.active_chats.insert(
+    mgr.shared.active_chats.insert(
         chat_id.to_string(),
         Arc::new(Mutex::new(ActiveChat::new(chat, Some(session)))),
     );

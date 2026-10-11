@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
+#[cfg(test)]
 use dashmap::DashMap;
 use mainframe_adapter_api::{AdapterError, AdapterSession, BoxFuture, SessionSink};
 use mainframe_runtime::sync::{FlightClaim, FlightWaiter, SingleFlight};
@@ -45,7 +46,7 @@ pub(crate) fn is_last_active_chat_for_scope(
 }
 
 /// Registry of active chats (SHARED_MAP; per-entity values are `Arc<Mutex<ActiveChat>>`).
-pub type ActiveChatRegistry = Arc<DashMap<String, Arc<Mutex<ActiveChat>>>>;
+pub use crate::chat_manager::Registry as ActiveChatRegistry;
 
 use mainframe_types::time::now_ms;
 

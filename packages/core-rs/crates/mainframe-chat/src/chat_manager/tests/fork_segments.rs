@@ -67,7 +67,7 @@ fn setup_parent() -> (Arc<StoreDeps>, Arc<FakeStore>, ChatManager) {
         user("x2"),
         reply("x2"),
     ];
-    let mut cache = mgr.messages.lock().unwrap();
+    let mut cache = mgr.shared.messages.lock().unwrap();
     for message in live {
         cache.append("c1", message);
     }

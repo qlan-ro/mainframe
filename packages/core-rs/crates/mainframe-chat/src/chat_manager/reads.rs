@@ -7,22 +7,22 @@ impl ChatManager {
         let mut chat = self
             .get_active(chat_id)
             .map(|c| c.lock_recover().chat.clone())
-            .or_else(|| self.deps.chats_get(chat_id))?;
-        self.enricher.enrich(&mut chat);
+            .or_else(|| self.shared.deps.chats_get(chat_id))?;
+        self.shared.enrich(&mut chat);
         Some(chat)
     }
 
     pub fn list_chats(&self, project_id: &str) -> Vec<Chat> {
-        self.enrich_all(self.deps.chats_list(project_id))
+        self.enrich_all(self.shared.deps.chats_list(project_id))
     }
 
     pub fn list_all_chats(&self) -> Vec<Chat> {
-        self.enrich_all(self.deps.chats_list_all())
+        self.enrich_all(self.shared.deps.chats_list_all())
     }
 
     fn enrich_all(&self, mut chats: Vec<Chat>) -> Vec<Chat> {
         for chat in &mut chats {
-            self.enricher.enrich(chat);
+            self.shared.enrich(chat);
         }
         chats
     }
@@ -47,7 +47,7 @@ impl ChatManager {
     /// `queue_state` snapshots render in this order, so it is part of the wire
     /// contract, not a courtesy.
     pub fn get_queued_for_chat(&self, chat_id: &str) -> Vec<QueuedMessageRef> {
-        queued_for_chat(&self.queued_refs, chat_id)
+        queued_for_chat(&self.shared.queued_refs, chat_id)
     }
 
     /// Announce the chat's current queued snapshot on the chat-surface seam
@@ -63,7 +63,7 @@ impl ChatManager {
 
     #[cfg(test)]
     pub(crate) fn handle_queued_processed(&self, chat_id: &str, uuid: &str) {
-        handle_queued_processed(&self.queued_refs, chat_id, uuid);
+        handle_queued_processed(&self.shared.queued_refs, chat_id, uuid);
     }
 
     // ── registry reads (enriched) ────────────────────────────────────────────
@@ -76,7 +76,7 @@ impl ChatManager {
         include_archived: bool,
         include_temporary: bool,
     ) -> Vec<Chat> {
-        self.enrich_all(self.deps.chats_list_filtered(
+        self.enrich_all(self.shared.deps.chats_list_filtered(
             project_id,
             tags_all,
             has_worktree,
@@ -96,7 +96,7 @@ impl ChatManager {
             }
             return Some(wt);
         }
-        self.deps.projects_get_path(&chat.project_id)
+        self.shared.deps.projects_get_path(&chat.project_id)
     }
 
     // ── in-memory cache sync + out-of-band broadcast ─────────────────────────
@@ -141,7 +141,7 @@ impl ChatManager {
     /// cell keeps what was read when the chat loaded.
     pub fn refresh_agent_lineage(&self, chat_id: &str) {
         if let Some(cell) = self.get_active(chat_id)
-            && let Some(row) = self.deps.chats_get(chat_id)
+            && let Some(row) = self.shared.deps.chats_get(chat_id)
         {
             let mut guard = cell.lock_recover();
             guard.chat.orchestration = row.orchestration;
@@ -153,13 +153,21 @@ impl ChatManager {
     /// Re-emit `chat.updated` for every non-archived chat bound to `worktree_path`
     /// so clients pick up the new `worktreeMissing` flag.
     pub async fn notify_worktree_deleted(&self, project_id: &str, worktree_path: &str) {
-        if let Some(stop) = self.deps.stop_launch_processes(project_id, worktree_path) {
+        if let Some(stop) = self
+            .shared
+            .deps
+            .stop_launch_processes(project_id, worktree_path)
+        {
             stop.await;
         }
-        if let Some(stop) = self.deps.stop_scope_tunnels(project_id, worktree_path) {
+        if let Some(stop) = self
+            .shared
+            .deps
+            .stop_scope_tunnels(project_id, worktree_path)
+        {
             stop.await;
         }
-        for chat in self.deps.chats_list_all() {
+        for chat in self.shared.deps.chats_list_all() {
             if chat.project_id == project_id && chat.worktree_path.as_deref() == Some(worktree_path)
             {
                 self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
@@ -169,12 +177,12 @@ impl ChatManager {
 
     /// Live-apply resolved tuning to the running session, if any.
     pub async fn apply_tuning(&self, chat_id: &str) {
-        apply_tuning_impl(&self.active_chats, &self.deps, chat_id).await;
+        apply_tuning_impl(&self.shared.active_chats, &self.shared.deps, chat_id).await;
     }
 
     /// Record a mention and refresh the session context.
     pub fn add_mention(&self, chat_id: &str, mention: SessionMention) {
-        self.deps.chats_add_mention(chat_id, &mention);
+        self.shared.deps.chats_add_mention(chat_id, &mention);
         self.emit(DaemonEvent::ContextUpdated {
             chat_id: chat_id.to_string(),
             file_paths: None,

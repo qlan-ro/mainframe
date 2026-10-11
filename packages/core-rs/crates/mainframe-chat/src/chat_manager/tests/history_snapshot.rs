@@ -31,7 +31,7 @@ async fn cold_manager(dir: &tempfile::TempDir) -> (Arc<StoreDeps>, ChatManager, 
     deps.set_history_cache_dir(&dir.path().join("cache").to_string_lossy());
     let manager = ChatManager::new(deps.clone());
     {
-        let mut cache = manager.messages.lock().unwrap();
+        let mut cache = manager.shared.messages.lock().unwrap();
         for id in 0..50 {
             let chat_id = format!("pinned-{id}");
             cache.pin(&chat_id);
@@ -61,7 +61,7 @@ async fn a_second_cold_load_of_an_unchanged_transcript_hits_the_snapshot() {
     assert_eq!(manager.get_messages("c1").await, vec![history()]);
     assert_eq!(deps.history_loads.load(Ordering::SeqCst), 1);
     wait_for_snapshot(&dir).await;
-    assert!(manager.messages.lock().unwrap().get("c1").is_none());
+    assert!(manager.shared.messages.lock().unwrap().get("c1").is_none());
 
     assert_eq!(manager.get_messages("c1").await, vec![history()]);
     assert_eq!(

@@ -11,13 +11,13 @@ use mainframe_types::sync::LockExt as _;
 struct PlanHostImpl {
     event_handler: Arc<EventHandler<EhDeps>>,
     lifecycle: Arc<ChatLifecycleManager<LcDeps>>,
-    enricher: Enricher,
+    shared: Arc<ChatShared>,
     self_ref: Arc<std::sync::OnceLock<std::sync::Weak<ChatManager>>>,
 }
 
 impl PlanHost for PlanHostImpl {
     fn emit_event(&self, event: DaemonEvent) {
-        self.enricher.emit(event);
+        self.shared.emit(event);
     }
     fn clear_display_state(&self, chat_id: &str) {
         self.event_handler.clear_display_state(chat_id);
@@ -56,9 +56,7 @@ impl PlanHost for PlanHostImpl {
 }
 
 pub(super) struct PhDeps {
-    deps: Arc<dyn ChatManagerDeps>,
-    active_chats: Registry,
-    enricher: Enricher,
+    shared: Arc<ChatShared>,
     event_handler: Arc<EventHandler<EhDeps>>,
     lifecycle: Arc<ChatLifecycleManager<LcDeps>>,
     plan_mode: Arc<PlanModeHandler<ChatPlanModeCtx>>,
@@ -66,19 +64,22 @@ pub(super) struct PhDeps {
 
 impl PermissionHandlerDeps for PhDeps {
     fn get_active_chat(&self, chat_id: &str) -> Option<Arc<Mutex<ActiveChat>>> {
-        self.active_chats.get(chat_id).map(|e| e.value().clone())
+        self.shared
+            .active_chats
+            .get(chat_id)
+            .map(|e| e.value().clone())
     }
     fn start_chat<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()> {
         Box::pin(async move { self.lifecycle.start_chat(chat_id).await })
     }
     fn emit_event(&self, event: DaemonEvent) {
-        self.enricher.emit(event);
+        self.shared.emit(event);
     }
     fn emit_display(&self, chat_id: &str) {
         self.event_handler.emit_display(chat_id);
     }
     fn chats_update(&self, chat_id: &str, patch: &ChatPatch) {
-        self.deps.chats_update(chat_id, patch);
+        self.shared.deps.chats_update(chat_id, patch);
     }
     fn get_messages<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, Vec<ChatMessage>> {
         // getPendingPermission calls getMessages to restore permission state from
@@ -86,14 +87,15 @@ impl PermissionHandlerDeps for PhDeps {
         // the caller only scans the returned messages for a pending permission).
         Box::pin(async move {
             let chat = self
+                .shared
                 .active_chats
                 .get(chat_id)
                 .map(|c| c.lock_recover().chat.clone())
-                .or_else(|| self.deps.chats_get(chat_id));
+                .or_else(|| self.shared.deps.chats_get(chat_id));
             let Some(chat) = chat else {
                 return Vec::new();
             };
-            let Some(session) = build_history_session(&self.deps, &chat, chat_id) else {
+            let Some(session) = build_history_session(&self.shared.deps, &chat, chat_id) else {
                 return Vec::new();
             };
             match session.load_history().await {
@@ -103,10 +105,10 @@ impl PermissionHandlerDeps for PhDeps {
         })
     }
     fn should_notify_permission(&self, tool_name: Option<&str>) -> bool {
-        self.deps.should_notify_permission(tool_name)
+        self.shared.deps.should_notify_permission(tool_name)
     }
     fn send_push(&self, msg: PushOut) {
-        self.deps.send_push(msg);
+        self.shared.deps.send_push(msg);
     }
     fn plan_mode_handle_no_process(
         &self,
@@ -143,36 +145,28 @@ impl PermissionHandlerDeps for PhDeps {
 }
 
 pub(super) fn build(
-    deps: &Arc<dyn ChatManagerDeps>,
-    active_chats: &Registry,
-    messages: &Arc<Mutex<MessageCache>>,
-    enricher: &Enricher,
+    shared: &Arc<ChatShared>,
     event_handler: &Arc<EventHandler<EhDeps>>,
     lifecycle: &Arc<ChatLifecycleManager<LcDeps>>,
     self_ref: &Arc<std::sync::OnceLock<std::sync::Weak<ChatManager>>>,
 ) -> ChatPermissionHandler<PhDeps> {
-    let permissions = enricher.permissions();
+    let permissions = &shared.permissions;
     let plan_host: Arc<dyn PlanHost> = Arc::new(PlanHostImpl {
         event_handler: event_handler.clone(),
         lifecycle: lifecycle.clone(),
-        enricher: enricher.clone(),
+        shared: shared.clone(),
         self_ref: self_ref.clone(),
     });
     let plan_mode = Arc::new(PlanModeHandler::new(ChatPlanModeCtx {
-        deps: deps.clone(),
-        active_chats: active_chats.clone(),
-        messages: messages.clone(),
-        permissions: permissions.clone(),
+        shared: shared.clone(),
         host: plan_host,
     }));
 
     let ph_deps = PhDeps {
-        deps: deps.clone(),
-        active_chats: active_chats.clone(),
-        enricher: enricher.clone(),
+        shared: shared.clone(),
         event_handler: event_handler.clone(),
         lifecycle: lifecycle.clone(),
         plan_mode,
     };
-    ChatPermissionHandler::new(permissions.clone(), messages.clone(), ph_deps)
+    ChatPermissionHandler::new(permissions.clone(), shared.messages.clone(), ph_deps)
 }

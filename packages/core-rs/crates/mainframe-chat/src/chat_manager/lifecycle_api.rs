@@ -30,15 +30,18 @@ impl ChatManager {
     /// from the chat). Backs `POST /api/chats/:id/trust-workspace`.
     pub async fn trust_workspace(&self, chat_id: &str) -> Result<(), TrustWorkspaceError> {
         let chat = self
+            .shared
             .deps
             .chats_get(chat_id)
             .ok_or_else(|| TrustWorkspaceError::ChatNotFound(chat_id.to_string()))?;
         let project_path = self
+            .shared
             .deps
             .projects_get_path(&chat.project_id)
             .ok_or_else(|| TrustWorkspaceError::ProjectNotFound(chat.project_id.clone()))?;
         let effective_path = chat.worktree_path.unwrap_or(project_path);
-        self.deps
+        self.shared
+            .deps
             .write_workspace_trust(&effective_path)
             .await
             .map_err(TrustWorkspaceError::Write)
@@ -80,7 +83,7 @@ impl ChatManager {
     /// archive is about to remove.
     pub async fn archive_chat(&self, chat_id: &str, delete_worktree: bool) {
         self.lifecycle.orchestration().stopping(chat_id).await;
-        if let Some(chat) = self.deps.chats_get(chat_id)
+        if let Some(chat) = self.shared.deps.chats_get(chat_id)
             && let Some(side_chat_id) = chat.side_chat_id.clone()
             && let Err(err) = self.discard_chat(&side_chat_id).await
         {
@@ -88,7 +91,7 @@ impl ChatManager {
         }
         self.lifecycle.archive_chat(chat_id, delete_worktree).await;
         self.teardown.clear(chat_id, TeardownMode::Archive);
-        self.deps.tracker_remove_chat(chat_id);
+        self.shared.deps.tracker_remove_chat(chat_id);
         self.event_handler
             .notify_chat_surface(crate::chat_surface::ChatSurfaceEvent::ChatEnded {
                 chat_id: chat_id.to_string(),
@@ -98,7 +101,7 @@ impl ChatManager {
     pub async fn end_chat(&self, chat_id: &str) {
         self.lifecycle.end_chat(chat_id).await;
         self.teardown.clear(chat_id, TeardownMode::End);
-        self.deps.tracker_remove_chat(chat_id);
+        self.shared.deps.tracker_remove_chat(chat_id);
         self.event_handler
             .notify_chat_surface(crate::chat_surface::ChatSurfaceEvent::ChatEnded {
                 chat_id: chat_id.to_string(),
@@ -106,14 +109,14 @@ impl ChatManager {
     }
 
     pub fn unarchive_chat(&self, chat_id: &str) -> Option<Chat> {
-        self.deps.chats_update(
+        self.shared.deps.chats_update(
             chat_id,
             &ChatPatch {
                 status: Some(mainframe_types::chat::ChatStatus::Active),
                 ..Default::default()
             },
         );
-        let chat = self.deps.chats_get(chat_id)?;
+        let chat = self.shared.deps.chats_get(chat_id)?;
         self.emit(DaemonEvent::ChatUpdated {
             chat: chat.clone(),
             reason: None,
@@ -122,7 +125,7 @@ impl ChatManager {
     }
 
     pub fn rename_chat(&self, chat_id: &str, title: &str) {
-        self.deps.chats_update(
+        self.shared.deps.chats_update(
             chat_id,
             &ChatPatch {
                 title: Some(title.to_string()),
@@ -132,7 +135,7 @@ impl ChatManager {
         if let Some(cell) = self.get_active(chat_id) {
             cell.lock_recover().chat.title = Some(title.to_string());
         }
-        if let Some(chat) = self.deps.chats_get(chat_id) {
+        if let Some(chat) = self.shared.deps.chats_get(chat_id) {
             self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
         }
     }

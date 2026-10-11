@@ -2,13 +2,16 @@
 
 use mainframe_types::sync::LockExt as _;
 use std::sync::Arc;
+#[cfg(test)]
 use std::sync::Mutex;
 
+#[cfg(test)]
 use dashmap::DashMap;
 use mainframe_adapter_api::{AdapterSession, BoxFuture};
 use tokio::task::JoinHandle;
 use tracing::info;
 
+#[cfg(test)]
 use crate::types::ActiveChat;
 
 /// 2 hours.
@@ -18,7 +21,7 @@ pub const IDLE_SCAN_INTERVAL_MS: u64 = 5 * 60 * 1000;
 
 /// The active-chat registry the scanner reads. Each value is an
 /// `Arc<Mutex<ActiveChat>>`; one interval task runs the scanner.
-pub type ActiveChatRegistry = Arc<DashMap<String, Arc<Mutex<ActiveChat>>>>;
+pub use crate::chat_manager::Registry as ActiveChatRegistry;
 
 type NowFn = Arc<dyn Fn() -> i64 + Send + Sync>;
 

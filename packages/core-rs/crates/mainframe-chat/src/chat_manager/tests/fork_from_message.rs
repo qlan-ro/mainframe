@@ -51,7 +51,7 @@ fn setup(chat: Chat) -> (Arc<StoreDeps>, ChatManager) {
 
 /// What the chat shows, when it differs from what the adapter reloads.
 fn show_live(mgr: &ChatManager, live: Vec<ChatMessage>) {
-    let mut cache = mgr.messages.lock().unwrap();
+    let mut cache = mgr.shared.messages.lock().unwrap();
     for m in live {
         cache.append("c1", m);
     }

@@ -222,16 +222,21 @@ async fn crossing_two_thousand_raises_no_resync() {
                 None,
             ),
             1 => {
-                let message = mgr.messages.lock().unwrap().create_transient_message(
-                    "c1",
-                    ChatMessageType::User,
-                    vec![MessageContent::Leaf(LeafContent::Text {
-                        text: n.to_string(),
-                        parent_tool_use_id: None,
-                    })],
-                    None,
-                );
-                mgr.messages.lock().unwrap().append("c1", message);
+                let message = mgr
+                    .shared
+                    .messages
+                    .lock()
+                    .unwrap()
+                    .create_transient_message(
+                        "c1",
+                        ChatMessageType::User,
+                        vec![MessageContent::Leaf(LeafContent::Text {
+                            text: n.to_string(),
+                            parent_tool_use_id: None,
+                        })],
+                        None,
+                    );
+                mgr.shared.messages.lock().unwrap().append("c1", message);
             }
             2 => sink.on_tool_result(vec![tool_result_content(&n.to_string())], None),
             _ => sink.on_compact(None),
@@ -256,11 +261,11 @@ async fn tool_timing_resume_reads_preserve_running_completed_and_legacy_calls() 
     let mgr = ChatManager::new(StoreDeps::with_chats(vec![test_chat("c1")]));
     let clock = Arc::new(AtomicU64::new(1000));
     let now = clock.clone();
-    *mgr.messages.lock().unwrap() =
+    *mgr.shared.messages.lock().unwrap() =
         MessageCache::with_clock(Arc::new(move || now.load(Ordering::SeqCst)));
     let mut history = numbered_message(0);
     history.content = vec![tool("legacy")];
-    mgr.messages.lock().unwrap().set("c1", vec![history]);
+    mgr.shared.messages.lock().unwrap().set("c1", vec![history]);
     let sink = mgr.event_handler.build_sink("c1", Some("session".into()));
     sink.on_message(vec![tool("a")], None);
     clock.store(1100, Ordering::SeqCst);
@@ -269,7 +274,7 @@ async fn tool_timing_resume_reads_preserve_running_completed_and_legacy_calls() 
     clock.store(9000, Ordering::SeqCst);
     assert_eq!(mgr.get_resume_snapshot("c1").await.messages, running);
     assert_eq!(
-        timings(&mgr.messages.lock().unwrap(), "c1"),
+        timings(&mgr.shared.messages.lock().unwrap(), "c1"),
         vec![
             serde_json::Value::Null,
             json!({"startedAt":1000}),
@@ -282,7 +287,7 @@ async fn tool_timing_resume_reads_preserve_running_completed_and_legacy_calls() 
     clock.store(9900, Ordering::SeqCst);
     assert_eq!(mgr.get_resume_snapshot("c1").await.messages, completed);
     assert_eq!(
-        timings(&mgr.messages.lock().unwrap(), "c1"),
+        timings(&mgr.shared.messages.lock().unwrap(), "c1"),
         vec![
             serde_json::Value::Null,
             json!({"startedAt":1000,"completedAt":1200}),

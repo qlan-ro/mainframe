@@ -15,40 +15,15 @@ struct Collaborators {
 
 impl Collaborators {
     fn build(
-        deps: &Arc<dyn ChatManagerDeps>,
-        active_chats: &Registry,
-        messages: &Arc<Mutex<MessageCache>>,
-        enricher: &Enricher,
-        queued_refs: &QueuedRefs,
+        shared: &Arc<ChatShared>,
         self_ref: &Arc<std::sync::OnceLock<std::sync::Weak<ChatManager>>>,
     ) -> Self {
-        let worktree_offers = deps_offer::build(deps, active_chats, enricher);
-        let event_handler = deps_event::build(
-            deps,
-            active_chats,
-            messages,
-            enricher,
-            queued_refs,
-            &worktree_offers,
-        );
-        let lifecycle = deps_lifecycle::build(
-            deps,
-            active_chats,
-            messages,
-            enricher,
-            &event_handler,
-            &worktree_offers,
-        );
-        let permission_handler = deps_permission::build(
-            deps,
-            active_chats,
-            messages,
-            enricher,
-            &event_handler,
-            &lifecycle,
-            self_ref,
-        );
-        let config = deps_config::build(deps, active_chats, enricher, &lifecycle, &worktree_offers);
+        let worktree_offers = deps_offer::build(shared);
+        let event_handler = deps_event::build(shared, &worktree_offers);
+        let lifecycle = deps_lifecycle::build(shared, &event_handler, &worktree_offers);
+        let permission_handler =
+            deps_permission::build(shared, &event_handler, &lifecycle, self_ref);
+        let config = deps_config::build(shared, &lifecycle, &worktree_offers);
         Self {
             event_handler,
             lifecycle,
@@ -61,17 +36,7 @@ impl Collaborators {
 
 impl ChatManager {
     pub fn new(deps: Arc<dyn ChatManagerDeps>) -> Self {
-        let active_chats: Registry = Arc::new(DashMap::new());
-        let messages = Arc::new(Mutex::new(MessageCache::new()));
-        let permissions = Arc::new(Mutex::new(PermissionManager::new()));
-        let queued_refs: QueuedRefs = Arc::new(Mutex::new(Vec::new()));
-        // One slot shared by the lifecycle manager (spawn credentials) and
-        // every enrich (the agent outbox); the daemon attaches it after boot.
-        let enricher = Enricher::new(
-            deps.clone(),
-            permissions.clone(),
-            crate::orchestration_hooks::OrchestrationSlot::default(),
-        );
+        let shared = ChatShared::new(deps);
 
         // Unset until `attach_self()` runs (called from `build_chat_manager` once
         // the manager is behind an `Arc`); until then plan-mode's clear-context
@@ -79,45 +44,34 @@ impl ChatManager {
         let self_ref: Arc<std::sync::OnceLock<std::sync::Weak<ChatManager>>> =
             Arc::new(std::sync::OnceLock::new());
 
-        let collab = Collaborators::build(
-            &deps,
-            &active_chats,
-            &messages,
-            &enricher,
-            &queued_refs,
-            &self_ref,
-        );
+        let collab = Collaborators::build(&shared, &self_ref);
 
         let teardown = Arc::new(crate::chat_teardown::ChatTeardown {
-            active_chats: active_chats.clone(),
-            messages: messages.clone(),
-            permissions: permissions.clone(),
+            active_chats: shared.active_chats.clone(),
+            messages: shared.messages.clone(),
+            permissions: shared.permissions.clone(),
             worktree_offers: collab.worktree_offers.clone(),
             event_handler: collab.event_handler.clone(),
         });
 
         let offloader: Arc<dyn crate::idle_scanner::IdleOffloader> =
             Arc::new(crate::idle_offload::ChatOffload::new(
-                active_chats.clone(),
-                permissions.clone(),
-                queued_refs.clone(),
+                shared.active_chats.clone(),
+                shared.permissions.clone(),
+                shared.queued_refs.clone(),
                 collab.lifecycle.clone(),
                 teardown.clone(),
             ));
         let mut idle_scanner =
-            crate::idle_scanner::IdleSessionScanner::new(active_chats.clone(), offloader);
+            crate::idle_scanner::IdleSessionScanner::new(shared.active_chats.clone(), offloader);
         idle_scanner.start();
 
         let history_cache = Arc::new(HistorySnapshotCache::new(std::path::PathBuf::from(
-            deps.history_cache_dir(),
+            shared.deps.history_cache_dir(),
         )));
 
         Self {
-            deps,
-            active_chats,
-            messages,
-            permissions,
-            queued_refs,
+            shared,
             event_handler: collab.event_handler,
             lifecycle: collab.lifecycle,
             permission_handler: collab.permission_handler,
@@ -127,7 +81,6 @@ impl ChatManager {
             worktree_offers: collab.worktree_offers,
             self_ref,
             history_cache,
-            enricher,
             handoff_locks: mainframe_runtime::sync::KeyedMutex::default(),
             teardown,
         }
@@ -169,11 +122,14 @@ impl ChatManager {
     }
 
     pub(super) fn emit(&self, event: DaemonEvent) {
-        self.enricher.emit(event);
+        self.shared.emit(event);
     }
 
     pub(super) fn get_active(&self, chat_id: &str) -> Option<Arc<Mutex<ActiveChat>>> {
-        self.active_chats.get(chat_id).map(|e| e.value().clone())
+        self.shared
+            .active_chats
+            .get(chat_id)
+            .map(|e| e.value().clone())
     }
 
     /// A turn is in flight. Reads the live cell, not the DB row — the row lags
@@ -185,7 +141,7 @@ impl ChatManager {
 
     /// On boot: reset orphaned `processState: 'working'` chats to idle.
     pub fn recover_stale_working_state(&self) {
-        let count = self.deps.chats_reset_working_to_idle();
+        let count = self.shared.deps.chats_reset_working_to_idle();
         info!(count, "reset orphaned working chats to idle on boot");
     }
 
@@ -200,13 +156,13 @@ impl ChatManager {
     pub async fn scan_idle_sessions(&self) {
         let offloader: Arc<dyn crate::idle_scanner::IdleOffloader> =
             Arc::new(crate::idle_offload::ChatOffload::new(
-                self.active_chats.clone(),
-                self.permissions.clone(),
-                self.queued_refs.clone(),
+                self.shared.active_chats.clone(),
+                self.shared.permissions.clone(),
+                self.shared.queued_refs.clone(),
                 self.lifecycle.clone(),
                 self.teardown.clone(),
             ));
-        crate::idle_scanner::IdleSessionScanner::new(self.active_chats.clone(), offloader)
+        crate::idle_scanner::IdleSessionScanner::new(self.shared.active_chats.clone(), offloader)
             .scan()
             .await;
     }

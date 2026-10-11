@@ -236,7 +236,7 @@ async fn side_chat_waiting_follows_a_pending_gate_on_the_side_chat_not_the_paren
     let idle = mgr.get_chat("c1").unwrap();
     assert_eq!(idle.side_chat_waiting, Some(false));
 
-    mgr.permissions.lock().unwrap().enqueue(
+    mgr.shared.permissions.lock().unwrap().enqueue(
         &side.id,
         mainframe_types::adapter::ControlRequest {
             request_id: "req-1".to_string(),

@@ -56,7 +56,7 @@ fn setup(layout: SegmentLayout, adapter: &str) -> (Arc<StoreDeps>, Arc<FakeStore
     deps.set_segment_store(store.clone());
     deps.set_adapter_info(codex_info());
     let mgr = ChatManager::new(deps.clone());
-    mgr.messages.lock().unwrap().set(
+    mgr.shared.messages.lock().unwrap().set(
         "c1",
         vec![
             text_message("u1", ChatMessageType::User, "first question"),
@@ -102,7 +102,14 @@ async fn switching_kills_the_cli_spawns_nothing_and_appends_the_divider() {
         matches!(open.native, OpenNative::Fresh { ref adapter_id, .. } if adapter_id == "codex")
     );
     assert_eq!(commit.settings.model.as_deref(), Some("codex-pro"));
-    let cached = mgr.messages.lock().unwrap().get("c1").cloned().unwrap();
+    let cached = mgr
+        .shared
+        .messages
+        .lock()
+        .unwrap()
+        .get("c1")
+        .cloned()
+        .unwrap();
     assert_eq!(cached.last().unwrap().id, format!("segdiv-{}", open.id));
 }
 
@@ -123,7 +130,7 @@ async fn the_first_send_carries_the_block_and_the_result_delivers_it() {
     let (_deps, store, mgr) = setup(layout.clone(), "codex");
     let name_of = |id: &str| id.to_string();
     let divider = crate::segments::divider::divider_for("c1", &layout, "s1", &name_of).unwrap();
-    mgr.messages.lock().unwrap().append("c1", divider);
+    mgr.shared.messages.lock().unwrap().append("c1", divider);
     let session = RecSession::new("codex", false, true);
     seed_active(&mgr, "c1", mgr.get_chat("c1").unwrap(), session.clone());
 
@@ -138,7 +145,14 @@ async fn the_first_send_carries_the_block_and_the_result_delivers_it() {
     );
     assert!(sent.contains("[user · turn 1 · claude]\nfirst question"));
     assert!(sent.ends_with("</mainframe-context-handoff>\n\nnext step"));
-    let cached = mgr.messages.lock().unwrap().get("c1").cloned().unwrap();
+    let cached = mgr
+        .shared
+        .messages
+        .lock()
+        .unwrap()
+        .get("c1")
+        .cloned()
+        .unwrap();
     let stored = cached
         .iter()
         .rev()
@@ -167,7 +181,14 @@ async fn the_first_send_carries_the_block_and_the_result_delivers_it() {
         HandoffStatus::Delivered
     );
     assert_eq!(store.results.lock().unwrap().len(), 1);
-    let refreshed = mgr.messages.lock().unwrap().get("c1").cloned().unwrap();
+    let refreshed = mgr
+        .shared
+        .messages
+        .lock()
+        .unwrap()
+        .get("c1")
+        .cloned()
+        .unwrap();
     let divider = refreshed.iter().find(|m| m.id == "segdiv-s1").unwrap();
     let MessageContent::Node(mainframe_types::chat::MessageContentNode::ProviderSwitch { marker }) =
         &divider.content[0]

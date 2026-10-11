@@ -22,7 +22,8 @@ impl ChatManager {
         } else {
             chat.worktree_path.clone()
         };
-        self.deps
+        self.shared
+            .deps
             .kill_tasks_for_chat(&chat.id, worktree_sweep_path, session.clone())
             .await;
         if let Some(session) = &session
@@ -36,7 +37,7 @@ impl ChatManager {
         }
         self.lifecycle.orchestration().revoke(&chat.id);
         self.teardown.clear(&chat.id, TeardownMode::Discard);
-        self.deps.tracker_remove_chat(&chat.id);
+        self.shared.deps.tracker_remove_chat(&chat.id);
         self.event_handler
             .notify_chat_surface(crate::chat_surface::ChatSurfaceEvent::ChatEnded {
                 chat_id: chat.id.clone(),
@@ -54,7 +55,7 @@ impl ChatManager {
     /// other temporary chat discards its own side chat first (AC 7), so a side
     /// chat never outlives the chat it belongs to.
     pub async fn discard_chat(&self, chat_id: &str) -> Result<(), DiscardError> {
-        let Some(chat) = self.deps.chats_get(chat_id) else {
+        let Some(chat) = self.shared.deps.chats_get(chat_id) else {
             return Err(NotFound::unnamed("Chat").into());
         };
         let side_chat = is_side_chat(&chat);
@@ -65,17 +66,18 @@ impl ChatManager {
 
         self.lifecycle.orchestration().stopping(chat_id).await;
         self.teardown_live_chat(&chat).await;
-        self.deps.attachment_delete_chat(chat_id).await;
+        self.shared.deps.attachment_delete_chat(chat_id).await;
         if !side_chat && let Some(scratch_path) = &chat.scratch_path {
             // NotFound counts as success (already gone); any other error stops
             // here so the row is not deleted and a retry stays possible.
-            self.deps
+            self.shared
+                .deps
                 .remove_scratch_dir(scratch_path)
                 .await
                 .map_err(DiscardError::ScratchDir)?;
         }
-        self.deps.chats_delete(chat_id);
-        self.deps.emit_event(DaemonEvent::ChatEnded {
+        self.shared.deps.chats_delete(chat_id);
+        self.shared.deps.emit_event(DaemonEvent::ChatEnded {
             chat_id: chat_id.to_string(),
         });
 

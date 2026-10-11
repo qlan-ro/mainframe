@@ -47,7 +47,7 @@ impl ChatManager {
         size: OutgoingSize,
     ) -> Result<Option<String>, SendError> {
         let _guard = self.handoff_locks.acquire(chat_id).await;
-        let Some(store) = self.deps.segment_store() else {
+        let Some(store) = self.shared.deps.segment_store() else {
             return Ok(None);
         };
         let Some(layout) = store
@@ -104,9 +104,10 @@ impl ChatManager {
             }));
         }
         let layout = store.replace_active_native(&chat.id)?;
-        if let (Some(cell), Some(fresh)) =
-            (self.get_active(&chat.id), self.deps.chats_get(&chat.id))
-        {
+        if let (Some(cell), Some(fresh)) = (
+            self.get_active(&chat.id),
+            self.shared.deps.chats_get(&chat.id),
+        ) {
             cell.lock_recover().chat = fresh;
         }
         let fresh_native = NativeSessionRecord {
@@ -125,16 +126,20 @@ impl ChatManager {
 
     fn budget_for(&self, chat: &Chat, native: &NativeSessionRecord, size: &OutgoingSize) -> u64 {
         let model = chat.model.clone();
-        let model_window = self.deps.adapter_info(&native.adapter_id).and_then(|info| {
-            let found = info
-                .models
-                .iter()
-                .find(|m| Some(&m.id) == model.as_ref())
-                .or_else(|| info.models.iter().find(|m| m.is_default == Some(true)));
-            found
-                .and_then(|m| m.context_window)
-                .map(|w| w.max(0) as u64)
-        });
+        let model_window = self
+            .shared
+            .deps
+            .adapter_info(&native.adapter_id)
+            .and_then(|info| {
+                let found = info
+                    .models
+                    .iter()
+                    .find(|m| Some(&m.id) == model.as_ref())
+                    .or_else(|| info.models.iter().find(|m| m.is_default == Some(true)));
+                found
+                    .and_then(|m| m.context_window)
+                    .map(|w| w.max(0) as u64)
+            });
         handoff_budget(&BudgetInput {
             model_window,
             native_max: native.last_context_max_tokens,
@@ -165,13 +170,13 @@ impl ChatManager {
             strategy: planned.coverage.strategy,
             title: chat.title.clone().unwrap_or_default(),
             chat_id: chat.id.clone(),
-            chat_read_available: self.deps.orchestration_mcp_attached(&chat.id),
+            chat_read_available: self.shared.deps.orchestration_mcp_attached(&chat.id),
         };
         let built = self.build_block(chat, &identity, &planned).await?;
         let record = handoff_record(&identity, active, &planned, &built);
         store.insert_pending_handoff(&record, &identity.segment_marker)?;
-        let name_of = |id: &str| self.deps.adapter_fork_info(id).name;
-        if refresh_divider(&self.messages, store, &chat.id, &active.id, &name_of) {
+        let name_of = |id: &str| self.shared.deps.adapter_fork_info(id).name;
+        if refresh_divider(&self.shared.messages, store, &chat.id, &active.id, &name_of) {
             self.event_handler.emit_display(&chat.id);
         }
         Ok(built.block)
@@ -202,12 +207,13 @@ impl ChatManager {
             })
             .collect();
         let subagents: HashSet<String> = self
+            .shared
             .deps
             .get_tool_categories(&chat.id)
             .map(|c| c.subagent)
             .unwrap_or_default();
         build_handoff(identity, &spans, &subagents, planned.budget).map_err(|_| {
-            SendError::HandoffTooLarge(self.deps.adapter_fork_info(&chat.adapter_id).name)
+            SendError::HandoffTooLarge(self.shared.deps.adapter_fork_info(&chat.adapter_id).name)
         })
     }
 
@@ -216,7 +222,7 @@ impl ChatManager {
             .native(&segment.native_session_ref)
             .map(|n| n.adapter_id.clone())
             .unwrap_or_default();
-        self.deps.adapter_fork_info(&adapter).name
+        self.shared.deps.adapter_fork_info(&adapter).name
     }
 }
 

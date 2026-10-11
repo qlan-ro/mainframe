@@ -1,19 +1,3 @@
-//! `ChatManager` owns the message cache, permissions, active-chat registry, and
-//! queued refs. It keeps the shared per-chat caches behind `Arc<Mutex<..>>` /
-//! `Arc<DashMap<..>>` and wires the sub-managers with concrete delegating `Deps`
-//! wrappers (`EhDeps`/`LcDeps`/`PhDeps`) that all hold the SAME
-//! `Arc<dyn ChatManagerDeps>` + shared state. Non-generic (`dyn ChatManagerDeps`)
-//! to avoid generic self-recursion in the wiring.
-//!
-//! The facade itself is split by band across flat submodules (never nested, so
-//! every submodule reaches this file's `use` block via `use super::*`): `deps.rs`
-//! is the injection surface, each `deps_*.rs` builds and owns one sub-manager
-//! collaborator, and `construct.rs`/`reads.rs`/`lifecycle_api.rs`/`history.rs`/
-//! `config_api.rs`/`send_entry.rs`/`send.rs` carry `impl ChatManager` by band
-//! (construction, registry reads, lifecycle/permission delegations, history,
-//! config/worktree delegations, the send-path entry point, and its command
-//! helpers).
-
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
@@ -92,6 +76,7 @@ mod send_entry;
 mod send_queue;
 mod shared;
 mod side_chat;
+mod state;
 mod steer;
 mod switch_api;
 mod update;
@@ -115,7 +100,7 @@ use deps_event::EhDeps;
 use deps_lifecycle::LcDeps;
 use deps_permission::PhDeps;
 use deps_recovery::PresenceDeps;
-use enrich::Enricher;
+pub(crate) use state::ChatShared;
 // `enrich_chat`/`is_working` have no direct caller left in this file — every
 // caller (enrich.rs, construct.rs) reaches them through this re-import via its
 // own `use super::*`, so removing this line would break the glob for them.
@@ -125,7 +110,7 @@ use shared::{
 };
 use side_chat::is_side_chat;
 
-type Registry = Arc<DashMap<String, Arc<Mutex<ActiveChat>>>>;
+pub type Registry = Arc<DashMap<String, Arc<Mutex<ActiveChat>>>>;
 /// Insertion-ordered (FIFO): `queue_state` snapshots render in the order we
 /// iterate, so enqueue order IS the wire contract. Queues are tiny (a few
 /// prompts), so linear scans by uuid beat carrying an ordered-map dependency.
@@ -134,11 +119,7 @@ type QueuedRefs = Arc<Mutex<Vec<QueuedMessageRef>>>;
 // ── ChatManager facade ───────────────────────────────────────────────────────
 
 pub struct ChatManager {
-    deps: Arc<dyn ChatManagerDeps>,
-    active_chats: Registry,
-    messages: Arc<Mutex<MessageCache>>,
-    permissions: Arc<Mutex<PermissionManager>>,
-    queued_refs: QueuedRefs,
+    shared: Arc<ChatShared>,
     event_handler: Arc<EventHandler<EhDeps>>,
     lifecycle: Arc<ChatLifecycleManager<LcDeps>>,
     permission_handler: ChatPermissionHandler<PhDeps>,
@@ -152,8 +133,6 @@ pub struct ChatManager {
     /// in-memory per-chat cache above), which stays the source of truth for
     /// any chat that's actually hot.
     history_cache: Arc<HistorySnapshotCache>,
-    /// Every derived `Chat` field, for reads and emits alike.
-    enricher: Enricher,
     /// One lock per chat, held across `prepare_handoff`'s check-then-insert
     /// (`handoff_send.rs`), so two sends racing for the same chat cannot
     /// both build and record a handoff.

@@ -27,6 +27,7 @@ impl ChatManager {
         let current_title = cell.lock_recover().chat.title.clone().unwrap_or_default();
         let title_empty = current_title.is_empty();
         let is_untouched_fork_title = self
+            .shared
             .deps
             .get_pending_fork(chat_id)
             .is_some_and(|pending| pending.provisional_title == current_title);
@@ -44,7 +45,7 @@ impl ChatManager {
                 let mut guard = cell.lock_recover();
                 guard.chat.title = Some(title.clone());
             }
-            self.deps.chats_update(
+            self.shared.deps.chats_update(
                 chat_id,
                 &ChatPatch {
                     title: Some(title),
@@ -83,6 +84,7 @@ impl ChatManager {
         vendor_id: Option<String>,
     ) -> ChatMessage {
         let message = self
+            .shared
             .messages
             .lock_recover()
             .create_transient_message_with_vendor_id(
@@ -96,7 +98,8 @@ impl ChatManager {
                 },
                 vendor_id,
             );
-        self.messages
+        self.shared
+            .messages
             .lock_recover()
             .append(chat_id, message.clone());
         self.event_handler.emit_display(chat_id);
@@ -121,7 +124,9 @@ impl ChatManager {
             text_prefix,
             attachment_previews,
         } = match attachment_ids {
-            Some(ids) if !ids.is_empty() => self.deps.process_attachments(chat_id, ids).await,
+            Some(ids) if !ids.is_empty() => {
+                self.shared.deps.process_attachments(chat_id, ids).await
+            }
             _ => ProcessedAttachments::default(),
         };
         if !content.is_empty() {
@@ -262,13 +267,18 @@ impl ChatManager {
                     if is_queued {
                         self.remove_queued_ref(chat_id, &message_uuid);
                     }
-                    self.messages
+                    self.shared
+                        .messages
                         .lock_recover()
                         .remove_by_id(chat_id, &message.id);
                     self.event_handler.emit_display(chat_id);
                     return Err(err.into());
                 }
-                if self.deps.extract_mentions_from_text(chat_id, content) {
+                if self
+                    .shared
+                    .deps
+                    .extract_mentions_from_text(chat_id, content)
+                {
                     self.emit(DaemonEvent::ContextUpdated {
                         chat_id: chat_id.to_string(),
                         file_paths: None,
@@ -295,7 +305,11 @@ impl ChatManager {
             Some(message_uuid.clone()),
         );
 
-        if self.deps.extract_mentions_from_text(chat_id, content) {
+        if self
+            .shared
+            .deps
+            .extract_mentions_from_text(chat_id, content)
+        {
             self.emit(DaemonEvent::ContextUpdated {
                 chat_id: chat_id.to_string(),
                 file_paths: None,

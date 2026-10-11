@@ -139,11 +139,12 @@ impl ChatManager {
         }
         // Unfiltered `ChatsRepository::list` (via `chats_list`), so a temporary
         // chat's live state and row are torn down along with the project.
-        let chats = self.deps.chats_list(project_id);
+        let chats = self.shared.deps.chats_list(project_id);
         for chat in chats {
             self.teardown_live_chat(&chat).await;
         }
-        self.deps
+        self.shared
+            .deps
             .projects_remove(project_id)
             .map_err(RemoveProjectError::Store)?;
         info!(project_id, "project removed");

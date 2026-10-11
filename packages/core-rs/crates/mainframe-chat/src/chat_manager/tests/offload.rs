@@ -53,9 +53,9 @@ fn offloader_for(
 ) -> ChatOffload<crate::chat_manager::deps_lifecycle::LcDeps, crate::chat_manager::deps_event::EhDeps>
 {
     ChatOffload::new(
-        mgr.active_chats.clone(),
-        mgr.permissions.clone(),
-        mgr.queued_refs.clone(),
+        mgr.shared.active_chats.clone(),
+        mgr.shared.permissions.clone(),
+        mgr.shared.queued_refs.clone(),
         mgr.lifecycle.clone(),
         mgr.teardown.clone(),
     )
@@ -100,7 +100,8 @@ fn offloaded_events(deps: &StoreDeps) -> Vec<String> {
 fn seed_idle_chat(mgr: &ChatManager, activity: Option<i64>) -> Arc<FakeSession> {
     let session = FakeSession::with_activity(true, activity);
     seed_active(mgr, "c1", test_chat("c1"), session.clone());
-    mgr.messages
+    mgr.shared
+        .messages
         .lock()
         .unwrap()
         .set("c1", vec![history_message("m1")]);
@@ -122,7 +123,7 @@ fn seed_offloadable_chat_with_transcript(
     let mgr = ChatManager::new(deps.clone());
     let session = FakeSession::with_activity(true, Some(long_idle()));
     seed_active(&mgr, "c1", chat, session);
-    mgr.messages.lock().unwrap().set("c1", history);
+    mgr.shared.messages.lock().unwrap().set("c1", history);
     (deps, mgr)
 }
 
@@ -154,11 +155,11 @@ async fn ac1_offloads_a_chat_idle_past_the_threshold() {
 
     assert_eq!(session.kills(), 1, "the idle CLI process is killed");
     assert!(
-        mgr.messages.lock().unwrap().get("c1").is_none(),
+        mgr.shared.messages.lock().unwrap().get("c1").is_none(),
         "the cached history is dropped"
     );
     assert!(
-        mgr.active_chats.get("c1").is_none(),
+        mgr.shared.active_chats.get("c1").is_none(),
         "the chat leaves the live-chat registry"
     );
     assert_eq!(
@@ -183,11 +184,11 @@ async fn ac2_a_pending_permission_blocks_offload_even_at_8_hours_idle() {
 
     assert_eq!(session.kills(), 0, "the process is not killed");
     assert!(
-        mgr.messages.lock().unwrap().get("c1").is_some(),
+        mgr.shared.messages.lock().unwrap().get("c1").is_some(),
         "the cache is intact"
     );
     assert!(
-        mgr.active_chats.get("c1").is_some(),
+        mgr.shared.active_chats.get("c1").is_some(),
         "the chat stays in the registry"
     );
     assert!(offloaded_events(&deps).is_empty(), "no event is emitted");
@@ -221,7 +222,10 @@ async fn ac3_ineligible_chats_are_untouched() {
         mgr.scan_idle_sessions().await;
 
         assert_eq!(session.kills(), 0, "{label}: not killed");
-        assert!(mgr.active_chats.get("c1").is_some(), "{label}: stays live");
+        assert!(
+            mgr.shared.active_chats.get("c1").is_some(),
+            "{label}: stays live"
+        );
         assert!(offloaded_events(&deps).is_empty(), "{label}: no event");
     }
 }
@@ -247,7 +251,7 @@ async fn ac4_a_pending_permission_injected_after_selection_keeps_the_chat_live()
     let mgr = ChatManager::new(deps.clone());
     let session = seed_idle_chat(&mgr, Some(long_idle()));
 
-    let candidates = select_idle_candidates(&mgr.active_chats, now_ms(), IDLE_THRESHOLD_MS);
+    let candidates = select_idle_candidates(&mgr.shared.active_chats, now_ms(), IDLE_THRESHOLD_MS);
     assert_eq!(
         candidates,
         vec!["c1".to_string()],
@@ -260,7 +264,7 @@ async fn ac4_a_pending_permission_injected_after_selection_keeps_the_chat_live()
     mgr.scan_idle_sessions().await;
 
     assert_eq!(session.kills(), 0, "the chat stays live");
-    assert!(mgr.messages.lock().unwrap().get("c1").is_some());
+    assert!(mgr.shared.messages.lock().unwrap().get("c1").is_some());
     assert!(offloaded_events(&deps).is_empty());
 }
 
@@ -277,7 +281,7 @@ async fn ac4_activity_injected_after_selection_keeps_the_chat_live() {
     let mgr = ChatManager::new(deps.clone());
     let session = seed_idle_chat(&mgr, Some(long_idle()));
 
-    let candidates = select_idle_candidates(&mgr.active_chats, now_ms(), IDLE_THRESHOLD_MS);
+    let candidates = select_idle_candidates(&mgr.shared.active_chats, now_ms(), IDLE_THRESHOLD_MS);
     assert_eq!(
         candidates,
         vec!["c1".to_string()],
@@ -291,8 +295,8 @@ async fn ac4_activity_injected_after_selection_keeps_the_chat_live() {
     offloader.offload("c1").await;
 
     assert_eq!(session.kills(), 0, "the chat stays live");
-    assert!(mgr.messages.lock().unwrap().get("c1").is_some());
-    assert!(mgr.active_chats.get("c1").is_some());
+    assert!(mgr.shared.messages.lock().unwrap().get("c1").is_some());
+    assert!(mgr.shared.active_chats.get("c1").is_some());
     assert!(offloaded_events(&deps).is_empty());
 }
 
@@ -302,7 +306,7 @@ async fn ac4_an_in_flight_send_injected_after_selection_keeps_the_chat_live() {
     let mgr = ChatManager::new(deps.clone());
     let session = seed_idle_chat(&mgr, Some(long_idle()));
 
-    let candidates = select_idle_candidates(&mgr.active_chats, now_ms(), IDLE_THRESHOLD_MS);
+    let candidates = select_idle_candidates(&mgr.shared.active_chats, now_ms(), IDLE_THRESHOLD_MS);
     assert_eq!(
         candidates,
         vec!["c1".to_string()],
@@ -315,7 +319,7 @@ async fn ac4_an_in_flight_send_injected_after_selection_keeps_the_chat_live() {
     mgr.scan_idle_sessions().await;
 
     assert_eq!(session.kills(), 0, "the chat stays live");
-    assert!(mgr.messages.lock().unwrap().get("c1").is_some());
+    assert!(mgr.shared.messages.lock().unwrap().get("c1").is_some());
     assert!(offloaded_events(&deps).is_empty());
     drop(send_guard);
 }
@@ -348,7 +352,7 @@ async fn ac6_display_history_survives_offload_and_loads_once_for_concurrent_read
 
     mgr.scan_idle_sessions().await;
     assert!(
-        mgr.messages.lock().unwrap().get("c1").is_none(),
+        mgr.shared.messages.lock().unwrap().get("c1").is_none(),
         "offloaded: cache is empty"
     );
 
@@ -380,7 +384,7 @@ async fn ac7_get_messages_after_offload_does_not_touch_the_registry() {
     let _ = mgr.get_messages("c1").await;
 
     assert!(
-        mgr.active_chats.get("c1").is_none(),
+        mgr.shared.active_chats.get("c1").is_none(),
         "reading history alone never spawns a CLI process"
     );
 }
@@ -398,11 +402,11 @@ async fn ac7_send_after_offload_reloads_prior_history_via_the_resume_path() {
 
     mgr.scan_idle_sessions().await;
     assert!(
-        mgr.active_chats.get("c1").is_none(),
+        mgr.shared.active_chats.get("c1").is_none(),
         "offloaded: no registry cell"
     );
     assert!(
-        mgr.messages.lock().unwrap().get("c1").is_none(),
+        mgr.shared.messages.lock().unwrap().get("c1").is_none(),
         "offloaded: no cached messages"
     );
 
@@ -414,7 +418,7 @@ async fn ac7_send_after_offload_reloads_prior_history_via_the_resume_path() {
         .expect("the resumed session now spawns successfully");
 
     assert!(
-        mgr.active_chats.get("c1").is_some(),
+        mgr.shared.active_chats.get("c1").is_some(),
         "the resume path re-registered the chat"
     );
 
@@ -430,6 +434,7 @@ async fn ac7_send_after_offload_reloads_prior_history_via_the_resume_path() {
     );
 
     let reloaded = mgr
+        .shared
         .messages
         .lock()
         .unwrap()
@@ -485,7 +490,7 @@ async fn resend_from_an_attached_chat_after_offload_resyncs_instead_of_scramblin
 
     mgr.scan_idle_sessions().await;
     assert!(
-        mgr.messages.lock().unwrap().get("c1").is_none(),
+        mgr.shared.messages.lock().unwrap().get("c1").is_none(),
         "offloaded: no cached messages"
     );
     assert!(
@@ -525,7 +530,8 @@ async fn a_working_chat_is_never_offloaded() {
     chat.process_state = Some(Some(mainframe_types::chat::ProcessState::Working));
     let session = FakeSession::with_activity(true, Some(long_idle()));
     seed_active(&mgr, "c1", chat, session.clone());
-    mgr.messages
+    mgr.shared
+        .messages
         .lock()
         .unwrap()
         .set("c1", vec![history_message("m1")]);
@@ -534,11 +540,11 @@ async fn a_working_chat_is_never_offloaded() {
 
     assert_eq!(session.kills(), 0, "a working turn's CLI is never killed");
     assert!(
-        mgr.active_chats.get("c1").is_some(),
+        mgr.shared.active_chats.get("c1").is_some(),
         "the registry cell remains"
     );
     assert!(
-        mgr.messages.lock().unwrap().get("c1").is_some(),
+        mgr.shared.messages.lock().unwrap().get("c1").is_some(),
         "the cache remains"
     );
     assert!(offloaded_events(&deps).is_empty());
@@ -624,7 +630,8 @@ fn seed_cell(
 ) {
     let mut active = ActiveChat::new(chat, session);
     active.last_used_at = last_used_at;
-    mgr.active_chats
+    mgr.shared
+        .active_chats
         .insert(chat_id.to_string(), Arc::new(Mutex::new(active)));
 }
 
@@ -648,27 +655,34 @@ async fn unspawned_never_sent_cell_offloads_once_backdated_past_the_threshold() 
     let deps = StoreDeps::arc();
     let mgr = ChatManager::new(deps.clone());
     let chat = mgr.create_chat(minimal_new_chat()).await;
-    mgr.messages
+    mgr.shared
+        .messages
         .lock()
         .unwrap()
         .set(&chat.id, vec![history_message("m1")]);
     {
-        let cell = mgr.active_chats.get(&chat.id).unwrap().value().clone();
+        let cell = mgr
+            .shared
+            .active_chats
+            .get(&chat.id)
+            .unwrap()
+            .value()
+            .clone();
         cell.lock().unwrap().last_used_at = long_idle();
     }
 
     mgr.scan_idle_sessions().await;
 
     assert!(
-        mgr.active_chats.get(&chat.id).is_none(),
+        mgr.shared.active_chats.get(&chat.id).is_none(),
         "the registry cell is gone"
     );
     assert!(
-        mgr.messages.lock().unwrap().get(&chat.id).is_none(),
+        mgr.shared.messages.lock().unwrap().get(&chat.id).is_none(),
         "the cache entry is gone"
     );
     assert!(
-        !mgr.messages.lock().unwrap().is_pinned(&chat.id),
+        !mgr.shared.messages.lock().unwrap().is_pinned(&chat.id),
         "the pin is released"
     );
     let stored = deps.chats_get(&chat.id).expect("the chat row survives");
@@ -692,15 +706,15 @@ async fn unspawned_session_handle_offloads_and_a_later_send_resumes_cleanly() {
     let mgr = ChatManager::new(deps.clone());
     let session: Arc<dyn AdapterSession> = FakeSession::with_activity(false, None);
     seed_cell(&mgr, "c1", chat, Some(session), long_idle());
-    mgr.messages.lock().unwrap().set("c1", history);
+    mgr.shared.messages.lock().unwrap().set("c1", history);
 
     mgr.scan_idle_sessions().await;
     assert!(
-        mgr.active_chats.get("c1").is_none(),
+        mgr.shared.active_chats.get("c1").is_none(),
         "offloaded: no registry cell"
     );
     assert!(
-        mgr.messages.lock().unwrap().get("c1").is_none(),
+        mgr.shared.messages.lock().unwrap().get("c1").is_none(),
         "offloaded: no cached messages"
     );
     assert_eq!(offloaded_events(&deps), vec!["c1".to_string()]);
@@ -710,10 +724,11 @@ async fn unspawned_session_handle_offloads_and_a_later_send_resumes_cleanly() {
         .expect("the resumed session now spawns successfully");
 
     assert!(
-        mgr.active_chats.get("c1").is_some(),
+        mgr.shared.active_chats.get("c1").is_some(),
         "the resume path re-registered the chat"
     );
     let reloaded = mgr
+        .shared
         .messages
         .lock()
         .unwrap()
@@ -744,7 +759,7 @@ async fn a_freshly_created_chat_is_not_offloaded_by_a_scan() {
     mgr.scan_idle_sessions().await;
 
     assert!(
-        mgr.active_chats.get(&chat.id).is_some(),
+        mgr.shared.active_chats.get(&chat.id).is_some(),
         "a fresh last_used_at keeps it live"
     );
     assert!(offloaded_events(&deps).is_empty());
@@ -760,7 +775,7 @@ async fn a_freshly_loaded_chat_is_not_offloaded_by_a_scan() {
     mgr.load_chat("c1").await;
     mgr.scan_idle_sessions().await;
 
-    assert!(mgr.active_chats.get("c1").is_some());
+    assert!(mgr.shared.active_chats.get("c1").is_some());
     assert!(offloaded_events(&deps).is_empty());
 }
 
@@ -774,12 +789,13 @@ async fn an_in_flight_send_injected_after_selection_keeps_an_unspawned_cell_live
     let deps = StoreDeps::arc();
     let mgr = ChatManager::new(deps.clone());
     seed_cell(&mgr, "c1", test_chat("c1"), None, long_idle());
-    mgr.messages
+    mgr.shared
+        .messages
         .lock()
         .unwrap()
         .set("c1", vec![history_message("m1")]);
 
-    let candidates = select_idle_candidates(&mgr.active_chats, now_ms(), IDLE_THRESHOLD_MS);
+    let candidates = select_idle_candidates(&mgr.shared.active_chats, now_ms(), IDLE_THRESHOLD_MS);
     assert_eq!(
         candidates,
         vec!["c1".to_string()],
@@ -790,7 +806,10 @@ async fn an_in_flight_send_injected_after_selection_keeps_an_unspawned_cell_live
 
     mgr.scan_idle_sessions().await;
 
-    assert!(mgr.active_chats.get("c1").is_some(), "the chat stays live");
+    assert!(
+        mgr.shared.active_chats.get("c1").is_some(),
+        "the chat stays live"
+    );
     assert!(offloaded_events(&deps).is_empty());
     drop(send_guard);
 }
@@ -806,12 +825,13 @@ async fn a_touch_injected_after_selection_keeps_an_unspawned_cell_live() {
     let deps = StoreDeps::arc();
     let mgr = ChatManager::new(deps.clone());
     seed_cell(&mgr, "c1", test_chat("c1"), None, long_idle());
-    mgr.messages
+    mgr.shared
+        .messages
         .lock()
         .unwrap()
         .set("c1", vec![history_message("m1")]);
 
-    let candidates = select_idle_candidates(&mgr.active_chats, now_ms(), IDLE_THRESHOLD_MS);
+    let candidates = select_idle_candidates(&mgr.shared.active_chats, now_ms(), IDLE_THRESHOLD_MS);
     assert_eq!(
         candidates,
         vec!["c1".to_string()],
@@ -824,8 +844,11 @@ async fn a_touch_injected_after_selection_keeps_an_unspawned_cell_live() {
     let offloader = offloader_for(&mgr);
     offloader.offload("c1").await;
 
-    assert!(mgr.active_chats.get("c1").is_some(), "the chat stays live");
-    assert!(mgr.messages.lock().unwrap().get("c1").is_some());
+    assert!(
+        mgr.shared.active_chats.get("c1").is_some(),
+        "the chat stays live"
+    );
+    assert!(mgr.shared.messages.lock().unwrap().get("c1").is_some());
     assert!(offloaded_events(&deps).is_empty());
 }
 
@@ -836,7 +859,8 @@ async fn a_pending_permission_blocks_offload_of_an_unspawned_backdated_cell() {
     let deps = StoreDeps::arc();
     let mgr = ChatManager::new(deps.clone());
     seed_cell(&mgr, "c1", test_chat("c1"), None, long_idle());
-    mgr.messages
+    mgr.shared
+        .messages
         .lock()
         .unwrap()
         .set("c1", vec![history_message("m1")]);
@@ -844,7 +868,7 @@ async fn a_pending_permission_blocks_offload_of_an_unspawned_backdated_cell() {
 
     mgr.scan_idle_sessions().await;
 
-    assert!(mgr.active_chats.get("c1").is_some(), "stays live");
+    assert!(mgr.shared.active_chats.get("c1").is_some(), "stays live");
     assert!(offloaded_events(&deps).is_empty());
 }
 
@@ -853,22 +877,27 @@ async fn a_queued_message_blocks_offload_of_an_unspawned_backdated_cell() {
     let deps = StoreDeps::arc();
     let mgr = ChatManager::new(deps.clone());
     seed_cell(&mgr, "c1", test_chat("c1"), None, long_idle());
-    mgr.messages
+    mgr.shared
+        .messages
         .lock()
         .unwrap()
         .set("c1", vec![history_message("m1")]);
-    mgr.queued_refs.lock().unwrap().push(QueuedMessageRef {
-        message_id: "m1".to_string(),
-        chat_id: "c1".to_string(),
-        uuid: "u1".to_string(),
-        content: "queued".to_string(),
-        attachment_ids: None,
-        timestamp: String::new(),
-    });
+    mgr.shared
+        .queued_refs
+        .lock()
+        .unwrap()
+        .push(QueuedMessageRef {
+            message_id: "m1".to_string(),
+            chat_id: "c1".to_string(),
+            uuid: "u1".to_string(),
+            content: "queued".to_string(),
+            attachment_ids: None,
+            timestamp: String::new(),
+        });
 
     mgr.scan_idle_sessions().await;
 
-    assert!(mgr.active_chats.get("c1").is_some(), "stays live");
+    assert!(mgr.shared.active_chats.get("c1").is_some(), "stays live");
     assert!(offloaded_events(&deps).is_empty());
 }
 
@@ -879,14 +908,15 @@ async fn a_working_process_state_blocks_offload_of_an_unspawned_backdated_cell()
     let mut chat = test_chat("c1");
     chat.process_state = Some(Some(ProcessState::Working));
     seed_cell(&mgr, "c1", chat, None, long_idle());
-    mgr.messages
+    mgr.shared
+        .messages
         .lock()
         .unwrap()
         .set("c1", vec![history_message("m1")]);
 
     mgr.scan_idle_sessions().await;
 
-    assert!(mgr.active_chats.get("c1").is_some(), "stays live");
+    assert!(mgr.shared.active_chats.get("c1").is_some(), "stays live");
     assert!(offloaded_events(&deps).is_empty());
 }
 
@@ -900,14 +930,15 @@ async fn update_chat_config_rebuilds_an_offloaded_cell_and_applies_the_new_model
     *deps.history.lock().unwrap() = Some(Vec::new());
     let mgr = ChatManager::new(deps.clone());
     seed_cell(&mgr, "c1", chat, None, long_idle());
-    mgr.messages
+    mgr.shared
+        .messages
         .lock()
         .unwrap()
         .set("c1", vec![history_message("m1")]);
 
     mgr.scan_idle_sessions().await;
     assert!(
-        mgr.active_chats.get("c1").is_none(),
+        mgr.shared.active_chats.get("c1").is_none(),
         "offloaded before the config edit"
     );
 
@@ -915,13 +946,17 @@ async fn update_chat_config_rebuilds_an_offloaded_cell_and_applies_the_new_model
         .await
         .expect("the edit rebuilds the cell instead of failing not-found");
 
-    assert!(mgr.active_chats.get("c1").is_some(), "the cell is back");
+    assert!(
+        mgr.shared.active_chats.get("c1").is_some(),
+        "the cell is back"
+    );
     assert_eq!(
         deps.chats_get("c1").unwrap().model,
         Some("new-model".to_string()),
         "the stored chat carries the new model"
     );
     let active_model = mgr
+        .shared
         .active_chats
         .get("c1")
         .unwrap()
@@ -947,14 +982,15 @@ async fn disable_worktree_rebuilds_an_offloaded_cell_and_clears_the_binding() {
     *deps.history.lock().unwrap() = Some(Vec::new());
     let mgr = ChatManager::new(deps.clone());
     seed_cell(&mgr, "c1", chat, None, long_idle());
-    mgr.messages
+    mgr.shared
+        .messages
         .lock()
         .unwrap()
         .set("c1", vec![history_message("m1")]);
 
     mgr.scan_idle_sessions().await;
     assert!(
-        mgr.active_chats.get("c1").is_none(),
+        mgr.shared.active_chats.get("c1").is_none(),
         "offloaded before the worktree edit"
     );
 
@@ -962,13 +998,17 @@ async fn disable_worktree_rebuilds_an_offloaded_cell_and_clears_the_binding() {
         .await
         .expect("the edit rebuilds the cell instead of silently no-oping");
 
-    assert!(mgr.active_chats.get("c1").is_some(), "the cell is back");
+    assert!(
+        mgr.shared.active_chats.get("c1").is_some(),
+        "the cell is back"
+    );
     assert_eq!(
         deps.chats_get("c1").unwrap().worktree_path,
         None,
         "the stored binding is cleared"
     );
     let active_worktree = mgr
+        .shared
         .active_chats
         .get("c1")
         .unwrap()

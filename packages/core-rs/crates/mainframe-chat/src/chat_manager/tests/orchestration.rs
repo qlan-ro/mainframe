@@ -75,7 +75,8 @@ async fn delegated_waiting_follows_a_gate_on_an_unfinished_child() {
         None
     );
 
-    mgr.permissions
+    mgr.shared
+        .permissions
         .lock()
         .unwrap()
         .enqueue("kid", gate("req-1"));
@@ -123,7 +124,7 @@ async fn refresh_agent_lineage_rereads_the_row_and_announces_the_chat() {
     let deps = StoreDeps::with_chats(vec![chat("c1")]);
     let mgr = ChatManager::new(deps.clone());
     // A loaded cell, which `get_chat` prefers over the row.
-    mgr.active_chats.insert(
+    mgr.shared.active_chats.insert(
         "c1".to_string(),
         Arc::new(Mutex::new(ActiveChat::new(chat("c1"), None))),
     );

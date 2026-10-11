@@ -43,19 +43,16 @@ fn ctx_with(
     request_id: &str,
     chat: mainframe_types::chat::Chat,
 ) -> ChatPlanActionCtx {
-    let active_chats: PlanRegistry = Arc::new(DashMap::new());
     let deps = StoreDeps::with_chats(vec![chat.clone()]);
-    active_chats.insert(
+    let shared = ChatShared::new(deps);
+    shared.active_chats.insert(
         chat_id.to_string(),
         Arc::new(Mutex::new(ActiveChat::new(chat, None))),
     );
     ChatPlanActionCtx {
         chat_id: chat_id.to_string(),
         request_id: request_id.to_string(),
-        deps,
-        active_chats,
-        messages: Arc::new(Mutex::new(MessageCache::new())),
-        permissions: Arc::new(Mutex::new(PermissionManager::new())),
+        shared,
         host: Arc::new(FakeHost::default()),
     }
 }
@@ -89,12 +86,21 @@ fn text_message(text: &str) -> ChatMessage {
 #[test]
 fn permissions_shift_pops_only_the_matching_front_request() {
     let ctx = ctx_with("c1", "r2", test_chat("c1"));
-    ctx.permissions.lock().unwrap().enqueue("c1", request("r1"));
-    ctx.permissions.lock().unwrap().enqueue("c1", request("r2"));
+    ctx.shared
+        .permissions
+        .lock()
+        .unwrap()
+        .enqueue("c1", request("r1"));
+    ctx.shared
+        .permissions
+        .lock()
+        .unwrap()
+        .enqueue("c1", request("r2"));
 
     ctx.permissions_shift();
     assert_eq!(
-        ctx.permissions
+        ctx.shared
+            .permissions
             .lock()
             .unwrap()
             .get_pending("c1")
@@ -104,12 +110,21 @@ fn permissions_shift_pops_only_the_matching_front_request() {
     );
 
     let ctx = ctx_with("c1", "r1", test_chat("c1"));
-    ctx.permissions.lock().unwrap().enqueue("c1", request("r1"));
-    ctx.permissions.lock().unwrap().enqueue("c1", request("r2"));
+    ctx.shared
+        .permissions
+        .lock()
+        .unwrap()
+        .enqueue("c1", request("r1"));
+    ctx.shared
+        .permissions
+        .lock()
+        .unwrap()
+        .enqueue("c1", request("r2"));
 
     ctx.permissions_shift();
     assert_eq!(
-        ctx.permissions
+        ctx.shared
+            .permissions
             .lock()
             .unwrap()
             .get_pending("c1")
@@ -131,7 +146,10 @@ fn update_chat_with_clear_claude_session_id_calls_chats_clear_session_and_nulls_
         clear_claude_session_id: true,
     });
 
-    assert_eq!(ctx.deps.chats_get("c1").unwrap().claude_session_id, None);
+    assert_eq!(
+        ctx.shared.deps.chats_get("c1").unwrap().claude_session_id,
+        None
+    );
     assert_eq!(
         ctx.active().unwrap().lock().unwrap().chat.claude_session_id,
         None
@@ -151,7 +169,7 @@ fn update_chat_without_it_never_calls_chats_clear_session() {
     });
 
     assert_eq!(
-        ctx.deps.chats_get("c1").unwrap().claude_session_id,
+        ctx.shared.deps.chats_get("c1").unwrap().claude_session_id,
         Some("sess-1".to_string())
     );
     assert_eq!(
@@ -165,7 +183,7 @@ fn recover_latest_plan_file_reads_the_cached_messages() {
     let ctx = ctx_with("c1", "r1", test_chat("c1"));
     assert_eq!(ctx.recover_latest_plan_file(), None);
 
-    ctx.messages.lock().unwrap().set(
+    ctx.shared.messages.lock().unwrap().set(
         "c1",
         vec![
             text_message("Your plan has been saved to: /tmp/old.md"),
@@ -182,14 +200,25 @@ fn recover_latest_plan_file_reads_the_cached_messages() {
 fn clear_messages_empties_the_cache_for_that_chat_only() {
     let ctx = ctx_with("c1", "r1", test_chat("c1"));
     let untouched = vec![text_message("bye")];
-    ctx.messages
+    ctx.shared
+        .messages
         .lock()
         .unwrap()
         .set("c1", vec![text_message("hi")]);
-    ctx.messages.lock().unwrap().set("c2", untouched.clone());
+    ctx.shared
+        .messages
+        .lock()
+        .unwrap()
+        .set("c2", untouched.clone());
 
     ctx.clear_messages();
 
-    assert_eq!(ctx.messages.lock().unwrap().get("c1"), Some(&Vec::new()));
-    assert_eq!(ctx.messages.lock().unwrap().get("c2"), Some(&untouched));
+    assert_eq!(
+        ctx.shared.messages.lock().unwrap().get("c1"),
+        Some(&Vec::new())
+    );
+    assert_eq!(
+        ctx.shared.messages.lock().unwrap().get("c2"),
+        Some(&untouched)
+    );
 }

@@ -1,38 +1,7 @@
-//! The per-read derivations every `Chat` leaving the manager carries, in one
-//! place: the facade's reads and every sub-manager's `chat.updated` /
-//! `chat.created` emit go through the same [`Enricher`].
 use super::*;
-use crate::orchestration_hooks::OrchestrationSlot;
 use mainframe_types::sync::LockExt as _;
 
-#[derive(Clone)]
-pub(super) struct Enricher {
-    deps: Arc<dyn ChatManagerDeps>,
-    permissions: Arc<Mutex<PermissionManager>>,
-    orchestration: OrchestrationSlot,
-}
-
-impl Enricher {
-    pub(super) fn new(
-        deps: Arc<dyn ChatManagerDeps>,
-        permissions: Arc<Mutex<PermissionManager>>,
-        orchestration: OrchestrationSlot,
-    ) -> Self {
-        Self {
-            deps,
-            permissions,
-            orchestration,
-        }
-    }
-
-    pub(super) fn permissions(&self) -> &Arc<Mutex<PermissionManager>> {
-        &self.permissions
-    }
-
-    pub(super) fn orchestration(&self) -> &OrchestrationSlot {
-        &self.orchestration
-    }
-
+impl ChatShared {
     fn has_pending(&self, chat_id: &str) -> bool {
         self.permissions.lock_recover().has_pending(chat_id)
     }
