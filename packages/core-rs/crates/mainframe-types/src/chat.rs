@@ -264,4 +264,5 @@ pub struct QueuedMessageRef {
 }
 
 #[cfg(test)]
+#[path = "chat_tests.rs"]
 mod tests;
