@@ -24,7 +24,12 @@ async fn emits_output_events_from_stdout() {
         .start(&cfg("server", "printf hello", None))
         .await
         .unwrap();
-    sleep(Duration::from_millis(200)).await;
+    wait_until(|| {
+        output_events(&events)
+            .iter()
+            .any(|(_, data)| data.contains("hello"))
+    })
+    .await;
     assert!(
         output_events(&events)
             .iter()
@@ -66,20 +71,24 @@ async fn restart_during_stop_teardown_respawns_after_exit() {
         },
     ));
 
-    // Loops so a group SIGTERM (which kills the `sleep` child, default
-    // disposition) doesn't end the `sh` script itself — it must survive to
-    // SIGKILL. The 50ms settle below lets the trap actually install before
-    // stop() fires; without it, SIGTERM can race the shell's startup and
-    // kill it via default disposition before the trap takes effect.
-    let config = cfg("server", "trap '' TERM; while :; do sleep 0.2; done", None);
+    let config = cfg(
+        "server",
+        "trap '' TERM; printf ready; while :; do sleep 0.2; done",
+        None,
+    );
     manager.start(&config).await.unwrap();
     assert_eq!(manager.get_status("server"), LaunchProcessStatus::Running);
-    sleep(Duration::from_millis(50)).await;
+    wait_until(|| {
+        output_events(&events)
+            .iter()
+            .any(|(_, data)| data.contains("ready"))
+    })
+    .await;
 
     let stop_manager = manager.clone();
     let stop_task = tokio::spawn(async move { stop_manager.stop("server").await });
 
-    sleep(Duration::from_millis(100)).await;
+    wait_until(|| manager.get_status("server") == LaunchProcessStatus::Stopped).await;
     manager.start(&config).await.unwrap();
 
     stop_task.await.unwrap();
@@ -119,7 +128,7 @@ async fn retains_failed_status_after_exit() {
         .start(&cfg("fail-fast", "exit 1", None))
         .await
         .unwrap();
-    sleep(Duration::from_millis(300)).await;
+    wait_until(|| manager.get_status("fail-fast") == LaunchProcessStatus::Failed).await;
     assert_eq!(manager.get_status("fail-fast"), LaunchProcessStatus::Failed);
     assert_eq!(
         manager.get_all_statuses().get("fail-fast").copied(),
@@ -192,6 +201,7 @@ async fn signal_group_does_not_fall_back_to_the_pid_when_the_group_is_gone() {
 
     signal_group(Some(unrelated.id()), Signal::Kill);
 
+    // OS child; Tokio time cannot be paused.
     tokio::time::sleep(Duration::from_millis(100)).await;
     let still_running = unrelated.try_wait().unwrap().is_none();
     unrelated.kill().unwrap();

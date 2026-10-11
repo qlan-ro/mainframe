@@ -138,7 +138,11 @@ fn deps(process_command: ProcessQueryFn, process_cwd: ProcessQueryFn, kill: Kill
     }
 }
 
+#[path = "sweep_tests_defaults.rs"]
 mod defaults;
+#[path = "sweep_tests_group_kill.rs"]
 mod group_kill;
+#[path = "sweep_tests_matching.rs"]
 mod matching;
+#[path = "sweep_tests_reaping.rs"]
 mod reaping;

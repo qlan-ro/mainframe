@@ -129,13 +129,29 @@ async fn poll_added(registry: &RecordingRegistry) -> ManagedChildEntry {
         if let Some(entry) = registry.added().into_iter().next() {
             return entry;
         }
+        // OS child; Tokio time cannot be paused.
         sleep(Duration::from_millis(25)).await;
     }
     panic!("no launch pid was recorded");
 }
 
+#[path = "launch_manager_tests_child_registry.rs"]
 mod child_registry;
+#[path = "launch_manager_tests_clean_env.rs"]
 mod clean_env;
+#[path = "launch_manager_tests_events_and_output.rs"]
 mod events_and_output;
+#[path = "launch_manager_tests_exit_order.rs"]
 mod exit_order;
+#[path = "launch_manager_tests_start_stop.rs"]
 mod start_stop;
+
+async fn wait_until(predicate: impl Fn() -> bool) {
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while !predicate() {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("child process reached the expected state");
+}

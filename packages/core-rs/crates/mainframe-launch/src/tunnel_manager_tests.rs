@@ -135,6 +135,7 @@ async fn start_until_spawned(
             if let Some(entry) = registry.added().first() {
                 break entry.pid as u32;
             }
+            // OS child; Tokio time cannot be paused.
             sleep(Duration::from_millis(10)).await;
         }
     })
@@ -165,6 +166,7 @@ fn signal_manager(
 async fn assert_pid_gone(pid: u32) {
     tokio::time::timeout(Duration::from_secs(2), async {
         while mainframe_runtime::process::is_alive(pid) {
+            // OS child; Tokio time cannot be paused.
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
     })
@@ -172,10 +174,10 @@ async fn assert_pid_gone(pid: u32) {
     .expect("the stopped child must no longer exist");
 }
 
-#[path = "behavior_tests.rs"]
+#[path = "tunnel_manager/behavior_tests.rs"]
 mod behavior;
-#[path = "shutdown_tests.rs"]
+#[path = "tunnel_manager/shutdown_tests.rs"]
 mod shutdown;
 
-#[path = "shutdown_gate_tests.rs"]
+#[path = "tunnel_manager/shutdown_gate_tests.rs"]
 mod shutdown_gate_tests;

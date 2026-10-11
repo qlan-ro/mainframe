@@ -113,6 +113,7 @@ async fn forgets_the_pid_when_the_launch_process_exits() {
         if registry.removed().contains(&pid) {
             break;
         }
+        // OS child; Tokio time cannot be paused.
         sleep(Duration::from_millis(25)).await;
     }
     assert!(registry.removed().contains(&pid));
@@ -143,6 +144,7 @@ async fn kills_the_process_group_and_forgets_the_pid_on_stop() {
         if registry.removed().contains(&pid) {
             break;
         }
+        // OS child; Tokio time cannot be paused.
         sleep(Duration::from_millis(25)).await;
     }
     assert!(registry.removed().contains(&pid));
@@ -210,6 +212,7 @@ async fn records_a_shebang_child_so_the_real_sweep_reaps_its_group() {
             gone = true;
             break;
         }
+        // OS child; Tokio time cannot be paused.
         sleep(Duration::from_millis(50)).await;
     }
     assert!(gone);

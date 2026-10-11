@@ -14,7 +14,7 @@
 //! map's back. Every read of a ready entry is therefore liveness-checked
 //! against the manager.
 
-use mainframe_types::sync::LockExt as _;
+use mainframe_types::sync::LockExt;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -24,6 +24,7 @@ use crate::tunnel_error::TunnelStartError;
 use crate::tunnel_manager::TunnelManager;
 
 #[cfg(test)]
+#[path = "port_tunnel_registry_tests.rs"]
 mod tests;
 
 /// Kept in sync with `PORT_TUNNEL_LABEL_PREFIX` in

@@ -170,6 +170,7 @@ pub struct LaunchManager {
 }
 
 #[cfg(test)]
+#[path = "launch_manager_tests.rs"]
 mod tests;
 
 mod construction;
