@@ -22,14 +22,10 @@ fn outputs(pairs: &[(&str, serde_json::Value)]) -> serde_json::Map<String, serde
 /// Poll until the run reaches `status`. The wait resume spawns its advance, so
 /// the sweep returning is not the same as the run having moved.
 async fn settle(h: &Harness, run_id: &str, status: RunStatus) -> RunRecord {
-    for _ in 0..100 {
-        let record = h.store.get_run(run_id).await.unwrap().unwrap();
-        if record.status == status {
-            return record;
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-    }
-    panic!("run {run_id} never reached {status:?}");
+    tokio::time::timeout(std::time::Duration::from_secs(10), h.sink.wait_for(|event| {
+        matches!(event, crate::ports::AutomationEvent::RunUpdated { run } if run.id == run_id && run.status == status)
+    })).await.unwrap();
+    h.store.get_run(run_id).await.unwrap().unwrap()
 }
 
 #[tokio::test]
@@ -167,11 +163,10 @@ async fn a_resumed_wait_reaches_the_run_view_via_the_next_park() {
     // emits the whole run record, `first` already succeeded inside it. Pinning
     // that here because the alternative (an emit in `resume_wait`) is the
     // obvious-looking fix, and it would double every update.
-    for _ in 0..100 {
-        if h.sink.run_updates().len() > before {
-            return;
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-    }
-    panic!("resuming a wait emitted no run update");
+    tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        h.sink.wait_for_run_updates(before + 1),
+    )
+    .await
+    .unwrap();
 }

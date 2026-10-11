@@ -57,6 +57,13 @@ fn overlay_message(chat_id: &str, overlay: &PartialOverlay) -> ChatMessage {
 pub struct PartialOverlays(Arc<Mutex<HashMap<(String, String), PartialOverlay>>>);
 
 impl PartialOverlays {
+    #[cfg(test)]
+    pub(crate) fn set_test_timestamp(&self, timestamp: &str) {
+        for overlay in self.0.lock_recover().values_mut() {
+            overlay.started_at = timestamp.to_string();
+        }
+    }
+
     pub fn new() -> Self {
         Self::default()
     }

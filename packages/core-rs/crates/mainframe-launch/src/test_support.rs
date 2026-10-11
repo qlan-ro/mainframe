@@ -2,7 +2,6 @@
 //! `TunnelManager` and `PortTunnelRegistry` both drive real child processes, so
 //! their tests need the same scripts.
 
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -36,37 +35,11 @@ pub(crate) fn recording_signal() -> (SignalFn, SignalLog) {
     (signal, log)
 }
 
-/// Writes a `/bin/sh` stand-in and returns its path, proven executable.
-///
-/// A file written by one thread of a multi-threaded test binary can fail to
-/// exec with `ETXTBSY`: a fork from another thread inherits the still-open
-/// write descriptor, and the kernel refuses to exec a file anyone holds for
-/// writing. The window closes as soon as that fork execs, so the probe below
-/// retries until the script runs — otherwise a test reads the race as
-/// "cloudflared failed to start", which is what it looks like from `start()`.
 fn write_script(dir: &Path, name: &str, body: &str) -> String {
     let script = dir.join(name);
-    std::fs::write(&script, format!("#!/bin/sh\n{PROBE_GUARD}\n{body}")).unwrap();
-    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
-
-    let mut last = None;
-    for _ in 0..100 {
-        match std::process::Command::new(&script).arg(PROBE_ARG).status() {
-            Ok(status) => {
-                assert!(status.success(), "{name} ignored {PROBE_ARG}: {status}");
-                return script.to_string_lossy().into_owned();
-            }
-            Err(err) => {
-                last = Some(err);
-                std::thread::sleep(Duration::from_millis(2));
-            }
-        }
-    }
-    panic!("{name} never became executable: {}", last.unwrap());
+    mainframe_runtime::test_support::write_shell_script(&script, body).unwrap();
+    script.to_string_lossy().into_owned()
 }
-
-const PROBE_ARG: &str = "--mf-exec-probe";
-const PROBE_GUARD: &str = r#"[ "$1" = --mf-exec-probe ] && exit 0"#;
 
 /// Prints the URL + the registration line, then sleeps so the child stays alive.
 pub(crate) fn write_fake_cloudflared(dir: &Path) -> String {
@@ -112,6 +85,7 @@ pub(crate) async fn wait_until_trapped(dir: &Path) {
     let marker = dir.join("trapped");
     tokio::time::timeout(Duration::from_secs(5), async {
         while !marker.exists() {
+            // OS child; Tokio time cannot be paused.
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
     })

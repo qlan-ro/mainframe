@@ -130,4 +130,5 @@ async fn apply_control_response(
 }
 
 #[cfg(test)]
+#[path = "gate_answers_tests.rs"]
 mod tests;

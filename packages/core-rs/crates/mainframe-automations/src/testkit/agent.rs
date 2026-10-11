@@ -23,6 +23,7 @@ struct Chan {
 /// `completing(...)` instead resolves every watch at once with one outcome.
 #[derive(Default)]
 pub struct FakeAgentPort {
+    changed: tokio::sync::Notify,
     pub started: Mutex<Vec<AgentRequest>>,
     pub watch_calls: Mutex<Vec<String>>,
     pub retry_calls: Mutex<Vec<(String, String)>>,
@@ -63,6 +64,40 @@ impl FakeAgentPort {
             // Unreachable: the receiver lives in the same `Chan` as the sender.
             tracing::warn!(chat_id, "fake agent port: watch channel closed");
         }
+    }
+
+    pub async fn wait_for_cancel(&self, chat_id: &str) {
+        loop {
+            let changed = self.changed.notified();
+            tokio::pin!(changed);
+            changed.as_mut().enable();
+            if self.cancels.lock_recover().iter().any(|id| id == chat_id) {
+                return;
+            }
+            changed.await;
+        }
+    }
+
+    pub async fn wait_for_watch(&self, chat_id: &str) {
+        loop {
+            let changed = self.changed.notified();
+            tokio::pin!(changed);
+            changed.as_mut().enable();
+            if self
+                .watch_calls
+                .lock_recover()
+                .iter()
+                .any(|id| id == chat_id)
+            {
+                return;
+            }
+            changed.await;
+        }
+    }
+
+    pub async fn pending_outcomes(&self, chat_id: &str) -> usize {
+        let chan = self.chan(chat_id);
+        chan.rx.lock().await.len()
     }
 
     pub fn started_requests(&self) -> Vec<AgentRequest> {
@@ -123,6 +158,7 @@ impl AgentPort for FakeAgentPort {
 
     fn watch<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, OutcomeResult> {
         self.watch_calls.lock_recover().push(chat_id.to_string());
+        self.changed.notify_waiters();
         Box::pin(self.next_outcome(chat_id))
     }
 
@@ -135,6 +171,7 @@ impl AgentPort for FakeAgentPort {
 
     fn cancel<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, Result<(), AgentPortError>> {
         self.cancels.lock_recover().push(chat_id.to_string());
+        self.changed.notify_waiters();
         Box::pin(async { Ok(()) })
     }
 }

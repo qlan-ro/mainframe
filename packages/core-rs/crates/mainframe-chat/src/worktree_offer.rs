@@ -219,4 +219,5 @@ fn resolved_event(
 }
 
 #[cfg(test)]
+#[path = "worktree_offer_tests.rs"]
 mod tests;

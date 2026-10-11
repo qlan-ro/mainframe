@@ -24,6 +24,7 @@ use crate::tunnel_error::TunnelStartError;
 use crate::tunnel_manager::TunnelManager;
 
 #[cfg(test)]
+#[path = "port_tunnel_registry_tests.rs"]
 mod tests;
 
 /// Kept in sync with `PORT_TUNNEL_LABEL_PREFIX` in

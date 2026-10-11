@@ -195,4 +195,5 @@ pub(crate) async fn lsof_any(process: &crate::process::ProcessDeps, path: &str) 
 }
 
 #[cfg(test)]
+#[path = "lsof_tests.rs"]
 mod tests;

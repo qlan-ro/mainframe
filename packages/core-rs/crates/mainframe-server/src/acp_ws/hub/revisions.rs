@@ -174,4 +174,5 @@ impl FacadeHub {
 }
 
 #[cfg(test)]
+#[path = "revisions_tests.rs"]
 mod tests;

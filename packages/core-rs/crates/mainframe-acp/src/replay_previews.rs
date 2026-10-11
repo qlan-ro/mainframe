@@ -136,4 +136,5 @@ fn with_truncation_marker(meta: Option<&Value>, text_bytes: usize) -> Value {
 }
 
 #[cfg(test)]
+#[path = "replay_previews_tests.rs"]
 mod tests;

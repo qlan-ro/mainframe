@@ -87,4 +87,5 @@ impl Default for ClaudeAdapter {
 mod contract;
 
 #[cfg(test)]
+#[path = "adapter_tests.rs"]
 mod tests;

@@ -165,4 +165,5 @@ fn urlencode(value: &str) -> String {
 }
 
 #[cfg(test)]
+#[path = "pair_tests.rs"]
 mod tests;

@@ -243,4 +243,5 @@ fn kind_for(t: DisplayMessageType) -> Option<ItemContainerKind> {
 }
 
 #[cfg(test)]
+#[path = "encoder_tests.rs"]
 mod tests;

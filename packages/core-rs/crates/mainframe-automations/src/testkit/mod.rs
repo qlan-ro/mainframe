@@ -49,15 +49,41 @@ impl Clock for FakeClock {
 #[derive(Default)]
 pub struct CollectingSink {
     pub events: Mutex<Vec<AutomationEvent>>,
+    changed: tokio::sync::Notify,
 }
 
 impl EventSink for CollectingSink {
     fn emit(&self, event: AutomationEvent) {
         self.events.lock_recover().push(event);
+        self.changed.notify_waiters();
     }
 }
 
 impl CollectingSink {
+    pub async fn wait_for(&self, predicate: impl Fn(&AutomationEvent) -> bool) {
+        loop {
+            let changed = self.changed.notified();
+            tokio::pin!(changed);
+            changed.as_mut().enable();
+            if self.events.lock_recover().iter().any(&predicate) {
+                return;
+            }
+            changed.await;
+        }
+    }
+
+    pub async fn wait_for_run_updates(&self, count: usize) {
+        loop {
+            let changed = self.changed.notified();
+            tokio::pin!(changed);
+            changed.as_mut().enable();
+            if self.run_updates().len() >= count {
+                return;
+            }
+            changed.await;
+        }
+    }
+
     fn collect<T>(&self, pick: impl Fn(&AutomationEvent) -> Option<T>) -> Vec<T> {
         self.events.lock_recover().iter().filter_map(pick).collect()
     }

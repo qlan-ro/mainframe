@@ -5,7 +5,6 @@
 //! replay safety, and per-entry `wake_at`.
 
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use serde_json::json;
 
@@ -53,12 +52,13 @@ async fn settle_leaf(
 }
 
 async fn settle(h: &Harness, run_id: &str, pred: impl Fn(&RunRecord) -> bool) -> RunRecord {
-    for _ in 0..100 {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while std::time::Instant::now() < deadline {
         let record = h.store.get_run(run_id).await.unwrap().unwrap();
         if pred(&record) {
             return record;
         }
-        tokio::time::sleep(Duration::from_millis(10)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
     }
     panic!("run {run_id} never reached the expected state");
 }

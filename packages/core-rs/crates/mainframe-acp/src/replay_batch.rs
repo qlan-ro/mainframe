@@ -78,4 +78,5 @@ fn notification(session_id: &str, count: usize, data: String) -> JsonRpcNotifica
 }
 
 #[cfg(test)]
+#[path = "replay_batch_tests.rs"]
 mod tests;

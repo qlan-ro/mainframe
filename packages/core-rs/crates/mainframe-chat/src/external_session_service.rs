@@ -222,4 +222,5 @@ mod scan;
 use scan::{emit_count, generate_import_title, scan_page_impl, strip_xml_tags};
 
 #[cfg(test)]
+#[path = "external_session_service_tests.rs"]
 mod tests;

@@ -136,4 +136,5 @@ impl SessionSink for ParentIdSink {
 }
 
 #[cfg(test)]
+#[path = "parent_id_sink_tests.rs"]
 mod tests;

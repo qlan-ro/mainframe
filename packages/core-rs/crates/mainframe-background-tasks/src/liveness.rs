@@ -175,4 +175,5 @@ pub(crate) fn start_liveness_scheduler_with_clock(
 }
 
 #[cfg(test)]
+#[path = "liveness_tests.rs"]
 mod tests;

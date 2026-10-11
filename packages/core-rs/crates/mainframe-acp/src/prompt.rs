@@ -161,4 +161,5 @@ fn session_unavailable(message: &str) -> JsonRpcErrorObject {
 }
 
 #[cfg(test)]
+#[path = "prompt_tests.rs"]
 mod tests;

@@ -183,4 +183,5 @@ pub fn attach_client_with_capture(
 }
 
 #[cfg(test)]
+#[path = "lsp_connection_tests.rs"]
 mod tests;

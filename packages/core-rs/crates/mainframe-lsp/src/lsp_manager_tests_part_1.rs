@@ -1,0 +1,280 @@
+use super::*;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Duration;
+
+struct FakeResolver {
+    calls: Arc<AtomicUsize>,
+    command: String,
+    args: Vec<String>,
+}
+
+impl CommandResolver for FakeResolver {
+    fn resolve_command<'a>(
+        &'a self,
+        _language: &'a str,
+        _project_path: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Option<ResolvedCommand>> + Send + 'a>> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        let command = self.command.clone();
+        let args = self.args.clone();
+        Box::pin(async move { Some(ResolvedCommand { command, args }) })
+    }
+}
+
+fn manager() -> (LspManager, Arc<AtomicUsize>) {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let resolver = Arc::new(FakeResolver {
+        calls: calls.clone(),
+        command: "cat".to_string(),
+        args: vec![],
+    });
+    let mut m = LspManager::with_resolver(Arc::new(LspRegistry::new()), resolver);
+    m.set_test_timeouts(
+        Duration::from_millis(60),
+        Duration::from_millis(150),
+        Duration::from_millis(150),
+        Duration::from_millis(150),
+    );
+    (m, calls)
+}
+
+#[tokio::test]
+async fn spawns_a_new_server_for_unknown_key() {
+    let (m, _) = manager();
+    let handle = m.get_or_spawn("proj1", "typescript", "/tmp").await.unwrap();
+    assert_eq!(handle.language, "typescript");
+    assert_eq!(handle.project_path, "/tmp");
+    m.shutdown_all().await;
+}
+
+#[tokio::test]
+async fn returns_existing_handle_for_same_key() {
+    let (m, _) = manager();
+    let h1 = m.get_or_spawn("proj1", "typescript", "/tmp").await.unwrap();
+    let h2 = m.get_or_spawn("proj1", "typescript", "/tmp").await.unwrap();
+    assert!(Arc::ptr_eq(&h1, &h2));
+    m.shutdown_all().await;
+}
+
+#[tokio::test]
+async fn deduplicates_concurrent_spawn_calls() {
+    let (m, calls) = manager();
+    let (h1, h2) = tokio::join!(
+        m.get_or_spawn("proj1", "typescript", "/tmp"),
+        m.get_or_spawn("proj1", "typescript", "/tmp"),
+    );
+    let h1 = h1.unwrap();
+    let h2 = h2.unwrap();
+    assert!(Arc::ptr_eq(&h1, &h2));
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    m.shutdown_all().await;
+}
+
+#[tokio::test]
+async fn reports_active_languages_for_a_project() {
+    let (m, _) = manager();
+    m.get_or_spawn("proj1", "typescript", "/tmp").await.unwrap();
+    let active = m.get_active_languages("proj1");
+    assert!(active.contains(&"typescript".to_string()));
+    assert!(!active.contains(&"python".to_string()));
+    m.shutdown_all().await;
+}
+
+#[tokio::test]
+async fn shutdown_removes_handle() {
+    let (m, _) = manager();
+    m.get_or_spawn("proj1", "typescript", "/tmp").await.unwrap();
+    m.shutdown("proj1", "typescript").await;
+    assert!(
+        !m.get_active_languages("proj1")
+            .contains(&"typescript".to_string())
+    );
+}
+
+#[tokio::test]
+async fn shutdown_all_clears_all_handles() {
+    let (m, _) = manager();
+    m.get_or_spawn("proj1", "typescript", "/tmp").await.unwrap();
+    m.get_or_spawn("proj2", "typescript", "/tmp").await.unwrap();
+    m.shutdown_all().await;
+    assert!(m.get_active_languages("proj1").is_empty());
+    assert!(m.get_active_languages("proj2").is_empty());
+}
+
+type SignalLog = Arc<Mutex<Vec<(u32, Signal)>>>;
+
+/// A manager whose servers run `script` under `/bin/sh` and ignore the LSP
+/// shutdown handshake, with a signal seam that records each delivery before
+/// really sending it.
+fn signal_manager(script: &str, sigterm_grace: Duration) -> (LspManager, SignalLog) {
+    let resolver = Arc::new(FakeResolver {
+        calls: Arc::new(AtomicUsize::new(0)),
+        command: "/bin/sh".to_string(),
+        args: vec!["-c".to_string(), script.to_string()],
+    });
+    let mut manager = LspManager::with_resolver(Arc::new(LspRegistry::new()), resolver);
+    manager.set_test_timeouts(
+        Duration::from_secs(60),
+        Duration::from_millis(25),
+        Duration::from_millis(50),
+        sigterm_grace,
+    );
+    let log: SignalLog = Arc::new(Mutex::new(Vec::new()));
+    let sink = log.clone();
+    let deliver = kill_signal();
+    manager.set_test_signal(Arc::new(move |pid, kind| {
+        sink.lock().unwrap().push((pid, kind));
+        deliver(pid, kind)
+    }));
+    (manager, log)
+}
+
+/// A server script that ignores SIGTERM, creating `marker` once its trap is set.
+fn ignores_sigterm(marker: &std::path::Path) -> String {
+    format!("trap '' TERM; touch {}; exec sleep 100", marker.display())
+}
+
+/// Waits until every server spawned from [`ignores_sigterm`] has installed its
+/// trap, so the SIGTERM that follows cannot kill it by default disposition.
+async fn wait_for_markers(markers: &[std::path::PathBuf]) {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while !markers.iter().all(|m| m.exists()) {
+            // OS child; Tokio time cannot be paused.
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("the server should install its TERM trap");
+}
+
+#[tokio::test]
+async fn shutdown_sends_only_sigterm_to_a_server_that_exits_on_it() {
+    let (manager, signals) = signal_manager("exec sleep 100", Duration::from_secs(5));
+    let handle = manager
+        .get_or_spawn("proj1", "typescript", "/tmp")
+        .await
+        .unwrap();
+
+    manager.shutdown("proj1", "typescript").await;
+
+    assert_eq!(*signals.lock().unwrap(), vec![(handle.pid, Signal::Term)]);
+    assert!(handle.exited.load(Ordering::SeqCst));
+    assert_pid_gone(handle.pid).await;
+    assert!(manager.get_handle("proj1", "typescript").is_none());
+}
+
+#[tokio::test]
+async fn shutdown_escalates_to_sigkill_and_waits_for_exit() {
+    let dir = tempfile::tempdir().unwrap();
+    let marker = dir.path().join("trapped");
+    let (manager, signals) = signal_manager(&ignores_sigterm(&marker), Duration::from_millis(500));
+    let handle = manager
+        .get_or_spawn("proj1", "typescript", "/tmp")
+        .await
+        .unwrap();
+    wait_for_markers(&[marker]).await;
+
+    manager.shutdown("proj1", "typescript").await;
+
+    assert_eq!(
+        *signals.lock().unwrap(),
+        vec![(handle.pid, Signal::Term), (handle.pid, Signal::Kill)]
+    );
+    assert!(handle.exited.load(Ordering::SeqCst));
+    assert_pid_gone(handle.pid).await;
+    assert!(manager.get_handle("proj1", "typescript").is_none());
+}
+
+#[tokio::test]
+async fn shutdown_all_signals_every_server_before_escalating_any() {
+    let dir = tempfile::tempdir().unwrap();
+    // Each server touches a file named after its own shell pid.
+    let script = format!(
+        "trap '' TERM; touch {}/$$; exec sleep 100",
+        dir.path().display()
+    );
+    let (manager, signals) = signal_manager(&script, Duration::from_millis(1_000));
+    let first = manager
+        .get_or_spawn("proj1", "typescript", "/tmp")
+        .await
+        .unwrap();
+    let second = manager
+        .get_or_spawn("proj1", "python", "/tmp")
+        .await
+        .unwrap();
+    wait_for_markers(&[
+        dir.path().join(first.pid.to_string()),
+        dir.path().join(second.pid.to_string()),
+    ])
+    .await;
+
+    manager.shutdown_all().await;
+
+    // Shut down one after another, the first server's SIGKILL would come
+    // before the second server's SIGTERM.
+    let mut flags: Vec<(u32, Signal)> = signals.lock().unwrap().clone();
+    let (terms, kills) = flags.split_at_mut(2);
+    terms.sort_unstable();
+    kills.sort_unstable();
+    let mut pids = [first.pid, second.pid];
+    pids.sort_unstable();
+    assert_eq!(terms, [(pids[0], Signal::Term), (pids[1], Signal::Term)]);
+    assert_eq!(kills, [(pids[0], Signal::Kill), (pids[1], Signal::Kill)]);
+    assert!(first.exited.load(Ordering::SeqCst));
+    assert!(second.exited.load(Ordering::SeqCst));
+    assert_pid_gone(first.pid).await;
+    assert_pid_gone(second.pid).await;
+}
+
+#[tokio::test]
+async fn shutdown_escalates_when_the_stdin_queue_is_full() {
+    // `sleep` never reads stdin, so the pipe fills, the writer task blocks
+    // and the bounded queue stays full: a handshake that waited for queue
+    // room would never reach the signals.
+    let (manager, signals) = signal_manager("exec sleep 100", Duration::from_secs(5));
+    let handle = manager
+        .get_or_spawn("proj1", "typescript", "/tmp")
+        .await
+        .unwrap();
+    let stdin = handle.stdin_tx();
+    stdin.try_write(vec![b'x'; 1 << 20]).unwrap();
+    let mut queued = 1;
+    while stdin.try_write(b"x".to_vec()).is_ok() {
+        queued += 1;
+        assert!(queued <= 4096, "the stdin queue never filled");
+    }
+    assert_eq!(
+        stdin.try_write(b"x".to_vec()),
+        Err(mainframe_runtime::process::StdinWriteError::Full)
+    );
+
+    tokio::time::timeout(
+        Duration::from_secs(2),
+        manager.shutdown("proj1", "typescript"),
+    )
+    .await
+    .expect("shutdown must not wait for stdin queue room");
+
+    assert_eq!(*signals.lock().unwrap(), vec![(handle.pid, Signal::Term)]);
+    assert!(handle.exited.load(Ordering::SeqCst));
+    assert_pid_gone(handle.pid).await;
+    assert!(manager.get_handle("proj1", "typescript").is_none());
+}
+
+#[tokio::test]
+async fn starts_idle_timer_on_spawn_no_client_connected() {
+    let (m, _) = manager();
+    let handle = m.get_or_spawn("proj1", "typescript", "/tmp").await.unwrap();
+    assert!(handle.has_idle_timer());
+    m.shutdown_all().await;
+}
+
+#[tokio::test]
+async fn returns_existing_handle_cancelling_and_restarting_idle_timer() {
+    let (m, _) = manager();
+    let handle = m.get_or_spawn("proj1", "typescript", "/tmp").await.unwrap();
+    assert!(handle.has_idle_timer());
+    let handle2 = m.get_or_spawn("proj1", "typescript", "/tmp").await.unwrap();
+    assert!(Arc::ptr_eq(&handle, &handle2));
+    m.shutdown_all().await;
+}

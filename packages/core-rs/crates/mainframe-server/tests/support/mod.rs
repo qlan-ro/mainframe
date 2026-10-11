@@ -11,7 +11,6 @@ pub mod settings_http;
 pub mod tool_timing_adapter;
 
 use std::net::SocketAddr;
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -143,8 +142,6 @@ pub async fn spawn_test_server_with(opts: TestServerOptions) -> TestServer {
         .await
     });
 
-    // Give the listener a beat to start accepting.
-    tokio::time::sleep(Duration::from_millis(20)).await;
     TestServer {
         addr,
         ctx,
@@ -175,8 +172,7 @@ fn build_port_tunnels(
         ),
     };
     let script = dir.join(name);
-    std::fs::write(&script, body).unwrap();
-    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    mainframe_runtime::test_support::write_shell_script(&script, &body).unwrap();
 
     let tx = broadcast.clone();
     let manager = mainframe_launch::TunnelManager::with_config(
@@ -421,3 +417,5 @@ impl WsClient {
         self.stream.read_exact(buf).await.ok().map(|_| ())
     }
 }
+
+pub mod helpers;

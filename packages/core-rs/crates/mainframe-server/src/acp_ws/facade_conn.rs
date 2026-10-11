@@ -287,4 +287,5 @@ pub fn rpc_id_string(request_id: &str) -> String {
 }
 
 #[cfg(test)]
+#[path = "facade_conn_tests.rs"]
 mod tests;

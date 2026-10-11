@@ -261,4 +261,5 @@ impl FacadeHub {
 use mainframe_types::time::now_ms;
 
 #[cfg(test)]
+#[path = "hub_tests.rs"]
 mod tests;

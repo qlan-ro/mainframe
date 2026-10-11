@@ -20,6 +20,7 @@ use crate::respond::{fail, ok};
 use crate::routes::body::parse_body;
 
 #[cfg(test)]
+#[path = "chat_switch_tests.rs"]
 mod tests;
 
 async fn switch_provider(

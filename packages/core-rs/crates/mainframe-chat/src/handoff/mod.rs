@@ -11,6 +11,7 @@ pub mod select;
 pub mod tool_items;
 
 #[cfg(test)]
+#[path = "../handoff_tests.rs"]
 mod tests;
 
 use std::collections::HashSet;

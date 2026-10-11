@@ -6,40 +6,13 @@
 
 mod support;
 
-use std::path::Path;
-
 use reqwest::StatusCode;
 use serde_json::{Value, json};
 use support::{TestServer, spawn_test_server};
 
-fn run_git(cwd: &Path, args: &[&str]) {
-    let out = std::process::Command::new("git")
-        .args(args)
-        .current_dir(cwd)
-        .env("GIT_CONFIG_GLOBAL", "/dev/null")
-        .env("GIT_CONFIG_SYSTEM", "/dev/null")
-        .output()
-        .unwrap();
-    assert!(
-        out.status.success(),
-        "git {args:?} failed: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-}
-
 /// Init a repo with one commit, using repo-local identity/no-sign config so the
 /// daemon's own `GitService` commits succeed regardless of the host git config.
-fn init_repo() -> tempfile::TempDir {
-    let dir = tempfile::tempdir().unwrap();
-    run_git(dir.path(), &["init", "-b", "main"]);
-    run_git(dir.path(), &["config", "user.email", "t@t.com"]);
-    run_git(dir.path(), &["config", "user.name", "T"]);
-    run_git(dir.path(), &["config", "commit.gpgsign", "false"]);
-    std::fs::write(dir.path().join("README.md"), "hello\n").unwrap();
-    run_git(dir.path(), &["add", "-A"]);
-    run_git(dir.path(), &["commit", "-m", "init"]);
-    dir
-}
+use support::helpers::init_repo;
 
 async fn post(server: &TestServer, path: &str, body: Value) -> reqwest::Response {
     reqwest::Client::new()

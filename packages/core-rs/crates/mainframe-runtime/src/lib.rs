@@ -16,3 +16,6 @@ pub mod spawn_env;
 pub use spawn_env::ResolvedPath;
 
 pub mod sync;
+
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_support;

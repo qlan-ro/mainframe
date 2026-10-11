@@ -153,7 +153,7 @@ impl VerbPorts for SleepyPorts {
         Box::pin(async move {
             let now = self.concurrent.fetch_add(1, Ordering::SeqCst) + 1;
             self.max_seen.fetch_max(now, Ordering::SeqCst);
-            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+            tokio::task::yield_now().await;
             self.concurrent.fetch_sub(1, Ordering::SeqCst);
             StepOutcome::Completed {
                 outputs: empty_outputs(),

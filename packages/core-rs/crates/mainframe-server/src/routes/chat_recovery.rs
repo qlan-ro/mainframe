@@ -82,14 +82,8 @@ pub fn router() -> Router<Arc<AppCtx>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::body::to_bytes;
 
-    async fn read(resp: Response) -> (StatusCode, serde_json::Value) {
-        let status = resp.status();
-        let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
-        let body = serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null);
-        (status, body)
-    }
+    use crate::test_support::read_json as read;
 
     #[tokio::test]
     async fn recovery_routes_report_missing_chat() {
@@ -99,7 +93,7 @@ mod tests {
             RecoveryAction::ContinueHere,
             RecoveryAction::ContinueInProjectRoot,
         ] {
-            let (status, body) = read(run(&ctx, "c1", action).await).await;
+            let (status, body) = read(run(&ctx, "c1", action).await).await.unwrap();
             assert_eq!(status, StatusCode::NOT_FOUND);
             assert_eq!(body["error"], "Chat not found");
         }

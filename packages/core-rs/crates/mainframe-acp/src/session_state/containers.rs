@@ -117,4 +117,5 @@ fn delta_containers(delta: &EncodedDelta) -> Vec<Vec<EncodedItem>> {
 }
 
 #[cfg(test)]
+#[path = "containers_tests.rs"]
 mod tests;

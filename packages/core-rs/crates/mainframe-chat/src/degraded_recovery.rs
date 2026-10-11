@@ -142,4 +142,5 @@ fn emit_updated(shared: &ChatShared, chat_id: &str) {
 }
 
 #[cfg(test)]
+#[path = "degraded_recovery_tests.rs"]
 mod tests;

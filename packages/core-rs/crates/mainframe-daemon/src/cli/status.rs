@@ -93,4 +93,5 @@ fn format_devices(devices: &[Value]) -> String {
 }
 
 #[cfg(test)]
+#[path = "status_tests.rs"]
 mod tests;

@@ -20,6 +20,9 @@ async fn health_log_form_answers_feed_notion_and_file_params() {
 
     // The ask_me step pauses the run with a pending interaction row + event.
     rig.wait(&run_id, RunStatus::Waiting).await;
+    tokio::time::timeout(std::time::Duration::from_secs(10), rig.sink.wait_for(|event| {
+        matches!(event, mainframe_automations::ports::AutomationEvent::InteractionCreated { interaction } if interaction.run_id == run_id)
+    })).await.unwrap();
     let created = rig.sink.interactions_created();
     assert_eq!(created.len(), 1);
     assert_eq!(created[0].title, "Health check-in");

@@ -33,7 +33,7 @@ mod tests {
                 let _guard = acquire_project_lock("/same/project").await;
                 let now = active.fetch_add(1, Ordering::SeqCst) + 1;
                 max_active.fetch_max(now, Ordering::SeqCst);
-                tokio::time::sleep(Duration::from_millis(5)).await;
+                tokio::task::yield_now().await;
                 order.lock().await.push(id);
                 active.fetch_sub(1, Ordering::SeqCst);
             }));

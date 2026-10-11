@@ -205,6 +205,7 @@ fn version_at_least(version: &str, min: (u64, u64, u64)) -> bool {
 #[cfg(test)]
 mod probe_tests;
 #[cfg(test)]
+#[path = "partial_stream_tests.rs"]
 mod tests;
 
 fn update_partial(

@@ -177,7 +177,7 @@ impl ClaudeSession {
 mod model_tests;
 
 #[cfg(test)]
-#[path = "session_tests/support.rs"]
+#[path = "session_tests_support.rs"]
 mod tests;
 
 #[path = "session_adapter.rs"]

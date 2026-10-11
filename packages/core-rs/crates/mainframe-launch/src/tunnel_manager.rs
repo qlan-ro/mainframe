@@ -249,6 +249,7 @@ impl TunnelManager {
 }
 
 #[cfg(test)]
+#[path = "tunnel_manager_tests.rs"]
 mod tests;
 
 use process::deliver;

@@ -296,4 +296,5 @@ fn remove_mainframe_wrapper(text: &str) -> String {
 }
 
 #[cfg(test)]
+#[path = "message_parsing_tests.rs"]
 mod tests;

@@ -246,4 +246,5 @@ fn print_usage() {
 }
 
 #[cfg(test)]
+#[path = "update_tests.rs"]
 mod tests;

@@ -27,6 +27,7 @@ mainframe-claude-workflows = { workspace = true }
 mainframe-orchestration = { workspace = true }
 
 [dev-dependencies]
+mainframe-adapter-api = { workspace = true, features = ["test-support"] }
 tempfile = { workspace = true }
 # test-util enables tokio's paused-clock helpers (advance / start_paused) used by
 # the session kill/stop-task and task-events TTL tests.

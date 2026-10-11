@@ -294,4 +294,5 @@ pub(crate) fn parse_ask_user_question_result(
 }
 
 #[cfg(test)]
+#[path = "parse_ask_user_question_tests.rs"]
 mod tests;

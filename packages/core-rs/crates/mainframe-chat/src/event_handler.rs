@@ -230,7 +230,7 @@ mod pr_detection_wiring_tests;
 mod stable_id_characterization_tests;
 
 #[cfg(test)]
-#[path = "event_handler/tests/support.rs"]
+#[path = "event_handler_tests_support.rs"]
 mod tests;
 
 mod tool_timing;

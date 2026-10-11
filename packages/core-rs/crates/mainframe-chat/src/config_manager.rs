@@ -115,4 +115,5 @@ mod update;
 mod worktree;
 
 #[cfg(test)]
+#[path = "config_manager_tests.rs"]
 mod tests;

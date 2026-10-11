@@ -183,4 +183,5 @@ impl CodexAdapter {
 mod contract;
 
 #[cfg(test)]
+#[path = "adapter_tests.rs"]
 mod tests;

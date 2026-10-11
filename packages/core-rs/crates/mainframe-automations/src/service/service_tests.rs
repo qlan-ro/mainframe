@@ -4,7 +4,6 @@
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::Duration;
 
 use mainframe_types::BoxFuture;
 use tempfile::TempDir;
@@ -196,12 +195,13 @@ async fn wait_for_status(
     run_id: &str,
     wanted: RunStatus,
 ) -> crate::store::RunRecord {
-    for _ in 0..100 {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while std::time::Instant::now() < deadline {
         let run = engine.get_run(run_id).await.unwrap().unwrap();
         if run.status == wanted {
             return run;
         }
-        tokio::time::sleep(Duration::from_millis(20)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
     }
     panic!("run {run_id} never reached {wanted:?}");
 }

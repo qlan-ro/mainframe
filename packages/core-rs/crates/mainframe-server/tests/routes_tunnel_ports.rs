@@ -154,7 +154,20 @@ async fn a_mid_start_tunnel_lists_as_starting_without_a_url() {
         let body = json!({ "port": 5173, "chatId": chat_id });
         async move { client().post(url).json(&body).send().await }
     });
-    tokio::time::sleep(Duration::from_millis(150)).await;
+    tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            let (_, body) = get(&server, "/api/tunnel/ports").await;
+            if body["data"]["tunnels"]
+                .as_array()
+                .is_some_and(|rows| !rows.is_empty())
+            {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .expect("start request registered the tunnel");
 
     let (_, body) = get(&server, "/api/tunnel/ports").await;
     assert_eq!(

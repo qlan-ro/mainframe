@@ -1,0 +1,53 @@
+//! Store-level tests for the todos-github plugin: schema migrations, and the
+//! `Link`/`Pair`/`Run` CRUD surfaces. Split by table group to stay under the
+//! 300-line file cap; this module holds the shared harness/fixture helpers.
+
+#[path = "store_tests_link.rs"]
+mod link;
+#[path = "store_tests_migrations.rs"]
+mod migrations;
+#[path = "store_tests_pairs.rs"]
+mod pairs;
+#[path = "store_tests_runs.rs"]
+mod runs;
+
+use mainframe_types::time::now_iso8601;
+
+use crate::todos;
+use crate::todos_github::store::{Link, Pair};
+
+/// A fresh todos+github db, migrated for both plugin surfaces.
+async fn setup() -> todos::tests::Harness {
+    todos::tests::setup().await
+}
+
+fn sample_link(project_id: &str) -> Link {
+    Link {
+        project_id: project_id.to_string(),
+        owner: "acme".to_string(),
+        repo: "widgets".to_string(),
+        remote_name: "origin".to_string(),
+        credential_label: "github".to_string(),
+        last_synced_at: None,
+        created_at: now_iso8601(),
+    }
+}
+
+fn sample_pair(todo_id: &str, project_id: &str, issue_number: i64) -> Pair {
+    Pair {
+        todo_id: todo_id.to_string(),
+        project_id: project_id.to_string(),
+        owner: "acme".to_string(),
+        repo: "widgets".to_string(),
+        issue_number,
+        issue_url: format!("https://github.com/acme/widgets/issues/{issue_number}"),
+        pair_state: "clean".to_string(),
+        state_reason: None,
+        base_title: "Title".to_string(),
+        base_body: "Body".to_string(),
+        base_state: "open".to_string(),
+        base_labels: vec!["bug".to_string()],
+        base_at: now_iso8601(),
+        created_at: now_iso8601(),
+    }
+}

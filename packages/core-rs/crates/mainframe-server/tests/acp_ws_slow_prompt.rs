@@ -112,7 +112,7 @@ async fn a_cancel_for_the_same_session_lands_after_its_prompt_is_in_flight() {
                     return seen.clone();
                 }
             }
-            tokio::time::sleep(Duration::from_millis(10)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
         }
     })
     .await

@@ -6,11 +6,8 @@ mod common;
 use std::sync::Arc;
 
 use common::Recorder;
-use mainframe_adapter_api::{AdapterError, ControlRequest, LoadedSkill, SessionSink};
+use mainframe_adapter_api::SessionSink;
 use mainframe_adapter_codex::event_mapper::{CodexSessionState, handle_notification};
-use mainframe_types::adapter::{ContextUsage, DetectedPr, MessageMetadata, SessionResult};
-use mainframe_types::chat::{MessageContent, TodoItem};
-use mainframe_types::context::SkillFileEntry;
 use serde_json::json;
 
 fn state() -> CodexSessionState {
@@ -25,24 +22,26 @@ fn state() -> CodexSessionState {
 struct NullSink;
 
 impl SessionSink for NullSink {
-    fn on_init(&self, _session_id: &str) {}
-    fn on_message(&self, _content: Vec<MessageContent>, _metadata: Option<MessageMetadata>) {}
-    fn on_tool_result(&self, _content: Vec<MessageContent>, _vendor_id: Option<String>) {}
-    fn on_permission(&self, _request: ControlRequest) {}
-    fn on_result(&self, _data: SessionResult) {}
-    fn on_exit(&self, _code: Option<i32>) {}
-    fn on_error(&self, _error: AdapterError) {}
-    fn on_compact(&self, _vendor_id: Option<&str>) {}
-    fn on_compact_start(&self) {}
-    fn on_context_usage(&self, _usage: ContextUsage) {}
-    fn on_plan_file(&self, _file_path: &str) {}
-    fn on_skill_file(&self, _entry: SkillFileEntry) {}
-    fn on_queued_processed(&self, _uuid: &str) {}
-    fn on_todo_update(&self, _todos: Vec<TodoItem>) {}
-    fn on_pr_detected(&self, _pr: DetectedPr) {}
-    fn on_cli_message(&self, _text: &str) {}
-    fn on_skill_loaded(&self, _entry: LoadedSkill) {}
-    fn on_subagent_child(&self, _parent_tool_use_id: &str, _blocks: Vec<MessageContent>) {}
+    mainframe_adapter_api::forward_session_sink!(
+        on_init,
+        on_message,
+        on_tool_result,
+        on_permission,
+        on_result,
+        on_exit,
+        on_error,
+        on_compact,
+        on_compact_start,
+        on_context_usage,
+        on_plan_file,
+        on_skill_file,
+        on_queued_processed,
+        on_todo_update,
+        on_pr_detected,
+        on_cli_message,
+        on_skill_loaded,
+        on_subagent_child
+    );
 }
 
 #[test]

@@ -305,4 +305,5 @@ fn redelivered_gate_id(replay: &mainframe_acp::ResumeReplay) -> Option<String> {
 }
 
 #[cfg(test)]
+#[path = "resume_tests.rs"]
 mod tests;

@@ -25,4 +25,5 @@ mainframe-background-tasks = { workspace = true }
 mainframe-orchestration = { workspace = true }
 
 [dev-dependencies]
+mainframe-adapter-api = { workspace = true, features = ["test-support"] }
 tempfile = { workspace = true }

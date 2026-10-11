@@ -16,6 +16,7 @@ mod routes;
 pub(crate) mod types;
 
 #[cfg(test)]
+#[path = "../todos_tests.rs"]
 pub(crate) mod tests;
 #[cfg(test)]
 mod tests_mutations;

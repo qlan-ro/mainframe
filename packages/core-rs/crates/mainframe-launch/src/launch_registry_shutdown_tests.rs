@@ -109,6 +109,7 @@ async fn shutdown_stops_multiple_launch_groups_within_shell_deadline() {
             if pids.len() == 4 {
                 break pids;
             }
+            // Wait for the real process lifecycle to advance.
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         }
     })

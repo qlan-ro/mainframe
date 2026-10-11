@@ -99,39 +99,26 @@ fn parse_launch_result_returns_none_without_a_run_id() {
 
 struct NoopSink;
 impl SessionSink for NoopSink {
-    fn on_init(&self, _session_id: &str) {}
-    fn on_message(
-        &self,
-        _content: Vec<mainframe_types::chat::MessageContent>,
-        _metadata: Option<mainframe_types::adapter::MessageMetadata>,
-    ) {
-    }
-    fn on_tool_result(
-        &self,
-        _content: Vec<mainframe_types::chat::MessageContent>,
-        _vendor_id: Option<String>,
-    ) {
-    }
-    fn on_permission(&self, _request: mainframe_types::adapter::ControlRequest) {}
-    fn on_result(&self, _data: mainframe_types::adapter::SessionResult) {}
-    fn on_exit(&self, _code: Option<i32>) {}
-    fn on_error(&self, _error: mainframe_adapter_api::AdapterError) {}
-    fn on_compact(&self, _vendor_id: Option<&str>) {}
-    fn on_compact_start(&self) {}
-    fn on_context_usage(&self, _usage: mainframe_types::adapter::ContextUsage) {}
-    fn on_plan_file(&self, _file_path: &str) {}
-    fn on_skill_file(&self, _entry: mainframe_types::context::SkillFileEntry) {}
-    fn on_queued_processed(&self, _uuid: &str) {}
-    fn on_todo_update(&self, _todos: Vec<mainframe_types::chat::TodoItem>) {}
-    fn on_pr_detected(&self, _pr: mainframe_types::adapter::DetectedPr) {}
-    fn on_cli_message(&self, _text: &str) {}
-    fn on_skill_loaded(&self, _entry: mainframe_adapter_api::adapter::LoadedSkill) {}
-    fn on_subagent_child(
-        &self,
-        _parent_tool_use_id: &str,
-        _blocks: Vec<mainframe_types::chat::MessageContent>,
-    ) {
-    }
+    mainframe_adapter_api::forward_session_sink!(on_init, on_result);
+
+    mainframe_adapter_api::forward_session_sink!(
+        on_message,
+        on_tool_result,
+        on_permission,
+        on_exit,
+        on_error,
+        on_compact,
+        on_compact_start,
+        on_context_usage,
+        on_plan_file,
+        on_skill_file,
+        on_queued_processed,
+        on_todo_update,
+        on_pr_detected,
+        on_cli_message,
+        on_skill_loaded,
+        on_subagent_child
+    );
 }
 
 const CHAT: &str = "mf-chat-1";
@@ -350,23 +337,21 @@ fn write_record(project_path: &str, session_id: &str, task_id: &str) -> RemoveDi
 }
 
 async fn await_record_source(store: &ClaudeWorkflowStore, task_id: &str) -> ClaudeWorkflowRun {
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
-    loop {
-        let run = store
-            .runs_for_chat(CHAT)
-            .into_iter()
-            .find(|r| r.task_id == task_id);
-        if let Some(run) = run
-            && run.source == ClaudeWorkflowRunSource::Record
-        {
-            return run;
+    let mut events = store.subscribe();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            if let Some(run) = store
+                .runs_for_chat(CHAT)
+                .into_iter()
+                .find(|r| r.task_id == task_id && r.source == ClaudeWorkflowRunSource::Record)
+            {
+                return run;
+            }
+            events.recv().await.unwrap();
         }
-        assert!(
-            tokio::time::Instant::now() < deadline,
-            "terminal reconcile never applied the on-disk record"
-        );
-        tokio::time::sleep(Duration::from_millis(20)).await;
-    }
+    })
+    .await
+    .expect("terminal reconcile applied the on-disk record")
 }
 
 /// `spawn_terminal_reconcile` only runs when `record_location` resolves, which

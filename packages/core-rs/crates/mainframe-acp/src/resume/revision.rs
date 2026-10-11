@@ -106,4 +106,5 @@ fn parse_revision_cursor(replay_from: Option<&Value>) -> Option<WireRevisionCurs
 }
 
 #[cfg(test)]
+#[path = "revision_tests.rs"]
 mod tests;

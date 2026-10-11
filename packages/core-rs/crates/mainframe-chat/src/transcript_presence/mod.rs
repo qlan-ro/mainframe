@@ -19,6 +19,7 @@ use mainframe_types::transcript::TranscriptLocation;
 use crate::chat_cwd::chat_cwd;
 
 #[cfg(test)]
+#[path = "../transcript_presence_tests.rs"]
 mod tests;
 
 /// Reconcile the persisted `transcriptMissing` flag against the transcript file

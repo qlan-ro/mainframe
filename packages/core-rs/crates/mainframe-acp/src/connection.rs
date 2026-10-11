@@ -211,4 +211,5 @@ fn to_wire(response: &JsonRpcResponse) -> String {
 }
 
 #[cfg(test)]
+#[path = "connection_tests.rs"]
 mod tests;

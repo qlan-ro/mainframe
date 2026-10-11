@@ -295,3 +295,10 @@ mod credentials_accessor_tests;
 mod registration_tests;
 #[cfg(test)]
 mod service_tests;
+
+#[cfg(feature = "testkit")]
+impl AutomationsEngine {
+    pub async fn wait_for_agent_watcher(&self, chat_id: &str) -> Result<(), &'static str> {
+        self.agent_verb.wait_for_watcher(chat_id).await
+    }
+}

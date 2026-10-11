@@ -128,4 +128,5 @@ impl MessageCache {
 }
 
 #[cfg(test)]
+#[path = "projection_tests.rs"]
 mod tests;

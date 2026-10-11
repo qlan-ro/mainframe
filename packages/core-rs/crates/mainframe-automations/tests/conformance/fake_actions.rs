@@ -54,10 +54,23 @@ impl Gate {
 /// Every fake action appends `(action_id, rendered_params)` here.
 #[derive(Clone, Default)]
 pub struct ActionRecorder {
+    changed: Arc<Notify>,
     calls: Arc<Mutex<Vec<(String, Value)>>>,
 }
 
 impl ActionRecorder {
+    pub async fn wait_for(&self, action_id: &str, count: usize) {
+        loop {
+            let changed = self.changed.notified();
+            tokio::pin!(changed);
+            changed.as_mut().enable();
+            if self.count(action_id) >= count {
+                return;
+            }
+            changed.await;
+        }
+    }
+
     pub fn calls_for(&self, action_id: &str) -> Vec<Value> {
         self.calls
             .lock()
@@ -110,6 +123,7 @@ impl Action for RecordingAction {
                 .lock()
                 .unwrap()
                 .push((self.id.to_string(), params.clone()));
+            self.recorder.changed.notify_waiters();
             self.gate.pass().await;
             Ok(self.outputs.clone())
         })

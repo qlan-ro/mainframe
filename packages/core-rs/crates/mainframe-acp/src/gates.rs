@@ -245,4 +245,5 @@ fn rich_answer(
 }
 
 #[cfg(test)]
+#[path = "gates_tests.rs"]
 mod tests;

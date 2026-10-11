@@ -8,7 +8,7 @@ publish.workspace = true
 workspace = true
 
 [features]
-test-support = ["mainframe-runtime/test-support", "dep:mainframe-adapter-claude"]
+test-support = ["mainframe-adapter-api/test-support", "mainframe-runtime/test-support", "dep:mainframe-adapter-claude"]
 
 [dependencies]
 mainframe-adapter-claude = { workspace = true, optional = true }
@@ -30,6 +30,7 @@ mainframe-services = { workspace = true }
 mainframe-background-tasks = { workspace = true }
 
 [dev-dependencies]
+mainframe-adapter-api = { workspace = true, features = ["test-support"] }
 tempfile = { workspace = true }
 mainframe-runtime = { workspace = true, features = ["test-support"] }
 mainframe-adapter-claude = { workspace = true }

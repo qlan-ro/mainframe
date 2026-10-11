@@ -1395,6 +1395,7 @@ name = "mainframe-adapter-api"
 version = "0.0.0"
 dependencies = [
  "dashmap",
+ "mainframe-adapter-api",
  "mainframe-display",
  "mainframe-runtime",
  "mainframe-types",

@@ -222,4 +222,5 @@ pub(crate) async fn walk_project_files(
 }
 
 #[cfg(test)]
+#[path = "fs_utils_tests.rs"]
 mod tests;

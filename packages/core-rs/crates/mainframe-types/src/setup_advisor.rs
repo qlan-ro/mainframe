@@ -114,4 +114,5 @@ pub struct SetupAdvisorReport {
 }
 
 #[cfg(test)]
+#[path = "setup_advisor_tests.rs"]
 mod tests;

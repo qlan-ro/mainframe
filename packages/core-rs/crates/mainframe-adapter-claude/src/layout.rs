@@ -174,4 +174,5 @@ fn copy_recursive<'a>(
 }
 
 #[cfg(test)]
+#[path = "layout_tests.rs"]
 mod tests;

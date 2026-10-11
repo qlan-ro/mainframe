@@ -6,14 +6,11 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use mainframe_adapter_api::{AdapterError, ControlRequest, LoadedSkill, SessionSink};
+use mainframe_adapter_api::{AdapterError, ControlRequest, SessionSink};
 use mainframe_adapter_codex::event_mapper::{CodexSessionState, handle_notification};
 use mainframe_adapter_codex::thread_registry::ThreadRegistryDeps;
-use mainframe_types::adapter::{
-    ContextUsage, DetectedPr, MessageMetadata, ProviderQuota, SessionResult,
-};
+use mainframe_types::adapter::{ContextUsage, MessageMetadata, ProviderQuota, SessionResult};
 use mainframe_types::chat::{MessageContent, TodoItem};
-use mainframe_types::context::SkillFileEntry;
 use serde_json::Value;
 
 #[derive(Default)]
@@ -126,6 +123,16 @@ impl Recorder {
 struct RecordingSink(Arc<Mutex<Recorded>>);
 
 impl SessionSink for RecordingSink {
+    mainframe_adapter_api::forward_session_sink!(
+        on_exit,
+        on_plan_file,
+        on_skill_file,
+        on_queued_processed,
+        on_pr_detected,
+        on_skill_loaded,
+        on_subagent_child
+    );
+
     fn on_init(&self, session_id: &str) {
         self.0.lock().unwrap().inits.push(session_id.to_string());
     }
@@ -149,7 +156,6 @@ impl SessionSink for RecordingSink {
     fn on_result(&self, data: SessionResult) {
         self.0.lock().unwrap().results.push(data);
     }
-    fn on_exit(&self, _code: Option<i32>) {}
     fn on_error(&self, error: AdapterError) {
         self.0.lock().unwrap().errors.push(error.to_string());
     }
@@ -169,18 +175,12 @@ impl SessionSink for RecordingSink {
             .partials
             .push((api_message_id.to_string(), content));
     }
-    fn on_plan_file(&self, _file_path: &str) {}
-    fn on_skill_file(&self, _entry: SkillFileEntry) {}
-    fn on_queued_processed(&self, _uuid: &str) {}
     fn on_todo_update(&self, todos: Vec<TodoItem>) {
         self.0.lock().unwrap().todos.push(todos);
     }
-    fn on_pr_detected(&self, _pr: DetectedPr) {}
     fn on_cli_message(&self, text: &str) {
         self.0.lock().unwrap().cli_messages.push(text.to_string());
     }
-    fn on_skill_loaded(&self, _entry: LoadedSkill) {}
-    fn on_subagent_child(&self, _parent_tool_use_id: &str, _blocks: Vec<MessageContent>) {}
     fn on_provider_quota(&self, adapter_id: &str, quota: ProviderQuota) {
         self.0
             .lock()

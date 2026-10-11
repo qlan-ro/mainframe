@@ -99,4 +99,5 @@ impl GateRegistry {
 }
 
 #[cfg(test)]
+#[path = "gate_registry_tests.rs"]
 mod tests;

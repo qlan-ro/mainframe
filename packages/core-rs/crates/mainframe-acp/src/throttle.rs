@@ -224,4 +224,5 @@ fn chunk_parts_mut(update: &mut SessionUpdate) -> Option<(&str, &mut String, &mu
 }
 
 #[cfg(test)]
+#[path = "throttle_tests.rs"]
 mod tests;

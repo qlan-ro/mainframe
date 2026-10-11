@@ -86,6 +86,7 @@ pub(super) async fn wait_for_pid(path: &std::path::Path) -> i64 {
             {
                 break pid;
             }
+            // OS child; Tokio time cannot be paused.
             sleep(Duration::from_millis(10)).await;
         }
     })
@@ -97,6 +98,7 @@ pub(super) async fn wait_for_phase(tunnels: &TunnelManager, registered: bool) {
     if registered {
         timeout(Duration::from_secs(3), async {
             while tunnels.get_url("daemon").is_none() {
+                // OS child; Tokio time cannot be paused.
                 sleep(Duration::from_millis(10)).await;
             }
         })

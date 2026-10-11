@@ -122,4 +122,5 @@ pub async fn fingerprint(root: &Path) -> ProjectFingerprint {
 }
 
 #[cfg(test)]
+#[path = "fingerprint_tests.rs"]
 mod tests;

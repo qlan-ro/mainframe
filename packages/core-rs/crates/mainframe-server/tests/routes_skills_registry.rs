@@ -8,14 +8,10 @@
 mod support;
 
 use reqwest::StatusCode;
-use serde_json::{Value, json};
-use support::{TestServer, spawn_test_server};
+use serde_json::json;
+use support::spawn_test_server;
 
-async fn get_json(server: &TestServer, path: &str) -> (StatusCode, Value) {
-    let res = reqwest::get(server.http_url(path)).await.unwrap();
-    let status = res.status();
-    (status, res.json().await.unwrap())
-}
+use support::helpers::get_json;
 
 /// The registry rejects a one-character query itself, so spending the round
 /// trip to be told so is pure latency. Rejecting here also means the debounced

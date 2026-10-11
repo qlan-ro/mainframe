@@ -259,4 +259,5 @@ pub async fn sweep_stray_children(
 }
 
 #[cfg(test)]
+#[path = "sweep_tests.rs"]
 mod tests;

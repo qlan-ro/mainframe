@@ -201,6 +201,7 @@ impl LspManager {
 }
 
 #[cfg(test)]
+#[path = "lsp_manager_tests.rs"]
 mod tests;
 
 mod handle;

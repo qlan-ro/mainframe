@@ -202,4 +202,5 @@ impl ChatStore for Db {
 mod context;
 
 #[cfg(test)]
+#[path = "chat_store_tests.rs"]
 mod tests;

@@ -215,4 +215,5 @@ pub(crate) async fn resolve_env(
 }
 
 #[cfg(test)]
+#[path = "cliproxy_tests.rs"]
 mod tests;

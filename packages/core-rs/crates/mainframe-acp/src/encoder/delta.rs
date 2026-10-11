@@ -66,4 +66,5 @@ impl EncodedDelta {
 }
 
 #[cfg(test)]
+#[path = "delta_tests.rs"]
 mod tests;

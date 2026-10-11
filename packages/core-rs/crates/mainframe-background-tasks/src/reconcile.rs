@@ -179,4 +179,5 @@ fn mtime_ms(md: &Metadata) -> i64 {
 }
 
 #[cfg(test)]
+#[path = "reconcile_tests.rs"]
 mod tests;

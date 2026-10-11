@@ -21,6 +21,7 @@ use crate::routes::body::parse_body;
 use mainframe_types::ids::is_safe_identifier;
 
 #[cfg(test)]
+#[path = "../chat_side_chat_tests.rs"]
 mod tests;
 
 /// The body is optional; when present it must be an empty JSON object — an

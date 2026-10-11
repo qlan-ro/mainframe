@@ -67,4 +67,5 @@ fn diff_meta(prev: &Option<Value>, new: &Option<Value>) -> Option<Option<Value>>
 }
 
 #[cfg(test)]
+#[path = "tool_patch_tests.rs"]
 mod tests;

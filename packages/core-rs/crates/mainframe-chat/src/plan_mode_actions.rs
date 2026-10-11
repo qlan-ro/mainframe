@@ -227,4 +227,5 @@ impl PlanActionContext for ChatPlanActionCtx {
 }
 
 #[cfg(test)]
+#[path = "plan_mode_actions_tests.rs"]
 mod tests;

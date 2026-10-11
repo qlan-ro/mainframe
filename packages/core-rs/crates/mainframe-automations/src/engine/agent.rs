@@ -24,6 +24,8 @@ pub(crate) struct WaitKey {
 }
 
 pub struct AgentVerb {
+    #[cfg(feature = "testkit")]
+    watchers: StdMutex<HashMap<String, tokio::task::JoinHandle<()>>>,
     pub(crate) port: Arc<dyn AgentPort>,
     pub(crate) store: RunStore,
     pub(crate) waits: StdMutex<HashMap<String, WaitKey>>,
@@ -33,6 +35,8 @@ pub struct AgentVerb {
 impl AgentVerb {
     pub fn new(port: Arc<dyn AgentPort>, store: RunStore) -> Arc<Self> {
         Arc::new(Self {
+            #[cfg(feature = "testkit")]
+            watchers: StdMutex::new(HashMap::new()),
             port,
             store,
             waits: StdMutex::new(HashMap::new()),
@@ -143,10 +147,16 @@ impl AgentVerb {
 
     fn spawn_watch(self: &Arc<Self>, chat_id: String) {
         let verb = self.clone();
-        tokio::spawn(async move {
+        #[cfg(feature = "testkit")]
+        let key = chat_id.clone();
+        let handle = tokio::spawn(async move {
             let outcome = verb.port.watch(&chat_id).await;
             verb.settle(&chat_id, outcome).await;
         });
+        #[cfg(feature = "testkit")]
+        self.watchers.lock_recover().insert(key, handle);
+        #[cfg(not(feature = "testkit"))]
+        drop(handle);
     }
 
     fn spawn_chat_cancel(&self, chat_id: String) {
@@ -237,5 +247,17 @@ fn build_request(step: &AskAgentStep, ctx: &VerbContext<'_>) -> AgentRequest {
         timeout_minutes: step.timeout_minutes,
         expects,
         attachments: step.attachments.clone().unwrap_or_default(),
+    }
+}
+
+#[cfg(feature = "testkit")]
+impl AgentVerb {
+    pub async fn wait_for_watcher(&self, chat_id: &str) -> Result<(), &'static str> {
+        let handle = self.watchers.lock_recover().remove(chat_id);
+        if let Some(handle) = handle {
+            handle.await.map_err(|_| "agent watcher failed")
+        } else {
+            Err("missing agent watcher")
+        }
     }
 }

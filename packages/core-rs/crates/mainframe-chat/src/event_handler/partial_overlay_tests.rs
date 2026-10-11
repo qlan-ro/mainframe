@@ -6,7 +6,7 @@
 //! moved to `teardown_tests.rs` — it
 //! shares this file's fixtures via `use super::*`.
 
-use mainframe_types::sync::LockExt;
+#[path = "partial_overlay_tests_teardown_tests.rs"]
 mod teardown_tests;
 
 use super::tests::Harness;
@@ -318,7 +318,19 @@ fn a_thinking_partial_streams_as_thinking() {
 /// group would carry a later timestamp than the first.
 #[test]
 fn the_overlay_timestamp_is_frozen_at_the_first_partial() {
-    let (sink, messages, _deps, surface) = setup_from(overlay_deps(true));
+    let harness = overlay_harness(overlay_deps(true));
+    let surface = Arc::new(RevisionSurface::default());
+    harness.handler.set_chat_surface(surface.clone());
+    let sink = harness.sink("chat-partial");
+    let messages = harness.messages();
+    harness
+        .handler
+        .partial_overlays
+        .insert("chat-partial", "", "msg_1", vec![]);
+    harness
+        .handler
+        .partial_overlays
+        .set_test_timestamp("2020-01-02T00:00:00.000Z");
     messages.lock().unwrap().append(
         "chat-partial",
         ChatMessage {
@@ -332,7 +344,6 @@ fn the_overlay_timestamp_is_frozen_at_the_first_partial() {
     );
 
     sink.on_message_partial("msg_1", vec![text("Riv")]);
-    std::thread::sleep(std::time::Duration::from_millis(20));
     sink.on_message_partial("msg_1", vec![text("Rivers flow")]);
 
     let revisions = surface.revisions();
@@ -343,6 +354,7 @@ fn the_overlay_timestamp_is_frozen_at_the_first_partial() {
         revisions[0]
     );
     let first_overlay_timestamp = revisions[0].last().unwrap().timestamp.clone();
+    assert_eq!(first_overlay_timestamp, "2020-01-02T00:00:00.000Z");
     let second_overlay_timestamp = revisions.last().unwrap().last().unwrap().timestamp.clone();
     assert_eq!(
         first_overlay_timestamp, second_overlay_timestamp,

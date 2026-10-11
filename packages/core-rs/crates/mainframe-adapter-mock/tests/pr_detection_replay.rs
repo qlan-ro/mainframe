@@ -6,53 +6,15 @@
 //! NDJSON handlers.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use mainframe_types::sync::LockExt as _;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
+use mainframe_adapter_api::AdapterSession;
 use mainframe_adapter_api::pr_detection::PrDetectionSink;
-use mainframe_adapter_api::{AdapterError, AdapterSession, LoadedSkill, SessionSink};
 use mainframe_adapter_mock::{ReplaySession, parse_fixture};
-use mainframe_types::adapter::{
-    ContextUsage, ControlRequest, DetectedPr, DetectedPrSource, MessageMetadata, SessionOptions,
-    SessionResult,
-};
-use mainframe_types::chat::{MessageContent, TodoItem};
-use mainframe_types::context::SkillFileEntry;
+use mainframe_types::adapter::{DetectedPr, DetectedPrSource, SessionOptions};
 
-#[derive(Default)]
-struct RecordingSink {
-    prs: Mutex<Vec<DetectedPr>>,
-}
-
-impl RecordingSink {
-    fn prs(&self) -> Vec<DetectedPr> {
-        self.prs.lock_recover().clone()
-    }
-}
-
-impl SessionSink for RecordingSink {
-    fn on_init(&self, _session_id: &str) {}
-    fn on_message(&self, _content: Vec<MessageContent>, _metadata: Option<MessageMetadata>) {}
-    fn on_tool_result(&self, _content: Vec<MessageContent>, _vendor_id: Option<String>) {}
-    fn on_permission(&self, _request: ControlRequest) {}
-    fn on_result(&self, _data: SessionResult) {}
-    fn on_exit(&self, _code: Option<i32>) {}
-    fn on_error(&self, _error: AdapterError) {}
-    fn on_compact(&self, _vendor_id: Option<&str>) {}
-    fn on_compact_start(&self) {}
-    fn on_context_usage(&self, _usage: ContextUsage) {}
-    fn on_plan_file(&self, _file_path: &str) {}
-    fn on_skill_file(&self, _entry: SkillFileEntry) {}
-    fn on_queued_processed(&self, _uuid: &str) {}
-    fn on_todo_update(&self, _todos: Vec<TodoItem>) {}
-    fn on_pr_detected(&self, pr: DetectedPr) {
-        self.prs.lock_recover().push(pr);
-    }
-    fn on_cli_message(&self, _text: &str) {}
-    fn on_skill_loaded(&self, _entry: LoadedSkill) {}
-    fn on_subagent_child(&self, _parent_tool_use_id: &str, _blocks: Vec<MessageContent>) {}
-}
+use mainframe_adapter_api::test_support::RecordingSink;
 
 fn options(project_path: String) -> SessionOptions {
     SessionOptions {
@@ -122,7 +84,9 @@ async fn mock_adapter_output_is_detected_through_the_shared_sink_decorator() {
         .send_message(String::new(), Vec::new(), None)
         .await
         .unwrap();
-    tokio::time::sleep(Duration::from_millis(140)).await;
+    tokio::time::timeout(Duration::from_secs(10), inner.wait_for_pr())
+        .await
+        .unwrap();
 
     assert_eq!(
         inner.prs(),
