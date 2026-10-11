@@ -1,138 +1,68 @@
 use super::*;
-use crate::test_support::test_chat;
-use mainframe_services::quota::{IngestMode, QuotaManager};
+use crate::chat_manager::ChatStore as _;
+use crate::fork::PendingForkState;
+use crate::test_support::{FakeDeps, test_chat};
+use mainframe_services::quota::QuotaManager;
 use mainframe_types::adapter::MessageUsage;
 
-pub(super) struct FakeDeps {
-    cell: Arc<Mutex<ActiveChat>>,
-    events: Mutex<Vec<DaemonEvent>>,
-    refs: Mutex<Vec<QueuedMessageRef>>,
-    updates: Mutex<Vec<ChatPatch>>,
-    quota: Option<Arc<QuotaManager>>,
-    /// `db.chats.pendingFork` for "c1"; `None` for every test
-    /// outside the retire-on-result coverage.
-    pending_fork: Mutex<Option<PendingForkState>>,
-    project_path: Mutex<Option<String>>,
-    /// What `initial_transcript_path` answers; the per-adapter policy lives in
-    /// the adapters and is tested through the server's adapter registry.
-    transcript_path: Mutex<Option<String>>,
-    /// Every `(adapter_id, session_id, cwd)` the sink asked about.
-    transcript_lookups: Mutex<Vec<(String, String, String)>>,
+/// One event handler over the shared fake deps, with `cell` registered as the
+/// live chat it drives.
+pub(super) struct Harness {
+    pub(super) deps: Arc<FakeDeps>,
+    pub(super) shared: Arc<ChatShared>,
+    pub(super) handler: Arc<EventHandler>,
 }
 
-impl FakeDeps {
-    pub(super) fn new(cell: Arc<Mutex<ActiveChat>>, refs: Vec<QueuedMessageRef>) -> Arc<Self> {
-        Arc::new(Self {
-            cell,
-            events: Mutex::new(Vec::new()),
-            refs: Mutex::new(refs),
-            updates: Mutex::new(Vec::new()),
-            quota: None,
-            pending_fork: Mutex::new(None),
-            project_path: Mutex::new(None),
-            transcript_path: Mutex::new(None),
-            transcript_lookups: Mutex::new(Vec::new()),
-        })
+impl Harness {
+    pub(super) fn new(cell: Arc<Mutex<ActiveChat>>) -> Self {
+        Self::build(FakeDeps::arc(), cell, Vec::new(), None)
     }
-    fn with_quota(cell: Arc<Mutex<ActiveChat>>, quota: Arc<QuotaManager>) -> Arc<Self> {
-        Arc::new(Self {
-            cell,
-            events: Mutex::new(Vec::new()),
-            refs: Mutex::new(Vec::new()),
-            updates: Mutex::new(Vec::new()),
-            quota: Some(quota),
-            pending_fork: Mutex::new(None),
-            project_path: Mutex::new(None),
-            transcript_path: Mutex::new(None),
-            transcript_lookups: Mutex::new(Vec::new()),
-        })
-    }
-    fn set_pending_fork(&self, pending: PendingForkState) {
-        *self.pending_fork.lock().unwrap() = Some(pending);
-    }
-}
 
-impl EventHandlerDeps for FakeDeps {
-    fn get_active_chat(&self, _chat_id: &str) -> Option<Arc<Mutex<ActiveChat>>> {
-        Some(self.cell.clone())
+    pub(super) fn with_deps(deps: Arc<FakeDeps>, cell: Arc<Mutex<ActiveChat>>) -> Self {
+        Self::build(deps, cell, Vec::new(), None)
     }
-    fn emit_event(&self, event: DaemonEvent) {
-        self.events.lock().unwrap().push(event);
+
+    /// `new`, with `refs` queued and the chat's messages already in `messages`.
+    pub(super) fn with_queue(
+        cell: Arc<Mutex<ActiveChat>>,
+        refs: Vec<QueuedMessageRef>,
+        messages: Arc<Mutex<MessageCache>>,
+    ) -> Self {
+        Self::build(FakeDeps::arc(), cell, refs, Some(messages))
     }
-    fn get_tool_categories(&self, _chat_id: &str) -> Option<ToolCategories> {
-        None
-    }
-    fn on_queued_processed(&self, _chat_id: &str, uuid: &str) {
-        self.refs.lock().unwrap().retain(|r| r.uuid != uuid);
-    }
-    fn on_queued_cleared(&self, _chat_id: &str) {}
-    fn get_queued_refs(&self, _chat_id: &str) -> Vec<QueuedMessageRef> {
-        self.refs.lock().unwrap().clone()
-    }
-    fn display_projector(&self) -> Box<dyn DisplayProjector> {
-        Box::new(FullRebuildProjector::new(|_raw, _overlay, _categories| {
-            Vec::new()
-        }))
-    }
-    fn strip_command_tags(&self, text: &str) -> String {
-        text.to_string()
-    }
-    fn chats_update(&self, _chat_id: &str, patch: &ChatPatch) {
-        self.updates.lock().unwrap().push(patch.clone());
-    }
-    fn projects_get_path(&self, _project_id: &str) -> Option<String> {
-        self.project_path.lock().unwrap().clone()
-    }
-    fn initial_transcript_path(
-        &self,
-        adapter_id: &str,
-        session_id: &str,
-        cwd: &str,
-    ) -> Option<String> {
-        self.transcript_lookups.lock().unwrap().push((
-            adapter_id.to_string(),
-            session_id.to_string(),
-            cwd.to_string(),
-        ));
-        self.transcript_path.lock().unwrap().clone()
-    }
-    fn add_plan_file(&self, _chat_id: &str, _file_path: &str) -> bool {
-        false
-    }
-    fn add_skill_file(&self, _chat_id: &str, _entry: &SkillFileEntry) -> bool {
-        false
-    }
-    fn update_todos(&self, _chat_id: &str, _todos: &[TodoItem]) {}
-    fn add_detected_prs(&self, _chat_id: &str, _prs: &[DetectedPr]) -> Vec<DetectedPr> {
-        Vec::new()
-    }
-    fn should_notify_permission(&self, _tool_name: Option<&str>) -> bool {
-        false
-    }
-    fn notify_task_complete(&self) -> bool {
-        false
-    }
-    fn notify_session_error(&self) -> bool {
-        false
-    }
-    fn notify_attention_request(&self) -> bool {
-        true
-    }
-    fn on_provider_quota(&self, adapter_id: &str, quota: ProviderQuota) {
-        // Mirror DaemonChatDeps: session-pushed quota sparse-merges (Push).
-        if let Some(q) = &self.quota {
-            q.ingest(adapter_id, quota, IngestMode::Push);
+
+    pub(super) fn build(
+        deps: Arc<FakeDeps>,
+        cell: Arc<Mutex<ActiveChat>>,
+        refs: Vec<QueuedMessageRef>,
+        messages: Option<Arc<Mutex<MessageCache>>>,
+    ) -> Self {
+        let shared = match messages {
+            Some(messages) => ChatShared::with_messages(deps.clone(), messages),
+            None => ChatShared::new(deps.clone()),
+        };
+        let chat_id = cell.lock_recover().chat.id.clone();
+        shared.active_chats.insert(chat_id, cell);
+        shared.queued_refs.lock_recover().extend(refs);
+        let offers = Arc::new(WorktreeOfferRegistry::new(shared.clone()));
+        let handler = Arc::new(EventHandler::new(shared.clone(), offers));
+        Self {
+            deps,
+            shared,
+            handler,
         }
     }
-    /// Empty on purpose: BgDeps below covers on_exit's tracker_end_all_running wiring.
-    fn tracker_end_all_running(&self, _chat_id: &str) {}
-    /// Empty on purpose: chat_deps.rs's workflow_runs_stop_all_delegates_... test covers the wiring.
-    fn workflow_runs_stop_all(&self, _chat_id: &str) {}
-    fn get_pending_fork(&self, _chat_id: &str) -> Option<PendingForkState> {
-        self.pending_fork.lock().unwrap().clone()
+
+    pub(super) fn messages(&self) -> Arc<Mutex<MessageCache>> {
+        self.shared.messages.clone()
     }
-    fn clear_pending_fork(&self, _chat_id: &str) {
-        *self.pending_fork.lock().unwrap() = None;
+
+    pub(super) fn permissions(&self) -> Arc<Mutex<PermissionManager>> {
+        self.shared.permissions.clone()
+    }
+
+    pub(super) fn sink(&self, chat_id: &str) -> Arc<dyn SessionSink> {
+        self.handler.build_sink(chat_id, None)
     }
 }
 
@@ -161,7 +91,17 @@ pub(super) fn cell(
     process_state: ProcessState,
     turn_started_at: Option<i64>,
 ) -> Arc<Mutex<ActiveChat>> {
-    let mut chat = test_chat("c1");
+    cell_named("c1", process_state, turn_started_at)
+}
+
+/// A live cell for `chat_id`: the harness registers it under that id, so the
+/// sink built for the same id finds it.
+pub(super) fn cell_named(
+    chat_id: &str,
+    process_state: ProcessState,
+    turn_started_at: Option<i64>,
+) -> Arc<Mutex<ActiveChat>> {
+    let mut chat = test_chat(chat_id);
     chat.process_state = Some(Some(process_state));
     let mut active = ActiveChat::new(chat, None);
     active.turn_started_at = turn_started_at;

@@ -33,7 +33,7 @@ use delivery::Delivery;
 
 use crate::config_manager::{ChatConfigManager, ConfigError, ConfigManagerDeps};
 use crate::degraded_recovery::{DegradedRecoveryDeps, DegradedRecoveryError, RecoverySync};
-use crate::event_handler::{EventHandler, EventHandlerDeps, PushOut};
+use crate::event_handler::{EventHandler, PushOut};
 use crate::external_session_service::{ExternalSessionDeps, ExternalSessionService};
 use crate::fork::{PendingForkState, fork_title};
 use crate::history_cache::{HistoryFingerprint, HistorySnapshotCache};
@@ -56,7 +56,6 @@ mod construct;
 mod delivery;
 mod deps;
 mod deps_config;
-mod deps_event;
 mod deps_lifecycle;
 mod deps_permission;
 mod deps_recovery;
@@ -97,17 +96,14 @@ pub use update::ProcessedAttachments;
 pub use crate::fork::{AdapterForkInfo, ForkChatError, ForkCreateInput, ForkPoint};
 
 use deps_config::CmDeps;
-use deps_event::EhDeps;
 use deps_lifecycle::LcDeps;
 use deps_permission::PhDeps;
-use deps_recovery::PresenceDeps;
 pub(crate) use state::ChatShared;
 // `enrich_chat`/`is_working` have no direct caller left in this file — every
 // caller (enrich.rs, construct.rs) reaches them through this re-import via its
 // own `use super::*`, so removing this line would break the glob for them.
 use shared::{
-    apply_tuning_impl, build_history_session, clear_all_queued_for_chat, enrich_chat,
-    handle_queued_processed, is_working, now_ms, queued_for_chat, remap_history,
+    apply_tuning_impl, build_history_session, enrich_chat, is_working, now_ms, remap_history,
 };
 use side_chat::is_side_chat;
 
@@ -121,7 +117,7 @@ type QueuedRefs = Arc<Mutex<Vec<QueuedMessageRef>>>;
 
 pub struct ChatManager {
     shared: Arc<ChatShared>,
-    event_handler: Arc<EventHandler<EhDeps>>,
+    event_handler: Arc<EventHandler>,
     lifecycle: Arc<ChatLifecycleManager<LcDeps>>,
     permission_handler: ChatPermissionHandler<PhDeps>,
     config: ChatConfigManager<CmDeps>,
@@ -138,7 +134,7 @@ pub struct ChatManager {
     /// (`handoff_send.rs`), so two sends racing for the same chat cannot
     /// both build and record a handoff.
     handoff_locks: mainframe_runtime::sync::KeyedMutex,
-    teardown: Arc<crate::chat_teardown::ChatTeardown<EhDeps>>,
+    teardown: Arc<crate::chat_teardown::ChatTeardown>,
 }
 
 #[cfg(test)]

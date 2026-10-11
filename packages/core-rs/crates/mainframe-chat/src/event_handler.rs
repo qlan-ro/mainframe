@@ -5,9 +5,6 @@ use std::time::Instant;
 
 use mainframe_adapter_api::SessionSink;
 use mainframe_adapter_api::pr_detection::PrDetectionSink;
-use mainframe_display::DisplayProjector;
-#[cfg(test)]
-use mainframe_display::FullRebuildProjector;
 use mainframe_types::adapter::{
     ContextUsage, ControlRequest, DetectedPr, MessageMetadata, ProviderQuota, SessionResult,
 };
@@ -26,11 +23,12 @@ use mainframe_types::time::now_iso8601;
 use tracing::{debug, warn};
 
 use crate::attention_request::{AttentionDedupe, normalize_attention_body};
+use crate::chat_manager::{ChatManagerDeps, ChatShared};
 use crate::chat_surface::{self, ChatSurface, ChatSurfaceEvent, CompactionPhase, TurnStopReason};
-use crate::fork::PendingForkState;
 use crate::message_cache::MessageCache;
 use crate::permission_manager::{CancelOutcome, PermissionManager};
 use crate::types::ActiveChat;
+use crate::worktree_offer::WorktreeOfferRegistry;
 use display_projection::streaming_leaf_kind;
 use partial_overlay::PartialOverlays;
 use worktree_tool::{creates_worktree, moves_transcript};
@@ -59,11 +57,13 @@ pub(crate) fn truncate_push_body(text: &str) -> String {
     mainframe_types::chat_text::truncate_with_ellipsis(text, PUSH_BODY_MAX_LENGTH)
 }
 
-pub struct EventHandler<D: EventHandlerDeps + 'static> {
+pub struct EventHandler {
+    shared: Arc<ChatShared>,
     messages: Arc<Mutex<MessageCache>>,
     permissions: Arc<Mutex<PermissionManager>>,
     partial_overlays: PartialOverlays,
-    deps: Arc<D>,
+    /// A confirmed worktree-creating tool result triggers its rescan.
+    worktree_offers: Arc<WorktreeOfferRegistry>,
     /// Survives a session resume because it is kept on the handler,
     /// not the per-session sink `build_sink` recreates.
     attention_dedupe: Arc<Mutex<AttentionDedupe>>,
@@ -75,17 +75,17 @@ pub struct EventHandler<D: EventHandlerDeps + 'static> {
     chat_surface: Arc<OnceLock<Arc<dyn ChatSurface>>>,
 }
 
-impl<D: EventHandlerDeps + 'static> EventHandler<D> {
-    pub fn new(
-        messages: Arc<Mutex<MessageCache>>,
-        permissions: Arc<Mutex<PermissionManager>>,
-        deps: Arc<D>,
+impl EventHandler {
+    pub(crate) fn new(
+        shared: Arc<ChatShared>,
+        worktree_offers: Arc<WorktreeOfferRegistry>,
     ) -> Self {
         Self {
-            messages,
-            permissions,
+            messages: shared.messages.clone(),
+            permissions: shared.permissions.clone(),
+            shared,
             partial_overlays: PartialOverlays::new(),
-            deps,
+            worktree_offers,
             attention_dedupe: Arc::new(Mutex::new(AttentionDedupe::default())),
             chat_surface: Arc::new(OnceLock::new()),
         }
@@ -119,7 +119,8 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
             messages: self.messages.clone(),
             permissions: self.permissions.clone(),
             partial_overlays: self.partial_overlays.clone(),
-            deps: self.deps.clone(),
+            shared: self.shared.clone(),
+            worktree_offers: self.worktree_offers.clone(),
             pending_file_paths: Mutex::new(HashMap::new()),
             pending_subagent_ids: Mutex::new(HashSet::new()),
             pending_worktree_triggers: Mutex::new(HashSet::new()),
@@ -135,13 +136,13 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
 
     /// Emit a display revision for a chat (code paths outside the session sink).
     pub(crate) fn emit_display(&self, chat_id: &str) {
-        let categories = self.deps.get_tool_categories(chat_id);
+        let categories = self.shared.deps.get_tool_categories(chat_id);
         emit_display_for(
             chat_id,
             &self.messages,
             &self.partial_overlays,
             categories.as_ref(),
-            self.deps.as_ref(),
+            self.shared.deps.as_ref(),
             self.chat_surface.get(),
         );
     }
@@ -175,12 +176,12 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
         chat_id: &str,
         raw: &[ChatMessage],
     ) -> (Vec<DisplayMessage>, Option<StreamingLeafKind>) {
-        let categories = self.deps.get_tool_categories(chat_id);
+        let categories = self.shared.deps.get_tool_categories(chat_id);
         let overlay = self.partial_overlays.message_for(chat_id);
         let mut msgs = self.messages.lock_recover();
         let materialized =
             msgs.display_snapshot(chat_id, raw, overlay.as_ref(), categories.as_ref(), || {
-                self.deps.display_projector()
+                self.shared.deps.display_projector()
             });
         let streaming = overlay
             .as_ref()
@@ -189,13 +190,14 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
     }
 }
 
-struct SessionSinkImpl<D: EventHandlerDeps + 'static> {
+struct SessionSinkImpl {
     chat_id: String,
     built_for_session_id: Option<String>,
     messages: Arc<Mutex<MessageCache>>,
     permissions: Arc<Mutex<PermissionManager>>,
     partial_overlays: PartialOverlays,
-    deps: Arc<D>,
+    shared: Arc<ChatShared>,
+    worktree_offers: Arc<WorktreeOfferRegistry>,
     pending_file_paths: Mutex<HashMap<String, String>>,
     pending_subagent_ids: Mutex<HashSet<String>>,
     pending_worktree_triggers: Mutex<HashSet<String>>,
@@ -235,8 +237,8 @@ mod tool_timing;
 #[cfg(test)]
 mod tool_timing_tests;
 
-mod deps;
-pub use deps::{EventHandlerDeps, PushOut};
+mod push;
+pub use push::PushOut;
 mod display_emission;
 use display_emission::emit_display_for;
 mod sink;

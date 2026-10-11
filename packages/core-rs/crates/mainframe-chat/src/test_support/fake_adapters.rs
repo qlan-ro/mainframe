@@ -10,12 +10,11 @@ use mainframe_adapter_api::{
 };
 use mainframe_services::quota::{IngestMode, QuotaManager};
 use mainframe_types::adapter::{AdapterInfo, ForkSource, ProviderQuota, SessionOptions};
-use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent, ResolvedTuning};
-use mainframe_types::display::{
-    DisplayContent, DisplayMessage, DisplayMessageType, ToolCategories,
-};
+use mainframe_types::chat::{ChatMessage, ResolvedTuning};
+use mainframe_types::display::{DisplayMessage, ToolCategories};
 use mainframe_types::transcript::TranscriptLocation;
 
+use super::fake_projection::ProjectorFn;
 use super::{FakeDeps, FakeSession};
 use crate::chat_manager::{AdapterForkInfo, AdapterPort};
 
@@ -78,40 +77,10 @@ pub(crate) struct FakeAdapterPort {
     pub(crate) tool_categories: Mutex<Option<ToolCategories>>,
     /// What `resolve_tuning` answers.
     pub(crate) resolved_tuning: Mutex<Option<ResolvedTuning>>,
-}
-
-impl FakeAdapterPort {
-    /// A 1:1 echo (same id/timestamp/type, leaf content verbatim, `Node`
-    /// content dropped) shared by `prepare_messages_for_client` and
-    /// `display_projector`, so REST and live paths answer identically.
-    pub(crate) fn convert(
-        raw: &[ChatMessage],
-        _categories: Option<&ToolCategories>,
-    ) -> Vec<DisplayMessage> {
-        raw.iter()
-            .map(|m| DisplayMessage {
-                id: m.id.clone(),
-                chat_id: m.chat_id.clone(),
-                r#type: match m.r#type {
-                    ChatMessageType::User => DisplayMessageType::User,
-                    ChatMessageType::Error => DisplayMessageType::Error,
-                    ChatMessageType::Permission => DisplayMessageType::Permission,
-                    ChatMessageType::System => DisplayMessageType::System,
-                    _ => DisplayMessageType::Assistant,
-                },
-                content: m
-                    .content
-                    .iter()
-                    .filter_map(|c| match c {
-                        MessageContent::Leaf(leaf) => Some(DisplayContent::Leaf(leaf.clone())),
-                        MessageContent::Node(_) => None,
-                    })
-                    .collect(),
-                timestamp: m.timestamp.clone(),
-                metadata: None,
-            })
-            .collect()
-    }
+    /// When set, backs `display_projector` instead of the 1:1 echo.
+    pub(crate) projector: Mutex<Option<ProjectorFn>>,
+    /// Literal tags `strip_command_tags` removes; empty leaves text untouched.
+    pub(crate) strip_tags: Mutex<Vec<String>>,
 }
 
 impl AdapterPort for FakeDeps {
@@ -126,8 +95,12 @@ impl AdapterPort for FakeDeps {
         FakeAdapterPort::convert(raw, categories)
     }
     fn display_projector(&self) -> Box<dyn mainframe_display::DisplayProjector> {
+        let custom = self.adapters.projector.lock().unwrap().clone();
         Box::new(mainframe_display::FullRebuildProjector::new(
-            |raw, overlay, categories| {
+            move |raw, overlay, categories| {
+                if let Some(project) = &custom {
+                    return project(raw, overlay, categories);
+                }
                 let combined: Vec<ChatMessage> = match overlay {
                     Some(o) => raw
                         .iter()
@@ -141,7 +114,12 @@ impl AdapterPort for FakeDeps {
         ))
     }
     fn strip_command_tags(&self, text: &str) -> String {
-        text.to_string()
+        self.adapters
+            .strip_tags
+            .lock()
+            .unwrap()
+            .iter()
+            .fold(text.to_string(), |acc, tag| acc.replace(tag, ""))
     }
     fn initial_transcript_path(
         &self,

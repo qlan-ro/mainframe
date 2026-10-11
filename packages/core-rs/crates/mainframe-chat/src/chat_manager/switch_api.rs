@@ -79,7 +79,7 @@ impl ChatManager {
             .ok_or_else(|| SwitchError::NotFound(chat_id.to_string()))?;
         let target = self.shared.deps.adapter_info(&req.adapter_id);
         let from_name = self.shared.deps.adapter_fork_info(&chat.adapter_id).name;
-        let queued = queued_for_chat(&self.shared.queued_refs, chat_id).len();
+        let queued = self.shared.queued_for_chat(chat_id).len();
         check_switch_allowed(&SwitchCheck {
             chat: &chat,
             target_id: &req.adapter_id,

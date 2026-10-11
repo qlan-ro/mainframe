@@ -48,10 +48,7 @@ impl ChatSurface for RecordingSurface {
 /// state change happens strictly between selection and the offload itself:
 /// `scan_idle_sessions`'s own selection would otherwise re-filter the
 /// candidate out before `ChatOffload::recheck` ever ran (AC4).
-fn offloader_for(
-    mgr: &ChatManager,
-) -> ChatOffload<crate::chat_manager::deps_lifecycle::LcDeps, crate::chat_manager::deps_event::EhDeps>
-{
+fn offloader_for(mgr: &ChatManager) -> ChatOffload<crate::chat_manager::deps_lifecycle::LcDeps> {
     ChatOffload::new(
         mgr.shared.active_chats.clone(),
         mgr.shared.permissions.clone(),

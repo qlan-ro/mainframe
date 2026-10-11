@@ -1,6 +1,6 @@
 use super::*;
 
-impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
+impl SessionSinkImpl {
     pub(super) fn result_notifications(
         &self,
         data: &SessionResult,
@@ -12,7 +12,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
             if !was_interrupted {
                 self.notify_result_error(data);
             }
-        } else if self.deps.notify_task_complete() {
+        } else if self.shared.deps.notify_task_complete() {
             self.notify_result_complete(cost);
         }
     }
@@ -42,15 +42,15 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         );
         self.append_and_display(message);
 
-        if self.deps.notify_session_error() {
-            self.deps.emit_event(DaemonEvent::ChatNotification {
+        if self.shared.deps.notify_session_error() {
+            self.shared.emit(DaemonEvent::ChatNotification {
                 chat_id: self.chat_id.clone(),
                 title: "Session Error".to_string(),
                 body: "A session ended unexpectedly".to_string(),
                 level: ChatNotificationLevel::Error,
                 kind: Some(ChatNotificationKind::SessionError),
             });
-            self.deps.send_push(PushOut {
+            self.shared.deps.send_push(PushOut {
                 chat_id: self.chat_id.clone(),
                 title: "Session Error".to_string(),
                 body: "A session ended unexpectedly".to_string(),
@@ -74,14 +74,14 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         } else {
             last_text
         };
-        self.deps.emit_event(DaemonEvent::ChatNotification {
+        self.shared.emit(DaemonEvent::ChatNotification {
             chat_id: self.chat_id.clone(),
             title: "Task Complete".to_string(),
             body: body.clone(),
             level: ChatNotificationLevel::Success,
             kind: Some(ChatNotificationKind::TaskComplete),
         });
-        self.deps.send_push(PushOut {
+        self.shared.deps.send_push(PushOut {
             chat_id: self.chat_id.clone(),
             title: "Task Complete".to_string(),
             body,

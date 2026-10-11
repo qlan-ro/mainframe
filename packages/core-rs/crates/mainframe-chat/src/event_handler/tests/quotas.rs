@@ -1,4 +1,4 @@
-use mainframe_services::quota::QuotaManagerDeps;
+use mainframe_services::quota::{IngestMode, QuotaManagerDeps};
 use mainframe_types::settings_kv::MemorySettings;
 use mainframe_types::adapter::{ProviderQuotaStatus, QuotaWindow, QuotaWindowKind};
 
@@ -45,13 +45,9 @@ fn sink_provider_quota_sparse_merges_into_the_quota_manager_and_fans_out() {
         IngestMode::Pull,
     );
 
-    let deps = FakeDeps::with_quota(cell(ProcessState::Working, None), Arc::clone(&quota));
-    let handler = EventHandler::new(
-        Arc::new(Mutex::new(MessageCache::new())),
-        Arc::new(Mutex::new(PermissionManager::new())),
-        deps,
-    );
-    let sink = handler.build_sink("c1", None);
+    let deps = FakeDeps::arc();
+    *deps.adapters.quota.lock().unwrap() = Some(Arc::clone(&quota));
+    let sink = Harness::with_deps(deps, cell(ProcessState::Working, None)).sink("c1");
 
  // The live session path: Codex pushes a session-only partial (weekly omitted).
     sink.on_provider_quota(

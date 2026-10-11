@@ -256,9 +256,12 @@ mod fake_adapters;
 mod fake_deps;
 mod fake_events;
 mod fake_paths;
+mod fake_projection;
 mod fake_push;
+mod fake_rows;
 mod fake_store;
 mod fake_workspace;
+pub(crate) use fake_adapters::FakeAdapterPort;
 pub(crate) use fake_deps::FakeDeps;
 
 /// An empty settings store, for fakes whose every settings read is unset.

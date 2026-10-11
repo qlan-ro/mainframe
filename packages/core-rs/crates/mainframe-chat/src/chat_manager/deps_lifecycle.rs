@@ -3,7 +3,7 @@ use super::*;
 
 pub(super) struct LcDeps {
     shared: Arc<ChatShared>,
-    event_handler: Arc<EventHandler<EhDeps>>,
+    event_handler: Arc<EventHandler>,
     worktree_offers: Arc<WorktreeOfferRegistry>,
 }
 
@@ -158,7 +158,7 @@ pub(super) async fn compose_if_multi(
 
 pub(super) fn build(
     shared: &Arc<ChatShared>,
-    event_handler: &Arc<EventHandler<EhDeps>>,
+    event_handler: &Arc<EventHandler>,
     worktree_offers: &Arc<WorktreeOfferRegistry>,
 ) -> Arc<ChatLifecycleManager<LcDeps>> {
     let lc_deps = Arc::new(LcDeps {

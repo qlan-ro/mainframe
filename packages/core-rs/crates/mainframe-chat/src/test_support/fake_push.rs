@@ -30,6 +30,12 @@ impl Default for FakePusher {
 
 impl FakePusher {}
 
+impl FakePusher {
+    pub(crate) fn pushes(&self) -> Vec<PushOut> {
+        self.pushes.lock().unwrap().clone()
+    }
+}
+
 impl Pusher for FakeDeps {
     fn should_notify_permission(&self, _tool_name: Option<&str>) -> bool {
         *self.push.permission.lock().unwrap()

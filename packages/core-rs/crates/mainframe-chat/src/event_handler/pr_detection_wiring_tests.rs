@@ -1,93 +1,17 @@
 //! `build_sink` wraps its `SessionSinkImpl` in `PrDetectionSink`, so every
 //! adapter inherits live PR detection through the session sink.
 
+use super::tests::Harness;
 use super::*;
-use crate::test_support::test_chat;
+use crate::test_support::{FakeDeps, test_chat};
 
-struct PrWiringDeps {
-    cell: Arc<Mutex<ActiveChat>>,
-    events: Mutex<Vec<DaemonEvent>>,
-    persisted_prs: Mutex<Vec<DetectedPr>>,
-}
-
-impl PrWiringDeps {
-    fn new() -> Arc<Self> {
-        Arc::new(Self {
-            cell: Arc::new(Mutex::new(ActiveChat::new(test_chat("chat-pr"), None))),
-            events: Mutex::new(Vec::new()),
-            persisted_prs: Mutex::new(Vec::new()),
-        })
-    }
-
-    fn events(&self) -> Vec<DaemonEvent> {
-        self.events.lock_recover().clone()
-    }
-}
-
-impl EventHandlerDeps for PrWiringDeps {
-    fn get_active_chat(&self, _chat_id: &str) -> Option<Arc<Mutex<ActiveChat>>> {
-        Some(self.cell.clone())
-    }
-    fn emit_event(&self, event: DaemonEvent) {
-        self.events.lock_recover().push(event);
-    }
-    fn get_tool_categories(&self, _chat_id: &str) -> Option<ToolCategories> {
-        None
-    }
-    fn on_queued_processed(&self, _chat_id: &str, _uuid: &str) {}
-    fn on_queued_cleared(&self, _chat_id: &str) {}
-    fn tracker_end_all_running(&self, _chat_id: &str) {}
-    fn workflow_runs_stop_all(&self, _chat_id: &str) {}
-    fn get_queued_refs(&self, _chat_id: &str) -> Vec<QueuedMessageRef> {
-        Vec::new()
-    }
-    fn display_projector(&self) -> Box<dyn DisplayProjector> {
-        Box::new(FullRebuildProjector::new(|_raw, _overlay, _categories| {
-            Vec::new()
-        }))
-    }
-    fn strip_command_tags(&self, text: &str) -> String {
-        text.to_string()
-    }
-    fn chats_update(&self, _chat_id: &str, _patch: &ChatPatch) {}
-    fn projects_get_path(&self, _project_id: &str) -> Option<String> {
-        None
-    }
-    fn initial_transcript_path(&self, _: &str, _: &str, _: &str) -> Option<String> {
-        None
-    }
-    fn add_plan_file(&self, _chat_id: &str, _file_path: &str) -> bool {
-        false
-    }
-    fn add_skill_file(&self, _chat_id: &str, _entry: &SkillFileEntry) -> bool {
-        false
-    }
-    fn update_todos(&self, _chat_id: &str, _todos: &[TodoItem]) {}
-    fn add_detected_prs(&self, _chat_id: &str, prs: &[DetectedPr]) -> Vec<DetectedPr> {
-        self.persisted_prs.lock_recover().extend_from_slice(prs);
-        prs.to_vec()
-    }
-    fn should_notify_permission(&self, _tool_name: Option<&str>) -> bool {
-        false
-    }
-    fn notify_task_complete(&self) -> bool {
-        false
-    }
-    fn notify_session_error(&self) -> bool {
-        false
-    }
-    fn notify_attention_request(&self) -> bool {
-        false
-    }
-}
-
-fn sink(deps: Arc<PrWiringDeps>) -> Arc<dyn SessionSink> {
-    let handler = EventHandler::new(
-        Arc::new(Mutex::new(MessageCache::new())),
-        Arc::new(Mutex::new(PermissionManager::new())),
-        deps,
-    );
-    handler.build_sink("chat-pr", None)
+/// A sink over a fresh "chat-pr".
+fn sink() -> (Arc<dyn SessionSink>, Arc<FakeDeps>) {
+    let h = Harness::new(Arc::new(Mutex::new(ActiveChat::new(
+        test_chat("chat-pr"),
+        None,
+    ))));
+    (h.sink("chat-pr"), h.deps)
 }
 
 fn bash_create_tool_use() -> MessageContent {
@@ -121,8 +45,7 @@ fn pr_url_tool_result() -> MessageContent {
 
 #[test]
 fn a_bash_pr_create_and_its_result_persist_and_emit_through_the_wired_sink() {
-    let deps = PrWiringDeps::new();
-    let sink = sink(deps.clone());
+    let (sink, deps) = sink();
 
     sink.on_message(vec![bash_create_tool_use()], None);
     sink.on_tool_result(vec![pr_url_tool_result()], None);
@@ -135,7 +58,7 @@ fn a_bash_pr_create_and_its_result_persist_and_emit_through_the_wired_sink() {
         source: mainframe_types::adapter::DetectedPrSource::Created,
     };
     assert_eq!(
-        deps.persisted_prs.lock_recover().as_slice(),
+        deps.store.detected_prs.lock().unwrap().as_slice(),
         std::slice::from_ref(&expected)
     );
     // The real sink also emits ChatUpdated/MessageAdded for the underlying

@@ -47,7 +47,7 @@ impl ChatManager {
     /// `queue_state` snapshots render in this order, so it is part of the wire
     /// contract, not a courtesy.
     pub fn get_queued_for_chat(&self, chat_id: &str) -> Vec<QueuedMessageRef> {
-        queued_for_chat(&self.shared.queued_refs, chat_id)
+        self.shared.queued_for_chat(chat_id)
     }
 
     /// Announce the chat's current queued snapshot on the chat-surface seam
@@ -63,7 +63,7 @@ impl ChatManager {
 
     #[cfg(test)]
     pub(crate) fn handle_queued_processed(&self, chat_id: &str, uuid: &str) {
-        handle_queued_processed(&self.shared.queued_refs, chat_id, uuid);
+        self.shared.handle_queued_processed(chat_id, uuid);
     }
 
     // ── registry reads (enriched) ────────────────────────────────────────────

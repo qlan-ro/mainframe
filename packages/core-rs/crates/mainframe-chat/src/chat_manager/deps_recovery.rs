@@ -6,7 +6,7 @@ use mainframe_types::sync::LockExt as _;
 /// Shared-internals wrapper for degraded recovery, constructed on demand.
 pub(super) struct RecoveryWrapper {
     shared: Arc<ChatShared>,
-    event_handler: Arc<EventHandler<EhDeps>>,
+    event_handler: Arc<EventHandler>,
 }
 
 impl RecoveryWrapper {
@@ -135,6 +135,23 @@ impl DegradedRecoveryDeps for RecoveryWrapper {
     fn clear_messages(&self, chat_id: &str) {
         self.shared.messages.lock_recover().delete(chat_id);
         self.event_handler.clear_display_state(chat_id);
+    }
+}
+
+impl ChatShared {
+    /// Follow a transcript the CLI just moved (the agent entered or left a
+    /// worktree), off the sink's thread.
+    pub(crate) fn spawn_transcript_refresh(self: &Arc<Self>, chat_id: &str) {
+        let Some(cell) = self.active(chat_id) else {
+            return;
+        };
+        let mut chat = cell.lock_recover().chat.clone();
+        let presence = PresenceDeps {
+            shared: self.clone(),
+        };
+        tokio::spawn(async move {
+            crate::transcript_presence::refresh_transcript_location(&presence, &mut chat).await;
+        });
     }
 }
 

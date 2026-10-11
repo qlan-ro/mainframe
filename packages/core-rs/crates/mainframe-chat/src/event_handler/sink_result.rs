@@ -1,11 +1,11 @@
 use super::*;
 
-impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
+impl SessionSinkImpl {
     pub(super) fn handle_result(&self, data: SessionResult) {
         if self.take_partial_overlay() {
             self.emit_display();
         }
-        let Some(cell) = self.deps.get_active_chat(&self.chat_id) else {
+        let Some(cell) = self.shared.active(&self.chat_id) else {
             return;
         };
         self.retire_fork();
@@ -22,8 +22,8 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
     }
 
     fn retire_fork(&self) {
-        if let Some(pending) = self.deps.get_pending_fork(&self.chat_id) {
-            self.deps.clear_pending_fork(&self.chat_id);
+        if let Some(pending) = self.shared.deps.get_pending_fork(&self.chat_id) {
+            self.shared.deps.clear_pending_fork(&self.chat_id);
             let chat_id = self.chat_id.clone();
             let snapshot_dir = pending.snapshot_dir;
             tokio::spawn(async move {
@@ -88,7 +88,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         // "keep stored" here; a zero must never clobber a real stored size.
         let context_update: Option<i64> = data.context_tokens.filter(|&v| v > 0);
 
-        self.deps.chats_update(
+        self.shared.deps.chats_update(
             &self.chat_id,
             &ChatPatch {
                 total_cost: Some(totals.0),
@@ -148,7 +148,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
             is_error,
             "onResult: emitting chat.updated with processState=idle"
         );
-        self.deps.emit_event(DaemonEvent::ChatUpdated {
+        self.shared.emit(DaemonEvent::ChatUpdated {
             chat,
             reason: Some(reason),
         });

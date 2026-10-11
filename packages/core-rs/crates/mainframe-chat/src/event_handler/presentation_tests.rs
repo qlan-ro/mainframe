@@ -30,13 +30,8 @@ fn terminal_updates_match_exact_turn_and_parent_and_invalidation_is_monotonic() 
 
 use super::*;
 
-fn handler() -> EventHandler<tests::FakeDeps> {
-    let deps = tests::FakeDeps::new(tests::cell(ProcessState::Working, None), Vec::new());
-    EventHandler::new(
-        Arc::new(Mutex::new(MessageCache::new())),
-        Arc::new(Mutex::new(PermissionManager::new())),
-        deps,
-    )
+fn handler() -> Arc<EventHandler> {
+    tests::Harness::new(tests::cell(ProcessState::Working, None)).handler
 }
 fn text(value: &str) -> Vec<MessageContent> {
     vec![MessageContent::Leaf(LeafContent::Text {
@@ -51,7 +46,7 @@ fn metadata(id: &str) -> Option<MessageMetadata> {
         vendor_id: Some(id.into()),
     })
 }
-fn stored(handler: &EventHandler<tests::FakeDeps>, id: &str) -> TranscriptPresentation {
+fn stored(handler: &EventHandler, id: &str) -> TranscriptPresentation {
     let messages = handler.messages.lock().unwrap();
     let message = messages
         .get("c1")

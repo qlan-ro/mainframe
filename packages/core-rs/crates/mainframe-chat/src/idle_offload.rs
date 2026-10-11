@@ -16,7 +16,6 @@ use mainframe_types::events::DaemonEvent;
 use tracing::{info, warn};
 
 use crate::chat_teardown::{ChatTeardown, TeardownMode};
-use crate::event_handler::EventHandlerDeps;
 use crate::idle_scanner::{ActiveChatRegistry, IDLE_THRESHOLD_MS, IdleOffloader, idle_since};
 use crate::lifecycle_manager::{ChatLifecycleManager, LifecycleManagerDeps};
 use crate::permission_manager::PermissionManager;
@@ -25,22 +24,22 @@ use crate::permission_manager::PermissionManager;
 /// from the same shared `Arc`s the manager already holds (registry, cache,
 /// permissions, queued refs, lifecycle, event handler) and stored as a trait
 /// object so `IdleSessionScanner`'s periodic task needs no `Weak<ChatManager>`.
-pub struct ChatOffload<L: LifecycleManagerDeps + 'static, E: EventHandlerDeps + 'static> {
+pub struct ChatOffload<L: LifecycleManagerDeps + 'static> {
     active_chats: ActiveChatRegistry,
     permissions: Arc<Mutex<PermissionManager>>,
     queued_refs: Arc<Mutex<Vec<QueuedMessageRef>>>,
     lifecycle: Arc<ChatLifecycleManager<L>>,
-    teardown: Arc<ChatTeardown<E>>,
+    teardown: Arc<ChatTeardown>,
     threshold_ms: i64,
 }
 
-impl<L: LifecycleManagerDeps + 'static, E: EventHandlerDeps + 'static> ChatOffload<L, E> {
+impl<L: LifecycleManagerDeps + 'static> ChatOffload<L> {
     pub(crate) fn new(
         active_chats: ActiveChatRegistry,
         permissions: Arc<Mutex<PermissionManager>>,
         queued_refs: Arc<Mutex<Vec<QueuedMessageRef>>>,
         lifecycle: Arc<ChatLifecycleManager<L>>,
-        teardown: Arc<ChatTeardown<E>>,
+        teardown: Arc<ChatTeardown>,
     ) -> Self {
         Self::with_threshold(
             active_chats,
@@ -60,7 +59,7 @@ impl<L: LifecycleManagerDeps + 'static, E: EventHandlerDeps + 'static> ChatOfflo
         permissions: Arc<Mutex<PermissionManager>>,
         queued_refs: Arc<Mutex<Vec<QueuedMessageRef>>>,
         lifecycle: Arc<ChatLifecycleManager<L>>,
-        teardown: Arc<ChatTeardown<E>>,
+        teardown: Arc<ChatTeardown>,
         threshold_ms: i64,
     ) -> Self {
         Self {
@@ -162,10 +161,9 @@ impl<L: LifecycleManagerDeps + 'static, E: EventHandlerDeps + 'static> ChatOfflo
     }
 }
 
-impl<L, E> IdleOffloader for ChatOffload<L, E>
+impl<L> IdleOffloader for ChatOffload<L>
 where
     L: LifecycleManagerDeps + 'static,
-    E: EventHandlerDeps + 'static,
 {
     fn offload<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()> {
         Box::pin(self.try_offload(chat_id))

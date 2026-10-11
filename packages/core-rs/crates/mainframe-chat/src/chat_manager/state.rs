@@ -13,14 +13,64 @@ pub(crate) struct ChatShared {
 
 impl ChatShared {
     pub(crate) fn new(deps: Arc<dyn ChatManagerDeps>) -> Arc<Self> {
+        Self::with_messages(deps, Arc::new(Mutex::new(MessageCache::new())))
+    }
+
+    /// `new`, over a caller-built message cache (a test's clocked cache).
+    pub(crate) fn with_messages(
+        deps: Arc<dyn ChatManagerDeps>,
+        messages: Arc<Mutex<MessageCache>>,
+    ) -> Arc<Self> {
         Arc::new(Self {
             deps,
             active_chats: Arc::new(DashMap::new()),
-            messages: Arc::new(Mutex::new(MessageCache::new())),
+            messages,
             permissions: Arc::new(Mutex::new(PermissionManager::new())),
             queued_refs: Arc::new(Mutex::new(Vec::new())),
             orchestration: OrchestrationSlot::default(),
         })
+    }
+
+    // ── queued-ref helpers ───────────────────────────────────────────────────
+
+    /// The chat's queued refs, oldest-first (enqueue order): `queue_state`
+    /// snapshots render in this order, so it is part of the wire contract.
+    pub(crate) fn queued_for_chat(&self, chat_id: &str) -> Vec<QueuedMessageRef> {
+        self.queued_refs
+            .lock_recover()
+            .iter()
+            .filter(|r| r.chat_id == chat_id)
+            .cloned()
+            .collect()
+    }
+
+    pub(crate) fn handle_queued_processed(&self, chat_id: &str, uuid: &str) {
+        let removed = {
+            let mut guard = self.queued_refs.lock_recover();
+            guard
+                .iter()
+                .position(|r| r.uuid == uuid)
+                .map(|i| guard.remove(i))
+        };
+        if let Some(r) = removed {
+            info!(
+                chat_id,
+                uuid,
+                message_id = r.message_id,
+                "CLI processed queued message"
+            );
+        }
+    }
+
+    pub(crate) fn clear_all_queued_for_chat(&self, chat_id: &str) {
+        let mut guard = self.queued_refs.lock_recover();
+        let before = guard.len();
+        guard.retain(|r| r.chat_id != chat_id);
+        let removed = before - guard.len();
+        drop(guard);
+        if removed > 0 {
+            info!(chat_id, removed, "cleared queued refs for exited chat");
+        }
     }
 
     /// The live registry cell for `chat_id`, if the chat is active.

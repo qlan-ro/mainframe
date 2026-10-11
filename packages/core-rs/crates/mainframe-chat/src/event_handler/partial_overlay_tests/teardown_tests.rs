@@ -8,12 +8,7 @@ use crate::chat_surface::ChatSurfaceEvent;
 
 #[test]
 fn a_superseded_sessions_overlay_is_dropped() {
-    let deps = Arc::new(OverlayDeps::default());
-    let handler = EventHandler::new(
-        Arc::new(Mutex::new(MessageCache::new())),
-        Arc::new(Mutex::new(PermissionManager::new())),
-        deps,
-    );
+    let handler = overlay_harness(overlay_deps(false)).handler;
     let surface = Arc::new(RevisionSurface::default());
     handler.set_chat_surface(surface.clone());
 
@@ -44,12 +39,7 @@ fn a_superseded_sessions_overlay_is_dropped() {
 
 #[test]
 fn retry_precedes_its_clearing_revision() {
-    let deps = Arc::new(OverlayDeps::default());
-    let handler = EventHandler::new(
-        Arc::new(Mutex::new(MessageCache::new())),
-        Arc::new(Mutex::new(PermissionManager::new())),
-        deps,
-    );
+    let handler = overlay_harness(overlay_deps(false)).handler;
     let surface = Arc::new(OrderSurface::default());
     handler.set_chat_surface(surface.clone());
     let sink = handler.build_sink("chat-partial", None);

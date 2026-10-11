@@ -3,6 +3,9 @@
 
 use std::sync::Mutex;
 
+use std::sync::Arc;
+
+use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_types::background_task::BackgroundTask;
 use mainframe_types::events::DaemonEvent;
 
@@ -20,6 +23,8 @@ pub(crate) struct FakeEventEmitter {
     pub(crate) tracker_removed: Mutex<Vec<String>>,
     /// Every chat id `workflow_runs_stop_all` was called with, in order.
     pub(crate) workflow_runs_stopped: Mutex<Vec<String>>,
+    /// When set, `tracker_end_all_running` also ends the tasks in it.
+    pub(crate) tracker: Mutex<Option<Arc<BackgroundTaskTracker>>>,
 }
 
 impl FakeEventEmitter {
@@ -48,6 +53,9 @@ impl EventEmitter for FakeDeps {
             .lock()
             .unwrap()
             .push(chat_id.to_string());
+        if let Some(tracker) = self.emitter.tracker.lock().unwrap().as_ref() {
+            tracker.end_all_running(chat_id);
+        }
     }
     fn workflow_runs_stop_all(&self, chat_id: &str) {
         self.emitter

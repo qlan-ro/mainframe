@@ -1,6 +1,6 @@
 use super::*;
 
-impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
+impl SessionSinkImpl {
     pub(super) fn handle_message(
         &self,
         content: Vec<MessageContent>,
@@ -40,7 +40,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         self.append_timed_and_display(message);
     }
     fn promote_working(&self) {
-        if let Some(cell) = self.deps.get_active_chat(&self.chat_id) {
+        if let Some(cell) = self.shared.active(&self.chat_id) {
             let updated = {
                 let mut guard = cell.lock_recover();
                 if guard.chat.process_state != Some(Some(ProcessState::Working)) {
@@ -51,20 +51,20 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
                 }
             };
             if let Some(chat) = updated {
-                self.deps.chats_update(
+                self.shared.deps.chats_update(
                     &self.chat_id,
                     &ChatPatch {
                         process_state: Some(Some(ProcessState::Working)),
                         ..Default::default()
                     },
                 );
-                self.deps
-                    .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
+                self.shared
+                    .emit(DaemonEvent::ChatUpdated { chat, reason: None });
             }
         }
     }
     fn track_tools(&self, content: &[MessageContent]) {
-        let categories = self.deps.get_tool_categories(&self.chat_id);
+        let categories = self.shared.deps.get_tool_categories(&self.chat_id);
         for block in content {
             if let MessageContent::Node(MessageContentNode::ToolUse {
                 id, name, input, ..
@@ -100,7 +100,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         let has_enter_plan_mode = content.iter().any(|b| {
             matches!(b, MessageContent::Node(MessageContentNode::ToolUse { name, .. }) if name == "EnterPlanMode")
         });
-        if has_enter_plan_mode && let Some(cell) = self.deps.get_active_chat(&self.chat_id) {
+        if has_enter_plan_mode && let Some(cell) = self.shared.active(&self.chat_id) {
             let updated = {
                 let mut guard = cell.lock_recover();
                 if guard.chat.plan_mode != Some(true) {
@@ -111,15 +111,15 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
                 }
             };
             if let Some(chat) = updated {
-                self.deps.chats_update(
+                self.shared.deps.chats_update(
                     &self.chat_id,
                     &ChatPatch {
                         plan_mode: Some(true),
                         ..Default::default()
                     },
                 );
-                self.deps
-                    .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
+                self.shared
+                    .emit(DaemonEvent::ChatUpdated { chat, reason: None });
             }
         }
     }
@@ -131,7 +131,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
                     text,
                     parent_tool_use_id,
                 }) => {
-                    let stripped = self.deps.strip_command_tags(&text);
+                    let stripped = self.shared.deps.strip_command_tags(&text);
                     MessageContent::Leaf(LeafContent::Text {
                         text: stripped,
                         parent_tool_use_id,
@@ -145,7 +145,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         &self,
         metadata: Option<MessageMetadata>,
     ) -> (HashMap<String, serde_json::Value>, Option<String>) {
-        let adapter_id = self.deps.get_active_chat(&self.chat_id).and_then(|c| {
+        let adapter_id = self.shared.active(&self.chat_id).and_then(|c| {
             c.lock_recover()
                 .session
                 .as_ref()

@@ -11,7 +11,7 @@
 use mainframe_types::sync::LockExt as _;
 use std::sync::{Arc, Mutex};
 
-use crate::event_handler::{EventHandler, EventHandlerDeps};
+use crate::event_handler::EventHandler;
 use crate::idle_scanner::ActiveChatRegistry;
 use crate::message_cache::MessageCache;
 use crate::permission_manager::PermissionManager;
@@ -41,15 +41,15 @@ pub(crate) enum TeardownMode {
     Offload,
 }
 
-pub(crate) struct ChatTeardown<E: EventHandlerDeps + 'static> {
+pub(crate) struct ChatTeardown {
     pub active_chats: ActiveChatRegistry,
     pub messages: Arc<Mutex<MessageCache>>,
     pub permissions: Arc<Mutex<PermissionManager>>,
     pub worktree_offers: Arc<WorktreeOfferRegistry>,
-    pub event_handler: Arc<EventHandler<E>>,
+    pub event_handler: Arc<EventHandler>,
 }
 
-impl<E: EventHandlerDeps + 'static> ChatTeardown<E> {
+impl ChatTeardown {
     pub fn clear(&self, chat_id: &str, mode: TeardownMode) {
         self.active_chats.remove(chat_id);
         {

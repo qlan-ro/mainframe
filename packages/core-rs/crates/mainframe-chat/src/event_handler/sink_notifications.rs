@@ -1,6 +1,6 @@
 use super::*;
 
-impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
+impl SessionSinkImpl {
     pub(super) fn handle_cli_message(&self, text: &str) {
         let message = self.transient(
             ChatMessageType::System,
@@ -36,14 +36,14 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
     }
 
     pub(super) fn handle_trust_required(&self, project_path: &str) {
-        self.deps.emit_event(DaemonEvent::ChatTrustRequired {
+        self.shared.emit(DaemonEvent::ChatTrustRequired {
             chat_id: self.chat_id.clone(),
             project_path: project_path.to_string(),
         });
     }
 
     pub(super) fn handle_provider_quota(&self, adapter_id: &str, quota: ProviderQuota) {
-        self.deps.on_provider_quota(adapter_id, quota);
+        self.shared.deps.on_provider_quota(adapter_id, quota);
     }
 
     pub(super) fn handle_api_retry(&self, attempt: i64, reason: Option<String>) {
@@ -80,7 +80,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         let Some(attention) = normalize_attention_body(message) else {
             return;
         };
-        if !self.deps.notify_attention_request() {
+        if !self.shared.deps.notify_attention_request() {
             return;
         }
         let admitted = self.attention_dedupe.lock_recover().admit(
@@ -91,14 +91,14 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         if !admitted {
             return;
         }
-        self.deps.emit_event(DaemonEvent::ChatNotification {
+        self.shared.emit(DaemonEvent::ChatNotification {
             chat_id: self.chat_id.clone(),
             title: "Claude needs your attention".to_string(),
             body: attention.body.clone(),
             level: ChatNotificationLevel::Success,
             kind: Some(ChatNotificationKind::AttentionRequest),
         });
-        self.deps.send_push(PushOut {
+        self.shared.deps.send_push(PushOut {
             chat_id: self.chat_id.clone(),
             title: "Claude needs your attention".to_string(),
             body: attention.body,

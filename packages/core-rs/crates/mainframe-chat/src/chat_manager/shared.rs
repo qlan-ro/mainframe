@@ -69,45 +69,6 @@ pub(super) async fn apply_tuning_impl(
     }
 }
 
-// ── queued-ref helpers (shared by the facade + EhDeps) ───────────────────────
-
-pub(super) fn queued_for_chat(refs: &QueuedRefs, chat_id: &str) -> Vec<QueuedMessageRef> {
-    refs.lock_recover()
-        .iter()
-        .filter(|r| r.chat_id == chat_id)
-        .cloned()
-        .collect()
-}
-
-pub(super) fn handle_queued_processed(refs: &QueuedRefs, chat_id: &str, uuid: &str) {
-    let removed = {
-        let mut guard = refs.lock_recover();
-        guard
-            .iter()
-            .position(|r| r.uuid == uuid)
-            .map(|i| guard.remove(i))
-    };
-    if let Some(r) = removed {
-        info!(
-            chat_id,
-            uuid,
-            message_id = r.message_id,
-            "CLI processed queued message"
-        );
-    }
-}
-
-pub(super) fn clear_all_queued_for_chat(refs: &QueuedRefs, chat_id: &str) {
-    let mut guard = refs.lock_recover();
-    let before = guard.len();
-    guard.retain(|r| r.chat_id != chat_id);
-    let removed = before - guard.len();
-    drop(guard);
-    if removed > 0 {
-        info!(chat_id, removed, "cleared queued refs for exited chat");
-    }
-}
-
 /// Build a stateless history-load session for `chat` (shared by the facade's
 /// `get_messages`/`get_messages_from_disk` and the permission handler's history
 /// restore). `None` when the chat has no Claude session / pending fork / adapter

@@ -5,12 +5,13 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use mainframe_types::adapter::DetectedPr;
-use mainframe_types::chat::{Chat, ChatStatus, NewChat, ProcessState, TodoItem};
+use mainframe_types::chat::{Chat, NewChat, ProcessState, TodoItem};
 use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::context::{SessionMention, SkillFileEntry};
 use mainframe_types::seam_error::SeamError;
 
 use super::FakeDeps;
+use super::fake_rows::{fork_row, side_chat_row};
 use crate::chat_manager::{ChatStore, ForkCreateInput};
 use crate::fork::PendingForkState;
 use crate::segments::SegmentStore;
@@ -33,6 +34,8 @@ pub(crate) struct FakeChatStore {
     pub(crate) fork_inserts: Mutex<Vec<ForkCreateInput>>,
     /// `db.chats.pendingFork` per chat id.
     pub(crate) pending_forks: Mutex<HashMap<String, PendingForkState>>,
+    /// Every PR `add_detected_prs` persisted, deduplicated by url.
+    pub(crate) detected_prs: Mutex<Vec<DetectedPr>>,
     /// `db.chats.dismissedWorktrees` per chat id.
     pub(crate) dismissed: Mutex<HashMap<String, Vec<String>>>,
     /// Every `(chat_id, worktree_path)` `add_dismissed_worktree` was asked to write.
@@ -168,8 +171,16 @@ impl ChatStore for FakeDeps {
         false
     }
     fn update_todos(&self, _chat_id: &str, _todos: &[TodoItem]) {}
-    fn add_detected_prs(&self, _chat_id: &str, _prs: &[DetectedPr]) -> Vec<DetectedPr> {
-        Vec::new()
+    /// Persists the PRs not yet stored and returns those, as the repository does.
+    fn add_detected_prs(&self, _chat_id: &str, prs: &[DetectedPr]) -> Vec<DetectedPr> {
+        let mut stored = self.store.detected_prs.lock().unwrap();
+        let fresh: Vec<DetectedPr> = prs
+            .iter()
+            .filter(|pr| stored.iter().all(|s| s.url != pr.url))
+            .cloned()
+            .collect();
+        stored.extend(fresh.iter().cloned());
+        fresh
     }
     fn get_dismissed_worktrees(&self, chat_id: &str) -> Vec<String> {
         self.store
@@ -260,48 +271,4 @@ impl ChatStore for FakeDeps {
         self.store.insert(side_chat.clone());
         Ok((side_chat, true))
     }
-}
-
-/// The row `create_fork` inserts: the fork's config copied from `insert`.
-fn fork_row(id: &str, insert: &ForkCreateInput) -> Chat {
-    let mut chat = test_chat(id);
-    chat.adapter_id = insert.adapter_id.clone();
-    chat.project_id = insert.project_id.clone();
-    chat.title = insert.title.clone();
-    chat.model = insert.model.clone();
-    chat.permission_mode = insert.permission_mode;
-    chat.plan_mode = Some(insert.plan_mode);
-    chat.status = ChatStatus::Active;
-    chat.created_at = "2026-01-01T00:00:00.000Z".to_string();
-    chat.updated_at = "2026-01-01T00:00:00.000Z".to_string();
-    chat.worktree_path = insert.worktree_path.clone();
-    chat.branch_name = insert.branch_name.clone();
-    chat.tuning = mainframe_types::chat::SessionTuning {
-        effort: Some(insert.effort),
-        fast: Some(insert.fast),
-        ultracode: Some(insert.ultracode),
-        adaptive_thinking: Some(insert.adaptive_thinking),
-    };
-    chat.parent_chat_id = Some(Some(insert.parent_chat_id.clone()));
-    chat
-}
-
-/// The temporary side-chat row the repository creates under `parent`.
-fn side_chat_row(id: &str, parent: &Chat) -> Chat {
-    let now = "2026-01-01T00:00:00.000Z".to_string();
-    let mut chat = test_chat(id);
-    chat.adapter_id = parent.adapter_id.clone();
-    chat.project_id = parent.project_id.clone();
-    chat.model = parent.model.clone();
-    chat.permission_mode = parent.permission_mode;
-    chat.plan_mode = parent.plan_mode;
-    chat.created_at = now.clone();
-    chat.updated_at = now;
-    chat.worktree_path = parent.worktree_path.clone();
-    chat.branch_name = parent.branch_name.clone();
-    chat.temporary = true;
-    chat.no_project = parent.no_project;
-    chat.scratch_path = parent.scratch_path.clone();
-    chat.parent_chat_id = Some(Some(parent.id.clone()));
-    chat
 }
