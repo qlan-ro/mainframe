@@ -3,7 +3,8 @@
 //! `TagColor` is the shared palette enum (an out-of-palette color fails the body
 //! parse → 400). Mutating handlers answer a rejected name with a 400 and a
 //! missing tag with a 404, both with the verbatim message; any other store
-//! failure, like every read failure, is the opaque 500. DELETE deviates from the rest of the API on purpose: it ends
+//! failure, like every read failure, is the opaque 500. DELETE deviates from the
+//! rest of the API on purpose: it ends
 //! 204 with NO body, not the `{success}` envelope (wire contract:
 //! `packages/ui/src/lib/api/tags.ts` sends it through `requestNoContent`).
 

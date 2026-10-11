@@ -57,8 +57,10 @@ pub struct RunResult {
 /// error banner and REST bodies verbatim.
 #[derive(Debug, thiserror::Error)]
 pub enum AdapterError {
-    /// An error the CLI itself reported (an `error` event, a JSON-RPC error
-    /// reply, a recorded fixture's failure). The text is the CLI's own.
+    /// An error carried as plain text: the CLI's own `error` events, JSON-RPC
+    /// error replies and recorded fixture failures, plus the daemon-side
+    /// plan-mode relay (`SendError::into_adapter_error` in the chat crate),
+    /// which has no richer channel through this crate.
     #[error("{0}")]
     Message(String),
     #[error(transparent)]

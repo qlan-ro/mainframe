@@ -54,9 +54,11 @@ impl HttpStatus for ConfigError {
     fn status_kind(&self) -> StatusKind {
         match self {
             Self::NotFound(_) => StatusKind::NotFound,
-            Self::Refused(_) | Self::Worktree(_) => StatusKind::BadRequest,
+            Self::Refused(_) | Self::Worktree(WorktreeError::Git(_)) => StatusKind::BadRequest,
             Self::ChatBusy => StatusKind::Conflict,
-            Self::TranscriptMoveFailed(_) | Self::Adapter(_) => StatusKind::Internal,
+            Self::Worktree(WorktreeError::Io(_))
+            | Self::TranscriptMoveFailed(_)
+            | Self::Adapter(_) => StatusKind::Internal,
         }
     }
 }
