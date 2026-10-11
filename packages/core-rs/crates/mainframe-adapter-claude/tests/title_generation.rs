@@ -3,7 +3,11 @@
 //! Drives a real stub `/bin/sh` executable as the title binary so these cases
 //! exercise the CLI's actual exit code and stderr, not a mocked `Command`.
 #![cfg(unix)]
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;

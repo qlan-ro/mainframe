@@ -157,7 +157,7 @@ impl ChatManager {
             Err(ForkPinError::PointNotFound(reason)) => ForkChatError::ForkPointUnresolved(reason),
             Err(ForkPinError::Failed(message)) => ForkChatError::PinFailed(message),
         };
-        remove_snapshot_dir(&dest_dir).await;
+        remove_snapshot_dir(&chat.id, &dest_dir).await;
         Err(err)
     }
 
@@ -196,7 +196,7 @@ impl ChatManager {
         let new_chat = match self.shared.deps.create_fork(&insert) {
             Ok(chat) => chat,
             Err(error) => {
-                remove_snapshot_dir(&dest_dir).await;
+                remove_snapshot_dir(&parent.id, &dest_dir).await;
                 return Err(ForkChatError::InsertFailed(error));
             }
         };
@@ -217,11 +217,11 @@ impl ChatManager {
 /// Best-effort cleanup of a snapshot directory a failed pin/insert leaves
 /// behind — logged, never surfaced, matching the plan's "a failed pin removes
 /// the directory" / "on insert failure it removes the directory".
-async fn remove_snapshot_dir(dir: &str) {
+async fn remove_snapshot_dir(chat_id: &str, dir: &str) {
     if let Err(err) = tokio::fs::remove_dir_all(dir).await
         && err.kind() != std::io::ErrorKind::NotFound
     {
-        tracing::warn!(%err, dir, "failed to remove fork snapshot directory after a failed fork");
+        tracing::warn!(error = %err, chat_id, dir, "failed to remove fork snapshot directory after a failed fork");
     }
 }
 

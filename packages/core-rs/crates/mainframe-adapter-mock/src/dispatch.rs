@@ -27,6 +27,10 @@ pub(crate) fn emit_event(sink: Arc<dyn SessionSink>, event: RecordedEvent) {
     }
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "recorded sink method dispatch table with typed payload decoders"
+)]
 fn dispatch(sink: &Arc<dyn SessionSink>, event: &RecordedEvent) -> Result<(), RecordedEventError> {
     match &event.method {
         RecordedMethod::OnInit => sink.on_init(&arg::<String>(event, 0)?),

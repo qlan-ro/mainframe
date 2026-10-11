@@ -107,15 +107,7 @@ pub fn reconcile(
     let mut remote_writes = RemoteWrites::default();
     let mut report_rows = Vec::new();
 
-    let title = fields::reconcile_scalar(fields::ScalarInput {
-        field: "title",
-        local_value: &local.title,
-        remote_value: &remote.title,
-        baseline_value: &baseline.title,
-        local_at: touch.title_at.as_deref(),
-        remote_at: remote.title_at.as_deref(),
-        remote_coarse: false,
-    });
+    let title = reconcile_title(local, remote, baseline, touch);
     fields::apply(
         title.clone(),
         &mut local_writes.title,
@@ -161,4 +153,21 @@ pub fn reconcile(
             labels: label_outcome.next_labels,
         },
     }
+}
+
+fn reconcile_title(
+    local: &LocalTask,
+    remote: &RemoteIssueView,
+    baseline: &Baseline,
+    touch: &TouchTimes,
+) -> fields::ScalarOutcome {
+    fields::reconcile_scalar(fields::ScalarInput {
+        field: "title",
+        local_value: &local.title,
+        remote_value: &remote.title,
+        baseline_value: &baseline.title,
+        local_at: touch.title_at.as_deref(),
+        remote_at: remote.title_at.as_deref(),
+        remote_coarse: false,
+    })
 }

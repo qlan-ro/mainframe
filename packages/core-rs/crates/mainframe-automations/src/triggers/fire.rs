@@ -54,7 +54,7 @@ impl TriggerFirer {
         let run_id = run.id.clone();
         tokio::spawn(async move {
             if let Err(err) = interpreter.advance(&run_id).await {
-                tracing::error!(run_id, error = %err, "trigger fire: advance failed");
+                tracing::error!(run_id, error = %err, "advance failed");
             }
         });
         Ok(Some(run))

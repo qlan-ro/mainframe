@@ -192,7 +192,7 @@ impl Adapter for CodexAdapter {
         for session in drained {
             tokio::spawn(async move {
                 if let Err(err) = session.kill().await {
-                    tracing::warn!(module = "codex:adapter", err = %err, "failed to kill codex session during killAll");
+                    tracing::warn!(error = %err, "failed to kill codex session during killAll");
                 }
             });
         }

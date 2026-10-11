@@ -99,7 +99,7 @@ impl FacadeHub {
             &request,
         );
         let Ok(payload) = serde_json::to_string(&frame) else {
-            warn!(chat_id, "acp facade: failed to serialize a gate request");
+            warn!(chat_id, "failed to serialize a gate request");
             return;
         };
         self.raise_gate(chat_id, &request, payload);
@@ -115,7 +115,7 @@ impl FacadeHub {
         for entry in self.connections.iter() {
             if entry.value().remove_gate(&rpc_id).is_some() {
                 entry.value().send_json(&note);
-                debug!(chat_id, request_id, "acp facade: pending gate resolved");
+                debug!(chat_id, request_id, "pending gate resolved");
             }
         }
     }

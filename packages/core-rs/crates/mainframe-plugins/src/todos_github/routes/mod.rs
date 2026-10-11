@@ -56,7 +56,7 @@ pub(super) fn conflict(error: &str) -> Response {
 }
 
 pub(super) fn server_error(err: PluginError) -> Response {
-    tracing::error!(err = %err, "todos_github: database error");
+    tracing::error!(error = %err, "database error");
     json_response(
         StatusCode::INTERNAL_SERVER_ERROR,
         json!({ "error": "Internal error" }),
@@ -68,7 +68,7 @@ pub(super) fn server_error(err: PluginError) -> Response {
 /// at `warn`, not `error`, and the message is the caller-readable one from
 /// `GitHubPortError`, not a generic string.
 fn service_unavailable(err: &GitHubPortError) -> Response {
-    tracing::warn!(err = %err, "todos_github: GitHub integration unavailable");
+    tracing::warn!(error = %err, "GitHub integration unavailable");
     json_response(
         StatusCode::SERVICE_UNAVAILABLE,
         json!({ "error": err.to_string() }),
@@ -79,7 +79,7 @@ fn service_unavailable(err: &GitHubPortError) -> Response {
 /// this server is correctly configured but the upstream interaction didn't
 /// go through.
 fn bad_gateway(err: &GitHubPortError) -> Response {
-    tracing::warn!(err = %err, "todos_github: GitHub request failed");
+    tracing::warn!(error = %err, "GitHub request failed");
     json_response(StatusCode::BAD_GATEWAY, json!({ "error": err.to_string() }))
 }
 
@@ -88,7 +88,10 @@ fn bad_gateway(err: &GitHubPortError) -> Response {
 // `Response` dwarfs the `Ok` payload, but every caller immediately returns
 // this `Err` as-is, so building a smaller error type here would just move
 // the conversion to each call site.
-#[allow(clippy::result_large_err)]
+#[expect(
+    clippy::result_large_err,
+    reason = "plugin routes return the existing axum response envelope"
+)]
 pub(super) fn require_project_id(params: &HashMap<String, String>) -> Result<String, Response> {
     match params.get("projectId").map(|s| s.trim()) {
         Some(s) if !s.is_empty() => Ok(s.to_string()),

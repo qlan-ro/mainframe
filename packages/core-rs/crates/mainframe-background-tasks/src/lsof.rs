@@ -49,7 +49,7 @@ fn default_exec(path: mainframe_runtime::ResolvedPath) -> ExecFn {
 }
 
 fn default_logger() -> WarnFn {
-    Arc::new(|msg: &str| tracing::warn!(target: "background-tasks:lsof", "{msg}"))
+    Arc::new(|msg: &str| tracing::warn!("{msg}"))
 }
 
 pub(crate) fn new_seam(path: mainframe_runtime::ResolvedPath) -> Mutex<Seam> {

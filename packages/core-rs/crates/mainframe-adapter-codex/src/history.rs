@@ -177,6 +177,10 @@ pub(crate) fn collab_agent_tool_use(
 }
 
 /// Tag a block with `parentToolUseId`.
+#[expect(
+    clippy::too_many_lines,
+    reason = "exhaustive content variant mapping that preserves parent provenance"
+)]
 pub(crate) fn with_parent(block: MessageContent, pid: &str) -> MessageContent {
     use mainframe_types::chat::MessageContentNode as N;
     let pid = Some(pid.to_string());

@@ -1,7 +1,7 @@
 //! Shared support for the Codex fork integration tests (`fork.rs`,
 //! `fork_from_message.rs`): a fake `codex app-server` that tees every request
 //! to a capture file, and readers for what it captured.
-#![allow(dead_code)] // each test binary uses a subset of these helpers
+#![allow(dead_code, reason = "Shared test helpers")] // each test binary uses a subset of these helpers
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;

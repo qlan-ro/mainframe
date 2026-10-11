@@ -1,6 +1,10 @@
 //! Live-detection specs for `PrDetectionSink`, the `SessionSink` decorator that
 //! runs PR scanning at the one seam every adapter crosses.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use std::collections::HashMap;
 use std::sync::Arc;

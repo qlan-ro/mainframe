@@ -53,7 +53,7 @@ async fn root_entries(real_root: &Path) -> Vec<(String, bool)> {
     let mut read_dir = match tokio::fs::read_dir(real_root).await {
         Ok(rd) => rd,
         Err(err) => {
-            tracing::warn!(error = %err, "setup advisor: project root is unreadable");
+            tracing::warn!(error = %err, "project root is unreadable");
             return Vec::new();
         }
     };
@@ -106,7 +106,7 @@ pub async fn fingerprint(root: &Path) -> ProjectFingerprint {
     let real_root = match tokio::fs::canonicalize(root).await {
         Ok(path) => path,
         Err(err) => {
-            tracing::warn!(error = %err, "setup advisor: project root does not resolve");
+            tracing::warn!(error = %err, "project root does not resolve");
             return fp;
         }
     };

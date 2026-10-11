@@ -46,15 +46,7 @@ async fn load_natives(
     layout: &SegmentLayout,
 ) -> HashMap<String, Vec<ChatMessage>> {
     let mut loaded = HashMap::new();
-    let Some(project_path) = deps.projects_get_path(&chat.project_id) else {
-        return loaded;
-    };
-    let cwd = crate::chat_cwd::chat_cwd(
-        chat.worktree_path.as_deref(),
-        chat.scratch_path.as_deref(),
-        Some(project_path),
-    );
-    let Some(cwd) = cwd else {
+    let Some(cwd) = native_cwd(deps, chat) else {
         return loaded;
     };
     let active_native = layout.active().map(|s| s.native_session_ref.clone());
@@ -94,7 +86,7 @@ async fn load_natives(
                 loaded.insert(native.id.clone(), remapped);
             }
             Err(err) => {
-                tracing::warn!(?err, chat_id = %chat.id, native = %native.id, "segment history load failed")
+                tracing::warn!(error = ?err, chat_id = %chat.id, native = %native.id, "segment history load failed")
             }
         }
     }
@@ -142,4 +134,13 @@ pub fn assemble(
             .extend(slices.remove(&segment.id).unwrap_or_default());
     }
     out
+}
+
+fn native_cwd(deps: &dyn ChatManagerDeps, chat: &Chat) -> Option<String> {
+    let project_path = deps.projects_get_path(&chat.project_id)?;
+    crate::chat_cwd::chat_cwd(
+        chat.worktree_path.as_deref(),
+        chat.scratch_path.as_deref(),
+        Some(project_path),
+    )
 }

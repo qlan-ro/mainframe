@@ -1,5 +1,9 @@
 //! Checkpoint step kinds keep their stored wire strings.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use mainframe_types::automation::AutomationStepKind;
 

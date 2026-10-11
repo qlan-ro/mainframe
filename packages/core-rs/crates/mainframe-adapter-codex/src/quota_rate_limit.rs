@@ -55,7 +55,7 @@ fn map_window(
     let Some(kind) = kind else {
         tracing::warn!(
             window_duration_mins = ?window.window_duration_mins,
-            "codex rate limit: unrecognized window duration, dropping window"
+            "unrecognized window duration, dropping window"
         );
         return None;
     };

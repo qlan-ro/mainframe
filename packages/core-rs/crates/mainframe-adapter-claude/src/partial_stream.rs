@@ -161,7 +161,7 @@ async fn probe_and_log(executable: &str, resolved_path: &str) -> bool {
         None => {
             warn!(
                 reason = executable,
-                "claude: --include-partial-messages probe failed or timed out; downgrading to legacy streaming"
+                "--include-partial-messages probe failed or timed out; downgrading to legacy streaming"
             );
             false
         }
@@ -169,7 +169,7 @@ async fn probe_and_log(executable: &str, resolved_path: &str) -> bool {
             warn!(
                 reason = executable,
                 version,
-                "claude: CLI version below --include-partial-messages minimum; downgrading to legacy streaming"
+                "CLI version below --include-partial-messages minimum; downgrading to legacy streaming"
             );
             false
         }

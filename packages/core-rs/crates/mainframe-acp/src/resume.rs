@@ -303,7 +303,7 @@ fn replay(
     match resolved {
         ResolvedCursor::Start => (state.diff(items), false),
         ResolvedCursor::Found(cursor_idx) => {
-            let _ = state.diff(&items[..=cursor_idx]);
+            state.diff(&items[..=cursor_idx]);
             (state.diff(items), false)
         }
         ResolvedCursor::Unknown => (state.diff(items), true),

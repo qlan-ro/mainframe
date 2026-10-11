@@ -1,5 +1,9 @@
 //! Provider model selections survive incomplete adapter catalogs.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use mainframe_types::settings_kv::MemorySettings;
 use std::path::Path;

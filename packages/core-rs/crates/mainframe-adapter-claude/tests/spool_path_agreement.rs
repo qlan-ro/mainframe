@@ -2,7 +2,11 @@
 //! and the production-default spool validator all agree, asserted in one test
 //! rather than three independent constant checks.
 #![cfg(unix)]
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use std::path::PathBuf;
 use std::process::Command;
@@ -35,7 +39,9 @@ fn base_tmp_dir() -> String {
 struct RemoveDirOnDrop(PathBuf);
 impl Drop for RemoveDirOnDrop {
     fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
+        if let Err(error) = std::fs::remove_dir_all(&self.0) {
+            tracing::warn!(%error, "best-effort operation failed");
+        }
     }
 }
 

@@ -1,4 +1,8 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 mod support;
 use mainframe_types::{
     chat::NewChat,
@@ -130,12 +134,11 @@ async fn start_alias_launch(
         })
         .await
         .unwrap();
-    tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        while !ready.exists() {
-            // OS child; Tokio time cannot be paused.
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-        }
-    })
+    mainframe_runtime::test_support::poll_until(
+        std::time::Duration::from_secs(5),
+        std::time::Duration::from_millis(10),
+        async || !(!ready.exists()),
+    )
     .await
     .unwrap();
     (launch, stopped_while_present)

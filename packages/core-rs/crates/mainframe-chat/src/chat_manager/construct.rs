@@ -119,7 +119,8 @@ impl ChatManager {
     /// an `Arc` (can't use `Arc::new_cyclic` without touching every `ChatManager::new`
     /// call site); idempotent, so a second call is a harmless no-op.
     pub fn attach_self(self: &Arc<Self>) {
-        let _ = self.self_ref.set(Arc::downgrade(self));
+        /* expected */
+        let _ = self.self_ref.set(Arc::downgrade(self)); // First attachment wins.
     }
 
     /// `ctx.chats.getExternalSessionService()` — `None` when the manager was

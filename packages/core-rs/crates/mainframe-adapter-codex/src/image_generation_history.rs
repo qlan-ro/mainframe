@@ -19,9 +19,8 @@ pub(crate) fn image_generation_message(
 ) -> Option<ChatMessage> {
     let Some(inline) = &img.result else {
         tracing::debug!(
-            module = "codex:history",
             id = %img.id,
-            "codex: imageGeneration history item has no inline result, savedPath-only reload is unsupported"
+            "imageGeneration history item has no inline result, savedPath-only reload is unsupported"
         );
         return None;
     };

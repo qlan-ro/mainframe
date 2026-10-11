@@ -3,7 +3,11 @@
 //! version — must not end up attached to the session it named, or it would
 //! keep receiving that chat's `session/update` fan-out for the rest of the
 //! connection.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 

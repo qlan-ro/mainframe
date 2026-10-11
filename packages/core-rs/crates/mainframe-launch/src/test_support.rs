@@ -83,12 +83,11 @@ pub(crate) fn write_term_ignoring_cloudflared(dir: &Path) -> String {
 /// so a SIGTERM sent afterwards cannot kill it by default disposition.
 pub(crate) async fn wait_until_trapped(dir: &Path) {
     let marker = dir.join("trapped");
-    tokio::time::timeout(Duration::from_secs(5), async {
-        while !marker.exists() {
-            // OS child; Tokio time cannot be paused.
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-    })
+    mainframe_runtime::test_support::poll_until(
+        Duration::from_secs(5),
+        Duration::from_millis(10),
+        async || !(!marker.exists()),
+    )
     .await
     .expect("the stand-in should install its TERM trap");
 }

@@ -3,7 +3,12 @@
 //! `mainframe-adapter-mock`'s `MockCliAdapter` standing in for a real
 //! fork-capable CLI (`with_fork_capable`). Follows `workflow_runs_history.rs`'s
 //! harness pattern.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(clippy::too_many_lines, reason = "Test assertions and scenarios")]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use mainframe_types::settings_kv::MemorySettings;
 use std::net::SocketAddr;
@@ -324,11 +329,4 @@ async fn a_message_not_in_the_chat_returns_404_message_not_found() {
     assert_eq!(h.chat_count(), before);
 }
 
-/// Eligibility runs before the message rules: an adapter that can't fork is
-/// a 422 even when the message id is bogus.
-#[tokio::test]
-async fn adapter_capability_is_checked_before_the_message() {
-    let h = harness(false, with_session()).await;
-    let resp = h.fork(&h.chat_id, r#"{"fromMessageId":"m-unknown"}"#).await;
-    assert_eq!(resp.status(), 422);
-}
+include!("cases/chat_fork_additional_cases.rs");

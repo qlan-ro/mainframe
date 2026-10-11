@@ -77,7 +77,7 @@ async fn run(deps: Arc<ClaudeQuotaSchedulerDeps>) {
         if (deps.has_clients)() {
             run_pull(&deps).await;
         } else {
-            tracing::debug!("quota: skipping timer pull — no connected clients");
+            tracing::debug!("skipping timer pull — no connected clients");
         }
     }
 }

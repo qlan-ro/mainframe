@@ -1,6 +1,6 @@
 //! Shared test support: a `SessionSink` that records the callbacks the codex
 //! event-mapper / approval-handler drive.
-#![allow(dead_code)] // each test binary uses a subset of Recorder's surface
+#![allow(dead_code, reason = "Shared test helpers")] // each test binary uses a subset of Recorder's surface
 
 use std::fs;
 use std::path::PathBuf;

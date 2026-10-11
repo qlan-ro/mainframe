@@ -30,7 +30,7 @@ async fn get_config_route() -> Response {
     let config = match get_config() {
         Ok(config) => config,
         Err(err) => {
-            tracing::warn!(%err, "tunnel config read failed");
+            tracing::warn!(error = %err, "tunnel config read failed");
             return ok(json!({ "hasToken": false, "url": Value::Null }));
         }
     };
@@ -90,7 +90,7 @@ async fn start(State(ctx): State<Arc<AppCtx>>, body: Option<Json<Value>>) -> Res
                 }
             };
             if let Err(err) = save_config(partial) {
-                tracing::warn!(%err, "tunnel start: save_config failed");
+                tracing::warn!(error = %err, "save_config failed");
             }
             ok(json!({ "url": url }))
         }
@@ -118,7 +118,7 @@ async fn stop(State(ctx): State<Arc<AppCtx>>, body: Option<Json<Value>>) -> Resp
         ..PartialMainframeConfig::default()
     };
     if let Err(err) = save_config(partial) {
-        tracing::warn!(%err, "tunnel stop: save_config failed");
+        tracing::warn!(error = %err, "save_config failed");
     }
     let _ = clear_config;
     ok_empty()

@@ -1,5 +1,9 @@
 //! Regression net for a router losing `GET /api/chats/{id}/workflow-runs`.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 

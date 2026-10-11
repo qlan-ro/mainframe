@@ -3,7 +3,11 @@
 //!
 //! There is no "attachment store not configured" case: `AppCtx` always carries
 //! an `Arc<AttachmentStore>`, so that branch is structurally unreachable.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 

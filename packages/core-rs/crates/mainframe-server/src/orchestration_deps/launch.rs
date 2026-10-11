@@ -45,7 +45,7 @@ impl DaemonOrchestrationPort {
         {
             // The chat would otherwise run in the project root, which the
             // caller did not ask for; retire it instead of leaving a stray.
-            tracing::warn!(chat_id = chat.id, %err, "worktree provisioning failed; archiving the new chat");
+            tracing::warn!(chat_id = chat.id, error = %err, "worktree provisioning failed; archiving the new chat");
             self.chats.archive_chat(&chat.id, false).await;
             return Err(invalid(format!("Could not create the worktree: {err}")));
         }
@@ -117,7 +117,7 @@ impl DaemonOrchestrationPort {
             // would be unreachable and, with plan mode never applied,
             // misleading if anyone found it by other means. Retire it
             // instead of leaving a stray.
-            tracing::warn!(chat_id, %err, "setting plan mode failed; archiving the new chat");
+            tracing::warn!(chat_id, error = %err, "setting plan mode failed; archiving the new chat");
             self.chats.archive_chat(chat_id, false).await;
             return Err(PortError::Internal(format!("set plan mode: {err}")));
         }
@@ -135,7 +135,7 @@ impl DaemonOrchestrationPort {
             // the caller never learns this chat's id, so an orphan here
             // would be unreachable and, with no recorded provenance,
             // misleading if anyone found it by other means.
-            tracing::warn!(chat_id, %err, "recording provenance failed; archiving the new chat");
+            tracing::warn!(chat_id, error = %err, "recording provenance failed; archiving the new chat");
             self.chats.archive_chat(chat_id, false).await;
             return Err(PortError::Internal(format!("record provenance: {err}")));
         }

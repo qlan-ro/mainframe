@@ -45,7 +45,7 @@ impl LaunchStopper for NoopLaunchStopper {
         tracing::debug!(
             project_id,
             effective_path,
-            "stopLaunchProcesses seam: launch registry not ported (Phase 5) — no-op"
+            "launch registry not ported (Phase 5) — no-op"
         );
         None
     }
@@ -137,7 +137,7 @@ impl RegistryScopeTunnelStopper {
                 true
             }
             Err(err) => {
-                tracing::warn!(%err, project_id, chat_id, "port-tunnel scope resolution failed");
+                tracing::warn!(error = %err, project_id, chat_id, "port-tunnel scope resolution failed");
                 false
             }
         }

@@ -27,7 +27,7 @@ impl AutomationsEngine {
         let run_id = run.id.clone();
         tokio::spawn(async move {
             if let Err(err) = interpreter.advance(&run_id).await {
-                tracing::error!(run_id, error = %err, "manual run: advance failed");
+                tracing::error!(run_id, error = %err, "advance failed");
             }
         });
         Ok(run)

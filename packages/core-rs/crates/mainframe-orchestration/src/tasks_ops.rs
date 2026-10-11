@@ -103,7 +103,7 @@ impl OrchestrationService {
                 error: None,
             };
             if let Err(err) = self.finalize(task, outcome).await {
-                tracing::warn!(task_id = id, %err, "failed to record a cancelled task");
+                tracing::warn!(task_id = id, error = %err, "failed to record a cancelled task");
             }
             cancelled.push(id);
         }

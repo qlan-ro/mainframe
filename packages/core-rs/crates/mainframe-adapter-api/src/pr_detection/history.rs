@@ -18,25 +18,7 @@ pub fn scan_history_for_prs(history: &[ChatMessage]) -> Vec<DetectedPr> {
     let mut seen_prs = HashSet::new();
     let mut pending_creates = HashSet::new();
     for msg in history {
-        if msg.r#type == ChatMessageType::Assistant {
-            for block in &msg.content {
-                let MessageContent::Node(MessageContentNode::ToolUse {
-                    id, name, input, ..
-                }) = block
-                else {
-                    continue;
-                };
-                if name != "Bash" && name != "BashTool" {
-                    continue;
-                }
-                let Some(command) = input.get("command").and_then(|v| v.as_str()) else {
-                    continue;
-                };
-                if is_pr_create_command(command) {
-                    pending_creates.insert(id.clone());
-                }
-            }
-        }
+        collect_pr_creates(msg, &mut pending_creates);
         if msg.r#type != ChatMessageType::ToolResult {
             continue;
         }
@@ -65,4 +47,26 @@ pub fn scan_history_for_prs(history: &[ChatMessage]) -> Vec<DetectedPr> {
         }
     }
     scanned
+}
+
+fn collect_pr_creates(msg: &ChatMessage, pending_creates: &mut HashSet<String>) {
+    if msg.r#type == ChatMessageType::Assistant {
+        for block in &msg.content {
+            let MessageContent::Node(MessageContentNode::ToolUse {
+                id, name, input, ..
+            }) = block
+            else {
+                continue;
+            };
+            if name != "Bash" && name != "BashTool" {
+                continue;
+            }
+            let Some(command) = input.get("command").and_then(|v| v.as_str()) else {
+                continue;
+            };
+            if is_pr_create_command(command) {
+                pending_creates.insert(id.clone());
+            }
+        }
+    }
 }

@@ -25,6 +25,10 @@ pub(super) fn convert_marker(msg: &GroupedMessage) -> DisplayMessage {
     }
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "exhaustive mapping of wire marker variants to display variants"
+)]
 fn marker_content(kind: ChatMessageType, content: &MessageContent) -> DisplayContent {
     match (kind, content) {
         (

@@ -2,7 +2,11 @@
 //! real git repos, not a mocked `GitService`), plus branch listing/creation
 //! coverage. Real collaborators: a temp git repo per test, a real in-memory DB
 //! project row.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 

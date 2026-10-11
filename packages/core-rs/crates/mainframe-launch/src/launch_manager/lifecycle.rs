@@ -23,11 +23,11 @@ impl LaunchManager {
         };
         let stop_process = async {
             use mainframe_runtime::process::{Terminated, terminate_with};
-            tracing::info!(target: "launch", name, pid = ?pid, "stopping launch process (SIGTERM)");
+            tracing::info!(name, pid = ?pid, "stopping launch process (SIGTERM)");
             let result = terminate_with(
                 |kind| {
                     if kind == Signal::Kill {
-                        tracing::warn!(target: "launch", name, "process did not exit after SIGTERM, sending SIGKILL");
+                        tracing::warn!(name, "process did not exit after SIGTERM, sending SIGKILL");
                     }
                     signal_group(pid, kind);
                     Ok(())
@@ -42,7 +42,7 @@ impl LaunchManager {
             }
         };
         tokio::join!(stop_tunnel, stop_process);
-        tracing::info!(target: "launch", name, pid = ?pid, "launch process stopped");
+        tracing::info!(name, pid = ?pid, "launch process stopped");
     }
 
     pub async fn stop_all(&self) {
@@ -62,7 +62,7 @@ impl LaunchManager {
         }
         while let Some(result) = tasks.join_next().await {
             if let Err(err) = result {
-                tracing::warn!(?err, "launch stop task failed");
+                tracing::warn!(error = ?err, "launch stop task failed");
             }
         }
     }

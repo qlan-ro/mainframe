@@ -139,6 +139,82 @@ async fn run_leaf(
     };
     let outcome = dispatch(step, ctx.ports, verb_ctx).await;
 
+    settle_leaf(outcome, ctx, step, step_ref).await
+}
+
+/// A6 — every leaf-step terminal transition streams to the run view.
+fn emit_settled(ctx: &WalkCtx<'_>, record: &RunRecord) {
+    ctx.events.emit(AutomationEvent::RunUpdated {
+        run: to_run_summary(record),
+    });
+}
+
+fn commit_keys(step: &Step, step_ref: &str) -> (String, String, StepKind) {
+    (step_ref.to_string(), step.id().to_string(), step.kind())
+}
+
+async fn commit(
+    ctx: &WalkCtx<'_>,
+    step: &Step,
+    step_ref: &str,
+    status: StepStatus,
+    outputs: Option<Map<String, Value>>,
+    error: Option<String>,
+) -> Result<RunRecord, StoreError> {
+    let (step_ref, step_id, kind) = commit_keys(step, step_ref);
+    ctx.store
+        .patch_checkpoint(ctx.run_id, move |cp| {
+            cp.set_step(
+                &step_ref,
+                &step_id,
+                kind,
+                crate::store::StepTransition {
+                    status,
+                    outputs,
+                    error,
+                    wake_at: None,
+                },
+            );
+        })
+        .await
+}
+
+async fn dispatch(step: &Step, ports: &dyn VerbPorts, ctx: VerbContext<'_>) -> StepOutcome {
+    match step {
+        Step::AskAgent(s) => ports.ask_agent(s, ctx).await,
+        Step::AskMe(s) => ports.ask_me(s, ctx).await,
+        Step::RunAction(s) => ports.run_action(s, ctx).await,
+        Step::Notify(s) => ports.notify(s, ctx).await,
+        // Pure and engine-internal: no port, and nothing to make idempotent.
+        Step::SetVariable(s) => StepOutcome::Completed {
+            outputs: Map::from_iter([(
+                "value".to_string(),
+                Value::String(render(&s.value, ctx.scope, ctx.names)),
+            )]),
+        },
+        // Parks on a wake_at the due-sweep resumes; no port, no side effect.
+        Step::Wait(s) => StepOutcome::Wait {
+            wake_at: Some(epoch_ms_now() + i64::from(s.seconds) * 1_000),
+        },
+        // Unreachable by construction (run_step routes blocks and break
+        // first); a graceful error beats a forbidden panic in library code.
+        Step::If(_)
+        | Step::Repeat(_)
+        | Step::Loop(_)
+        | Step::Retry(_)
+        | Step::Parallel(_)
+        | Step::Break(_) => StepOutcome::Failed {
+            error: "internal: block dispatched as a leaf verb".to_string(),
+        },
+    }
+}
+
+async fn settle_leaf(
+    outcome: StepOutcome,
+    ctx: &WalkCtx<'_>,
+    step: &Step,
+    step_ref: &str,
+) -> Result<StepsResult, StoreError> {
     match outcome {
         StepOutcome::Completed { outputs } => {
             let record = commit(
@@ -185,62 +261,5 @@ async fn run_leaf(
                 checkpoint: record.checkpoint,
             })
         }
-    }
-}
-
-/// A6 — every leaf-step terminal transition streams to the run view.
-fn emit_settled(ctx: &WalkCtx<'_>, record: &RunRecord) {
-    ctx.events.emit(AutomationEvent::RunUpdated {
-        run: to_run_summary(record),
-    });
-}
-
-fn commit_keys(step: &Step, step_ref: &str) -> (String, String, StepKind) {
-    (step_ref.to_string(), step.id().to_string(), step.kind())
-}
-
-async fn commit(
-    ctx: &WalkCtx<'_>,
-    step: &Step,
-    step_ref: &str,
-    status: StepStatus,
-    outputs: Option<Map<String, Value>>,
-    error: Option<String>,
-) -> Result<RunRecord, StoreError> {
-    let (step_ref, step_id, kind) = commit_keys(step, step_ref);
-    ctx.store
-        .patch_checkpoint(ctx.run_id, move |cp| {
-            cp.set_step(&step_ref, &step_id, kind, status, outputs, error, None);
-        })
-        .await
-}
-
-async fn dispatch(step: &Step, ports: &dyn VerbPorts, ctx: VerbContext<'_>) -> StepOutcome {
-    match step {
-        Step::AskAgent(s) => ports.ask_agent(s, ctx).await,
-        Step::AskMe(s) => ports.ask_me(s, ctx).await,
-        Step::RunAction(s) => ports.run_action(s, ctx).await,
-        Step::Notify(s) => ports.notify(s, ctx).await,
-        // Pure and engine-internal: no port, and nothing to make idempotent.
-        Step::SetVariable(s) => StepOutcome::Completed {
-            outputs: Map::from_iter([(
-                "value".to_string(),
-                Value::String(render(&s.value, ctx.scope, ctx.names)),
-            )]),
-        },
-        // Parks on a wake_at the due-sweep resumes; no port, no side effect.
-        Step::Wait(s) => StepOutcome::Wait {
-            wake_at: Some(epoch_ms_now() + i64::from(s.seconds) * 1_000),
-        },
-        // Unreachable by construction (run_step routes blocks and break
-        // first); a graceful error beats a forbidden panic in library code.
-        Step::If(_)
-        | Step::Repeat(_)
-        | Step::Loop(_)
-        | Step::Retry(_)
-        | Step::Parallel(_)
-        | Step::Break(_) => StepOutcome::Failed {
-            error: "internal: block dispatched as a leaf verb".to_string(),
-        },
     }
 }

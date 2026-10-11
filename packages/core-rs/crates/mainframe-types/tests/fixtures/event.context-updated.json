@@ -7,6 +7,6 @@
   "full": {
     "type": "context.updated",
     "chatId": "chat_9f2a3b1c",
-    "filePaths": ["packages/core/src/server/ws.ts"]
+    "filePaths": ["packages/core-rs/crates/mainframe-server/src/websocket.rs"]
   }
 }

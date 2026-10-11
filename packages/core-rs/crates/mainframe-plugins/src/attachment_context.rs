@@ -146,8 +146,10 @@ impl PluginAttachments for FsAttachmentContext {
             while let Some(entry) = entries.next_entry().await? {
                 let name = entry.file_name();
                 let name = name.to_string_lossy();
-                if name == json_name || name.starts_with(&data_prefix) {
-                    let _ = tokio::fs::remove_file(entry.path()).await;
+                if (name == json_name || name.starts_with(&data_prefix))
+                    && let Err(error) = tokio::fs::remove_file(entry.path()).await
+                {
+                    tracing::warn!(%error, path = %entry.path().display(), "failed to remove attachment context file");
                 }
             }
             Ok(())

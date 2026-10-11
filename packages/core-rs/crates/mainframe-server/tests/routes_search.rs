@@ -2,7 +2,11 @@
 //! tempdir project. The symlink-containment specs exercise the in-process
 //! searcher's default (`ignore::WalkBuilder` never follows symlinks), so the
 //! leaked file is never read.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 

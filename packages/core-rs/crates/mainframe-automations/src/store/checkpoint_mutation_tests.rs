@@ -42,10 +42,12 @@ fn a_failed_rerun_keeps_earlier_outputs_and_what_the_verb_stamped() {
         "agent",
         "agent",
         StepKind::AskAgent,
-        StepStatus::Failed,
-        Some(outputs("ignored")),
-        Some("boom".into()),
-        Some(900),
+        crate::store::StepTransition {
+            status: StepStatus::Failed,
+            outputs: Some(outputs("ignored")),
+            error: Some("boom".into()),
+            wake_at: Some(900),
+        },
     );
 
     let entry = &cp.steps["agent"];
@@ -67,10 +69,12 @@ fn a_success_replaces_outputs_and_a_running_entry_has_no_finish_time() {
         "run#0",
         "run",
         StepKind::RunAction,
-        StepStatus::Running,
-        Some(outputs("dropped")),
-        None,
-        None,
+        crate::store::StepTransition {
+            status: StepStatus::Running,
+            outputs: Some(outputs("dropped")),
+            error: None,
+            wake_at: None,
+        },
     );
     let running = &cp.steps["run#0"];
     assert_eq!(running.kind, StepKind::RunAction);
@@ -84,10 +88,12 @@ fn a_success_replaces_outputs_and_a_running_entry_has_no_finish_time() {
         "run#0",
         "run",
         StepKind::RunAction,
-        StepStatus::Succeeded,
-        Some(outputs("done")),
-        None,
-        None,
+        crate::store::StepTransition {
+            status: StepStatus::Succeeded,
+            outputs: Some(outputs("done")),
+            error: None,
+            wake_at: None,
+        },
     );
     let done = &cp.steps["run#0"];
     assert_eq!(done.outputs, Some(outputs("done")));

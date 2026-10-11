@@ -1,4 +1,8 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 //! Golden texts and status classes for the `DbError`s REST routes answer with.
 //! The tag route returns these messages verbatim, so the strings are wire

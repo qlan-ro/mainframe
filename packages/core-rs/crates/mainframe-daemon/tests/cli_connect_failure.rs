@@ -5,7 +5,11 @@
 //!
 //! Integration tests are only built under `cargo test`, so `unwrap`/`expect` are
 //! permitted here (RUST RULES `#[cfg(test)]` exemption).
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use std::process::Command;
 

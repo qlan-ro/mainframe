@@ -94,28 +94,7 @@ pub fn map_model_info(info: &Value) -> AdapterModel {
     if let Some(rm) = info.get("resolvedModel").and_then(Value::as_str) {
         model.resolved_model = Some(rm.to_string());
     }
-    let raw_efforts: Vec<&str> = info
-        .get("supportedEffortLevels")
-        .and_then(Value::as_array)
-        .map(|a| a.iter().filter_map(Value::as_str).collect())
-        .unwrap_or_default();
-    if !raw_efforts.is_empty() {
-        model.supported_efforts =
-            Some(raw_efforts.iter().filter_map(|s| parse_effort(s)).collect());
-        if raw_efforts.contains(&"xhigh") {
-            model.supports_ultracode = Some(true);
-        }
-    }
-    if info.get("supportsFastMode").and_then(Value::as_bool) == Some(true) {
-        model.supports_fast = Some(true);
-    }
-    if info
-        .get("supportsAdaptiveThinking")
-        .and_then(Value::as_bool)
-        == Some(true)
-    {
-        model.supports_adaptive_thinking = Some(true);
-    }
+    apply_model_capabilities(info, &mut model);
     // The CLI exposes the tier-resolved default under value: "default".
     if value == "default" {
         model.is_default = Some(true);
@@ -218,7 +197,7 @@ pub async fn probe_models(executable: &str, path: &str) -> Option<ProbeResult> {
     {
         Ok(child) => child,
         Err(err) => {
-            tracing::warn!(?err, "probe spawn error");
+            tracing::warn!(error = ?err, "probe spawn error");
             return None;
         }
     };
@@ -230,17 +209,70 @@ pub async fn probe_models(executable: &str, path: &str) -> Option<ProbeResult> {
     // Keep stdin open for the lifetime of the read loop (dropping it would close
     // the pipe and the CLI could exit before answering).
     if let Some(stdin) = stdin.as_mut() {
-        let payload = serde_json::json!({
-            "type": "control_request",
-            "request_id": nanoid::nanoid!(),
-            "request": { "subtype": "initialize" },
-        });
-        let line = format!("{payload}\n");
-        let _ = stdin.write_all(line.as_bytes()).await;
-        let _ = stdin.flush().await;
+        initialize_probe(stdin).await;
     }
 
-    let result = match stdout {
+    let result = read_probe(stdout).await;
+
+    process.signal(mainframe_runtime::process::Signal::Kill);
+    process.exit().wait().await;
+    match result {
+        Ok(inner) => inner,
+        Err(_) => {
+            tracing::warn!("probe timed out");
+            None
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "probe_models_tests.rs"]
+mod tests;
+
+fn apply_model_capabilities(info: &Value, model: &mut AdapterModel) {
+    let raw_efforts: Vec<&str> = info
+        .get("supportedEffortLevels")
+        .and_then(Value::as_array)
+        .map(|a| a.iter().filter_map(Value::as_str).collect())
+        .unwrap_or_default();
+    if !raw_efforts.is_empty() {
+        model.supported_efforts =
+            Some(raw_efforts.iter().filter_map(|s| parse_effort(s)).collect());
+        if raw_efforts.contains(&"xhigh") {
+            model.supports_ultracode = Some(true);
+        }
+    }
+    if info.get("supportsFastMode").and_then(Value::as_bool) == Some(true) {
+        model.supports_fast = Some(true);
+    }
+    if info
+        .get("supportsAdaptiveThinking")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        model.supports_adaptive_thinking = Some(true);
+    }
+}
+
+async fn initialize_probe(stdin: &mut tokio::process::ChildStdin) {
+    let payload = serde_json::json!({
+        "type": "control_request",
+        "request_id": nanoid::nanoid!(),
+        "request": { "subtype": "initialize" },
+    });
+    let line = format!("{payload}\n");
+    if let Err(error) = stdin.write_all(line.as_bytes()).await {
+        tracing::warn!(%error, operation = "write_control_response", "failed to write model probe response");
+    }
+    if let Err(error) = stdin.flush().await {
+        tracing::warn!(%error, operation = "flush_control_response", "failed to flush model probe response");
+    }
+}
+
+async fn read_probe(
+    stdout: Option<tokio::process::ChildStdout>,
+) -> Result<Option<ProbeResult>, tokio::time::error::Elapsed> {
+    match stdout {
         Some(stdout) => {
             let mut lines = BufReader::new(stdout).lines();
             tokio::time::timeout(Duration::from_millis(PROBE_TIMEOUT_MS), async {
@@ -263,19 +295,5 @@ pub async fn probe_models(executable: &str, path: &str) -> Option<ProbeResult> {
             .await
         }
         None => Ok(None),
-    };
-
-    process.signal(mainframe_runtime::process::Signal::Kill);
-    process.exit().wait().await;
-    match result {
-        Ok(inner) => inner,
-        Err(_) => {
-            tracing::warn!("probe timed out");
-            None
-        }
     }
 }
-
-#[cfg(test)]
-#[path = "probe_models_tests.rs"]
-mod tests;

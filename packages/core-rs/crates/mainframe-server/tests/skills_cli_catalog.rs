@@ -7,7 +7,11 @@
 //! promises. When it breaks, these tests are how you'll know it broke here and
 //! not in the UI.
 
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use std::sync::Mutex;
 

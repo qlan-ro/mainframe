@@ -62,7 +62,7 @@ fn purge_old_logs(dir: &PathBuf) {
         if let Ok(modified) = entry.metadata().and_then(|m| m.modified())
             && is_stale_server_log(&name, modified, cutoff)
         {
-            let _ = fs::remove_file(entry.path());
+            let _ = fs::remove_file(entry.path()); /* expected */ // Boot purge tolerates inaccessible logs.
         }
     }
 }
@@ -95,11 +95,9 @@ pub fn init(log_dir: &std::path::Path) -> Option<WorkerGuard> {
 
     let dir = log_dir.to_path_buf();
     if let Err(err) = fs::create_dir_all(&dir) {
-        // The subscriber is not installed yet, so `tracing` would drop this.
-        // Logging falls back to stdout-only below when the appender can't be built.
-        eprintln!(
-            "mainframe: could not create log directory {}: {err}",
-            dir.display()
+        boot_error(
+            &format!("could not create log directory {}", dir.display()),
+            &err,
         );
     }
     purge_old_logs(&dir);
@@ -145,6 +143,16 @@ pub fn init(log_dir: &std::path::Path) -> Option<WorkerGuard> {
     tracing::info!(log_level = %level, raw = %raw, "logger initialized");
 
     Some(guard)
+}
+
+pub fn boot_error(context: &str, error: &dyn std::fmt::Display) {
+    let subscriber = tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .with_ansi(false)
+        .finish();
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::error!(%error, "{context}");
+    });
 }
 
 #[cfg(test)]

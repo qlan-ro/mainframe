@@ -1,4 +1,8 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 use mainframe_display::decoders::{MainframeDecoders, NoopDecoders};
 use mainframe_display::display_pipeline::prepare_messages_with_decoders;
 use mainframe_display::incremental::IncrementalProjector;

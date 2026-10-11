@@ -4,7 +4,7 @@ impl SessionSinkImpl {
     pub(super) fn handle_queued_processed(&self, uuid: &str) {
         debug!(
             chat_id = self.chat_id,
-            uuid, "onQueuedProcessed: moving queued message to end + clearing flag"
+            uuid, "moving queued message to end + clearing flag"
         );
         let found_id = {
             let msgs = self.messages.lock_recover();
@@ -36,7 +36,7 @@ impl SessionSinkImpl {
         } else {
             warn!(
                 chat_id = self.chat_id,
-                uuid, "onQueuedProcessed: message not found in cache or already processed"
+                uuid, "message not found in cache or already processed"
             );
         }
         self.shared.handle_queued_processed(&self.chat_id, uuid);
@@ -64,7 +64,7 @@ impl SessionSinkImpl {
                     warn!(
                         chat_id = self.chat_id,
                         uuid = u,
-                        "onResult: orphan metadata.queued (no matching ref) — clearing"
+                        "orphan metadata.queued (no matching ref) — clearing"
                     );
                     self.shared.handle_queued_processed(&self.chat_id, &u);
                 }
@@ -76,7 +76,7 @@ impl SessionSinkImpl {
                 warn!(
                     chat_id = self.chat_id,
                     uuid = r.uuid,
-                    "onResult: orphan queuedRef (no matching cached message) — pruning"
+                    "orphan queuedRef (no matching cached message) — pruning"
                 );
                 self.shared.handle_queued_processed(&self.chat_id, &r.uuid);
             }

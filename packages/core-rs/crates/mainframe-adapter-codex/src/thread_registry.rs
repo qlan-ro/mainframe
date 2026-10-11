@@ -52,7 +52,6 @@ pub(crate) fn lookup_agent_metadata_with(
     };
     if std::fs::metadata(&path).is_err() {
         tracing::debug!(
-            module = "codex:thread-registry",
             db_path = %path.display(),
             "codex state DB not accessible — agent name lookup skipped"
         );
@@ -67,9 +66,8 @@ pub(crate) fn lookup_agent_metadata_with(
         }
         Err(err) => {
             tracing::warn!(
-                module = "codex:thread-registry",
-                err = %err,
-                "codex: failed to read thread registry"
+                error = %err,
+                "failed to read thread registry"
             );
         }
     }

@@ -66,7 +66,7 @@ impl ProcessWatch {
         if line.trim().is_empty() {
             return;
         }
-        tracing::trace!(module = "codex:jsonrpc", line, "jsonrpc recv");
+        tracing::trace!(line, "jsonrpc recv");
         match parse_jsonrpc_messages(&line) {
             Ok(messages) => {
                 for message in messages {
@@ -75,11 +75,7 @@ impl ProcessWatch {
             }
             Err(_) => {
                 let head: String = line.chars().take(200).collect();
-                tracing::warn!(
-                    module = "codex:jsonrpc",
-                    line = head,
-                    "jsonrpc: malformed JSON line"
-                );
+                tracing::warn!(line = head, "malformed JSON line");
             }
         }
     }
@@ -94,9 +90,9 @@ impl ProcessWatch {
         }
         self.tail.lock_recover().push(message.to_string());
         if is_tracing_line(message) {
-            tracing::debug!(module = "codex:jsonrpc", stderr = message, "codex stderr");
+            tracing::debug!(stderr = message, "codex stderr");
         } else {
-            tracing::warn!(module = "codex:jsonrpc", stderr = message, "codex stderr");
+            tracing::warn!(stderr = message, "codex stderr");
         }
     }
 

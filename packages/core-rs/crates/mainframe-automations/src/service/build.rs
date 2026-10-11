@@ -25,14 +25,7 @@ pub(super) async fn build(
     let runs = RunStore::new(db.clone());
     let interactions = InteractionStore::new(db.clone());
 
-    let registry = match ports.registry {
-        Some(registry) => registry,
-        None => {
-            let mut registry = ActionRegistry::new();
-            register_all_actions(&mut registry).map_err(StoreError::ActionRegistry)?;
-            Arc::new(registry)
-        }
-    };
+    let registry = action_registry(ports.registry.clone())?;
     let credentials = config.credentials;
     // Only the execution path needs expiry-refresh — the admin/UI accessor
     // (`AutomationsEngine::credentials()`) and webhook secrets keep reading
@@ -42,7 +35,57 @@ pub(super) async fn build(
         ports.clock.clone(),
     ));
 
-    let agent_verb = AgentVerb::new(ports.agent, runs.clone());
+    let (agent_verb, interpreter, completion) = build_interpreter(
+        &ports,
+        &runs,
+        &interactions,
+        &automations,
+        registry.clone(),
+        refreshing_credentials,
+    );
+
+    let (router, sweeper) = trigger_services(&automations, &interpreter, &agent_verb, &completion);
+    let webhook_deliveries = WebhookStateStore::new(db);
+    let webhooks = WebhookProcessor::new(
+        automations.clone(),
+        credentials.clone(),
+        interpreter.clone(),
+        webhook_deliveries.clone(),
+    );
+
+    Ok(Arc::new(AutomationsEngine {
+        automations,
+        runs,
+        interactions: interactions.clone(),
+        interaction_service: InteractionService::new(
+            interactions.clone(),
+            interpreter.clone(),
+            ports.events.clone(),
+        ),
+        interpreter,
+        registry,
+        credentials,
+        webhooks,
+        webhook_deliveries,
+        sweeper,
+        router,
+        event_source: ports.event_source,
+        agent_verb,
+        clock: ports.clock,
+        tasks: StdMutex::new(Vec::new()),
+        started: std::sync::atomic::AtomicBool::new(false),
+    }))
+}
+
+fn build_interpreter(
+    ports: &AutomationsPorts,
+    runs: &RunStore,
+    interactions: &InteractionStore,
+    automations: &AutomationStore,
+    registry: Arc<ActionRegistry>,
+    refreshing_credentials: Arc<RefreshingCredentialStore>,
+) -> (Arc<AgentVerb>, Arc<Interpreter>, Arc<CompletionEmitter>) {
+    let agent_verb = AgentVerb::new(ports.agent.clone(), runs.clone());
     let verb_ports = EngineVerbPorts {
         agent: agent_verb.clone(),
         ask_me: AskMeVerb::new(
@@ -78,11 +121,29 @@ pub(super) async fn build(
     }));
     agent_verb.bind_advancer(interpreter.clone());
 
-    let interaction_service = InteractionService::new(
-        interactions.clone(),
-        interpreter.clone(),
-        ports.events.clone(),
-    );
+    (agent_verb, interpreter, completion)
+}
+
+fn action_registry(
+    registry: Option<Arc<ActionRegistry>>,
+) -> Result<Arc<ActionRegistry>, StoreError> {
+    let registry = match registry {
+        Some(registry) => registry,
+        None => {
+            let mut registry = ActionRegistry::new();
+            register_all_actions(&mut registry).map_err(StoreError::ActionRegistry)?;
+            Arc::new(registry)
+        }
+    };
+    Ok(registry)
+}
+
+fn trigger_services(
+    automations: &AutomationStore,
+    interpreter: &Arc<Interpreter>,
+    agent_verb: &Arc<AgentVerb>,
+    completion: &Arc<CompletionEmitter>,
+) -> (Arc<TriggerRouter>, Arc<ScheduleSweeper>) {
     let firer = Arc::new(TriggerFirer::new(automations.clone(), interpreter.clone()));
     let router = Arc::new(TriggerRouter::new(
         automations.clone(),
@@ -91,30 +152,5 @@ pub(super) async fn build(
     ));
     completion.bind_router(router.clone());
     let sweeper = Arc::new(ScheduleSweeper::new(automations.clone(), firer));
-    let webhook_deliveries = WebhookStateStore::new(db.clone());
-    let webhooks = WebhookProcessor::new(
-        automations.clone(),
-        credentials.clone(),
-        interpreter.clone(),
-        webhook_deliveries.clone(),
-    );
-
-    Ok(Arc::new(AutomationsEngine {
-        automations,
-        runs,
-        interactions,
-        interaction_service,
-        interpreter,
-        registry,
-        credentials,
-        webhooks,
-        webhook_deliveries,
-        sweeper,
-        router,
-        event_source: ports.event_source,
-        agent_verb,
-        clock: ports.clock,
-        tasks: StdMutex::new(Vec::new()),
-        started: std::sync::atomic::AtomicBool::new(false),
-    }))
+    (router, sweeper)
 }

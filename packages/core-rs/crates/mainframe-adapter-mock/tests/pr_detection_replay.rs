@@ -4,7 +4,12 @@
 //! is private, `emit_event` is `pub(crate)`; see `src/dispatch.rs:23,29`).
 //! Proves the decorator applies to every adapter, not just Claude's own
 //! NDJSON handlers.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(clippy::too_many_lines, reason = "Test assertions and scenarios")]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use std::sync::Arc;
 use std::time::Duration;

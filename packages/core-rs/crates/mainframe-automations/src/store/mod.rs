@@ -5,6 +5,7 @@
 
 pub mod automation_store;
 mod checkpoint_mutation;
+pub(crate) use checkpoint_mutation::StepTransition;
 pub mod db;
 pub mod interaction_store;
 pub(crate) mod run_rows;

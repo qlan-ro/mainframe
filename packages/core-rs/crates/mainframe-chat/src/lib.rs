@@ -5,7 +5,15 @@
 //! stays FIFO per chat, and a chat lock is never held across an `.await` that
 //! emits events or does session I/O.
 #![forbid(unsafe_code)]
-#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
+#![cfg_attr(
+    test,
+    allow(
+        clippy::too_many_lines,
+        clippy::unwrap_used,
+        clippy::expect_used,
+        reason = "Test assertions and scenarios"
+    )
+)]
 
 macro_rules! storage_event {
     ($shared:expr, $result:expr $(, $fallback:expr)?) => {
@@ -62,7 +70,7 @@ pub mod worktree_offer_scan;
 mod history_cache;
 
 #[cfg(any(test, feature = "test-support"))]
-#[allow(dead_code, clippy::unwrap_used, clippy::expect_used)]
+#[expect(dead_code, reason = "Shared test helpers")]
 pub mod test_support;
 #[cfg(any(test, feature = "test-support"))]
 mod test_support_chat;

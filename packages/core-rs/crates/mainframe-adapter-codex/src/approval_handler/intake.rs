@@ -15,6 +15,10 @@ use super::approval_options::{approval_triad, ask_user_question_options, exit_pl
 use super::{ApprovalHandler, PendingApproval, RespondFn};
 
 impl ApprovalHandler {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "approval protocol method dispatch and response shape table"
+    )]
     pub fn handle_request(
         &self,
         method: &str,
@@ -131,11 +135,7 @@ impl ApprovalHandler {
             self.report_unanswered(result);
             return;
         } else {
-            tracing::warn!(
-                module = "codex:approvals",
-                method,
-                "codex: unknown server request method"
-            );
+            tracing::warn!(method, "unknown server request method");
             self.report_unanswered(respond(json_rpc_id, json!({ "decision": "decline" })));
             return;
         }
@@ -163,7 +163,6 @@ impl ApprovalHandler {
         );
 
         tracing::info!(
-            module = "codex:approvals",
             mainframe_request_id,
             ?json_rpc_id,
             tool_name,
@@ -191,7 +190,7 @@ impl ApprovalHandler {
     /// to the session: the turn would otherwise wait on it silently.
     fn report_unanswered(&self, result: Result<(), crate::jsonrpc::JsonRpcError>) {
         if let Err(error) = result {
-            tracing::warn!(module = "codex:approvals", %error, "codex: server request not answered");
+            tracing::warn!(%error, "server request not answered");
             self.sink.on_error(error.into());
         }
     }

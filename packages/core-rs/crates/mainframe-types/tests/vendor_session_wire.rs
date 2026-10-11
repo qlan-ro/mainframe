@@ -1,4 +1,8 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 use mainframe_types::{chat_patch::ChatPatch, events::DaemonEvent};
 use serde_json::json;
 

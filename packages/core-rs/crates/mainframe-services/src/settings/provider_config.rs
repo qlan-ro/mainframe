@@ -10,7 +10,7 @@ pub async fn get_provider_config(settings: &dyn SettingsKv, adapter_id: &str) ->
     let rows = match settings.get_by_category("provider").await {
         Ok(rows) => rows,
         Err(err) => {
-            tracing::warn!(%err, category = "provider", adapter_id, "provider settings read failed; using defaults");
+            tracing::warn!(error = %err, category = "provider", adapter_id, "provider settings read failed; using defaults");
             return ProviderConfig::default();
         }
     };

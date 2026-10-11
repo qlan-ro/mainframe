@@ -1,4 +1,8 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 //! Byte-level pin of the serialized `Chat`. The expected string was captured
 //! from the pre-refactor struct; serde emits keys in declaration order

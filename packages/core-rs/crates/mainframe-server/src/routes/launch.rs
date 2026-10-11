@@ -138,7 +138,7 @@ async fn get_configs(
     let parsed: serde_json::Value = match serde_json::from_str(&raw) {
         Ok(value) => value,
         Err(err) => {
-            tracing::warn!(module = "routes:launch", %err, "invalid launch.json");
+            tracing::warn!(error = %err, "invalid launch.json");
             return ok(json!([]));
         }
     };
@@ -170,7 +170,7 @@ async fn start(
     let parsed_json: serde_json::Value = match serde_json::from_str(&raw) {
         Ok(value) => value,
         Err(err) => {
-            tracing::warn!(module = "routes:launch", %err, "invalid launch.json");
+            tracing::warn!(error = %err, "invalid launch.json");
             return fail(StatusCode::BAD_REQUEST, "Invalid launch.json");
         }
     };

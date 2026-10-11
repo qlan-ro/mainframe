@@ -36,60 +36,7 @@ pub const BODY_LIMIT_BYTES: usize = 30 * 1024 * 1024;
 /// the auth middleware; the WS upgrade at `/` authenticates itself; CORS and the
 /// body limit wrap everything.
 pub fn build_app(ctx: Arc<AppCtx>) -> Router {
-    let mut http = Router::new()
-        .route("/health", get(routes::health::get_health))
-        .merge(routes::auth::router())
-        .merge(routes::device::router())
-        .merge(routes::projects::router())
-        .merge(routes::tags::router())
-        .merge(routes::settings::router())
-        .merge(routes::commands::router())
-        .merge(routes::files::router())
-        .merge(routes::search::router())
-        .merge(routes::git::router())
-        .merge(routes::git_remotes::router())
-        .merge(routes::git_write::router())
-        .merge(routes::git_chat::router())
-        .merge(routes::attachments::router())
-        .merge(routes::chats::router())
-        .merge(routes::chat_commands::router())
-        .merge(routes::chat_fork::router())
-        .merge(routes::chat_create::router())
-        .merge(routes::chat_discard::router())
-        .merge(routes::chat_side_chat::router())
-        .merge(routes::chat_switch::router())
-        .merge(routes::agent_outbox::router())
-        .merge(routes::context::router())
-        .merge(routes::worktree::router())
-        .merge(routes::worktree_offer::router())
-        .merge(routes::chat_recovery::router())
-        .merge(routes::session_transcripts::router())
-        .merge(routes::external_sessions::router())
-        .merge(routes::background_tasks::router())
-        .merge(routes::adapters::router())
-        .merge(routes::adapter_catalog::router())
-        .merge(routes::skills_cli::router())
-        .merge(routes::skills_registry::router())
-        .merge(routes::suggestions::router())
-        .merge(routes::setup_advisor::router())
-        .merge(routes::quota::router())
-        // Launch (per-project process control), tunnel and per-port tunnels
-        // (cloudflared), and the LSP language-status endpoint.
-        .merge(routes::launch::router())
-        .merge(routes::tunnel::router())
-        .merge(routes::tunnel_ports::router())
-        .merge(routes::lsp_routes::router())
-        // Automations v2. All behind auth EXCEPT the webhook ingress,
-        // which middleware/auth.rs exempts by path (HMAC-verified instead).
-        .merge(routes::automations::router())
-        .merge(routes::automation_admin::router())
-        .merge(routes::automation_credentials_github::router())
-        .merge(routes::automation_webhook::router())
-        // Standalone notifications for work launched outside a chat/run (e.g.
-        // an ask_agent-spawned CLI session). Behind auth like everything
-        // above, but loopback callers reach it with no token regardless
-        // (middleware/auth.rs — loopback is never rejected).
-        .merge(routes::notifications::router());
+    let mut http = http_routes();
 
     // Plugin routes — the PluginManager owns a parent router (listing + per-plugin
     // sub-routers) mounted under `/api/plugins`, behind the auth layer. Its state
@@ -178,4 +125,61 @@ fn apply_cors_headers(headers: &mut HeaderMap, origin: Option<&str>) {
         HeaderName::from_static("x-content-type-options"),
         HeaderValue::from_static("nosniff"),
     );
+}
+
+fn http_routes() -> Router<Arc<AppCtx>> {
+    Router::new()
+        .route("/health", get(routes::health::get_health))
+        .merge(routes::auth::router())
+        .merge(routes::device::router())
+        .merge(routes::projects::router())
+        .merge(routes::tags::router())
+        .merge(routes::settings::router())
+        .merge(routes::commands::router())
+        .merge(routes::files::router())
+        .merge(routes::search::router())
+        .merge(routes::git::router())
+        .merge(routes::git_remotes::router())
+        .merge(routes::git_write::router())
+        .merge(routes::git_chat::router())
+        .merge(routes::attachments::router())
+        .merge(routes::chats::router())
+        .merge(routes::chat_commands::router())
+        .merge(routes::chat_fork::router())
+        .merge(routes::chat_create::router())
+        .merge(routes::chat_discard::router())
+        .merge(routes::chat_side_chat::router())
+        .merge(routes::chat_switch::router())
+        .merge(routes::agent_outbox::router())
+        .merge(routes::context::router())
+        .merge(routes::worktree::router())
+        .merge(routes::worktree_offer::router())
+        .merge(routes::chat_recovery::router())
+        .merge(routes::session_transcripts::router())
+        .merge(routes::external_sessions::router())
+        .merge(routes::background_tasks::router())
+        .merge(routes::adapters::router())
+        .merge(routes::adapter_catalog::router())
+        .merge(routes::skills_cli::router())
+        .merge(routes::skills_registry::router())
+        .merge(routes::suggestions::router())
+        .merge(routes::setup_advisor::router())
+        .merge(routes::quota::router())
+        // Launch (per-project process control), tunnel and per-port tunnels
+        // (cloudflared), and the LSP language-status endpoint.
+        .merge(routes::launch::router())
+        .merge(routes::tunnel::router())
+        .merge(routes::tunnel_ports::router())
+        .merge(routes::lsp_routes::router())
+        // Automations v2. All behind auth EXCEPT the webhook ingress,
+        // which middleware/auth.rs exempts by path (HMAC-verified instead).
+        .merge(routes::automations::router())
+        .merge(routes::automation_admin::router())
+        .merge(routes::automation_credentials_github::router())
+        .merge(routes::automation_webhook::router())
+        // Standalone notifications for work launched outside a chat/run (e.g.
+        // an ask_agent-spawned CLI session). Behind auth like everything
+        // above, but loopback callers reach it with no token regardless
+        // (middleware/auth.rs — loopback is never rejected).
+        .merge(routes::notifications::router())
 }

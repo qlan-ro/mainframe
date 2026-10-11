@@ -125,14 +125,18 @@ fn launch_cfg(name: &str, exe: &str, args: &[&str]) -> LaunchConfiguration {
 }
 
 async fn poll_added(registry: &RecordingRegistry) -> ManagedChildEntry {
-    for _ in 0..80 {
-        if let Some(entry) = registry.added().into_iter().next() {
-            return entry;
-        }
-        // Wait for the real process lifecycle to advance.
-        sleep(Duration::from_millis(25)).await;
-    }
-    panic!("no launch pid was recorded");
+    let mut entry = None;
+    mainframe_runtime::test_support::poll_until(
+        Duration::from_secs(2),
+        Duration::from_millis(25),
+        async || {
+            entry = registry.added().into_iter().next();
+            entry.is_some()
+        },
+    )
+    .await
+    .expect("no launch pid was recorded");
+    entry.unwrap()
 }
 
 #[path = "launch_manager_tests_child_registry.rs"]
@@ -147,11 +151,11 @@ mod exit_order;
 mod start_stop;
 
 async fn wait_until(predicate: impl Fn() -> bool) {
-    tokio::time::timeout(Duration::from_secs(10), async {
-        while !predicate() {
-            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-        }
-    })
+    mainframe_runtime::test_support::poll_until(
+        Duration::from_secs(10),
+        std::time::Duration::from_millis(5),
+        async || !(!predicate()),
+    )
     .await
     .expect("child process reached the expected state");
 }

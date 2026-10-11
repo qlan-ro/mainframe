@@ -6,7 +6,11 @@
 //! (`history_subagents.rs`'s `inject_agent_children` and `mainframe-chat`'s
 //! `on_subagent_child` mutate-in-place path) — so there is nothing to
 //! reconcile there.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use std::sync::{Arc, Mutex};
 

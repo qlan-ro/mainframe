@@ -5,7 +5,7 @@
 //! wiring precisely) and can be `hold()`-gated mid-effect to model a crash /
 //! cancel while a step is `running`. Idempotent flags match the real
 //! catalog so the restart policy behaves identically.
-#![allow(dead_code)]
+#![allow(dead_code, reason = "Shared test helpers")]
 
 use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicBool, Ordering};

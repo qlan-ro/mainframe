@@ -53,8 +53,5 @@ pub(super) fn dispatch(
         return;
     }
 
-    tracing::warn!(
-        module = "codex:jsonrpc",
-        "jsonrpc: unrecognized message shape"
-    );
+    tracing::warn!("unrecognized message shape");
 }

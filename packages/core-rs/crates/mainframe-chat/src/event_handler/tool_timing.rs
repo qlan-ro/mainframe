@@ -33,7 +33,7 @@ impl SessionSinkImpl {
                 chat_id = self.chat_id,
                 parent_tool_use_id = parent,
                 block_count = count,
-                "onSubagentChild: parent tool_use not found in cache; dropping blocks"
+                "parent tool_use not found in cache; dropping blocks"
             );
         }
     }

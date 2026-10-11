@@ -11,7 +11,7 @@ use mainframe_types::{
 type Db = SqliteActor<DatabaseManager>;
 
 fn store_error(err: mainframe_db::DbError) -> SeamError {
-    tracing::error!(%err, "chat storage operation failed");
+    tracing::error!(error = %err, "chat storage operation failed");
     SeamError::new(err)
 }
 
@@ -19,6 +19,7 @@ impl ChatStore for Db {
     fn segment_store(&self) -> Option<&dyn crate::segments::SegmentStore> {
         None
     }
+    #[tracing::instrument(skip_all, fields(chat_id = id))]
     fn chats_get(&self, id: &str) -> Result<Option<Chat>, SeamError> {
         let id = id.to_string();
         self.call_blocking(move |d| d.chats.get(&id))
@@ -29,11 +30,13 @@ impl ChatStore for Db {
         self.call_blocking(move |d| d.chats.create(&new_chat))
             .map_err(store_error)
     }
+    #[tracing::instrument(skip_all, fields(chat_id))]
     fn chats_delete(&self, chat_id: &str) -> Result<(), SeamError> {
         let chat_id = chat_id.to_string();
         self.call_blocking(move |d| d.chats.delete(&chat_id))
             .map_err(store_error)
     }
+    #[tracing::instrument(skip_all, fields(chat_id))]
     fn chats_update(&self, chat_id: &str, patch: &ChatPatch) -> Result<(), SeamError> {
         let chat_id = chat_id.to_string();
         let patch = patch.clone();
@@ -71,6 +74,7 @@ impl ChatStore for Db {
         self.call_blocking(move |d| d.chats.reset_working_to_idle())
             .map_err(store_error)
     }
+    #[tracing::instrument(skip_all, fields(chat_id))]
     fn chats_add_mention(&self, chat_id: &str, mention: &SessionMention) -> Result<(), SeamError> {
         let chat_id = chat_id.to_string();
         let mention = mention.clone();
@@ -78,24 +82,28 @@ impl ChatStore for Db {
             .map_err(store_error)
             .map(|_| ())
     }
+    #[tracing::instrument(skip_all, fields(chat_id))]
     fn add_plan_file(&self, chat_id: &str, file_path: &str) -> Result<bool, SeamError> {
         let chat_id = chat_id.to_string();
         let file_path = file_path.to_string();
         self.call_blocking(move |d| d.chats.add_plan_file(&chat_id, &file_path))
             .map_err(store_error)
     }
+    #[tracing::instrument(skip_all, fields(chat_id))]
     fn add_skill_file(&self, chat_id: &str, entry: &SkillFileEntry) -> Result<bool, SeamError> {
         let chat_id = chat_id.to_string();
         let entry = entry.clone();
         self.call_blocking(move |d| d.chats.add_skill_file(&chat_id, &entry))
             .map_err(store_error)
     }
+    #[tracing::instrument(skip_all, fields(chat_id))]
     fn update_todos(&self, chat_id: &str, todos: &[TodoItem]) -> Result<(), SeamError> {
         let chat_id = chat_id.to_string();
         let todos = todos.to_vec();
         self.call_blocking(move |d| d.chats.update_todos(&chat_id, &todos))
             .map_err(store_error)
     }
+    #[tracing::instrument(skip_all, fields(chat_id))]
     fn add_detected_prs(
         &self,
         chat_id: &str,
@@ -106,11 +114,13 @@ impl ChatStore for Db {
         self.call_blocking(move |d| d.chats.add_detected_prs(&chat_id, &prs))
             .map_err(store_error)
     }
+    #[tracing::instrument(skip_all, fields(chat_id))]
     fn get_dismissed_worktrees(&self, chat_id: &str) -> Result<Vec<String>, SeamError> {
         let chat_id = chat_id.to_string();
         self.call_blocking(move |d| d.chats.get_dismissed_worktrees(&chat_id))
             .map_err(store_error)
     }
+    #[tracing::instrument(skip_all, fields(chat_id))]
     fn add_dismissed_worktree(
         &self,
         chat_id: &str,
@@ -121,42 +131,50 @@ impl ChatStore for Db {
         self.call_blocking(move |d| d.chats.add_dismissed_worktree(&chat_id, &worktree_path))
             .map_err(store_error)
     }
+    #[tracing::instrument(skip_all, fields(chat_id))]
     fn chats_clear_session(&self, chat_id: &str) -> Result<(), SeamError> {
         let chat_id = chat_id.to_string();
         self.call_blocking(move |d| d.chats.clear_session(&chat_id))
             .map_err(store_error)
     }
+    #[tracing::instrument(skip_all, fields(chat_id))]
     fn chats_clear_worktree(&self, chat_id: &str) -> Result<(), SeamError> {
         let chat_id = chat_id.to_string();
         self.call_blocking(move |d| d.chats.clear_worktree(&chat_id))
             .map_err(store_error)
     }
+    #[tracing::instrument(skip_all, fields(chat_id))]
     fn mark_context_lost(&self, chat_id: &str, context_lost_at: &str) -> Result<(), SeamError> {
         let chat_id = chat_id.to_string();
         let context_lost_at = context_lost_at.to_string();
         self.call_blocking(move |d| d.chats.mark_context_lost(&chat_id, &context_lost_at))
             .map_err(store_error)
     }
+    #[tracing::instrument(skip_all, fields(chat_id = %insert.parent_chat_id))]
     fn create_fork(&self, insert: &ForkCreateInput) -> Result<Chat, SeamError> {
         let insert = insert.clone();
         self.call_blocking(move |d| d.chats.create_fork(&insert.as_insert()))
             .map_err(store_error)
     }
+    #[tracing::instrument(skip_all, fields(chat_id))]
     fn get_pending_fork(&self, chat_id: &str) -> Result<Option<PendingForkState>, SeamError> {
         let chat_id = chat_id.to_string();
         self.call_blocking(move |d| d.chats.get_pending_fork(&chat_id))
             .map_err(store_error)
     }
+    #[tracing::instrument(skip_all, fields(chat_id))]
     fn clear_pending_fork(&self, chat_id: &str) -> Result<(), SeamError> {
         let chat_id = chat_id.to_string();
         self.call_blocking(move |d| d.chats.clear_pending_fork(&chat_id))
             .map_err(store_error)
     }
+    #[tracing::instrument(skip_all, fields(chat_id = %parent.id))]
     fn chats_find_or_create_side_chat(&self, parent: &Chat) -> Result<(Chat, bool), SeamError> {
         let parent = parent.clone();
         self.call_blocking(move |d| d.chats.find_or_create_side_chat(&parent))
             .map_err(store_error)
     }
+    #[tracing::instrument(skip_all, fields(chat_id))]
     fn owned_native_sessions(
         &self,
         chat_id: &str,

@@ -140,7 +140,8 @@ impl ChatLifecycleManager {
     /// First caller wins, matching `EventHandler::set_chat_surface` — a
     /// second call (e.g. a stray double-attach) is a harmless no-op.
     pub fn set_chat_surface(&self, surface: Arc<dyn ChatSurface>) {
-        let _ = self.chat_surface.set(surface);
+        /* expected */
+        let _ = self.chat_surface.set(surface); // First attachment wins.
     }
 
     /// The orchestration hooks every spawn and teardown path consults — the
@@ -402,7 +403,7 @@ impl ChatLifecycleManager {
         let result = self.do_start_chat(chat_id).await;
         drop(notify);
         if let Err(err) = result {
-            warn!(?err, chat_id, "startChat failed");
+            warn!(error = ?err, chat_id, "startChat failed");
             self.shared.emit(DaemonEvent::Error {
                 chat_id: Some(chat_id.to_string()),
                 error: err.to_string(),
@@ -451,7 +452,7 @@ impl ChatLifecycleManager {
         if let Some(session) = session
             && let Err(err) = session.interrupt().await
         {
-            warn!(?err, chat_id, "interrupt failed");
+            warn!(error = ?err, chat_id, "interrupt failed");
         }
     }
 
@@ -487,7 +488,7 @@ impl ChatLifecycleManager {
         if let Some(session) = &session
             && let Err(err) = session.kill().await
         {
-            warn!(?err, chat_id, "session.kill failed on archive");
+            warn!(error = ?err, chat_id, "session.kill failed on archive");
         }
         self.shared.orchestration.revoke(chat_id);
 
@@ -496,40 +497,8 @@ impl ChatLifecycleManager {
             .and_then(|c| self.shared.deps.projects_get_path(&c.project_id));
         let effective_path = worktree_path.clone().or_else(|| project_path.clone());
 
-        if let (Some(chat), Some(project_path), Some(effective_path)) =
-            (&chat, &project_path, &effective_path)
-        {
-            let last_user = is_last_active_chat_for_scope(
-                &self.shared.best_effort(
-                    chat_id,
-                    self.shared.deps.chats_list(&chat.project_id),
-                    Vec::new(),
-                ),
-                project_path,
-                effective_path,
-                chat_id,
-            );
-            if last_user {
-                if let Some(fut) = self
-                    .shared
-                    .deps
-                    .stop_launch_processes(&chat.project_id, effective_path)
-                {
-                    fut.await;
-                }
-                if let Some(fut) = self
-                    .shared
-                    .deps
-                    .stop_scope_tunnels(&chat.project_id, effective_path)
-                {
-                    fut.await;
-                }
-                self.shared.emit(DaemonEvent::LaunchScopeReleased {
-                    project_id: chat.project_id.clone(),
-                    effective_path: effective_path.clone(),
-                });
-            }
-        }
+        self.release_archived_scope(chat_id, &chat, &project_path, &effective_path)
+            .await;
 
         if delete_worktree
             && let (Some(chat), Some(project_path)) = (&chat, &project_path)
@@ -541,22 +510,7 @@ impl ChatLifecycleManager {
                 .await;
         }
 
-        self.shared.deps.attachment_delete_chat(chat_id).await;
-        self.shared.best_effort(
-            chat_id,
-            self.shared.deps.chats_update(
-                chat_id,
-                &ChatPatch {
-                    status: Some(ChatStatus::Archived),
-                    ..Default::default()
-                },
-            ),
-            (),
-        );
-        info!(chat_id, "chat archived");
-        self.shared.emit(DaemonEvent::ChatEnded {
-            chat_id: chat_id.to_string(),
-        });
+        self.finish_archive(chat_id).await;
     }
 
     /// Stop a running session without ending the chat.
@@ -571,7 +525,7 @@ impl ChatLifecycleManager {
         if session.is_spawned()
             && let Err(err) = session.kill().await
         {
-            warn!(?err, chat_id, "session.kill failed on stopChat");
+            warn!(error = ?err, chat_id, "session.kill failed on stopChat");
         }
         self.shared.orchestration.revoke(chat_id);
         cell.lock_recover().session = None;
@@ -593,7 +547,7 @@ impl ChatLifecycleManager {
         if let Some(session) = &session
             && let Err(err) = session.kill().await
         {
-            warn!(?err, chat_id, "session.kill failed on endChat");
+            warn!(error = ?err, chat_id, "session.kill failed on endChat");
         }
         self.shared.orchestration.revoke(chat_id);
 
@@ -769,57 +723,13 @@ impl ChatLifecycleManager {
     /// first send after `session/resume` — raises no resync: "no previous
     /// entry" counts as changed, an unchanged list does not.
     async fn do_load_chat(&self, chat_id: &str) -> bool {
-        let Some(mut chat) =
-            storage_event!(self.shared, Some(chat_id); self.shared.deps.chats_get(chat_id), false)
-        else {
-            warn!(chat_id, "doLoadChat: chat not found");
+        let Some((chat, effective_path)) = self.prepare_load(chat_id).await else {
             return false;
         };
-        self.shared.active_chats.insert(
-            chat_id.to_string(),
-            Arc::new(Mutex::new(ActiveChat::new(chat.clone(), None))),
-        );
-        self.shared.messages.lock_recover().pin(chat_id);
-
-        // Before any resume target is read below, a dead ephemeral session's
-        // context loss must be marked (clears `vendor_session_id`, so the early
-        // return just past it fires and no session is created).
-        self.mark_context_lost_if_needed(chat_id, &mut chat);
-
-        let project_path = self.shared.deps.projects_get_path(&chat.project_id);
-        let Some(effective_path) = chat_cwd(
-            chat.worktree_path.as_deref(),
-            chat.scratch_path.as_deref(),
-            project_path.clone(),
-        ) else {
-            return false;
-        };
-        // Before the early returns below: a chat with no session still needs a
-        // baseline, and it must be re-seeded on every activation after a restart.
-        // A non-project chat has no worktrees to baseline (`project_path` is
-        // `None` for the hidden scratch row).
-        if let Some(project_path) = &project_path {
-            self.worktree_offers
-                .seed_baseline(chat_id, project_path)
-                .await;
-        }
-
-        if let Some(wt) = &chat.worktree_path
-            && !self.shared.deps.path_exists(wt)
-        {
-            return false;
-        }
-
-        // A fork's own session id may not exist yet (its first turn never ran)
-        // or may exist but crashed before the CLI wrote its transcript — either
-        // way, `fork_source` rides along so the adapter's own resolver
-        // (`resolve_resume`) can fall back to the pinned snapshot. Only a chat
-        // with neither an own id nor a pending fork has nothing to resume.
-        // A multi-segment chat composes every segment's history, even while
-        // its active segment has no session yet (switched, nothing sent):
-        // returning early below would hide the earlier segments.
+        // Compose earlier segments even when the active session has no transcript.
         let composed = self.compose_history(chat_id).await;
         let own_id = chat.vendor_session_id.clone();
+        // A pending fork snapshot can resume before the new session writes its own transcript.
         let fork_source = storage_event!(
             self.shared, Some(chat_id);
             self.shared.deps.get_pending_fork(chat_id),
@@ -966,74 +876,115 @@ impl ChatLifecycleManager {
         // along the way) and the no-persistence decision.
         let plan = self.resolve_spawn_plan(&chat, project_path).await?;
 
-        // See `do_load_chat`'s comment: a fork's own id and its pending-fork
-        // source can both be present (a crashed first turn already got an
-        // `on_init`), so both ride along and the adapter's own resolver decides.
-        let fork_source = self
-            .shared
-            .deps
-            .get_pending_fork(chat_id)?
-            .map(|pending| pending.fork_source);
-        let session = self
-            .shared
-            .deps
-            .create_session(
-                &chat.adapter_id,
-                SessionOptions {
-                    project_path: plan.cwd,
-                    chat_id: chat.vendor_session_id.clone(),
-                    mainframe_chat_id: chat_id.to_string(),
-                    session_file_path: chat.session_file_path.clone(),
-                    fork_source,
-                },
-            )
-            .ok_or_else(|| NotFound::new("Adapter", chat.adapter_id.clone()))?;
+        let session = self.create_start_session(chat_id, &chat, plan.cwd)?;
         cell.lock_recover().session = Some(session.clone());
 
         let sink = self
             .event_handler
             .build_sink(chat_id, Some(session.id().to_string()));
 
-        let executable_path = self
-            .provider_setting(&chat.adapter_id, "executablePath")
+        let mut options = self
+            .session_spawn_options(chat_id, &chat, plan.no_persistence)
             .await;
-        let system_prompt = self
-            .provider_setting(&chat.adapter_id, "systemPrompt")
-            .await;
-        let small_fast_model = self
-            .provider_setting(&chat.adapter_id, "cliproxySmallFastModel")
-            .await;
-        let tuning = self.shared.deps.resolve_tuning(chat_id).await;
-        let default_model = self.default_model_for(&chat.adapter_id).await;
 
         // The no-persistence flag write: persisted and mirrored into the active
         // chat before the spawn, so `on_init`'s stored provider id lands with
         // the right ephemeral flag already in place.
         self.apply_no_persistence_flag(&chat.id, &cell, plan.no_persistence);
 
-        let process = session
-            .spawn(
-                Some(SessionSpawnOptions {
-                    model: chat.model.clone().or_else(|| default_model.clone()),
-                    permission_mode: chat.permission_mode,
-                    plan_mode: Some(chat.plan_mode.unwrap_or(false)),
-                    executable_path,
-                    system_prompt,
-                    tuning,
-                    small_fast_model,
-                    default_model,
-                    no_persistence: Some(plan.no_persistence),
-                    orchestration_mcp: self.shared.orchestration.issue(chat_id, session.id()),
-                }),
-                Some(sink),
-            )
-            .await?;
+        options.orchestration_mcp = self.shared.orchestration.issue(chat_id, session.id());
+        let process = session.spawn(Some(options), Some(sink)).await?;
         info!(chat_id, "chat session started");
         self.shared.emit(DaemonEvent::ProcessStarted {
             chat_id: chat_id.to_string(),
             process,
         });
         Ok(())
+    }
+    async fn release_archived_scope(
+        &self,
+        chat_id: &str,
+        chat: &Option<Chat>,
+        project_path: &Option<String>,
+        effective_path: &Option<String>,
+    ) {
+        if let (Some(chat), Some(project_path), Some(effective_path)) =
+            (chat, project_path, effective_path)
+        {
+            let last_user = is_last_active_chat_for_scope(
+                &self.shared.best_effort(
+                    chat_id,
+                    self.shared.deps.chats_list(&chat.project_id),
+                    Vec::new(),
+                ),
+                project_path,
+                effective_path,
+                chat_id,
+            );
+            if last_user {
+                if let Some(fut) = self
+                    .shared
+                    .deps
+                    .stop_launch_processes(&chat.project_id, effective_path)
+                {
+                    fut.await;
+                }
+                if let Some(fut) = self
+                    .shared
+                    .deps
+                    .stop_scope_tunnels(&chat.project_id, effective_path)
+                {
+                    fut.await;
+                }
+                self.shared.emit(DaemonEvent::LaunchScopeReleased {
+                    project_id: chat.project_id.clone(),
+                    effective_path: effective_path.clone(),
+                });
+            }
+        }
+    }
+
+    async fn prepare_load(&self, chat_id: &str) -> Option<(Chat, String)> {
+        let Some(mut chat) =
+            storage_event!(self.shared, Some(chat_id); self.shared.deps.chats_get(chat_id), None)
+        else {
+            warn!(chat_id, "chat not found");
+            return None;
+        };
+        self.shared.active_chats.insert(
+            chat_id.to_string(),
+            Arc::new(Mutex::new(ActiveChat::new(chat.clone(), None))),
+        );
+        self.shared.messages.lock_recover().pin(chat_id);
+
+        // Before any resume target is read below, a dead ephemeral session's
+        // context loss must be marked (clears `vendor_session_id`, so the early
+        // return just past it fires and no session is created).
+        self.mark_context_lost_if_needed(chat_id, &mut chat);
+
+        let project_path = self.shared.deps.projects_get_path(&chat.project_id);
+        let effective_path = chat_cwd(
+            chat.worktree_path.as_deref(),
+            chat.scratch_path.as_deref(),
+            project_path.clone(),
+        )?;
+        // Before the early returns below: a chat with no session still needs a
+        // baseline, and it must be re-seeded on every activation after a restart.
+        // A non-project chat has no worktrees to baseline (`project_path` is
+        // `None` for the hidden scratch row).
+        if let Some(project_path) = &project_path {
+            self.worktree_offers
+                .seed_baseline(chat_id, project_path)
+                .await;
+        }
+
+        if let Some(wt) = &chat.worktree_path
+            && !self.shared.deps.path_exists(wt)
+        {
+            return None;
+        }
+
+        Some((chat, effective_path))
     }
 }
 
@@ -1042,6 +993,7 @@ impl ChatLifecycleManager {
 /// widening their visibility.
 mod flight_claims;
 
+mod session_helpers;
 #[cfg(test)]
 mod title_logging_tests;
 

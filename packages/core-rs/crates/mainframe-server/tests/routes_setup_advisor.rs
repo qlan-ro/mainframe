@@ -1,6 +1,10 @@
 //! Integration tests for the `GET /api/projects/{id}/automation-recommendations`
 //! route.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 

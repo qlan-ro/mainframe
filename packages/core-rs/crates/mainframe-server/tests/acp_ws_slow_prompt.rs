@@ -1,7 +1,11 @@
 //! A slow `session/prompt` blocks neither the socket loop nor the ordering its
 //! own session's `session/cancel` depends on. These tests need the
 //! `FacadeServer` fixture and a barrier adapter.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use mainframe_types::sync::LockExt as _;
 mod support;
@@ -104,19 +108,14 @@ async fn a_cancel_for_the_same_session_lands_after_its_prompt_is_in_flight() {
     let prompt_reply = read_until(&mut ws, |v| v["id"] == json!(1)).await;
     assert!(prompt_reply.get("result").is_some() || prompt_reply.get("error").is_some());
 
-    let log = tokio::time::timeout(Duration::from_secs(2), async {
-        loop {
-            {
-                let seen = interrupts.lock_recover();
-                if !seen.is_empty() {
-                    return seen.clone();
-                }
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-        }
-    })
+    mainframe_runtime::test_support::poll_until(
+        Duration::from_secs(2),
+        Duration::from_millis(5),
+        async || !interrupts.lock_recover().is_empty(),
+    )
     .await
-    .expect("the cancel must reach the session once the prompt releases it");
+    .expect("cancel reached the session");
+    let log = interrupts.lock_recover().clone();
 
     assert_eq!(
         log,

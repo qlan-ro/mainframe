@@ -27,7 +27,7 @@ pub(super) async fn deliver(child: &mut Child, kind: Signal, signal: &SignalFn) 
         }
         // Already exited; the monitor's `wait` arm reports it.
         (Ok(_), _) => {}
-        (Err(err), _) => tracing::warn!(?kind, ?err, "failed to check LSP server process"),
+        (Err(err), _) => tracing::warn!(?kind, error = ?err, "failed to check LSP server process"),
     }
 }
 
@@ -62,10 +62,11 @@ impl ManagerState {
                     language = %handle.language, project_path = %handle.project_path,
                     code = ?status.code(), "LSP server exited"
                 ),
-                Err(err) => tracing::error!(
-                    %err, language = %handle.language, project_path = %handle.project_path,
-                    "LSP server process error"
-                ),
+                Err(err) => {
+                    tracing::error!(error = %err, language = %handle.language, project_path = %handle.project_path,
+                        "LSP server process error"
+                    )
+                }
             }
             handle.exited.store(true, Ordering::SeqCst);
             handle.exit_notify.notify_waiters();

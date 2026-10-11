@@ -223,39 +223,7 @@ async fn validate_and_delete_worktree(
         return Err(InputError::Rejected("Cannot determine branch name for worktree").into());
     };
 
-    // Kill background tasks for every chat whose worktree resolves to this one.
-    let pid = project_id.to_string();
-    let chats = ctx.core.db.call(move |db| db.chats.list(&pid)).await?;
-    for chat in chats {
-        let Some(chat_wt) = chat.worktree_path.clone() else {
-            continue;
-        };
-        // Match by realpath equality, falling back to raw-string equality (so a
-        // request path like '/wt/x/', a symlinked alias, or a worktree already gone
-        // from disk still sweeps the chat's tracker entries).
-        let canonical_match = matches!(
-            tokio::fs::canonicalize(&chat_wt).await,
-            Ok(real) if real.to_string_lossy() == real_worktree_path.as_str()
-        );
-        if !(canonical_match || chat_wt == worktree_path) {
-            continue;
-        }
-        let session = ctx
-            .chat
-            .chat_manager
-            .get_session_for_chat(&chat.id)
-            .map(crate::session_kill_bridge::SessionKillBridge);
-        let session_ref = session.as_ref().map(|s| s as &dyn SessionLike);
-        kill_tasks_for_chat(KillTasksForChatArgs {
-            chat_id: &chat.id,
-            // canonical path so the sweep targets the right spool prefix.
-            worktree_path: Some(&real_worktree_path),
-            session: session_ref,
-            tracker: &ctx.core.background_tasks,
-            spool_root: None,
-        })
-        .await;
-    }
+    kill_worktree_tasks(ctx, project_id, worktree_path, &real_worktree_path).await?;
 
     let cm = &ctx.chat.chat_manager;
     let affected = cm
@@ -288,3 +256,46 @@ pub fn router() -> Router<Arc<AppCtx>> {
 #[cfg(test)]
 #[path = "worktree_tests.rs"]
 mod tests;
+
+async fn kill_worktree_tasks(
+    ctx: &Arc<AppCtx>,
+    project_id: &str,
+    worktree_path: &str,
+    real_worktree_path: &str,
+) -> Result<(), crate::respond::ApiError> {
+    // Kill background tasks for every chat whose worktree resolves to this one.
+    let pid = project_id.to_string();
+    let chats = ctx.core.db.call(move |db| db.chats.list(&pid)).await?;
+    for chat in chats {
+        let Some(chat_wt) = chat.worktree_path.clone() else {
+            continue;
+        };
+        // Match by realpath equality, falling back to raw-string equality (so a
+        // request path like '/wt/x/', a symlinked alias, or a worktree already gone
+        // from disk still sweeps the chat's tracker entries).
+        let canonical_match = matches!(
+            tokio::fs::canonicalize(&chat_wt).await,
+            Ok(real) if real.to_string_lossy() == real_worktree_path
+        );
+        if !(canonical_match || chat_wt == worktree_path) {
+            continue;
+        }
+        let session = ctx
+            .chat
+            .chat_manager
+            .get_session_for_chat(&chat.id)
+            .map(crate::session_kill_bridge::SessionKillBridge);
+        let session_ref = session.as_ref().map(|s| s as &dyn SessionLike);
+        kill_tasks_for_chat(KillTasksForChatArgs {
+            chat_id: &chat.id,
+            // canonical path so the sweep targets the right spool prefix.
+            worktree_path: Some(real_worktree_path),
+            session: session_ref,
+            tracker: &ctx.core.background_tasks,
+            spool_root: None,
+        })
+        .await;
+    }
+
+    Ok(())
+}

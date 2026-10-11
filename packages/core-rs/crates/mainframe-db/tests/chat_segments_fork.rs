@@ -1,7 +1,11 @@
 //! Forks of multi-segment chats: `create_fork` copies the parent's segments
 //! as planned, and a switch commit can turn an unsent fork's pinned native
 //! row into a borrowed view of the parent.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use mainframe_db::{DatabaseManager, ForkInsert, PendingFork};
 use mainframe_types::adapter::ForkSource;

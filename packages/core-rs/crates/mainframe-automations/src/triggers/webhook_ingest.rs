@@ -201,7 +201,7 @@ impl WebhookProcessor {
                 let run_id = run.id.clone();
                 tokio::spawn(async move {
                     if let Err(err) = interpreter.advance(&run_id).await {
-                        tracing::error!(run_id, error = %err, "webhook delivery: advance failed");
+                        tracing::error!(run_id, error = %err, "advance failed");
                     }
                 });
                 WebhookDecision::Accepted {
@@ -222,11 +222,11 @@ impl WebhookProcessor {
     /// delivery.
     async fn stamp_delivery(&self, hook_id: &str, now_ms: i64) {
         let Some(at) = chrono::DateTime::from_timestamp_millis(now_ms) else {
-            tracing::warn!(hook_id, now_ms, "webhook delivery: unrepresentable clock");
+            tracing::warn!(hook_id, now_ms, "unrepresentable clock");
             return;
         };
         if let Err(err) = self.state.record_delivery(hook_id, &at.to_rfc3339()).await {
-            tracing::warn!(hook_id, error = %err, "webhook delivery: recording the delivery time failed");
+            tracing::warn!(hook_id, error = %err, "recording the delivery time failed");
         }
     }
 

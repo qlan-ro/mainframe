@@ -153,10 +153,9 @@ impl HistorySnapshotCache {
         let snapshot: Snapshot = match serde_json::from_slice(&bytes) {
             Ok(s) => s,
             Err(err) => {
-                tracing::warn!(
-                    ?err,
+                tracing::warn!(error = ?err,
                     chat_id,
-                    "history snapshot cache: corrupt snapshot, reparsing"
+                    "corrupt snapshot, reparsing"
                 );
                 return None;
             }
@@ -179,7 +178,7 @@ impl HistorySnapshotCache {
         let cache = Arc::clone(self);
         let handle = tokio::spawn(async move {
             if let Err(err) = cache.write(&chat_id, fingerprint, messages).await {
-                tracing::warn!(%err, chat_id, "history snapshot cache: write failed");
+                tracing::warn!(error = %err, chat_id, "write failed");
             }
         });
         #[cfg(test)]
@@ -237,10 +236,9 @@ impl HistorySnapshotCache {
         files.sort_by_key(|(_, modified)| std::cmp::Reverse(*modified));
         for (path, _) in files.into_iter().skip(self.max_snapshots) {
             if let Err(err) = tokio::fs::remove_file(&path).await {
-                tracing::warn!(
-                    ?err,
+                tracing::warn!(error = ?err,
                     path = %path.display(),
-                    "history snapshot cache: failed to prune an old snapshot"
+                    "failed to prune an old snapshot"
                 );
             }
         }

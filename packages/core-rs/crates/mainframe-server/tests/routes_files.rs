@@ -1,7 +1,11 @@
 //! Integration tests for `routes/files.rs`. Real spawned app + real in-memory
 //! DB + real tempdir project (no mocks); the project is a real row, and no chat
 //! exists.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 

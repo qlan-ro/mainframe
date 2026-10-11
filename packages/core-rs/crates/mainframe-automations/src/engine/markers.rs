@@ -37,10 +37,12 @@ pub(crate) fn fail_enclosing_branch(
         &marker,
         block_id,
         StepKind::BranchOutcome,
-        StepStatus::Failed,
-        None,
-        Some(error.to_string()),
-        None,
+        crate::store::StepTransition {
+            status: StepStatus::Failed,
+            outputs: None,
+            error: Some(error.to_string()),
+            wake_at: None,
+        },
     );
 }
 
@@ -58,7 +60,17 @@ pub(crate) async fn mark_outcome(
     let record = ctx
         .store
         .patch_checkpoint(ctx.run_id, move |cp| {
-            cp.set_step(&marker, &step_id, kind, status, None, error.clone(), None);
+            cp.set_step(
+                &marker,
+                &step_id,
+                kind,
+                crate::store::StepTransition {
+                    status,
+                    outputs: None,
+                    error: error.clone(),
+                    wake_at: None,
+                },
+            );
         })
         .await?;
     Ok(record.checkpoint)

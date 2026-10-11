@@ -194,11 +194,11 @@ async fn watch_resolves_on_the_matching_terminal_chat_updated() {
     let port = agent_port(fake, tx.clone());
 
     let watching = tokio::spawn(async move { port.watch("chat_1").await });
-    tokio::time::timeout(Duration::from_secs(10), async {
-        while tx.receiver_count() < 2 {
-            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-        }
-    })
+    mainframe_runtime::test_support::poll_until(
+        Duration::from_secs(10),
+        std::time::Duration::from_millis(5),
+        async || !(tx.receiver_count() < 2),
+    )
     .await
     .expect("agent watch subscribed");
     tx.send(updated("other", Some(ChatUpdatedReason::Completed)))
@@ -226,11 +226,11 @@ async fn watch_maps_error_and_interrupt_reasons() {
         let (tx, _rx) = broadcast::channel(16);
         let port = agent_port(fake, tx.clone());
         let watching = tokio::spawn(async move { port.watch("chat_1").await });
-        tokio::time::timeout(Duration::from_secs(10), async {
-            while tx.receiver_count() < 2 {
-                tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-            }
-        })
+        mainframe_runtime::test_support::poll_until(
+            Duration::from_secs(10),
+            std::time::Duration::from_millis(5),
+            async || !(tx.receiver_count() < 2),
+        )
         .await
         .expect("agent watch subscribed");
         tx.send(updated("chat_1", Some(reason))).unwrap();
@@ -263,11 +263,11 @@ async fn retry_sends_the_correction_into_the_same_chat() {
         let port = port.clone();
         tokio::spawn(async move { port.retry("chat_1", "fix the JSON").await })
     };
-    tokio::time::timeout(Duration::from_secs(10), async {
-        while tx.receiver_count() < 2 {
-            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-        }
-    })
+    mainframe_runtime::test_support::poll_until(
+        Duration::from_secs(10),
+        std::time::Duration::from_millis(5),
+        async || !(tx.receiver_count() < 2),
+    )
     .await
     .expect("agent watch subscribed");
     tx.send(updated("chat_1", Some(ChatUpdatedReason::Completed)))

@@ -113,7 +113,7 @@ impl Interpreter {
         let run_id = run_id.to_string();
         tokio::spawn(async move {
             if let Err(err) = interpreter.advance(&run_id).await {
-                tracing::error!(run_id, error = %err, "wait resume: advance failed");
+                tracing::error!(run_id, error = %err, "advance failed");
             }
         });
         Ok(())

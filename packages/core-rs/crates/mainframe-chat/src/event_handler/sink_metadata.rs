@@ -148,10 +148,23 @@ impl SessionSinkImpl {
             scratch_path.as_deref(),
             project_path,
         );
-        if let Some(session_file_path) = cwd.as_deref().and_then(|cwd| {
+        self.persist_initial_transcript(&cell, &adapter_id, session_id, cwd.as_deref());
+        self.shared.emit(DaemonEvent::ProcessReady {
+            process_id: session_process_id.unwrap_or_default(),
+            vendor_session_id: session_id.to_string(),
+        });
+    }
+    fn persist_initial_transcript(
+        &self,
+        cell: &std::sync::Arc<std::sync::Mutex<crate::types::ActiveChat>>,
+        adapter_id: &str,
+        session_id: &str,
+        cwd: Option<&str>,
+    ) {
+        if let Some(session_file_path) = cwd.and_then(|cwd| {
             self.shared
                 .deps
-                .initial_transcript_path(&adapter_id, session_id, cwd)
+                .initial_transcript_path(adapter_id, session_id, cwd)
         }) {
             self.shared.best_effort(
                 &self.chat_id,
@@ -166,9 +179,5 @@ impl SessionSinkImpl {
             );
             cell.lock_recover().chat.session_file_path = Some(session_file_path);
         }
-        self.shared.emit(DaemonEvent::ProcessReady {
-            process_id: session_process_id.unwrap_or_default(),
-            vendor_session_id: session_id.to_string(),
-        });
     }
 }

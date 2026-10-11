@@ -91,7 +91,7 @@ impl ClaudeSession {
                 session_id = %self.id,
                 request_id = %response.request_id,
                 tool_name = ?response.tool_name,
-                "respondToPermission: stdin unavailable, response dropped"
+                "stdin unavailable, response dropped"
             );
             return Ok(());
         };
@@ -109,7 +109,7 @@ impl ClaudeSession {
     }
     pub async fn cancel_queued_message(&self, uuid: String) -> Result<bool, AdapterError> {
         let Some(tx) = self.available_stdin() else {
-            tracing::warn!(session_id = %self.id, uuid = %uuid, "cancelQueuedMessage: stdin unavailable");
+            tracing::warn!(session_id = %self.id, uuid = %uuid, "stdin unavailable");
             return Ok(false);
         };
         let raw = self
@@ -136,7 +136,7 @@ impl ClaudeSession {
         task_id: String,
     ) -> Result<StopBackgroundTaskResult, AdapterError> {
         let Some(tx) = self.available_stdin() else {
-            tracing::warn!(session_id = %self.id, task_id = %task_id, "stopBackgroundTask: stdin unavailable");
+            tracing::warn!(session_id = %self.id, task_id = %task_id, "stdin unavailable");
             return Ok(StopBackgroundTaskResult {
                 ok: false,
                 error: Some("stdin unavailable".to_string()),

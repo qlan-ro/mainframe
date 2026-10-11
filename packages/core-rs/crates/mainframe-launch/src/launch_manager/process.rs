@@ -67,7 +67,7 @@ pub(super) async fn wait_for_exit_task(
 
     let _gate = spawn_gate.lock().await;
     if !inner.is_current_generation(&name, generation) {
-        tracing::debug!(target: "launch", name = %name, pid = ?pid, "a newer start owns the name; leaving its status and tunnel alone");
+        tracing::debug!(name = %name, pid = ?pid, "a newer start owns the name; leaving its status and tunnel alone");
         return;
     }
     {
@@ -105,7 +105,7 @@ pub(super) async fn wait_for_port(
             }
         }
         if start.elapsed() > timings.port_timeout {
-            tracing::warn!(target: "launch", port, "port readiness timeout, proceeding anyway");
+            tracing::warn!(port, "port readiness timeout, proceeding anyway");
             return true;
         }
         if let Ok(Ok(_stream)) = tokio::time::timeout(
@@ -151,7 +151,6 @@ fn log_exit(name: &str, pid: Option<u32>, code: Option<i32>, stderr_tail: &Arc<M
         let tail = stderr_tail.lock_recover();
         if code != Some(0) && !tail.is_empty() {
             tracing::warn!(
-                target: "launch",
                 name = %name,
                 pid = ?pid,
                 code = ?code,
@@ -159,7 +158,7 @@ fn log_exit(name: &str, pid: Option<u32>, code: Option<i32>, stderr_tail: &Arc<M
                 "launch process failed"
             );
         } else {
-            tracing::info!(target: "launch", name = %name, pid = ?pid, code = ?code, "launch process exited");
+            tracing::info!(name = %name, pid = ?pid, code = ?code, "launch process exited");
         }
     }
 }

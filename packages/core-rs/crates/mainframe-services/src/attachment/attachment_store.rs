@@ -99,9 +99,7 @@ impl AttachmentStore {
             let materialized_path = match self.materialize(&files_dir, &id, &attachment).await {
                 Ok(path) => Some(path),
                 Err(err) => {
-                    tracing::warn!(
-                        module = "attachment-store",
-                        ?err,
+                    tracing::warn!(error = ?err,
                         chat_id,
                         name = %attachment.name,
                         "failed to materialize attachment file"
@@ -204,9 +202,7 @@ impl AttachmentStore {
                 if let Err(err) = tokio::fs::remove_dir_all(&dir).await {
                     // A missing directory is already deleted; surface other errors.
                     if err.kind() != std::io::ErrorKind::NotFound {
-                        tracing::warn!(
-                            module = "attachment-store",
-                            ?err,
+                        tracing::warn!(error = ?err,
                             chat_id,
                             "failed to delete chat attachments"
                         );
@@ -214,9 +210,7 @@ impl AttachmentStore {
                 }
             }
             Err(err) => {
-                tracing::warn!(
-                    module = "attachment-store",
-                    ?err,
+                tracing::warn!(error = ?err,
                     chat_id,
                     "failed to delete chat attachments"
                 );

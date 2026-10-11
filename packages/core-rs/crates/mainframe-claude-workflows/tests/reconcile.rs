@@ -1,5 +1,9 @@
 //! `reconcile::spawn_terminal_reconcile` — the terminal record backfill.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use std::sync::Arc;
 use std::time::Duration;

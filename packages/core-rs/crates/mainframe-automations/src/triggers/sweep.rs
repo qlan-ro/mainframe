@@ -40,7 +40,7 @@ impl ScheduleSweeper {
         let enabled = match self.automations.list_enabled().await {
             Ok(enabled) => enabled,
             Err(err) => {
-                tracing::error!(error = %err, "schedule sweep: listing automations failed");
+                tracing::error!(error = %err, "listing automations failed");
                 return;
             }
         };
@@ -67,7 +67,7 @@ impl ScheduleSweeper {
                     automation_id = automation.id,
                     trigger_id = trigger.id,
                     error = %err,
-                    "schedule sweep: occurrence computation failed"
+                    "occurrence computation failed"
                 );
                 return;
             }
@@ -98,7 +98,7 @@ impl ScheduleSweeper {
                 automation_id = automation.id,
                 trigger_id = trigger.id,
                 error = %err,
-                "schedule sweep: fire failed"
+                "fire failed"
             );
         }
     }

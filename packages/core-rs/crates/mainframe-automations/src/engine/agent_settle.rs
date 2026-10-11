@@ -76,7 +76,7 @@ impl AgentVerb {
         let run = match self.store.get_run(&key.run_id).await {
             Ok(run) => run,
             Err(err) => {
-                tracing::error!(run_id = key.run_id, error = %err, "agent settle: run load failed");
+                tracing::error!(run_id = key.run_id, error = %err, "run load failed");
                 return None;
             }
         };
@@ -112,7 +112,7 @@ impl AgentVerb {
 
     async fn settle_step(&self, key: &WaitKey, outcome: OutOfBandOutcome) {
         let Some(advancer) = self.advancer.get() else {
-            tracing::error!(run_id = key.run_id, "agent settle: no advancer bound");
+            tracing::error!(run_id = key.run_id, "no advancer bound");
             return;
         };
         let succeeded = matches!(outcome, OutOfBandOutcome::Succeeded(_));
@@ -125,16 +125,16 @@ impl AgentVerb {
         let run_id = key.run_id.as_str();
         match err {
             SettleError::Write(err) if succeeded => {
-                tracing::error!(run_id, error = %err, "agent settle: succeed write failed");
+                tracing::error!(run_id, error = %err, "succeed write failed");
             }
             SettleError::Write(err) => {
-                tracing::error!(run_id, error = %err, "agent settle: fail write failed");
+                tracing::error!(run_id, error = %err, "fail write failed");
             }
             SettleError::Advance(err) => {
-                tracing::error!(run_id, error = %err, "agent settle: advance failed");
+                tracing::error!(run_id, error = %err, "advance failed");
             }
             SettleError::Finalize(err) => {
-                tracing::error!(run_id, error = %err, "agent settle: run finalize failed");
+                tracing::error!(run_id, error = %err, "run finalize failed");
             }
         }
     }

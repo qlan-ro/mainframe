@@ -5,7 +5,15 @@
 //! once the submodules have real content). `__fixtures__/` and `__tests__/` are test
 //! support, not wire types, and are intentionally omitted from the module list.
 #![forbid(unsafe_code)]
-#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
+#![cfg_attr(
+    test,
+    allow(
+        clippy::too_many_lines,
+        clippy::unwrap_used,
+        clippy::expect_used,
+        reason = "Test assertions and scenarios"
+    )
+)]
 
 pub mod acp;
 pub mod adapter;

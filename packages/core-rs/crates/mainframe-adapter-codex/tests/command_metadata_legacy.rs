@@ -1,4 +1,8 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 use mainframe_adapter_codex::history::convert_thread_items;
 use mainframe_adapter_codex::rollout_reader::{RolloutReaderDeps, read_rollout_items};
 use serde_json::json;

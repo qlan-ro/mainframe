@@ -68,7 +68,9 @@ async fn locate_returns_present_at_the_stored_path_when_it_exists() {
 struct RemoveDirOnDrop(String);
 impl Drop for RemoveDirOnDrop {
     fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
+        if let Err(error) = std::fs::remove_dir_all(&self.0) {
+            tracing::warn!(%error, "best-effort operation failed");
+        }
     }
 }
 

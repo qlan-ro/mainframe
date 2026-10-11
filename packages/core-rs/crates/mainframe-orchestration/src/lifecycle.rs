@@ -92,7 +92,7 @@ impl OrchestrationService {
             return dropped_senders;
         }
         if let Err(err) = self.port.send(chat_id, &batch_body(&deliverable)).await {
-            tracing::warn!(chat_id, ?err, "outbox delivery failed; keeping entries");
+            tracing::warn!(chat_id, error = ?err, "outbox delivery failed; keeping entries");
             self.outbox.restore(deliverable);
             return dropped_senders;
         }
@@ -143,7 +143,7 @@ impl OrchestrationService {
             task.delivery = delivery;
             task.updated_at = now();
             if let Err(err) = self.save(&task).await {
-                tracing::warn!(task_id, %err, "failed to record a task delivery");
+                tracing::warn!(task_id, error = %err, "failed to record a task delivery");
             }
         }
     }
@@ -215,7 +215,7 @@ impl OrchestrationService {
                 }
             );
             if let Err(err) = self.advance(&task_id, interrupted).await {
-                tracing::warn!(task_id, %err, "failed to advance a delegated task");
+                tracing::warn!(task_id, error = %err, "failed to advance a delegated task");
             }
         }
         self.try_flush(chat_id).await;
@@ -230,7 +230,7 @@ impl OrchestrationService {
             .collect();
         for task_id in tracked {
             if let Err(err) = self.advance(&task_id, false).await {
-                tracing::warn!(task_id, %err, "failed to advance a delegated task");
+                tracing::warn!(task_id, error = %err, "failed to advance a delegated task");
             }
         }
         for target in self.outbox.targets() {

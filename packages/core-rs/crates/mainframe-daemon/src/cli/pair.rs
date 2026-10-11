@@ -39,38 +39,7 @@ pub(crate) async fn run_pair() {
         }
     };
 
-    // Request a pairing code.
-    let pair_res = match client
-        .post(format!("{base_url}/api/auth/pair"))
-        .json(&json!({ "deviceName": "CLI pairing" }))
-        .send()
-        .await
-    {
-        Ok(res) => res,
-        Err(err) => {
-            eprintln!("Pairing failed: {err}");
-            std::process::exit(1);
-        }
-    };
-    if !pair_res.status().is_success() {
-        let body: Value = pair_res.json().await.unwrap_or(Value::Null);
-        let error = body
-            .get("error")
-            .and_then(Value::as_str)
-            .unwrap_or("request failed");
-        eprintln!("Pairing failed: {error}");
-        std::process::exit(1);
-    }
-    let pair_body: Value = pair_res.json().await.unwrap_or(Value::Null);
-    let Some(pairing_code) = pair_body
-        .get("data")
-        .and_then(|d| d.get("pairingCode"))
-        .and_then(Value::as_str)
-        .map(str::to_string)
-    else {
-        eprintln!("Pairing failed: malformed response");
-        std::process::exit(1);
-    };
+    let pairing_code = request_pairing_code(&client, &base_url).await;
     let tunnel_url = health
         .get("tunnelUrl")
         .and_then(Value::as_str)
@@ -89,40 +58,7 @@ pub(crate) async fn run_pair() {
 
     println!("  Waiting for device to pair...");
 
-    // Poll every 2s until paired, up to the 5-minute code window.
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(5 * 60);
-    loop {
-        if tokio::time::Instant::now() >= deadline {
-            println!("\n  Pairing code expired. Run `mainframe pair` to try again.\n");
-            std::process::exit(1);
-        }
-        tokio::time::sleep(Duration::from_secs(2)).await;
-        let url = format!(
-            "{base_url}/api/auth/pair-status?code={}",
-            urlencode(&pairing_code)
-        );
-        let Ok(res) = client.get(url).send().await else {
-            continue; // transient network error — keep polling
-        };
-        let body: Value = res.json().await.unwrap_or(Value::Null);
-        let data = body.get("data");
-        if data
-            .and_then(|d| d.get("paired"))
-            .and_then(Value::as_bool)
-            .unwrap_or(false)
-        {
-            let name = data
-                .and_then(|d| d.get("deviceName"))
-                .and_then(Value::as_str)
-                .unwrap_or("device");
-            let id = data
-                .and_then(|d| d.get("deviceId"))
-                .and_then(Value::as_str)
-                .unwrap_or("?");
-            println!("{}", format_device_paired(name, id));
-            std::process::exit(0);
-        }
-    }
+    wait_for_pairing(&client, &base_url, &pairing_code).await;
 }
 
 /// The pairing-code banner printed as soon as the daemon issues a code.
@@ -167,3 +103,76 @@ fn urlencode(value: &str) -> String {
 #[cfg(test)]
 #[path = "pair_tests.rs"]
 mod tests;
+
+async fn request_pairing_code(client: &reqwest::Client, base_url: &str) -> String {
+    // Request a pairing code.
+    let pair_res = match client
+        .post(format!("{base_url}/api/auth/pair"))
+        .json(&json!({ "deviceName": "CLI pairing" }))
+        .send()
+        .await
+    {
+        Ok(res) => res,
+        Err(err) => {
+            eprintln!("Pairing failed: {err}");
+            std::process::exit(1);
+        }
+    };
+    if !pair_res.status().is_success() {
+        let body: Value = pair_res.json().await.unwrap_or(Value::Null);
+        let error = body
+            .get("error")
+            .and_then(Value::as_str)
+            .unwrap_or("request failed");
+        eprintln!("Pairing failed: {error}");
+        std::process::exit(1);
+    }
+    let pair_body: Value = pair_res.json().await.unwrap_or(Value::Null);
+    let Some(pairing_code) = pair_body
+        .get("data")
+        .and_then(|d| d.get("pairingCode"))
+        .and_then(Value::as_str)
+        .map(str::to_string)
+    else {
+        eprintln!("Pairing failed: malformed response");
+        std::process::exit(1);
+    };
+    pairing_code
+}
+
+async fn wait_for_pairing(client: &reqwest::Client, base_url: &str, pairing_code: &str) {
+    // Poll every 2s until paired, up to the 5-minute code window.
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5 * 60);
+    loop {
+        if tokio::time::Instant::now() >= deadline {
+            println!("\n  Pairing code expired. Run `mainframe pair` to try again.\n");
+            std::process::exit(1);
+        }
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        let url = format!(
+            "{base_url}/api/auth/pair-status?code={}",
+            urlencode(pairing_code)
+        );
+        let Ok(res) = client.get(url).send().await else {
+            continue; // transient network error — keep polling
+        };
+        let body: Value = res.json().await.unwrap_or(Value::Null);
+        let data = body.get("data");
+        if data
+            .and_then(|d| d.get("paired"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+        {
+            let name = data
+                .and_then(|d| d.get("deviceName"))
+                .and_then(Value::as_str)
+                .unwrap_or("device");
+            let id = data
+                .and_then(|d| d.get("deviceId"))
+                .and_then(Value::as_str)
+                .unwrap_or("?");
+            println!("{}", format_device_paired(name, id));
+            std::process::exit(0);
+        }
+    }
+}

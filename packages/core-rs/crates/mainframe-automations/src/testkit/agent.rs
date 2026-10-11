@@ -62,7 +62,7 @@ impl FakeAgentPort {
     pub fn complete(&self, chat_id: &str, outcome: OutcomeResult) {
         if self.chan(chat_id).tx.send(outcome).is_err() {
             // Unreachable: the receiver lives in the same `Chan` as the sender.
-            tracing::warn!(chat_id, "fake agent port: watch channel closed");
+            tracing::warn!(chat_id, "watch channel closed");
         }
     }
 

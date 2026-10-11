@@ -1,4 +1,4 @@
-#![allow(clippy::unwrap_used)]
+#![allow(clippy::unwrap_used, reason = "Test assertions and scenarios")]
 
 use mainframe_acp::encoder::{EncodedItem, encode};
 use mainframe_display::display_pipeline::prepare_messages_for_client;

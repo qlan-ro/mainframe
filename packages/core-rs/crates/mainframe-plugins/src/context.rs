@@ -218,21 +218,7 @@ pub fn build_plugin_context(deps: PluginContextDeps) -> Result<Arc<PluginContext
 
     let ui: Arc<dyn PluginUi> =
         if has(PluginCapability::UiPanels) || has(PluginCapability::UiNotifications) {
-            let host_db = Arc::clone(&deps.host_db);
-            let gate: crate::ui_context::NotifyGate = Box::new(move || {
-                let host_db = host_db.clone();
-                Box::pin(async move {
-                    let raw = mainframe_services::settings::read_setting(
-                        host_db.settings(),
-                        "general",
-                        "notifications",
-                    )
-                    .await;
-                    mainframe_services::notifications::parse_notification_config(raw.as_deref())
-                        .other
-                        .plugin
-                })
-            });
+            let gate = notification_gate(Arc::clone(&deps.host_db));
             Arc::new(create_plugin_ui_context(
                 &deps.manifest.id,
                 Arc::clone(&deps.emit),
@@ -349,3 +335,6 @@ mod guards {
 
     pub use crate::github_port_guard::GuardGitHub;
 }
+
+mod notification;
+use notification::notification_gate;

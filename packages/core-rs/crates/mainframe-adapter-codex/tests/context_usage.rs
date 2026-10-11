@@ -1,7 +1,11 @@
 //! the Codex adapter must publish `ContextUsage` through the same
 //! sink contract Claude uses. Drives `thread/tokenUsage/updated` through
 //! `handle_notification`, mirroring `tests/quota_notification.rs`.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod common;
 

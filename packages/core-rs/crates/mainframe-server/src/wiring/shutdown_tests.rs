@@ -4,7 +4,7 @@ use mainframe_launch::{
 };
 use std::os::unix::fs::PermissionsExt;
 use std::sync::Arc;
-use tokio::time::{sleep, timeout};
+use tokio::time::timeout;
 
 #[path = "shutdown/fixture.rs"]
 mod fixture;

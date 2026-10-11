@@ -21,7 +21,7 @@ pub(super) fn not_found() -> Response {
 }
 
 pub(super) fn server_error(err: PluginError) -> Response {
-    tracing::error!(err = %err, "todos: database error");
+    tracing::error!(error = %err, "database error");
     json_response(
         StatusCode::INTERNAL_SERVER_ERROR,
         json!({ "error": "Internal error" }),

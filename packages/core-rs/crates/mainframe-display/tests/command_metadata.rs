@@ -1,4 +1,8 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 use mainframe_display::display_helpers::{apply_tool_grouping, convert_assistant_content};
 use mainframe_display::message_grouping::GroupedMessage;
 use mainframe_types::chat::{ChatMessage, ChatMessageType};

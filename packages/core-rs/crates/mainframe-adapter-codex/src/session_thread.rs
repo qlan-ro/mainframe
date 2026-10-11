@@ -75,11 +75,10 @@ impl CodexSession {
             && res.thread.forked_from_id.as_deref() != Some(expected)
         {
             tracing::warn!(
-                module = "codex:session",
                 session_id = %self.id,
                 expected,
                 actual = ?res.thread.forked_from_id,
-                "codex: forked thread's forkedFromId does not match the fork source"
+                "forked thread's forkedFromId does not match the fork source"
             );
         }
     }

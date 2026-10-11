@@ -103,7 +103,7 @@ impl PushService {
                 },
             );
         }
-        tracing::info!(module = "push", device_id, "push token registered");
+        tracing::info!(device_id, "push token registered");
     }
 
     pub fn unregister_device(&self, device_id: &str) {
@@ -145,11 +145,11 @@ impl PushService {
                 tokio::time::sleep(Duration::from_millis(STALENESS_MS)).await;
                 let mut guard = inner.lock_recover();
                 guard.desktop_active = false;
-                tracing::info!(module = "push", "desktop staleness timeout — resuming push");
+                tracing::info!("desktop staleness timeout — resuming push");
             });
             self.lock().staleness_handle = Some(handle);
         }
-        tracing::info!(module = "push", active, "desktop active state changed");
+        tracing::info!(active, "desktop active state changed");
     }
 
     pub fn dispose(&self) {
@@ -167,22 +167,18 @@ impl PushService {
         let client = match &self.client {
             Ok(client) => client,
             Err(err) => {
-                tracing::error!(module = "push", ?err, "failed to send push notification");
+                tracing::error!(error = ?err, "failed to send push notification");
                 return;
             }
         };
         match client.post(&self.url).json(&messages).send().await {
             Ok(res) => {
                 if !res.status().is_success() {
-                    tracing::error!(
-                        module = "push",
-                        status = res.status().as_u16(),
-                        "expo push API error"
-                    );
+                    tracing::error!(status = res.status().as_u16(), "expo push API error");
                 }
             }
             Err(err) => {
-                tracing::error!(module = "push", ?err, "failed to send push notification");
+                tracing::error!(error = ?err, "failed to send push notification");
             }
         }
     }
@@ -194,7 +190,7 @@ impl PushService {
         let tokens = {
             let inner = self.lock();
             if inner.desktop_active {
-                tracing::debug!(module = "push", "push suppressed — desktop is active");
+                tracing::debug!("push suppressed — desktop is active");
                 return Vec::new();
             }
             let mut seen: HashSet<String> = HashSet::new();

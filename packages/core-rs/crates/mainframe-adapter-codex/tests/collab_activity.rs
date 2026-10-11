@@ -1,7 +1,11 @@
 //! Pins the sub-agent-activity lifecycle against `BackgroundTaskTracker`.
 //! Payload shapes come from `tests/collab_delegation.rs` and
 //! `tests/fixtures/collab-delegation-0.144.3.jsonl`.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod common;
 

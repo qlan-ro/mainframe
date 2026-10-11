@@ -2,7 +2,11 @@
 //! `clear_session` / `clear_worktree` degraded-recovery helpers. (The migration
 //! that adds the column itself is version 25 in `mainframe-db::migrations`, with
 //! its own test; here we exercise the repository read/write path.)
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use mainframe_types::chat_patch::ChatPatch;
 use std::rc::Rc;

@@ -1,3 +1,4 @@
+from test_gate_conventions import ConventionTests
 import tempfile
 import unittest
 from pathlib import Path
@@ -102,6 +103,25 @@ class GateTests(unittest.TestCase):
         path = self.write('src/lib.rs', '#[cfg(test)] mod checks { include!("lib.rs"); }\n'
                           'fn run() { x.unwrap(); }')
         self.assertEqual(len(scan_file(path)), 1)
+
+    def test_field_and_variant_attributes_do_not_exempt_following_impl(self):
+        for attr in ['#[cfg(test)]', '#[cfg(any(test, feature = "test-support"))]']:
+            for declaration in ['struct S { ATTR field: u8, }', 'enum S { ATTR Variant, }',
+                                'struct S { ATTR field: u8 }', 'struct S { ATTR field: Result<A, B>, }', 'fn make() { S { ATTR field: value.unwrap(), } }']:
+                path = self.write('src/example.rs', declaration.replace('ATTR', attr) +
+                                  '\nimpl S { fn run() { value.unwrap(); } }')
+                self.assertEqual(len(scan_file(path)), 1)
+
+    def test_item_attributes_exempt_module_function_and_impl(self):
+        for item in ['mod tests { fn run() { value.unwrap(); } }',
+                     'fn run() { value.unwrap(); }', 'impl S { fn run() { value.unwrap(); } }']:
+            path = self.write('src/example.rs', '#[cfg(test)] ' + item)
+            self.assertEqual(scan_file(path), [])
+
+    def test_last_field_without_comma_keeps_its_parent_closing_brace(self):
+        from verify_gate_rules import measured_lines
+        path = self.write('src/example.rs', 'struct S {\n#[cfg(test)]\nfield: u8\n}\n')
+        self.assertEqual(measured_lines(path, set()), 2)
 
 
 if __name__ == '__main__':

@@ -101,18 +101,8 @@ impl TaskBridge {
         input: &HashMap<String, serde_json::Value>,
     ) {
         let string = |key: &str| input.get(key).and_then(|v| v.as_str()).unwrap_or_default();
-        let backgrounded = input
-            .get("run_in_background")
-            .and_then(serde_json::Value::as_bool)
-            .unwrap_or(false);
-        let kind = if name == WORKFLOW_TOOL {
-            BackgroundWorkKind::Workflow
-        } else if SUBAGENT_TOOLS.contains(&name) {
-            BackgroundWorkKind::Agent
-        } else if name == "Bash" && backgrounded {
-            BackgroundWorkKind::Bash
-        } else {
-            return; // foreground work is not background work
+        let Some(kind) = background_kind(name, input) else {
+            return;
         };
         let workflow_name = (kind == BackgroundWorkKind::Workflow).then(|| {
             let named = string("workflowName");
@@ -211,3 +201,23 @@ impl TaskBridge {
 #[cfg(test)]
 #[path = "task_bridge_tests.rs"]
 mod tests;
+
+fn background_kind(
+    name: &str,
+    input: &HashMap<String, serde_json::Value>,
+) -> Option<BackgroundWorkKind> {
+    let backgrounded = input
+        .get("run_in_background")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+    let kind = if name == WORKFLOW_TOOL {
+        BackgroundWorkKind::Workflow
+    } else if SUBAGENT_TOOLS.contains(&name) {
+        BackgroundWorkKind::Agent
+    } else if name == "Bash" && backgrounded {
+        BackgroundWorkKind::Bash
+    } else {
+        return None; // Foreground work has no background task.
+    };
+    Some(kind)
+}

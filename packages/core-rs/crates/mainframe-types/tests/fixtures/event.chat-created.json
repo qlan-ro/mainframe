@@ -36,18 +36,21 @@
       "model": "claude-sonnet-5",
       "permissionMode": "acceptEdits",
       "planMode": false,
-      "contextFiles": ["packages/core/src/server/ws.ts"],
+      "contextFiles": ["packages/core-rs/crates/mainframe-server/src/websocket.rs"],
       "mentions": [
         {
           "id": "mnt_1",
           "kind": "file",
           "source": "user",
           "name": "ws.ts",
-          "path": "packages/core/src/server/ws.ts",
+          "path": "packages/core-rs/crates/mainframe-server/src/websocket.rs",
           "timestamp": "2026-07-08T10:15:30.000Z"
         }
       ],
-      "modifiedFiles": ["packages/core/src/server/ws.ts", "packages/core/src/server/__tests__/ws.test.ts"],
+      "modifiedFiles": [
+        "packages/core-rs/crates/mainframe-server/src/websocket.rs",
+        "packages/core-rs/crates/mainframe-server/tests/websocket.rs"
+      ],
       "worktreePath": "/Users/doru/Projects/mainframe/.worktrees/fix-ws-reconnect",
       "branchName": "fix/ws-reconnect",
       "processState": "working",

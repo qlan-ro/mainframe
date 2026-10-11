@@ -79,29 +79,30 @@ pub(super) fn tunnels(
 }
 
 pub(super) async fn wait_for_pid(path: &std::path::Path) -> i64 {
-    timeout(Duration::from_secs(3), async {
-        loop {
-            if let Ok(text) = tokio::fs::read_to_string(path).await
-                && let Ok(pid) = text.trim().parse::<i64>()
-            {
-                break pid;
-            }
-            // OS child; Tokio time cannot be paused.
-            sleep(Duration::from_millis(10)).await;
-        }
-    })
+    let mut pid = None;
+    mainframe_runtime::test_support::poll_until(
+        Duration::from_secs(3),
+        Duration::from_millis(10),
+        async || {
+            pid = tokio::fs::read_to_string(path)
+                .await
+                .ok()
+                .and_then(|text| text.trim().parse::<i64>().ok());
+            pid.is_some()
+        },
+    )
     .await
-    .unwrap()
+    .unwrap();
+    pid.unwrap()
 }
 
 pub(super) async fn wait_for_phase(tunnels: &TunnelManager, registered: bool) {
     if registered {
-        timeout(Duration::from_secs(3), async {
-            while tunnels.get_url("daemon").is_none() {
-                // OS child; Tokio time cannot be paused.
-                sleep(Duration::from_millis(10)).await;
-            }
-        })
+        mainframe_runtime::test_support::poll_until(
+            Duration::from_secs(3),
+            Duration::from_millis(10),
+            async || !(tunnels.get_url("daemon").is_none()),
+        )
         .await
         .unwrap();
     } else {

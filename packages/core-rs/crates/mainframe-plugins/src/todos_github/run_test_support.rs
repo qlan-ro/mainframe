@@ -54,7 +54,10 @@ pub(super) async fn link_project(ctx: &PluginContext, project_id: &str) {
     .unwrap();
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "test fixture supplies every persisted pairing field"
+)]
 pub(super) async fn insert_pair(
     ctx: &PluginContext,
     todo_id: &str,

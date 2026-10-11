@@ -68,6 +68,13 @@ pub trait GitExec: Send + Sync {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RealGitExec;
 
+#[path = "git_service_branches.rs"]
+mod branches;
+#[path = "git_service_sync.rs"]
+mod sync;
+#[path = "git_service_update.rs"]
+mod update;
+
 impl GitExec for RealGitExec {
     async fn exec(
         &self,
@@ -142,120 +149,6 @@ impl<E: GitExec> GitService<E> {
         ))
     }
 
-    pub async fn branches(&self) -> Result<BranchListResult, GitServiceError> {
-        let info = self.branch_info(true).await?;
-        let mut local: Vec<BranchInfo> = Vec::new();
-        let mut remote: Vec<String> = Vec::new();
-
-        // Build branch → worktree dirname map from `git worktree list`.
-        let mut branch_to_worktree: std::collections::HashMap<String, String> =
-            std::collections::HashMap::new();
-        let mut worktree_names: Vec<String> = Vec::new();
-        if let Ok(wt_output) = self
-            .git(argv!["worktree", "list", "--porcelain"], None)
-            .await
-        {
-            let entries = parse_worktree_list(&wt_output);
-            for (i, entry) in entries.iter().enumerate() {
-                // Skip the main worktree (always the first entry).
-                if i == 0 {
-                    continue;
-                }
-                let Some(branch) = &entry.branch else {
-                    continue;
-                };
-                let branch_name = branch
-                    .strip_prefix("refs/heads/")
-                    .unwrap_or(branch)
-                    .to_string();
-                let dir_name = basename(&entry.path);
-                branch_to_worktree.insert(branch_name, dir_name.clone());
-                if !worktree_names.contains(&dir_name) {
-                    worktree_names.push(dir_name);
-                }
-            }
-        }
-
-        for name in &info.all {
-            if name.starts_with("remotes/") {
-                // Skip pseudo-refs like "remotes/origin/HEAD -> origin/main".
-                if name.contains(" -> ") || name.ends_with("/HEAD") {
-                    continue;
-                }
-                let remote_name = name.strip_prefix("remotes/").unwrap_or(name).to_string();
-                remote.push(remote_name);
-            } else {
-                let mut tracking: Option<String> = None;
-                let mut ahead: Option<i64> = None;
-                let mut behind: Option<i64> = None;
-                if let Ok(upstream_raw) = self
-                    .git(
-                        argv!["rev-parse", "--abbrev-ref", format!("{name}@{{upstream}}")],
-                        None,
-                    )
-                    .await
-                {
-                    let upstream = upstream_raw.trim();
-                    if !upstream.is_empty() {
-                        tracking = Some(upstream.to_string());
-                        let counts_raw = self
-                            .git(
-                                argv![
-                                    "rev-list",
-                                    "--left-right",
-                                    "--count",
-                                    format!("{name}...{upstream}")
-                                ],
-                                None,
-                            )
-                            .await?;
-                        let counts = counts_raw.trim();
-                        let mut parts = counts.split_whitespace();
-                        let a = parts.next().unwrap_or("");
-                        let b = parts.next().unwrap_or("");
-                        ahead = Some(js_parse_int(a));
-                        behind = Some(js_parse_int(b));
-                    }
-                }
-                local.push(BranchInfo {
-                    name: name.clone(),
-                    current: *name == info.current,
-                    tracking,
-                    ahead,
-                    behind,
-                    worktree: branch_to_worktree.get(name).cloned(),
-                });
-            }
-        }
-
-        // Detect active merge/rebase operation.
-        let mut active_operation: Option<ActiveOperation> = None;
-        if let Ok(git_dir_raw) = self.git(argv!["rev-parse", "--git-dir"], None).await {
-            let git_dir = git_dir_raw.trim();
-            if fs_exists(&Path::new(git_dir).join("MERGE_HEAD")).await {
-                active_operation = Some(ActiveOperation::Merge);
-            }
-            if active_operation.is_none()
-                && fs_exists(&Path::new(git_dir).join("rebase-merge")).await
-            {
-                active_operation = Some(ActiveOperation::Rebase);
-            }
-            if active_operation.is_none()
-                && fs_exists(&Path::new(git_dir).join("rebase-apply")).await
-            {
-                active_operation = Some(ActiveOperation::Rebase);
-            }
-        }
-
-        Ok(BranchListResult {
-            current: info.current,
-            local,
-            remote,
-            worktrees: worktree_names,
-            active_operation,
-        })
-    }
-
     pub async fn stage(&self, files: &[String]) -> Result<(), GitServiceError> {
         let mut args = argv!["add"];
         args.extend(files.iter().cloned());
@@ -304,32 +197,7 @@ impl<E: GitExec> GitService<E> {
         let mut files: Vec<WorkingStatFile> = Vec::new();
 
         let numstat = self.git(argv!["diff", "--numstat", "HEAD"], None).await?;
-        for line in numstat.split('\n').filter(|l| !l.is_empty()) {
-            let parts: Vec<&str> = line.split('\t').collect();
-            let add_str = parts.first().copied().unwrap_or("");
-            let del_str = parts.get(1).copied().unwrap_or("");
-            let path = if parts.len() > 2 {
-                parts[2..].join("\t")
-            } else {
-                String::new()
-            };
-            if path.is_empty() {
-                continue;
-            }
-            files.push(WorkingStatFile {
-                path,
-                additions: if add_str == "-" {
-                    0
-                } else {
-                    js_parse_int(add_str)
-                },
-                deletions: if del_str == "-" {
-                    0
-                } else {
-                    js_parse_int(del_str)
-                },
-            });
-        }
+        append_numstat(&numstat, &mut files);
 
         // Untracked files (`-uall` lists individual files inside new directories).
         let status = self
@@ -481,147 +349,6 @@ impl<E: GitExec> GitService<E> {
         })
     }
 
-    pub async fn pull(
-        &self,
-        remote: Option<&str>,
-        branch: Option<&str>,
-        local_branch: Option<&str>,
-    ) -> Result<PullResult, GitServiceError> {
-        let _guard = acquire_project_lock(&self.project_path).await;
-        // When a local branch is specified and differs from the current branch,
-        // use `git fetch remote remoteBranch:localBranch` to fast-forward the
-        // target ref without switching the working tree.
-        if let (Some(local), Some(br)) = (local_branch, branch) {
-            let current_branch = self.branch_info(false).await?.current;
-            if current_branch != local {
-                let pull_remote = remote.unwrap_or("origin");
-                let ref_before = self
-                    .git(argv!["rev-parse", local], None)
-                    .await?
-                    .trim()
-                    .to_string();
-                self.git(
-                    argv!["fetch", pull_remote, format!("{br}:{local}")],
-                    NO_TIMEOUT,
-                )
-                .await?;
-                let ref_after = self
-                    .git(argv!["rev-parse", local], None)
-                    .await?
-                    .trim()
-                    .to_string();
-                if ref_before == ref_after {
-                    return Ok(PullResult::UpToDate);
-                }
-                return Ok(PullResult::Success {
-                    summary: PullSummary {
-                        changes: 0,
-                        insertions: 0,
-                        deletions: 0,
-                    },
-                });
-            }
-        }
-
-        let mut args = argv!["pull"];
-        if let Some(r) = remote {
-            args.push(r.to_string());
-        }
-        if let Some(b) = branch {
-            args.push(b.to_string());
-        }
-        args.push("--ff-only".to_string());
-        match self.git(args, NO_TIMEOUT).await {
-            Ok(out) => {
-                let summary = parse_diff_stat_summary(&out);
-                if summary.changes == 0 && summary.insertions == 0 && summary.deletions == 0 {
-                    Ok(PullResult::UpToDate)
-                } else {
-                    Ok(PullResult::Success {
-                        summary: PullSummary {
-                            changes: summary.changes,
-                            insertions: summary.insertions,
-                            deletions: summary.deletions,
-                        },
-                    })
-                }
-            }
-            Err(err) => {
-                let conflicts = self.unmerged_paths().await?;
-                if !conflicts.is_empty() {
-                    Ok(PullResult::Conflict {
-                        conflicts,
-                        message: err.message.clone(),
-                    })
-                } else {
-                    Err(err.into())
-                }
-            }
-        }
-    }
-
-    pub async fn push(
-        &self,
-        branch: Option<&str>,
-        remote: Option<&str>,
-    ) -> Result<PushResult, GitServiceError> {
-        let _guard = acquire_project_lock(&self.project_path).await;
-        let current_branch = match branch {
-            Some(b) => b.to_string(),
-            None => self.branch_info(false).await?.current,
-        };
-        let push_remote = remote.unwrap_or("origin").to_string();
-
-        // Look up the tracking branch to build a correct refspec when the local
-        // and remote branch names differ.
-        let mut remote_branch = current_branch.clone();
-        if let Ok(upstream_raw) = self
-            .git(
-                argv![
-                    "rev-parse",
-                    "--abbrev-ref",
-                    format!("{current_branch}@{{upstream}}")
-                ],
-                None,
-            )
-            .await
-        {
-            let upstream = upstream_raw.trim();
-            if !upstream.is_empty()
-                && let Some(idx) = upstream.find('/')
-                && idx > 0
-            {
-                remote_branch = upstream[idx + 1..].to_string();
-            }
-        }
-
-        match self
-            .git(
-                argv![
-                    "push",
-                    push_remote.clone(),
-                    format!("{current_branch}:{remote_branch}")
-                ],
-                NO_TIMEOUT,
-            )
-            .await
-        {
-            Ok(_) => Ok(PushResult::Success {
-                branch: current_branch,
-                remote: push_remote,
-            }),
-            Err(err) => {
-                if err.message.contains("non-fast-forward") || err.message.contains("rejected") {
-                    Ok(PushResult::Rejected {
-                        message: err.message,
-                    })
-                } else {
-                    Err(err.into())
-                }
-            }
-        }
-    }
-
     pub async fn merge(&self, branch: &str) -> Result<MergeResult, GitServiceError> {
         let _guard = acquire_project_lock(&self.project_path).await;
         match self.git(argv!["merge", branch], NO_TIMEOUT).await {
@@ -746,121 +473,6 @@ impl<E: GitExec> GitService<E> {
             }
         }
     }
-
-    pub async fn update_all(&self) -> Result<UpdateAllResult, GitServiceError> {
-        let _guard = acquire_project_lock(&self.project_path).await;
-        let mut fetched = false;
-        match self
-            .git(argv!["fetch", "--all", "--prune"], NO_TIMEOUT)
-            .await
-        {
-            Ok(_) => fetched = true,
-            Err(err) => tracing::warn!(?err, "fetch --all failed during updateAll"),
-        }
-
-        // Pull current branch.
-        let pull: PullResult;
-        match self.git(argv!["pull", "--ff-only"], NO_TIMEOUT).await {
-            Ok(out) => {
-                let summary = parse_diff_stat_summary(&out);
-                pull = if summary.changes == 0 && summary.insertions == 0 && summary.deletions == 0
-                {
-                    PullResult::UpToDate
-                } else {
-                    PullResult::Success {
-                        summary: PullSummary {
-                            changes: summary.changes,
-                            insertions: summary.insertions,
-                            deletions: summary.deletions,
-                        },
-                    }
-                };
-            }
-            Err(err) => {
-                let conflicts = self.unmerged_paths().await?;
-                if !conflicts.is_empty() {
-                    pull = PullResult::Conflict {
-                        conflicts,
-                        message: err.message.clone(),
-                    };
-                } else {
-                    tracing::warn!(?err, "pull failed during updateAll");
-                    pull = PullResult::UpToDate;
-                }
-            }
-        }
-
-        // Fast-forward all non-current local branches that have tracking remotes.
-        let mut branches: Vec<BranchUpdateStatus> = Vec::new();
-        match self.branch_info(true).await {
-            Ok(branch_result) => {
-                let current_branch = branch_result.current.clone();
-                for name in &branch_result.all {
-                    if name.starts_with("remotes/") || *name == current_branch {
-                        continue;
-                    }
-                    let upstream = match self
-                        .git(
-                            argv!["rev-parse", "--abbrev-ref", format!("{name}@{{upstream}}")],
-                            None,
-                        )
-                        .await
-                    {
-                        Ok(u) => u.trim().to_string(),
-                        Err(_) => continue, // no tracking remote
-                    };
-                    let idx = match upstream.find('/') {
-                        Some(i) if i > 0 => i,
-                        _ => continue,
-                    };
-                    let remote = &upstream[..idx];
-                    let remote_branch = &upstream[idx + 1..];
-                    let updated: Result<BranchUpdateStatusKind, GitExecError> = async {
-                        let ref_before = self
-                            .git(argv!["rev-parse", name], None)
-                            .await?
-                            .trim()
-                            .to_string();
-                        self.git(
-                            argv!["fetch", remote, format!("{remote_branch}:{name}")],
-                            NO_TIMEOUT,
-                        )
-                        .await?;
-                        let ref_after = self
-                            .git(argv!["rev-parse", name], None)
-                            .await?
-                            .trim()
-                            .to_string();
-                        Ok(if ref_before == ref_after {
-                            BranchUpdateStatusKind::UpToDate
-                        } else {
-                            BranchUpdateStatusKind::Updated
-                        })
-                    }
-                    .await;
-                    match updated {
-                        Ok(status) => branches.push(BranchUpdateStatus {
-                            branch: name.clone(),
-                            status,
-                            error: None,
-                        }),
-                        Err(err) => branches.push(BranchUpdateStatus {
-                            branch: name.clone(),
-                            status: BranchUpdateStatusKind::Error,
-                            error: Some(err.message),
-                        }),
-                    }
-                }
-            }
-            Err(err) => tracing::warn!(?err, "branch enumeration failed during updateAll"),
-        }
-
-        Ok(UpdateAllResult {
-            fetched,
-            pull,
-            branches,
-        })
-    }
 }
 
 /// `path.basename` — the final component of a path.
@@ -884,3 +496,32 @@ mod mock_tests;
 #[cfg(test)]
 #[path = "git_service_review_tests.rs"]
 mod review_tests;
+
+fn append_numstat(numstat: &str, files: &mut Vec<WorkingStatFile>) {
+    for line in numstat.split('\n').filter(|l| !l.is_empty()) {
+        let parts: Vec<&str> = line.split('\t').collect();
+        let add_str = parts.first().copied().unwrap_or("");
+        let del_str = parts.get(1).copied().unwrap_or("");
+        let path = if parts.len() > 2 {
+            parts[2..].join("\t")
+        } else {
+            String::new()
+        };
+        if path.is_empty() {
+            continue;
+        }
+        files.push(WorkingStatFile {
+            path,
+            additions: if add_str == "-" {
+                0
+            } else {
+                js_parse_int(add_str)
+            },
+            deletions: if del_str == "-" {
+                0
+            } else {
+                js_parse_int(del_str)
+            },
+        });
+    }
+}

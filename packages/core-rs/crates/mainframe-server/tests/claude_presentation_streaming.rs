@@ -1,4 +1,8 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 #[path = "support/presentation.rs"]
 mod support;
 use mainframe_acp::encoder::{EncodedItem, encode_revision};

@@ -3,7 +3,11 @@
 //! `unwrap_or(0)` stub. Every case here reads the expected uid from an
 //! independent oracle (`id -u`), never from the code under test.
 #![cfg(unix)]
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use std::os::unix::fs::DirBuilderExt;
 use std::path::PathBuf;

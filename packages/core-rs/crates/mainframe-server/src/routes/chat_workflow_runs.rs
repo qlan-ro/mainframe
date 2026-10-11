@@ -42,10 +42,7 @@ async fn resolve_session(ctx: &AppCtx, chat_id: &str) -> Option<(String, String)
 pub(crate) async fn workflow_runs_for_chat(ctx: &AppCtx, chat_id: &str) -> Vec<ClaudeWorkflowRun> {
     let memory = ctx.core.claude_workflows.runs_for_chat(chat_id);
     let Some((session_id, cwd)) = resolve_session(ctx, chat_id).await else {
-        tracing::debug!(
-            chat_id,
-            "workflow_runs_for_chat: no session/cwd to backfill from"
-        );
+        tracing::debug!(chat_id, "no session/cwd to backfill from");
         return memory;
     };
     let project_dir =

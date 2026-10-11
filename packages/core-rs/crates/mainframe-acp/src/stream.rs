@@ -60,7 +60,7 @@ impl SessionStream {
     /// path replays them itself (`resume::dispatch_resume`), and every later
     /// [`Self::on_revision`] must delta against what that replay delivered.
     pub fn seed(&mut self, items: &[EncodedItem]) {
-        let _ = self.state.diff(items);
+        self.state.diff(items);
     }
 
     /// Like [`Self::seed`], but container-aware — the resume replay's

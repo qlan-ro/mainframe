@@ -28,7 +28,7 @@ pub fn handle_stdout(session: &ClaudeSession, chunk: &[u8], sink: &dyn SessionSi
             continue;
         }
         session.bump_last_activity();
-        tracing::trace!(session_id = %session.id, line = %line, "[stream-json]");
+        tracing::trace!(session_id = %session.id, line = %line, "stream-json line");
         if let Ok(event) = serde_json::from_str::<Value>(line.trim()) {
             handle_event(session, &event, sink);
         }
@@ -113,7 +113,7 @@ fn handle_event(session: &ClaudeSession, event: &Value, sink: &dyn SessionSink) 
             {
                 tracing::debug!(
                     session_id = %session.id,
-                    "claude: skipping subagent result event (parent_tool_use_id present)"
+                    "skipping subagent result event (parent_tool_use_id present)"
                 );
                 return;
             }
@@ -123,7 +123,7 @@ fn handle_event(session: &ClaudeSession, event: &Value, sink: &dyn SessionSink) 
             tracing::debug!(
                 session_id = %session.id,
                 r#type = ?ty,
-                "claude: unhandled event type"
+                "unhandled event type"
             );
         }
     }

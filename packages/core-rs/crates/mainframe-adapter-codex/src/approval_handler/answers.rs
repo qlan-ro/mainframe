@@ -16,7 +16,6 @@ pub(super) fn answer_user_input(
 ) -> Result<(), JsonRpcError> {
     let Some(answer_string) = choose_request_user_input_answer(&entry, response) else {
         tracing::info!(
-            module = "codex:approvals",
             request_id = %response.request_id,
             tool_name = %entry.tool_name,
             "codex user input declined"
@@ -28,7 +27,6 @@ pub(super) fn answer_user_input(
         answers.insert(qid, json!({ "answers": [answer_string.clone()] }));
     }
     tracing::info!(
-        module = "codex:approvals",
         request_id = %response.request_id,
         behavior = ?response.behavior,
         tool_name = %entry.tool_name,
@@ -53,7 +51,7 @@ pub(super) fn answer_approval(
         (ControlBehavior::Allow, _) => "accept",
         (ControlBehavior::Deny, _) => "decline",
     };
-    tracing::info!(module = "codex:approvals", request_id = %response.request_id, decision, "codex approval resolved");
+    tracing::info!(request_id = %response.request_id, decision, "codex approval resolved");
     (entry.respond)(entry.json_rpc_id, json!({ "decision": decision }))
 }
 
@@ -160,10 +158,9 @@ fn exit_plan_mode_answer(entry: &PendingApproval, response: &ControlResponse) ->
         && !msg.is_empty()
     {
         tracing::warn!(
-            module = "codex:approvals",
             request_id = %response.request_id,
             tool_name = %entry.tool_name,
-            "codex: plan-exit revise free-text not supported by requestUserInput; answering with the no label, or the message when that label is blank"
+            "plan-exit revise free-text not supported by requestUserInput; answering with the no label, or the message when that label is blank"
         );
     }
 
@@ -173,11 +170,10 @@ fn exit_plan_mode_answer(entry: &PendingApproval, response: &ControlResponse) ->
     };
     if answer.is_none() {
         tracing::warn!(
-            module = "codex:approvals",
             request_id = %response.request_id,
             tool_name = %entry.tool_name,
             direction,
-            "codex: plan exit has no label for this direction; declining rather than answering blank"
+            "plan exit has no label for this direction; declining rather than answering blank"
         );
     }
     answer

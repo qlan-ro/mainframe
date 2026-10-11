@@ -18,7 +18,7 @@ impl TunnelManager {
         tokio::spawn(async move {
             process.terminate(grace).await;
             if let Some(label) = label.filter(|_| process.exit.borrow().is_some()) {
-                tracing::info!(target: "tunnel", label = %label, "tunnel stopped");
+                tracing::info!(label = %label, "tunnel stopped");
                 broadcast(DaemonEvent::TunnelStatus {
                     state: TunnelState::Stopped,
                     label,
@@ -55,7 +55,7 @@ impl TunnelManager {
         }
         for task in tasks {
             if let Err(err) = task.await {
-                tracing::warn!(target: "tunnel", ?err, "tunnel stop task failed");
+                tracing::warn!(error = ?err, "tunnel stop task failed");
             }
         }
     }
@@ -84,7 +84,7 @@ impl TunnelManager {
         }
         for task in stopping {
             if let Err(err) = task.await {
-                tracing::warn!(target: "tunnel", ?err, "tunnel stop task failed");
+                tracing::warn!(error = ?err, "tunnel stop task failed");
             }
         }
     }

@@ -2,7 +2,11 @@
 //! in-memory DB + real PushService). Rate-limit-recording cases use a distinct
 //! `X-Forwarded-For` so the process-global rate-limit bucket never collides
 //! across the parallel tests.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 

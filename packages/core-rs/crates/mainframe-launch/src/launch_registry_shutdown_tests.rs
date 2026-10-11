@@ -103,18 +103,14 @@ async fn shutdown_stops_multiple_launch_groups_within_shell_deadline() {
                 .unwrap();
         }
     }
-    let pids = tokio::time::timeout(std::time::Duration::from_secs(3), async {
-        loop {
-            let pids = trapped_pids(&events);
-            if pids.len() == 4 {
-                break pids;
-            }
-            // Wait for the real process lifecycle to advance.
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-        }
-    })
+    mainframe_runtime::test_support::poll_until(
+        std::time::Duration::from_secs(3),
+        std::time::Duration::from_millis(10),
+        async || trapped_pids(&events).len() == 4,
+    )
     .await
     .unwrap();
+    let pids = trapped_pids(&events);
     tokio::time::timeout(
         std::time::Duration::from_secs(8),
         shutdown_launches_and_tunnels(&registry, &TunnelManager::new(None)),

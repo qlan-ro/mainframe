@@ -4,7 +4,11 @@
 //! temp-directory fixtures. `list_agents` also scans the developer's real `~/.claude/agents`,
 //! so every lookup filters on `todo317-` names and the `Project` scope, never by name alone.
 
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use mainframe_adapter_claude::frontmatter::parse_frontmatter;
 use mainframe_adapter_claude::skills::{create_agent, list_agents, list_skills, update_agent};

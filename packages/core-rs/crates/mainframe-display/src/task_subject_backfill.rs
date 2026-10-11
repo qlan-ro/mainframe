@@ -105,17 +105,7 @@ fn backfill_blocks(
                 }
             }
             DisplayContent::Node(DisplayNode::TaskProgress { items }) => {
-                let mut items_changed = false;
-                let new_items: Vec<TaskProgressItem> = items
-                    .iter()
-                    .map(|item| match backfill_item(item, scope) {
-                        Some(new_item) => {
-                            items_changed = true;
-                            new_item
-                        }
-                        None => item.clone(),
-                    })
-                    .collect();
+                let (new_items, items_changed) = backfill_items(items, scope);
                 if !items_changed {
                     next.push(block.clone());
                 } else {
@@ -199,3 +189,21 @@ fn backfill_item(item: &TaskProgressItem, scope: &mut SubjectScope) -> Option<Ta
 #[cfg(test)]
 #[path = "task_subject_backfill_tests.rs"]
 mod tests;
+
+fn backfill_items(
+    items: &[TaskProgressItem],
+    scope: &mut SubjectScope,
+) -> (Vec<TaskProgressItem>, bool) {
+    let mut items_changed = false;
+    let new_items: Vec<TaskProgressItem> = items
+        .iter()
+        .map(|item| match backfill_item(item, scope) {
+            Some(new_item) => {
+                items_changed = true;
+                new_item
+            }
+            None => item.clone(),
+        })
+        .collect();
+    (new_items, items_changed)
+}

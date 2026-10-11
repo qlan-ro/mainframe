@@ -40,12 +40,7 @@ fn fixture_chat(id: &str) -> Chat {
         transcript_missing: None,
         todos: None,
         pinned: None,
-        tuning: mainframe_types::chat::SessionTuning {
-            effort: None,
-            fast: None,
-            ultracode: None,
-            adaptive_thinking: None,
-        },
+        tuning: Default::default(),
         detected_prs: None,
         tags: None,
         automation_run_id: None,

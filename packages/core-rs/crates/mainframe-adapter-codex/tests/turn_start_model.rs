@@ -8,7 +8,11 @@
 //! Cases cover configured, reported, and default model selection, plus
 //! failure when no model is available.
 #![cfg(unix)]
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod common;
 

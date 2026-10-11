@@ -1,7 +1,11 @@
 //! `ProviderSwitchMarker::label` — the divider text older clients render.
 //! Mirrors `providerSwitchLabel` in `packages/types/src/segment.ts`; both
 //! suites assert the same strings.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use mainframe_types::segment::{
     HandoffStatus, HandoffStrategy, HandoffSummary, ProviderSwitchMarker, SegmentKind,

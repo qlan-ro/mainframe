@@ -124,17 +124,7 @@ impl<D: ExternalSessionDeps + 'static> ExternalSessionService<D> {
             updates.updated_at = Some(modified.to_string());
         }
         self.deps.chats_update(&chat.id, &updates)?;
-        // Object.assign(chat, updates)
-        chat.vendor_session_id = updates.vendor_session_id.clone();
-        if let Some(t) = &updates.title {
-            chat.title = Some(t.clone());
-        }
-        if let Some(c) = &updates.created_at {
-            chat.created_at = c.clone();
-        }
-        if let Some(u) = &updates.updated_at {
-            chat.updated_at = u.clone();
-        }
+        apply_import_patch(&mut chat, &updates);
 
         info!(
             chat_id = chat.id,
@@ -145,6 +135,12 @@ impl<D: ExternalSessionDeps + 'static> ExternalSessionService<D> {
             source: Some(mainframe_types::events::ChatCreatedSource::Import),
         });
 
+        self.schedule_import_title(&chat, adapter_id, clean_title);
+
+        Ok(chat)
+    }
+
+    fn schedule_import_title(&self, chat: &Chat, adapter_id: &str, clean_title: Option<String>) {
         // Fire-and-forget LLM title generation to replace the truncated title
         if let Some(ct) = clean_title {
             let deps = self.deps.clone();
@@ -162,8 +158,6 @@ impl<D: ExternalSessionDeps + 'static> ExternalSessionService<D> {
                 .await;
             });
         }
-
-        Ok(chat)
     }
 
     /// Start auto-scanning for a project (on project open).
@@ -224,3 +218,16 @@ use scan::{emit_count, generate_import_title, scan_page_impl, strip_xml_tags};
 #[cfg(test)]
 #[path = "external_session_service_tests.rs"]
 mod tests;
+
+fn apply_import_patch(chat: &mut Chat, updates: &ChatPatch) {
+    chat.vendor_session_id = updates.vendor_session_id.clone();
+    if let Some(t) = &updates.title {
+        chat.title = Some(t.clone());
+    }
+    if let Some(c) = &updates.created_at {
+        chat.created_at = c.clone();
+    }
+    if let Some(u) = &updates.updated_at {
+        chat.updated_at = u.clone();
+    }
+}

@@ -1,4 +1,5 @@
 use super::*;
+use tracing::Instrument as _;
 pub struct NullSink;
 impl SessionSink for NullSink {
     fn on_init(&self, _session_id: &str) {}
@@ -98,7 +99,7 @@ impl ClaudeSession {
         reader.map(|reader| {
             mainframe_runtime::process::spawn_chunk_pump(reader, move |bytes| {
                 if let Some(session) = weak.as_ref().and_then(Weak::upgrade) {
-                    handler(&session, bytes, &*sink);
+                    session.span.in_scope(|| handler(&session, bytes, &*sink));
                     true
                 } else {
                     false
@@ -114,21 +115,25 @@ impl ClaudeSession {
     ) {
         let weak = self.weak_self.get().cloned();
         let control = self.control.clone();
-        tokio::spawn(async move {
-            let code = exit.wait().await;
-            handle.exited.store(true, Ordering::SeqCst);
-            if let Some(session) = weak.as_ref().and_then(Weak::upgrade) {
-                session.process_exited(&*sink);
-            }
-            control.drain_all_as_failed();
-            handle.closed.notify_waiters();
-            sink.on_exit(code);
-            if let Some(session) = weak.as_ref().and_then(Weak::upgrade) {
-                let guard = session.on_exit.lock_recover();
-                if let Some(cb) = guard.as_ref() {
-                    cb();
+        let span = self.span.clone();
+        tokio::spawn(
+            async move {
+                let code = exit.wait().await;
+                handle.exited.store(true, Ordering::SeqCst);
+                if let Some(session) = weak.as_ref().and_then(Weak::upgrade) {
+                    session.process_exited(&*sink);
+                }
+                control.drain_all_as_failed();
+                handle.closed.notify_waiters();
+                sink.on_exit(code);
+                if let Some(session) = weak.as_ref().and_then(Weak::upgrade) {
+                    let guard = session.on_exit.lock_recover();
+                    if let Some(cb) = guard.as_ref() {
+                        cb();
+                    }
                 }
             }
-        });
+            .instrument(span),
+        );
     }
 }

@@ -62,7 +62,7 @@ async fn build_report(
             tracing::warn!(
                 base_path,
                 budget_secs = budget.as_secs(),
-                "setup advisor: fingerprint exceeded its time budget"
+                "fingerprint exceeded its time budget"
             );
             return None;
         }

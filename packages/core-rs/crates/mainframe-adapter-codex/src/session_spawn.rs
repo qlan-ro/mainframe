@@ -20,7 +20,6 @@ impl CodexSession {
         self.initialize_client(&client, &*sink).await?;
 
         tracing::info!(
-            module = "codex:session",
             session_id = %self.id,
             project_path = %self.project_path,
             resume = self.resume_thread_id.is_some(),
@@ -93,7 +92,7 @@ impl CodexSession {
             }
             Ok(Err(e)) => return Err(e.into()),
             Err(_) => {
-                tracing::error!(module = "codex:session", session_id = %self.id, "codex handshake timeout");
+                tracing::error!(session_id = %self.id, "codex handshake timeout");
                 sink.on_error(AdapterError::Timeout("handshake timeout"));
                 client.close();
                 return Err(AdapterError::Timeout("handshake timeout"));

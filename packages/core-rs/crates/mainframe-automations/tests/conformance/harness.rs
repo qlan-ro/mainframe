@@ -5,7 +5,7 @@
 //! fresh engine over the SAME db/credentials paths, mirroring a daemon
 //! crash-and-reboot.
 
-#![allow(dead_code)]
+#![allow(dead_code, reason = "Shared test helpers")]
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -162,17 +162,23 @@ impl Rig {
 }
 
 pub async fn wait_status(engine: &AutomationsEngine, run_id: &str, status: RunStatus) -> RunRecord {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    while std::time::Instant::now() < deadline {
-        if let Some(run) = engine.get_run(run_id).await.unwrap()
-            && run.status == status
-        {
-            return run;
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-    }
-    let actual = engine.get_run(run_id).await.unwrap().map(|r| r.status);
-    panic!("run {run_id} never reached {status:?} (last: {actual:?})");
+    let mut result = None;
+    mainframe_runtime::test_support::poll_until(
+        std::time::Duration::from_secs(10),
+        std::time::Duration::from_millis(5),
+        async || {
+            if let Some(run) = engine.get_run(run_id).await.unwrap()
+                && run.status == status
+            {
+                result = Some(run);
+                return true;
+            }
+            false
+        },
+    )
+    .await
+    .expect("state did not settle before timeout");
+    result.expect("polling condition produced a result")
 }
 
 /// Poll until a fake action has been invoked at least `count` times.

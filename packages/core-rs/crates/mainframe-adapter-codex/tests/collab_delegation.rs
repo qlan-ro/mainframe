@@ -4,7 +4,11 @@
 //! `receiverThreadIds` and `agentsStates` are both empty and the only signal
 //! naming the child is the `subAgentActivity` `started` ping. The card id is
 //! that ping's own item id, the spawn call id.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod common;
 

@@ -47,7 +47,7 @@ async fn kill_resolves_only_after_child_emits_close() {
     tokio::select! {
         biased;
         _ = &mut fut => panic!("kill resolved before close"),
-        () = tokio::time::sleep(Duration::from_millis(2999)) => {}
+        () = tokio::time::advance(Duration::from_millis(2999)) => {}
     }
     assert!(ctrl.signals.lock().unwrap().contains(&Signal::Term));
 

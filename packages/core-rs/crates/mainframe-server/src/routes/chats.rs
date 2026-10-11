@@ -425,7 +425,7 @@ async fn resolve_tool_result_path(
     {
         Ok(location) => location,
         Err(err) => {
-            tracing::warn!(chat_id = %chat.id, %err, "tool result transcript lookup failed");
+            tracing::warn!(chat_id = %chat.id, error = %err, "tool result transcript lookup failed");
             None
         }
     };

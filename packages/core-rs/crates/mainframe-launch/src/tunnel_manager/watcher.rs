@@ -45,7 +45,7 @@ impl TunnelManager {
                     status.code()
                 }
                 Err(err) => {
-                    tracing::warn!(target: "tunnel", ?pid, ?err, "failed to reap tunnel process");
+                    tracing::warn!(?pid, error = ?err, "failed to reap tunnel process");
                     None
                 }
             };

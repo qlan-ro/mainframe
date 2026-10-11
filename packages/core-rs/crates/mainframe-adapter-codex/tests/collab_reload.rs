@@ -3,7 +3,11 @@
 //! but through `convert_thread_items` (the `thread/read` reload path) instead
 //! of `handle_notification` (the live path), and asserts the reload produces
 //! the same card shape the live replay does.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod common;
 

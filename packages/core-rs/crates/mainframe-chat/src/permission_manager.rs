@@ -167,22 +167,7 @@ impl PermissionManager {
 
         let mut answered_tool_use_ids: HashSet<String> = HashSet::new();
         for msg in messages.iter().rev() {
-            let has_user_text = msg.r#type == ChatMessageType::User
-                && msg
-                    .content
-                    .iter()
-                    .any(|b| matches!(b, MessageContent::Leaf(LeafContent::Text { .. })));
-
-            if has_user_text {
-                return;
-            }
-
-            if msg.r#type == ChatMessageType::Assistant
-                && !msg
-                    .content
-                    .iter()
-                    .any(|b| matches!(b, MessageContent::Node(MessageContentNode::ToolUse { .. })))
-            {
+            if ends_permission_search(msg) {
                 return;
             }
 
@@ -228,3 +213,26 @@ impl PermissionManager {
 
 #[cfg(test)]
 mod cancel_tests;
+
+fn ends_permission_search(msg: &ChatMessage) -> bool {
+    let has_user_text = msg.r#type == ChatMessageType::User
+        && msg
+            .content
+            .iter()
+            .any(|b| matches!(b, MessageContent::Leaf(LeafContent::Text { .. })));
+
+    if has_user_text {
+        return true;
+    }
+
+    if msg.r#type == ChatMessageType::Assistant
+        && !msg
+            .content
+            .iter()
+            .any(|b| matches!(b, MessageContent::Node(MessageContentNode::ToolUse { .. })))
+    {
+        return true;
+    }
+
+    false
+}

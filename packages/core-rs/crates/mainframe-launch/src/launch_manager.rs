@@ -174,6 +174,7 @@ pub struct LaunchManager {
 mod tests;
 
 mod construction;
+pub(crate) use construction::LaunchExecution;
 mod env;
 mod lifecycle;
 mod process;

@@ -58,10 +58,7 @@ async fn run_sync_inner(ctx: &PluginContext, project_id: &str) -> Result<store::
     let mut link = store::read_link(ctx, project_id)
         .await?
         .ok_or(RunError::NotLinked)?;
-    let repo = RepoRef {
-        owner: link.owner.clone(),
-        repo: link.repo.clone(),
-    };
+    let repo = linked_repo(&link);
     let pairs = store::pairs_for_project(ctx, project_id).await?;
 
     let run_id = nanoid::nanoid!();
@@ -108,9 +105,7 @@ async fn run_sync_inner(ctx: &PluginContext, project_id: &str) -> Result<store::
         failure_kind: stop.as_ref().map(|(kind, _)| kind.to_string()),
         failure_message: stop.as_ref().map(|(_, message)| message.clone()),
     };
-    store::insert_run(ctx, &run).await?;
-    store::insert_report_rows(ctx, &report_rows).await?;
-    store::prune_runs(ctx, project_id, KEEP_RUNS).await?;
+    persist_run(ctx, project_id, &run, &report_rows).await?;
     Ok(run)
 }
 
@@ -199,4 +194,23 @@ async fn handle_port_error(
 
 fn internal(err: PluginError) -> (&'static str, String) {
     ("internal", err.to_string())
+}
+
+async fn persist_run(
+    ctx: &PluginContext,
+    project_id: &str,
+    run: &store::Run,
+    report_rows: &[store::ReportRow],
+) -> Result<(), PluginError> {
+    store::insert_run(ctx, run).await?;
+    store::insert_report_rows(ctx, report_rows).await?;
+    store::prune_runs(ctx, project_id, KEEP_RUNS).await?;
+    Ok(())
+}
+
+fn linked_repo(link: &store::Link) -> RepoRef {
+    RepoRef {
+        owner: link.owner.clone(),
+        repo: link.repo.clone(),
+    }
 }

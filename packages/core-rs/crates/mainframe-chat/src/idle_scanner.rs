@@ -165,7 +165,7 @@ async fn scan_registry(
 ) {
     let candidates = select_idle_candidates(active_chats, now(), threshold_ms);
     for chat_id in candidates {
-        info!(chat_id, "idle scanner: offload candidate");
+        info!(chat_id, "offload candidate");
         offloader.offload(&chat_id).await;
     }
 }

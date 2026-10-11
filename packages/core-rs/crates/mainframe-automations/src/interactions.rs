@@ -117,10 +117,12 @@ impl AskMeVerb {
                     &step_ref,
                     &step_id,
                     StepKind::AskMe,
-                    StepStatus::Waiting,
-                    None,
-                    None,
-                    None,
+                    crate::store::StepTransition {
+                        status: StepStatus::Waiting,
+                        outputs: None,
+                        error: None,
+                        wake_at: None,
+                    },
                 );
                 if let Some(entry) = cp.steps.get_mut(&step_ref) {
                     entry.interaction_id = Some(interaction_id);
@@ -153,7 +155,7 @@ impl AskMeVerb {
             Ok(Some(run)) => run,
             Ok(None) => return,
             Err(err) => {
-                tracing::warn!(run_id, error = %err, "ask_me notification: run load failed");
+                tracing::warn!(run_id, error = %err, "run load failed");
                 return;
             }
         };

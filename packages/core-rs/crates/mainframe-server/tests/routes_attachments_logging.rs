@@ -6,7 +6,11 @@
 //! `OnceLock`, so it affects only this file (`tests/*.rs` are separate
 //! binaries). Tests run on parallel threads within the binary, so every test
 //! drives a unique chat id and filters the shared capture buffer by it.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 

@@ -186,7 +186,7 @@ fn fail_resume(failure: ResumeFailure<'_>) {
         ));
     }
     let Some(session_id) = session_id else {
-        error!(%cause, "acp facade: resume delivery failed with no session to recover");
+        error!(%cause, "resume delivery failed with no session to recover");
         return;
     };
     // The reply reached the client, but the panic struck before
@@ -205,7 +205,7 @@ fn fail_resume(failure: ResumeFailure<'_>) {
         session_id,
         failures,
         resync_suppressed = failures > 1,
-        "acp facade: resume delivery failed"
+        "resume delivery failed"
     );
     // The client answers a resync with another resume, so a failure that
     // repeats on the same transcript would loop at round-trip speed. After

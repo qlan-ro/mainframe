@@ -2,7 +2,11 @@
 //! the `turn/start` `input` array it sends — the wiring proof for `user_input.rs`
 //! (unit-tested in isolation in `src/user_input.rs`).
 #![cfg(unix)]
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod common;
 

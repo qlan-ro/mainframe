@@ -103,12 +103,13 @@ async fn cancelling_spawn_owner_allows_waiter_to_resolve_and_spawn() {
     drop(first);
     resolver.release.add_permits(1);
     let handle = bounded(waiter).await.unwrap();
-    bounded(async {
-        while !marker.exists() {
-            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-        }
-    })
-    .await;
+    mainframe_runtime::test_support::poll_until(
+        std::time::Duration::from_secs(5),
+        std::time::Duration::from_millis(5),
+        async || marker.exists(),
+    )
+    .await
+    .unwrap();
     assert_eq!(resolver.calls.load(Ordering::SeqCst), 2);
     assert!(manager.state.guards.is_empty());
     bounded(manager.shutdown_all()).await;

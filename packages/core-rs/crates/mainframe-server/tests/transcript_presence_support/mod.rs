@@ -1,8 +1,13 @@
+#![allow(clippy::too_many_lines, reason = "Test assertions and scenarios")]
 //! Shared harness for the wiring-level transcript-presence tests. Drives the
 //! production stack through `build_chat_manager` (see
 //! `chat_background_activity.rs`, the structural template) rather than a
 //! hand-built `ChatManagerDeps` fake.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use mainframe_types::settings_kv::MemorySettings;
 use std::path::Path;

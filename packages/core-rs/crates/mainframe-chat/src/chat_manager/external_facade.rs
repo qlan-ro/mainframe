@@ -13,7 +13,6 @@ pub trait ExternalSessionFacade: Send + Sync {
         offset: i64,
         limit: i64,
     ) -> BoxFuture<'a, Result<ExternalSessionPage, SeamError>>;
-    #[allow(clippy::too_many_arguments)]
     fn import_session<'a>(
         &'a self,
         project_id: &'a str,

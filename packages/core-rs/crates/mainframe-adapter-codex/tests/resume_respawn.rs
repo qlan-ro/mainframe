@@ -6,7 +6,11 @@
 //! segment that has already run a turn and open a spurious `context_reset`
 //! segment plus a false "context reset" divider on every respawn.
 #![cfg(unix)]
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod common;
 mod fork_support;

@@ -1,4 +1,8 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 // Capture at 5cb0933b: copy fixtures/display/capture_base.rs to the base worktree's
 // crates/mainframe-server/tests/r2_capture.rs, seed its target, then from packages/core-rs:
 // CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 R2_GOLDEN_DIR=<absolute fixtures/display> cargo test -p mainframe-server --test r2_capture

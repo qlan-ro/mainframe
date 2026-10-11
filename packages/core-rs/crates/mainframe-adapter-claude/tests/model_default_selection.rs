@@ -1,4 +1,4 @@
-#![allow(clippy::unwrap_used)]
+#![allow(clippy::unwrap_used, reason = "Test assertions and scenarios")]
 
 use mainframe_adapter_claude::probe_models::extract_probe_payload;
 use mainframe_types::adapter::EffortLevel;

@@ -127,11 +127,11 @@ async fn valid_delivery_starts_a_run_and_a_replay_is_a_200_noop() {
     .unwrap();
     assert_eq!(status, StatusCode::OK);
     assert_eq!(envelope, json!({ "success": true }));
-    tokio::time::timeout(Duration::from_secs(10), async {
-        while run_count(&h, &automation_id).await == 0 {
-            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-        }
-    })
+    mainframe_runtime::test_support::poll_until(
+        Duration::from_secs(10),
+        std::time::Duration::from_millis(5),
+        async || !(run_count(&h, &automation_id).await == 0),
+    )
     .await
     .expect("webhook run created");
     assert_eq!(run_count(&h, &automation_id).await, 1);

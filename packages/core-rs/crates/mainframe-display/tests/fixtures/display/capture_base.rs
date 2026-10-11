@@ -1,4 +1,8 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 use mainframe_adapter_claude::messages::display_pipeline::prepare_messages_for_client;
 use mainframe_adapter_codex::{history::convert_thread_items, item_types::ThreadItem};
 use mainframe_types::{chat::ChatMessage, display::ToolCategories};

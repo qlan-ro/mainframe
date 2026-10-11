@@ -1,4 +1,9 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(clippy::too_many_lines, reason = "Test assertions and scenarios")]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 use mainframe_launch::{TunnelConfig, TunnelManager};
 use mainframe_server::{ctx::AppCtx, db::Db};
 use mainframe_types::{chat::NewChat, chat_patch::ChatPatch, launch::LaunchConfiguration};
@@ -99,12 +104,11 @@ async fn start(ctx: &AppCtx, project: &str, path: &str, port: u16) {
         })
         .await
         .unwrap();
-    tokio::time::timeout(Duration::from_secs(5), async {
-        while ctx.infra.tunnel_manager.get_url("preview:web").is_none() {
-            // OS child; Tokio time cannot be paused.
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-    })
+    mainframe_runtime::test_support::poll_until(
+        Duration::from_secs(5),
+        Duration::from_millis(10),
+        async || !(ctx.infra.tunnel_manager.get_url("preview:web").is_none()),
+    )
     .await
     .unwrap();
 }

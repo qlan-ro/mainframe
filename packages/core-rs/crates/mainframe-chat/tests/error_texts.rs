@@ -1,4 +1,8 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 //! Golden texts and status classes for the chat errors REST routes and the
 //! chat's error banner show verbatim. Each pair is wire contract.

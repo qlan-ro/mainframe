@@ -18,7 +18,7 @@
 //!
 //! pub async fn manifest(runner: &dyn SkillsCliRunner, path: &ResolvedPath, project_id: &str, project_path: &str) -> Result<ManifestOutcome, SkillsCliError>;
 //! pub async fn probe(runner: &dyn SkillsCliRunner, path: &ResolvedPath, project_id: &str, project_path: &str, source: &str) -> Result<ProbeOutcome, SkillsCliError>;
-//! pub async fn install(runner: &dyn SkillsCliRunner, path: &ResolvedPath, project_id: &str, project_path: &str, source: &str, skills: &[String], scope: Scope, adapter_id: Option<&str>) -> Result<(), SkillsCliError>;
+//! pub async fn install(runner: &dyn SkillsCliRunner, path: &ResolvedPath, request: InstallRequest<'_>) -> Result<(), SkillsCliError>;
 //! pub async fn uninstall(runner: &dyn SkillsCliRunner, path: &ResolvedPath, project_id: &str, project_path: &str, skills: &[String], scope: Scope, adapter_id: Option<&str>) -> Result<(), SkillsCliError>;
 //! ```
 //!
@@ -27,7 +27,12 @@
 //! `skills_cli::run::{tail, TAIL_CHARS}`, `skills_cli::probe_parse::parse_probe`,
 //! `skills_cli::locks::acquire`.
 
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(clippy::too_many_lines, reason = "Test assertions and scenarios")]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 
@@ -153,12 +158,14 @@ async fn install_argv_is_add_with_explicit_skills_agent_and_yes() {
     let result = mainframe_server::skills_cli::install(
         &runner,
         &path,
-        project_id,
-        PROJECT_PATH,
-        "owner/repo",
-        &owned(&["a", "b"]),
-        Scope::Project,
-        Some("claude"),
+        mainframe_server::skills_cli::InstallRequest {
+            project_id,
+            project_path: PROJECT_PATH,
+            source: "owner/repo",
+            skills: &owned(&["a", "b"]),
+            scope: Scope::Project,
+            adapter_id: Some("claude"),
+        },
     )
     .await;
 
@@ -192,12 +199,14 @@ async fn install_global_scope_adds_the_global_flag() {
     mainframe_server::skills_cli::install(
         &runner,
         &path,
-        project_id,
-        PROJECT_PATH,
-        "owner/repo",
-        &owned(&["a"]),
-        Scope::Global,
-        Some("claude"),
+        mainframe_server::skills_cli::InstallRequest {
+            project_id,
+            project_path: PROJECT_PATH,
+            source: "owner/repo",
+            skills: &owned(&["a"]),
+            scope: Scope::Global,
+            adapter_id: Some("claude"),
+        },
     )
     .await
     .unwrap();
@@ -297,24 +306,28 @@ async fn no_argv_contains_a_telemetry_or_dangerously_accept_flag() {
     mainframe_server::skills_cli::install(
         &runner,
         &path,
-        project_id,
-        PROJECT_PATH,
-        "owner/repo",
-        &owned(&["a"]),
-        Scope::Project,
-        Some("claude"),
+        mainframe_server::skills_cli::InstallRequest {
+            project_id,
+            project_path: PROJECT_PATH,
+            source: "owner/repo",
+            skills: &owned(&["a"]),
+            scope: Scope::Project,
+            adapter_id: Some("claude"),
+        },
     )
     .await
     .unwrap();
     mainframe_server::skills_cli::install(
         &runner,
         &path,
-        project_id,
-        PROJECT_PATH,
-        "owner/repo",
-        &owned(&["a"]),
-        Scope::Global,
-        Some("claude"),
+        mainframe_server::skills_cli::InstallRequest {
+            project_id,
+            project_path: PROJECT_PATH,
+            source: "owner/repo",
+            skills: &owned(&["a"]),
+            scope: Scope::Global,
+            adapter_id: Some("claude"),
+        },
     )
     .await
     .unwrap();
@@ -364,12 +377,14 @@ async fn no_argument_derived_from_user_input_starts_with_a_dash() {
     mainframe_server::skills_cli::install(
         &runner,
         &path,
-        project_id,
-        PROJECT_PATH,
-        "owner/repo",
-        &owned(&["my skill.v2"]),
-        Scope::Project,
-        Some("claude"),
+        mainframe_server::skills_cli::InstallRequest {
+            project_id,
+            project_path: PROJECT_PATH,
+            source: "owner/repo",
+            skills: &owned(&["my skill.v2"]),
+            scope: Scope::Project,
+            adapter_id: Some("claude"),
+        },
     )
     .await
     .unwrap();
@@ -395,24 +410,28 @@ async fn unknown_adapter_falls_back_to_claude_code() {
     mainframe_server::skills_cli::install(
         &runner,
         &path,
-        project_id,
-        PROJECT_PATH,
-        "owner/repo",
-        &owned(&["a"]),
-        Scope::Project,
-        Some("codex"),
+        mainframe_server::skills_cli::InstallRequest {
+            project_id,
+            project_path: PROJECT_PATH,
+            source: "owner/repo",
+            skills: &owned(&["a"]),
+            scope: Scope::Project,
+            adapter_id: Some("codex"),
+        },
     )
     .await
     .unwrap();
     mainframe_server::skills_cli::install(
         &runner,
         &path,
-        project_id,
-        PROJECT_PATH,
-        "owner/repo",
-        &owned(&["a"]),
-        Scope::Project,
-        None,
+        mainframe_server::skills_cli::InstallRequest {
+            project_id,
+            project_path: PROJECT_PATH,
+            source: "owner/repo",
+            skills: &owned(&["a"]),
+            scope: Scope::Project,
+            adapter_id: None,
+        },
     )
     .await
     .unwrap();
@@ -455,12 +474,14 @@ async fn source_rejected_when_empty_dashed_local_path_or_off_allowlist() {
         let result = mainframe_server::skills_cli::install(
             &runner,
             &path,
-            project_id,
-            PROJECT_PATH,
-            source,
-            &owned(&["a"]),
-            Scope::Project,
-            Some("claude"),
+            mainframe_server::skills_cli::InstallRequest {
+                project_id,
+                project_path: PROJECT_PATH,
+                source,
+                skills: &owned(&["a"]),
+                scope: Scope::Project,
+                adapter_id: Some("claude"),
+            },
         )
         .await;
         assert!(
@@ -691,12 +712,14 @@ async fn nonzero_exit_maps_to_a_failure_carrying_the_ansi_stripped_tail() {
     let result = mainframe_server::skills_cli::install(
         &runner,
         &path,
-        project_id,
-        PROJECT_PATH,
-        "owner/repo",
-        &owned(&["a"]),
-        Scope::Project,
-        Some("claude"),
+        mainframe_server::skills_cli::InstallRequest {
+            project_id,
+            project_path: PROJECT_PATH,
+            source: "owner/repo",
+            skills: &owned(&["a"]),
+            scope: Scope::Project,
+            adapter_id: Some("claude"),
+        },
     )
     .await;
 
@@ -730,12 +753,14 @@ async fn spawn_failure_and_timeout_map_to_failures_with_their_own_reasons() {
     let spawn_result = mainframe_server::skills_cli::install(
         &spawn_failure_runner,
         &path,
-        project_id,
-        PROJECT_PATH,
-        "owner/repo",
-        &owned(&["a"]),
-        Scope::Project,
-        Some("claude"),
+        mainframe_server::skills_cli::InstallRequest {
+            project_id,
+            project_path: PROJECT_PATH,
+            source: "owner/repo",
+            skills: &owned(&["a"]),
+            scope: Scope::Project,
+            adapter_id: Some("claude"),
+        },
     )
     .await;
 
@@ -749,12 +774,14 @@ async fn spawn_failure_and_timeout_map_to_failures_with_their_own_reasons() {
     let timeout_result = mainframe_server::skills_cli::install(
         &timeout_runner,
         &path,
-        project_id,
-        PROJECT_PATH,
-        "owner/repo",
-        &owned(&["a"]),
-        Scope::Project,
-        Some("claude"),
+        mainframe_server::skills_cli::InstallRequest {
+            project_id,
+            project_path: PROJECT_PATH,
+            source: "owner/repo",
+            skills: &owned(&["a"]),
+            scope: Scope::Project,
+            adapter_id: Some("claude"),
+        },
     )
     .await;
 
@@ -877,12 +904,14 @@ async fn second_operation_for_the_same_project_is_refused_while_one_is_in_flight
     let result = mainframe_server::skills_cli::install(
         &runner,
         &path,
-        project_id,
-        PROJECT_PATH,
-        "owner/repo",
-        &owned(&["a"]),
-        Scope::Project,
-        Some("claude"),
+        mainframe_server::skills_cli::InstallRequest {
+            project_id,
+            project_path: PROJECT_PATH,
+            source: "owner/repo",
+            skills: &owned(&["a"]),
+            scope: Scope::Project,
+            adapter_id: Some("claude"),
+        },
     )
     .await;
 
@@ -907,12 +936,14 @@ async fn a_different_project_is_not_blocked() {
     let result = mainframe_server::skills_cli::install(
         &runner,
         &path,
-        "guard-project-b",
-        PROJECT_PATH,
-        "owner/repo",
-        &owned(&["a"]),
-        Scope::Project,
-        Some("claude"),
+        mainframe_server::skills_cli::InstallRequest {
+            project_id: "guard-project-b",
+            project_path: PROJECT_PATH,
+            source: "owner/repo",
+            skills: &owned(&["a"]),
+            scope: Scope::Project,
+            adapter_id: Some("claude"),
+        },
     )
     .await;
 
@@ -927,54 +958,4 @@ async fn a_different_project_is_not_blocked() {
     );
 }
 
-#[tokio::test]
-async fn the_guard_is_released_when_the_operation_finishes_and_when_it_fails() {
-    let (_dir, path) = fake_skills_binary();
-    let succeeding_project = "guard-project-success";
-    let failing_project = "guard-project-failure";
-
-    let success_runner = RecordingRunner::queued(vec![success_outcome()]);
-    mainframe_server::skills_cli::install(
-        &success_runner,
-        &path,
-        succeeding_project,
-        PROJECT_PATH,
-        "owner/repo",
-        &owned(&["a"]),
-        Scope::Project,
-        Some("claude"),
-    )
-    .await
-    .expect("install succeeds");
-    assert!(
-        mainframe_server::skills_cli::locks::acquire(succeeding_project).is_some(),
-        "the guard must be released after a successful operation"
-    );
-
-    let failing_runner = RecordingRunner::queued(vec![CliOutcome {
-        started: true,
-        timed_out: false,
-        exit_code: Some(1),
-        stdout: String::new(),
-        stderr: "error: boom".to_string(),
-    }]);
-    let failed = mainframe_server::skills_cli::install(
-        &failing_runner,
-        &path,
-        failing_project,
-        PROJECT_PATH,
-        "owner/repo",
-        &owned(&["a"]),
-        Scope::Project,
-        Some("claude"),
-    )
-    .await;
-    assert!(
-        matches!(failed, Err(SkillsCliError::Cli { .. })),
-        "expected the queued nonzero exit to surface as a Cli error, got {failed:?}"
-    );
-    assert!(
-        mainframe_server::skills_cli::locks::acquire(failing_project).is_some(),
-        "the guard must be released after a failed operation too"
-    );
-}
+include!("cases/skills_cli_unit_additional_cases.rs");

@@ -65,7 +65,7 @@ pub(crate) async fn apply_tuning_impl(
         return;
     };
     if let Err(err) = session.apply_tuning(resolved).await {
-        tracing::warn!(?err, chat_id, "live applyTuning failed");
+        tracing::warn!(error = ?err, chat_id, "live applyTuning failed");
     }
 }
 

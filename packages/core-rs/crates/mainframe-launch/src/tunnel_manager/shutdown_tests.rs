@@ -13,11 +13,11 @@ async fn records_the_spawned_pid_and_forgets_it_on_stop() {
     let manager = manager_with(config, registry.clone());
 
     manager.start(4173, "preview:Dev", None).await.unwrap();
-    tokio::time::timeout(Duration::from_secs(10), async {
-        while registry.added().is_empty() {
-            sleep(Duration::from_millis(5)).await;
-        }
-    })
+    mainframe_runtime::test_support::poll_until(
+        Duration::from_secs(10),
+        Duration::from_millis(5),
+        async || !(registry.added().is_empty()),
+    )
     .await
     .expect("registry add completed");
 
@@ -161,12 +161,11 @@ async fn individual_stop_retains_registry_until_exit_and_concurrent_stop_waits()
     let pid = manager.pid_of("preview:Dev").unwrap();
     let stopping = manager.clone();
     let first = tokio::spawn(async move { stopping.stop("preview:Dev").await });
-    tokio::time::timeout(Duration::from_secs(2), async {
-        while signals.lock().unwrap().is_empty() {
-            // The signal recorder has no notification for the stop task.
-            sleep(Duration::from_millis(5)).await;
-        }
-    })
+    mainframe_runtime::test_support::poll_until(
+        Duration::from_secs(2),
+        Duration::from_millis(5),
+        async || !signals.lock().unwrap().is_empty(),
+    )
     .await
     .unwrap();
     assert!(!registry.removed().contains(&i64::from(pid)));
@@ -225,12 +224,11 @@ async fn cancelling_a_start_kills_its_child() {
 
     task.abort();
     assert!(task.await.unwrap_err().is_cancelled());
-    tokio::time::timeout(Duration::from_secs(2), async {
-        while manager.live_count() > 0 {
-            // Wait for the real process lifecycle to advance.
-            sleep(Duration::from_millis(10)).await;
-        }
-    })
+    mainframe_runtime::test_support::poll_until(
+        Duration::from_secs(2),
+        Duration::from_millis(10),
+        async || !(manager.live_count() > 0),
+    )
     .await
     .expect("the cancelled start's child should be reaped");
 
@@ -251,7 +249,7 @@ async fn restarting_a_label_keeps_the_new_tunnel_when_the_old_child_exits() {
     manager.start(3000, "daemon", None).await.unwrap();
     manager.start(3000, "daemon", None).await.unwrap();
     // Give the first child's exit watcher time to run.
-    // Wait for the real process lifecycle to advance.
+    // Let the replaced cloudflared stand-in's exit watcher run.
     sleep(Duration::from_millis(100)).await;
 
     assert_eq!(

@@ -186,8 +186,7 @@ async fn load_meta(candidate: &Candidate) -> Option<RolloutMeta> {
         Ok(h) => h,
         Err(err) => {
             tracing::warn!(
-                module = "codex:external-sessions",
-                err = %err,
+                error = %err,
                 file_path = %candidate.file_path.display(),
                 "failed to read rollout head"
             );
@@ -221,8 +220,7 @@ async fn load_first_prompt(candidate: &Candidate) -> Option<String> {
         Ok(h) => first_user_prompt(&parse_lines(&h)),
         Err(err) => {
             tracing::warn!(
-                module = "codex:external-sessions",
-                err = %err,
+                error = %err,
                 file_path = %candidate.file_path.display(),
                 "failed to read rollout prompt"
             );

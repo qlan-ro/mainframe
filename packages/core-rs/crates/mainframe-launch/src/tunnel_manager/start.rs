@@ -51,6 +51,51 @@ impl TunnelManager {
             error: None,
         });
 
+        let mut child = self.spawn_tunnel(port, label, &options)?;
+        let mut out_lines = child.stdout.take().map(|s| BufReader::new(s).lines());
+        let mut err_lines = child.stderr.take().map(|s| BufReader::new(s).lines());
+        // Tracked in `live` (and its reap pid recorded) BEFORE the start window,
+        // so a shutdown or crash during it can reap the child (see stop_all).
+        let process = self.watch_child(child, label);
+        drop(gate);
+        let mut guard = StartGuard {
+            tunnels: &self.tunnels,
+            label,
+            process: &process,
+            armed: true,
+        };
+
+        let initial_url = if is_named { options.url.clone() } else { None };
+        let url = self
+            .wait_for_registration(
+                label,
+                is_named,
+                initial_url,
+                &process,
+                &mut out_lines,
+                &mut err_lines,
+            )
+            .await?;
+
+        // Keep reading the child's output for its whole life: dropping the pipe
+        // readers closes the pipes, and cloudflared (Go) dies on SIGPIPE at its
+        // next log write.
+        let pumps = spawn_output_drain(out_lines, err_lines);
+
+        self.register_connected(label, port, &url, &process);
+
+        self.verify_started_tunnel(label, &url, &process).await?;
+        guard.armed = false;
+        self.spawn_exit_watcher(label.to_string(), process.clone(), pumps);
+        Ok(url)
+    }
+    fn spawn_tunnel(
+        &self,
+        port: u16,
+        label: &str,
+        options: &TunnelStartOptions,
+    ) -> Result<Child, TunnelStartError> {
+        let is_named = options.token.is_some();
         let args: Vec<String> = if is_named {
             vec![
                 "tunnel".to_string(),
@@ -66,7 +111,7 @@ impl TunnelManager {
             ]
         };
 
-        let mut child = match build_cloudflared_command(
+        let child = match build_cloudflared_command(
             &self.config.cloudflared_bin,
             &args,
             self.resolved_path.as_deref(),
@@ -87,20 +132,19 @@ impl TunnelManager {
             }
         };
 
-        let mut out_lines = child.stdout.take().map(|s| BufReader::new(s).lines());
-        let mut err_lines = child.stderr.take().map(|s| BufReader::new(s).lines());
-        // Tracked in `live` (and its reap pid recorded) BEFORE the start window,
-        // so a shutdown or crash during it can reap the child (see stop_all).
-        let process = self.watch_child(child, label);
-        drop(gate);
-        let mut guard = StartGuard {
-            tunnels: &self.tunnels,
-            label,
-            process: &process,
-            armed: true,
-        };
+        Ok(child)
+    }
 
-        let mut pending_url: Option<String> = if is_named { options.url.clone() } else { None };
+    async fn wait_for_registration(
+        &self,
+        label: &str,
+        is_named: bool,
+        initial_url: Option<String>,
+        process: &process::TunnelProcess,
+        out_lines: &mut Option<Lines<BufReader<ChildStdout>>>,
+        err_lines: &mut Option<Lines<BufReader<ChildStderr>>>,
+    ) -> Result<String, TunnelStartError> {
+        let mut pending_url = initial_url;
         let mut registered = false;
 
         let start_deadline = sleep(self.config.start_timeout);
@@ -112,12 +156,12 @@ impl TunnelManager {
                 break;
             }
             tokio::select! {
-                line = next_line_stdout(&mut out_lines) => {
+                line = next_line_stdout(out_lines) => {
                     if let Some(line) = line {
                         self.scan_line(&line, is_named, label, &mut pending_url, &mut registered);
                     }
                 }
-                line = next_line_stderr(&mut err_lines) => {
+                line = next_line_stderr(err_lines) => {
                     if let Some(line) = line {
                         self.scan_line(&line, is_named, label, &mut pending_url, &mut registered);
                     }
@@ -143,51 +187,65 @@ impl TunnelManager {
             }
         }
 
-        // Keep reading the child's output for its whole life: dropping the pipe
-        // readers closes the pipes, and cloudflared (Go) dies on SIGPIPE at its
-        // next log write.
-        let pumps = spawn_output_drain(out_lines, err_lines);
+        Ok(pending_url.unwrap_or_default())
+    }
 
+    fn register_connected(
+        &self,
+        label: &str,
+        port: u16,
+        url: &str,
+        process: &process::TunnelProcess,
+    ) {
         // Step 2: connected. Register the tunnel, then wait for DNS while still
         // watching for an early exit (which fails the start).
-        let url = pending_url.unwrap_or_default();
         self.tunnels.insert(
             label.to_string(),
             ManagedTunnel {
                 process: process.clone(),
-                url: url.clone(),
+                url: url.to_string(),
                 ready: false,
             },
         );
-        tracing::info!(target: "tunnel", label, url, port, "tunnel connected, waiting for DNS propagation…");
+        tracing::info!(
+            label,
+            url,
+            port,
+            "tunnel connected, waiting for DNS propagation…"
+        );
         self.broadcast(DaemonEvent::TunnelStatus {
             state: TunnelState::Ready,
             label: label.to_string(),
-            url: Some(url.clone()),
+            url: Some(url.to_string()),
             dns_verified: Some(false),
             error: None,
         });
-
+    }
+    async fn verify_started_tunnel(
+        &self,
+        label: &str,
+        url: &str,
+        process: &process::TunnelProcess,
+    ) -> Result<(), TunnelStartError> {
         tokio::select! {
-            dns_ok = self.wait_for_dns(&url) => {
+            dns_ok = self.wait_for_dns(url) => {
                 if let Some(mut tunnel) = self.tunnels.get_mut(label) {
                     tunnel.ready = true;
                 }
                 if dns_ok {
-                    tracing::info!(target: "tunnel", label, url, "tunnel ready (DNS verified)");
+                    tracing::info!(label, url, "tunnel ready (DNS verified)");
                 } else {
-                    tracing::warn!(target: "tunnel", label, url, "tunnel DNS verification timed out, emitting anyway");
+                    tracing::warn!(label, url, "tunnel DNS verification timed out, emitting anyway");
                 }
                 self.broadcast(DaemonEvent::TunnelStatus {
                     state: TunnelState::DnsVerified,
                     label: label.to_string(),
-                    url: Some(url.clone()),
+                    url: Some(url.to_string()),
                     dns_verified: Some(dns_ok),
                     error: None,
                 });
-                guard.armed = false;
-                self.spawn_exit_watcher(label.to_string(), process.clone(), pumps);
-                Ok(url)
+
+                Ok(())
             }
             exit = process.exited() => Err(self.on_exit_before_ready(label, exit)),
         }

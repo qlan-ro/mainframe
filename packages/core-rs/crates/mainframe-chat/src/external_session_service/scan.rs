@@ -19,26 +19,7 @@ pub(super) async fn scan_page_impl<D: ExternalSessionDeps>(
 
     // Count-only: each adapter returns its total without enriching.
     if limit <= 0 {
-        let mut total = 0;
-        for adapter_id in &adapter_ids {
-            match deps
-                .list_external_sessions(adapter_id, &project, &exclude_ids, 0, 0)
-                .await
-            {
-                Ok(page) => total += page.total,
-                Err(err) => {
-                    warn!(
-                        ?err,
-                        adapter_id, project_id, "Failed to count external sessions"
-                    )
-                }
-            }
-        }
-        return Ok(ExternalSessionPage {
-            sessions: Vec::new(),
-            total,
-            next_offset: None,
-        });
+        return count_sessions(deps, project_id, &project, &adapter_ids, &exclude_ids).await;
     }
 
     // Over-fetch each adapter's prefix [0, offset+limit), then merge-sort across
@@ -60,43 +41,16 @@ pub(super) async fn scan_page_impl<D: ExternalSessionDeps>(
                 collected.extend(page.sessions);
             }
             Err(err) => {
-                warn!(
-                    ?err,
+                warn!(error = ?err,
                     adapter_id, project_id, "Failed to scan external sessions"
                 )
             }
         }
     }
 
-    collected.sort_by(|a, b| {
-        let d = parse_ms(&b.modified_at) - parse_ms(&a.modified_at);
-        if d != 0 {
-            if d > 0 {
-                Ordering::Greater
-            } else {
-                Ordering::Less
-            }
-        } else if a.session_id < b.session_id {
-            Ordering::Greater
-        } else {
-            Ordering::Less
-        }
-    });
+    sort_sessions(&mut collected);
 
-    let len = collected.len() as i64;
-    let start = offset.clamp(0, len) as usize;
-    let end = (offset + limit).clamp(0, len) as usize;
-    let sessions = collected[start..end].to_vec();
-    let next_offset = if offset + limit < total {
-        Some(offset + limit)
-    } else {
-        None
-    };
-    Ok(ExternalSessionPage {
-        sessions,
-        total,
-        next_offset,
-    })
+    Ok(session_page(collected, total, offset, limit))
 }
 
 pub(super) async fn generate_import_title<D: ExternalSessionDeps>(
@@ -223,4 +177,71 @@ pub(super) fn strip_xml_tags(text: &str) -> String {
         }
     }
     out.trim().to_string()
+}
+
+async fn count_sessions<D: ExternalSessionDeps>(
+    deps: &D,
+    project_id: &str,
+    project: &str,
+    adapter_ids: &[String],
+    exclude_ids: &[String],
+) -> Result<ExternalSessionPage, SeamError> {
+    let mut total = 0;
+    for adapter_id in adapter_ids {
+        match deps
+            .list_external_sessions(adapter_id, project, exclude_ids, 0, 0)
+            .await
+        {
+            Ok(page) => total += page.total,
+            Err(err) => {
+                warn!(error = ?err,
+                    adapter_id, project_id, "Failed to count external sessions"
+                )
+            }
+        }
+    }
+    Ok(ExternalSessionPage {
+        sessions: Vec::new(),
+        total,
+        next_offset: None,
+    })
+}
+
+fn sort_sessions(collected: &mut [ExternalSession]) {
+    collected.sort_by(|a, b| {
+        let d = parse_ms(&b.modified_at) - parse_ms(&a.modified_at);
+        if d != 0 {
+            if d > 0 {
+                Ordering::Greater
+            } else {
+                Ordering::Less
+            }
+        } else if a.session_id < b.session_id {
+            Ordering::Greater
+        } else {
+            Ordering::Less
+        }
+    });
+}
+
+fn session_page(
+    collected: Vec<ExternalSession>,
+    total: i64,
+    offset: i64,
+    limit: i64,
+) -> ExternalSessionPage {
+    let len = collected.len() as i64;
+    let start = offset.clamp(0, len) as usize;
+    let end = (offset + limit).clamp(0, len) as usize;
+    let sessions = collected[start..end].to_vec();
+    let next_offset = if offset + limit < total {
+        Some(offset + limit)
+    } else {
+        None
+    };
+    ExternalSessionPage {
+        sessions,
+        total,
+        next_offset,
+    }
 }

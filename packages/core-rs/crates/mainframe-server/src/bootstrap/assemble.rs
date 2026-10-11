@@ -106,7 +106,7 @@ async fn automations(
     if let Some(engine) = &engine
         && let Err(err) = engine.start().await
     {
-        tracing::error!(%err, "failed to start the automations engine");
+        tracing::error!(error = %err, "failed to start the automations engine");
     }
     engine
 }
@@ -124,7 +124,7 @@ async fn plugins(
         match github_issues_port::DaemonGitHubIssuesPort::new(engine.credentials()) {
             Ok(port) => Some(Arc::new(port) as Arc<dyn GitHubIssues>),
             Err(err) => {
-                tracing::error!(%err, "github issues port unavailable: HTTP client build failed");
+                tracing::error!(error = %err, "github issues port unavailable: HTTP client build failed");
                 None
             }
         }
@@ -137,7 +137,7 @@ async fn plugins(
     if let Err(err) =
         builtin_plugins::load_builtin_plugins(&manager, &bound.input.paths.data_dir).await
     {
-        tracing::error!(%err, "failed to load builtin plugins");
+        tracing::error!(error = %err, "failed to load builtin plugins");
     }
     manager
 }

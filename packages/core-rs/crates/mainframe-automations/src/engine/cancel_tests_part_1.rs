@@ -1,4 +1,3 @@
-
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -151,24 +150,28 @@ async fn cancel_aborts_the_in_flight_walk_and_the_run_never_continues() {
     let advance = tokio::spawn(async move { spawned.advance(&run_id).await });
 
     // Wait for the pre-effect running marker so the walk is provably in-flight.
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    loop {
-        assert!(std::time::Instant::now() < deadline, "walk never entered running");
-        let status = h
-            .store
-            .get_run(&run.id)
-            .await
-            .unwrap()
-            .unwrap()
-            .checkpoint
-            .steps
-            .get("run-1")
-            .map(|e| e.status);
-        if status == Some(StepStatus::Running) {
-            break;
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-    }
+    mainframe_runtime::test_support::poll_until(
+        std::time::Duration::from_secs(10),
+        std::time::Duration::from_millis(5),
+        async || {
+            let status = h
+                .store
+                .get_run(&run.id)
+                .await
+                .unwrap()
+                .unwrap()
+                .checkpoint
+                .steps
+                .get("run-1")
+                .map(|e| e.status);
+            if status == Some(StepStatus::Running) {
+                return true;
+            }
+            false
+        },
+    )
+    .await
+    .expect("expected state before timeout");
 
     engine.cancel_run(&run.id).await.unwrap();
     advance.await.unwrap().unwrap();

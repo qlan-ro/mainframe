@@ -6,7 +6,12 @@
 //!
 //! `CodexScanDeps` and `CodexSession::set_scan_deps` let these tests run
 //! offline while production entry points enforce session containment.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(clippy::too_many_lines, reason = "Test assertions and scenarios")]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod common;
 

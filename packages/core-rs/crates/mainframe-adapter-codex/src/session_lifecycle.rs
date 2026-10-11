@@ -11,6 +11,7 @@ impl CodexSession {
             approval.reject_all();
         }
         client.close();
+        /* expected */
         let _ = tokio::time::timeout(Duration::from_millis(3000), client.closed()).await;
         *self.client.lock_recover() = None;
         Ok(())
@@ -44,17 +45,23 @@ impl CodexSession {
         let sink_x = self.sink.clone();
         let on_exit_cb = self.on_exit_callback.clone();
 
+        let notification_span = self.span.clone();
+        let error_span = self.span.clone();
+        let exit_span = self.span.clone();
         JsonRpcHandlers {
             on_notification: Box::new(move |method, params| {
+                let _span = notification_span.enter();
                 let s = sink_n.lock_recover().clone();
                 handle_notification(&method, &params, &s, &mut state_n.lock_recover());
             }),
             on_request: self.request_handler(approval),
             on_error: Box::new(move |error| {
+                let _span = error_span.enter();
                 let s = sink_e.lock_recover().clone();
                 s.on_error(AdapterError::Message(error));
             }),
             on_exit: Box::new(move |code| {
+                let _span = exit_span.enter();
                 let s = sink_x.lock_recover().clone();
                 clear_after_exit(&state_x, &*s);
                 *status_x.lock_recover() = AdapterProcessStatus::Stopped;
@@ -74,7 +81,9 @@ impl CodexSession {
         let config_r = self.config.clone();
         let client_slot_r = self.client.clone();
         let approval_r = approval;
+        let span = self.span.clone();
         Box::new(move |method, params, id| {
+            let _span = span.enter();
             let plan_mode = config_r.lock_recover().plan_mode;
             let current_turn_plan = state_r.lock_recover().current_turn_plan.clone();
             approval_r.set_plan_context(PlanContext {

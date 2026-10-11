@@ -106,7 +106,6 @@ impl SpoolValidator for MadeSpoolValidator {
                     Some(f) => format!("claude-{}", f()),
                     None => {
                         tracing::warn!(
-                            target: "background-tasks:spool",
                             %output_path,
                             "no uid source for a POSIX spool path; rejecting"
                         );

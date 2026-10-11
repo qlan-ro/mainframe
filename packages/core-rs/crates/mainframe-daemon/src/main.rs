@@ -1,5 +1,12 @@
 #![forbid(unsafe_code)]
-#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        reason = "Test assertions and scenarios"
+    )
+)]
 mod cli;
 use tokio::signal;
 use tracing::info;
@@ -7,25 +14,8 @@ const DAEMON_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[tokio::main]
 async fn main() {
-    // `--version`/`version` is answered before logging init: no
-    // logger noise on stdout, no daemon graph loaded. `pair`/`status` are thin
-    // HTTP clients against the running daemon.
-    match std::env::args().nth(1).as_deref() {
-        Some("--version") | Some("-v") | Some("version") => {
-            println!("mainframe {DAEMON_VERSION}");
-            return;
-        }
-        Some("pair") => return cli::pair::run_pair().await,
-        Some("status") => return cli::status::run_status().await,
-        Some("update") => {
-            let argv: Vec<String> = std::env::args().skip(2).collect();
-            if let Err(err) = cli::update::run_update(argv).await {
-                eprintln!("  {err}");
-                std::process::exit(1);
-            }
-            return;
-        }
-        _ => {}
+    if cli::dispatch(DAEMON_VERSION).await {
+        return;
     }
     run_daemon().await;
 }
@@ -39,7 +29,7 @@ async fn run_daemon() {
         Ok(loaded) => loaded,
         Err(err) => {
             // Logging is not up yet: it needs the configured data directory.
-            eprintln!("failed to load config: {err}");
+            mainframe_runtime::logging::boot_error("failed to load config", &err);
             std::process::exit(1);
         }
     };
@@ -98,7 +88,10 @@ async fn shutdown_signal() {
         // Boot-time signal handler installation failure is unrecoverable — the
         // process has no path forward without it — so this is treated as a
         // fatal boot condition per the RUST RULES exemption for main.rs boot.
-        #[allow(clippy::expect_used)]
+        #[expect(
+            clippy::expect_used,
+            reason = "signal setup failure is fatal during boot"
+        )]
         signal::ctrl_c()
             .await
             .expect("failed to install SIGINT handler");
@@ -106,7 +99,10 @@ async fn shutdown_signal() {
 
     #[cfg(unix)]
     let terminate = async {
-        #[allow(clippy::expect_used)]
+        #[expect(
+            clippy::expect_used,
+            reason = "signal setup failure is fatal during boot"
+        )]
         signal::unix::signal(signal::unix::SignalKind::terminate())
             .expect("failed to install SIGTERM handler")
             .recv()

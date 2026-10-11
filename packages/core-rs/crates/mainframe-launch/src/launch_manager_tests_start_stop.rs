@@ -64,10 +64,12 @@ async fn restart_during_stop_teardown_respawns_after_exit() {
         None,
         None,
         None,
-        default_read_command(),
-        LaunchTimings {
-            stop_grace: Duration::from_millis(300),
-            ..LaunchTimings::default()
+        crate::launch_manager::LaunchExecution {
+            read_process_command: default_read_command(),
+            timings: LaunchTimings {
+                stop_grace: Duration::from_millis(300),
+                ..LaunchTimings::default()
+            },
         },
     ));
 
@@ -201,7 +203,7 @@ async fn signal_group_does_not_fall_back_to_the_pid_when_the_group_is_gone() {
 
     signal_group(Some(unrelated.id()), Signal::Kill);
 
-    // Wait for the real process lifecycle to advance.
+    // Give the unrelated sleep child time to react to a wrongly targeted signal.
     tokio::time::sleep(Duration::from_millis(100)).await;
     let still_running = unrelated.try_wait().unwrap().is_none();
     unrelated.kill().unwrap();

@@ -207,8 +207,7 @@ pub(crate) async fn enrich_session(
         Ok(ht) => ht,
         Err(err) => {
             tracing::warn!(
-                module = "claude:external-session-enrich",
-                err = %err,
+                error = %err,
                 file_path = %candidate.file_path,
                 "failed to read external session file"
             );
@@ -234,14 +233,7 @@ pub(crate) async fn enrich_session(
     let git_branch = pick_string(&all, "gitBranch");
     let created_at = pick_string(&all, "timestamp");
 
-    let first_user = head_entries.iter().find(|e| {
-        e.get("type").and_then(Value::as_str) == Some("user")
-            && e.get("message").and_then(|m| m.get("content")).is_some()
-    });
-    let first_prompt_raw =
-        first_user.and_then(|e| raw_text(e.get("message").and_then(|m| m.get("content")), 2000));
-    let first_prompt =
-        first_prompt_raw.map(|r| clean_prompt(&r).chars().take(500).collect::<String>());
+    let first_prompt = first_prompt(&head_entries);
 
     // Title precedence: customTitle > aiTitle > summary > firstPrompt > synthetic.
     let title = pick_string(&all, "customTitle")
@@ -250,13 +242,7 @@ pub(crate) async fn enrich_session(
         .or_else(|| first_prompt.clone())
         .unwrap_or_else(|| SYNTHETIC_TITLE.to_string());
 
-    let modified_at = match tokio::fs::metadata(&candidate.file_path).await {
-        Ok(m) => match m.modified() {
-            Ok(t) => to_iso8601(DateTime::<Utc>::from(t)),
-            Err(_) => fallback_from_ms(candidate.mtime_ms),
-        },
-        Err(_) => fallback_from_ms(candidate.mtime_ms),
-    };
+    let modified_at = modification_time(candidate).await;
 
     Some(ExternalSession {
         session_id: candidate.session_id.clone(),
@@ -277,3 +263,24 @@ pub(crate) async fn enrich_session(
 #[cfg(test)]
 #[path = "external_session_enrich_tests.rs"]
 mod tests;
+
+async fn modification_time(candidate: &Candidate) -> String {
+    match tokio::fs::metadata(&candidate.file_path).await {
+        Ok(m) => match m.modified() {
+            Ok(t) => to_iso8601(DateTime::<Utc>::from(t)),
+            Err(_) => fallback_from_ms(candidate.mtime_ms),
+        },
+        Err(_) => fallback_from_ms(candidate.mtime_ms),
+    }
+}
+
+fn first_prompt(head_entries: &[Value]) -> Option<String> {
+    let first_user = head_entries.iter().find(|e| {
+        e.get("type").and_then(Value::as_str) == Some("user")
+            && e.get("message").and_then(|m| m.get("content")).is_some()
+    });
+    let first_prompt_raw =
+        first_user.and_then(|e| raw_text(e.get("message").and_then(|m| m.get("content")), 2000));
+
+    first_prompt_raw.map(|r| clean_prompt(&r).chars().take(500).collect::<String>())
+}

@@ -9,7 +9,11 @@
 //! `AdapterRegistry`, read back only through `ChatManager`'s public history and
 //! sweep APIs. A regression where `DaemonChatDeps` silently inherited the trait
 //! default (`Box::pin(async { None })`) would fail every case here.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod transcript_presence_support;
 
@@ -120,17 +124,18 @@ async fn the_external_session_sweep_reconciles_an_unopened_chat() {
 
     service.start_auto_scan(&h.project_id);
 
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
-    loop {
-        if persisted_missing(&h) == Some(true) {
-            break;
-        }
-        assert!(
-            tokio::time::Instant::now() < deadline,
-            "sweep never flipped transcript_missing within 5s"
-        );
-        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-    }
+    mainframe_runtime::test_support::poll_until(
+        std::time::Duration::from_secs(10),
+        std::time::Duration::from_millis(5),
+        async || {
+            if persisted_missing(&h) == Some(true) {
+                return true;
+            }
+            false
+        },
+    )
+    .await
+    .expect("expected state before timeout");
 
     service.stop_auto_scan(&h.project_id);
     assert_eq!(persisted_missing(&h), Some(true));

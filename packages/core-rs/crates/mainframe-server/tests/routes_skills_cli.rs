@@ -1,7 +1,11 @@
 //! Route-level tests for the `/api/projects/{id}/skills-cli/…` routes. These
 //! exercise only paths that never spawn a process: unknown-project 404s and
 //! input-validation 400s.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 

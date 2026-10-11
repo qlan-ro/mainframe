@@ -1,4 +1,8 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 #[path = "agent_message_presentation/lifecycle.rs"]
 mod lifecycle;
 #[path = "agent_message_presentation/support.rs"]

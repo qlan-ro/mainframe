@@ -5,7 +5,11 @@
 //! payload, teardown) is built from small synthetic notifications so each
 //! assertion pins one condition without depending on the capture's exact
 //! shape.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod common;
 

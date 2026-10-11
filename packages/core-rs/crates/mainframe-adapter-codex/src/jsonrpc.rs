@@ -93,7 +93,7 @@ impl JsonRpcClient {
         }
         let msg = serde_json::json!({ "method": method, "params": params.unwrap_or(Value::Object(Map::new())) });
         if let Err(error) = self.write(&msg) {
-            tracing::warn!(module = "codex:jsonrpc", method, %error, "notification not written");
+            tracing::warn!(method, %error, "notification not written");
         }
     }
 
@@ -103,22 +103,18 @@ impl JsonRpcClient {
     /// an answer that never arrives.
     pub fn respond(&self, id: RequestId, result: Value) -> Result<(), JsonRpcError> {
         if self.closed.load(Ordering::SeqCst) {
-            tracing::debug!(
-                module = "codex:jsonrpc",
-                ?id,
-                "response skipped: client closed"
-            );
+            tracing::debug!(?id, "response skipped: client closed");
             return Ok(());
         }
         let msg = serde_json::json!({ "id": id, "result": result });
         match self.write(&msg) {
             Ok(()) => Ok(()),
             Err(error @ mainframe_runtime::process::StdinWriteError::Closed) => {
-                tracing::debug!(module = "codex:jsonrpc", ?id, %error, "response not written");
+                tracing::debug!(?id, %error, "response not written");
                 Ok(())
             }
             Err(error @ mainframe_runtime::process::StdinWriteError::Full) => {
-                tracing::warn!(module = "codex:jsonrpc", ?id, %error, "response not written");
+                tracing::warn!(?id, %error, "response not written");
                 Err(JsonRpcError(format!(
                     "Response to request {} not written: {error}",
                     serde_json::to_string(&id).unwrap_or_default()
@@ -151,7 +147,7 @@ impl JsonRpcClient {
     fn write(&self, msg: &Value) -> Result<(), mainframe_runtime::process::StdinWriteError> {
         let mut json = serde_json::to_string(msg).unwrap_or_default();
         json.push('\n');
-        tracing::trace!(module = "codex:jsonrpc", "jsonrpc write");
+        tracing::trace!("jsonrpc write");
         self.write_tx.try_write(json.into_bytes())
     }
 }

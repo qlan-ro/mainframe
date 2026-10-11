@@ -45,7 +45,7 @@ impl LspConnectionHandler {
     ) -> UpgradeOutcome {
         // Validate effective path exists on disk (async — no sync I/O).
         if let Err(err) = tokio::fs::metadata(effective_path).await {
-            tracing::warn!(%err, project_id, path = %effective_path, "LSP upgrade rejected: project path not found");
+            tracing::warn!(error = %err, project_id, path = %effective_path, "LSP upgrade rejected: project path not found");
             return UpgradeOutcome::Reject(StatusKind::NotFound);
         }
 
@@ -84,7 +84,7 @@ impl LspConnectionHandler {
         {
             Ok(handle) => UpgradeOutcome::Proceed(handle),
             Err(err) => {
-                tracing::error!(%err, project_id, language, "Failed to spawn LSP server");
+                tracing::error!(error = %err, project_id, language, "Failed to spawn LSP server");
                 UpgradeOutcome::Reject(StatusKind::Unavailable)
             }
         }

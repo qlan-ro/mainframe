@@ -68,7 +68,6 @@ pub(super) async fn close_as_completed(
         .await
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(super) fn build_published_pair(
     todo_id: &str,
     project_id: &str,
