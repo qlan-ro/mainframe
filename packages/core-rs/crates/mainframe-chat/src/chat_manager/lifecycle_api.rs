@@ -83,7 +83,8 @@ impl ChatManager {
     /// archive is about to remove.
     pub async fn archive_chat(&self, chat_id: &str, delete_worktree: bool) {
         self.lifecycle.orchestration().stopping(chat_id).await;
-        if let Some(chat) = storage_event!(self.shared, self.shared.deps.chats_get(chat_id))
+        if let Some(chat) =
+            storage_event!(self.shared, Some(chat_id); self.shared.deps.chats_get(chat_id))
             && let Some(side_chat_id) = chat.side_chat_id.clone()
             && let Err(err) = self.discard_chat(&side_chat_id).await
         {
@@ -110,7 +111,7 @@ impl ChatManager {
 
     pub fn unarchive_chat(&self, chat_id: &str) -> Option<Chat> {
         let update = storage_event!(
-            self.shared,
+            self.shared, Some(chat_id);
             self.shared.prepare_update(
                 chat_id,
                 &ChatPatch {
@@ -120,14 +121,15 @@ impl ChatManager {
             ),
             None
         );
-        let chat = storage_event!(self.shared, self.shared.deps.chats_get(chat_id), None)?;
+        let chat =
+            storage_event!(self.shared, Some(chat_id); self.shared.deps.chats_get(chat_id), None)?;
         update.emit(chat.clone(), None);
         Some(chat)
     }
 
     pub fn rename_chat(&self, chat_id: &str, title: &str) {
         let update = storage_event!(
-            self.shared,
+            self.shared, Some(chat_id);
             self.shared.prepare_update(
                 chat_id,
                 &ChatPatch {
@@ -139,7 +141,9 @@ impl ChatManager {
         if let Some(cell) = self.get_active(chat_id) {
             cell.lock_recover().chat.title = Some(title.to_string());
         }
-        if let Some(chat) = storage_event!(self.shared, self.shared.deps.chats_get(chat_id)) {
+        if let Some(chat) =
+            storage_event!(self.shared, Some(chat_id); self.shared.deps.chats_get(chat_id))
+        {
             update.emit(chat, None);
         }
     }

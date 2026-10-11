@@ -1910,3 +1910,7 @@ async fn attach_worktree_rebinds_when_the_chat_is_idle() {
     assert_eq!(chat.worktree_path.as_deref(), Some("/tmp/wt"));
     assert_eq!(chat.branch_name.as_deref(), Some("feat/x"));
 }
+
+mod storage_failures;
+
+mod flow_golden;

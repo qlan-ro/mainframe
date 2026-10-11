@@ -135,31 +135,34 @@ impl ChatConfigManager {
         }
 
         let mut updates = ChatPatch::default();
+        let mut chat = cell.lock_recover().chat.clone();
         {
-            let mut guard = cell.lock_recover();
             if let Some(adapter_id) = changes.adapter_id {
                 updates.adapter_id = Some(adapter_id.clone());
-                guard.chat.adapter_id = adapter_id;
+                chat.adapter_id = adapter_id;
             }
             if let Some(model) = changes.model {
                 updates.model = Some(model.clone());
-                guard.chat.model = Some(model);
+                chat.model = Some(model);
             }
             if let Some(mode) = changes.permission_mode {
                 updates.permission_mode = Some(mode);
-                guard.chat.permission_mode = Some(mode);
+                chat.permission_mode = Some(mode);
             }
             if let Some(plan) = changes.plan_mode {
                 updates.plan_mode = Some(plan);
-                guard.chat.plan_mode = Some(plan);
+                chat.plan_mode = Some(plan);
             }
         }
 
-        let chat = cell.lock_recover().chat.clone();
-        self.shared.update_and_emit(chat, &updates)?;
+        let result = self.shared.prepare_update(chat_id, &updates);
+        if result.is_ok() {
+            cell.lock_recover().chat = chat.clone();
+        }
+        let result = result.map(|update| update.emit(chat, None));
         if was_spawned {
             self.lifecycle.start_chat(chat_id).await;
         }
-        Ok(())
+        result.map_err(ConfigError::from)
     }
 }

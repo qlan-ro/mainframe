@@ -9,6 +9,7 @@ pub(crate) struct ChatShared {
     pub(crate) permissions: Arc<Mutex<PermissionManager>>,
     pub(crate) queued_refs: QueuedRefs,
     pub(crate) orchestration: OrchestrationSlot,
+    storage_errors: Mutex<HashMap<String, std::time::Instant>>,
 }
 
 impl ChatShared {
@@ -28,6 +29,7 @@ impl ChatShared {
             permissions: Arc::new(Mutex::new(PermissionManager::new())),
             queued_refs: Arc::new(Mutex::new(Vec::new())),
             orchestration: OrchestrationSlot::default(),
+            storage_errors: Mutex::new(HashMap::new()),
         })
     }
 
@@ -82,7 +84,7 @@ impl ChatShared {
     pub(crate) fn chat_or_db(&self, chat_id: &str) -> Option<Chat> {
         self.active(chat_id)
             .map(|c| c.lock_recover().chat.clone())
-            .or_else(|| storage_event!(self, self.deps.chats_get(chat_id), None))
+            .or_else(|| storage_event!(self, Some(chat_id); self.deps.chats_get(chat_id), None))
     }
 }
 
@@ -118,15 +120,83 @@ impl ChatShared {
         chat_id: &str,
         patch: &ChatPatch,
     ) -> Result<PendingChatUpdate<'_>, mainframe_types::seam_error::SeamError> {
-        self.deps.chats_update(chat_id, patch)?;
+        self.deps
+            .chats_update(chat_id, patch)
+            .inspect_err(|error| self.report_storage_error(Some(chat_id), error))?;
         Ok(PendingChatUpdate { shared: self })
     }
 
-    pub(crate) fn report_storage_error(&self, error: &mainframe_types::seam_error::SeamError) {
-        tracing::error!(%error, "chat storage operation failed");
+    pub(crate) fn best_effort<T>(
+        &self,
+        chat_id: &str,
+        result: Result<T, mainframe_types::seam_error::SeamError>,
+        fallback: T,
+    ) -> T {
+        result.unwrap_or_else(|error| {
+            self.report_storage_error(Some(chat_id), &error);
+            fallback
+        })
+    }
+
+    pub(crate) fn prepare_live_update(
+        &self,
+        chat_id: &str,
+        patch: &ChatPatch,
+    ) -> PendingChatUpdate<'_> {
+        self.best_effort(chat_id, self.deps.chats_update(chat_id, patch), ());
+        PendingChatUpdate { shared: self }
+    }
+
+    pub(crate) fn report_storage_error(
+        &self,
+        chat_id: Option<&str>,
+        error: &mainframe_types::seam_error::SeamError,
+    ) {
+        tracing::error!(%error, chat_id, "chat storage operation failed");
+        let now = std::time::Instant::now();
+        let mut errors = self.storage_errors.lock_recover();
+        errors.retain(|_, last| now.duration_since(*last).as_secs() < 10);
+        if errors.contains_key(chat_id.unwrap_or_default()) {
+            return;
+        }
+        errors.insert(chat_id.unwrap_or_default().to_owned(), now);
+        drop(errors);
         self.emit(DaemonEvent::Error {
-            chat_id: None,
-            error: error.to_string(),
+            chat_id: chat_id.map(str::to_owned),
+            error: "Chat storage operation failed".into(),
         });
+    }
+}
+
+#[cfg(test)]
+mod storage_tests {
+    use super::*;
+
+    #[test]
+    fn storage_errors_are_limited_per_chat_and_resume_after_ten_seconds() {
+        let deps = crate::test_support::FakeDeps::arc();
+        let shared = ChatShared::new(deps.clone());
+        let error = mainframe_types::seam_error::SeamError::msg("private sqlite error");
+        shared.report_storage_error(Some("a"), &error);
+        shared.report_storage_error(Some("a"), &error);
+        shared.report_storage_error(Some("b"), &error);
+        assert_eq!(deps.events().len(), 2);
+        shared.storage_errors.lock_recover().insert(
+            "a".into(),
+            std::time::Instant::now() - std::time::Duration::from_secs(11),
+        );
+        shared.report_storage_error(Some("a"), &error);
+        let ids: Vec<_> = deps
+            .events()
+            .into_iter()
+            .map(|event| match event {
+                DaemonEvent::Error { chat_id, .. } => chat_id,
+                _ => panic!("expected error"),
+            })
+            .collect();
+        assert_eq!(
+            ids,
+            vec![Some("a".into()), Some("b".into()), Some("a".into())]
+        );
     }
 }

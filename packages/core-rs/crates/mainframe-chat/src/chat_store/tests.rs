@@ -74,7 +74,9 @@ fn failed_update_returns_an_error_without_a_success_event() {
             .update_and_emit(test_chat("c1"), &ChatPatch::default())
             .is_err()
     );
-    assert!(deps.events().is_empty());
+    assert!(
+        matches!(deps.events().as_slice(), [mainframe_types::events::DaemonEvent::Error { chat_id: Some(id), .. }] if id == "c1")
+    );
 }
 
 #[test]

@@ -1,7 +1,7 @@
 //! `mainframe-chat` — the `ChatManager` state machine and session orchestration.
 //!
 //! Active chats live in a shared `DashMap` registry of per-chat
-//! `Arc<Mutex<ActiveChat>>` cells (`ActiveChatRegistry`); the permission queue
+//! `Arc<Mutex<ActiveChat>>` cells (`Registry`); the permission queue
 //! stays FIFO per chat, and a chat lock is never held across an `.await` that
 //! emits events or does session I/O.
 #![forbid(unsafe_code)]
@@ -9,10 +9,13 @@
 
 macro_rules! storage_event {
     ($shared:expr, $result:expr $(, $fallback:expr)?) => {
+        storage_event!($shared, None; $result $(, $fallback)?)
+    };
+    ($shared:expr, $chat_id:expr; $result:expr $(, $fallback:expr)?) => {
         match $result {
             Ok(value) => value,
             Err(error) => {
-                $shared.report_storage_error(&error);
+                $shared.report_storage_error($chat_id, &error);
                 return $($fallback)?;
             }
         }

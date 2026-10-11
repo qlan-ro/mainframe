@@ -141,7 +141,7 @@ pub(super) async fn generate_import_title<D: ExternalSessionDeps>(
 
     chat.title = Some(title.clone());
     storage_event!(
-        shared,
+        shared, Some(&chat.id);
         shared.update_and_emit(
             chat.clone(),
             &ChatPatch {

@@ -29,6 +29,16 @@ pub async fn notification_config(db: &Db) -> NotificationConfig {
     }
 }
 
+pub fn notification_config_blocking(db: &Db) -> NotificationConfig {
+    match db.call_blocking(|d| d.settings.get("general", "notifications")) {
+        Ok(raw) => parse_notification_config(raw.as_deref()),
+        Err(err) => {
+            tracing::warn!(%err, "notification settings read failed; using the defaults");
+            NotificationConfig::default()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{Db, notification_config};

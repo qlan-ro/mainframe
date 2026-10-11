@@ -61,16 +61,15 @@ impl SessionSinkImpl {
                 guard.chat.process_state = Some(None);
                 (guard.chat.clone(), was_working)
             };
-            storage_event!(
-                self.shared,
-                self.shared.update_and_emit(
-                    chat,
+            self.shared
+                .prepare_live_update(
+                    &self.chat_id,
                     &ChatPatch {
                         process_state: Some(None),
                         ..Default::default()
                     },
                 )
-            );
+                .emit(chat, None);
             if was_working {
                 self.notify_surface(ChatSurfaceEvent::TurnFinished {
                     chat_id: self.chat_id.clone(),

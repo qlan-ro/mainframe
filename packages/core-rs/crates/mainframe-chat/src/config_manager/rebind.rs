@@ -9,24 +9,25 @@ impl ChatConfigManager {
         branch_name: Option<String>,
         session_file_path: Option<String>,
     ) -> Result<(), ConfigError> {
-        {
-            let mut guard = cell.lock_recover();
-            guard.chat.worktree_path = worktree_path.clone();
-            guard.chat.branch_name = branch_name.clone();
-            if session_file_path.is_some() {
-                guard.chat.session_file_path = session_file_path.clone();
-            }
-        }
-        let chat = cell.lock_recover().chat.clone();
-        self.shared.update_and_emit(
-            chat,
+        let update = self.shared.prepare_update(
+            chat_id,
             &ChatPatch {
                 worktree_path: Some(worktree_path.clone()),
-                branch_name: Some(branch_name),
-                session_file_path,
+                branch_name: Some(branch_name.clone()),
+                session_file_path: session_file_path.clone(),
                 ..Default::default()
             },
         )?;
+        let chat = {
+            let mut guard = cell.lock_recover();
+            guard.chat.worktree_path = worktree_path.clone();
+            guard.chat.branch_name = branch_name;
+            if session_file_path.is_some() {
+                guard.chat.session_file_path = session_file_path;
+            }
+            guard.chat.clone()
+        };
+        update.emit(chat, None);
         self.worktree_offers
             .on_binding_changed(chat_id, worktree_path.as_deref());
         Ok(())
@@ -73,14 +74,14 @@ impl ChatConfigManager {
             }
         };
 
-        self.apply_worktree_update(
+        let result = self.apply_worktree_update(
             cell,
             chat_id,
             Some(rebind.worktree_path),
             rebind.branch_name,
             moved_transcript,
-        )?;
+        );
         self.lifecycle.start_chat(chat_id).await;
-        Ok(())
+        result
     }
 }

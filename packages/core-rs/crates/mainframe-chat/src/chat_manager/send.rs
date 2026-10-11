@@ -27,7 +27,7 @@ impl ChatManager {
         let current_title = cell.lock_recover().chat.title.clone().unwrap_or_default();
         let title_empty = current_title.is_empty();
         let is_untouched_fork_title =
-            storage_event!(self.shared, self.shared.deps.get_pending_fork(chat_id))
+            storage_event!(self.shared, Some(chat_id); self.shared.deps.get_pending_fork(chat_id))
                 .is_some_and(|pending| pending.provisional_title == current_title);
         if !title_empty && !is_untouched_fork_title {
             return;
@@ -45,7 +45,7 @@ impl ChatManager {
             }
             let chat = cell.lock_recover().chat.clone();
             storage_event!(
-                self.shared,
+                self.shared, Some(chat_id);
                 self.shared.update_and_emit(
                     chat,
                     &ChatPatch {
@@ -195,7 +195,7 @@ impl ChatManager {
                 .await?;
         }
         let now = now_iso8601();
-        self.set_working(post, &now)?;
+        self.set_working(post, &now);
         // Commands are never queued behind a running turn, so acceptance
         // (send_entry.rs) and start are the same moment — UNLESS a turn was
         // already running: the command still bypasses the queue and runs
@@ -272,11 +272,13 @@ impl ChatManager {
                     self.event_handler.emit_display(chat_id);
                     return Err(err.into());
                 }
-                if self
-                    .shared
-                    .deps
-                    .extract_mentions_from_text(chat_id, content)?
-                {
+                if self.shared.best_effort(
+                    chat_id,
+                    self.shared
+                        .deps
+                        .extract_mentions_from_text(chat_id, content),
+                    false,
+                ) {
                     self.emit(DaemonEvent::ContextUpdated {
                         chat_id: chat_id.to_string(),
                         file_paths: None,
@@ -303,11 +305,13 @@ impl ChatManager {
             Some(message_uuid.clone()),
         );
 
-        if self
-            .shared
-            .deps
-            .extract_mentions_from_text(chat_id, content)?
-        {
+        if self.shared.best_effort(
+            chat_id,
+            self.shared
+                .deps
+                .extract_mentions_from_text(chat_id, content),
+            false,
+        ) {
             self.emit(DaemonEvent::ContextUpdated {
                 chat_id: chat_id.to_string(),
                 file_paths: None,
@@ -317,7 +321,7 @@ impl ChatManager {
         self.assign_initial_title(post, chat_id, content);
 
         let now = now_iso8601();
-        self.set_working(post, &now)?;
+        self.set_working(post, &now);
 
         let uuid = Some(message_uuid.clone());
         // The provider gets the handoff block; the stored message keeps

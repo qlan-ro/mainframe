@@ -1,0 +1,84 @@
+[
+  {
+    "chat": {
+      "adapterId": "claude",
+      "createdAt": "TIME",
+      "id": "new",
+      "lastContextTokensInput": 0,
+      "model": "old-model",
+      "noProject": false,
+      "permissionMode": "default",
+      "projectId": "p1",
+      "status": "active",
+      "temporary": false,
+      "totalCost": 0.0,
+      "totalTokensInput": 0,
+      "totalTokensOutput": 0,
+      "updatedAt": "TIME"
+    },
+    "type": "chat.created"
+  },
+  {
+    "chat": {
+      "adapterId": "claude",
+      "createdAt": "TIME",
+      "directoryMissing": false,
+      "displayStatus": "idle",
+      "id": "new",
+      "isRunning": false,
+      "lastContextTokensInput": 0,
+      "model": "old-model",
+      "noProject": false,
+      "permissionMode": "default",
+      "projectId": "p1",
+      "status": "active",
+      "temporary": false,
+      "title": "renamed",
+      "totalCost": 0.0,
+      "totalTokensInput": 0,
+      "totalTokensOutput": 0,
+      "updatedAt": "TIME",
+      "worktreeMissing": false
+    },
+    "type": "chat.updated"
+  },
+  {
+    "chat": {
+      "adapterId": "claude",
+      "branchName": "golden",
+      "createdAt": "TIME",
+      "directoryMissing": false,
+      "displayStatus": "idle",
+      "id": "new",
+      "isRunning": false,
+      "lastContextTokensInput": 0,
+      "model": "old-model",
+      "noProject": false,
+      "permissionMode": "default",
+      "projectId": "p1",
+      "status": "active",
+      "temporary": false,
+      "title": "renamed",
+      "totalCost": 0.0,
+      "totalTokensInput": 0,
+      "totalTokensOutput": 0,
+      "updatedAt": "TIME",
+      "worktreeMissing": false,
+      "worktreePath": "PROJECT/.worktrees/golden"
+    },
+    "type": "chat.updated"
+  },
+  {
+    "chatId": "new",
+    "type": "chat.ended"
+  },
+  {
+    "effectivePath": "PROJECT/.worktrees/golden",
+    "projectId": "p1",
+    "type": "launch.scopeReleased"
+  },
+  {
+    "chatId": "new",
+    "type": "chat.ended"
+  }
+]

@@ -168,3 +168,5 @@ include!("queues.rs");
 include!("quotas.rs");
 include!("results.rs");
 include!("streaming.rs");
+
+include!("storage_failures.rs");

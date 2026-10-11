@@ -12,8 +12,6 @@ use crate::chat_manager::{ChatShared, build_history_session, remap_history_for};
 use crate::chat_surface::{self, ChatSurface, ChatSurfaceEvent};
 use crate::event_handler::EventHandler;
 use crate::lifecycle_manager::ChatLifecycleManager;
-use crate::message_cache::MessageCache;
-use crate::permission_manager::PermissionManager;
 use crate::plan_mode_actions::ChatPlanModeCtx;
 use crate::plan_mode_handler::PlanModeHandler;
 use crate::types::ActiveChat;
@@ -32,8 +30,6 @@ pub struct ChatPermissionHandler {
     lifecycle: Arc<ChatLifecycleManager>,
     /// Plan-mode delegation for `ExitPlanMode` approvals.
     plan_mode: Arc<PlanModeHandler<ChatPlanModeCtx>>,
-    permissions: Arc<Mutex<PermissionManager>>,
-    messages: Arc<Mutex<MessageCache>>,
     /// The chat-surface observer: unlike `EventHandler`, this handler owns the
     /// normal (non-cancelled) permission-answer path, so it needs its own
     /// attach point to emit `GateResolved`/`GateRaised` there — mirrors
@@ -55,8 +51,6 @@ impl ChatPermissionHandler {
         plan_mode: Arc<PlanModeHandler<ChatPlanModeCtx>>,
     ) -> Self {
         Self {
-            permissions: shared.permissions.clone(),
-            messages: shared.messages.clone(),
             shared,
             event_handler,
             lifecycle,
@@ -93,7 +87,7 @@ impl ChatPermissionHandler {
     }
 
     fn has_pending(&self, chat_id: &str) -> bool {
-        self.permissions.lock_recover().has_pending(chat_id)
+        self.shared.permissions.lock_recover().has_pending(chat_id)
     }
 
     fn session_spawned(cell: &Arc<Mutex<ActiveChat>>) -> bool {
@@ -115,7 +109,8 @@ impl ChatPermissionHandler {
     /// restores a pending permission from it, so a second load would only
     /// repeat that work (a cold chat's whole JSONL, twice per resume).
     pub(crate) fn pending_permission_as_known(&self, chat_id: &str) -> Option<ControlRequest> {
-        self.permissions
+        self.shared
+            .permissions
             .lock_recover()
             .get_pending(chat_id)
             .cloned()

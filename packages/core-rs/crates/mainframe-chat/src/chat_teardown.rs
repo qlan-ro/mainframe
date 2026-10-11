@@ -11,8 +11,8 @@
 use mainframe_types::sync::LockExt as _;
 use std::sync::{Arc, Mutex};
 
+use crate::chat_manager::Registry;
 use crate::event_handler::EventHandler;
-use crate::idle_scanner::ActiveChatRegistry;
 use crate::message_cache::MessageCache;
 use crate::permission_manager::PermissionManager;
 use crate::worktree_offer::WorktreeOfferRegistry;
@@ -42,7 +42,7 @@ pub(crate) enum TeardownMode {
 }
 
 pub(crate) struct ChatTeardown {
-    pub active_chats: ActiveChatRegistry,
+    pub active_chats: Registry,
     pub messages: Arc<Mutex<MessageCache>>,
     pub permissions: Arc<Mutex<PermissionManager>>,
     pub worktree_offers: Arc<WorktreeOfferRegistry>,

@@ -21,6 +21,7 @@ use crate::test_support::test_chat;
 
 #[derive(Default)]
 pub(crate) struct FakeChatStore {
+    pub(crate) list_failure: Mutex<Option<String>>,
     pub(crate) write_failure: Mutex<Option<String>>,
     pub(crate) owned_sessions: Mutex<Vec<crate::config_transcripts::OwnedNativeSession>>,
     pub(crate) native_paths: Arc<Mutex<Vec<(String, String)>>>,

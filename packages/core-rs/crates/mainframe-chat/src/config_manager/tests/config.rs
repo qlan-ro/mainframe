@@ -32,6 +32,12 @@ async fn persists_permission_mode_even_when_set_model_rejects() {
         session.set_permission_mode_calls.lock().unwrap().as_slice(),
         &[ExecutionMode::AcceptEdits]
     );
+    assert_eq!(
+        session
+            .apply_tuning_calls
+            .load(std::sync::atomic::Ordering::SeqCst),
+        0
+    );
     let updates = manager.updates();
     assert_eq!(
         updates.as_slice(),

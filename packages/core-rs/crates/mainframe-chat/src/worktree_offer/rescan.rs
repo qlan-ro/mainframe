@@ -77,11 +77,11 @@ impl WorktreeOfferRegistry {
             None => None,
         };
         let other_chat_worktrees = storage_event!(
-            self.shared,
+            self.shared, Some(chat_id);
             self.canonical_others(&project_id, chat_id).await
         );
         let dismissed: HashSet<String> = storage_event!(
-            self.shared,
+            self.shared, Some(chat_id);
             self.shared.deps.get_dismissed_worktrees(chat_id)
         )
         .into_iter()

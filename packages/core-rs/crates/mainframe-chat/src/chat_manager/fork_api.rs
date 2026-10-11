@@ -231,7 +231,7 @@ mod turn_in_flight_tests {
     use crate::test_support::test_chat;
 
     /// `turn_in_flight` is exercised directly (rather than only through
-    /// `fork_chat`'s `StoreDeps`-backed tests) because `enrich_chat` — which
+    /// `fork_chat`'s `FakeDeps`-backed tests) because `enrich_chat` — which
     /// `get_chat` always runs — recomputes both `is_running` and
     /// `display_status` from live state (process state / the permission
     /// manager's pending queue), so a fake chat's manually-set fields never

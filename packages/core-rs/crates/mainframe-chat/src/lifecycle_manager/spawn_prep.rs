@@ -69,7 +69,7 @@ impl ChatLifecycleManager {
         no_persistence: bool,
     ) {
         storage_event!(
-            self.shared,
+            self.shared, Some(chat_id);
             self.shared.deps.chats_update(
                 chat_id,
                 &ChatPatch {

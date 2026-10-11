@@ -65,6 +65,10 @@ impl ChatConfigManager {
                         worktree_path: info.worktree_path,
                         source,
                     },
+                    ConfigError::Store(source) => ConfigError::WorktreeCreated {
+                        worktree_path: info.worktree_path,
+                        source: RelocateError::Store(source),
+                    },
                     other => other,
                 });
         }

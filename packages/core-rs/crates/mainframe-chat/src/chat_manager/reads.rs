@@ -4,7 +4,7 @@ use mainframe_types::sync::LockExt as _;
 
 impl ChatManager {
     pub fn get_chat(&self, chat_id: &str) -> Option<Chat> {
-        storage_event!(self.shared, self.try_get_chat(chat_id), None)
+        storage_event!(self.shared, Some(chat_id); self.try_get_chat(chat_id), None)
     }
 
     pub fn try_get_chat(
@@ -140,7 +140,7 @@ impl ChatManager {
     }
 
     /// Broadcast `chat.updated` for a chat whose fields were persisted out-of-band
-    /// (e.g. the tuning PATCH). Mirrors `notify_worktree_deleted`'s enriched re-emit.
+    /// (e.g. the tuning PATCH or worktree deletion).
     pub fn emit_chat_updated(&self, chat_id: &str) {
         if let Some(chat) = self.get_chat(chat_id) {
             self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
@@ -153,7 +153,8 @@ impl ChatManager {
     /// cell keeps what was read when the chat loaded.
     pub fn refresh_agent_lineage(&self, chat_id: &str) {
         if let Some(cell) = self.get_active(chat_id)
-            && let Some(row) = storage_event!(self.shared, self.shared.deps.chats_get(chat_id))
+            && let Some(row) =
+                storage_event!(self.shared, Some(chat_id); self.shared.deps.chats_get(chat_id))
         {
             let mut guard = cell.lock_recover();
             guard.chat.orchestration = row.orchestration;
@@ -167,11 +168,22 @@ impl ChatManager {
         project_id: &str,
         worktree_path: &str,
     ) -> Result<Vec<String>, mainframe_types::seam_error::SeamError> {
+        self.stop_worktree_services_with_aliases(project_id, worktree_path, &[])
+            .await
+    }
+
+    pub async fn stop_worktree_services_with_aliases(
+        &self,
+        project_id: &str,
+        worktree_path: &str,
+        aliases: &[&str],
+    ) -> Result<Vec<String>, mainframe_types::seam_error::SeamError> {
         let canonical = tokio::fs::canonicalize(worktree_path).await.ok();
         let mut paths = std::collections::HashSet::from([worktree_path.to_string()]);
         if let Some(path) = &canonical {
             paths.insert(path.to_string_lossy().into_owned());
         }
+        paths.extend(aliases.iter().map(|path| (*path).to_owned()));
         let mut chats = Vec::new();
         for chat in self.shared.deps.chats_list_all()? {
             if chat.project_id != project_id {
@@ -198,6 +210,7 @@ impl ChatManager {
         Ok(chats)
     }
 
+    #[cfg(test)]
     pub async fn notify_worktree_deleted(&self, project_id: &str, worktree_path: &str) {
         for chat_id in storage_event!(
             self.shared,
@@ -215,7 +228,7 @@ impl ChatManager {
     /// Record a mention and refresh the session context.
     pub fn add_mention(&self, chat_id: &str, mention: SessionMention) {
         storage_event!(
-            self.shared,
+            self.shared, Some(chat_id);
             self.shared.deps.chats_add_mention(chat_id, &mention)
         );
         self.emit(DaemonEvent::ContextUpdated {

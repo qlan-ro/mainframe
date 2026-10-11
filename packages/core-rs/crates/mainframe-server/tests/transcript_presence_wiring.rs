@@ -4,7 +4,7 @@
 //! external-session sweep's `reconcile_transcript` callback must reach
 //! `ChatManager::reconcile_transcript`. Unlike `mainframe-chat`'s
 //! `transcript_presence` unit tests — which call the reconciliation function
-//! directly against a hand-built `TranscriptPresenceDeps` fake — these tests
+//! directly against a hand-built `FakeDeps` store — these tests
 //! drive the production stack end to end: a real adapter registered under
 //! `AdapterRegistry`, read back only through `ChatManager`'s public history and
 //! sweep APIs. A regression where `DaemonChatDeps` silently inherited the trait

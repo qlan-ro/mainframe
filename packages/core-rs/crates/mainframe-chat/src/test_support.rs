@@ -32,6 +32,7 @@ pub struct FakeSession {
     /// plain `Option<i64>` field can't do without interior mutability.
     pub(crate) activity_override: Mutex<Option<i64>>,
     pub kill_count: AtomicUsize,
+    pub apply_tuning_calls: AtomicUsize,
     pub set_model_calls: Mutex<Vec<String>>,
     pub set_permission_mode_calls: Mutex<Vec<ExecutionMode>>,
     pub set_plan_mode_calls: Mutex<Vec<bool>>,
@@ -105,6 +106,13 @@ fn err<'a, T: Send + 'a>(msg: &str) -> BoxFuture<'a, Result<T, AdapterError>> {
 }
 
 impl AdapterSession for FakeSession {
+    fn apply_tuning(
+        &self,
+        _tuning: mainframe_types::chat::ResolvedTuning,
+    ) -> BoxFuture<'_, Result<(), AdapterError>> {
+        self.apply_tuning_calls.fetch_add(1, Ordering::SeqCst);
+        ok()
+    }
     fn id(&self) -> &str {
         "sess"
     }

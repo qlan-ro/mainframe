@@ -185,3 +185,5 @@ fn assert_created_worktree(repo: &tempfile::TempDir) {
 mod config;
 
 mod worktree;
+
+mod storage_failures;

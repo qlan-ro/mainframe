@@ -248,7 +248,10 @@ fn failed_no_process_plan_write_keeps_the_cached_mode_retryable() {
     assert!(handler.handle_no_process(&active, &response).is_err());
     assert_eq!(active.lock().unwrap().chat.plan_mode, Some(true));
     assert_eq!(active.lock().unwrap().chat.permission_mode, None);
-    assert!(deps.events().is_empty());
+    assert!(
+        matches!(deps.events().as_slice(), [DaemonEvent::Error { chat_id: Some(id), .. }] if id == "c1")
+    );
+    deps.clear_events();
     *deps.store.write_failure.lock().unwrap() = None;
     handler.handle_no_process(&active, &response).unwrap();
     assert_eq!(active.lock().unwrap().chat.plan_mode, Some(false));

@@ -82,6 +82,9 @@ impl ChatStore for FakeDeps {
         Ok(())
     }
     fn chats_list(&self, _project_id: &str) -> Result<Vec<Chat>, SeamError> {
+        if let Some(error) = self.store.list_failure.lock_recover().clone() {
+            return Err(SeamError::msg(error));
+        }
         Ok({
             self.store
                 .with_derived_side_chat_ids(self.store.raw_chats())
@@ -134,6 +137,9 @@ impl ChatStore for FakeDeps {
         Ok(false)
     }
     fn update_todos(&self, _chat_id: &str, _todos: &[TodoItem]) -> Result<(), SeamError> {
+        if let Some(error) = self.store.write_failure.lock_recover().clone() {
+            return Err(SeamError::msg(error));
+        }
         Ok(())
     }
     /// Persists the PRs not yet stored and returns those, as the repository does.
@@ -200,6 +206,9 @@ impl ChatStore for FakeDeps {
         Ok(())
     }
     fn mark_context_lost(&self, chat_id: &str, context_lost_at: &str) -> Result<(), SeamError> {
+        if let Some(error) = self.store.write_failure.lock_recover().clone() {
+            return Err(SeamError::msg(error));
+        }
         self.store
             .mark_context_lost_calls
             .lock_recover()

@@ -16,6 +16,9 @@ fn store_error(err: mainframe_db::DbError) -> SeamError {
 }
 
 impl ChatStore for Db {
+    fn segment_store(&self) -> Option<&dyn crate::segments::SegmentStore> {
+        None
+    }
     fn chats_get(&self, id: &str) -> Result<Option<Chat>, SeamError> {
         let id = id.to_string();
         self.call_blocking(move |d| d.chats.get(&id))

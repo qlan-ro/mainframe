@@ -71,19 +71,26 @@ impl EventEmitter for DaemonChatDeps {
 }
 
 impl Pusher for DaemonChatDeps {
-    fn should_notify_permission<'a>(&'a self, tool_name: Option<&'a str>) -> BoxFuture<'a, bool> {
-        Box::pin(async move {
-            should_notify_permission(&notification_config(&self.db).await, tool_name)
-        })
+    fn should_notify_permission(&self, tool_name: Option<&str>) -> bool {
+        should_notify_permission(
+            &crate::db::notification_config_blocking(&self.db),
+            tool_name,
+        )
     }
-    fn notify_task_complete(&self) -> BoxFuture<'_, bool> {
-        Box::pin(async { notification_config(&self.db).await.chat.task_complete })
+    fn notify_task_complete(&self) -> bool {
+        crate::db::notification_config_blocking(&self.db)
+            .chat
+            .task_complete
     }
-    fn notify_session_error(&self) -> BoxFuture<'_, bool> {
-        Box::pin(async { notification_config(&self.db).await.chat.session_error })
+    fn notify_session_error(&self) -> bool {
+        crate::db::notification_config_blocking(&self.db)
+            .chat
+            .session_error
     }
-    fn notify_attention_request(&self) -> BoxFuture<'_, bool> {
-        Box::pin(async { notification_config(&self.db).await.chat.attention_request })
+    fn notify_attention_request(&self) -> bool {
+        crate::db::notification_config_blocking(&self.db)
+            .chat
+            .attention_request
     }
     fn send_push(&self, msg: PushOut) {
         let push = Arc::clone(&self.push);

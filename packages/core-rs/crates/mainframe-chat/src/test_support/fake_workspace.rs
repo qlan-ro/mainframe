@@ -222,6 +222,9 @@ impl WorkspacePort for FakeDeps {
         Box::pin(async move { dirty })
     }
     fn extract_mentions_from_text(&self, _chat_id: &str, _text: &str) -> Result<bool, SeamError> {
+        if let Some(error) = self.store.write_failure.lock_recover().clone() {
+            return Err(SeamError::msg(error));
+        }
         Ok(*self.workspace.mentions_found.lock_recover())
     }
     fn list_worktrees<'a>(&'a self, _project_path: &'a str) -> BoxFuture<'a, Vec<WorktreeEntry>> {

@@ -16,6 +16,7 @@ impl ChatPermissionHandler {
         response: ControlResponse,
     ) -> Result<(), PermissionError> {
         if self
+            .shared
             .permissions
             .lock_recover()
             .was_cancelled(chat_id, &response.request_id)
@@ -33,6 +34,7 @@ impl ChatPermissionHandler {
         // Guard: reject stale/duplicate responses (only when a permission is queued).
         if let Some(cell) = &active {
             let matches_pending = self
+                .shared
                 .permissions
                 .lock_recover()
                 .matches_pending(chat_id, &response.request_id);
@@ -73,7 +75,7 @@ impl ChatPermissionHandler {
 
         if let Some(text) = &response.message {
             let message = self.transient_user_text(chat_id, text);
-            self.messages.lock_recover().append(chat_id, message);
+            self.shared.messages.lock_recover().append(chat_id, message);
             self.event_handler.emit_display(chat_id);
         }
 

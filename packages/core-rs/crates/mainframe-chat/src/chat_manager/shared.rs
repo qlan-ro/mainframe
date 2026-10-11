@@ -1,4 +1,4 @@
-//! Free helpers shared across the facade and the sub-manager Deps wrappers.
+//! Helpers shared by the chat facade and its managers.
 use super::*;
 use mainframe_types::sync::LockExt as _;
 

@@ -15,8 +15,9 @@ use mainframe_types::chat::QueuedMessageRef;
 use mainframe_types::events::DaemonEvent;
 use tracing::{info, warn};
 
+use crate::chat_manager::Registry;
 use crate::chat_teardown::{ChatTeardown, TeardownMode};
-use crate::idle_scanner::{ActiveChatRegistry, IDLE_THRESHOLD_MS, IdleOffloader, idle_since};
+use crate::idle_scanner::{IDLE_THRESHOLD_MS, IdleOffloader, idle_since};
 use crate::lifecycle_manager::ChatLifecycleManager;
 use crate::permission_manager::PermissionManager;
 
@@ -25,7 +26,7 @@ use crate::permission_manager::PermissionManager;
 /// permissions, queued refs, lifecycle, event handler) and stored as a trait
 /// object so `IdleSessionScanner`'s periodic task needs no `Weak<ChatManager>`.
 pub struct ChatOffload {
-    active_chats: ActiveChatRegistry,
+    active_chats: Registry,
     permissions: Arc<Mutex<PermissionManager>>,
     queued_refs: Arc<Mutex<Vec<QueuedMessageRef>>>,
     lifecycle: Arc<ChatLifecycleManager>,
@@ -35,7 +36,7 @@ pub struct ChatOffload {
 
 impl ChatOffload {
     pub(crate) fn new(
-        active_chats: ActiveChatRegistry,
+        active_chats: Registry,
         permissions: Arc<Mutex<PermissionManager>>,
         queued_refs: Arc<Mutex<Vec<QueuedMessageRef>>>,
         lifecycle: Arc<ChatLifecycleManager>,
@@ -55,7 +56,7 @@ impl ChatOffload {
     /// threshold behaves exactly like a chat idle 2+ hours past the real one,
     /// so tests inject a small threshold rather than a fake clock.
     pub(crate) fn with_threshold(
-        active_chats: ActiveChatRegistry,
+        active_chats: Registry,
         permissions: Arc<Mutex<PermissionManager>>,
         queued_refs: Arc<Mutex<Vec<QueuedMessageRef>>>,
         lifecycle: Arc<ChatLifecycleManager>,

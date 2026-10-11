@@ -26,7 +26,7 @@ use mainframe_runtime::sync::KeyedMutex;
 /// routes return them as the error text.
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
-    #[error(transparent)]
+    #[error("Internal server error")]
     Store(#[from] mainframe_types::seam_error::SeamError),
     #[error(transparent)]
     NotFound(#[from] NotFound),

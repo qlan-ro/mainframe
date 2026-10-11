@@ -31,7 +31,7 @@ pub const NO_PROJECT_ID: &str = "mainframe-no-project";
 /// Fields for a new chat, threaded from the create route through the lifecycle
 /// manager down to `ChatsRepository::create`. Owned strings (rather than
 /// borrows) because the request crosses several trait-object boundaries
-/// (`dyn LifecycleManagerDeps`, `dyn ChatManagerDeps`, ...).
+/// (`dyn ChatManagerDeps`).
 #[derive(Debug, Clone, Default)]
 pub struct NewChat {
     pub project_id: String,

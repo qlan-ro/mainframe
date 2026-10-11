@@ -140,7 +140,7 @@ impl<D: ExternalSessionDeps + 'static> ExternalSessionService<D> {
             chat_id = chat.id,
             session_id, project_id, "external session imported"
         );
-        self.deps.emit_event(DaemonEvent::ChatCreated {
+        self.shared.emit(DaemonEvent::ChatCreated {
             chat: chat.clone(),
             source: Some(mainframe_types::events::ChatCreatedSource::Import),
         });

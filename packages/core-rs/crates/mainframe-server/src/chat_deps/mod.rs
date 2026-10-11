@@ -52,7 +52,7 @@ use tokio::sync::broadcast;
 
 use crate::chat_seams::{LaunchStopper, ScopeTunnelStopper};
 use crate::ctx::GitFactory;
-use crate::db::{Db, notification_config};
+use crate::db::Db;
 
 /// The daemon-side `ChatManagerDeps`. Cheap to clone-share (every field is an
 /// `Arc`/handle), constructed once at boot in [`build_chat_manager`].

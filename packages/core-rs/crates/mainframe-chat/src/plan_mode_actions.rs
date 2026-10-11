@@ -193,7 +193,7 @@ impl PlanActionContext for ChatPlanActionCtx {
 
     fn add_plan_file(&self, path: String) -> bool {
         storage_event!(
-            self.shared,
+            self.shared, Some(&self.chat_id);
             self.shared.deps.add_plan_file(&self.chat_id, &path),
             false
         )

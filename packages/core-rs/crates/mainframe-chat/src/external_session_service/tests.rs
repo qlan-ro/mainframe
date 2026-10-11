@@ -107,3 +107,34 @@ async fn import_with_no_title_logs_no_title_and_keeps_the_title() {
     assert_logged_once_and_title_untouched(&events, "no_title", &deps);
     assert_eq!(chat.title.as_deref(), Some("Fallback Title"));
 }
+
+#[tokio::test]
+async fn imported_creation_and_generated_title_share_enrichment() {
+    let deps = FakeDeps::arc();
+    *deps.adapters.generated_title.lock().unwrap() = Some("Generated title".into());
+    let shared = ChatShared::new(deps.clone());
+    let service = ExternalSessionService::new(deps.clone(), shared);
+    service
+        .import_session("p1", "native", "claude", Some("hello"), None, None)
+        .await
+        .unwrap();
+    tokio::time::timeout(std::time::Duration::from_secs(1), async {
+        while deps.events().len() < 2 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    let wire = serde_json::to_value(deps.events()).unwrap();
+    assert_eq!(wire[0]["type"], "chat.created");
+    assert_eq!(wire[1]["type"], "chat.updated");
+    for field in [
+        "displayStatus",
+        "isRunning",
+        "worktreeMissing",
+        "directoryMissing",
+    ] {
+        assert!(!wire[0]["chat"][field].is_null());
+        assert_eq!(wire[0]["chat"][field], wire[1]["chat"][field]);
+    }
+}

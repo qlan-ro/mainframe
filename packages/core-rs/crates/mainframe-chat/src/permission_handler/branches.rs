@@ -24,7 +24,7 @@ impl ChatPermissionHandler {
         response: ControlResponse,
         active: Option<Arc<Mutex<ActiveChat>>>,
     ) -> Result<(), PermissionError> {
-        self.permissions.lock_recover().clear(chat_id);
+        self.shared.permissions.lock_recover().clear(chat_id);
 
         if response.behavior == ControlBehavior::Allow
             && is_exit_plan_mode(&response)
@@ -91,6 +91,7 @@ impl ChatPermissionHandler {
         });
 
         let next_request = self
+            .shared
             .permissions
             .lock_recover()
             .shift(chat_id, &response.request_id);
@@ -116,14 +117,17 @@ impl ChatPermissionHandler {
     }
 
     pub(super) fn transient_user_text(&self, chat_id: &str, text: &str) -> ChatMessage {
-        self.messages.lock_recover().create_transient_message(
-            chat_id,
-            ChatMessageType::User,
-            vec![MessageContent::Leaf(LeafContent::Text {
-                text: text.to_string(),
-                parent_tool_use_id: None,
-            })],
-            None,
-        )
+        self.shared
+            .messages
+            .lock_recover()
+            .create_transient_message(
+                chat_id,
+                ChatMessageType::User,
+                vec![MessageContent::Leaf(LeafContent::Text {
+                    text: text.to_string(),
+                    parent_tool_use_id: None,
+                })],
+                None,
+            )
     }
 }

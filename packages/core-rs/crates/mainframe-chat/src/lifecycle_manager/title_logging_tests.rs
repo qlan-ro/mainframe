@@ -104,5 +104,5 @@ async fn none_outcome_logs_no_title_and_keeps_the_fallback() {
 /// rather than reconstructing one — inserting directly mirrors what
 /// `super::tests` does inline.
 fn mgr_insert(mgr: &super::ChatLifecycleManager, chat_id: &str, cell: Arc<Mutex<ActiveChat>>) {
-    mgr.active_chats.insert(chat_id.to_string(), cell);
+    mgr.shared.active_chats.insert(chat_id.to_string(), cell);
 }

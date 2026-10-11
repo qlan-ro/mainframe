@@ -138,8 +138,9 @@ async fn deletion_notification_stops_scope_launches_and_preview_tunnels() {
     f.ctx
         .chat
         .chat_manager
-        .notify_worktree_deleted(&f.project, &f.path)
-        .await;
+        .stop_worktree_services(&f.project, &f.path)
+        .await
+        .unwrap();
     assert!(!mainframe_runtime::process::is_alive(f.tunnel_pid));
     assert_eq!(f.ctx.infra.tunnel_manager.get_url("preview:web"), None);
     let statuses = f
@@ -173,8 +174,9 @@ async fn deleted_worktree_start_and_configs_use_the_file_route_error_text() {
     f.ctx
         .chat
         .chat_manager
-        .notify_worktree_deleted(&f.project, &f.path)
-        .await;
+        .stop_worktree_services(&f.project, &f.path)
+        .await
+        .unwrap();
 }
 
 fn tunnels(data: &tempfile::TempDir) -> Arc<TunnelManager> {

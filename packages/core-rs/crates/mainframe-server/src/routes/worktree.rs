@@ -225,12 +225,7 @@ async fn validate_and_delete_worktree(
 
     // Kill background tasks for every chat whose worktree resolves to this one.
     let pid = project_id.to_string();
-    let chats = ctx
-        .core
-        .db
-        .call(move |db| db.chats.list(&pid))
-        .await
-        .unwrap_or_default();
+    let chats = ctx.core.db.call(move |db| db.chats.list(&pid)).await?;
     for chat in chats {
         let Some(chat_wt) = chat.worktree_path.clone() else {
             continue;
@@ -264,7 +259,11 @@ async fn validate_and_delete_worktree(
 
     let cm = &ctx.chat.chat_manager;
     let affected = cm
-        .stop_worktree_services(project_id, &real_worktree_path)
+        .stop_worktree_services_with_aliases(
+            project_id,
+            &real_worktree_path,
+            &[worktree_path, &matched.path],
+        )
         .await?;
     remove_worktree(project_path, &real_worktree_path, &resolved_branch).await;
     for chat_id in affected {

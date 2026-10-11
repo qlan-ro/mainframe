@@ -4,7 +4,7 @@ use mainframe_adapter_api::AdapterSession;
 use mainframe_types::chat::Chat;
 
 /// In-memory record for a chat the manager is tracking: the per-chat value of
-/// the shared `ActiveChatRegistry` map, each behind its own lock.
+/// the shared `Registry` map, each behind its own lock.
 #[derive(Clone)]
 pub struct ActiveChat {
     pub chat: Chat,

@@ -19,10 +19,8 @@ use crate::chat_cwd::chat_cwd;
 use crate::chat_manager::ChatShared;
 use crate::chat_surface::{self, ChatSurface, ChatSurfaceEvent};
 use crate::event_handler::EventHandler;
-use crate::message_cache::MessageCache;
 use crate::no_persistence;
 use crate::orchestration_hooks::OrchestrationSlot;
-use crate::permission_manager::PermissionManager;
 use crate::title_generator::resolve_title_binary;
 use crate::types::ActiveChat;
 use crate::worktree_offer::WorktreeOfferRegistry;
@@ -43,9 +41,6 @@ pub(crate) fn is_last_active_chat_for_scope(
             && c.worktree_path.as_deref().unwrap_or(project_path) == effective_path
     })
 }
-
-/// Registry of active chats (SHARED_MAP; per-entity values are `Arc<Mutex<ActiveChat>>`).
-pub use crate::chat_manager::Registry as ActiveChatRegistry;
 
 use mainframe_types::time::now_ms;
 
@@ -119,9 +114,6 @@ pub struct ChatLifecycleManager {
     event_handler: Arc<EventHandler>,
     /// Seeded with the worktrees a chat already knows when it activates.
     worktree_offers: Arc<WorktreeOfferRegistry>,
-    active_chats: ActiveChatRegistry,
-    messages: Arc<Mutex<MessageCache>>,
-    permissions: Arc<Mutex<PermissionManager>>,
     guards: Arc<Mutex<Guards>>,
     /// Set post-construction via [`Self::set_chat_surface`] — mirrors
     /// `EventHandler`'s identical `OnceLock` pattern so a manager built with
@@ -137,9 +129,6 @@ impl ChatLifecycleManager {
         worktree_offers: Arc<WorktreeOfferRegistry>,
     ) -> Self {
         Self {
-            active_chats: shared.active_chats.clone(),
-            messages: shared.messages.clone(),
-            permissions: shared.permissions.clone(),
             shared,
             event_handler,
             worktree_offers,
@@ -162,7 +151,10 @@ impl ChatLifecycleManager {
     }
 
     fn get_active(&self, chat_id: &str) -> Option<Arc<Mutex<ActiveChat>>> {
-        self.active_chats.get(chat_id).map(|e| e.value().clone())
+        self.shared
+            .active_chats
+            .get(chat_id)
+            .map(|e| e.value().clone())
     }
 
     /// Bump `chat_id`'s in-memory "last used" clock to now, if its registry
@@ -180,7 +172,7 @@ impl ChatLifecycleManager {
     fn chat_or_db(&self, chat_id: &str) -> Option<Chat> {
         self.get_active(chat_id)
             .map(|c| c.lock_recover().chat.clone())
-            .or_else(|| storage_event!(self.shared, self.shared.deps.chats_get(chat_id), None))
+            .or_else(|| storage_event!(self.shared, Some(chat_id); self.shared.deps.chats_get(chat_id), None))
     }
 
     pub async fn create_chat(
@@ -211,11 +203,11 @@ impl ChatLifecycleManager {
             worktree_path,
             "chat created"
         );
-        self.active_chats.insert(
+        self.shared.active_chats.insert(
             chat.id.clone(),
             Arc::new(Mutex::new(ActiveChat::new(chat.clone(), None))),
         );
-        self.messages.lock_recover().pin(&chat.id);
+        self.shared.messages.lock_recover().pin(&chat.id);
         self.shared.emit(DaemonEvent::ChatCreated {
             chat: chat.clone(),
             source: None,
@@ -280,7 +272,7 @@ impl ChatLifecycleManager {
             // TS: `if yolo → start; else if !hasPending → start`. Both branches call
             // startChat, so the identical arms collapse to one guard (hasPending is
             // still short-circuited when yolo, matching the original evaluation).
-            let no_pending = || !self.permissions.lock_recover().has_pending(chat_id);
+            let no_pending = || !self.shared.permissions.lock_recover().has_pending(chat_id);
             if is_yolo || no_pending() {
                 self.start_chat(chat_id).await;
             }
@@ -315,7 +307,7 @@ impl ChatLifecycleManager {
             let g = self.guards.lock_recover();
             if let Some(existing) = g.loading.get(chat_id) {
                 Flight::Await(existing)
-            } else if self.active_chats.contains_key(chat_id) {
+            } else if self.shared.active_chats.contains_key(chat_id) {
                 Flight::Skip
             } else {
                 match g.loading.claim(chat_id) {
@@ -431,7 +423,7 @@ impl ChatLifecycleManager {
         };
 
         {
-            let mut perms = self.permissions.lock_recover();
+            let mut perms = self.shared.permissions.lock_recover();
             perms.clear(chat_id);
             perms.mark_interrupted(chat_id);
         }
@@ -508,7 +500,11 @@ impl ChatLifecycleManager {
             (&chat, &project_path, &effective_path)
         {
             let last_user = is_last_active_chat_for_scope(
-                &storage_event!(self.shared, self.shared.deps.chats_list(&chat.project_id)),
+                &self.shared.best_effort(
+                    chat_id,
+                    self.shared.deps.chats_list(&chat.project_id),
+                    Vec::new(),
+                ),
                 project_path,
                 effective_path,
                 chat_id,
@@ -546,15 +542,16 @@ impl ChatLifecycleManager {
         }
 
         self.shared.deps.attachment_delete_chat(chat_id).await;
-        storage_event!(
-            self.shared,
+        self.shared.best_effort(
+            chat_id,
             self.shared.deps.chats_update(
                 chat_id,
                 &ChatPatch {
                     status: Some(ChatStatus::Archived),
                     ..Default::default()
                 },
-            )
+            ),
+            (),
         );
         info!(chat_id, "chat archived");
         self.shared.emit(DaemonEvent::ChatEnded {
@@ -600,15 +597,16 @@ impl ChatLifecycleManager {
         }
         self.shared.orchestration.revoke(chat_id);
 
-        storage_event!(
-            self.shared,
+        self.shared.best_effort(
+            chat_id,
             self.shared.deps.chats_update(
                 chat_id,
                 &ChatPatch {
                     status: Some(ChatStatus::Ended),
                     ..Default::default()
                 },
-            )
+            ),
+            (),
         );
         self.shared.emit(DaemonEvent::ChatEnded {
             chat_id: chat_id.to_string(),
@@ -725,7 +723,7 @@ impl ChatLifecycleManager {
             guard.chat.clone()
         };
         storage_event!(
-            self.shared,
+            self.shared, Some(&cell.lock_recover().chat.id);
             self.shared.update_and_emit(
                 chat,
                 &ChatPatch {
@@ -747,9 +745,10 @@ impl ChatLifecycleManager {
         if !no_persistence::take_context_loss(chat, &now) {
             return;
         }
-        storage_event!(
-            self.shared,
-            self.shared.deps.mark_context_lost(chat_id, &now)
+        self.shared.best_effort(
+            chat_id,
+            self.shared.deps.mark_context_lost(chat_id, &now),
+            (),
         );
         if let Some(cell) = self.get_active(chat_id) {
             cell.lock_recover().chat = chat.clone();
@@ -772,16 +771,16 @@ impl ChatLifecycleManager {
     /// entry" counts as changed, an unchanged list does not.
     async fn do_load_chat(&self, chat_id: &str) -> bool {
         let Some(mut chat) =
-            storage_event!(self.shared, self.shared.deps.chats_get(chat_id), false)
+            storage_event!(self.shared, Some(chat_id); self.shared.deps.chats_get(chat_id), false)
         else {
             warn!(chat_id, "doLoadChat: chat not found");
             return false;
         };
-        self.active_chats.insert(
+        self.shared.active_chats.insert(
             chat_id.to_string(),
             Arc::new(Mutex::new(ActiveChat::new(chat.clone(), None))),
         );
-        self.messages.lock_recover().pin(chat_id);
+        self.shared.messages.lock_recover().pin(chat_id);
 
         // Before any resume target is read below, a dead ephemeral session's
         // context loss must be marked (clears `claude_session_id`, so the early
@@ -823,7 +822,7 @@ impl ChatLifecycleManager {
         let composed = self.compose_history(chat_id).await;
         let own_id = chat.claude_session_id.clone();
         let fork_source = storage_event!(
-            self.shared,
+            self.shared, Some(chat_id);
             self.shared.deps.get_pending_fork(chat_id),
             false
         )
@@ -875,13 +874,14 @@ impl ChatLifecycleManager {
         if let Some((remapped, active_from)) = history
             && !remapped.is_empty()
         {
-            let mut messages = self.messages.lock_recover();
+            let mut messages = self.shared.messages.lock_recover();
             let previous = messages.get(chat_id).cloned();
             messages.set(chat_id, remapped);
             let remapped = messages.get(chat_id).cloned().unwrap_or_default();
             drop(messages);
             let active_slice = &remapped[active_from.min(remapped.len())..];
-            self.permissions
+            self.shared
+                .permissions
                 .lock_recover()
                 .restore_pending_permission(chat_id, active_slice);
             // Raise the resync only when the reload actually changed the
@@ -1237,7 +1237,7 @@ mod tests {
         let mgr = manager(deps.clone());
         // Insert an active chat whose FakeSession records its own kill order.
         let session = FakeSession::with_activity(true, None);
-        mgr.active_chats.insert(
+        mgr.shared.active_chats.insert(
             "c1".to_string(),
             Arc::new(Mutex::new(ActiveChat::new(chat, Some(session.clone())))),
         );
@@ -1581,3 +1581,6 @@ mod tests {
         assert_eq!(last.fork_source, Some(pending_fork().fork_source));
     }
 }
+
+#[cfg(test)]
+mod storage_tests;
