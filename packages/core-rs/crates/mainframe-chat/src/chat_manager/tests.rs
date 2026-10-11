@@ -1,5 +1,5 @@
-//! Chat-manager tests for queueing, recovery, timing, command routing, and
 //! project teardown.
+//! Chat-manager tests for queueing, recovery, timing, command routing, and
 
 use super::*;
 use crate::test_support::test_chat;
@@ -285,50 +285,7 @@ impl StoreDeps {
     }
 }
 
-impl ChatManagerDeps for StoreDeps {
-    fn emit_event(&self, event: DaemonEvent) {
-        self.events.lock().unwrap().push(event);
-    }
-    fn get_tool_categories(&self, _chat_id: &str) -> Option<ToolCategories> {
-        None
-    }
-    /// A trivial 1:1 echo (one `DisplayMessage` per raw `ChatMessage`,
-    /// carrying the same id/timestamp/type and its leaf content verbatim,
-    /// `Node` content dropped) — real conversion (grouping, tag stripping)
-    /// lives outside this crate's dep set. Carrying the type and leaf
-    /// content through is what lets `resume_overlay.rs`'s
-    /// streaming-attribution assertions (which need an `Assistant` message
-    /// whose own last leaf matches the overlay's) exercise the real
-    /// `project_display` path, not just COUNT/id-order retention checks.
-    fn prepare_messages_for_client(
-        &self,
-        raw: &[ChatMessage],
-        categories: Option<&ToolCategories>,
-    ) -> Vec<DisplayMessage> {
-        Self::convert(raw, categories)
-    }
-    /// Wraps the same 1:1 echo in a `FullRebuildProjector`: the
-    /// closure appends the overlay itself before converting, reproducing
-    /// what the deleted `project_display` free function used to do for
-    /// every `EventHandlerDeps`/`ChatManagerDeps` caller.
-    fn display_projector(&self) -> Box<dyn mainframe_display::DisplayProjector> {
-        Box::new(mainframe_display::FullRebuildProjector::new(
-            |raw, overlay, categories| {
-                let combined: Vec<ChatMessage> = match overlay {
-                    Some(o) => raw
-                        .iter()
-                        .cloned()
-                        .chain(std::iter::once(o.clone()))
-                        .collect(),
-                    None => raw.to_vec(),
-                };
-                StoreDeps::convert(&combined, categories)
-            },
-        ))
-    }
-    fn strip_command_tags(&self, text: &str) -> String {
-        text.to_string()
-    }
+impl ChatStore for StoreDeps {
     fn chats_get(&self, id: &str) -> Option<Chat> {
         let all = self.raw_chats();
         let mut chat = all.iter().find(|c| c.id == id)?.clone();
@@ -348,22 +305,6 @@ impl ChatManagerDeps for StoreDeps {
     }
     fn chats_delete(&self, chat_id: &str) {
         self.store.lock().unwrap().remove(chat_id);
-    }
-    fn remove_scratch_dir<'a>(
-        &'a self,
-        scratch_path: &'a str,
-    ) -> BoxFuture<'a, Result<(), SeamError>> {
-        self.remove_scratch_dir_calls
-            .lock()
-            .unwrap()
-            .push(scratch_path.to_string());
-        let fail = self.fail_remove_scratch_dir.lock().unwrap().clone();
-        Box::pin(async move {
-            match fail {
-                Some(msg) => Err(SeamError::msg(msg)),
-                None => Ok(()),
-            }
-        })
     }
     fn chats_update(&self, chat_id: &str, patch: &ChatPatch) {
         self.updates
@@ -429,40 +370,6 @@ impl ChatManagerDeps for StoreDeps {
         }
         count
     }
-    fn projects_get_path(&self, _project_id: &str) -> Option<String> {
-        Some("/tmp/test".to_string())
-    }
-    fn initial_transcript_path(&self, _: &str, _: &str, _: &str) -> Option<String> {
-        None
-    }
-    fn projects_remove(&self, project_id: &str) -> Result<(), SeamError> {
-        self.project_removed
-            .lock()
-            .unwrap()
-            .push(project_id.to_string());
-        match self.fail_project_remove.lock().unwrap().clone() {
-            Some(msg) => Err(SeamError::msg(msg)),
-            None => Ok(()),
-        }
-    }
-    fn write_workspace_trust<'a>(
-        &'a self,
-        project_path: &'a str,
-    ) -> BoxFuture<'a, Result<(), SeamError>> {
-        Box::pin(async move {
-            if let Some(msg) = self.fail_trust_write.lock().unwrap().clone() {
-                return Err(SeamError::msg(msg));
-            }
-            self.trusted_paths
-                .lock()
-                .unwrap()
-                .push(project_path.to_string());
-            Ok(())
-        })
-    }
-    fn settings(&self) -> &dyn mainframe_types::settings_kv::SettingsKv {
-        crate::test_support::no_settings()
-    }
     fn add_plan_file(&self, _chat_id: &str, _file_path: &str) -> bool {
         false
     }
@@ -477,175 +384,6 @@ impl ChatManagerDeps for StoreDeps {
     ) -> Vec<mainframe_types::adapter::DetectedPr> {
         Vec::new()
     }
-    fn create_session(
-        &self,
-        _adapter_id: &str,
-        options: mainframe_types::adapter::SessionOptions,
-    ) -> Option<Arc<dyn AdapterSession>> {
-        self.created_sessions.lock().unwrap().push(options);
-        self.history.lock().unwrap().clone().map(|history| {
-            Arc::new(crate::test_support::FakeSession {
-                history,
-                history_loads: Some(Arc::clone(&self.history_loads)),
-                history_sources: self.history_sources.lock().unwrap().clone(),
-                spawn_ok: *self.spawn_ok.lock().unwrap(),
-                ..Default::default()
-            }) as Arc<dyn AdapterSession>
-        })
-    }
-    fn create_plan_mode_handler(
-        &self,
-        _adapter_id: &str,
-    ) -> Option<Arc<dyn PlanModeActionHandler>> {
-        self.plan_handler.lock().unwrap().clone()
-    }
-
-    fn attachment_delete_chat<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, ()> {
-        Box::pin(async {})
-    }
-    fn process_attachments<'a>(
-        &'a self,
-        _chat_id: &'a str,
-        _attachment_ids: &'a [String],
-    ) -> BoxFuture<'a, ProcessedAttachments> {
-        let p = self.attachments.lock().unwrap().clone().unwrap_or_default();
-        Box::pin(async move { p })
-    }
-    fn kill_tasks_for_chat<'a>(
-        &'a self,
-        chat_id: &'a str,
-        worktree_path: Option<String>,
-        _session: Option<Arc<dyn AdapterSession>>,
-    ) -> BoxFuture<'a, ()> {
-        self.order.lock().unwrap().push(format!(
-            "kill:{chat_id}:{}",
-            worktree_path.as_deref().unwrap_or("no-wt")
-        ));
-        Box::pin(async {})
-    }
-    fn remove_worktree<'a>(
-        &'a self,
-        _project_path: &'a str,
-        _worktree_path: &'a str,
-        _branch_name: &'a str,
-    ) -> BoxFuture<'a, ()> {
-        Box::pin(async {})
-    }
-    fn stop_launch_processes<'a>(
-        &'a self,
-        _project_id: &'a str,
-        _effective_path: &'a str,
-    ) -> Option<BoxFuture<'a, ()>> {
-        None
-    }
-    fn stop_scope_tunnels<'a>(
-        &'a self,
-        _project_id: &'a str,
-        _effective_path: &'a str,
-    ) -> Option<BoxFuture<'a, ()>> {
-        None
-    }
-    fn scan_loaded_history<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, ()> {
-        Box::pin(async {})
-    }
-    fn resolve_tuning<'a>(
-        &'a self,
-        _chat_id: &'a str,
-    ) -> BoxFuture<'a, Option<mainframe_types::chat::ResolvedTuning>> {
-        Box::pin(async { None })
-    }
-    fn get_session_context<'a>(
-        &'a self,
-        _chat_id: &'a str,
-        _project_path: &'a str,
-        _session: Option<Arc<dyn AdapterSession>>,
-        _adapter_id: Option<String>,
-    ) -> BoxFuture<'a, mainframe_types::context::SessionContext> {
-        Box::pin(async {
-            mainframe_types::context::SessionContext {
-                global_files: Vec::new(),
-                project_files: Vec::new(),
-                mentions: Vec::new(),
-                attachments: Vec::new(),
-                modified_files: Vec::new(),
-                skill_files: Vec::new(),
-            }
-        })
-    }
-    fn apply_codex_provider_tuning(&self, _session: &Arc<dyn AdapterSession>) {}
-    fn generate_title<'a>(
-        &'a self,
-        _adapter_id: &'a str,
-        content: &'a str,
-        _binary: &'a str,
-    ) -> BoxFuture<'a, Option<String>> {
-        self.generate_title_calls
-            .lock()
-            .unwrap()
-            .push(content.to_string());
-        let gate = self.title_gate.lock().unwrap().clone();
-        let result = self.generated_title.lock().unwrap().clone();
-        Box::pin(async move {
-            if let Some(gate) = gate {
-                gate.notified().await;
-            }
-            result
-        })
-    }
-    fn is_working_tree_dirty<'a>(&'a self, _project_path: &'a str) -> BoxFuture<'a, bool> {
-        Box::pin(async { false })
-    }
-    fn path_exists(&self, _path: &str) -> bool {
-        true
-    }
-    fn should_notify_permission(&self, _tool_name: Option<&str>) -> bool {
-        false
-    }
-    fn notify_task_complete(&self) -> bool {
-        false
-    }
-    fn notify_session_error(&self) -> bool {
-        false
-    }
-    fn notify_attention_request(&self) -> bool {
-        true
-    }
-    fn extract_mentions_from_text(&self, _chat_id: &str, _text: &str) -> bool {
-        *self.mentions_found.lock().unwrap()
-    }
-    fn tracker_remove_chat(&self, _chat_id: &str) {}
-    /// Empty on purpose: mainframe-server's chat_background_activity test covers the wiring (#273).
-    fn tracker_list_live(&self, _chat_id: &str) -> Vec<BackgroundTask> {
-        Vec::new()
-    }
-    /// Empty on purpose: chat_deps.rs's tracker_end_all_running_delegates_... test covers the wiring (#273).
-    fn tracker_end_all_running(&self, _chat_id: &str) {}
-    /// Empty on purpose: chat_deps.rs's workflow_runs_stop_all_delegates_... test covers the wiring.
-    fn workflow_runs_stop_all(&self, _chat_id: &str) {}
-    /// `transcript_present` = `Some(true)` reports the transcript where the chat
-    /// row says it is, so presence tests never also re-point the path.
-    fn locate_transcript<'a>(
-        &'a self,
-        _adapter_id: &'a str,
-        session_id: &'a str,
-        _project_path: &'a str,
-        session_file_path: Option<&'a str>,
-    ) -> BoxFuture<'a, Option<mainframe_types::transcript::TranscriptLocation>> {
-        use mainframe_types::transcript::TranscriptLocation;
-        let present = *self.transcript_present.lock().unwrap();
-        let path = session_file_path
-            .map(str::to_string)
-            .unwrap_or_else(|| format!("/transcripts/{session_id}.jsonl"));
-        Box::pin(async move {
-            present.map(|present| {
-                if present {
-                    TranscriptLocation::Present(path)
-                } else {
-                    TranscriptLocation::Missing
-                }
-            })
-        })
-    }
     fn chats_clear_session(&self, chat_id: &str) {
         if let Some(c) = self.store.lock().unwrap().get_mut(chat_id) {
             c.claude_session_id = None;
@@ -659,13 +397,6 @@ impl ChatManagerDeps for StoreDeps {
             c.branch_name = None;
         }
     }
-    fn adapter_supports_no_persistence(&self, _adapter_id: &str) -> bool {
-        *self.no_persistence_capability.lock().unwrap()
-    }
-    fn ensure_dir<'a>(&'a self, path: &'a str) -> BoxFuture<'a, ()> {
-        self.ensure_dir_calls.lock().unwrap().push(path.to_string());
-        Box::pin(async {})
-    }
     fn mark_context_lost(&self, chat_id: &str, context_lost_at: &str) {
         self.mark_context_lost_calls
             .lock()
@@ -677,36 +408,6 @@ impl ChatManagerDeps for StoreDeps {
             c.session_file_path = None;
             c.vendor_session_ephemeral = false;
         }
-    }
-    fn adapter_fork_info(&self, adapter_id: &str) -> AdapterForkInfo {
-        AdapterForkInfo {
-            name: adapter_id.to_string(),
-            fork: *self.fork_capable.lock().unwrap(),
-            unavailable_reason: self.fork_unavailable_reason.lock().unwrap().clone(),
-        }
-    }
-    fn pin_fork_point<'a>(
-        &'a self,
-        _adapter_id: &'a str,
-        request: ForkPinRequest,
-    ) -> BoxFuture<'a, Result<ForkSource, ForkPinError>> {
-        let failure = self.pin_failure.lock().unwrap().clone();
-        self.pin_requests.lock().unwrap().push(request.clone());
-        Box::pin(async move {
-            match failure {
-                Some(PinFailure::Unsupported) => Err(ForkPinError::Unsupported),
-                Some(PinFailure::TranscriptMissing) => Err(ForkPinError::TranscriptMissing),
-                Some(PinFailure::Failed(message)) => Err(ForkPinError::Failed(message)),
-                Some(PinFailure::PointNotFound(reason)) => Err(ForkPinError::PointNotFound(reason)),
-                // A cut is echoed as the pinned turn so tests can see it
-                // survive into the stored pending fork.
-                None => Ok(ForkSource {
-                    source_session_id: request.source_session_id,
-                    resume_path: Some(format!("{}/snapshot.jsonl", request.dest_dir)),
-                    last_turn_id: request.cut.map(|cut| cut.vendor_message_id),
-                }),
-            }
-        })
     }
     fn create_fork(&self, insert: &ForkCreateInput) -> Result<Chat, SeamError> {
         if let Some(message) = self.create_fork_failure.lock().unwrap().clone() {
@@ -780,35 +481,8 @@ impl ChatManagerDeps for StoreDeps {
     fn clear_pending_fork(&self, chat_id: &str) {
         self.pending_forks.lock().unwrap().remove(chat_id);
     }
-    fn fork_snapshots_dir(&self) -> String {
-        self.fork_snapshots_dir
-            .lock()
-            .unwrap()
-            .clone()
-            .unwrap_or_else(|| {
-                std::env::temp_dir()
-                    .join("mainframe-fork-snapshots-test-default")
-                    .to_string_lossy()
-                    .into_owned()
-            })
-    }
-    fn history_cache_dir(&self) -> String {
-        self.history_cache_dir
-            .lock()
-            .unwrap()
-            .clone()
-            .unwrap_or_else(|| {
-                std::env::temp_dir()
-                    .join("mainframe-history-cache-test-default")
-                    .to_string_lossy()
-                    .into_owned()
-            })
-    }
     fn segment_store(&self) -> Option<&dyn crate::segments::SegmentStore> {
         self.segment_store.get().map(|store| store.as_ref())
-    }
-    fn adapter_info(&self, adapter_id: &str) -> Option<mainframe_types::adapter::AdapterInfo> {
-        self.adapter_infos.lock().unwrap().get(adapter_id).cloned()
     }
     fn chats_find_or_create_side_chat(&self, parent: &Chat) -> Result<(Chat, bool), SeamError> {
         let all = self.raw_chats();
@@ -874,6 +548,332 @@ impl ChatManagerDeps for StoreDeps {
         };
         self.store.lock().unwrap().insert(id, side_chat.clone());
         Ok((side_chat, true))
+    }
+}
+
+impl ProjectPaths for StoreDeps {
+    fn projects_get_path(&self, _project_id: &str) -> Option<String> {
+        Some("/tmp/test".to_string())
+    }
+    fn projects_remove(&self, project_id: &str) -> Result<(), SeamError> {
+        self.project_removed
+            .lock()
+            .unwrap()
+            .push(project_id.to_string());
+        match self.fail_project_remove.lock().unwrap().clone() {
+            Some(msg) => Err(SeamError::msg(msg)),
+            None => Ok(()),
+        }
+    }
+    fn path_exists(&self, _path: &str) -> bool {
+        true
+    }
+    fn ensure_dir<'a>(&'a self, path: &'a str) -> BoxFuture<'a, ()> {
+        self.ensure_dir_calls.lock().unwrap().push(path.to_string());
+        Box::pin(async {})
+    }
+    fn fork_snapshots_dir(&self) -> String {
+        self.fork_snapshots_dir
+            .lock()
+            .unwrap()
+            .clone()
+            .unwrap_or_else(|| {
+                std::env::temp_dir()
+                    .join("mainframe-fork-snapshots-test-default")
+                    .to_string_lossy()
+                    .into_owned()
+            })
+    }
+    fn history_cache_dir(&self) -> String {
+        self.history_cache_dir
+            .lock()
+            .unwrap()
+            .clone()
+            .unwrap_or_else(|| {
+                std::env::temp_dir()
+                    .join("mainframe-history-cache-test-default")
+                    .to_string_lossy()
+                    .into_owned()
+            })
+    }
+}
+
+impl EventEmitter for StoreDeps {
+    fn emit_event(&self, event: DaemonEvent) {
+        self.events.lock().unwrap().push(event);
+    }
+    fn tracker_remove_chat(&self, _chat_id: &str) {}
+    fn tracker_list_live(&self, _chat_id: &str) -> Vec<BackgroundTask> {
+        Vec::new()
+    }
+    fn tracker_end_all_running(&self, _chat_id: &str) {}
+    fn workflow_runs_stop_all(&self, _chat_id: &str) {}
+}
+
+impl Pusher for StoreDeps {
+    fn should_notify_permission(&self, _tool_name: Option<&str>) -> bool {
+        false
+    }
+    fn notify_task_complete(&self) -> bool {
+        false
+    }
+    fn notify_session_error(&self) -> bool {
+        false
+    }
+    fn notify_attention_request(&self) -> bool {
+        true
+    }
+}
+
+impl AdapterPort for StoreDeps {
+    fn get_tool_categories(&self, _chat_id: &str) -> Option<ToolCategories> {
+        None
+    }
+    fn prepare_messages_for_client(
+        &self,
+        raw: &[ChatMessage],
+        categories: Option<&ToolCategories>,
+    ) -> Vec<DisplayMessage> {
+        Self::convert(raw, categories)
+    }
+    fn display_projector(&self) -> Box<dyn mainframe_display::DisplayProjector> {
+        Box::new(mainframe_display::FullRebuildProjector::new(
+            |raw, overlay, categories| {
+                let combined: Vec<ChatMessage> = match overlay {
+                    Some(o) => raw
+                        .iter()
+                        .cloned()
+                        .chain(std::iter::once(o.clone()))
+                        .collect(),
+                    None => raw.to_vec(),
+                };
+                StoreDeps::convert(&combined, categories)
+            },
+        ))
+    }
+    fn strip_command_tags(&self, text: &str) -> String {
+        text.to_string()
+    }
+    fn initial_transcript_path(&self, _: &str, _: &str, _: &str) -> Option<String> {
+        None
+    }
+    fn create_session(
+        &self,
+        _adapter_id: &str,
+        options: mainframe_types::adapter::SessionOptions,
+    ) -> Option<Arc<dyn AdapterSession>> {
+        self.created_sessions.lock().unwrap().push(options);
+        self.history.lock().unwrap().clone().map(|history| {
+            Arc::new(crate::test_support::FakeSession {
+                history,
+                history_loads: Some(Arc::clone(&self.history_loads)),
+                history_sources: self.history_sources.lock().unwrap().clone(),
+                spawn_ok: *self.spawn_ok.lock().unwrap(),
+                ..Default::default()
+            }) as Arc<dyn AdapterSession>
+        })
+    }
+    fn create_plan_mode_handler(
+        &self,
+        _adapter_id: &str,
+    ) -> Option<Arc<dyn PlanModeActionHandler>> {
+        self.plan_handler.lock().unwrap().clone()
+    }
+    fn scan_loaded_history<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, ()> {
+        Box::pin(async {})
+    }
+    fn resolve_tuning<'a>(
+        &'a self,
+        _chat_id: &'a str,
+    ) -> BoxFuture<'a, Option<mainframe_types::chat::ResolvedTuning>> {
+        Box::pin(async { None })
+    }
+    fn apply_codex_provider_tuning(&self, _session: &Arc<dyn AdapterSession>) {}
+    fn generate_title<'a>(
+        &'a self,
+        _adapter_id: &'a str,
+        content: &'a str,
+        _binary: &'a str,
+    ) -> BoxFuture<'a, Option<String>> {
+        self.generate_title_calls
+            .lock()
+            .unwrap()
+            .push(content.to_string());
+        let gate = self.title_gate.lock().unwrap().clone();
+        let result = self.generated_title.lock().unwrap().clone();
+        Box::pin(async move {
+            if let Some(gate) = gate {
+                gate.notified().await;
+            }
+            result
+        })
+    }
+    fn locate_transcript<'a>(
+        &'a self,
+        _adapter_id: &'a str,
+        session_id: &'a str,
+        _project_path: &'a str,
+        session_file_path: Option<&'a str>,
+    ) -> BoxFuture<'a, Option<mainframe_types::transcript::TranscriptLocation>> {
+        use mainframe_types::transcript::TranscriptLocation;
+        let present = *self.transcript_present.lock().unwrap();
+        let path = session_file_path
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("/transcripts/{session_id}.jsonl"));
+        Box::pin(async move {
+            present.map(|present| {
+                if present {
+                    TranscriptLocation::Present(path)
+                } else {
+                    TranscriptLocation::Missing
+                }
+            })
+        })
+    }
+    fn adapter_supports_no_persistence(&self, _adapter_id: &str) -> bool {
+        *self.no_persistence_capability.lock().unwrap()
+    }
+    fn adapter_fork_info(&self, adapter_id: &str) -> AdapterForkInfo {
+        AdapterForkInfo {
+            name: adapter_id.to_string(),
+            fork: *self.fork_capable.lock().unwrap(),
+            unavailable_reason: self.fork_unavailable_reason.lock().unwrap().clone(),
+        }
+    }
+    fn pin_fork_point<'a>(
+        &'a self,
+        _adapter_id: &'a str,
+        request: ForkPinRequest,
+    ) -> BoxFuture<'a, Result<ForkSource, ForkPinError>> {
+        let failure = self.pin_failure.lock().unwrap().clone();
+        self.pin_requests.lock().unwrap().push(request.clone());
+        Box::pin(async move {
+            match failure {
+                Some(PinFailure::Unsupported) => Err(ForkPinError::Unsupported),
+                Some(PinFailure::TranscriptMissing) => Err(ForkPinError::TranscriptMissing),
+                Some(PinFailure::Failed(message)) => Err(ForkPinError::Failed(message)),
+                Some(PinFailure::PointNotFound(reason)) => Err(ForkPinError::PointNotFound(reason)),
+                // A cut is echoed as the pinned turn so tests can see it
+                // survive into the stored pending fork.
+                None => Ok(ForkSource {
+                    source_session_id: request.source_session_id,
+                    resume_path: Some(format!("{}/snapshot.jsonl", request.dest_dir)),
+                    last_turn_id: request.cut.map(|cut| cut.vendor_message_id),
+                }),
+            }
+        })
+    }
+    fn adapter_info(&self, adapter_id: &str) -> Option<mainframe_types::adapter::AdapterInfo> {
+        self.adapter_infos.lock().unwrap().get(adapter_id).cloned()
+    }
+}
+
+impl WorkspacePort for StoreDeps {
+    fn remove_scratch_dir<'a>(
+        &'a self,
+        scratch_path: &'a str,
+    ) -> BoxFuture<'a, Result<(), SeamError>> {
+        self.remove_scratch_dir_calls
+            .lock()
+            .unwrap()
+            .push(scratch_path.to_string());
+        let fail = self.fail_remove_scratch_dir.lock().unwrap().clone();
+        Box::pin(async move {
+            match fail {
+                Some(msg) => Err(SeamError::msg(msg)),
+                None => Ok(()),
+            }
+        })
+    }
+    fn write_workspace_trust<'a>(
+        &'a self,
+        project_path: &'a str,
+    ) -> BoxFuture<'a, Result<(), SeamError>> {
+        Box::pin(async move {
+            if let Some(msg) = self.fail_trust_write.lock().unwrap().clone() {
+                return Err(SeamError::msg(msg));
+            }
+            self.trusted_paths
+                .lock()
+                .unwrap()
+                .push(project_path.to_string());
+            Ok(())
+        })
+    }
+    fn attachment_delete_chat<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, ()> {
+        Box::pin(async {})
+    }
+    fn process_attachments<'a>(
+        &'a self,
+        _chat_id: &'a str,
+        _attachment_ids: &'a [String],
+    ) -> BoxFuture<'a, ProcessedAttachments> {
+        let p = self.attachments.lock().unwrap().clone().unwrap_or_default();
+        Box::pin(async move { p })
+    }
+    fn kill_tasks_for_chat<'a>(
+        &'a self,
+        chat_id: &'a str,
+        worktree_path: Option<String>,
+        _session: Option<Arc<dyn AdapterSession>>,
+    ) -> BoxFuture<'a, ()> {
+        self.order.lock().unwrap().push(format!(
+            "kill:{chat_id}:{}",
+            worktree_path.as_deref().unwrap_or("no-wt")
+        ));
+        Box::pin(async {})
+    }
+    fn remove_worktree<'a>(
+        &'a self,
+        _project_path: &'a str,
+        _worktree_path: &'a str,
+        _branch_name: &'a str,
+    ) -> BoxFuture<'a, ()> {
+        Box::pin(async {})
+    }
+    fn stop_launch_processes<'a>(
+        &'a self,
+        _project_id: &'a str,
+        _effective_path: &'a str,
+    ) -> Option<BoxFuture<'a, ()>> {
+        None
+    }
+    fn stop_scope_tunnels<'a>(
+        &'a self,
+        _project_id: &'a str,
+        _effective_path: &'a str,
+    ) -> Option<BoxFuture<'a, ()>> {
+        None
+    }
+    fn get_session_context<'a>(
+        &'a self,
+        _chat_id: &'a str,
+        _project_path: &'a str,
+        _session: Option<Arc<dyn AdapterSession>>,
+        _adapter_id: Option<String>,
+    ) -> BoxFuture<'a, mainframe_types::context::SessionContext> {
+        Box::pin(async {
+            mainframe_types::context::SessionContext {
+                global_files: Vec::new(),
+                project_files: Vec::new(),
+                mentions: Vec::new(),
+                attachments: Vec::new(),
+                modified_files: Vec::new(),
+                skill_files: Vec::new(),
+            }
+        })
+    }
+    fn is_working_tree_dirty<'a>(&'a self, _project_path: &'a str) -> BoxFuture<'a, bool> {
+        Box::pin(async { false })
+    }
+    fn extract_mentions_from_text(&self, _chat_id: &str, _text: &str) -> bool {
+        *self.mentions_found.lock().unwrap()
+    }
+}
+
+impl ChatManagerDeps for StoreDeps {
+    fn settings(&self) -> &dyn mainframe_types::settings_kv::SettingsKv {
+        crate::test_support::no_settings()
     }
 }
 

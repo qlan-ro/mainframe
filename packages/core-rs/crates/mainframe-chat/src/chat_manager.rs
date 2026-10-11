@@ -50,6 +50,7 @@ use crate::types::ActiveChat;
 use crate::worktree_offer::{OfferError, WorktreeOfferDeps, WorktreeOfferRegistry};
 use mainframe_types::worktree_offer::WorktreeSwitchOffer;
 
+mod capabilities;
 mod config_api;
 mod construct;
 mod delivery;
@@ -81,6 +82,7 @@ mod steer;
 mod switch_api;
 mod update;
 
+pub use capabilities::{AdapterPort, ChatStore, EventEmitter, ProjectPaths, Pusher, WorkspacePort};
 pub use deps::ChatManagerDeps;
 pub use errors::{
     CommandMeta, DiscardError, ForkError, RemoveProjectError, SendError, TrustWorkspaceError,

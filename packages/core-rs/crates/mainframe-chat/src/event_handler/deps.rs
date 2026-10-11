@@ -35,7 +35,7 @@ pub trait EventHandlerDeps: Send + Sync {
     // db surface --------------------------------------------------------------
     fn chats_update(&self, chat_id: &str, patch: &ChatPatch);
     fn projects_get_path(&self, project_id: &str) -> Option<String>;
-    /// See `ChatManagerDeps::initial_transcript_path`.
+    /// See `AdapterPort::initial_transcript_path`.
     fn initial_transcript_path(
         &self,
         adapter_id: &str,
@@ -95,7 +95,7 @@ pub trait EventHandlerDeps: Send + Sync {
     fn clear_pending_fork(&self, chat_id: &str) {
         let _ = chat_id;
     }
-    /// The segment repository (`ChatManagerDeps::segment_store`'s bridge).
+    /// The segment repository (`ChatStore::segment_store`'s bridge).
     /// `None` (the default): no per-segment counters or handoff delivery,
     /// the right answer for a deps impl that stores no segments.
     fn segment_store(&self) -> Option<&dyn crate::segments::SegmentStore> {

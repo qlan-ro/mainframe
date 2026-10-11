@@ -17,6 +17,9 @@
 //!      each call back through the actor. Settings are read asynchronously
 //!      through `Db`'s `SettingsKv` impl, except the synchronous notification
 //!      gates (`notification_config_blocking`).
+use mainframe_chat::chat_manager::{
+    AdapterPort, ChatStore, EventEmitter, ProjectPaths, Pusher, WorkspacePort,
+};
 
 use mainframe_chat::segments::categories::{segment_adapters, union_categories};
 use std::sync::{Arc, OnceLock, Weak};
@@ -171,7 +174,7 @@ impl DaemonChatDeps {
         // its pending fork's snapshot instead, same as every other session
         // builder (`build_history_session`/`do_load_chat`/`do_start_chat`).
         let own_id = chat.claude_session_id.clone();
-        let fork_source = ChatManagerDeps::get_pending_fork(self, chat_id).map(|p| p.fork_source);
+        let fork_source = ChatStore::get_pending_fork(self, chat_id).map(|p| p.fork_source);
         if own_id.is_none() && fork_source.is_none() {
             return None;
         }
@@ -204,7 +207,7 @@ impl DaemonChatDeps {
         }
         let persisted = self.add_detected_prs(chat_id, &scanned);
         for pr in persisted {
-            ChatManagerDeps::emit_event(
+            EventEmitter::emit_event(
                 self,
                 DaemonEvent::ChatPrDetected {
                     chat_id: chat_id.to_string(),
@@ -244,56 +247,7 @@ impl DaemonChatDeps {
     }
 }
 
-impl ChatManagerDeps for DaemonChatDeps {
-    fn emit_event(&self, event: DaemonEvent) {
-        // send() errors only when there are no WS subscribers — not fatal.
-        let _ = self.broadcast.send(event);
-    }
-
-    /// The union over every adapter the chat's segments ran on, so a
-    /// switched chat folds each segment's tools by their own adapter's rules.
-    fn get_tool_categories(&self, chat_id: &str) -> Option<ToolCategories> {
-        let id = chat_id.to_string();
-        let chat = self
-            .db
-            .call_blocking(move |d| d.chats.get(&id))
-            .ok()
-            .flatten()?;
-        let layout = mainframe_chat::segments::SegmentStore::layout(self, chat_id);
-        let adapters = segment_adapters(&chat.adapter_id, layout.as_ref());
-        union_categories(adapters.iter().filter_map(|adapter_id| {
-            self.adapters
-                .get(adapter_id)
-                .and_then(|a| a.get_tool_categories())
-        }))
-    }
-
-    fn prepare_messages_for_client(
-        &self,
-        raw: &[ChatMessage],
-        categories: Option<&ToolCategories>,
-    ) -> Vec<DisplayMessage> {
-        prepare_messages_for_client(raw, categories)
-    }
-
-    /// The production projector. `IncrementalProjector`'s
-    /// `Nested`-patch path now re-applies both per-group post-processing
-    /// passes a tail refold would have given the patched group — tool-call
-    /// timing and task-subject backfill (`try_patch_nested`'s
-    /// `reapply_post_processing`,
-    /// `mainframe-adapter-claude/src/messages/incremental/patches.rs`) — so
-    /// it no longer drops a sub-agent child call's sibling timing or an
-    /// inherited `subject` the way the earlier raw-`fold_merge_group`
-    /// output did. Confirmed against
-    /// `tests/acp_ws_tool_timing.rs::tool_timing_reconnect_retains_overlapping_and_nested_calls`.
-    fn display_projector(&self) -> Box<dyn mainframe_display::DisplayProjector> {
-        Box::new(mainframe_adapter_claude::messages::incremental::IncrementalProjector::new())
-    }
-
-    fn strip_command_tags(&self, text: &str) -> String {
-        strip_mainframe_command_tags(text)
-    }
-
+impl ChatStore for DaemonChatDeps {
     fn chats_get(&self, id: &str) -> Option<Chat> {
         let id = id.to_string();
         self.db
@@ -301,7 +255,6 @@ impl ChatManagerDeps for DaemonChatDeps {
             .ok()
             .flatten()
     }
-
     fn chats_create(&self, new_chat: &NewChat) -> Chat {
         // The scratch root is a daemon concern (`<data_dir>/scratch`);
         // the caller only ever knows the chat is non-project, never the path.
@@ -328,28 +281,12 @@ impl ChatManagerDeps for DaemonChatDeps {
             }
         }
     }
-
     fn chats_delete(&self, chat_id: &str) {
         let id = chat_id.to_string();
         if let Err(err) = self.db.call_blocking(move |d| d.chats.delete(&id)) {
             tracing::warn!(%err, chat_id, "chats.delete failed");
         }
     }
-
-    fn remove_scratch_dir<'a>(
-        &'a self,
-        scratch_path: &'a str,
-    ) -> BoxFuture<'a, Result<(), SeamError>> {
-        let path = scratch_path.to_string();
-        Box::pin(async move {
-            match tokio::fs::remove_dir_all(&path).await {
-                Ok(()) => Ok(()),
-                Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
-                Err(err) => Err(SeamError::new(err)),
-            }
-        })
-    }
-
     fn chats_update(&self, chat_id: &str, patch: &ChatPatch) {
         let id = chat_id.to_string();
         let db_patch = patch.clone();
@@ -360,34 +297,29 @@ impl ChatManagerDeps for DaemonChatDeps {
             tracing::warn!(%err, chat_id, "chats.update failed");
         }
     }
-
     fn chats_clear_session(&self, chat_id: &str) {
         let id = chat_id.to_string();
         if let Err(err) = self.db.call_blocking(move |d| d.chats.clear_session(&id)) {
             tracing::warn!(%err, chat_id, "chats.clearSession failed");
         }
     }
-
     fn chats_clear_worktree(&self, chat_id: &str) {
         let id = chat_id.to_string();
         if let Err(err) = self.db.call_blocking(move |d| d.chats.clear_worktree(&id)) {
             tracing::warn!(%err, chat_id, "chats.clearWorktree failed");
         }
     }
-
     fn chats_list(&self, project_id: &str) -> Vec<Chat> {
         let pid = project_id.to_string();
         self.db
             .call_blocking(move |d| d.chats.list(&pid))
             .unwrap_or_default()
     }
-
     fn chats_list_all(&self) -> Vec<Chat> {
         self.db
             .call_blocking(|d| d.chats.list_all())
             .unwrap_or_default()
     }
-
     fn chats_list_filtered(
         &self,
         project_id: Option<&str>,
@@ -407,7 +339,6 @@ impl ChatManagerDeps for DaemonChatDeps {
             .call_blocking(move |d| d.chats.list_filtered(&filters))
             .unwrap_or_default()
     }
-
     fn chats_add_mention(&self, chat_id: &str, mention: &SessionMention) {
         let (id, mention) = (chat_id.to_string(), mention.clone());
         if let Err(err) = self
@@ -417,71 +348,23 @@ impl ChatManagerDeps for DaemonChatDeps {
             tracing::warn!(%err, chat_id, "chats.add_mention failed");
         }
     }
-
     fn chats_reset_working_to_idle(&self) -> i64 {
         self.db
             .call_blocking(|d| d.chats.reset_working_to_idle())
             .unwrap_or(0)
     }
-
-    fn projects_get_path(&self, project_id: &str) -> Option<String> {
-        let pid = project_id.to_string();
-        self.db
-            .call_blocking(move |d| d.projects.get(&pid))
-            .ok()
-            .flatten()
-            .map(|p| p.path)
-    }
-    fn initial_transcript_path(
-        &self,
-        adapter_id: &str,
-        session_id: &str,
-        cwd: &str,
-    ) -> Option<String> {
-        self.adapters
-            .get(adapter_id)?
-            .initial_transcript_path(session_id, cwd)
-    }
-
-    fn projects_remove(&self, project_id: &str) -> Result<(), SeamError> {
-        let pid = project_id.to_string();
-        self.db
-            .call_blocking(move |d| d.projects.remove(&pid))
-            .map_err(|err| {
-                tracing::warn!(%err, project_id, "projects.remove failed");
-                SeamError::new(err)
-            })
-    }
-
-    fn write_workspace_trust<'a>(
-        &'a self,
-        project_path: &'a str,
-    ) -> BoxFuture<'a, Result<(), SeamError>> {
-        Box::pin(async move {
-            mainframe_adapter_claude::trust_store::write_workspace_trust(project_path, None)
-                .await
-                .map_err(SeamError::new)
-        })
-    }
-
-    fn settings(&self) -> &dyn SettingsKv {
-        &self.db
-    }
-
     fn add_plan_file(&self, chat_id: &str, file_path: &str) -> bool {
         let (id, fp) = (chat_id.to_string(), file_path.to_string());
         self.db
             .call_blocking(move |d| d.chats.add_plan_file(&id, &fp))
             .unwrap_or(false)
     }
-
     fn add_skill_file(&self, chat_id: &str, entry: &SkillFileEntry) -> bool {
         let (id, entry) = (chat_id.to_string(), entry.clone());
         self.db
             .call_blocking(move |d| d.chats.add_skill_file(&id, &entry))
             .unwrap_or(false)
     }
-
     fn update_todos(&self, chat_id: &str, todos: &[TodoItem]) {
         let (id, todos) = (chat_id.to_string(), todos.to_vec());
         if let Err(err) = self
@@ -491,288 +374,24 @@ impl ChatManagerDeps for DaemonChatDeps {
             tracing::warn!(%err, chat_id, "chats.update_todos failed");
         }
     }
-
     fn add_detected_prs(&self, chat_id: &str, prs: &[DetectedPr]) -> Vec<DetectedPr> {
         let (id, prs) = (chat_id.to_string(), prs.to_vec());
         self.db
             .call_blocking(move |d| d.chats.add_detected_prs(&id, &prs))
             .unwrap_or_default()
     }
-
     fn get_dismissed_worktrees(&self, chat_id: &str) -> Vec<String> {
         let id = chat_id.to_string();
         self.db
             .call_blocking(move |d| d.chats.get_dismissed_worktrees(&id))
             .unwrap_or_default()
     }
-
     fn add_dismissed_worktree(&self, chat_id: &str, worktree_path: &str) -> bool {
         let (id, path) = (chat_id.to_string(), worktree_path.to_string());
         self.db
             .call_blocking(move |d| d.chats.add_dismissed_worktree(&id, &path))
             .unwrap_or(false)
     }
-
-    fn create_session(
-        &self,
-        adapter_id: &str,
-        options: SessionOptions,
-    ) -> Option<Arc<dyn AdapterSession>> {
-        self.adapters
-            .get(adapter_id)
-            .map(|adapter| adapter.create_session(options))
-    }
-
-    fn create_plan_mode_handler(&self, adapter_id: &str) -> Option<Arc<dyn PlanModeActionHandler>> {
-        self.adapters
-            .get(adapter_id)
-            .and_then(|adapter| adapter.create_plan_mode_handler())
-    }
-
-    fn attachment_delete_chat<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()> {
-        Box::pin(async move {
-            self.attachments.delete_chat(chat_id).await;
-        })
-    }
-
-    fn process_attachments<'a>(
-        &'a self,
-        chat_id: &'a str,
-        attachment_ids: &'a [String],
-    ) -> BoxFuture<'a, ProcessedAttachments> {
-        Box::pin(async move {
-            let mut fetched = Vec::with_capacity(attachment_ids.len());
-            for id in attachment_ids {
-                match self.attachments.get(chat_id, id).await {
-                    Some(attachment) => fetched.push(attachment),
-                    None => tracing::warn!(
-                        chat_id,
-                        attachment_id = %id,
-                        "processAttachments: attachment not found in store; skipping"
-                    ),
-                }
-            }
-            attachment_processor::process_attachments(&fetched)
-        })
-    }
-
-    fn kill_tasks_for_chat<'a>(
-        &'a self,
-        chat_id: &'a str,
-        worktree_path: Option<String>,
-        session: Option<Arc<dyn AdapterSession>>,
-    ) -> BoxFuture<'a, ()> {
-        Box::pin(async move {
-            let wrapped = session.map(crate::session_kill_bridge::SessionKillBridge);
-            let session_ref = wrapped.as_ref().map(|w| w as &dyn SessionLike);
-            kill_tasks_for_chat(KillTasksForChatArgs {
-                chat_id,
-                worktree_path: worktree_path.as_deref(),
-                session: session_ref,
-                tracker: &self.background_tasks,
-                spool_root: None,
-            })
-            .await;
-        })
-    }
-
-    fn remove_worktree<'a>(
-        &'a self,
-        project_path: &'a str,
-        worktree_path: &'a str,
-        branch_name: &'a str,
-    ) -> BoxFuture<'a, ()> {
-        Box::pin(async move {
-            mainframe_services::workspace::remove_worktree(
-                project_path,
-                worktree_path,
-                branch_name,
-            )
-            .await;
-        })
-    }
-
-    fn stop_launch_processes<'a>(
-        &'a self,
-        project_id: &'a str,
-        effective_path: &'a str,
-    ) -> Option<BoxFuture<'a, ()>> {
-        self.launch
-            .stop_launch_processes(project_id, effective_path)
-    }
-
-    fn stop_scope_tunnels<'a>(
-        &'a self,
-        project_id: &'a str,
-        effective_path: &'a str,
-    ) -> Option<BoxFuture<'a, ()>> {
-        self.scope_tunnels
-            .stop_scope_tunnels(project_id, effective_path)
-    }
-
-    fn scan_loaded_history<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()> {
-        Box::pin(async move {
-            let Some(session) = self.session_for_scan(chat_id) else {
-                return;
-            };
-            // Mentions and PRs read different histories: `load_history` is the
-            // adapter's canonical transcript (what the user actually typed),
-            // while `load_scan_records` may reconstruct extra tool-output-only
-            // records `load_history` never returns (Codex's rollout — see
-            // `scan_and_persist_mentions`). Each scan gets its own source; a
-            // failure on one must not skip the other.
-            match session.load_history().await {
-                Ok(history) if !history.is_empty() => {
-                    self.scan_and_persist_mentions(chat_id, &history);
-                }
-                Ok(_) => {}
-                Err(err) => tracing::warn!(%err, chat_id, "load_history failed"),
-            }
-            match session.load_scan_records().await {
-                Ok(history) if !history.is_empty() => {
-                    self.scan_and_persist_prs(chat_id, &history);
-                }
-                Ok(_) => {}
-                Err(err) => tracing::warn!(%err, chat_id, "load_scan_records failed"),
-            }
-            self.persist_plan_and_skill_files(chat_id, session.as_ref())
-                .await;
-        })
-    }
-
-    fn resolve_tuning<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, Option<ResolvedTuning>> {
-        let db = self.db.clone();
-        let adapters = Arc::clone(&self.adapters);
-        Box::pin(async move {
-            let deps = RtDeps { db, adapters };
-            resolve_tuning_for_chat(&deps, chat_id).await
-        })
-    }
-
-    fn get_session_context<'a>(
-        &'a self,
-        chat_id: &'a str,
-        project_path: &'a str,
-        session: Option<Arc<dyn AdapterSession>>,
-        adapter_id: Option<String>,
-    ) -> BoxFuture<'a, mainframe_types::context::SessionContext> {
-        Box::pin(async move {
-            let ctx_db = CtxDbHandle {
-                db: self.db.clone(),
-            };
-            let lister = AttachmentListerHandle {
-                store: Arc::clone(&self.attachments),
-            };
-            get_session_context(
-                chat_id,
-                project_path,
-                &ctx_db,
-                &self.adapters,
-                session.as_ref(),
-                Some(&lister),
-                adapter_id.as_deref(),
-            )
-            .await
-        })
-    }
-
-    fn apply_codex_provider_tuning(&self, _session: &Arc<dyn AdapterSession>) {
-        // TODO: `set_codex_provider_tuning` (personality, reasoning summary) is a
-        // Codex-only session method that the generic `AdapterSession` trait does not
-        // expose, so this cannot reach it and the tuning stays at its default.
-        // The no-op is correct for every non-Codex adapter.
-    }
-
-    fn generate_title<'a>(
-        &'a self,
-        adapter_id: &'a str,
-        content: &'a str,
-        binary: &'a str,
-    ) -> BoxFuture<'a, Option<String>> {
-        // Route to the owning adapter's `generate_title`; an unregistered
-        // adapter id and an adapter error are logged separately so an operator
-        // can tell the two apart.
-        let Some(adapter) = self.adapters.get(adapter_id) else {
-            tracing::warn!(
-                adapter_id,
-                reason = "unknown_adapter",
-                "title generation skipped"
-            );
-            return Box::pin(async { None });
-        };
-        let content = content.to_string();
-        let binary = binary.to_string();
-        let adapter_id = adapter_id.to_string();
-        Box::pin(async move {
-            match adapter.generate_title(content, binary).await {
-                Ok(title) => title,
-                Err(err) => {
-                    tracing::warn!(%err, adapter_id, reason = "adapter_error", "title generation failed");
-                    None
-                }
-            }
-        })
-    }
-
-    fn locate_transcript<'a>(
-        &'a self,
-        adapter_id: &'a str,
-        session_id: &'a str,
-        project_path: &'a str,
-        session_file_path: Option<&'a str>,
-    ) -> BoxFuture<'a, Option<mainframe_types::transcript::TranscriptLocation>> {
-        let adapter = self.adapters.get(adapter_id);
-        let (session_id, project_path) = (session_id.to_string(), project_path.to_string());
-        let session_file_path = session_file_path.map(str::to_string);
-        Box::pin(async move {
-            let Some(adapter) = adapter else {
-                tracing::warn!(adapter_id, "transcript presence: no adapter registered");
-                return None;
-            };
-            match adapter
-                .locate_transcript(session_id, project_path, session_file_path)
-                .await
-            {
-                Ok(location) => location,
-                Err(err) => {
-                    tracing::warn!(%err, adapter_id, "transcript lookup failed");
-                    None
-                }
-            }
-        })
-    }
-
-    fn is_working_tree_dirty<'a>(&'a self, project_path: &'a str) -> BoxFuture<'a, bool> {
-        Box::pin(async move {
-            match self.git.for_project(project_path).status_raw().await {
-                Ok(stdout) => !stdout.trim().is_empty(),
-                Err(err) => {
-                    tracing::warn!(%err, project_path, "git status --porcelain failed");
-                    false
-                }
-            }
-        })
-    }
-
-    fn path_exists(&self, path: &str) -> bool {
-        std::path::Path::new(path).exists()
-    }
-
-    fn adapter_supports_no_persistence(&self, adapter_id: &str) -> bool {
-        self.adapters
-            .get(adapter_id)
-            .is_some_and(|adapter| adapter.capabilities().no_persistence)
-    }
-
-    fn ensure_dir<'a>(&'a self, path: &'a str) -> BoxFuture<'a, ()> {
-        let path = path.to_string();
-        Box::pin(async move {
-            if let Err(err) = tokio::fs::create_dir_all(&path).await {
-                tracing::warn!(%err, path, "failed to create the chat's scratch directory");
-            }
-        })
-    }
-
     fn mark_context_lost(&self, chat_id: &str, context_lost_at: &str) {
         let id = chat_id.to_string();
         let at = context_lost_at.to_string();
@@ -783,25 +402,123 @@ impl ChatManagerDeps for DaemonChatDeps {
             tracing::warn!(%err, chat_id, "chats.markContextLost failed");
         }
     }
+    fn create_fork(&self, insert: &ForkCreateInput) -> Result<Chat, SeamError> {
+        let input = insert.clone();
+        let db_pending = to_db_pending_fork(&input.pending_fork);
+        self.db
+            .call_blocking(move |d| {
+                let fork_insert = to_db_fork_insert(&input, &db_pending);
+                d.chats.create_fork(&fork_insert)
+            })
+            .map_err(SeamError::new)
+    }
+    fn get_pending_fork(&self, chat_id: &str) -> Option<PendingForkState> {
+        let id = chat_id.to_string();
+        self.db
+            .call_blocking(move |d| d.chats.get_pending_fork(&id))
+            .ok()
+            .flatten()
+            .map(from_db_pending_fork)
+    }
+    fn clear_pending_fork(&self, chat_id: &str) {
+        let id = chat_id.to_string();
+        if let Err(err) = self
+            .db
+            .call_blocking(move |d| d.chats.clear_pending_fork(&id))
+        {
+            tracing::warn!(%err, chat_id, "chats.clear_pending_fork failed");
+        }
+    }
+    fn chats_find_or_create_side_chat(&self, parent: &Chat) -> Result<(Chat, bool), SeamError> {
+        let parent = parent.clone();
+        self.db
+            .call_blocking(move |d| d.chats.find_or_create_side_chat(&parent))
+            .map_err(SeamError::new)
+    }
+    fn segment_store(&self) -> Option<&dyn mainframe_chat::segments::SegmentStore> {
+        Some(self)
+    }
+}
 
+impl ProjectPaths for DaemonChatDeps {
+    fn projects_get_path(&self, project_id: &str) -> Option<String> {
+        let pid = project_id.to_string();
+        self.db
+            .call_blocking(move |d| d.projects.get(&pid))
+            .ok()
+            .flatten()
+            .map(|p| p.path)
+    }
+    fn projects_remove(&self, project_id: &str) -> Result<(), SeamError> {
+        let pid = project_id.to_string();
+        self.db
+            .call_blocking(move |d| d.projects.remove(&pid))
+            .map_err(|err| {
+                tracing::warn!(%err, project_id, "projects.remove failed");
+                SeamError::new(err)
+            })
+    }
+    fn path_exists(&self, path: &str) -> bool {
+        std::path::Path::new(path).exists()
+    }
+    fn ensure_dir<'a>(&'a self, path: &'a str) -> BoxFuture<'a, ()> {
+        let path = path.to_string();
+        Box::pin(async move {
+            if let Err(err) = tokio::fs::create_dir_all(&path).await {
+                tracing::warn!(%err, path, "failed to create the chat's scratch directory");
+            }
+        })
+    }
+    fn fork_snapshots_dir(&self) -> String {
+        self.data_dir
+            .join("fork-snapshots")
+            .to_string_lossy()
+            .into_owned()
+    }
+    fn history_cache_dir(&self) -> String {
+        self.data_dir
+            .join("cache")
+            .join("history")
+            .to_string_lossy()
+            .into_owned()
+    }
+}
+
+impl EventEmitter for DaemonChatDeps {
+    fn emit_event(&self, event: DaemonEvent) {
+        // send() errors only when there are no WS subscribers — not fatal.
+        let _ = self.broadcast.send(event);
+    }
+
+    fn tracker_remove_chat(&self, chat_id: &str) {
+        self.background_tasks.remove_chat(chat_id);
+    }
+    fn tracker_list_live(&self, chat_id: &str) -> Vec<BackgroundTask> {
+        self.background_tasks.list_live(chat_id)
+    }
+    fn tracker_end_all_running(&self, chat_id: &str) {
+        self.background_tasks.end_all_running(chat_id);
+    }
+    fn workflow_runs_stop_all(&self, chat_id: &str) {
+        self.claude_workflows.stop_all_running(chat_id);
+    }
+}
+
+impl Pusher for DaemonChatDeps {
     fn should_notify_permission(&self, tool_name: Option<&str>) -> bool {
         should_notify_permission(&notification_config_blocking(&self.db), tool_name)
     }
-
     fn notify_task_complete(&self) -> bool {
         notification_config_blocking(&self.db).chat.task_complete
     }
-
     fn notify_session_error(&self) -> bool {
         notification_config_blocking(&self.db).chat.session_error
     }
-
     fn notify_attention_request(&self) -> bool {
         notification_config_blocking(&self.db)
             .chat
             .attention_request
     }
-
     fn send_push(&self, msg: PushOut) {
         let push = Arc::clone(&self.push);
         // A delegated child's gate names its parent and opens the top-level
@@ -842,36 +559,172 @@ impl ChatManagerDeps for DaemonChatDeps {
             push.send_push(message).await;
         });
     }
+}
 
+impl AdapterPort for DaemonChatDeps {
+    fn get_tool_categories(&self, chat_id: &str) -> Option<ToolCategories> {
+        let id = chat_id.to_string();
+        let chat = self
+            .db
+            .call_blocking(move |d| d.chats.get(&id))
+            .ok()
+            .flatten()?;
+        let layout = mainframe_chat::segments::SegmentStore::layout(self, chat_id);
+        let adapters = segment_adapters(&chat.adapter_id, layout.as_ref());
+        union_categories(adapters.iter().filter_map(|adapter_id| {
+            self.adapters
+                .get(adapter_id)
+                .and_then(|a| a.get_tool_categories())
+        }))
+    }
+    fn prepare_messages_for_client(
+        &self,
+        raw: &[ChatMessage],
+        categories: Option<&ToolCategories>,
+    ) -> Vec<DisplayMessage> {
+        prepare_messages_for_client(raw, categories)
+    }
+
+    fn display_projector(&self) -> Box<dyn mainframe_display::DisplayProjector> {
+        Box::new(mainframe_adapter_claude::messages::incremental::IncrementalProjector::new())
+    }
+    fn strip_command_tags(&self, text: &str) -> String {
+        strip_mainframe_command_tags(text)
+    }
+    fn initial_transcript_path(
+        &self,
+        adapter_id: &str,
+        session_id: &str,
+        cwd: &str,
+    ) -> Option<String> {
+        self.adapters
+            .get(adapter_id)?
+            .initial_transcript_path(session_id, cwd)
+    }
+    fn create_session(
+        &self,
+        adapter_id: &str,
+        options: SessionOptions,
+    ) -> Option<Arc<dyn AdapterSession>> {
+        self.adapters
+            .get(adapter_id)
+            .map(|adapter| adapter.create_session(options))
+    }
+    fn create_plan_mode_handler(&self, adapter_id: &str) -> Option<Arc<dyn PlanModeActionHandler>> {
+        self.adapters
+            .get(adapter_id)
+            .and_then(|adapter| adapter.create_plan_mode_handler())
+    }
+    fn scan_loaded_history<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()> {
+        Box::pin(async move {
+            let Some(session) = self.session_for_scan(chat_id) else {
+                return;
+            };
+            // Mentions and PRs read different histories: `load_history` is the
+            // adapter's canonical transcript (what the user actually typed),
+            // while `load_scan_records` may reconstruct extra tool-output-only
+            // records `load_history` never returns (Codex's rollout — see
+            // `scan_and_persist_mentions`). Each scan gets its own source; a
+            // failure on one must not skip the other.
+            match session.load_history().await {
+                Ok(history) if !history.is_empty() => {
+                    self.scan_and_persist_mentions(chat_id, &history);
+                }
+                Ok(_) => {}
+                Err(err) => tracing::warn!(%err, chat_id, "load_history failed"),
+            }
+            match session.load_scan_records().await {
+                Ok(history) if !history.is_empty() => {
+                    self.scan_and_persist_prs(chat_id, &history);
+                }
+                Ok(_) => {}
+                Err(err) => tracing::warn!(%err, chat_id, "load_scan_records failed"),
+            }
+            self.persist_plan_and_skill_files(chat_id, session.as_ref())
+                .await;
+        })
+    }
+    fn resolve_tuning<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, Option<ResolvedTuning>> {
+        let db = self.db.clone();
+        let adapters = Arc::clone(&self.adapters);
+        Box::pin(async move {
+            let deps = RtDeps { db, adapters };
+            resolve_tuning_for_chat(&deps, chat_id).await
+        })
+    }
+    fn apply_codex_provider_tuning(&self, _session: &Arc<dyn AdapterSession>) {
+        // TODO: `set_codex_provider_tuning` (personality, reasoning summary) is a
+        // Codex-only session method that the generic `AdapterSession` trait does not
+        // expose, so this cannot reach it and the tuning stays at its default.
+        // The no-op is correct for every non-Codex adapter.
+    }
+    fn generate_title<'a>(
+        &'a self,
+        adapter_id: &'a str,
+        content: &'a str,
+        binary: &'a str,
+    ) -> BoxFuture<'a, Option<String>> {
+        // Route to the owning adapter's `generate_title`; an unregistered
+        // adapter id and an adapter error are logged separately so an operator
+        // can tell the two apart.
+        let Some(adapter) = self.adapters.get(adapter_id) else {
+            tracing::warn!(
+                adapter_id,
+                reason = "unknown_adapter",
+                "title generation skipped"
+            );
+            return Box::pin(async { None });
+        };
+        let content = content.to_string();
+        let binary = binary.to_string();
+        let adapter_id = adapter_id.to_string();
+        Box::pin(async move {
+            match adapter.generate_title(content, binary).await {
+                Ok(title) => title,
+                Err(err) => {
+                    tracing::warn!(%err, adapter_id, reason = "adapter_error", "title generation failed");
+                    None
+                }
+            }
+        })
+    }
+    fn locate_transcript<'a>(
+        &'a self,
+        adapter_id: &'a str,
+        session_id: &'a str,
+        project_path: &'a str,
+        session_file_path: Option<&'a str>,
+    ) -> BoxFuture<'a, Option<mainframe_types::transcript::TranscriptLocation>> {
+        let adapter = self.adapters.get(adapter_id);
+        let (session_id, project_path) = (session_id.to_string(), project_path.to_string());
+        let session_file_path = session_file_path.map(str::to_string);
+        Box::pin(async move {
+            let Some(adapter) = adapter else {
+                tracing::warn!(adapter_id, "transcript presence: no adapter registered");
+                return None;
+            };
+            match adapter
+                .locate_transcript(session_id, project_path, session_file_path)
+                .await
+            {
+                Ok(location) => location,
+                Err(err) => {
+                    tracing::warn!(%err, adapter_id, "transcript lookup failed");
+                    None
+                }
+            }
+        })
+    }
+    fn adapter_supports_no_persistence(&self, adapter_id: &str) -> bool {
+        self.adapters
+            .get(adapter_id)
+            .is_some_and(|adapter| adapter.capabilities().no_persistence)
+    }
     fn on_provider_quota(&self, adapter_id: &str, quota: ProviderQuota) {
         // Session-pushed quota sparse-merges (Push): a partial blob keeps prior
         // windows. `ingest` persists + fans out `provider.quota.updated` itself.
         self.quota.ingest(adapter_id, quota, IngestMode::Push);
     }
-
-    fn extract_mentions_from_text(&self, chat_id: &str, text: &str) -> bool {
-        let ctx = CtxDbHandle {
-            db: self.db.clone(),
-        };
-        extract_mentions_from_text(chat_id, Some(text), &ctx)
-    }
-
-    fn tracker_remove_chat(&self, chat_id: &str) {
-        self.background_tasks.remove_chat(chat_id);
-    }
-
-    fn tracker_list_live(&self, chat_id: &str) -> Vec<BackgroundTask> {
-        self.background_tasks.list_live(chat_id)
-    }
-
-    fn tracker_end_all_running(&self, chat_id: &str) {
-        self.background_tasks.end_all_running(chat_id);
-    }
-
-    fn workflow_runs_stop_all(&self, chat_id: &str) {
-        self.claude_workflows.stop_all_running(chat_id);
-    }
-
     fn adapter_fork_info(&self, adapter_id: &str) -> AdapterForkInfo {
         match self.adapters.get(adapter_id) {
             Some(adapter) => AdapterForkInfo {
@@ -886,7 +739,6 @@ impl ChatManagerDeps for DaemonChatDeps {
             },
         }
     }
-
     fn pin_fork_point<'a>(
         &'a self,
         adapter_id: &'a str,
@@ -900,68 +752,161 @@ impl ChatManagerDeps for DaemonChatDeps {
             adapter.pin_fork_point(request).await
         })
     }
-
-    fn create_fork(&self, insert: &ForkCreateInput) -> Result<Chat, SeamError> {
-        let input = insert.clone();
-        let db_pending = to_db_pending_fork(&input.pending_fork);
-        self.db
-            .call_blocking(move |d| {
-                let fork_insert = to_db_fork_insert(&input, &db_pending);
-                d.chats.create_fork(&fork_insert)
-            })
-            .map_err(SeamError::new)
-    }
-
-    fn get_pending_fork(&self, chat_id: &str) -> Option<PendingForkState> {
-        let id = chat_id.to_string();
-        self.db
-            .call_blocking(move |d| d.chats.get_pending_fork(&id))
-            .ok()
-            .flatten()
-            .map(from_db_pending_fork)
-    }
-
-    fn clear_pending_fork(&self, chat_id: &str) {
-        let id = chat_id.to_string();
-        if let Err(err) = self
-            .db
-            .call_blocking(move |d| d.chats.clear_pending_fork(&id))
-        {
-            tracing::warn!(%err, chat_id, "chats.clear_pending_fork failed");
-        }
-    }
-
-    fn fork_snapshots_dir(&self) -> String {
-        self.data_dir
-            .join("fork-snapshots")
-            .to_string_lossy()
-            .into_owned()
-    }
-
-    fn history_cache_dir(&self) -> String {
-        self.data_dir
-            .join("cache")
-            .join("history")
-            .to_string_lossy()
-            .into_owned()
-    }
-
-    fn chats_find_or_create_side_chat(&self, parent: &Chat) -> Result<(Chat, bool), SeamError> {
-        let parent = parent.clone();
-        self.db
-            .call_blocking(move |d| d.chats.find_or_create_side_chat(&parent))
-            .map_err(SeamError::new)
-    }
-
-    fn segment_store(&self) -> Option<&dyn mainframe_chat::segments::SegmentStore> {
-        Some(self)
-    }
-
     fn adapter_info(&self, adapter_id: &str) -> Option<mainframe_types::adapter::AdapterInfo> {
         self.adapters
             .get_snapshots()
             .into_iter()
             .find(|info| info.id == adapter_id)
+    }
+}
+
+impl WorkspacePort for DaemonChatDeps {
+    fn remove_scratch_dir<'a>(
+        &'a self,
+        scratch_path: &'a str,
+    ) -> BoxFuture<'a, Result<(), SeamError>> {
+        let path = scratch_path.to_string();
+        Box::pin(async move {
+            match tokio::fs::remove_dir_all(&path).await {
+                Ok(()) => Ok(()),
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                Err(err) => Err(SeamError::new(err)),
+            }
+        })
+    }
+    fn write_workspace_trust<'a>(
+        &'a self,
+        project_path: &'a str,
+    ) -> BoxFuture<'a, Result<(), SeamError>> {
+        Box::pin(async move {
+            mainframe_adapter_claude::trust_store::write_workspace_trust(project_path, None)
+                .await
+                .map_err(SeamError::new)
+        })
+    }
+    fn attachment_delete_chat<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()> {
+        Box::pin(async move {
+            self.attachments.delete_chat(chat_id).await;
+        })
+    }
+    fn process_attachments<'a>(
+        &'a self,
+        chat_id: &'a str,
+        attachment_ids: &'a [String],
+    ) -> BoxFuture<'a, ProcessedAttachments> {
+        Box::pin(async move {
+            let mut fetched = Vec::with_capacity(attachment_ids.len());
+            for id in attachment_ids {
+                match self.attachments.get(chat_id, id).await {
+                    Some(attachment) => fetched.push(attachment),
+                    None => tracing::warn!(
+                        chat_id,
+                        attachment_id = %id,
+                        "processAttachments: attachment not found in store; skipping"
+                    ),
+                }
+            }
+            attachment_processor::process_attachments(&fetched)
+        })
+    }
+    fn kill_tasks_for_chat<'a>(
+        &'a self,
+        chat_id: &'a str,
+        worktree_path: Option<String>,
+        session: Option<Arc<dyn AdapterSession>>,
+    ) -> BoxFuture<'a, ()> {
+        Box::pin(async move {
+            let wrapped = session.map(crate::session_kill_bridge::SessionKillBridge);
+            let session_ref = wrapped.as_ref().map(|w| w as &dyn SessionLike);
+            kill_tasks_for_chat(KillTasksForChatArgs {
+                chat_id,
+                worktree_path: worktree_path.as_deref(),
+                session: session_ref,
+                tracker: &self.background_tasks,
+                spool_root: None,
+            })
+            .await;
+        })
+    }
+    fn remove_worktree<'a>(
+        &'a self,
+        project_path: &'a str,
+        worktree_path: &'a str,
+        branch_name: &'a str,
+    ) -> BoxFuture<'a, ()> {
+        Box::pin(async move {
+            mainframe_services::workspace::remove_worktree(
+                project_path,
+                worktree_path,
+                branch_name,
+            )
+            .await;
+        })
+    }
+    fn stop_launch_processes<'a>(
+        &'a self,
+        project_id: &'a str,
+        effective_path: &'a str,
+    ) -> Option<BoxFuture<'a, ()>> {
+        self.launch
+            .stop_launch_processes(project_id, effective_path)
+    }
+    fn stop_scope_tunnels<'a>(
+        &'a self,
+        project_id: &'a str,
+        effective_path: &'a str,
+    ) -> Option<BoxFuture<'a, ()>> {
+        self.scope_tunnels
+            .stop_scope_tunnels(project_id, effective_path)
+    }
+    fn get_session_context<'a>(
+        &'a self,
+        chat_id: &'a str,
+        project_path: &'a str,
+        session: Option<Arc<dyn AdapterSession>>,
+        adapter_id: Option<String>,
+    ) -> BoxFuture<'a, mainframe_types::context::SessionContext> {
+        Box::pin(async move {
+            let ctx_db = CtxDbHandle {
+                db: self.db.clone(),
+            };
+            let lister = AttachmentListerHandle {
+                store: Arc::clone(&self.attachments),
+            };
+            get_session_context(
+                chat_id,
+                project_path,
+                &ctx_db,
+                &self.adapters,
+                session.as_ref(),
+                Some(&lister),
+                adapter_id.as_deref(),
+            )
+            .await
+        })
+    }
+    fn is_working_tree_dirty<'a>(&'a self, project_path: &'a str) -> BoxFuture<'a, bool> {
+        Box::pin(async move {
+            match self.git.for_project(project_path).status_raw().await {
+                Ok(stdout) => !stdout.trim().is_empty(),
+                Err(err) => {
+                    tracing::warn!(%err, project_path, "git status --porcelain failed");
+                    false
+                }
+            }
+        })
+    }
+    fn extract_mentions_from_text(&self, chat_id: &str, text: &str) -> bool {
+        let ctx = CtxDbHandle {
+            db: self.db.clone(),
+        };
+        extract_mentions_from_text(chat_id, Some(text), &ctx)
+    }
+}
+
+impl ChatManagerDeps for DaemonChatDeps {
+    fn settings(&self) -> &dyn SettingsKv {
+        &self.db
     }
 }
 
@@ -997,7 +942,7 @@ impl ExternalSessionDeps for DaemonChatDeps {
     }
 
     fn chats_create(&self, project_id: &str, adapter_id: &str) -> Chat {
-        <Self as ChatManagerDeps>::chats_create(
+        <Self as ChatStore>::chats_create(
             self,
             &NewChat {
                 project_id: project_id.to_string(),
@@ -1019,7 +964,7 @@ impl ExternalSessionDeps for DaemonChatDeps {
     }
 
     fn chats_list(&self, project_id: &str) -> Vec<Chat> {
-        <Self as ChatManagerDeps>::chats_list(self, project_id)
+        <Self as ChatStore>::chats_list(self, project_id)
     }
 
     fn settings(&self) -> &dyn SettingsKv {
@@ -1027,7 +972,7 @@ impl ExternalSessionDeps for DaemonChatDeps {
     }
 
     fn emit_event(&self, event: DaemonEvent) {
-        <Self as ChatManagerDeps>::emit_event(self, event)
+        <Self as EventEmitter>::emit_event(self, event)
     }
 
     /// Wires the periodic external-session sweep to `ChatManager::reconcile_transcript`
@@ -1047,7 +992,7 @@ impl ExternalSessionDeps for DaemonChatDeps {
         content: &'a str,
         binary: &'a str,
     ) -> BoxFuture<'a, Option<String>> {
-        <Self as ChatManagerDeps>::generate_title(self, adapter_id, content, binary)
+        <Self as AdapterPort>::generate_title(self, adapter_id, content, binary)
     }
 
     /// `adapters.getAll().filter(a => a.listExternalSessions)` — the claude/codex
@@ -1420,7 +1365,7 @@ mod scan_loaded_history_tests {
         let _guard = tracing::subscriber::set_default(subscriber);
 
         let result =
-            ChatManagerDeps::generate_title(&deps, "not-a-real-adapter", "hello", "claude").await;
+            AdapterPort::generate_title(&deps, "not-a-real-adapter", "hello", "claude").await;
 
         assert_eq!(result, None);
         assert_eq!(
@@ -1444,15 +1389,15 @@ mod scan_loaded_history_tests {
             .into_owned();
 
         assert_eq!(
-            ChatManagerDeps::initial_transcript_path(&deps, "claude", "session-1", "/proj"),
+            AdapterPort::initial_transcript_path(&deps, "claude", "session-1", "/proj"),
             Some(claude_path)
         );
         assert_eq!(
-            ChatManagerDeps::initial_transcript_path(&deps, "codex", "session-1", "/proj"),
+            AdapterPort::initial_transcript_path(&deps, "codex", "session-1", "/proj"),
             None
         );
         assert_eq!(
-            ChatManagerDeps::initial_transcript_path(&deps, "unknown", "session-1", "/proj"),
+            AdapterPort::initial_transcript_path(&deps, "unknown", "session-1", "/proj"),
             None
         );
     }
@@ -2131,7 +2076,7 @@ mod scan_loaded_history_tests {
             })
             .unwrap();
 
-        ChatManagerDeps::scan_loaded_history(&deps, &chat.id).await;
+        AdapterPort::scan_loaded_history(&deps, &chat.id).await;
 
         let mentions = deps
             .db

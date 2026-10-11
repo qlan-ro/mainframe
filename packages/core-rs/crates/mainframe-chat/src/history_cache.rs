@@ -109,7 +109,7 @@ struct Snapshot {
 }
 
 /// A directory of `<chat_id>.json` snapshots under `<data_dir>/cache/history`
-/// (`ChatManagerDeps::history_cache_dir`). Cheap to clone-share (`Arc`'d by
+/// (`ProjectPaths::history_cache_dir`). Cheap to clone-share (`Arc`'d by
 /// `ChatManager`); every method does its own async I/O, none of it blocking.
 pub(crate) struct HistorySnapshotCache {
     dir: PathBuf,
