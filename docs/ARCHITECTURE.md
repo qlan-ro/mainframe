@@ -142,7 +142,7 @@ Claude-specific project layout and transcript relocation (including sidechains) 
 | `mainframe-acp` | The ACP v2 chat-facade protocol: JSON-RPC framing, the `initialize` handshake, and the `_mainframe.dev` extension namespace. `mainframe-server` owns the `/acp/{profile}` socket shell. |
 | `mainframe-adapter-api` | The `Adapter` trait (behavioral half of the `AgentAdapter` concept — see [Adapter system](#adapter-system-agentadapter)), the `AdapterRegistry`, and executable resolution. |
 | `mainframe-services` | Cross-cutting daemon services that don't fit one domain crate: workspace/worktree helpers, attachment storage, push notifications, custom commands, file watching, provider settings. |
-| `mainframe-plugins` | The builtin plugin registry and the capability-gated `PluginContext` (db/attachments/ui/events/config access). Only the builtin `todos` plugin loads here — Claude and Codex are native adapter crates, not plugins, and dynamic third-party JS plugin loading from the old Node daemon was **deliberately dropped** (the manifest/capability model is kept so a future WASM loader could restore it). |
+| `mainframe-plugins` | The builtin plugin registry and the capability-gated `PluginContext` (db/attachments/ui/events/config access). The `todos` builtin supplies routes and storage; Claude and Codex also publish plugin manifests, while their native adapter crates are registered separately. Dynamic third-party JS plugin loading from the old Node daemon was **deliberately dropped** (the manifest/capability model is kept so a future WASM loader could restore it). |
 | `mainframe-adapter-claude` | The Claude CLI integration: spawns `claude` with `stream-json` I/O, parses assistant/tool/result events, handles `control_request` permission prompts, reads JSONL session history for resume. |
 | `mainframe-adapter-codex` | The Codex CLI integration: spawns Codex's app-server and speaks its JSON-RPC framing, including approval handling and rollout-file history. |
 | `mainframe-adapter-mock` | A fixture-replay adapter with no real CLI — used by the E2E suite and local demos to produce deterministic adapter output. |
@@ -402,13 +402,9 @@ This file previously described a five-package Electron + Node.js system —
 as the Electron app, and `better-sqlite3` for storage. That system was fully
 replaced by the Rust daemon (`packages/core-rs`) and the Tauri 2 shell
 (`packages/app-tauri`) described above. `packages/app-electron` and
-`packages/desktop` are gone from the workspace entirely (no directory on
-disk); a `packages/core/` directory still exists on disk, but it carries no
-`package.json`, is not a pnpm workspace member, and its only tracked-adjacent
-contents are stale build artifacts (`dist/`, `coverage/`, a leftover
-`mainframe.db`) — it is not a live package. Nothing in this document reflects
-that earlier design — if you find a stale cross-reference to it elsewhere in
-the docs tree, it needs the same treatment this file just got.
+`packages/desktop` are gone from the workspace, as is the tracked
+`packages/core` package. The live daemon source is `packages/core-rs`; stale
+local build artifacts under retired paths are not part of the architecture.
 
 ## Open questions / not independently verified
 
