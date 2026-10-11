@@ -96,9 +96,17 @@ jobs:
           node-version: 22
           cache: 'pnpm'
 
+      - name: Read pinned Rust toolchain
+        id: rust-toolchain
+        working-directory: ${{ github.workspace }}
+        shell: bash
+        run: |
+          channel=$(sed -n 's/^channel = "\(.*\)"/\1/p' packages/core-rs/rust-toolchain.toml)
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
       - if: ${{ steps.manual.outputs.satisfied != 'true' }}
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: ${{ steps.rust-toolchain.outputs.channel }}
           components: rustfmt, clippy
 
       - if: ${{ steps.manual.outputs.satisfied != 'true' }}
