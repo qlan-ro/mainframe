@@ -16,6 +16,7 @@ pub mod process;
 pub mod resolve_cloudflared;
 #[cfg(test)]
 pub(crate) mod test_support;
+pub mod tunnel_error;
 pub mod tunnel_manager;
 
 pub use expand_variables::expand_variables;
@@ -32,6 +33,7 @@ pub use process::{
     SweepDeps, SweepResult, default_sweep_deps, sweep_stray_children,
 };
 pub use resolve_cloudflared::{ResolveCloudflaredDeps, resolve_cloudflared_path};
+pub use tunnel_error::TunnelStartError;
 pub use tunnel_manager::{
     BroadcastFn, TunnelConfig, TunnelManager, TunnelManagerOptions, TunnelStartOptions,
 };

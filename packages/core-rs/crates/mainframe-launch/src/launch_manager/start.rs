@@ -224,7 +224,7 @@ impl LaunchManager {
                         project_id: inner.project_id.clone(),
                         effective_path: inner.project_path.clone(),
                         name,
-                        error,
+                        error: error.to_string(),
                     }
                 }
             };

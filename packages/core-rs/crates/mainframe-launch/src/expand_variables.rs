@@ -10,9 +10,19 @@ use std::collections::HashMap;
 
 use serde_json::{Map, Value};
 
-/// Expand every string in `raw`, recursing into arrays and objects. Errors with
-/// a fixed message when a referenced variable is unset and carries no default.
-pub fn expand_variables(raw: &Value, env: &HashMap<String, String>) -> Result<Value, String> {
+/// A `${NAME}` reference with no value in the environment and no default.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error(
+    "Unresolved variable '{0}' in launch.json. Set it in your environment or provide a default: ${{{0}:-<value>}}"
+)]
+pub struct UnresolvedVariable(pub String);
+
+/// Expand every string in `raw`, recursing into arrays and objects. Errors
+/// when a referenced variable is unset and carries no default.
+pub fn expand_variables(
+    raw: &Value,
+    env: &HashMap<String, String>,
+) -> Result<Value, UnresolvedVariable> {
     match raw {
         Value::String(s) => Ok(Value::String(expand_string(s, env)?)),
         Value::Array(items) => {
@@ -33,7 +43,7 @@ pub fn expand_variables(raw: &Value, env: &HashMap<String, String>) -> Result<Va
     }
 }
 
-fn expand_string(value: &str, env: &HashMap<String, String>) -> Result<String, String> {
+fn expand_string(value: &str, env: &HashMap<String, String>) -> Result<String, UnresolvedVariable> {
     let expanded = replace_vars(value, env)?;
 
     // Tilde expansion: `~` alone or a leading `~/` become the home directory.
@@ -49,7 +59,7 @@ fn expand_string(value: &str, env: &HashMap<String, String>) -> Result<String, S
     Ok(expanded)
 }
 
-fn replace_vars(value: &str, env: &HashMap<String, String>) -> Result<String, String> {
+fn replace_vars(value: &str, env: &HashMap<String, String>) -> Result<String, UnresolvedVariable> {
     let mut out = String::with_capacity(value.len());
     let mut rest = value;
     loop {
@@ -65,11 +75,7 @@ fn replace_vars(value: &str, env: &HashMap<String, String>) -> Result<String, St
                     Some(env_value) => env_value.clone(),
                     None => match default {
                         Some(default_value) => default_value,
-                        None => {
-                            return Err(format!(
-                                "Unresolved variable '{name}' in launch.json. Set it in your environment or provide a default: ${{{name}:-<value>}}"
-                            ));
-                        }
+                        None => return Err(UnresolvedVariable(name)),
                     },
                 };
                 out.push_str(&resolved);
@@ -162,7 +168,10 @@ mod tests {
     #[test]
     fn errors_on_unresolved_variable_without_default() {
         let err = expand_variables(&json!({ "port": "${PORT}" }), &env(&[])).unwrap_err();
-        assert!(err.contains("Unresolved variable 'PORT' in launch.json"));
+        assert_eq!(
+            err.to_string(),
+            "Unresolved variable 'PORT' in launch.json. Set it in your environment or provide a default: ${PORT:-<value>}"
+        );
     }
 
     #[test]

@@ -23,7 +23,7 @@ async fn shutdown_rejects_a_replacement_already_waiting_for_the_previous_child()
     manager.close_starts().await;
     manager.stop_all().await;
     assert_eq!(
-        replacement.await.unwrap().unwrap_err(),
+        replacement.await.unwrap().unwrap_err().to_string(),
         "Daemon is shutting down"
     );
     assert_eq!(registry.added().len(), 1);

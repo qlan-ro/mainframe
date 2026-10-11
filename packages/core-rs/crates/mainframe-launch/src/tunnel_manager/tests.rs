@@ -124,7 +124,10 @@ async fn start_until_spawned(
     manager: &Arc<TunnelManager>,
     registry: &RecordingRegistry,
     label: &'static str,
-) -> (tokio::task::JoinHandle<Result<String, String>>, u32) {
+) -> (
+    tokio::task::JoinHandle<Result<String, TunnelStartError>>,
+    u32,
+) {
     let start_manager = manager.clone();
     let task = tokio::spawn(async move { start_manager.start(4173, label, None).await });
     let pid = tokio::time::timeout(Duration::from_secs(2), async {

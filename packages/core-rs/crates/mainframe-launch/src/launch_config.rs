@@ -9,27 +9,37 @@ use std::collections::HashMap;
 use mainframe_types::launch::{LaunchConfig, LaunchConfiguration};
 use serde_json::Value;
 
-use crate::expand_variables::expand_variables;
+use crate::expand_variables::{UnresolvedVariable, expand_variables};
 
-/// Parse and validate a raw launch config. Returns the typed config or a
-/// human-readable error (either the unresolved-variable message from expansion
-/// or the joined validation issues).
+/// Why a `launch.json` is unusable. The launch routes answer with the text
+/// verbatim, so it is wire contract.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum LaunchConfigError {
+    #[error(transparent)]
+    Unresolved(#[from] UnresolvedVariable),
+    #[error("Expected object")]
+    NotAnObject,
+    /// Every schema rule the config breaks, in check order, joined with `, `.
+    #[error("{}", .0.join(", "))]
+    Invalid(Vec<&'static str>),
+}
+
+/// Parse and validate a raw launch config. Returns the typed config, or the
+/// unresolved-variable error from expansion, or the joined validation issues.
 pub fn parse_launch_config(
     data: &Value,
     env: &HashMap<String, String>,
-) -> Result<LaunchConfig, String> {
+) -> Result<LaunchConfig, LaunchConfigError> {
     let expanded = expand_variables(data, env)?;
 
-    let obj = expanded
-        .as_object()
-        .ok_or_else(|| "Expected object".to_string())?;
+    let obj = expanded.as_object().ok_or(LaunchConfigError::NotAnObject)?;
 
-    let mut issues: Vec<String> = Vec::new();
+    let mut issues: Vec<&'static str> = Vec::new();
 
     let version = match obj.get("version").and_then(Value::as_str) {
         Some(v) => v.to_string(),
         None => {
-            issues.push("version must be a string".to_string());
+            issues.push("version must be a string");
             String::new()
         }
     };
@@ -38,7 +48,7 @@ pub fn parse_launch_config(
     match obj.get("configurations") {
         Some(Value::Array(items)) => {
             if items.is_empty() {
-                issues.push("At least one configuration is required".to_string());
+                issues.push("At least one configuration is required");
             }
             for item in items {
                 match parse_configuration(item) {
@@ -47,7 +57,7 @@ pub fn parse_launch_config(
                 }
             }
         }
-        _ => issues.push("At least one configuration is required".to_string()),
+        _ => issues.push("At least one configuration is required"),
     }
 
     if configurations
@@ -56,7 +66,7 @@ pub fn parse_launch_config(
         .count()
         > 1
     {
-        issues.push("At most one configuration may have preview: true".to_string());
+        issues.push("At most one configuration may have preview: true");
     }
 
     if issues.is_empty() {
@@ -65,7 +75,7 @@ pub fn parse_launch_config(
             configurations,
         })
     } else {
-        Err(issues.join(", "))
+        Err(LaunchConfigError::Invalid(issues))
     }
 }
 
@@ -83,18 +93,18 @@ fn is_safe_executable(value: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.' | '/'))
 }
 
-fn parse_configuration(item: &Value) -> Result<LaunchConfiguration, Vec<String>> {
-    let mut issues: Vec<String> = Vec::new();
+fn parse_configuration(item: &Value) -> Result<LaunchConfiguration, Vec<&'static str>> {
+    let mut issues: Vec<&'static str> = Vec::new();
 
     let obj = match item.as_object() {
         Some(obj) => obj,
-        None => return Err(vec!["configuration must be an object".to_string()]),
+        None => return Err(vec!["configuration must be an object"]),
     };
 
     let name = match obj.get("name").and_then(Value::as_str) {
         Some(v) if !v.is_empty() => v.to_string(),
         _ => {
-            issues.push("name must be a non-empty string".to_string());
+            issues.push("name must be a non-empty string");
             String::new()
         }
     };
@@ -104,15 +114,13 @@ fn parse_configuration(item: &Value) -> Result<LaunchConfiguration, Vec<String>>
             if is_safe_executable(v) {
                 v.to_string()
             } else {
-                issues.push(
-                    "runtimeExecutable must be a safe executable name (no shell operators)"
-                        .to_string(),
-                );
+                issues
+                    .push("runtimeExecutable must be a safe executable name (no shell operators)");
                 v.to_string()
             }
         }
         _ => {
-            issues.push("runtimeExecutable must be a non-empty string".to_string());
+            issues.push("runtimeExecutable must be a non-empty string");
             String::new()
         }
     };
@@ -125,13 +133,13 @@ fn parse_configuration(item: &Value) -> Result<LaunchConfiguration, Vec<String>>
             for arg in items {
                 match arg.as_str() {
                     Some(s) => args.push(s.to_string()),
-                    None => issues.push("runtimeArgs must be an array of strings".to_string()),
+                    None => issues.push("runtimeArgs must be an array of strings"),
                 }
             }
             args
         }
         Some(_) => {
-            issues.push("runtimeArgs must be an array of strings".to_string());
+            issues.push("runtimeArgs must be an array of strings");
             Vec::new()
         }
     };
@@ -156,7 +164,7 @@ fn parse_configuration(item: &Value) -> Result<LaunchConfiguration, Vec<String>>
         None | Some(Value::Null) => None,
         Some(Value::Bool(b)) => Some(*b),
         Some(_) => {
-            issues.push("preview must be a boolean".to_string());
+            issues.push("preview must be a boolean");
             None
         }
     };
@@ -187,7 +195,7 @@ fn parse_configuration(item: &Value) -> Result<LaunchConfiguration, Vec<String>>
 /// A number, string, or null (default null). A JSON number passes through
 /// unchecked (its positivity is never validated);
 /// a string is `parseInt`-ed and must be a positive integer; `null`/absent → None.
-fn parse_port(value: Option<&Value>) -> Result<Option<i64>, String> {
+fn parse_port(value: Option<&Value>) -> Result<Option<i64>, &'static str> {
     const MESSAGE: &str = "port must be a positive integer or null";
     match value {
         None | Some(Value::Null) => Ok(None),
@@ -197,9 +205,9 @@ fn parse_port(value: Option<&Value>) -> Result<Option<i64>, String> {
             .or(Some(0))),
         Some(Value::String(s)) => match parse_int_prefix(s) {
             Some(parsed) if parsed > 0 => Ok(Some(parsed)),
-            _ => Err(MESSAGE.to_string()),
+            _ => Err(MESSAGE),
         },
-        Some(_) => Err(MESSAGE.to_string()),
+        Some(_) => Err(MESSAGE),
     }
 }
 
@@ -230,17 +238,17 @@ fn parse_int_prefix(value: &str) -> Option<i64> {
 
 /// `z.string().url().nullable().optional().default(null)`. Without a URL crate
 /// the check is a light `scheme://host` shape; `null`/absent → None.
-fn parse_url_field(value: Option<&Value>) -> Result<Option<String>, String> {
+fn parse_url_field(value: Option<&Value>) -> Result<Option<String>, &'static str> {
     match value {
         None | Some(Value::Null) => Ok(None),
         Some(Value::String(s)) => {
             if looks_like_url(s) {
                 Ok(Some(s.to_string()))
             } else {
-                Err("url must be a valid URL".to_string())
+                Err("url must be a valid URL")
             }
         }
-        Some(_) => Err("url must be a valid URL".to_string()),
+        Some(_) => Err("url must be a valid URL"),
     }
 }
 
@@ -257,25 +265,25 @@ fn looks_like_url(value: &str) -> bool {
 
 /// `z.record(keyRegex, z.coerce.string())`. Keys must match
 /// `^[A-Za-z_][A-Za-z0-9_]*$`; values are coerced to strings.
-fn parse_env(value: Option<&Value>) -> Result<Option<HashMap<String, String>>, Vec<String>> {
+fn parse_env(value: Option<&Value>) -> Result<Option<HashMap<String, String>>, Vec<&'static str>> {
     let obj = match value {
         None | Some(Value::Null) => return Ok(None),
         Some(Value::Object(obj)) => obj,
-        Some(_) => return Err(vec!["env must be an object".to_string()]),
+        Some(_) => return Err(vec!["env must be an object"]),
     };
 
-    let mut issues: Vec<String> = Vec::new();
+    let mut issues: Vec<&'static str> = Vec::new();
     let mut out: HashMap<String, String> = HashMap::new();
     for (key, val) in obj {
         if !is_valid_env_key(key) {
-            issues.push("env key must be letters, digits, or underscores".to_string());
+            issues.push("env key must be letters, digits, or underscores");
             continue;
         }
         match coerce_string(val) {
             Some(coerced) => {
                 out.insert(key.clone(), coerced);
             }
-            None => issues.push("env value must be coercible to a string".to_string()),
+            None => issues.push("env value must be coercible to a string"),
         }
     }
 
@@ -315,6 +323,39 @@ mod tests {
             .iter()
             .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
             .collect()
+    }
+
+    #[test]
+    fn invalid_configs_join_every_issue_in_check_order() {
+        let err = parse_launch_config(
+            &json!({
+                "configurations": [{
+                    "name": "",
+                    "runtimeExecutable": "npm; rm",
+                    "runtimeArgs": [],
+                    "port": "abc",
+                    "url": "nope",
+                    "env": { "1BAD": "x" }
+                }]
+            }),
+            &env(&[]),
+        )
+        .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "version must be a string, name must be a non-empty string, \
+             runtimeExecutable must be a safe executable name (no shell operators), \
+             port must be a positive integer or null, url must be a valid URL, \
+             env key must be letters, digits, or underscores"
+        );
+        assert_eq!(
+            parse_launch_config(&json!([]), &env(&[])).unwrap_err(),
+            LaunchConfigError::NotAnObject
+        );
+        assert_eq!(
+            LaunchConfigError::NotAnObject.to_string(),
+            "Expected object"
+        );
     }
 
     #[test]
@@ -405,7 +446,7 @@ mod tests {
             &env(&[]),
         );
         let err = result.unwrap_err();
-        assert!(err.contains("Unresolved variable 'UNSET_VAR'"));
+        assert!(err.to_string().contains("Unresolved variable 'UNSET_VAR'"));
     }
 
     #[test]
@@ -441,7 +482,7 @@ mod tests {
             &env(&[]),
         );
         let err = result.unwrap_err();
-        assert!(err.contains("safe executable name"));
+        assert!(err.to_string().contains("safe executable name"));
     }
 
     #[test]
@@ -457,7 +498,10 @@ mod tests {
             &env(&[]),
         );
         let err = result.unwrap_err();
-        assert!(err.contains("At most one configuration may have preview: true"));
+        assert!(
+            err.to_string()
+                .contains("At most one configuration may have preview: true")
+        );
     }
 
     #[test]
@@ -465,6 +509,9 @@ mod tests {
         let result =
             parse_launch_config(&json!({ "version": "1", "configurations": [] }), &env(&[]));
         let err = result.unwrap_err();
-        assert!(err.contains("At least one configuration is required"));
+        assert!(
+            err.to_string()
+                .contains("At least one configuration is required")
+        );
     }
 }
