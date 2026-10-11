@@ -6,17 +6,6 @@
 //! trait (see `mainframe_chat::chat_manager`); this module is the one production
 //! impl of it.
 //!
-//! Two structural facts shape the code:
-//!   1. `ChatManagerDeps`'s DB accessors are **synchronous** but the daemon owns
-//!      the connection behind the async `Db` actor. They go through the SYNC-DB
-//!      BRIDGE (`Db::call_blocking`) — one WAL connection, no second writer.
-//!   2. A handful of generic helpers (`resolve_tuning_for_chat`,
-//!      `extract_mentions_from_text`) take a trait the raw `!Send`
-//!      `DatabaseManager` cannot satisfy across the actor boundary; small local
-//!      bridge types (`RtDeps`, `CtxDbHandle`) satisfy those bounds by routing
-//!      each call back through the actor. Settings are read asynchronously
-//!      through `Db`'s `SettingsKv` impl, except the synchronous notification
-//!      gates (`notification_config_blocking`).
 use mainframe_chat::chat_manager::{
     AdapterPort, ChatStore, EventEmitter, ProjectPaths, Pusher, WorkspacePort,
 };
@@ -47,7 +36,7 @@ use mainframe_chat::context_tracker::{
 use mainframe_chat::event_handler::PushOut;
 use mainframe_chat::external_session_service::{ExternalSessionDeps, ExternalSessionService};
 use mainframe_chat::fork::PendingForkState;
-use mainframe_chat::resolve_tuning_for_chat::{ResolveTuningDeps, resolve_tuning_for_chat};
+use mainframe_chat::resolve_tuning_for_chat::resolve_tuning_for_chat;
 use mainframe_claude_workflows::store::ClaudeWorkflowStore;
 use mainframe_services::attachment::AttachmentStore;
 use mainframe_services::attachment::attachment_store::AttachmentKind;
@@ -55,9 +44,7 @@ use mainframe_services::notifications::should_notify_permission;
 use mainframe_services::push::PushService;
 use mainframe_services::push::push_service::{PushMessage, PushPriority};
 use mainframe_services::quota::{IngestMode, QuotaManager};
-use mainframe_types::adapter::{
-    AdapterModel, DetectedPr, ExternalSessionPage, ProviderQuota, SessionOptions,
-};
+use mainframe_types::adapter::{DetectedPr, ExternalSessionPage, ProviderQuota, SessionOptions};
 use mainframe_types::background_task::BackgroundTask;
 use mainframe_types::chat::{
     Chat, ChatMessage, ChatMessageType, MessageContent, NewChat, Project, ResolvedTuning, TodoItem,
@@ -645,11 +632,13 @@ impl AdapterPort for DaemonChatDeps {
         })
     }
     fn resolve_tuning<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, Option<ResolvedTuning>> {
-        let db = self.db.clone();
-        let adapters = Arc::clone(&self.adapters);
         Box::pin(async move {
-            let deps = RtDeps { db, adapters };
-            resolve_tuning_for_chat(&deps, chat_id).await
+            let chat = self.chats_get(chat_id)?;
+            let models = match self.adapters.get(&chat.adapter_id) {
+                Some(adapter) => adapter.list_models().await.unwrap_or_default(),
+                None => Vec::new(),
+            };
+            Some(resolve_tuning_for_chat(&chat, &self.db, &models).await)
         })
     }
     fn apply_codex_provider_tuning(&self, _session: &Arc<dyn AdapterSession>) {
@@ -1062,38 +1051,6 @@ impl ExternalSessionDeps for DaemonChatDeps {
 #[path = "chat_deps/build.rs"]
 mod build;
 pub use build::{ChatManagerParams, build_chat_manager};
-
-/// A `Send + Sync` `ResolveTuningDeps` that routes the synchronous `db.chats.get`
-/// read through the actor bridge, settings through `Db`'s `SettingsKv`, and the
-/// async `listModels` through the registry. The raw `!Send` `DatabaseManager`
-/// cannot cross the actor boundary, so this handle-backed bridge stands in for it.
-struct RtDeps {
-    db: Db,
-    adapters: Arc<AdapterRegistry>,
-}
-
-impl ResolveTuningDeps for RtDeps {
-    fn settings(&self) -> &dyn SettingsKv {
-        &self.db
-    }
-
-    fn get_chat(&self, id: &str) -> Option<Chat> {
-        let id = id.to_string();
-        self.db
-            .call_blocking(move |d| d.chats.get(&id))
-            .ok()
-            .flatten()
-    }
-
-    fn list_models<'a>(&'a self, adapter_id: &'a str) -> BoxFuture<'a, Vec<AdapterModel>> {
-        Box::pin(async move {
-            match self.adapters.get(adapter_id) {
-                Some(adapter) => adapter.list_models().await.unwrap_or_default(),
-                None => Vec::new(),
-            }
-        })
-    }
-}
 
 /// A `Send + Sync` `ContextDb` that routes `context-tracker`'s synchronous
 /// `db.chats.*` reads/writes through the actor bridge.

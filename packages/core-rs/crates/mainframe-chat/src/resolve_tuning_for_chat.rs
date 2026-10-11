@@ -1,4 +1,3 @@
-use mainframe_adapter_api::BoxFuture;
 use mainframe_services::settings::get_provider_config;
 use mainframe_types::adapter::AdapterModel;
 use mainframe_types::chat::{Chat, ResolvedTuning, SessionTuning};
@@ -6,22 +5,11 @@ use mainframe_types::settings_kv::SettingsKv;
 
 use crate::resolve_tuning::{ProviderTuningDefaults, resolve_tuning};
 
-/// The injected dependency surface: chat lookup, the settings store the
-/// provider tuning defaults come from, and the adapter's model list.
-/// `list_models` returns `[]` when the adapter is absent.
-pub trait ResolveTuningDeps: Sync {
-    fn get_chat(&self, id: &str) -> Option<Chat>;
-    fn settings(&self) -> &dyn SettingsKv;
-    fn list_models<'a>(&'a self, adapter_id: &'a str) -> BoxFuture<'a, Vec<AdapterModel>>;
-}
-
-/// THE single resolution site. Used by spawn (lifecycle) and live-apply (chat-manager).
-pub async fn resolve_tuning_for_chat<D: ResolveTuningDeps>(
-    deps: &D,
-    chat_id: &str,
-) -> Option<ResolvedTuning> {
-    let chat = deps.get_chat(chat_id)?;
-    let models = deps.list_models(&chat.adapter_id).await;
+pub async fn resolve_tuning_for_chat(
+    chat: &Chat,
+    settings: &dyn SettingsKv,
+    models: &[AdapterModel],
+) -> ResolvedTuning {
     let model_id = chat.model.clone().unwrap_or_default();
     // Exact match → the adapter's default model (covers 'default'/alias/inherited model
     // ids that aren't literal catalog keys) → a capability-less stub as last resort.
@@ -46,14 +34,14 @@ pub async fn resolve_tuning_for_chat<D: ResolveTuningDeps>(
             supports_personality: None,
             resolved_model: None,
         });
-    let cfg = get_provider_config(deps.settings(), &chat.adapter_id).await;
+    let cfg = get_provider_config(settings, &chat.adapter_id).await;
     let provider = ProviderTuningDefaults {
         default_effort: cfg.default_effort,
         default_fast: cfg.default_fast,
         default_ultracode: cfg.default_ultracode,
         default_adaptive_thinking: cfg.default_adaptive_thinking,
     };
-    Some(resolve_tuning(
+    resolve_tuning(
         &SessionTuning {
             effort: chat.tuning.effort,
             fast: chat.tuning.fast,
@@ -62,7 +50,7 @@ pub async fn resolve_tuning_for_chat<D: ResolveTuningDeps>(
         },
         &provider,
         &model,
-    ))
+    )
 }
 
 #[cfg(test)]
@@ -134,19 +122,6 @@ mod tests {
         settings: MemorySettings,
     }
 
-    impl ResolveTuningDeps for TestDeps {
-        fn get_chat(&self, _id: &str) -> Option<Chat> {
-            Some(self.chat.clone())
-        }
-        fn settings(&self) -> &dyn SettingsKv {
-            &self.settings
-        }
-        fn list_models<'a>(&'a self, _adapter_id: &'a str) -> BoxFuture<'a, Vec<AdapterModel>> {
-            let models = self.models.clone();
-            Box::pin(async move { models })
-        }
-    }
-
     fn model(id: &str, is_default: bool, supported: &[EffortLevel]) -> AdapterModel {
         AdapterModel {
             id: id.to_string(),
@@ -184,7 +159,7 @@ mod tests {
             chat: chat_with("opus[1m]", EffortLevel::Xhigh),
             settings: MemorySettings::default(),
         };
-        let t = resolve_tuning_for_chat(&deps, "c1").await;
+        let t = Some(resolve_tuning_for_chat(&deps.chat, &deps.settings, &deps.models).await);
         assert_eq!(t.map(|t| t.effort), Some(Some(EffortLevel::Xhigh)));
     }
 
@@ -200,7 +175,7 @@ mod tests {
             chat: chat_with("default", EffortLevel::High),
             settings: MemorySettings::default(),
         };
-        let t = resolve_tuning_for_chat(&deps, "c2").await;
+        let t = Some(resolve_tuning_for_chat(&deps.chat, &deps.settings, &deps.models).await);
         assert_eq!(t.map(|t| t.effort), Some(Some(EffortLevel::High)));
     }
 
@@ -214,7 +189,7 @@ mod tests {
             chat,
             settings: MemorySettings::default().with("provider", "claude.defaultEffort", "high"),
         };
-        let t = resolve_tuning_for_chat(&deps, "c3").await;
+        let t = Some(resolve_tuning_for_chat(&deps.chat, &deps.settings, &deps.models).await);
         assert_eq!(t.map(|t| t.effort), Some(Some(EffortLevel::High)));
     }
 }
