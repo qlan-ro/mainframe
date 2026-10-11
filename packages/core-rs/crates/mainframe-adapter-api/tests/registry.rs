@@ -137,16 +137,16 @@ impl AdapterSession for StubSession {
 struct FakeAdapter {
     id: String,
     name: String,
-    has_probe: bool,
+    uses_probe_catalog: bool,
     probe_result: Option<Vec<AdapterModel>>,
-    list_models_seq: Mutex<VecDeque<Vec<AdapterModel>>>,
-    list_models_default: Vec<AdapterModel>,
+    refresh_catalog_seq: Mutex<VecDeque<Vec<AdapterModel>>>,
+    refresh_catalog_default: Vec<AdapterModel>,
     fallback_models: Vec<AdapterModel>,
     installed: bool,
     version: String,
     is_installed_calls: AtomicUsize,
     get_version_calls: AtomicUsize,
-    list_models_calls: AtomicUsize,
+    refresh_catalog_calls: AtomicUsize,
     probe_calls: AtomicUsize,
     probe_args: Mutex<Vec<Option<String>>>,
     /// When `true`, `capabilities().fork` and
@@ -162,16 +162,16 @@ impl FakeAdapter {
         Self {
             id: "claude".into(),
             name: "Claude".into(),
-            has_probe: true,
+            uses_probe_catalog: true,
             probe_result: None,
-            list_models_seq: Mutex::new(VecDeque::new()),
-            list_models_default: fb.clone(),
+            refresh_catalog_seq: Mutex::new(VecDeque::new()),
+            refresh_catalog_default: fb.clone(),
             fallback_models: fb,
             installed: true,
             version: "1.0.0".into(),
             is_installed_calls: AtomicUsize::new(0),
             get_version_calls: AtomicUsize::new(0),
-            list_models_calls: AtomicUsize::new(0),
+            refresh_catalog_calls: AtomicUsize::new(0),
             probe_calls: AtomicUsize::new(0),
             probe_args: Mutex::new(Vec::new()),
             fork_version_gated: false,
@@ -184,8 +184,8 @@ impl FakeAdapter {
     fn get_version_count(&self) -> usize {
         self.get_version_calls.load(Ordering::SeqCst)
     }
-    fn list_models_count(&self) -> usize {
-        self.list_models_calls.load(Ordering::SeqCst)
+    fn refresh_catalog_count(&self) -> usize {
+        self.refresh_catalog_calls.load(Ordering::SeqCst)
     }
     fn probe_count(&self) -> usize {
         self.probe_calls.load(Ordering::SeqCst)
@@ -232,31 +232,31 @@ impl Adapter for FakeAdapter {
         let v = self.version.clone();
         Box::pin(async move { Ok(Some(v)) })
     }
-    fn list_models(&self) -> BoxFuture<'_, Result<Vec<AdapterModel>, AdapterError>> {
-        self.list_models_calls.fetch_add(1, Ordering::SeqCst);
-        let models = self
-            .list_models_seq
-            .lock()
-            .unwrap()
-            .pop_front()
-            .unwrap_or_else(|| self.list_models_default.clone());
-        Box::pin(async move { Ok(models) })
+    fn catalog(&self) -> Vec<AdapterModel> {
+        self.fallback_models.clone()
     }
-    fn has_probe_models(&self) -> bool {
-        self.has_probe
-    }
-    fn probe_models(
+
+    fn refresh_catalog(
         &self,
         executable_path: Option<String>,
     ) -> BoxFuture<'_, Result<Option<Vec<AdapterModel>>, AdapterError>> {
-        self.probe_calls.fetch_add(1, Ordering::SeqCst);
-        self.probe_args.lock().unwrap().push(executable_path);
-        let r = self.probe_result.clone();
-        Box::pin(async move { Ok(r) })
+        if self.uses_probe_catalog {
+            self.probe_calls.fetch_add(1, Ordering::SeqCst);
+            self.probe_args.lock().unwrap().push(executable_path);
+            let result = self.probe_result.clone();
+            Box::pin(async move { Ok(result) })
+        } else {
+            self.refresh_catalog_calls.fetch_add(1, Ordering::SeqCst);
+            let models = self
+                .refresh_catalog_seq
+                .lock()
+                .unwrap()
+                .pop_front()
+                .unwrap_or_else(|| self.refresh_catalog_default.clone());
+            Box::pin(async move { Ok(Some(models)) })
+        }
     }
-    fn get_fallback_models(&self) -> Option<Vec<AdapterModel>> {
-        Some(self.fallback_models.clone())
-    }
+
     fn create_session(&self, _options: SessionOptions) -> Arc<dyn AdapterSession> {
         Arc::new(StubSession)
     }
@@ -306,7 +306,7 @@ async fn seeds_statically_without_spawning() {
     assert_eq!(snaps[0].models_revision, Some(1));
     assert_eq!(a.is_installed_count(), 0);
     assert_eq!(a.get_version_count(), 0);
-    assert_eq!(a.list_models_count(), 0);
+    assert_eq!(a.refresh_catalog_count(), 0);
 }
 
 #[tokio::test]
@@ -382,9 +382,9 @@ async fn latches_per_adapter_failed_retries_succeeded_does_not() {
     let mut bad_fa = FakeAdapter::new();
     bad_fa.id = "codex".into();
     bad_fa.name = "Codex".into();
-    bad_fa.has_probe = false;
-    bad_fa.list_models_seq = Mutex::new(VecDeque::from([vec![], vec![model("c", "C")]]));
-    bad_fa.list_models_default = vec![];
+    bad_fa.uses_probe_catalog = false;
+    bad_fa.refresh_catalog_seq = Mutex::new(VecDeque::from([vec![], vec![model("c", "C")]]));
+    bad_fa.refresh_catalog_default = vec![];
     bad_fa.fallback_models = vec![];
     let bad = Arc::new(bad_fa);
 
@@ -402,7 +402,7 @@ async fn latches_per_adapter_failed_retries_succeeded_does_not() {
     reg.refresh_all().await; // ok succeeds+latches; codex returns [] → not latched
     reg.refresh_all().await; // ok skipped (latched); codex retries → succeeds
     assert_eq!(ok.probe_count(), 1);
-    assert_eq!(bad.list_models_count(), 2);
+    assert_eq!(bad.refresh_catalog_count(), 2);
 }
 
 #[tokio::test]
@@ -457,9 +457,9 @@ async fn capability_and_reason_flip_after_observed_version_even_with_no_catalog_
     fa.id = "codex".into();
     fa.name = "Codex".into();
     fa.fork_version_gated = true;
-    fa.has_probe = false;
-    fa.list_models_seq = Mutex::new(VecDeque::from([vec![]]));
-    fa.list_models_default = vec![];
+    fa.uses_probe_catalog = false;
+    fa.refresh_catalog_seq = Mutex::new(VecDeque::from([vec![]]));
+    fa.refresh_catalog_default = vec![];
     fa.fallback_models = vec![];
     let a = Arc::new(fa);
     let events = Arc::new(Mutex::new(Vec::new()));
@@ -513,4 +513,26 @@ async fn capability_and_reason_flip_after_observed_version_even_with_no_catalog_
         }
         other => panic!("unexpected event: {other:?}"),
     }
+}
+
+#[tokio::test]
+async fn refresh_allowlist_keeps_other_adapters_on_static_catalogs() {
+    let reg = AdapterRegistry::new();
+    let real = Arc::new(FakeAdapter::new());
+    let mut replay = FakeAdapter::new();
+    replay.id = "mock-cli".into();
+    let replay = Arc::new(replay);
+    reg.register(real.clone());
+    reg.register(replay.clone());
+    reg.seed_static_snapshots();
+    reg.configure_refresh(Arc::new(FakeDeps {
+        resolve_path: None,
+        run_result: ok_run("cli 2.0.0"),
+        events: Arc::new(Mutex::new(Vec::new())),
+    }));
+    reg.allow_refresh_for(["mock-cli".into()]);
+    reg.refresh_all().await;
+    reg.list().await;
+    assert_eq!(real.probe_count(), 0);
+    assert!(replay.probe_count() > 0);
 }

@@ -13,7 +13,7 @@ use serde_json::{Value, json};
 use crate::item_types::PatchChangeKind;
 
 pub use crate::history_convert::convert_thread_items;
-pub(crate) use crate::unified_diff::parse_unified_diff;
+pub(crate) use mainframe_display::parse_unified_diff::parse_unified_diff;
 
 /// The live-path counterpart to `make_message`'s id: wraps a Codex thread
 /// item's stable id as `on_message`'s vendor id, so the live `ChatMessage`

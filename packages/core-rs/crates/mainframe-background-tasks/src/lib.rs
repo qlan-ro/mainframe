@@ -13,3 +13,5 @@ pub mod spool_root;
 pub mod spool_validator;
 pub mod spool_walker;
 pub mod tracker;
+
+pub mod workflow_sink;

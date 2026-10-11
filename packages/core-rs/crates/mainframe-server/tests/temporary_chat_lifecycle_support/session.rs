@@ -73,8 +73,8 @@ impl Adapter for TestAdapter {
     fn get_version(&self) -> BoxFuture<'_, Result<Option<String>, AdapterError>> {
         Box::pin(async { Ok(None) })
     }
-    fn list_models(&self) -> BoxFuture<'_, Result<Vec<AdapterModel>, AdapterError>> {
-        Box::pin(async { Ok(Vec::new()) })
+    fn catalog(&self) -> Vec<AdapterModel> {
+        Vec::new()
     }
     fn create_session(&self, options: SessionOptions) -> Arc<dyn AdapterSession> {
         let id = options.chat_id.clone().unwrap_or_else(|| {

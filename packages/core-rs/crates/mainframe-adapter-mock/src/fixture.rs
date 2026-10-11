@@ -1,3 +1,4 @@
+use crate::recorded_method::RecordedMethod;
 use mainframe_adapter_api::AdapterError;
 use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent};
 use mainframe_types::content::LeafContent;
@@ -23,7 +24,7 @@ pub struct RecordedFile {
 #[serde(rename_all = "camelCase")]
 pub struct RecordedEvent {
     pub dir: EventDirection,
-    pub method: String,
+    pub method: crate::recorded_method::RecordedMethod,
     pub args: Vec<Value>,
     pub delay_ms: i64,
     #[serde(default)]
@@ -79,17 +80,17 @@ impl ReplayState {
 
     pub(crate) fn drain_optional_interrupts(&mut self) -> Vec<RecordedEvent> {
         let mut drained = Vec::new();
-        while self.peek_input("interrupt") {
+        while self.peek_input(&RecordedMethod::Interrupt) {
             self.cursor += 1;
             drained.extend(self.drain_outputs());
         }
         drained
     }
 
-    pub(crate) fn peek_input(&self, method: &str) -> bool {
+    pub(crate) fn peek_input(&self, method: &RecordedMethod) -> bool {
         self.events
             .get(self.cursor)
-            .map(|event| event.dir == EventDirection::In && event.method == method)
+            .map(|event| event.dir == EventDirection::In && &event.method == method)
             .unwrap_or(false)
     }
 }
@@ -114,14 +115,18 @@ pub(crate) fn messages_from_events(events: &[RecordedEvent], chat_id: &str) -> V
 }
 
 fn event_message(event: &RecordedEvent, index: usize, chat_id: &str) -> Option<ChatMessage> {
-    let (r#type, content) = match (event.dir.clone(), event.method.as_str()) {
-        (EventDirection::Out, "onMessage") => (ChatMessageType::Assistant, event_content(event)?),
-        (EventDirection::Out, "onToolResult") => {
+    let (r#type, content) = match (event.dir.clone(), &event.method) {
+        (EventDirection::Out, crate::recorded_method::RecordedMethod::OnMessage) => {
+            (ChatMessageType::Assistant, event_content(event)?)
+        }
+        (EventDirection::Out, crate::recorded_method::RecordedMethod::OnToolResult) => {
             (ChatMessageType::ToolResult, event_content(event)?)
         }
         // A recorded prompt is a user turn, as in a real CLI's transcript —
         // a from-message fork resolves its cut against these.
-        (EventDirection::In, "sendMessage") => (ChatMessageType::User, prompt_content(event)?),
+        (EventDirection::In, crate::recorded_method::RecordedMethod::SendMessage) => {
+            (ChatMessageType::User, prompt_content(event)?)
+        }
         _ => return None,
     };
     Some(ChatMessage {

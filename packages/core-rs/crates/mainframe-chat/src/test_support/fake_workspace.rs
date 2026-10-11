@@ -59,14 +59,18 @@ pub(crate) struct FakeWorkspacePort {
 }
 
 impl WorkspacePort for FakeDeps {
-    fn move_claude_session_files<'a>(
+    fn relocate_transcript<'a>(
         &'a self,
+        adapter: &'a str,
         session: &'a str,
         _: &'a str,
         destination: &'a str,
-    ) -> BoxFuture<'a, Result<(), mainframe_services::workspace::session_files::SessionFilesError>>
-    {
+    ) -> BoxFuture<'a, Result<Option<String>, mainframe_adapter_api::AdapterError>> {
         Box::pin(async move {
+            if adapter != "claude" {
+                return Ok(None);
+            }
+            let project = mainframe_adapter_claude::layout::get_claude_project_dir(destination);
             if let Some(error) = self.workspace.move_files_error.lock_recover().clone() {
                 return Err(std::io::Error::other(error).into());
             }
@@ -76,12 +80,15 @@ impl WorkspacePort for FakeDeps {
             self.workspace
                 .move_destinations
                 .lock_recover()
-                .push(destination.into());
+                .push(project.to_string_lossy().into_owned());
             self.workspace
                 .moved_sessions
                 .lock_recover()
                 .push(session.into());
-            Ok(())
+            Ok(Some(crate::event_handler::compute_session_file_path(
+                destination,
+                session,
+            )))
         })
     }
 

@@ -1,3 +1,4 @@
+use crate::recorded_method::RecordedMethod;
 use mainframe_types::sync::LockExt as _;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -100,7 +101,7 @@ impl AdapterSession for ReplaySession {
                     sink.on_queued_processed(&uuid);
                 }
             }
-            self.advance("sendMessage").await;
+            self.advance(RecordedMethod::SendMessage).await;
             Ok(())
         })
     }
@@ -110,14 +111,14 @@ impl AdapterSession for ReplaySession {
         _response: ControlResponse,
     ) -> BoxFuture<'_, Result<(), AdapterError>> {
         Box::pin(async move {
-            self.advance("respondToPermission").await;
+            self.advance(RecordedMethod::RespondToPermission).await;
             Ok(())
         })
     }
 
     fn interrupt(&self) -> BoxFuture<'_, Result<(), AdapterError>> {
         Box::pin(async move {
-            self.advance("interrupt").await;
+            self.advance(RecordedMethod::Interrupt).await;
             Ok(())
         })
     }

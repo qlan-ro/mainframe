@@ -2,6 +2,7 @@
 //! the daemon queued behind it. Split out of `session.rs`: the hand-off runs
 //! inside the spawned replay task, so it cannot borrow the session.
 
+use crate::recorded_method::RecordedMethod;
 use mainframe_types::sync::LockExt as _;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -13,7 +14,6 @@ use mainframe_types::orchestration::OrchestrationMcpLaunch;
 
 use crate::dispatch::emit_event;
 use crate::fixture::{EventDirection, RecordedEvent, ReplayState};
-use crate::mcp_call::MCP_CALL_METHOD;
 use crate::session::SessionState;
 use crate::task_bridge::TaskBridge;
 
@@ -32,7 +32,7 @@ fn max_delay_ms() -> i64 {
 }
 
 pub(crate) fn is_result(event: &RecordedEvent) -> bool {
-    event.dir == EventDirection::Out && event.method == "onResult"
+    event.dir == EventDirection::Out && event.method == RecordedMethod::OnResult
 }
 
 pub(crate) struct Pump {
@@ -85,7 +85,7 @@ impl Pump {
                 tokio::time::sleep(remaining).await;
             }
             // Awaited in line, so the events after it see what the call did.
-            if event.method == MCP_CALL_METHOD {
+            if event.method == RecordedMethod::McpCall {
                 crate::mcp_call::replay(self.sink.as_ref(), self.orchestration.as_ref(), &event)
                     .await;
                 continue;
@@ -115,7 +115,7 @@ impl Pump {
                     return None;
                 }
             };
-            let (batch, base, error) = take_interaction(&mut state, "sendMessage");
+            let (batch, base, error) = take_interaction(&mut state, RecordedMethod::SendMessage);
             state.turn_in_flight = error.is_none() && batch.iter().any(is_result);
             (uuid, batch, base, error)
         };
@@ -130,7 +130,7 @@ impl Pump {
 
 pub(crate) fn take_interaction(
     state: &mut SessionState,
-    expected: &str,
+    expected: RecordedMethod,
 ) -> (Vec<RecordedEvent>, i64, Option<String>) {
     // A permission answer past the end of the recording is a no-op, not a
     // desync: the real CLI drops a `control_response` whose request it has
@@ -141,12 +141,12 @@ pub(crate) fn take_interaction(
     // identical `respondToPermission` markers because the daemon really does
     // forward an ExitPlanMode allow twice (permission_handler forwards, then
     // the plan-mode escalation forwards the same response again).
-    if expected == "respondToPermission" && state.replay.is_exhausted() {
+    if expected == RecordedMethod::RespondToPermission && state.replay.is_exhausted() {
         tracing::debug!("mock-cli: ignoring a respondToPermission past the end of the fixture");
         return (Vec::new(), state.last_delay, None);
     }
-    let mut prefix = if expected == "interrupt" {
-        if !state.replay.peek_input("interrupt") {
+    let mut prefix = if expected == RecordedMethod::Interrupt {
+        if !state.replay.peek_input(&RecordedMethod::Interrupt) {
             return (Vec::new(), state.last_delay, None);
         }
         Vec::new()
@@ -154,15 +154,15 @@ pub(crate) fn take_interaction(
         state.replay.drain_optional_interrupts()
     };
     let marker = state.replay.consume_input();
-    if marker.as_ref().map(|event| event.method.as_str()) != Some(expected) {
-        let message = desync_message(expected, marker, &state.replay);
+    if marker.as_ref().map(|event| &event.method) != Some(&expected) {
+        let message = desync_message(&expected, marker, &state.replay);
         return (Vec::new(), state.last_delay, Some(message));
     }
     let Some(marker) = marker else {
         return (Vec::new(), state.last_delay, None);
     };
     state.last_delay = marker.delay_ms;
-    while state.replay.peek_input(expected) {
+    while state.replay.peek_input(&expected) {
         state.replay.consume_input();
     }
     prefix.extend(state.replay.drain_outputs());
@@ -173,7 +173,11 @@ pub(crate) fn take_interaction(
     (prefix, base, None)
 }
 
-fn desync_message(expected: &str, marker: Option<RecordedEvent>, state: &ReplayState) -> String {
+fn desync_message(
+    expected: &RecordedMethod,
+    marker: Option<RecordedEvent>,
+    state: &ReplayState,
+) -> String {
     let had = if let Some(marker) = marker {
         format!("'{}'", marker.method)
     } else if state.is_exhausted() {
@@ -182,8 +186,8 @@ fn desync_message(expected: &str, marker: Option<RecordedEvent>, state: &ReplayS
         let method = state
             .events
             .get(state.cursor)
-            .map(|event| event.method.as_str())
-            .unwrap_or("unknown");
+            .map(|event| event.method.to_string())
+            .unwrap_or_else(|| "unknown".into());
         format!("an out-event ('{method}') — fixture is mid-turn")
     };
     format!(
@@ -244,7 +248,8 @@ mod tests {
 
     #[test]
     fn a_permission_answer_past_the_end_of_the_fixture_is_ignored() {
-        let (batch, _, error) = take_interaction(&mut exhausted_state(), "respondToPermission");
+        let (batch, _, error) =
+            take_interaction(&mut exhausted_state(), RecordedMethod::RespondToPermission);
 
         assert!(batch.is_empty());
         assert_eq!(error, None);
@@ -252,7 +257,7 @@ mod tests {
 
     #[test]
     fn a_message_past_the_end_of_the_fixture_still_reports_a_desync() {
-        let (_, _, error) = take_interaction(&mut exhausted_state(), "sendMessage");
+        let (_, _, error) = take_interaction(&mut exhausted_state(), RecordedMethod::SendMessage);
 
         let message = error.expect("an exhausted fixture must still fail a sendMessage");
         assert!(message.contains("fixture exhausted"), "{message}");

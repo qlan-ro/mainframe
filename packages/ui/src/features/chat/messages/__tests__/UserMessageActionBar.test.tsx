@@ -18,7 +18,7 @@ interface Meta {
 
 interface Custom {
   adapterId: string;
-  claudeSessionId?: string;
+  vendorSessionId?: string;
   temporary: boolean;
   noProject: boolean;
   transcriptMissing: boolean;
@@ -79,7 +79,7 @@ const adapter = (fork: boolean): AdapterInfo => ({
 
 const READY: Custom = {
   adapterId: 'claude',
-  claudeSessionId: 'sess-1',
+  vendorSessionId: 'sess-1',
   temporary: false,
   noProject: false,
   transcriptMissing: false,
@@ -125,7 +125,7 @@ describe('UserMessageActionBar', () => {
       {},
       "Forking isn't available for Claude chats yet",
     ],
-    ['no provider session', () => {}, { claudeSessionId: undefined }, {}, 'Nothing to fork yet'],
+    ['no provider session', () => {}, { vendorSessionId: undefined }, {}, 'Nothing to fork yet'],
     ['a missing transcript', () => {}, { transcriptMissing: true }, {}, "This chat's transcript is missing"],
     ['a missing folder', () => {}, { directoryMissing: true }, {}, "This chat's folder is missing"],
     ['a message still sending', () => {}, {}, { pending: true }, "This message hasn't been sent yet"],

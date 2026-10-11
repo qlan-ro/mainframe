@@ -7,8 +7,7 @@
 //! `ChatState` holds `Arc<dyn AdapterSession>`, so both are trait objects. Rust
 //! async-fn-in-trait is not `dyn`-compatible and the workspace has no
 //! `async-trait`, so every async method returns `BoxFuture<'_, ..>` by hand (the
-//! same manual pattern already used in
-//! `mainframe-services::workspace::session_files`). `SessionSink`'s methods are
+//! same manual pattern used by the other adapter capabilities). `SessionSink`'s methods are
 //! synchronous fire-and-forget calls: the implementations emit over channels
 //! (`broadcast`/`mpsc` sends, non-blocking), so no method needs to return a future.
 
@@ -120,10 +119,39 @@ pub enum ForkPinError {
 
 /// An adapter (a CLI integration). Trait object stored as `Arc<dyn Adapter>`.
 ///
-/// Optional adapter features are modelled as capability probes + default
-/// methods: `has_probe_models()` tells the registry whether to probe or list,
-/// and `get_fallback_models()` defaults to no fallback catalog.
+/// Optional features have defaults; catalogs can be read without spawning a CLI.
 pub trait Adapter: Send + Sync {
+    fn relocate_transcript(
+        &self,
+        _session: String,
+        _old_dir: String,
+        _new_dir: String,
+    ) -> BoxFuture<'_, Result<Option<String>, AdapterError>> {
+        Box::pin(async { Ok(None) })
+    }
+
+    fn external_sessions(&self) -> Option<Arc<dyn crate::ExternalSessions>> {
+        None
+    }
+    fn read_tool_result(&self, _path: String, _tool_id: String) -> BoxFuture<'_, Option<String>> {
+        Box::pin(async { None })
+    }
+    fn config_conflicts(&self) -> BoxFuture<'_, Vec<String>> {
+        Box::pin(async { Vec::new() })
+    }
+
+    fn quota_source(&self) -> Option<Arc<dyn crate::QuotaSource>> {
+        None
+    }
+
+    fn skills(&self) -> Option<Arc<dyn crate::SkillsProvider>> {
+        None
+    }
+
+    fn display_decoders(&self) -> Arc<dyn mainframe_display::ToolResultDecoders> {
+        Arc::new(mainframe_display::decoders::NoopDecoders)
+    }
+
     fn id(&self) -> &str;
     fn name(&self) -> &str;
     fn capabilities(&self) -> AdapterCapabilities;
@@ -136,25 +164,14 @@ pub trait Adapter: Send + Sync {
 
     fn is_installed(&self) -> BoxFuture<'_, Result<bool, AdapterError>>;
     fn get_version(&self) -> BoxFuture<'_, Result<Option<String>, AdapterError>>;
-    fn list_models(&self) -> BoxFuture<'_, Result<Vec<AdapterModel>, AdapterError>>;
-
-    /// `true` when this adapter implements `probe_models`. Default `false`.
-    fn has_probe_models(&self) -> bool {
-        false
+    fn catalog(&self) -> Vec<AdapterModel> {
+        Vec::new()
     }
-    /// Live-catalog probe (`probeModels?`). `Ok(None)` means "probed, no catalog";
-    /// only invoked by the registry when `has_probe_models()` is `true`.
-    fn probe_models(
+    fn refresh_catalog(
         &self,
-        executable_path: Option<String>,
+        _executable_path: Option<String>,
     ) -> BoxFuture<'_, Result<Option<Vec<AdapterModel>>, AdapterError>> {
-        let _ = executable_path;
-        Box::pin(async { Ok(None) })
-    }
-    /// Synchronous static fallback catalog for spawn-free startup seeding
-    /// (`getFallbackModels?`). Default `None`.
-    fn get_fallback_models(&self) -> Option<Vec<AdapterModel>> {
-        None
+        Box::pin(async { Ok(Some(self.catalog())) })
     }
 
     fn configured_model(
@@ -260,8 +277,4 @@ pub trait Adapter: Send + Sync {
     fn fork_unavailable_reason(&self) -> Option<String> {
         None
     }
-
-    // Skill/agent/command CRUD and external-session listing are not trait
-    // methods: the server calls the concrete adapter crates directly, keyed on
-    // the adapter id. The registry + chat-session consumers do not need them.
 }

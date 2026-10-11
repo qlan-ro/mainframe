@@ -12,7 +12,7 @@ use mainframe_types::adapter::{
 use mainframe_types::display::ToolCategories;
 
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
-use mainframe_claude_workflows::store::ClaudeWorkflowStore;
+use mainframe_background_tasks::workflow_sink::WorkflowSink;
 
 use crate::plan_mode_handler::MockPlanModeHandler;
 use crate::session::{ReplayCache, ReplaySession};
@@ -25,7 +25,7 @@ pub struct MockCliAdapter {
     /// Present only when the daemon wired its tracker in. Without it the replay
     /// behaves exactly as before: transcripts, but no background-task events.
     tracker: Option<Arc<BackgroundTaskTracker>>,
-    workflows: Option<Arc<ClaudeWorkflowStore>>,
+    workflows: Option<Arc<dyn WorkflowSink>>,
     /// Reported by `capabilities().no_persistence`. Defaults to false; tests that
     /// need the no-persistence chat behavior opt in via `with_no_persistence`
     /// (the mock adapter must be able to report either value).
@@ -51,7 +51,7 @@ impl MockCliAdapter {
     /// the CLI's own task notifications.
     pub fn with_tracker(
         tracker: Arc<BackgroundTaskTracker>,
-        workflows: Arc<ClaudeWorkflowStore>,
+        workflows: Arc<dyn WorkflowSink>,
     ) -> Self {
         Self {
             tracker: Some(tracker),
@@ -184,6 +184,14 @@ fn model(
 }
 
 impl Adapter for MockCliAdapter {
+    fn skills(&self) -> Option<Arc<dyn mainframe_adapter_api::SkillsProvider>> {
+        Some(Arc::new(crate::skills_provider::Provider))
+    }
+
+    fn display_decoders(&self) -> Arc<dyn mainframe_display::ToolResultDecoders> {
+        Arc::new(mainframe_display::decoders::MainframeDecoders)
+    }
+
     fn id(&self) -> &str {
         self.identity.as_ref().map_or(DEFAULT_ID, |(id, _)| id)
     }
@@ -206,11 +214,8 @@ impl Adapter for MockCliAdapter {
     fn get_version(&self) -> BoxFuture<'_, Result<Option<String>, AdapterError>> {
         Box::pin(async { Ok(Some("0.1.0".to_string())) })
     }
-    fn list_models(&self) -> BoxFuture<'_, Result<Vec<AdapterModel>, AdapterError>> {
-        Box::pin(async { Ok(models()) })
-    }
-    fn get_fallback_models(&self) -> Option<Vec<AdapterModel>> {
-        Some(models())
+    fn catalog(&self) -> Vec<AdapterModel> {
+        models()
     }
 
     fn create_session(&self, options: SessionOptions) -> Arc<dyn AdapterSession> {

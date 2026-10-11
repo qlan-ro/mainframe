@@ -19,7 +19,7 @@ use tempfile::TempDir;
 use tokio::sync::broadcast;
 
 /// A minimal `Adapter` double whose only purpose is to advertise a fixed model
-/// catalog via `get_fallback_models()` so `AdapterRegistry::seed_static_snapshots`
+/// catalog via `catalog()` so `AdapterRegistry::seed_static_snapshots`
 /// can populate a snapshot without spawning a CLI. The test never starts a
 /// session, so `create_session` is unreachable.
 struct CatalogAdapter {
@@ -48,13 +48,10 @@ impl Adapter for CatalogAdapter {
     fn get_version(&self) -> BoxFuture<'_, Result<Option<String>, AdapterError>> {
         Box::pin(async { Ok(None) })
     }
-    fn list_models(&self) -> BoxFuture<'_, Result<Vec<AdapterModel>, AdapterError>> {
-        let models = self.models.clone();
-        Box::pin(async move { Ok(models) })
+    fn catalog(&self) -> Vec<AdapterModel> {
+        self.models.clone()
     }
-    fn get_fallback_models(&self) -> Option<Vec<AdapterModel>> {
-        Some(self.models.clone())
-    }
+
     fn create_session(
         &self,
         _options: mainframe_types::adapter::SessionOptions,

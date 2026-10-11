@@ -5,14 +5,14 @@ use super::*;
 use mainframe_types::http_status::StatusKind;
 use mainframe_types::seam_error::SeamError;
 
-fn chat_with(id: &str, adapter_id: &str, claude_session_id: Option<&str>) -> Chat {
+fn chat_with(id: &str, adapter_id: &str, vendor_session_id: Option<&str>) -> Chat {
     // `enrich_chat`'s directory-missing check stats the real filesystem against
     // FakeDeps's fixed "/tmp/test" project path — make sure it exists so every
     // test below is about fork_chat's OWN gating, not directory presence.
     std::fs::create_dir_all("/tmp/test").expect("create the fake project dir");
     let mut c = test_chat(id);
     c.adapter_id = adapter_id.to_string();
-    c.claude_session_id = claude_session_id.map(str::to_string);
+    c.vendor_session_id = vendor_session_id.map(str::to_string);
     c.status = ChatStatus::Active;
     c
 }

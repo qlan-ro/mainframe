@@ -97,7 +97,7 @@ fn deltas_stream_then_converge_under_the_same_item_id_with_no_overlay_left_behin
     let cache = Arc::new(Mutex::new(MessageCache::new()));
     let handler = mainframe_chat::test_support::presentation_handler(
         cache,
-        || Box::new(mainframe_adapter_claude::messages::incremental::IncrementalProjector::new()),
+        || Box::new(mainframe_display::incremental::IncrementalProjector::new()),
         None,
     );
     let surface = Arc::new(RevisionSurface::default());

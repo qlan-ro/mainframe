@@ -22,7 +22,7 @@ function session(overrides: { remoteId: string; title?: string; custom?: Partial
     custom: {
       projectId: PROJECT,
       adapterId: 'claude',
-      claudeSessionId: 'sess',
+      vendorSessionId: 'sess',
       tags: [],
       pinned: false,
       status: 'active',

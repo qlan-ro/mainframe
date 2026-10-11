@@ -1,3 +1,4 @@
+use crate::recorded_method::RecordedMethod;
 use std::sync::Arc;
 
 use mainframe_adapter_api::{AdapterError, LoadedSkill, SessionSink};
@@ -27,58 +28,62 @@ pub(crate) fn emit_event(sink: Arc<dyn SessionSink>, event: RecordedEvent) {
 }
 
 fn dispatch(sink: &Arc<dyn SessionSink>, event: &RecordedEvent) -> Result<(), RecordedEventError> {
-    match event.method.as_str() {
-        "onInit" => sink.on_init(&arg::<String>(event, 0)?),
-        "onMessage" => sink.on_message(
+    match &event.method {
+        RecordedMethod::OnInit => sink.on_init(&arg::<String>(event, 0)?),
+        RecordedMethod::OnMessage => sink.on_message(
             arg::<Vec<MessageContent>>(event, 0)?,
             arg::<Option<MessageMetadata>>(event, 1)?,
         ),
         // `args[1]` (the vendor id) is optional so pre-existing recorded
         // fixtures that predate it keep replaying unchanged.
-        "onToolResult" => sink.on_tool_result(
+        RecordedMethod::OnToolResult => sink.on_tool_result(
             arg(event, 0)?,
             match event.args.get(1) {
                 Some(_) => arg::<Option<String>>(event, 1)?,
                 None => None,
             },
         ),
-        "onPermission" => sink.on_permission(arg::<ControlRequest>(event, 0)?),
-        "onPermissionCancelled" => sink.on_permission_cancelled(&arg::<String>(event, 0)?),
-        "onResult" => sink.on_result(arg::<SessionResult>(event, 0)?),
-        "onExit" => sink.on_exit(arg::<Option<i32>>(event, 0)?),
-        "onError" => sink.on_error(AdapterError::Message(recorded_error(event)?)),
+        RecordedMethod::OnPermission => sink.on_permission(arg::<ControlRequest>(event, 0)?),
+        RecordedMethod::OnPermissionCancelled => {
+            sink.on_permission_cancelled(&arg::<String>(event, 0)?)
+        }
+        RecordedMethod::OnResult => sink.on_result(arg::<SessionResult>(event, 0)?),
+        RecordedMethod::OnExit => sink.on_exit(arg::<Option<i32>>(event, 0)?),
+        RecordedMethod::OnError => sink.on_error(AdapterError::Message(recorded_error(event)?)),
         // `args[0]` (the vendor id) is optional so pre-existing recorded
         // fixtures that predate it keep replaying unchanged.
-        "onCompact" => {
+        RecordedMethod::OnCompact => {
             let vendor_id = match event.args.first() {
                 Some(_) => arg::<Option<String>>(event, 0)?,
                 None => None,
             };
             sink.on_compact(vendor_id.as_deref())
         }
-        "onCompactStart" => sink.on_compact_start(),
-        "onContextUsage" => sink.on_context_usage(arg::<ContextUsage>(event, 0)?),
-        "onPlanFile" => sink.on_plan_file(&arg::<String>(event, 0)?),
-        "onSkillFile" => sink.on_skill_file(arg::<SkillFileEntry>(event, 0)?),
-        "onQueuedProcessed" => sink.on_queued_processed(&arg::<String>(event, 0)?),
-        "onTodoUpdate" => sink.on_todo_update(arg::<Vec<TodoItem>>(event, 0)?),
-        "onPrDetected" => sink.on_pr_detected(arg::<DetectedPr>(event, 0)?),
-        "onCliMessage" => sink.on_cli_message(&arg::<String>(event, 0)?),
-        "onSkillLoaded" => sink.on_skill_loaded(arg::<LoadedSkill>(event, 0)?),
-        "onSubagentChild" => sink.on_subagent_child(
+        RecordedMethod::OnCompactStart => sink.on_compact_start(),
+        RecordedMethod::OnContextUsage => sink.on_context_usage(arg::<ContextUsage>(event, 0)?),
+        RecordedMethod::OnPlanFile => sink.on_plan_file(&arg::<String>(event, 0)?),
+        RecordedMethod::OnSkillFile => sink.on_skill_file(arg::<SkillFileEntry>(event, 0)?),
+        RecordedMethod::OnQueuedProcessed => sink.on_queued_processed(&arg::<String>(event, 0)?),
+        RecordedMethod::OnTodoUpdate => sink.on_todo_update(arg::<Vec<TodoItem>>(event, 0)?),
+        RecordedMethod::OnPrDetected => sink.on_pr_detected(arg::<DetectedPr>(event, 0)?),
+        RecordedMethod::OnCliMessage => sink.on_cli_message(&arg::<String>(event, 0)?),
+        RecordedMethod::OnSkillLoaded => sink.on_skill_loaded(arg::<LoadedSkill>(event, 0)?),
+        RecordedMethod::OnSubagentChild => sink.on_subagent_child(
             &arg::<String>(event, 0)?,
             arg::<Vec<MessageContent>>(event, 1)?,
         ),
-        "onTrustRequired" => sink.on_trust_required(&arg::<String>(event, 0)?),
-        "onProviderQuota" => {
+        RecordedMethod::OnTrustRequired => sink.on_trust_required(&arg::<String>(event, 0)?),
+        RecordedMethod::OnProviderQuota => {
             sink.on_provider_quota(&arg::<String>(event, 0)?, arg::<ProviderQuota>(event, 1)?)
         }
         // Lets a captured `api_error` retry be replayed through the sink.
-        "onApiRetry" => sink.on_api_retry(arg::<i64>(event, 0)?, arg::<Option<String>>(event, 1)?),
+        RecordedMethod::OnApiRetry => {
+            sink.on_api_retry(arg::<i64>(event, 0)?, arg::<Option<String>>(event, 1)?)
+        }
         // A recording can emit a partial for message A, then
         // `onApiRetry`, then the completed message B — the sequence the
         // no-ghost-bubble e2e scenario asserts against.
-        "onMessagePartial" => sink.on_message_partial(
+        RecordedMethod::OnMessagePartial => sink.on_message_partial(
             arg::<String>(event, 0)?.as_str(),
             arg::<Vec<MessageContent>>(event, 1)?,
         ),
@@ -157,7 +162,7 @@ mod tests {
     fn recorded(method: &str, args: Vec<Value>) -> RecordedEvent {
         RecordedEvent {
             dir: EventDirection::Out,
-            method: method.to_string(),
+            method: method.into(),
             args,
             delay_ms: 0,
             files: Vec::new(),

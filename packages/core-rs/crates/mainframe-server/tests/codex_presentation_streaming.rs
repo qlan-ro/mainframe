@@ -199,9 +199,7 @@ fn assert_legacy_parity(h: &Harness) {
             meta.remove("transcriptPresentation");
         }
     }
-    let display = mainframe_adapter_claude::messages::display_pipeline::prepare_messages_for_client(
-        &raw, None,
-    );
+    let display = mainframe_display::display_pipeline::prepare_messages_for_client(&raw, None);
     let mut legacy = encode_revision(&display, None);
     let mut actual = h.encoded();
     for item in actual.iter_mut().chain(legacy.iter_mut()) {

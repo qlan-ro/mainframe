@@ -59,7 +59,6 @@ pub mod turn_config;
 pub(crate) mod turn_lifecycle;
 pub(crate) mod turn_model;
 pub mod types;
-pub(crate) mod unified_diff;
 pub(crate) mod user_input;
 pub(crate) mod web_search_action;
 pub(crate) mod web_search_history;
@@ -81,3 +80,9 @@ mod presentation_sink;
 mod rollout_profile_test;
 mod thread_read_types;
 mod transcript_presentation;
+
+mod skills_provider;
+
+mod quota_source;
+
+mod external_sessions_provider;

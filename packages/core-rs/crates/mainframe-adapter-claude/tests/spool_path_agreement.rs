@@ -68,7 +68,7 @@ async fn recorded_task_output_path_is_accepted_by_the_default_validator() {
             workflow_name: None,
         },
         TaskStartedCtx {
-            claude_session_id: "sess-agree".to_string(),
+            vendor_session_id: "sess-agree".to_string(),
             real_cwd,
         },
     );

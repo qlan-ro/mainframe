@@ -38,7 +38,7 @@ pub(crate) async fn reconcile_transcript_presence(shared: &ChatShared, chat: &mu
     }
 
     // A chat that never spawned a CLI session is new, not degraded — clear any stale flag.
-    if chat.claude_session_id.is_none() {
+    if chat.vendor_session_id.is_none() {
         if current {
             apply_flag(shared, chat, false);
         }
@@ -67,7 +67,7 @@ pub(crate) async fn reconcile_transcript_presence(shared: &ChatShared, chat: &mu
 /// found — re-pointing the path and clearing a stale missing flag — and never
 /// flags one missing while the CLI may still be writing it.
 pub(crate) async fn refresh_transcript_location(shared: &ChatShared, chat: &mut Chat) {
-    if chat.vendor_session_ephemeral || chat.claude_session_id.is_none() {
+    if chat.vendor_session_ephemeral || chat.vendor_session_id.is_none() {
         return;
     }
     let Some(TranscriptLocation::Present(path)) = locate(shared, chat).await else {
@@ -82,7 +82,7 @@ pub(crate) async fn refresh_transcript_location(shared: &ChatShared, chat: &mut 
 /// The adapter's view of where `chat`'s transcript is. `None` when the chat has
 /// no session or no resolvable working directory, or the adapter cannot tell.
 async fn locate(shared: &ChatShared, chat: &Chat) -> Option<TranscriptLocation> {
-    let session_id = chat.claude_session_id.as_deref()?;
+    let session_id = chat.vendor_session_id.as_deref()?;
     let project_path = shared.deps.projects_get_path(&chat.project_id);
     let cwd = chat_cwd(
         chat.worktree_path.as_deref(),

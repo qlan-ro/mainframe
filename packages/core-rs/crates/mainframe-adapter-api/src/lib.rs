@@ -139,6 +139,7 @@ pub struct AdapterRegistry {
     snapshots: Arc<DashMap<String, AdapterInfo>>,
     deps: OnceLock<Arc<dyn RefreshDeps>>,
     refresh_allowed: AtomicBool,
+    refresh_ids: OnceLock<std::collections::HashSet<String>>,
     /// Concurrent refreshes share a cancellation-safe completion claim.
     in_flight: SingleFlight,
     succeeded: Arc<DashSet<String>>,
@@ -177,6 +178,11 @@ impl AdapterRegistry {
         self.refresh_allowed.store(true, Ordering::SeqCst);
     }
 
+    pub fn allow_refresh_for(&self, ids: impl IntoIterator<Item = String>) {
+        let _ = self.refresh_ids.set(ids.into_iter().collect()); // expected: boot configures this once
+        self.allow_refresh();
+    }
+
     /// STATIC-ONLY seed: no CLI spawn. Safe to call before server start.
     pub fn seed_static_snapshots(&self) {
         for entry in self.adapters.iter() {
@@ -189,7 +195,7 @@ impl AdapterRegistry {
                     description: format!("{} adapter", adapter.name()),
                     installed: false,
                     version: None,
-                    models: adapter.get_fallback_models().unwrap_or_default(),
+                    models: adapter.catalog(),
                     models_revision: Some(1),
                     catalog_source: Some(CatalogSource::Fallback),
                     capabilities: adapter.capabilities(),
@@ -252,26 +258,19 @@ impl AdapterRegistry {
     }
 
     async fn run_refresh(&self, adapter_id: &str) -> Result<(), AdapterError> {
-        // In E2E the only adapters whose live state matters are the mock replay
-        // CLIs: the default `mock-cli` and, when the provider-switch harness
-        // registers a second identity for switching between two mocks
-        // (`mainframe-daemon/src/e2e_mock.rs::SECOND_MOCK_ID`), `mock-cli-b`.
-        // This crate sits below `mainframe-daemon` and cannot import that
-        // constant, so the match is by prefix; probing claude/codex here costs
-        // a `--version` spawn plus a model-catalog spawn each (~1s a piece when
-        // those CLIs are actually installed on the dev machine), and
-        // `/api/adapters` blocks on this refresh — a cost the harness pays on
-        // every describe's daemon boot (100+ a run). Skip the real adapters and
-        // leave them on their seeded fallback snapshot.
-        if !adapter_id.starts_with("mock-cli") && std::env::var_os("E2E_MODE").is_some() {
-            return Ok(());
-        }
         let Some(adapter) = self.adapters.get(adapter_id).map(|e| e.value().clone()) else {
             return Ok(());
         };
         let Some(deps) = self.deps.get().cloned() else {
             return Ok(());
         };
+        if self
+            .refresh_ids
+            .get()
+            .is_some_and(|ids| !ids.contains(adapter_id))
+        {
+            return Ok(());
+        }
         let exe_path = deps.resolve_executable_path(adapter_id.to_string()).await;
         // One `--version` spawn covers installed AND version (use the resolved path).
         let ver = deps
@@ -321,13 +320,9 @@ impl AdapterRegistry {
             );
             return Ok(());
         }
-        // Live catalog: Claude probes; Codex (no probeModels) lists.
+        // A failed refresh leaves the previous catalog intact.
         let models: Option<Vec<AdapterModel>> = {
-            let res = if adapter.has_probe_models() {
-                adapter.probe_models(exe_path.clone()).await
-            } else {
-                adapter.list_models().await.map(Some)
-            };
+            let res = adapter.refresh_catalog(exe_path.clone()).await;
             match res {
                 Ok(m) => m,
                 Err(err) => {
@@ -431,3 +426,12 @@ impl AdapterRegistry {
         }
     }
 }
+
+pub mod skills;
+pub use skills::SkillsProvider;
+
+pub mod quota;
+pub use quota::QuotaSource;
+
+mod external_sessions;
+pub use external_sessions::ExternalSessions;

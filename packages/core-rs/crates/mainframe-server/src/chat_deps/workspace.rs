@@ -1,6 +1,29 @@
 use super::*;
 
 impl WorkspacePort for DaemonChatDeps {
+    fn relocate_transcript<'a>(
+        &'a self,
+        adapter_id: &'a str,
+        session_id: &'a str,
+        old_dir: &'a str,
+        new_dir: &'a str,
+    ) -> BoxFuture<'a, Result<Option<String>, AdapterError>> {
+        Box::pin(async move {
+            match self.adapters.get(adapter_id) {
+                Some(adapter) => {
+                    adapter
+                        .relocate_transcript(
+                            session_id.to_string(),
+                            old_dir.to_string(),
+                            new_dir.to_string(),
+                        )
+                        .await
+                }
+                None => Ok(None),
+            }
+        })
+    }
+
     fn remove_scratch_dir<'a>(
         &'a self,
         scratch_path: &'a str,

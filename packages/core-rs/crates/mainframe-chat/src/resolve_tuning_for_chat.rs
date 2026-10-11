@@ -66,7 +66,7 @@ mod tests {
             adapter_id: "claude".to_string(),
             project_id: "p".to_string(),
             title: None,
-            claude_session_id: None,
+            vendor_session_id: None,
             session_file_path: None,
             model: Some(model.to_string()),
             permission_mode: None,

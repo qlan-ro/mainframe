@@ -19,8 +19,6 @@ use serde_json::{Value, json};
 
 use crate::fixture::{RecordedEvent, RecordedEventError};
 
-pub const MCP_CALL_METHOD: &str = "mcp_call";
-
 const PROTOCOL_VERSION: &str = "2025-06-18";
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]

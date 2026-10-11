@@ -53,9 +53,13 @@ async fn quota(bound: &BoundBootstrap, resources: &Resources) -> Arc<QuotaManage
             let _ = emit.send(event);
         }),
     }));
-    register_quota_identity_resolvers(&quota);
-    quota.load_from_disk().await;
-    register_quota_pullers(&quota, &bound.db, &bound.input.resolved_path);
+    initialize_quota(
+        &quota,
+        &resources.adapters,
+        &bound.db,
+        &bound.input.resolved_path,
+    )
+    .await;
     quota
 }
 
@@ -160,3 +164,17 @@ fn context_builder(bound: &BoundBootstrap, r: &Resources) -> crate::ctx::AppCtxB
         .port_tunnels(r.port_tunnels.clone())
         .lsp_manager(Arc::new(LspManager::new(Arc::new(lsp))))
 }
+
+async fn initialize_quota(
+    quota: &Arc<QuotaManager>,
+    adapters: &AdapterRegistry,
+    db: &Db,
+    path: &mainframe_runtime::ResolvedPath,
+) {
+    register_quota_sources(quota, adapters, db, path);
+    quota.load_from_disk().await;
+}
+
+#[cfg(test)]
+#[path = "quota_tests.rs"]
+mod quota_tests;

@@ -76,7 +76,7 @@ fn build_recovered_snapshot(
 async fn reconcile_inner(deps: &ReconcileDeps<'_>, spool_root: &str) {
     let mut session_to_chat: HashMap<String, Chat> = HashMap::new();
     for chat in deps.db.chats_list_all() {
-        if let Some(sid) = &chat.claude_session_id
+        if let Some(sid) = &chat.vendor_session_id
             && chat.status != ChatStatus::Archived
         {
             session_to_chat.insert(sid.clone(), chat);

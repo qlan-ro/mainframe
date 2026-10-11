@@ -69,13 +69,13 @@ fn handle_task_started(session: &ClaudeSession, event: &Value, _sink: &dyn Sessi
     );
     if !st.mainframe_chat_id.is_empty() {
         let chat_id = st.mainframe_chat_id.clone();
-        let claude_session_id = st.chat_id.clone();
+        let vendor_session_id = st.chat_id.clone();
         let real_cwd = st.real_project_path.clone();
         st.task_events.handle_task_started(
             &chat_id,
             task_started_payload(event, task_id),
             TaskStartedCtx {
-                claude_session_id,
+                vendor_session_id,
                 real_cwd,
             },
         );

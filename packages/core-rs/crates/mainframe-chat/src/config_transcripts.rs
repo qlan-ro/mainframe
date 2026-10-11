@@ -1,25 +1,19 @@
-//! Worktree moves relocate the chat's Claude transcripts. Claude keys its
-//! transcripts by project directory, so a chat moved into (or between)
-//! worktrees must take every Claude session it owns along, not only the
-//! active one: a provider switch can leave earlier Claude segments behind,
-//! and returning to one resumes it from the new directory. Codex rollouts
-//! are not project-keyed, and borrowed sessions belong to another chat.
-
-use mainframe_services::workspace::get_claude_project_dir;
-use mainframe_services::workspace::session_files::SessionFilesError;
+//! Worktree moves relocate every provider session the chat owns, including
+//! earlier segments that can be resumed after switching back. Claude keys its
+//! files by project directory; Codex rollouts are not project-keyed. Borrowed
+//! sessions belong to another chat and must remain at their original location.
 
 use crate::chat_manager::ChatManagerDeps;
+#[cfg(test)]
 use crate::event_handler::compute_session_file_path;
 
 #[derive(Debug, thiserror::Error)]
 pub enum RelocateError {
     #[error(transparent)]
-    Files(#[from] SessionFilesError),
+    Adapter(#[from] mainframe_adapter_api::AdapterError),
     #[error(transparent)]
     Store(#[from] mainframe_types::seam_error::SeamError),
 }
-
-const CLAUDE: &str = "claude";
 
 /// One provider session a chat owns (never a borrowed one).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -35,59 +29,48 @@ pub struct ActiveSession<'a> {
     pub session_id: Option<&'a str>,
 }
 
-/// Moves every owned Claude transcript from `old_dir`'s project directory to
-/// `new_dir`'s and records each new path. Returns the active session's new
-/// path, for the live cell and the mirror. A deps impl without segments
-/// reports no owned sessions; the active one is then moved as before.
-/// Stops at the first failure: rows already moved keep their new paths.
-pub(crate) async fn relocate_claude_transcripts(
+/// Stops at the first failure; sessions already moved retain their updated paths.
+pub(crate) async fn relocate_transcripts(
     deps: &dyn ChatManagerDeps,
     chat_id: &str,
     active: ActiveSession<'_>,
     old_dir: &str,
     new_dir: &str,
 ) -> Result<Option<String>, RelocateError> {
-    let sessions = claude_sessions(deps, chat_id, &active)?;
-    let old_project = get_claude_project_dir(old_dir);
-    let new_project = get_claude_project_dir(new_dir);
+    let owned = deps.owned_native_sessions(chat_id)?;
+    let mut sessions: Vec<_> = owned
+        .into_iter()
+        .map(|session| {
+            (
+                Some(session.native_ref),
+                session.adapter_id,
+                session.session_id,
+            )
+        })
+        .collect();
+    if !sessions
+        .iter()
+        .any(|(_, adapter, _)| adapter == active.adapter_id)
+        && let Some(id) = active.session_id
+    {
+        sessions.push((None, active.adapter_id.to_string(), id.to_string()));
+    }
     let mut active_path = None;
-    for (native_ref, session_id) in sessions {
-        deps.move_claude_session_files(
-            &session_id,
-            &old_project.to_string_lossy(),
-            &new_project.to_string_lossy(),
-        )
-        .await?;
-        let path = compute_session_file_path(new_dir, &session_id);
-        if let Some(native_ref) = &native_ref {
-            deps.set_native_session_file_path(native_ref, &path)?;
+    for (native_ref, adapter_id, session_id) in sessions {
+        let Some(path) = deps
+            .relocate_transcript(&adapter_id, &session_id, old_dir, new_dir)
+            .await?
+        else {
+            continue;
+        };
+        if let Some(native_ref) = native_ref {
+            deps.set_native_session_file_path(&native_ref, &path)?;
         }
-        if active.session_id == Some(session_id.as_str()) {
+        if active.adapter_id == adapter_id && active.session_id == Some(session_id.as_str()) {
             active_path = Some(path);
         }
     }
     Ok(active_path)
-}
-
-/// (native row, session id) for each Claude session to move.
-fn claude_sessions(
-    deps: &dyn ChatManagerDeps,
-    chat_id: &str,
-    active: &ActiveSession<'_>,
-) -> Result<Vec<(Option<String>, String)>, RelocateError> {
-    let owned: Vec<(Option<String>, String)> = deps
-        .owned_native_sessions(chat_id)?
-        .into_iter()
-        .filter(|s| s.adapter_id == CLAUDE)
-        .map(|s| (Some(s.native_ref), s.session_id))
-        .collect();
-    if !owned.is_empty() {
-        return Ok(owned);
-    }
-    Ok(match active.session_id {
-        Some(id) if active.adapter_id == CLAUDE => vec![(None, id.to_string())],
-        _ => Vec::new(),
-    })
 }
 
 #[cfg(test)]

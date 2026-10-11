@@ -2,10 +2,10 @@ use mainframe_types::sync::LockExt as _;
 use serde_json::Value;
 
 use mainframe_adapter_api::SessionSink;
-use mainframe_services::todos::normalize::{TodoSource, normalize_todos};
 use mainframe_types::adapter::{MessageMetadata, MessageUsage};
 use mainframe_types::chat::{MessageContent, TodoItem};
 use mainframe_types::context::SkillFileEntry;
+use mainframe_types::todo_normalize::{TodoSource, normalize_todos};
 
 use crate::session::{ClaudeSession, ClaudeSessionState};
 use crate::skill_path::resolve_skill_path;

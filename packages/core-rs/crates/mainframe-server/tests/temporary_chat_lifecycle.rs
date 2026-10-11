@@ -23,7 +23,7 @@ async fn restart_survival_marks_context_loss_and_spawns_fresh_when_capable() {
     let after_first_start = support::get_chat(&h, &chat.id);
     assert!(after_first_start.vendor_session_ephemeral);
     let first_id = after_first_start
-        .claude_session_id
+        .vendor_session_id
         .clone()
         .expect("on_init must have stored a provider id");
     assert!(after_first_start.context_lost_at.is_none());
@@ -39,7 +39,7 @@ async fn restart_survival_marks_context_loss_and_spawns_fresh_when_capable() {
         "the dead ephemeral session must be marked lost on the reload"
     );
     let second_id = after_restart
-        .claude_session_id
+        .vendor_session_id
         .expect("the fresh spawn must have stored its own provider id");
     assert_ne!(first_id, second_id, "a fresh spawn must mint a new id");
 }
@@ -56,7 +56,7 @@ async fn restart_survival_resumes_the_same_id_without_the_capability() {
     let after_first_start = support::get_chat(&h, &chat.id);
     assert!(!after_first_start.vendor_session_ephemeral);
     let first_id = after_first_start
-        .claude_session_id
+        .vendor_session_id
         .clone()
         .expect("on_init must have stored a provider id");
 
@@ -70,7 +70,7 @@ async fn restart_survival_resumes_the_same_id_without_the_capability() {
         "a normally-persisted session is never marked lost"
     );
     assert_eq!(
-        after_restart.claude_session_id,
+        after_restart.vendor_session_id,
         Some(first_id),
         "without the capability the chat resumes its stored session id"
     );
@@ -177,7 +177,7 @@ async fn config_respawn_starts_fresh_when_capable_and_resumes_without_the_capabi
         let manager = support::rebuild_manager(&h, adapter);
         manager.start_chat(&chat.id).await;
         let first_id = support::get_chat(&h, &chat.id)
-            .claude_session_id
+            .vendor_session_id
             .expect("on_init must have stored a provider id");
 
         // A model change crossing endpoints needs a respawn (rule: the endpoint
@@ -199,7 +199,7 @@ async fn config_respawn_starts_fresh_when_capable_and_resumes_without_the_capabi
 
         let after = support::get_chat(&h, &chat.id);
         let second_id = after
-            .claude_session_id
+            .vendor_session_id
             .expect("the respawn must store a provider id");
         if capable {
             assert!(
@@ -227,7 +227,7 @@ async fn degraded_recovery_rebind_starts_fresh_when_capable_and_resumes_without_
         let manager = support::rebuild_manager(&h, adapter);
         manager.start_chat(&chat.id).await;
         let first_id = support::get_chat(&h, &chat.id)
-            .claude_session_id
+            .vendor_session_id
             .expect("on_init must have stored a provider id");
 
         // Rebinds the chat off its (here: still-present, but the recovery flow
@@ -237,7 +237,7 @@ async fn degraded_recovery_rebind_starts_fresh_when_capable_and_resumes_without_
 
         let after = support::get_chat(&h, &chat.id);
         let second_id = after
-            .claude_session_id
+            .vendor_session_id
             .expect("the rebind's respawn must store a provider id");
         if capable {
             assert!(
@@ -261,7 +261,7 @@ async fn next_send_after_a_cli_exit_starts_fresh_when_capable_and_resumes_withou
         let manager = support::rebuild_manager(&h, adapter);
         manager.start_chat(&chat.id).await;
         let first_id = support::get_chat(&h, &chat.id)
-            .claude_session_id
+            .vendor_session_id
             .expect("on_init must have stored a provider id");
 
         // Model an unexpected CLI exit: the fake session's `interrupt` marks
@@ -277,7 +277,7 @@ async fn next_send_after_a_cli_exit_starts_fresh_when_capable_and_resumes_withou
 
         let after = support::get_chat(&h, &chat.id);
         let second_id = after
-            .claude_session_id
+            .vendor_session_id
             .expect("the post-exit respawn must store a provider id");
         if capable {
             assert!(

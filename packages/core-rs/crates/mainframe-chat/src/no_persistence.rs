@@ -20,9 +20,9 @@ fn should_start_without_persistence(
 /// time either reaches this check no live process holds the session (both
 /// early-return on an already-spawned session first), so a persisted
 /// `vendor_session_ephemeral` flag here always means the CLI never wrote a
-/// resumable transcript for `claude_session_id`.
-fn context_was_lost(vendor_session_ephemeral: bool, claude_session_id: Option<&str>) -> bool {
-    vendor_session_ephemeral && claude_session_id.is_some()
+/// resumable transcript for `vendor_session_id`.
+fn context_was_lost(vendor_session_ephemeral: bool, vendor_session_id: Option<&str>) -> bool {
+    vendor_session_ephemeral && vendor_session_id.is_some()
 }
 
 /// The per-spawn no-persistence decision, exposed as the single call
@@ -43,12 +43,12 @@ pub fn no_persistence_for_spawn(temporary: bool, adapter_supports_no_persistence
 pub(crate) fn take_context_loss(chat: &mut Chat, now: &str) -> bool {
     if !context_was_lost(
         chat.vendor_session_ephemeral,
-        chat.claude_session_id.as_deref(),
+        chat.vendor_session_id.as_deref(),
     ) {
         return false;
     }
     chat.context_lost_at = Some(now.to_string());
-    chat.claude_session_id = None;
+    chat.vendor_session_id = None;
     chat.session_file_path = None;
     chat.vendor_session_ephemeral = false;
     true
@@ -78,7 +78,7 @@ mod tests {
     fn take_context_loss_clears_the_resume_target_and_stamps_the_loss() {
         let mut chat = crate::test_support::test_chat("c1");
         chat.vendor_session_ephemeral = true;
-        chat.claude_session_id = Some("sess-1".to_string());
+        chat.vendor_session_id = Some("sess-1".to_string());
         chat.session_file_path = Some("/tmp/sess-1.jsonl".to_string());
 
         assert!(take_context_loss(&mut chat, "2026-09-25T00:00:00.000Z"));
@@ -87,7 +87,7 @@ mod tests {
             chat.context_lost_at.as_deref(),
             Some("2026-09-25T00:00:00.000Z")
         );
-        assert!(chat.claude_session_id.is_none());
+        assert!(chat.vendor_session_id.is_none());
         assert!(chat.session_file_path.is_none());
         assert!(!chat.vendor_session_ephemeral);
     }
@@ -96,10 +96,10 @@ mod tests {
     fn take_context_loss_is_a_noop_for_a_persisted_session() {
         let mut chat = crate::test_support::test_chat("c1");
         chat.vendor_session_ephemeral = false;
-        chat.claude_session_id = Some("sess-1".to_string());
+        chat.vendor_session_id = Some("sess-1".to_string());
 
         assert!(!take_context_loss(&mut chat, "2026-09-25T00:00:00.000Z"));
         assert!(chat.context_lost_at.is_none());
-        assert_eq!(chat.claude_session_id.as_deref(), Some("sess-1"));
+        assert_eq!(chat.vendor_session_id.as_deref(), Some("sess-1"));
     }
 }

@@ -5,11 +5,12 @@ pub trait AdapterPort: Send + Sync {
 
     fn prepare_messages_for_client(
         &self,
+        chat_id: &str,
         raw: &[ChatMessage],
         categories: Option<&ToolCategories>,
     ) -> Vec<DisplayMessage>;
 
-    fn display_projector(&self) -> Box<dyn mainframe_display::DisplayProjector>;
+    fn display_projector(&self, chat_id: &str) -> Box<dyn mainframe_display::DisplayProjector>;
 
     fn strip_command_tags(&self, text: &str) -> String;
 
@@ -34,8 +35,6 @@ pub trait AdapterPort: Send + Sync {
         &'a self,
         chat_id: &'a str,
     ) -> BoxFuture<'a, Option<mainframe_types::chat::ResolvedTuning>>;
-
-    fn apply_codex_provider_tuning(&self, session: &Arc<dyn AdapterSession>);
 
     fn generate_title<'a>(
         &'a self,

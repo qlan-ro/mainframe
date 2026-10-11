@@ -14,12 +14,12 @@ impl ChatConfigManager {
         branch_name: &str,
     ) -> Result<(), ConfigError> {
         let cell = self.require_active_chat(chat_id)?;
-        let (has_worktree, project_id, claude_session_id, adapter) = {
+        let (has_worktree, project_id, vendor_session_id, adapter) = {
             let guard = cell.lock_recover();
             (
                 guard.chat.worktree_path.is_some(),
                 guard.chat.project_id.clone(),
-                guard.chat.claude_session_id.clone(),
+                guard.chat.vendor_session_id.clone(),
                 guard.chat.adapter_id.clone(),
             )
         };
@@ -33,7 +33,7 @@ impl ChatConfigManager {
             .projects_get_path(&project_id)
             .ok_or_else(|| NotFound::unnamed("Project"))?;
 
-        if let Some(session_id) = claude_session_id {
+        if let Some(session_id) = vendor_session_id {
             // Mid-session path. The worktree is created while the chat still runs,
             // so a failed `git worktree add` leaves it untouched.
             let info = create_worktree(
@@ -89,7 +89,7 @@ impl ChatConfigManager {
             adapter_id: &adapter,
             session_id: None,
         };
-        relocate_claude_transcripts(
+        relocate_transcripts(
             self.shared.deps.as_ref(),
             chat_id,
             active,

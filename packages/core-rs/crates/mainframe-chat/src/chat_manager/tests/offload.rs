@@ -105,7 +105,7 @@ fn seed_idle_chat(mgr: &ChatManager, activity: Option<i64>) -> Arc<FakeSession> 
     session
 }
 
-/// AC6/AC7 setup: "c1" has a stored `claude_session_id` (the resume anchor)
+/// AC6/AC7 setup: "c1" has a stored `vendor_session_id` (the resume anchor)
 /// and a transcript on disk (`deps.history`) matching what is already cached,
 /// so an idle scan has something real to reload once it clears the cache.
 /// Returns `(deps, mgr)` with the chat already idle past the threshold and
@@ -114,7 +114,7 @@ fn seed_offloadable_chat_with_transcript(
     history: Vec<ChatMessage>,
 ) -> (Arc<FakeDeps>, ChatManager) {
     let mut chat = test_chat("c1");
-    chat.claude_session_id = Some("sess-1".to_string());
+    chat.vendor_session_id = Some("sess-1".to_string());
     let deps = FakeDeps::with_chats(vec![chat.clone()]);
     *deps.adapters.history.lock().unwrap() = Some(history.clone());
     let mgr = ChatManager::new(deps.clone());
@@ -557,7 +557,7 @@ async fn a_working_chat_is_never_offloaded() {
 #[tokio::test]
 async fn a_cold_opened_chat_sends_without_resync() {
     let mut chat = test_chat("c1");
-    chat.claude_session_id = Some("sess-1".to_string());
+    chat.vendor_session_id = Some("sess-1".to_string());
     let deps = FakeDeps::with_chats(vec![chat]);
     *deps.adapters.history.lock().unwrap() =
         Some(vec![history_message("m1"), history_message("m2")]);
@@ -586,7 +586,7 @@ async fn a_cold_opened_chat_sends_without_resync() {
 #[tokio::test]
 async fn worktree_missing_error_keeps_the_loaded_history() {
     let mut chat = test_chat("c1");
-    chat.claude_session_id = Some("sess-1".to_string());
+    chat.vendor_session_id = Some("sess-1".to_string());
     // `get_chat` recomputes `worktree_missing` from disk (`enrich_chat`), so
     // the fixture needs a worktree path that is actually absent rather than
     // the flag set directly.
@@ -704,7 +704,7 @@ async fn unspawned_never_sent_cell_offloads_once_backdated_past_the_threshold() 
 #[tokio::test]
 async fn unspawned_session_handle_offloads_and_a_later_send_resumes_cleanly() {
     let mut chat = test_chat("c1");
-    chat.claude_session_id = Some("sess-1".to_string());
+    chat.vendor_session_id = Some("sess-1".to_string());
     let history = vec![history_message("m1"), history_message("m2")];
     let deps = FakeDeps::with_chats(vec![chat.clone()]);
     *deps.adapters.history.lock().unwrap() = Some(history.clone());

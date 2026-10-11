@@ -30,7 +30,10 @@ done
         mainframe_runtime::ResolvedPath::from_value(temp.path().to_str().unwrap());
     ctx.core
         .adapter_registry
-        .register(Arc::new(mainframe_adapter_codex::CodexAdapter::default()));
+        .register(Arc::new(mainframe_adapter_codex::CodexAdapter::new(
+            ctx.core.background_tasks.clone(),
+            ctx.core.resolved_path.clone(),
+        )));
     let response = list::<true>(
         State(ctx),
         Path("codex".into()),

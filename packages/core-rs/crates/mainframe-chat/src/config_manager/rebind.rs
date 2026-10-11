@@ -84,7 +84,7 @@ impl ChatConfigManager {
         {
             fut.await;
         }
-        relocate_claude_transcripts(
+        relocate_transcripts(
             self.shared.deps.as_ref(),
             chat_id,
             ActiveSession {

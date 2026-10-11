@@ -7,9 +7,9 @@ use std::sync::Mutex as StdMutex;
 #[tokio::test]
 async fn reconciles_every_non_archived_chat_with_a_cli_session_id() {
     let mut active = test_chat("with-session");
-    active.claude_session_id = Some("sess-a".into());
+    active.vendor_session_id = Some("sess-a".into());
     let mut archived = test_chat("archived");
-    archived.claude_session_id = Some("sess-b".into());
+    archived.vendor_session_id = Some("sess-b".into());
     archived.status = ChatStatus::Archived;
     let deps = FakeDeps::with_chats(vec![active, archived, test_chat("draft")]);
     *deps.adapters.transcript_present.lock().unwrap() = Some(false);
@@ -26,7 +26,7 @@ async fn reconciles_every_non_archived_chat_with_a_cli_session_id() {
 #[tokio::test]
 async fn unknown_transcript_location_leaves_the_chat_unchanged() {
     let mut chat = test_chat("with-session");
-    chat.claude_session_id = Some("sess-a".into());
+    chat.vendor_session_id = Some("sess-a".into());
     let deps = FakeDeps::with_chats(vec![chat]);
     let shared = ChatShared::new(deps.clone());
     ExternalSessionService::new(deps.clone(), shared)

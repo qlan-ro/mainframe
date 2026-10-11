@@ -132,7 +132,7 @@ async fn failed_claude_rebind_write_keeps_binding_with_moved_transcript() {
     assert_eq!(
         *manager.deps.workspace.move_destinations.lock().unwrap(),
         vec![
-            mainframe_services::workspace::get_claude_project_dir("/tmp/new-worktree")
+            mainframe_adapter_claude::layout::get_claude_project_dir("/tmp/new-worktree")
                 .to_string_lossy()
                 .into_owned()
         ]

@@ -131,16 +131,16 @@ async fn the_side_chat_starts_with_no_session_even_after_the_parent_has_one() {
 
     manager.start_chat(&parent.id).await;
     let parent_after_start = support::get_chat(&h, &parent.id);
-    assert!(parent_after_start.claude_session_id.is_some());
+    assert!(parent_after_start.vendor_session_id.is_some());
 
     let side = support::create_side_chat(&manager, &parent.id).await;
-    assert_eq!(side.claude_session_id, None);
+    assert_eq!(side.vendor_session_id, None);
     assert_eq!(side.title, None);
 
     manager.start_chat(&side.id).await;
     let side_after_start = support::get_chat(&h, &side.id);
     assert_ne!(
-        side_after_start.claude_session_id, parent_after_start.claude_session_id,
+        side_after_start.vendor_session_id, parent_after_start.vendor_session_id,
         "the side chat's session must never be the parent's"
     );
 }
@@ -160,7 +160,7 @@ async fn restart_with_the_capability_on_stamps_loss_mints_a_fresh_id_never_trans
     let after_first_start = support::get_chat(&h, &side.id);
     assert!(after_first_start.vendor_session_ephemeral);
     let first_id = after_first_start
-        .claude_session_id
+        .vendor_session_id
         .clone()
         .expect("on_init must have stored a provider id");
     assert!(after_first_start.context_lost_at.is_none());
@@ -177,7 +177,7 @@ async fn restart_with_the_capability_on_stamps_loss_mints_a_fresh_id_never_trans
         "the dead ephemeral session must be marked lost on the reload"
     );
     let second_id = after_restart
-        .claude_session_id
+        .vendor_session_id
         .clone()
         .expect("the fresh spawn must have stored its own provider id");
     assert_ne!(first_id, second_id, "a fresh spawn must mint a new id");
@@ -204,7 +204,7 @@ async fn restart_with_the_capability_off_resumes_the_same_provider_id() {
     let after_first_start = support::get_chat(&h, &side.id);
     assert!(!after_first_start.vendor_session_ephemeral);
     let first_id = after_first_start
-        .claude_session_id
+        .vendor_session_id
         .clone()
         .expect("on_init must have stored a provider id");
 
@@ -214,7 +214,7 @@ async fn restart_with_the_capability_off_resumes_the_same_provider_id() {
 
     let after_restart = support::get_chat(&h, &side.id);
     assert!(after_restart.context_lost_at.is_none());
-    assert_eq!(after_restart.claude_session_id, Some(first_id));
+    assert_eq!(after_restart.vendor_session_id, Some(first_id));
 }
 
 #[tokio::test]

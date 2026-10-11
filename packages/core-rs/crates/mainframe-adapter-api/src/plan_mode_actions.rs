@@ -20,7 +20,7 @@ pub struct PlanChatUpdate {
     pub plan_mode: Option<bool>,
     pub permission_mode: Option<ExecutionMode>,
     /// The clear-context path sets `claudeSessionId = undefined`.
-    pub clear_claude_session_id: bool,
+    pub clear_vendor_session_id: bool,
 }
 
 /// The capability bag a plan-mode handler drives (relocated `PlanActionContext`).
@@ -76,7 +76,7 @@ pub async fn clear_context_and_restart(
     ctx.update_chat(PlanChatUpdate {
         plan_mode: Some(false),
         permission_mode: Some(response.execution_mode.unwrap_or(ExecutionMode::Default)),
-        clear_claude_session_id: true,
+        clear_vendor_session_id: true,
     })?;
 
     ctx.clear_messages();

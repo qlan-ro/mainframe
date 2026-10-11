@@ -13,7 +13,7 @@ use mainframe_types::settings::{ExecutionMode, GeneralConfig};
 use tracing::warn;
 
 use crate::config_respawn_guard::{model_changed, respawn_refusal};
-use crate::config_transcripts::{ActiveSession, relocate_claude_transcripts};
+use crate::config_transcripts::{ActiveSession, relocate_transcripts};
 use crate::types::ActiveChat;
 
 /// User-facing message when a chat's transcripts could not be moved into its

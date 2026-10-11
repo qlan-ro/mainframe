@@ -92,12 +92,13 @@ impl AdapterPort for FakeDeps {
     }
     fn prepare_messages_for_client(
         &self,
+        _chat_id: &str,
         raw: &[ChatMessage],
         categories: Option<&ToolCategories>,
     ) -> Vec<DisplayMessage> {
         FakeAdapterPort::convert(raw, categories)
     }
-    fn display_projector(&self) -> Box<dyn mainframe_display::DisplayProjector> {
+    fn display_projector(&self, _chat_id: &str) -> Box<dyn mainframe_display::DisplayProjector> {
         if let Some(factory) = self.adapters.projector_factory {
             return factory();
         }
@@ -171,7 +172,6 @@ impl AdapterPort for FakeDeps {
         let resolved = self.adapters.resolved_tuning.lock_recover().clone();
         Box::pin(async move { resolved })
     }
-    fn apply_codex_provider_tuning(&self, _session: &Arc<dyn AdapterSession>) {}
     fn generate_title<'a>(
         &'a self,
         _adapter_id: &'a str,

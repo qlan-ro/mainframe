@@ -24,7 +24,7 @@ impl PlanModeActionHandler for ClaudePlanModeHandler {
             ctx.update_chat(PlanChatUpdate {
                 plan_mode: Some(false),
                 permission_mode: Some(exec),
-                clear_claude_session_id: false,
+                clear_vendor_session_id: false,
             })?;
 
             if ctx.session_is_spawned() {
@@ -230,7 +230,7 @@ mod tests {
             vec![PlanChatUpdate {
                 plan_mode: Some(false),
                 permission_mode: Some(ExecutionMode::AcceptEdits),
-                clear_claude_session_id: false,
+                clear_vendor_session_id: false,
             }]
         );
         assert_eq!(rec.set_permission_mode, vec![ExecutionMode::AcceptEdits]);
@@ -252,7 +252,7 @@ mod tests {
             vec![PlanChatUpdate {
                 plan_mode: Some(false),
                 permission_mode: Some(ExecutionMode::Auto),
-                clear_claude_session_id: false,
+                clear_vendor_session_id: false,
             }]
         );
     }
@@ -280,7 +280,7 @@ mod tests {
         let rec = ctx.rec();
         assert_eq!(rec.kills, 1);
         assert!(rec.updates.iter().any(|u| {
-            u.clear_claude_session_id
+            u.clear_vendor_session_id
                 && u.plan_mode == Some(false)
                 && u.permission_mode == Some(ExecutionMode::AcceptEdits)
         }));

@@ -58,7 +58,7 @@ async fn resolve(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
 }
 
 /// Per-chat resolution order: missing/unreadable chat or project → `Unknown`;
-/// no `claude_session_id` → `Unavailable(NeverStarted)`; unregistered adapter
+/// no `vendor_session_id` → `Unavailable(NeverStarted)`; unregistered adapter
 /// → `Unknown`; otherwise defer to the adapter's `locate_transcript`.
 async fn resolve_one(ctx: &Arc<AppCtx>, chat_id: String) -> TranscriptResolution {
     let chat = {
@@ -69,7 +69,7 @@ async fn resolve_one(ctx: &Arc<AppCtx>, chat_id: String) -> TranscriptResolution
         }
     };
 
-    let Some(session_id) = chat.claude_session_id.clone() else {
+    let Some(session_id) = chat.vendor_session_id.clone() else {
         return TranscriptResolution::Unavailable {
             chat_id,
             reason: TranscriptUnavailableReason::NeverStarted,
@@ -163,8 +163,8 @@ mod tests {
         fn get_version(&self) -> BoxFuture<'_, Result<Option<String>, AdapterError>> {
             Box::pin(async { Ok(None) })
         }
-        fn list_models(&self) -> BoxFuture<'_, Result<Vec<AdapterModel>, AdapterError>> {
-            Box::pin(async { Ok(vec![]) })
+        fn catalog(&self) -> Vec<AdapterModel> {
+            Vec::new()
         }
         fn create_session(&self, _options: SessionOptions) -> Arc<dyn AdapterSession> {
             unreachable!("resolve_one never spawns a session")
@@ -211,8 +211,8 @@ mod tests {
         fn get_version(&self) -> BoxFuture<'_, Result<Option<String>, AdapterError>> {
             Box::pin(async { Ok(None) })
         }
-        fn list_models(&self) -> BoxFuture<'_, Result<Vec<AdapterModel>, AdapterError>> {
-            Box::pin(async { Ok(vec![]) })
+        fn catalog(&self) -> Vec<AdapterModel> {
+            Vec::new()
         }
         fn create_session(&self, _options: SessionOptions) -> Arc<dyn AdapterSession> {
             unreachable!("resolve_one never spawns a session")
@@ -220,7 +220,7 @@ mod tests {
         fn kill_all(&self) {}
     }
 
-    /// Seed a project + a chat with `claude_session_id` set, registered under
+    /// Seed a project + a chat with `vendor_session_id` set, registered under
     /// `adapter_id`. Returns the chat id.
     async fn seed_chat(ctx: &Arc<AppCtx>, adapter_id: &str, with_session: bool) -> String {
         let path = format!("/tmp/session-transcripts-test-{}", nanoid::nanoid!());
@@ -251,7 +251,7 @@ mod tests {
                     db.chats.update(
                         &id,
                         &mainframe_types::chat_patch::ChatPatch {
-                            claude_session_id: Some("session-1".to_string()),
+                            vendor_session_id: Some("session-1".to_string()),
                             ..Default::default()
                         },
                     )

@@ -11,7 +11,7 @@ pub fn test_chat(id: &str) -> Chat {
         adapter_id: "claude".to_string(),
         project_id: "p1".to_string(),
         title: None,
-        claude_session_id: None,
+        vendor_session_id: None,
         session_file_path: None,
         model: Some("old-model".to_string()),
         permission_mode: Some(ExecutionMode::Default),

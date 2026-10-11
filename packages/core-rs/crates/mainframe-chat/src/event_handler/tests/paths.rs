@@ -63,7 +63,10 @@ fn init_without_an_adapter_transcript_path_persists_only_the_session_id() {
         vec![lookup("codex", "codex-session")]
     );
     let guard = active.lock().unwrap();
-    assert_eq!(guard.chat.claude_session_id.as_deref(), Some("codex-session"));
+    assert_eq!(
+        guard.chat.vendor_session_id.as_deref(),
+        Some("codex-session")
+    );
     assert_eq!(guard.chat.session_file_path, None);
     let updates = h.deps.store.updates.lock().unwrap();
     assert_eq!(updates.len(), 1);

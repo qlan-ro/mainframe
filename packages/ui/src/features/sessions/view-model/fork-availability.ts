@@ -33,8 +33,8 @@ export interface ForkBaseInput {
   temporary: boolean;
   /** A no-project chat has no project checkout for the fork to run in (todo #346). */
   noProject: boolean;
-  /** The chat's own provider session id (`SessionCustom.claudeSessionId`). Absent means nothing has run yet. */
-  claudeSessionId?: string;
+  /** The chat's own provider session id (`SessionCustom.vendorSessionId`). Absent means nothing has run yet. */
+  vendorSessionId?: string;
   transcriptMissing: boolean;
   directoryMissing: boolean;
 }
@@ -59,7 +59,7 @@ export function forkBaseAvailability(input: ForkBaseInput): ForkAvailability {
   }
   if (input.temporary) return disabled("Temporary chats can't be forked");
   if (input.noProject) return disabled("Chats with no project can't be forked");
-  if (input.claudeSessionId == null) return disabled('Nothing to fork yet');
+  if (input.vendorSessionId == null) return disabled('Nothing to fork yet');
   if (input.transcriptMissing) return disabled("This chat's transcript is missing");
   if (input.directoryMissing) return disabled("This chat's folder is missing");
   return FORK_ENABLED;

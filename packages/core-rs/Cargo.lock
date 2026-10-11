@@ -1395,6 +1395,7 @@ name = "mainframe-adapter-api"
 version = "0.0.0"
 dependencies = [
  "dashmap",
+ "mainframe-display",
  "mainframe-runtime",
  "mainframe-types",
  "serde",
@@ -1418,7 +1419,6 @@ dependencies = [
  "mainframe-display",
  "mainframe-orchestration",
  "mainframe-runtime",
- "mainframe-services",
  "mainframe-types",
  "nanoid",
  "reqwest",
@@ -1438,6 +1438,7 @@ dependencies = [
  "dirs",
  "mainframe-adapter-api",
  "mainframe-background-tasks",
+ "mainframe-display",
  "mainframe-orchestration",
  "mainframe-runtime",
  "mainframe-types",
@@ -1457,7 +1458,7 @@ version = "0.0.0"
 dependencies = [
  "mainframe-adapter-api",
  "mainframe-background-tasks",
- "mainframe-claude-workflows",
+ "mainframe-display",
  "mainframe-types",
  "reqwest",
  "serde",
@@ -1523,7 +1524,6 @@ dependencies = [
  "dirs",
  "mainframe-adapter-api",
  "mainframe-adapter-claude",
- "mainframe-adapter-codex",
  "mainframe-background-tasks",
  "mainframe-db",
  "mainframe-display",

@@ -8,7 +8,6 @@ use axum::response::Response;
 use axum::routing::get;
 use serde::Deserialize;
 
-use mainframe_adapter_claude::skills;
 use mainframe_types::skill::{AgentScope, CreateAgentInput, CreateSkillInput};
 
 use crate::ctx::AppCtx;
@@ -23,12 +22,15 @@ fn unsupported<const SKILL: bool>() -> &'static str {
     }
 }
 
-fn claude_supported(ctx: &AppCtx, adapter_id: &str) -> bool {
+fn writable_provider(
+    ctx: &AppCtx,
+    adapter_id: &str,
+) -> Option<Arc<dyn mainframe_adapter_api::SkillsProvider>> {
     ctx.core
         .adapter_registry
-        .get(adapter_id)
-        .map(|a| a.id() == "claude")
-        .unwrap_or(false)
+        .get(adapter_id)?
+        .skills()
+        .filter(|provider| provider.writable())
 }
 
 fn parse_scope(scope: Option<&str>) -> AgentScope {
@@ -55,25 +57,28 @@ async fn list<const SKILL: bool>(
     let Some(project_path) = q.project_path.filter(|p| !p.is_empty()) else {
         return fail(StatusCode::BAD_REQUEST, "projectPath is required");
     };
-    match adapter.id() {
-        "claude" if SKILL => ok(skills::list_skills(&project_path).await),
-        "claude" => ok(skills::list_agents(&project_path).await),
-        "codex" if SKILL => match mainframe_adapter_codex::skills::list_skills(
-            &project_path,
-            ctx.core.resolved_path.as_str(),
-        )
-        .await
-        {
-            Ok(skills) => ok(skills),
-            Err(error) => crate::respond::fail_internal(
-                "Failed to list Codex skills",
-                &error,
-                "Failed to list Codex skills",
-            ),
-        },
-        "mock-cli" if SKILL => ok(mainframe_adapter_mock::skills::list_skills(&project_path).await),
-        "mock-cli" => ok(mainframe_adapter_mock::skills::list_agents(&project_path).await),
-        _ => fail(StatusCode::NOT_FOUND, unsupported::<SKILL>()),
+    let Some(provider) = adapter
+        .skills()
+        .filter(|provider| SKILL || provider.supports_agents())
+    else {
+        return fail(StatusCode::NOT_FOUND, unsupported::<SKILL>());
+    };
+    let result = if SKILL {
+        provider
+            .list_skills(project_path)
+            .await
+            .map(|value| serde_json::json!(value))
+    } else {
+        provider
+            .list_agents(project_path)
+            .await
+            .map(|value| serde_json::json!(value))
+    };
+    match result {
+        Ok(value) => ok(value),
+        Err(error) => {
+            crate::respond::fail_internal(provider.list_error(), &error, provider.list_error())
+        }
     }
 }
 
@@ -94,9 +99,9 @@ async fn create<const SKILL: bool>(
     Path(adapter_id): Path<String>,
     body: Bytes,
 ) -> Response {
-    if !claude_supported(&ctx, &adapter_id) {
+    let Some(provider) = writable_provider(&ctx, &adapter_id) else {
         return fail(StatusCode::NOT_FOUND, unsupported::<SKILL>());
-    }
+    };
     let Some(b) = parse_body::<CreateCatalogBody>(&body) else {
         return fail(StatusCode::BAD_REQUEST, "Invalid request body");
     };
@@ -118,7 +123,8 @@ async fn create<const SKILL: bool>(
         scope: parse_scope(b.scope.as_deref()),
     };
     let result = if SKILL {
-        skills::create_skill(&project_path, &input)
+        provider
+            .create_skill(project_path, input.clone())
             .await
             .map(|value| serde_json::json!(value))
     } else {
@@ -128,7 +134,8 @@ async fn create<const SKILL: bool>(
             content: input.content.clone(),
             scope: input.scope,
         };
-        skills::create_agent(&project_path, &input)
+        provider
+            .create_agent(project_path, input)
             .await
             .map(|value| serde_json::json!(value))
     };
@@ -157,9 +164,9 @@ async fn update<const SKILL: bool>(
     Path((adapter_id, id)): Path<(String, String)>,
     body: Bytes,
 ) -> Response {
-    if !claude_supported(&ctx, &adapter_id) {
+    let Some(provider) = writable_provider(&ctx, &adapter_id) else {
         return fail(StatusCode::NOT_FOUND, unsupported::<SKILL>());
-    }
+    };
     let Some(b) = parse_body::<UpdateCatalogBody>(&body) else {
         return fail(StatusCode::BAD_REQUEST, "Invalid request body");
     };
@@ -171,11 +178,13 @@ async fn update<const SKILL: bool>(
         );
     };
     let result = if SKILL {
-        skills::update_skill(&id, &project_path, &content)
+        provider
+            .update_skill(id.clone(), project_path, content)
             .await
             .map(|value| serde_json::json!(value))
     } else {
-        skills::update_agent(&id, &project_path, &content)
+        provider
+            .update_agent(id.clone(), project_path, content)
             .await
             .map(|value| serde_json::json!(value))
     };
@@ -201,9 +210,9 @@ async fn delete<const SKILL: bool>(
     Query(q): Query<ProjectPathQuery>,
     body: Bytes,
 ) -> Response {
-    if !claude_supported(&ctx, &adapter_id) {
+    let Some(provider) = writable_provider(&ctx, &adapter_id) else {
         return fail(StatusCode::NOT_FOUND, unsupported::<SKILL>());
-    }
+    };
     let project_path = q
         .project_path
         .or_else(|| parse_body::<DeleteBody>(&body).and_then(|b| b.project_path))
@@ -212,9 +221,9 @@ async fn delete<const SKILL: bool>(
         return fail(StatusCode::BAD_REQUEST, "projectPath is required");
     };
     let result = if SKILL {
-        skills::delete_skill(&id, &project_path).await
+        provider.delete_skill(id.clone(), project_path).await
     } else {
-        skills::delete_agent(&id, &project_path).await
+        provider.delete_agent(id.clone(), project_path).await
     };
     match result {
         Ok(()) => crate::respond::ok_empty(),
@@ -252,3 +261,7 @@ mod agent_tests;
 #[cfg(test)]
 #[path = "adapter_catalog/skill_tests.rs"]
 mod skill_tests;
+
+#[cfg(test)]
+#[path = "adapter_catalog/parity_tests.rs"]
+mod parity_tests;

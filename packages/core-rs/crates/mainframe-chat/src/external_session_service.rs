@@ -100,7 +100,7 @@ impl<D: ExternalSessionDeps + 'static> ExternalSessionService<D> {
 
         let mut chat = self.deps.create_imported_chat(project_id, adapter_id)?;
         let mut updates = ChatPatch {
-            claude_session_id: Some(session_id.to_string()),
+            vendor_session_id: Some(session_id.to_string()),
             ..Default::default()
         };
 
@@ -125,7 +125,7 @@ impl<D: ExternalSessionDeps + 'static> ExternalSessionService<D> {
         }
         self.deps.chats_update(&chat.id, &updates)?;
         // Object.assign(chat, updates)
-        chat.claude_session_id = updates.claude_session_id.clone();
+        chat.vendor_session_id = updates.vendor_session_id.clone();
         if let Some(t) = &updates.title {
             chat.title = Some(t.clone());
         }

@@ -385,7 +385,7 @@ fn project_display_folds_in_a_pending_delta_from_a_prior_display_snapshot() {
 /// stay empty forever.
 #[test]
 fn display_snapshot_on_an_empty_chat_then_append_folds_into_project_display() {
-    use mainframe_adapter_claude::messages::incremental::IncrementalProjector;
+    use mainframe_display::incremental::IncrementalProjector;
 
     let mut cache = MessageCache::new();
 

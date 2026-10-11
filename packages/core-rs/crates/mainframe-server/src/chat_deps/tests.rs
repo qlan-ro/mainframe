@@ -9,3 +9,4 @@ include!("tests/plans_and_skills.rs");
 include!("tests/history_sources.rs");
 
 include!("tests/notifications.rs");
+include!("tests/capability_parity.rs");

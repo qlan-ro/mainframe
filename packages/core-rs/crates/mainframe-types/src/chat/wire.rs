@@ -14,7 +14,8 @@ pub struct Chat {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub claude_session_id: Option<String>,
+    #[serde(rename = "claudeSessionId")]
+    pub vendor_session_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub session_file_path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -106,7 +107,7 @@ pub struct Chat {
     /// Drives the "earlier context was not preserved" notice.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context_lost_at: Option<String>,
-    /// Whether the stored provider session (`claude_session_id`) was started
+    /// Whether the stored provider session (`vendor_session_id`) was started
     /// with the adapter's no-persistence mechanism, so it is never a resume
     /// target. Daemon-internal — deliberately absent from the wire `Chat`.
     #[serde(skip)]

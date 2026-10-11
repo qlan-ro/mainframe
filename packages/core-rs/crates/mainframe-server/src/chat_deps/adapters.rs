@@ -19,17 +19,29 @@ impl AdapterPort for DaemonChatDeps {
     }
     fn prepare_messages_for_client(
         &self,
+        chat_id: &str,
         raw: &[ChatMessage],
         categories: Option<&ToolCategories>,
     ) -> Vec<DisplayMessage> {
-        prepare_messages_for_client(raw, categories)
+        mainframe_display::display_pipeline::prepare_messages_with_decoders(
+            raw,
+            categories,
+            self.display_decoders(chat_id).as_ref(),
+        )
     }
 
-    fn display_projector(&self) -> Box<dyn mainframe_display::DisplayProjector> {
-        Box::new(mainframe_adapter_claude::messages::incremental::IncrementalProjector::new())
+    fn display_projector(&self, chat_id: &str) -> Box<dyn mainframe_display::DisplayProjector> {
+        Box::new(
+            mainframe_display::incremental::IncrementalProjector::with_decoders(
+                self.display_decoders(chat_id),
+            ),
+        )
     }
     fn strip_command_tags(&self, text: &str) -> String {
-        strip_mainframe_command_tags(text)
+        mainframe_display::ToolResultDecoders::strip_command_tags(
+            &mainframe_display::decoders::MainframeDecoders,
+            text,
+        )
     }
     fn initial_transcript_path(
         &self,
@@ -94,17 +106,24 @@ impl AdapterPort for DaemonChatDeps {
                 }
             };
             let models = match self.adapters.get(&chat.adapter_id) {
-                Some(adapter) => adapter.list_models().await.unwrap_or_default(),
+                Some(adapter) => {
+                    let catalog = adapter.catalog();
+                    if catalog.is_empty() {
+                        match adapter.refresh_catalog(None).await {
+                            Ok(models) => models.unwrap_or_default(),
+                            Err(error) => {
+                                tracing::warn!(%error, "tuning catalog refresh failed");
+                                Vec::new()
+                            }
+                        }
+                    } else {
+                        catalog
+                    }
+                }
                 None => Vec::new(),
             };
             Some(resolve_tuning_for_chat(&chat, &self.db, &models).await)
         })
-    }
-    fn apply_codex_provider_tuning(&self, _session: &Arc<dyn AdapterSession>) {
-        // TODO: `set_codex_provider_tuning` (personality, reasoning summary) is a
-        // Codex-only session method that the generic `AdapterSession` trait does not
-        // expose, so this cannot reach it and the tuning stays at its default.
-        // The no-op is correct for every non-Codex adapter.
     }
     fn generate_title<'a>(
         &'a self,
@@ -206,4 +225,42 @@ impl AdapterPort for DaemonChatDeps {
             .into_iter()
             .find(|info| info.id == adapter_id)
     }
+}
+
+impl DaemonChatDeps {
+    fn display_decoders(&self, chat_id: &str) -> Arc<dyn mainframe_display::ToolResultDecoders> {
+        let layout = mainframe_chat::segments::SegmentStore::layout(self, chat_id);
+        let initial = layout
+            .as_ref()
+            .and_then(|layout| {
+                layout
+                    .segments
+                    .first()
+                    .and_then(|s| layout.native(&s.native_session_ref))
+            })
+            .map(|native| native.adapter_id.clone())
+            .or_else(|| match self.chats_get(chat_id) {
+                Ok(chat) => chat.map(|chat| chat.adapter_id),
+                Err(error) => {
+                    self.emit_storage_error(chat_id, error);
+                    None
+                }
+            })
+            .unwrap_or_default();
+        decoder_set(&self.adapters, initial)
+    }
+}
+
+pub(super) fn decoder_set(
+    adapters: &AdapterRegistry,
+    initial: String,
+) -> Arc<dyn mainframe_display::ToolResultDecoders> {
+    Arc::new(mainframe_display::decoders::DecoderSet::new(
+        initial,
+        adapters
+            .get_all()
+            .iter()
+            .map(|adapter| (adapter.id().to_string(), adapter.display_decoders()))
+            .collect(),
+    ))
 }

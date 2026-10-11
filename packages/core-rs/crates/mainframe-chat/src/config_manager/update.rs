@@ -12,21 +12,21 @@ impl ChatConfigManager {
         let _change = self.changes.acquire(chat_id).await;
         let cell = self.require_active_chat(chat_id)?;
 
-        let (cur_adapter, cur_model, cur_mode, cur_plan, has_claude_session, session) = {
+        let (cur_adapter, cur_model, cur_mode, cur_plan, has_vendor_session, session) = {
             let guard = cell.lock_recover();
             (
                 guard.chat.adapter_id.clone(),
                 guard.chat.model.clone(),
                 guard.chat.permission_mode,
                 guard.chat.plan_mode,
-                guard.chat.claude_session_id.is_some(),
+                guard.chat.vendor_session_id.is_some(),
                 guard.session.clone(),
             )
         };
 
         if let Some(ref new_adapter) = adapter_id
             && *new_adapter != cur_adapter
-            && (has_claude_session
+            && (has_vendor_session
                 || self
                     .shared
                     .deps

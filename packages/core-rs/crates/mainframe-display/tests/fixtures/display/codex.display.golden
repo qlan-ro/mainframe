@@ -1,0 +1,114 @@
+[
+  {
+    "chatId": "golden",
+    "content": [
+      {
+        "text": "Inspect and fix the parser",
+        "type": "text"
+      }
+    ],
+    "id": "u1",
+    "timestamp": "2026-10-07T12:00:00Z",
+    "type": "user"
+  },
+  {
+    "chatId": "golden",
+    "content": [
+      {
+        "text": "Checking the parser.",
+        "type": "text"
+      },
+      {
+        "items": [
+          {
+            "category": "progress",
+            "id": "todo-live",
+            "input": {
+              "items": [
+                {
+                  "completed": false,
+                  "text": "Inspect parser"
+                }
+              ]
+            },
+            "name": "todo_list"
+          }
+        ],
+        "type": "task_progress"
+      },
+      {
+        "category": "default",
+        "commandExecution": {
+          "commandActions": [
+            {
+              "command": "cat src/parser.rs",
+              "name": "parser.rs",
+              "path": "src/parser.rs",
+              "type": "read"
+            }
+          ],
+          "reportedDurationMs": 1234
+        },
+        "id": "cmd",
+        "input": {
+          "command": "cat src/parser.rs"
+        },
+        "name": "Bash",
+        "result": {
+          "content": "fn parse() {}",
+          "isError": false
+        },
+        "type": "tool_call"
+      },
+      {
+        "category": "default",
+        "id": "file:0",
+        "input": {
+          "file_path": "src/parser.rs",
+          "new_string": "",
+          "old_string": ""
+        },
+        "name": "Edit",
+        "result": {
+          "content": "OK",
+          "isError": false,
+          "structuredPatch": [
+            {
+              "lines": [
+                "-fn parse() {}",
+                "+fn parse() { validate(); }",
+                ""
+              ],
+              "newLines": 1,
+              "newStart": 1,
+              "oldLines": 1,
+              "oldStart": 1
+            }
+          ]
+        },
+        "type": "tool_call"
+      },
+      {
+        "agentId": "collab",
+        "calls": [],
+        "result": {
+          "content": "Parser reviewed",
+          "isError": false
+        },
+        "taskArgs": {
+          "description": "Sub-agent",
+          "prompt": "",
+          "subagent_type": "Sub-agent"
+        },
+        "type": "task_group"
+      },
+      {
+        "text": "Parser fixed and reviewed.",
+        "type": "text"
+      }
+    ],
+    "id": "a1",
+    "timestamp": "2026-10-07T12:00:00Z",
+    "type": "assistant"
+  }
+]

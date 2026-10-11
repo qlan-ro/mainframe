@@ -43,7 +43,7 @@ fn setup_parent() -> (Arc<FakeDeps>, Arc<FakeStore>, ChatManager) {
     std::fs::create_dir_all("/tmp/test").expect("create the fake project dir");
     let mut chat = test_chat("c1");
     chat.adapter_id = "codex".into();
-    chat.claude_session_id = Some("x-1".into());
+    chat.vendor_session_id = Some("x-1".into());
     chat.status = ChatStatus::Active;
     let deps = FakeDeps::with_chats(vec![chat]);
     deps.set_fork_capable(true);

@@ -19,7 +19,7 @@ impl ChatShared {
     pub(crate) async fn sweep_transcript_presence(&self, project_id: &str) {
         for mut chat in storage_event!(self, self.deps.chats_list(project_id)) {
             if chat.status != mainframe_types::chat::ChatStatus::Archived
-                && chat.claude_session_id.is_some()
+                && chat.vendor_session_id.is_some()
             {
                 crate::transcript_presence::reconcile_transcript_presence(self, &mut chat).await;
             }

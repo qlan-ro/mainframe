@@ -45,7 +45,7 @@ impl ModelSession {
                     &chat_id,
                     &ChatPatch {
                         model: chat_model,
-                        claude_session_id: Some(SESSION_ID.into()),
+                        vendor_session_id: Some(SESSION_ID.into()),
                         session_file_path: Some(transcript.to_string_lossy().into_owned()),
                         ..Default::default()
                     },

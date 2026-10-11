@@ -5,7 +5,7 @@ impl ChatStore for FakeDeps {
         Ok(self
             .chats_list(project)?
             .into_iter()
-            .filter_map(|c| c.claude_session_id)
+            .filter_map(|c| c.vendor_session_id)
             .collect())
     }
     fn find_by_external_session_id(
@@ -16,7 +16,7 @@ impl ChatStore for FakeDeps {
         Ok(self
             .chats_list(project)?
             .into_iter()
-            .find(|c| c.claude_session_id.as_deref() == Some(session)))
+            .find(|c| c.vendor_session_id.as_deref() == Some(session)))
     }
     fn owned_native_sessions(&self, chat_id: &str) -> Result<Vec<OwnedNativeSession>, SeamError> {
         Ok({
@@ -190,7 +190,7 @@ impl ChatStore for FakeDeps {
     }
     fn chats_clear_session(&self, chat_id: &str) -> Result<(), SeamError> {
         if let Some(c) = self.store.chats.lock_recover().get_mut(chat_id) {
-            c.claude_session_id = None;
+            c.vendor_session_id = None;
             c.session_file_path = None;
             c.transcript_missing = Some(false);
         }
@@ -215,7 +215,7 @@ impl ChatStore for FakeDeps {
             .push((chat_id.to_string(), context_lost_at.to_string()));
         if let Some(c) = self.store.chats.lock_recover().get_mut(chat_id) {
             c.context_lost_at = Some(context_lost_at.to_string());
-            c.claude_session_id = None;
+            c.vendor_session_id = None;
             c.session_file_path = None;
             c.vendor_session_ephemeral = false;
         }

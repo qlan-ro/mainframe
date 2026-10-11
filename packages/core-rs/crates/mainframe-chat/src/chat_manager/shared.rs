@@ -96,7 +96,7 @@ pub(crate) async fn compose_if_multi(
 /// Build a stateless history-load session for `chat` (shared by the facade's
 /// `get_messages`/`get_messages_from_disk` and the permission handler's history
 /// restore). `None` when the chat has no Claude session / pending fork / adapter
-/// / project — an unsent fork has no `claude_session_id` yet, so it resumes from
+/// / project — an unsent fork has no `vendor_session_id` yet, so it resumes from
 /// `chats.pending_fork`'s `fork_source` instead; this is the path a freshly
 /// forked chat's pre-first-message history takes (still in `active_chats`, so
 /// `load_chat` never runs `do_load_chat` for it).
@@ -105,7 +105,7 @@ pub(crate) fn build_history_session(
     chat: &Chat,
     chat_id: &str,
 ) -> Option<Arc<dyn AdapterSession>> {
-    let own_id = chat.claude_session_id.clone();
+    let own_id = chat.vendor_session_id.clone();
     let fork_source = match deps.get_pending_fork(chat_id) {
         Ok(value) => value,
         Err(error) => {

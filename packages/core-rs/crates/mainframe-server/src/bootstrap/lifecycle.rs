@@ -42,20 +42,42 @@ impl Daemon {
 
     fn start_catalog_refresh(&self) {
         let adapters = self.ctx.core.adapter_registry.clone();
-        adapters.allow_refresh();
+        if std::env::var_os("E2E_MODE").is_some() {
+            adapters.allow_refresh_for(
+                adapters
+                    .get_all()
+                    .iter()
+                    .filter(|adapter| adapter.id().starts_with("mock-cli"))
+                    .map(|adapter| adapter.id().to_string()),
+            );
+        } else {
+            adapters.allow_refresh();
+        }
         tokio::spawn(async move {
             adapters.refresh_all().await;
         });
     }
 
     fn start_quota_scheduler(&self) -> ClaudeQuotaScheduler {
+        let sources: Vec<_> = crate::wiring::quota::quota_sources(&self.ctx.core.adapter_registry)
+            .into_iter()
+            .map(|source| (source.id, source.poll))
+            .collect();
+        let periodic: Vec<_> = sources
+            .iter()
+            .filter(|(_, poll)| *poll)
+            .map(|(id, _)| id.clone())
+            .collect();
         let quota = self.handles.quota_manager.clone();
         let clients = self.ctx.infra.ws_clients.clone();
         let mut scheduler = ClaudeQuotaScheduler::new(ClaudeQuotaSchedulerDeps {
             refresh: Arc::new(move || {
                 let quota = quota.clone();
+                let periodic = periodic.clone();
                 Box::pin(async move {
-                    quota.refresh("claude").await;
+                    for id in periodic {
+                        quota.refresh(&id).await;
+                    }
                     Ok::<(), SeamError>(())
                 })
             }),
@@ -65,7 +87,11 @@ impl Daemon {
         scheduler.start();
         let quota = self.handles.quota_manager.clone();
         tokio::spawn(async move {
-            quota.refresh("codex").await;
+            for (id, poll) in sources {
+                if !poll {
+                    quota.refresh(&id).await;
+                }
+            }
         });
         scheduler
     }

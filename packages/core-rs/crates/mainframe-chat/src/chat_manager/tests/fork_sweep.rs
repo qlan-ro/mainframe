@@ -39,7 +39,7 @@ async fn keeps_a_snapshot_dir_a_pending_fork_still_references() {
     let kept_str = kept.to_string_lossy().into_owned();
 
     let mut chat = test_chat("fork-1");
-    chat.claude_session_id = None;
+    chat.vendor_session_id = None;
     let deps = FakeDeps::with_chats(vec![chat]);
     deps.set_fork_snapshots_dir(&root.path().to_string_lossy());
     deps.set_pending_fork("fork-1", pending_for(&kept_str));

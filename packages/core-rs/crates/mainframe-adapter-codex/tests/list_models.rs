@@ -33,9 +33,8 @@ async fn probes_models_with_the_configured_executable_path() {
     fs::set_permissions(&fake, perms).unwrap();
 
     let adapter = CodexAdapter::default();
-    assert!(adapter.has_probe_models());
     let models = adapter
-        .probe_models(Some(fake.to_str().unwrap().to_string()))
+        .refresh_catalog(Some(fake.to_str().unwrap().to_string()))
         .await
         .unwrap()
         .expect("probe returns a catalog");

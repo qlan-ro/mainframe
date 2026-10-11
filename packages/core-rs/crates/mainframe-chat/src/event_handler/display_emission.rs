@@ -21,7 +21,7 @@ pub(super) fn emit_display_for(
     let overlay = partial_overlays.message_for(chat_id);
     let mut msgs = messages.lock_recover();
     let delta = msgs.project_display(chat_id, overlay.as_ref(), categories, || {
-        deps.display_projector()
+        deps.display_projector(chat_id)
     });
     // The streaming rule reads only the current last container (ordinal
     // `len - 1`), via the snapshot's cheap `with_mut` peek — never a full

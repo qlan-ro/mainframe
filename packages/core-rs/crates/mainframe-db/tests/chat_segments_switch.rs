@@ -31,7 +31,7 @@ fn set_session(db: &DatabaseManager, chat_id: &str, session: &str) {
         .update(
             chat_id,
             &ChatPatch {
-                claude_session_id: Some(session.to_string()),
+                vendor_session_id: Some(session.to_string()),
                 ..Default::default()
             },
         )
@@ -83,7 +83,7 @@ fn commit_switch_opens_a_segment_and_moves_the_mirror() {
     assert_eq!(layout.active().unwrap().id, "seg_new");
     let row = db.chats.get(&chat.id).unwrap().unwrap();
     assert_eq!(row.adapter_id, "codex");
-    assert_eq!(row.claude_session_id, None);
+    assert_eq!(row.vendor_session_id, None);
     assert_eq!(row.model.as_deref(), Some("x-model"));
     let first = layout
         .native(&layout.segments[0].native_session_ref)
@@ -112,7 +112,7 @@ fn commit_switch_opens_a_segment_and_moves_the_mirror() {
     assert_eq!(layout.natives.len(), 1);
     let row = db.chats.get(&chat.id).unwrap().unwrap();
     assert_eq!(
-        (row.adapter_id.as_str(), row.claude_session_id.as_deref()),
+        (row.adapter_id.as_str(), row.vendor_session_id.as_deref()),
         ("claude", Some("c-sess"))
     );
 }

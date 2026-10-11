@@ -1,0 +1,28 @@
+{
+  "explore": [
+    "Grep",
+    "Read",
+    "LS",
+    "Glob"
+  ],
+  "hidden": [
+    "TodoWrite",
+    "TaskCreate",
+    "AskUserQuestion",
+    "EnterPlanMode",
+    "TaskUpdate",
+    "TaskGet",
+    "TaskList",
+    "TaskOutput",
+    "TaskStop",
+    "ToolSearch"
+  ],
+  "progress": [
+    "TaskUpdate",
+    "TaskCreate"
+  ],
+  "subagent": [
+    "Agent",
+    "Task"
+  ]
+}

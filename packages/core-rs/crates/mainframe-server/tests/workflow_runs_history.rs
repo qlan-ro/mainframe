@@ -97,7 +97,7 @@ async fn harness(session_id: &str) -> Harness {
             d.chats.update(
                 &chat_id,
                 &ChatPatch {
-                    claude_session_id: Some(session_id),
+                    vendor_session_id: Some(session_id),
                     ..Default::default()
                 },
             )
@@ -188,7 +188,7 @@ impl Harness {
 }
 
 /// Writes `wf_<runId>.json` into the real `~/.claude/projects/<encoded>/<sessionId>/workflows/`
-/// tree the future route resolves from the chat's `claude_session_id` + project path, returning
+/// tree the future route resolves from the chat's `vendor_session_id` + project path, returning
 /// a guard that removes the whole encoded project dir on drop.
 fn write_record(
     project_path: &str,

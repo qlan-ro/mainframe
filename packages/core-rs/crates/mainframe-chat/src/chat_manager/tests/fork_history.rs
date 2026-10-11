@@ -1,6 +1,6 @@
 //! `build_history_session` learns the pending fork before the first message:
 //! a freshly forked
-//! chat has no `claude_session_id` yet, so its history load must resume from
+//! chat has no `vendor_session_id` yet, so its history load must resume from
 //! `chats.pending_fork` instead of bailing out early. A child module of
 //! `tests`, so it sees `tests`' private `FakeDeps`.
 
@@ -8,7 +8,7 @@ use super::*;
 
 fn unsent_fork(id: &str) -> Chat {
     let mut c = test_chat(id);
-    c.claude_session_id = None;
+    c.vendor_session_id = None;
     c.parent_chat_id = Some(Some("parent-1".to_string()));
     c
 }

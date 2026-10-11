@@ -19,7 +19,7 @@ use std::collections::HashMap;
 use mainframe_acp::encoder::{EncodedItem, ItemRole, encode, encode_revision};
 use mainframe_adapter_api::Adapter;
 use mainframe_adapter_claude::adapter::ClaudeAdapter;
-use mainframe_adapter_claude::messages::display_pipeline::prepare_messages_for_client;
+use mainframe_display::display_pipeline::prepare_messages_for_client;
 use mainframe_types::acp::content::ContentBlock;
 use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent, MessageContentNode};
 use mainframe_types::content::LeafContent;

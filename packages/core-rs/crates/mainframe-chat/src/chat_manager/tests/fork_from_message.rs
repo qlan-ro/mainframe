@@ -13,7 +13,7 @@ fn parent() -> Chat {
     std::fs::create_dir_all("/tmp/test").expect("create the fake project dir");
     let mut c = test_chat("c1");
     c.adapter_id = "claude".to_string();
-    c.claude_session_id = Some("sess-1".to_string());
+    c.vendor_session_id = Some("sess-1".to_string());
     c.status = ChatStatus::Active;
     c
 }

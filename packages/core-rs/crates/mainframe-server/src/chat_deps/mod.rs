@@ -12,12 +12,6 @@ use mainframe_adapter_api::{
     AdapterError, AdapterRegistry, AdapterSession, BoxFuture, ForkPinError, ForkPinRequest,
     PlanModeActionHandler,
 };
-use mainframe_adapter_claude::external_session_cache::{
-    ExternalSessionCache, new_external_session_cache,
-};
-use mainframe_adapter_claude::external_sessions::ExternalSessionListOpts;
-use mainframe_adapter_claude::messages::display_pipeline::prepare_messages_for_client;
-use mainframe_adapter_claude::messages::message_parsing::strip_mainframe_command_tags;
 use mainframe_background_tasks::kill::{KillTasksForChatArgs, SessionLike, kill_tasks_for_chat};
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_chat::attachment_processor;
@@ -68,10 +62,6 @@ pub struct DaemonChatDeps {
     launch: Arc<dyn LaunchStopper>,
     scope_tunnels: Arc<dyn ScopeTunnelStopper>,
     quota: Arc<QuotaManager>,
-    /// Process-lifetime Claude external-session enrichment cache — owned here
-    /// (not a module-level singleton) and threaded into every
-    /// `list_external_sessions("claude", ...)` call.
-    claude_external_session_cache: ExternalSessionCache,
     /// Shared with `AppCtx` and the `ClaudeAdapter` — the daemon's single
     /// per-chat workflow-run store (the CLI-exit sweep's target).
     claude_workflows: Arc<ClaudeWorkflowStore>,

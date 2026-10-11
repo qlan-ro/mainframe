@@ -1,4 +1,4 @@
-//! `relocate_claude_transcripts`: every owned Claude session moves, Codex and
+//! `relocate_transcripts`: every owned Claude session moves, Codex and
 //! borrowed ones never do, and a deps impl without segments still moves the
 //! active session.
 
@@ -50,7 +50,7 @@ async fn every_owned_claude_session_moves_and_records_its_path() {
         ],
         ..Default::default()
     };
-    let active = relocate_claude_transcripts(&deps.build(), "chat", codex_active(), "/p", "/wt")
+    let active = relocate_transcripts(&deps.build(), "chat", codex_active(), "/p", "/wt")
         .await
         .unwrap();
     assert_eq!(*deps.moved.lock().unwrap(), ["c-1", "c-2"]);
@@ -72,7 +72,7 @@ async fn the_active_claude_session_path_is_returned() {
         adapter_id: "claude",
         session_id: Some("c-1"),
     };
-    let path = relocate_claude_transcripts(&deps.build(), "chat", active, "/p", "/wt")
+    let path = relocate_transcripts(&deps.build(), "chat", active, "/p", "/wt")
         .await
         .unwrap();
     assert_eq!(path, Some(compute_session_file_path("/wt", "c-1")));
@@ -85,7 +85,7 @@ async fn without_segments_the_active_session_moves_as_before() {
         adapter_id: "claude",
         session_id: Some("c-1"),
     };
-    let path = relocate_claude_transcripts(&deps.build(), "chat", active, "/p", "/wt")
+    let path = relocate_transcripts(&deps.build(), "chat", active, "/p", "/wt")
         .await
         .unwrap();
     assert_eq!(*deps.moved.lock().unwrap(), ["c-1"]);
@@ -103,9 +103,31 @@ async fn a_failed_move_stops_and_keeps_earlier_paths() {
         fail_on: Some("c-2".into()),
         ..Default::default()
     };
-    let err = relocate_claude_transcripts(&deps.build(), "chat", codex_active(), "/p", "/wt")
+    let err = relocate_transcripts(&deps.build(), "chat", codex_active(), "/p", "/wt")
         .await
         .unwrap_err();
     assert_eq!(err.to_string(), "disk full");
     assert_eq!(deps.paths.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn active_session_fallback_is_kept_when_only_another_provider_has_owned_rows() {
+    let deps = Deps {
+        owned: vec![owned("ns_x", "codex", "x-1")],
+        ..Default::default()
+    };
+    let path = relocate_transcripts(
+        &deps.build(),
+        "chat",
+        ActiveSession {
+            adapter_id: "claude",
+            session_id: Some("c-1"),
+        },
+        "/p",
+        "/wt",
+    )
+    .await
+    .unwrap();
+    assert_eq!(path, Some(compute_session_file_path("/wt", "c-1")));
+    assert_eq!(*deps.moved.lock().unwrap(), ["c-1"]);
 }

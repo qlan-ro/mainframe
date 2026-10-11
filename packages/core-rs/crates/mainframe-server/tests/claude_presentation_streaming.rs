@@ -140,7 +140,7 @@ fn assert_legacy_parity(h: &Harness) {
             meta.remove("transcriptPresentation");
         }
     }
-    let display = mainframe_adapter_claude::messages::display_pipeline::prepare_messages_for_client(
+    let display = mainframe_display::display_pipeline::prepare_messages_for_client(
         &raw,
         Some(&mainframe_types::display::ToolCategories {
             subagent: std::collections::HashSet::from(["Task".into()]),

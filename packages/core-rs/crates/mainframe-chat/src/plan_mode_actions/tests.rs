@@ -127,15 +127,15 @@ fn permissions_shift_pops_only_the_matching_front_request() {
 }
 
 #[test]
-fn update_chat_with_clear_claude_session_id_calls_chats_clear_session_and_nulls_the_in_memory_id() {
+fn update_chat_with_clear_vendor_session_id_calls_chats_clear_session_and_nulls_the_in_memory_id() {
     let mut chat = test_chat("c1");
-    chat.claude_session_id = Some("sess-1".to_string());
+    chat.vendor_session_id = Some("sess-1".to_string());
     let ctx = ctx_with("c1", "r1", chat);
 
     ctx.update_chat(PlanChatUpdate {
         plan_mode: Some(false),
         permission_mode: None,
-        clear_claude_session_id: true,
+        clear_vendor_session_id: true,
     })
     .unwrap();
 
@@ -145,11 +145,11 @@ fn update_chat_with_clear_claude_session_id_calls_chats_clear_session_and_nulls_
             .chats_get("c1")
             .unwrap()
             .unwrap()
-            .claude_session_id,
+            .vendor_session_id,
         None
     );
     assert_eq!(
-        ctx.active().unwrap().lock().unwrap().chat.claude_session_id,
+        ctx.active().unwrap().lock().unwrap().chat.vendor_session_id,
         None
     );
 }
@@ -157,13 +157,13 @@ fn update_chat_with_clear_claude_session_id_calls_chats_clear_session_and_nulls_
 #[test]
 fn update_chat_without_it_never_calls_chats_clear_session() {
     let mut chat = test_chat("c1");
-    chat.claude_session_id = Some("sess-1".to_string());
+    chat.vendor_session_id = Some("sess-1".to_string());
     let ctx = ctx_with("c1", "r1", chat);
 
     ctx.update_chat(PlanChatUpdate {
         plan_mode: Some(false),
         permission_mode: None,
-        clear_claude_session_id: false,
+        clear_vendor_session_id: false,
     })
     .unwrap();
 
@@ -173,11 +173,11 @@ fn update_chat_without_it_never_calls_chats_clear_session() {
             .chats_get("c1")
             .unwrap()
             .unwrap()
-            .claude_session_id,
+            .vendor_session_id,
         Some("sess-1".to_string())
     );
     assert_eq!(
-        ctx.active().unwrap().lock().unwrap().chat.claude_session_id,
+        ctx.active().unwrap().lock().unwrap().chat.vendor_session_id,
         Some("sess-1".to_string())
     );
 }

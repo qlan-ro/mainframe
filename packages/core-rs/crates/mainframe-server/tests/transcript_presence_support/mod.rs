@@ -80,8 +80,8 @@ impl Adapter for StubAdapter {
     fn get_version(&self) -> BoxFuture<'_, Result<Option<String>, AdapterError>> {
         Box::pin(async { Ok(None) })
     }
-    fn list_models(&self) -> BoxFuture<'_, Result<Vec<AdapterModel>, AdapterError>> {
-        Box::pin(async { Ok(vec![]) })
+    fn catalog(&self) -> Vec<AdapterModel> {
+        Vec::new()
     }
     fn create_session(&self, options: SessionOptions) -> Arc<dyn AdapterSession> {
         Arc::new(ReplaySession::new(options, Vec::new()))
@@ -123,7 +123,7 @@ pub struct Harness {
 /// otherwise the seeded chat points at `"unregistered-adapter"`, an id the
 /// registry never knows about. `seed_missing` seeds the persisted
 /// `transcript_missing` flag before any reconciliation runs — reconciliation
-/// skips a chat with no session id, so every case seeds `claude_session_id`.
+/// skips a chat with no session id, so every case seeds `vendor_session_id`.
 pub fn harness(adapter: Option<Arc<StubAdapter>>, seed_missing: Option<bool>) -> Harness {
     let data_dir = tempfile::tempdir().unwrap();
     let db = Db::spawn(|| DatabaseManager::open(Path::new(":memory:"))).unwrap();
@@ -163,7 +163,7 @@ pub fn harness(adapter: Option<Arc<StubAdapter>>, seed_missing: Option<bool>) ->
         d.chats.update(
             &chat_id_for_seed,
             &ChatPatch {
-                claude_session_id: Some("sess-1".to_string()),
+                vendor_session_id: Some("sess-1".to_string()),
                 transcript_missing: seed_missing,
                 ..Default::default()
             },

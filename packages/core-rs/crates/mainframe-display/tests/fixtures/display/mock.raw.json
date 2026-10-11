@@ -1,0 +1,63 @@
+[
+  {
+    "id": "mock-history-0",
+    "chatId": "golden",
+    "type": "user",
+    "content": [
+      {
+        "type": "text",
+        "text": "Read index.ts, then tell me what it exports"
+      }
+    ],
+    "timestamp": "2026-10-07T12:00:00Z"
+  },
+  {
+    "id": "mock-history-4",
+    "chatId": "golden",
+    "type": "assistant",
+    "content": [
+      {
+        "type": "text",
+        "text": "SEGMENT-ONE: reading index.ts first."
+      },
+      {
+        "type": "tool_use",
+        "id": "toolu_e2e_stream_read",
+        "name": "Read",
+        "input": {
+          "file_path": "{{PROJECT_PATH}}/index.ts"
+        },
+        "caller": {
+          "type": "direct"
+        }
+      }
+    ],
+    "timestamp": "2026-10-07T12:00:00Z"
+  },
+  {
+    "id": "mock-history-5",
+    "chatId": "golden",
+    "type": "tool_result",
+    "content": [
+      {
+        "type": "tool_result",
+        "toolUseId": "toolu_e2e_stream_read",
+        "content": "1\texport const greeting = \"hello\";\n2\t",
+        "isError": false
+      }
+    ],
+    "timestamp": "2026-10-07T12:00:00Z"
+  },
+  {
+    "id": "mock-history-7",
+    "chatId": "golden",
+    "type": "assistant",
+    "content": [
+      {
+        "type": "text",
+        "text": "SEGMENT-TWO: the file exports one greeting constant."
+      }
+    ],
+    "timestamp": "2026-10-07T12:00:00Z"
+  }
+]
