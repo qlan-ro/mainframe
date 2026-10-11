@@ -46,7 +46,7 @@ async fn handle(State(ctx): State<Arc<AppCtx>>, req: Request) -> Response {
     }
     let caller = match admit(service, req.headers()) {
         Ok(caller) => caller,
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     };
     let body = match axum::body::to_bytes(req.into_body(), MCP_BODY_LIMIT_BYTES).await {
         Ok(body) => body,

@@ -12,7 +12,7 @@ use axum::Router;
 use axum::body::Bytes;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
@@ -20,8 +20,8 @@ use serde_json::{Value, json};
 
 use crate::async_err::internal_error;
 use crate::ctx::AppCtx;
-use crate::error_status::fail_with;
 use crate::input_error::InputError;
+use crate::respond::fail_with;
 use crate::respond::{fail, ok, ok_empty};
 
 use super::git::{ChatIdQuery, get_effective_path, git_error_message, parse_json_body};
@@ -95,7 +95,7 @@ async fn resolve(
     project_id: &str,
     query_chat_id: Option<&str>,
     bytes: &[u8],
-) -> Result<(String, Value), Response> {
+) -> Result<(String, Value), crate::respond::ApiError> {
     let body: Value = serde_json::from_slice(bytes).unwrap_or(Value::Null);
     let chat_id = query_chat_id.map(str::to_string).or_else(|| {
         body.get("chatId")
@@ -104,8 +104,14 @@ async fn resolve(
     });
     match get_effective_path(ctx, project_id, chat_id.as_deref()).await {
         Ok(Some(path)) => Ok((path, body)),
-        Ok(None) => Err(fail(StatusCode::NOT_FOUND, "Project not found")),
-        Err(e) => Err(internal_error("Failed to resolve project path", &e)),
+        Ok(None) => Err(crate::respond::ApiError::new(
+            StatusCode::NOT_FOUND,
+            "Project not found",
+        )),
+        Err(e) => Err(crate::respond::ApiError::internal(
+            "Failed to resolve project path",
+            &e,
+        )),
     }
 }
 
@@ -167,7 +173,7 @@ async fn checkout(
 ) -> Response {
     let (path, val) = match resolve(&ctx, &id, q.chat_id.as_deref(), &body).await {
         Ok(v) => v,
-        Err(r) => return r,
+        Err(r) => return r.into_response(),
     };
     let data: CheckoutBody = match body_of(val) {
         Ok(d) => d,
@@ -190,7 +196,7 @@ async fn commit(
 ) -> Response {
     let (path, val) = match resolve(&ctx, &id, q.chat_id.as_deref(), &body).await {
         Ok(v) => v,
-        Err(r) => return r,
+        Err(r) => return r.into_response(),
     };
     let data: CommitBody = match body_of(val) {
         Ok(d) => d,
@@ -216,7 +222,7 @@ async fn create_branch(
 ) -> Response {
     let (path, val) = match resolve(&ctx, &id, q.chat_id.as_deref(), &body).await {
         Ok(v) => v,
-        Err(r) => return r,
+        Err(r) => return r.into_response(),
     };
     let data: CreateBranchBody = match body_of(val) {
         Ok(d) => d,
@@ -242,7 +248,7 @@ async fn fetch(
 ) -> Response {
     let (path, val) = match resolve(&ctx, &id, q.chat_id.as_deref(), &body).await {
         Ok(v) => v,
-        Err(r) => return r,
+        Err(r) => return r.into_response(),
     };
     let data: FetchBody = match body_of(val) {
         Ok(d) => d,
@@ -265,7 +271,7 @@ async fn pull(
 ) -> Response {
     let (path, val) = match resolve(&ctx, &id, q.chat_id.as_deref(), &body).await {
         Ok(v) => v,
-        Err(r) => return r,
+        Err(r) => return r.into_response(),
     };
     let data: PullBody = match body_of(val) {
         Ok(d) => d,
@@ -300,7 +306,7 @@ async fn push(
 ) -> Response {
     let (path, val) = match resolve(&ctx, &id, q.chat_id.as_deref(), &body).await {
         Ok(v) => v,
-        Err(r) => return r,
+        Err(r) => return r.into_response(),
     };
     let data: PushBody = match body_of(val) {
         Ok(d) => d,
@@ -323,7 +329,7 @@ async fn merge(
 ) -> Response {
     let (path, val) = match resolve(&ctx, &id, q.chat_id.as_deref(), &body).await {
         Ok(v) => v,
-        Err(r) => return r,
+        Err(r) => return r.into_response(),
     };
     let data: BranchArgBody = match body_of(val) {
         Ok(d) => d,
@@ -343,7 +349,7 @@ async fn rebase(
 ) -> Response {
     let (path, val) = match resolve(&ctx, &id, q.chat_id.as_deref(), &body).await {
         Ok(v) => v,
-        Err(r) => return r,
+        Err(r) => return r.into_response(),
     };
     let data: BranchArgBody = match body_of(val) {
         Ok(d) => d,
@@ -366,7 +372,7 @@ async fn abort(
 ) -> Response {
     let (path, _val) = match resolve(&ctx, &id, q.chat_id.as_deref(), &body).await {
         Ok(v) => v,
-        Err(r) => return r,
+        Err(r) => return r.into_response(),
     };
     git_result(ctx.git.for_project(path).abort().await, "abort")
 }
@@ -379,7 +385,7 @@ async fn rename_branch(
 ) -> Response {
     let (path, val) = match resolve(&ctx, &id, q.chat_id.as_deref(), &body).await {
         Ok(v) => v,
-        Err(r) => return r,
+        Err(r) => return r.into_response(),
     };
     let data: RenameBranchBody = match body_of(val) {
         Ok(d) => d,
@@ -405,7 +411,7 @@ async fn delete_branch(
 ) -> Response {
     let (path, val) = match resolve(&ctx, &id, q.chat_id.as_deref(), &body).await {
         Ok(v) => v,
-        Err(r) => return r,
+        Err(r) => return r.into_response(),
     };
     let data: DeleteBranchBody = match body_of(val) {
         Ok(d) => d,
@@ -435,7 +441,7 @@ async fn update_all(
 ) -> Response {
     let (path, _val) = match resolve(&ctx, &id, q.chat_id.as_deref(), &body).await {
         Ok(v) => v,
-        Err(r) => return r,
+        Err(r) => return r.into_response(),
     };
     git_result(ctx.git.for_project(path).update_all().await, "updateAll")
 }

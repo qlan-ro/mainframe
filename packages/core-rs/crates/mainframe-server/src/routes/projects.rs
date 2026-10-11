@@ -118,7 +118,7 @@ async fn create(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
 fn removal_response(result: Result<(), RemoveProjectError>) -> Response {
     match result {
         Ok(()) => ok_empty(),
-        Err(err) => crate::error_status::fail_with(&err),
+        Err(err) => crate::respond::fail_with(&err),
     }
 }
 

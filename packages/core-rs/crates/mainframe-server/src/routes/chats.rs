@@ -11,6 +11,7 @@
 //! unarchive) call the real facade methods, falling back to the failure envelope
 //! when it is unavailable.
 
+use axum::response::IntoResponse;
 use std::sync::Arc;
 
 use axum::Router;
@@ -267,10 +268,9 @@ async fn set_pinned(
         return fail(StatusCode::BAD_REQUEST, "pinned (boolean) is required");
     };
     let lookup = id.clone();
-    let existing = match ctx.db.call(move |db| db.chats.get(&lookup)).await {
-        Ok(Some(chat)) => chat,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
-        Err(err) => return crate::async_err::internal_error("get chat", &err),
+    let existing = match ctx.require_chat(&lookup).await {
+        Ok(value) => value,
+        Err(error) => return error.into_response(),
     };
     if let Some(resp) = refuse_if_temporary(&existing, "pin") {
         return resp;
@@ -292,10 +292,9 @@ async fn set_pinned(
         return crate::async_err::internal_error("update pinned", &err);
     }
     let lookup = id.clone();
-    let chat = match ctx.db.call(move |db| db.chats.get(&lookup)).await {
-        Ok(Some(chat)) => chat,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
-        Err(err) => return crate::async_err::internal_error("get chat", &err),
+    let chat = match ctx.require_chat(&lookup).await {
+        Ok(value) => value,
+        Err(error) => return error.into_response(),
     };
     if let Some(cm) = ctx.chat_manager.as_ref() {
         cm.sync_chat_fields(
@@ -356,10 +355,9 @@ async fn apply_and_return(ctx: &Arc<AppCtx>, id: String, update: ChatPatch) -> R
         return crate::async_err::internal_error("update tuning", &err);
     }
     let lookup = id.clone();
-    let chat = match ctx.db.call(move |db| db.chats.get(&lookup)).await {
-        Ok(Some(chat)) => chat,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
-        Err(err) => return crate::async_err::internal_error("get chat", &err),
+    let chat = match ctx.require_chat(&lookup).await {
+        Ok(value) => value,
+        Err(error) => return error.into_response(),
     };
     if let Some(cm) = ctx.chat_manager.clone() {
         cm.sync_chat_fields(&id, partial);
@@ -455,15 +453,14 @@ async fn tool_result(
         return fail(StatusCode::BAD_REQUEST, "Invalid parameters");
     }
     let lookup_id = id.clone();
-    let chat = match ctx.db.call(move |db| db.chats.get(&lookup_id)).await {
-        Ok(Some(chat)) => chat,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
-        Err(err) => return crate::async_err::internal_error("get chat", &err),
+    let chat = match ctx.require_chat(&lookup_id).await {
+        Ok(value) => value,
+        Err(error) => return error.into_response(),
     };
 
     let file_path = match resolve_tool_result_path(&ctx, &chat).await {
         Ok(Some(path)) => path,
-        Err(response) => return response,
+        Err(response) => return response.into_response(),
         Ok(None) => return fail(StatusCode::NOT_FOUND, "No session file for chat"),
     };
     // A Codex chat's session file is a rollout, where the tool call's display
@@ -487,7 +484,10 @@ async fn tool_result(
     }
 }
 
-async fn resolve_tool_result_path(ctx: &AppCtx, chat: &Chat) -> Result<Option<String>, Response> {
+async fn resolve_tool_result_path(
+    ctx: &AppCtx,
+    chat: &Chat,
+) -> Result<Option<String>, crate::respond::ApiError> {
     if let Some(path) = &chat.session_file_path {
         return Ok(Some(path.clone()));
     }
@@ -499,7 +499,7 @@ async fn resolve_tool_result_path(ctx: &AppCtx, chat: &Chat) -> Result<Option<St
         .db
         .call(move |db| db.projects.get(&project_id))
         .await
-        .map_err(|err| crate::async_err::internal_error("get project", &err))?
+        .map_err(|err| crate::respond::ApiError::internal("get project", &err))?
         .map(|project| project.path);
     let Some(cwd) = chat.worktree_path.clone().or(project_path) else {
         return Ok(None);
@@ -532,7 +532,7 @@ async fn resolve_tool_result_path(ctx: &AppCtx, chat: &Chat) -> Result<Option<St
             )
         })
         .await
-        .map_err(|err| crate::async_err::internal_error("persist session file path", &err))?;
+        .map_err(|err| crate::respond::ApiError::internal("persist session file path", &err))?;
     Ok(Some(path))
 }
 

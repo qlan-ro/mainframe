@@ -14,7 +14,7 @@ use axum::Router;
 use axum::body::Bytes;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use serde::Deserialize;
 
@@ -22,20 +22,23 @@ use mainframe_background_tasks::kill::{KillTasksForChatArgs, SessionLike, kill_t
 use mainframe_services::workspace::{get_worktrees, remove_worktree, short_branch};
 
 use crate::ctx::AppCtx;
-use crate::error_status::{fail_with, status_of};
 use crate::input_error::InputError;
 use crate::orchestration_deps::branch_name_ok;
 use crate::respond::{fail, ok, ok_empty};
+use crate::respond::{fail_with, status_of};
 use crate::routes::projects::parse_body;
 
 // The `Err` carries a built axum `Response` (intentionally large); boxing it
 // would only add an allocation for a value we return by move once.
 #[allow(clippy::result_large_err)]
-async fn project_path(ctx: &Arc<AppCtx>, project_id: &str) -> Result<Option<String>, Response> {
+async fn project_path(
+    ctx: &Arc<AppCtx>,
+    project_id: &str,
+) -> Result<Option<String>, crate::respond::ApiError> {
     let pid = project_id.to_string();
     match ctx.db.call(move |db| db.projects.get(&pid)).await {
         Ok(project) => Ok(project.map(|p| p.path)),
-        Err(err) => Err(crate::async_err::internal_error("get project", &err)),
+        Err(err) => Err(crate::respond::ApiError::internal("get project", &err)),
     }
 }
 
@@ -50,17 +53,29 @@ struct WorktreeBody {
 // Parse + validate the enable/fork body, returning the (baseBranch, branchName)
 // pair. The first failing check wins.
 #[allow(clippy::result_large_err)]
-fn validate_enable_fork(body: &Bytes) -> Result<(String, String), Response> {
+fn validate_enable_fork(body: &Bytes) -> Result<(String, String), crate::respond::ApiError> {
     let Some(b) = parse_body::<WorktreeBody>(body) else {
-        return Err(fail(StatusCode::BAD_REQUEST, "Invalid input"));
+        return Err(crate::respond::ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "Invalid input",
+        ));
     };
     let Some(base) = b.base_branch.filter(|s| !s.is_empty()) else {
-        return Err(fail(StatusCode::BAD_REQUEST, "Base branch is required"));
+        return Err(crate::respond::ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "Base branch is required",
+        ));
     };
     match b.branch_name.as_deref() {
         Some(name) if branch_name_ok(name) => Ok((base, name.to_string())),
-        Some("") | None => Err(fail(StatusCode::BAD_REQUEST, "Branch name is required")),
-        _ => Err(fail(StatusCode::BAD_REQUEST, "Invalid branch name")),
+        Some("") | None => Err(crate::respond::ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "Branch name is required",
+        )),
+        _ => Err(crate::respond::ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "Invalid branch name",
+        )),
     }
 }
 
@@ -71,7 +86,7 @@ async fn enable_worktree(
 ) -> Response {
     let (base, branch) = match validate_enable_fork(&body) {
         Ok(v) => v,
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     };
     let Some(cm) = ctx.chat_manager.as_ref() else {
         tracing::warn!(chat_id = %id, "enable-worktree needs ChatManager (unwired)");
@@ -107,7 +122,7 @@ async fn fork_worktree(
 ) -> Response {
     let (base, branch) = match validate_enable_fork(&body) {
         Ok(v) => v,
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     };
     let Some(cm) = ctx.chat_manager.as_ref() else {
         tracing::warn!(chat_id = %id, "fork-worktree needs ChatManager (unwired)");
@@ -130,7 +145,7 @@ async fn list_worktrees(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) 
     let path = match project_path(&ctx, &id).await {
         Ok(Some(path)) => path,
         Ok(None) => return fail(StatusCode::NOT_FOUND, "Project not found"),
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     };
     let worktrees = get_worktrees(&path).await;
     let filtered: Vec<_> = worktrees.into_iter().filter(|wt| wt.path != path).collect();
@@ -194,7 +209,7 @@ async fn delete_worktree(
     let project_path = match project_path(&ctx, &id).await {
         Ok(Some(path)) => path,
         Ok(None) => return fail(StatusCode::NOT_FOUND, "Project not found"),
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     };
     let parsed = parse_body::<DeleteWorktreeBody>(&body).unwrap_or(DeleteWorktreeBody {
         worktree_path: None,

@@ -13,7 +13,7 @@ use axum::Router;
 use axum::body::Bytes;
 use axum::extract::{Path as AxPath, Query, State};
 use axum::http::StatusCode;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use mainframe_db::{DatabaseManager, DbError};
 use mainframe_types::chat::{Chat, Project};
@@ -77,7 +77,7 @@ pub(crate) async fn resolve_base(
     ctx: &AppCtx,
     project_id: &str,
     chat_id: Option<&str>,
-) -> Result<String, Response> {
+) -> Result<String, crate::respond::ApiError> {
     let pid = project_id.to_string();
     let cid = chat_id.map(str::to_string);
     match ctx
@@ -86,8 +86,14 @@ pub(crate) async fn resolve_base(
         .await
     {
         Ok(Some(base)) => Ok(base),
-        Ok(None) => Err(fail(StatusCode::NOT_FOUND, "Project not found")),
-        Err(err) => Err(internal_error("resolving effective path", &err)),
+        Ok(None) => Err(crate::respond::ApiError::new(
+            StatusCode::NOT_FOUND,
+            "Project not found",
+        )),
+        Err(err) => Err(crate::respond::ApiError::internal(
+            "resolving effective path",
+            &err,
+        )),
     }
 }
 
@@ -104,7 +110,7 @@ async fn tree(
 ) -> Response {
     let base = match resolve_base(&ctx, &id, qget(&q, "chatId")).await {
         Ok(b) => b,
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     };
     // `req.query.path || '.'` — an empty string is falsy → '.'.
     let dir_path = qget(&q, "path").filter(|p| !p.is_empty()).unwrap_or(".");
@@ -179,7 +185,7 @@ async fn search_files(
 ) -> Response {
     let base = match resolve_base(&ctx, &id, qget(&q, "chatId")).await {
         Ok(b) => b,
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     };
     let query = qget(&q, "q").unwrap_or("").to_lowercase();
     if query.is_empty() {
@@ -265,7 +271,7 @@ async fn files_list(
 ) -> Response {
     let base = match resolve_base(&ctx, &id, qget(&q, "chatId")).await {
         Ok(b) => b,
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     };
     let limit = parse_limit(qget(&q, "limit"), 5000, 5000);
     if tokio::fs::canonicalize(&base).await.is_err() {
@@ -322,7 +328,7 @@ async fn file_content(
 ) -> Response {
     let base = match resolve_base(&ctx, &id, qget(&q, "chatId")).await {
         Ok(b) => b,
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     };
     let Some(file_path) = qget(&q, "path").filter(|p| !p.is_empty()) else {
         return fail(StatusCode::BAD_REQUEST, "path query required");
@@ -366,7 +372,7 @@ async fn write_file(
     let chat_id = parsed.get("chatId").and_then(|v| v.as_str());
     let file_path = match require_nonempty_string(&parsed, "path") {
         Ok(p) => p,
-        Err(err) => return crate::error_status::fail_with(&err),
+        Err(err) => return crate::respond::fail_with(&err),
     };
     // `content` must be a string (an empty string is valid). Missing/non-string
     // returns the Zod v4 type-mismatch message.
@@ -383,7 +389,7 @@ async fn write_file(
 
     let base = match resolve_base(&ctx, &id, chat_id).await {
         Ok(b) => b,
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     };
     let Some(full) = resolve_and_validate_path(&base, file_path).await else {
         return fail(StatusCode::FORBIDDEN, "Path outside project");

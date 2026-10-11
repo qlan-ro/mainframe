@@ -2,7 +2,8 @@ use axum::body::to_bytes;
 
 use super::*;
 
-async fn read(resp: Response) -> (StatusCode, serde_json::Value) {
+async fn read(resp: impl axum::response::IntoResponse) -> (StatusCode, serde_json::Value) {
+    let resp = resp.into_response();
     let status = resp.status();
     let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
     (
@@ -39,7 +40,7 @@ async fn create_rejects_worktree_without_branch_400() {
 }
 
 #[tokio::test]
-async fn create_rejects_an_unknown_project_id_400_and_writes_no_row() {
+async fn create_rejects_an_unknown_project_id_404_and_writes_no_row() {
     let ctx = AppCtx::test_ctx();
     let resp = create(
         State(ctx.clone()),
@@ -47,21 +48,21 @@ async fn create_rejects_an_unknown_project_id_400_and_writes_no_row() {
     )
     .await;
     let (status, body) = read(resp).await;
-    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(body["error"], "Project not found");
     let rows = ctx.db.call(|db| db.chats.list_all()).await.unwrap();
     assert!(rows.is_empty(), "a rejected create must write no chat row");
 }
 
 #[tokio::test]
-async fn create_rejects_the_scratch_project_id_as_an_unknown_project_400() {
+async fn create_rejects_the_scratch_project_id_as_an_unknown_project_404() {
     let ctx = AppCtx::test_ctx();
     let resp = create(
         State(ctx.clone()),
         axum::body::Bytes::from(r#"{"projectId":"mainframe-no-project","adapterId":"claude"}"#),
     )
     .await;
-    assert_eq!(read(resp).await.0, StatusCode::BAD_REQUEST);
+    assert_eq!(read(resp).await.0, StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]

@@ -1,6 +1,7 @@
 //! `POST /api/chats/{id}/discard`, and the temporary-chat refusal shared by the
 //! pin/tag/archive/unarchive guards.
 
+use axum::response::IntoResponse;
 use std::sync::Arc;
 
 use axum::Router;
@@ -28,10 +29,9 @@ pub(crate) fn refuse_if_temporary(chat: &Chat, action: &str) -> Option<Response>
 
 async fn discard(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
     let lookup = id.clone();
-    let chat = match ctx.db.call(move |db| db.chats.get(&lookup)).await {
-        Ok(Some(chat)) => chat,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
-        Err(err) => return crate::async_err::internal_error("get chat", &err),
+    let chat = match ctx.require_chat(&lookup).await {
+        Ok(value) => value,
+        Err(error) => return error.into_response(),
     };
     if !chat.temporary {
         return fail(StatusCode::CONFLICT, "chat is not temporary");
@@ -44,7 +44,7 @@ async fn discard(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Resp
         Ok(()) => ok_empty(),
         Err(err) => {
             tracing::error!(chat_id = %id, %err, "discard failed");
-            crate::error_status::fail_with(&err)
+            crate::respond::fail_with(&err)
         }
     }
 }

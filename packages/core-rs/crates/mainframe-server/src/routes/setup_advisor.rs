@@ -10,7 +10,7 @@ use std::time::Duration;
 use axum::Router;
 use axum::extract::{Path as AxPath, State};
 use axum::http::StatusCode;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use mainframe_types::setup_advisor::{ProjectFingerprint, SetupAdvisorReport};
 
@@ -28,7 +28,7 @@ const FINGERPRINT_BUDGET: Duration = Duration::from_secs(15);
 async fn handle_automation_recommendations(ctx: &AppCtx, id: &str) -> Response {
     let base_path = match resolve_base(ctx, id, None).await {
         Ok(b) => b,
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     };
 
     let is_dir = tokio::fs::metadata(&base_path)

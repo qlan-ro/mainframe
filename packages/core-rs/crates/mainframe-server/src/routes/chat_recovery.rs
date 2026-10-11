@@ -11,7 +11,7 @@ use axum::response::Response;
 use axum::routing::post;
 
 use crate::ctx::AppCtx;
-use crate::error_status::fail_with;
+use crate::respond::fail_with;
 use crate::respond::{fail, ok_empty};
 
 /// Which recovery op a route runs, mapped to its ChatManager method + log label.

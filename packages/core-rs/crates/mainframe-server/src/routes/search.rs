@@ -10,14 +10,14 @@ use std::sync::Arc;
 use axum::Router;
 use axum::extract::{Path as AxPath, Query, State};
 use axum::http::StatusCode;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use mainframe_types::search::SearchContentResult;
 
 use crate::ctx::AppCtx;
-use crate::error_status::fail_with;
 use crate::fs_utils::{has_binary_extension, relative};
 use crate::input_error::InputError;
+use crate::respond::fail_with;
 use crate::respond::{fail, ok};
 use crate::ripgrep::{RipgrepOptions, search_with_ripgrep};
 use crate::routes::files::resolve_base;
@@ -113,7 +113,7 @@ async fn content_search(
 
     let raw_base = match resolve_base(&ctx, &id, qget(&q, "chatId")).await {
         Ok(b) => b,
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     };
     let base = match tokio::fs::canonicalize(&raw_base).await {
         Ok(p) => p.to_string_lossy().into_owned(),

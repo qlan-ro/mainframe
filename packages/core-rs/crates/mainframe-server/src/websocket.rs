@@ -209,7 +209,7 @@ pub(crate) async fn lsp_ws_handler(
 
 /// The bare status response that refuses an LSP upgrade.
 fn reject_response(kind: StatusKind) -> Response {
-    crate::error_status::status_code(kind).into_response()
+    crate::respond::status_code(kind).into_response()
 }
 
 /// Bridge an accepted LSP WebSocket to its spawned language-server child: cancel

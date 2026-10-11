@@ -22,14 +22,13 @@ pub fn ok_empty() -> Response {
     Json(json!({ "success": true })).into_response()
 }
 
-/// `fail(res, status, error)` — failure envelope at the given HTTP status.
 pub fn fail(status: StatusCode, error: impl Into<String>) -> Response {
-    (
-        status,
-        Json(json!({ "success": false, "error": error.into() })),
-    )
-        .into_response()
+    ApiError::from_status(status, error.into()).into_response()
 }
+
+mod error;
+pub use error::ApiError;
+pub use error::{fail_or_internal, fail_with, status_code, status_of};
 
 #[cfg(test)]
 mod tests {
@@ -63,3 +62,7 @@ mod tests {
         assert_eq!(body, json!({ "success": false, "error": "Not found" }));
     }
 }
+
+#[cfg(test)]
+#[path = "respond/golden_tests.rs"]
+mod golden_tests;

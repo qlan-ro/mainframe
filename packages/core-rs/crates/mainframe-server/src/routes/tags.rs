@@ -20,7 +20,7 @@ use mainframe_types::tags::TagColor;
 use serde::Deserialize;
 
 use crate::ctx::AppCtx;
-use crate::error_status::fail_or_internal;
+use crate::respond::fail_or_internal;
 use crate::respond::{fail, ok};
 use crate::routes::chat_discard::refuse_if_temporary;
 use crate::routes::projects::parse_body;

@@ -11,7 +11,7 @@ use axum::Router;
 use axum::body::Bytes;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use axum::routing::{patch, post};
 use serde::Deserialize;
 
@@ -26,11 +26,11 @@ use crate::routes::projects::parse_body;
 /// key. Wrapping in `Some` here keeps absent → outer `None` and present
 /// (including `null`) → outer `Some`, which is what the `projectId` presence
 /// check needs.
-async fn chat_exists(ctx: &Arc<AppCtx>, id: &str) -> Result<bool, Response> {
+async fn chat_exists(ctx: &Arc<AppCtx>, id: &str) -> Result<bool, crate::respond::ApiError> {
     let lookup = id.to_string();
     match ctx.db.call(move |db| db.chats.get(&lookup)).await {
         Ok(chat) => Ok(chat.is_some()),
-        Err(err) => Err(crate::async_err::internal_error("get chat", &err)),
+        Err(err) => Err(crate::respond::ApiError::internal("get chat", &err)),
     }
 }
 
@@ -72,7 +72,7 @@ async fn update_config(
     match chat_exists(&ctx, &id).await {
         Ok(false) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
         Ok(true) => {}
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     }
     let Some(cm) = ctx.chat_manager.as_ref() else {
         tracing::warn!(chat_id = %id, "updateChatConfig is a Phase-4 seam (ChatManager unavailable)");
@@ -107,7 +107,7 @@ async fn interrupt(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Re
     match chat_exists(&ctx, &id).await {
         Ok(false) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
         Ok(true) => {}
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     }
     let Some(cm) = ctx.chat_manager.as_ref() else {
         tracing::warn!(chat_id = %id, "interrupt is a Phase-4 seam (ChatManager unavailable)");
@@ -121,7 +121,7 @@ async fn resume(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Respo
     match chat_exists(&ctx, &id).await {
         Ok(false) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
         Ok(true) => {}
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     }
     let Some(cm) = ctx.chat_manager.as_ref() else {
         tracing::warn!(chat_id = %id, "resume is a Phase-4 seam (ChatManager unavailable)");
@@ -135,7 +135,7 @@ async fn trust_workspace(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>)
     match chat_exists(&ctx, &id).await {
         Ok(false) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
         Ok(true) => {}
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     }
     let Some(cm) = ctx.chat_manager.as_ref() else {
         tracing::warn!(chat_id = %id, "trustWorkspace is a Phase-4 seam (ChatManager unavailable)");
@@ -148,7 +148,7 @@ async fn trust_workspace(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>)
         Ok(()) => ok_empty(),
         Err(err) => {
             tracing::error!(chat_id = %id, %err, "trust-workspace failed");
-            crate::error_status::fail_with(&err)
+            crate::respond::fail_with(&err)
         }
     }
 }
@@ -172,7 +172,7 @@ async fn queue_edit(
     match chat_exists(&ctx, &id).await {
         Ok(false) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
         Ok(true) => {}
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     }
     let Some(cm) = ctx.chat_manager.as_ref() else {
         tracing::warn!(chat_id = %id, "queue.edit is a Phase-4 seam (ChatManager unavailable)");
@@ -194,7 +194,7 @@ async fn queue_cancel(
     match chat_exists(&ctx, &id).await {
         Ok(false) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
         Ok(true) => {}
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     }
     let Some(cm) = ctx.chat_manager.as_ref() else {
         tracing::warn!(chat_id = %id, "queue.cancel is a Phase-4 seam (ChatManager unavailable)");

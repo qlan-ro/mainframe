@@ -7,6 +7,7 @@
 //! built mention. `context` needs `ChatManager::get_session_context` and returns
 //! the failure envelope when the manager is unwired.
 
+use axum::response::IntoResponse;
 use std::sync::Arc;
 
 use axum::Router;
@@ -31,16 +32,14 @@ async fn context(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Resp
     // `get_session_context` needs the AdapterRegistry + AttachmentStore that only
     // the ChatManager holds.
     let lookup = id.clone();
-    let chat = match ctx.db.call(move |db| db.chats.get(&lookup)).await {
-        Ok(Some(chat)) => chat,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
-        Err(err) => return crate::async_err::internal_error("get chat", &err),
+    let chat = match ctx.require_chat(&lookup).await {
+        Ok(value) => value,
+        Err(error) => return error.into_response(),
     };
     let project_id = chat.project_id.clone();
-    let project = match ctx.db.call(move |db| db.projects.get(&project_id)).await {
-        Ok(Some(project)) => project,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Project not found"),
-        Err(err) => return crate::async_err::internal_error("get project", &err),
+    let project = match ctx.require_project(&project_id).await {
+        Ok(value) => value,
+        Err(error) => return error.into_response(),
     };
     let Some(cm) = ctx.chat_manager.as_ref() else {
         tracing::warn!(chat_id = %id, "getSessionContext needs ChatManager (unwired)");
@@ -61,16 +60,14 @@ async fn session_file(
     Query(q): Query<SessionFileQuery>,
 ) -> Response {
     let lookup = id.clone();
-    let chat = match ctx.db.call(move |db| db.chats.get(&lookup)).await {
-        Ok(Some(chat)) => chat,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
-        Err(err) => return crate::async_err::internal_error("get chat", &err),
+    let chat = match ctx.require_chat(&lookup).await {
+        Ok(value) => value,
+        Err(error) => return error.into_response(),
     };
     let project_id = chat.project_id.clone();
-    let project = match ctx.db.call(move |db| db.projects.get(&project_id)).await {
-        Ok(Some(project)) => project,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Project not found"),
-        Err(err) => return crate::async_err::internal_error("get project", &err),
+    let project = match ctx.require_project(&project_id).await {
+        Ok(value) => value,
+        Err(error) => return error.into_response(),
     };
     let Some(file_path) = q.path.filter(|p| !p.is_empty()) else {
         return fail(StatusCode::BAD_REQUEST, "path query required");

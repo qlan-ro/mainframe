@@ -57,7 +57,7 @@ async fn start(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
     let chat_id = body.chat_id.clone();
     let project_id = match ctx.db.call(move |db| db.chats.get(&chat_id)).await {
         Ok(Some(chat)) => chat.project_id,
-        Ok(None) => return fail(StatusCode::BAD_REQUEST, "Chat not found"),
+        Ok(None) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
         Err(err) => return crate::async_err::internal_error("get chat", &err),
     };
 
@@ -111,4 +111,32 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/api/tunnel/ports", get(list))
         .route("/api/tunnel/ports/start", post(start))
         .route("/api/tunnel/ports/stop", post(stop))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn unknown_chat_returns_404_without_starting_tunnel() {
+        let mut ctx = AppCtx::test_ctx();
+        let inner = Arc::get_mut(&mut ctx).unwrap();
+        inner.port = 3210;
+        inner.port_tunnels = Some(Arc::new(PortTunnelRegistry::new(Arc::new(
+            mainframe_launch::TunnelManager::with_config(None, Default::default()),
+        ))));
+        let response = start(
+            State(ctx),
+            Bytes::from(r#"{"port":8080,"chatId":"missing"}"#),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(
+            bytes.as_ref(),
+            br#"{"error":"Chat not found","success":false}"#
+        );
+    }
 }

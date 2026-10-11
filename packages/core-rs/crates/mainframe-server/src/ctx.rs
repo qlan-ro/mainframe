@@ -176,6 +176,28 @@ pub struct AppCtx {
 }
 
 impl AppCtx {
+    pub async fn require_chat(
+        &self,
+        id: &str,
+    ) -> Result<mainframe_types::chat::Chat, crate::respond::ApiError> {
+        let id = id.to_string();
+        self.db
+            .call(move |db| db.chats.get(&id))
+            .await?
+            .ok_or_else(crate::respond::ApiError::chat_not_found)
+    }
+
+    pub async fn require_project(
+        &self,
+        id: &str,
+    ) -> Result<mainframe_types::chat::Project, crate::respond::ApiError> {
+        let id = id.to_string();
+        self.db
+            .call(move |db| db.projects.get(&id))
+            .await?
+            .ok_or_else(crate::respond::ApiError::project_not_found)
+    }
+
     /// Read the current `/health` tunnel URL.
     pub fn tunnel_url(&self) -> Option<String> {
         self.tunnel_url.read_recover().clone()
