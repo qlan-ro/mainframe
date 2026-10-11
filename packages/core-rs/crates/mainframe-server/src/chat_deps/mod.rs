@@ -96,4 +96,5 @@ pub use build::{ChatManagerParams, build_chat_manager};
 #[cfg(test)]
 use scan::scan_history_for_mentions;
 #[cfg(test)]
+#[path = "../chat_deps_tests.rs"]
 mod tests;

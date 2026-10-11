@@ -3,7 +3,7 @@
 //! `FacadeServer` fixture and a barrier adapter.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use mainframe_types::sync::LockExt as _;
+use mainframe_types::sync::LockExt;
 mod support;
 
 use std::sync::Arc;
@@ -112,7 +112,7 @@ async fn a_cancel_for_the_same_session_lands_after_its_prompt_is_in_flight() {
                     return seen.clone();
                 }
             }
-            tokio::time::sleep(Duration::from_millis(10)).await;
+            tokio::task::yield_now().await;
         }
     })
     .await

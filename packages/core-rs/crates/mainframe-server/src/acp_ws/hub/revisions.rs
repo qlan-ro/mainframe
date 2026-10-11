@@ -5,7 +5,7 @@
 //! as a full replay — nothing on the wire distinguishes "evicted" from "the
 //! daemon restarted".
 
-use mainframe_types::sync::LockExt as _;
+use mainframe_types::sync::LockExt;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 
@@ -174,4 +174,5 @@ impl FacadeHub {
 }
 
 #[cfg(test)]
+#[path = "revisions_tests.rs"]
 mod tests;

@@ -9,11 +9,7 @@ use reqwest::StatusCode;
 use serde_json::{Value, json};
 use support::{TestServer, spawn_test_server};
 
-async fn get_json(server: &TestServer, path: &str) -> (StatusCode, Value) {
-    let res = reqwest::get(server.http_url(path)).await.unwrap();
-    let status = res.status();
-    (status, res.json().await.unwrap())
-}
+use support::get_json;
 
 async fn post_json(server: &TestServer, path: &str, body: Value) -> (StatusCode, Value) {
     let res = reqwest::Client::new()

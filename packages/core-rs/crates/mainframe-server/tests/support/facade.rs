@@ -4,7 +4,6 @@ use mainframe_types::settings_kv::MemorySettings;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
-use std::time::Duration;
 
 use dashmap::DashMap;
 use mainframe_adapter_api::{Adapter, AdapterRegistry};
@@ -162,7 +161,6 @@ pub async fn spawn_facade_server_with(
         )
         .await
     });
-    tokio::time::sleep(Duration::from_millis(20)).await;
 
     FacadeServer {
         server: TestServer {

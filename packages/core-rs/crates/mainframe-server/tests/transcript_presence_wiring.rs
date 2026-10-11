@@ -129,7 +129,7 @@ async fn the_external_session_sweep_reconciles_an_unopened_chat() {
             tokio::time::Instant::now() < deadline,
             "sweep never flipped transcript_missing within 5s"
         );
-        tokio::time::sleep(Duration::from_millis(25)).await;
+        tokio::task::yield_now().await;
     }
 
     service.stop_auto_scan(&h.project_id);

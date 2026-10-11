@@ -85,3 +85,6 @@ pub mod wiring;
 pub mod bootstrap;
 
 mod lsp_websocket;
+
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_support;

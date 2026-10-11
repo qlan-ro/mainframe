@@ -101,6 +101,7 @@ async fn start(ctx: &AppCtx, project: &str, path: &str, port: u16) {
         .unwrap();
     tokio::time::timeout(Duration::from_secs(5), async {
         while ctx.infra.tunnel_manager.get_url("preview:web").is_none() {
+            // OS child; Tokio time cannot be paused.
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
     })

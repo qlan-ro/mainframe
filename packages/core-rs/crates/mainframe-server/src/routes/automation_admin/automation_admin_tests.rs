@@ -1,12 +1,9 @@
 //! Admin route tests: interactions respond flow, action catalog,
 //! credential CRUD (labels/kind only — never secret material).
 
-use std::time::Duration;
-
-use axum::body::{Bytes, to_bytes};
+use axum::body::Bytes;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::response::Response;
 use serde_json::{Value, json};
 
 use crate::routes::automations_test_support::{AutomationsHarness, ask_me_body, automations_ctx};
@@ -16,26 +13,20 @@ use super::{
     put_credential, respond,
 };
 
-async fn read(resp: Response) -> (StatusCode, Value) {
-    let status = resp.status();
-    let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
-    (
-        status,
-        serde_json::from_slice(&bytes).unwrap_or(Value::Null),
-    )
-}
+use crate::test_support::read_json as read;
 
 fn bytes(value: &Value) -> Bytes {
     Bytes::from(serde_json::to_vec(value).unwrap())
 }
 
 async fn pending_interaction_id(h: &AutomationsHarness) -> String {
-    for _ in 0..100 {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while std::time::Instant::now() < deadline {
         let pending = h.engine.list_pending_interactions().await.unwrap();
         if let Some(first) = pending.first() {
             return first.id.clone();
         }
-        tokio::time::sleep(Duration::from_millis(20)).await;
+        tokio::task::yield_now().await;
     }
     panic!("no interaction ever went pending");
 }
@@ -51,7 +42,9 @@ async fn interactions_list_and_respond_flow() {
     h.engine.run_manually(&created.id).await.unwrap();
     let interaction_id = pending_interaction_id(&h).await;
 
-    let (status, body) = read(list_interactions(State(h.ctx.clone())).await).await;
+    let (status, body) = read(list_interactions(State(h.ctx.clone())).await)
+        .await
+        .unwrap();
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["data"][0]["status"], "pending");
     assert_eq!(body["data"][0]["fields"][0]["key"], "mood");
@@ -64,7 +57,8 @@ async fn interactions_list_and_respond_flow() {
         )
         .await,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(status, StatusCode::OK);
 
     // Second answer → 409 (already answered).
@@ -76,7 +70,8 @@ async fn interactions_list_and_respond_flow() {
         )
         .await,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(status, StatusCode::CONFLICT);
     assert!(body["error"].as_str().unwrap().contains("already answered"));
 }
@@ -92,7 +87,8 @@ async fn respond_unknown_interaction_404_and_bad_body_400() {
         )
         .await,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(status, StatusCode::NOT_FOUND);
 
     let (status, _) = read(
@@ -103,14 +99,17 @@ async fn respond_unknown_interaction_404_and_bad_body_400() {
         )
         .await,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]
 async fn action_catalog_lists_builtins_and_connectors_without_mcp() {
     let h = automations_ctx().await;
-    let (status, body) = read(list_actions(State(h.ctx.clone())).await).await;
+    let (status, body) = read(list_actions(State(h.ctx.clone())).await)
+        .await
+        .unwrap();
     assert_eq!(status, StatusCode::OK);
     let ids: Vec<&str> = body["data"]
         .as_array()
@@ -137,23 +136,30 @@ async fn credentials_round_trip_never_exposes_the_token() {
         )
         .await,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(status, StatusCode::OK);
 
-    let (status, body) = read(list_credentials(State(h.ctx.clone())).await).await;
+    let (status, body) = read(list_credentials(State(h.ctx.clone())).await)
+        .await
+        .unwrap();
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["data"]["labels"], json!(["github"]));
 
-    let (status, body) =
-        read(get_credential(State(h.ctx.clone()), Path("github".into())).await).await;
+    let (status, body) = read(get_credential(State(h.ctx.clone()), Path("github".into())).await)
+        .await
+        .unwrap();
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["data"], json!({ "label": "github", "kind": "token" }));
     assert!(!body.to_string().contains("tok_secret"));
 
-    let (status, _) =
-        read(delete_credential(State(h.ctx.clone()), Path("github".into())).await).await;
+    let (status, _) = read(delete_credential(State(h.ctx.clone()), Path("github".into())).await)
+        .await
+        .unwrap();
     assert_eq!(status, StatusCode::OK);
-    let (status, _) = read(get_credential(State(h.ctx.clone()), Path("github".into())).await).await;
+    let (status, _) = read(get_credential(State(h.ctx.clone()), Path("github".into())).await)
+        .await
+        .unwrap();
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
 
@@ -163,6 +169,7 @@ async fn reserved_webhook_labels_are_rejected_by_the_label_rule() {
     for handler_status in [
         read(get_credential(State(h.ctx.clone()), Path("webhook:h1".into())).await)
             .await
+            .unwrap()
             .0,
         read(
             put_credential(
@@ -173,9 +180,11 @@ async fn reserved_webhook_labels_are_rejected_by_the_label_rule() {
             .await,
         )
         .await
+        .unwrap()
         .0,
         read(delete_credential(State(h.ctx.clone()), Path("webhook:h1".into())).await)
             .await
+            .unwrap()
             .0,
     ] {
         assert_eq!(handler_status, StatusCode::BAD_REQUEST);

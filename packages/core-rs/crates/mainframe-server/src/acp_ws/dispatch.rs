@@ -253,4 +253,5 @@ pub(super) fn wire(response: &JsonRpcResponse) -> String {
 }
 
 #[cfg(test)]
+#[path = "dispatch_tests.rs"]
 mod tests;

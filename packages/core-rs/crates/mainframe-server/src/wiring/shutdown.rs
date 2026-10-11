@@ -50,4 +50,5 @@ async fn finish(
 }
 
 #[cfg(test)]
+#[path = "shutdown_tests.rs"]
 mod tests;

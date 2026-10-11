@@ -8,7 +8,7 @@
 //! `fanout.rs` owns per-event delivery and `handlers.rs` the `ChatSurface` sink
 //! itself.
 
-use mainframe_types::sync::LockExt as _;
+use mainframe_types::sync::LockExt;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 
@@ -261,4 +261,5 @@ impl FacadeHub {
 use mainframe_types::time::now_ms;
 
 #[cfg(test)]
+#[path = "hub_tests.rs"]
 mod tests;

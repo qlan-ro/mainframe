@@ -8,6 +8,7 @@ pub mod skills;
 pub mod subagents;
 
 #[cfg(test)]
+#[path = "../rules_tests.rs"]
 mod tests;
 
 use mainframe_types::setup_advisor::ProjectFingerprint;

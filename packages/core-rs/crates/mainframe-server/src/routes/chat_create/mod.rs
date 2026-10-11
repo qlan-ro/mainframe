@@ -17,6 +17,7 @@ use crate::respond::ok;
 use crate::routes::body::RequestJson;
 
 #[cfg(test)]
+#[path = "../chat_create_tests.rs"]
 mod tests;
 
 #[derive(Deserialize)]

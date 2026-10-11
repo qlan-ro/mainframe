@@ -1,14 +1,6 @@
 use super::*;
-use axum::body::to_bytes;
 
-async fn read(resp: Response) -> (StatusCode, serde_json::Value) {
-    let status = resp.status();
-    let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
-    (
-        status,
-        serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null),
-    )
-}
+use crate::test_support::read_json as read;
 
 #[cfg(unix)]
 #[tokio::test]
@@ -42,7 +34,7 @@ done
         }),
     )
     .await;
-    let (status, body) = read(response).await;
+    let (status, body) = read(response).await.unwrap();
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["data"].as_array().unwrap().len(), 1);
     assert_eq!(body["data"][0]["name"], "review");
@@ -61,7 +53,7 @@ async fn list_unknown_adapter_404() {
         }),
     )
     .await;
-    let (status, body) = read(resp).await;
+    let (status, body) = read(resp).await.unwrap();
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(body["error"], unsupported::<true>());
 }
@@ -75,7 +67,7 @@ async fn create_unknown_adapter_404() {
         axum::body::Bytes::from("{}"),
     )
     .await;
-    assert_eq!(read(resp).await.0, StatusCode::NOT_FOUND);
+    assert_eq!(read(resp).await.unwrap().0, StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]
@@ -102,7 +94,7 @@ async fn list_mock_adapter_scans_project_skills() {
         }),
     )
     .await;
-    let (status, body) = read(response).await;
+    let (status, body) = read(response).await.unwrap();
 
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["data"][0]["id"], "mock-cli:project:review");

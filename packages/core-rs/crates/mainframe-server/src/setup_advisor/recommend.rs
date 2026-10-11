@@ -90,4 +90,5 @@ pub(crate) fn recommend_with(
 }
 
 #[cfg(test)]
+#[path = "recommend_tests.rs"]
 mod tests;

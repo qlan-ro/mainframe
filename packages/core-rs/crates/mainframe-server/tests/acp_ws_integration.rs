@@ -299,7 +299,7 @@ async fn connecting_registers_a_facade_client_and_disconnecting_unregisters_it()
     while server.ctx.chat.facade_hub.connection_count() == 0
         && tokio::time::Instant::now() < deadline
     {
-        tokio::time::sleep(Duration::from_millis(10)).await;
+        tokio::task::yield_now().await;
     }
     assert_eq!(server.ctx.chat.facade_hub.connection_count(), 1);
 
@@ -308,7 +308,7 @@ async fn connecting_registers_a_facade_client_and_disconnecting_unregisters_it()
     while server.ctx.chat.facade_hub.connection_count() != 0
         && tokio::time::Instant::now() < deadline
     {
-        tokio::time::sleep(Duration::from_millis(10)).await;
+        tokio::task::yield_now().await;
     }
     assert_eq!(server.ctx.chat.facade_hub.connection_count(), 0);
 }

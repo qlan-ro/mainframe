@@ -110,18 +110,8 @@ pub fn router() -> Router<Arc<AppCtx>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::body::to_bytes;
-    use axum::response::IntoResponse;
 
-    async fn read(resp: impl IntoResponse) -> (StatusCode, serde_json::Value) {
-        let resp = resp.into_response();
-        let status = resp.status();
-        let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
-        (
-            status,
-            serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null),
-        )
-    }
+    use crate::test_support::read_json as read;
 
     #[tokio::test]
     async fn session_file_missing_chat_404() {
@@ -134,7 +124,7 @@ mod tests {
             }),
         )
         .await;
-        let (status, body) = read(resp).await;
+        let (status, body) = read(resp).await.unwrap();
         assert_eq!(status, StatusCode::NOT_FOUND);
         assert_eq!(body["error"], "Chat not found");
     }
@@ -148,13 +138,15 @@ mod tests {
             axum::body::Bytes::from(r#"{"kind":"nope","name":"x"}"#),
         )
         .await;
-        assert_eq!(read(resp).await.0, StatusCode::BAD_REQUEST);
+        assert_eq!(read(resp).await.unwrap().0, StatusCode::BAD_REQUEST);
     }
 
     #[tokio::test]
     async fn context_missing_chat_404() {
         let ctx = AppCtx::test_ctx();
-        let (status, body) = read(context(State(ctx.clone()), Path("nope".into())).await).await;
+        let (status, body) = read(context(State(ctx.clone()), Path("nope".into())).await)
+            .await
+            .unwrap();
         assert_eq!(status, StatusCode::NOT_FOUND);
         assert_eq!(body["error"], "Chat not found");
     }

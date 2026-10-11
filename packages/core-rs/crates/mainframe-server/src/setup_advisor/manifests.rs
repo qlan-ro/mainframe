@@ -265,4 +265,5 @@ pub async fn detect_root_manifests(real_root: &Path, fp: &mut ProjectFingerprint
 }
 
 #[cfg(test)]
+#[path = "manifests_tests.rs"]
 mod tests;

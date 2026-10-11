@@ -111,4 +111,5 @@ pub async fn build_automations_engine(
 }
 
 #[cfg(test)]
+#[path = "../automations_deps_tests.rs"]
 mod tests;

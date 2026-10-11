@@ -2,7 +2,7 @@
 //! socket loop drains, per-session stream state, and gates delivered but not
 //! yet answered.
 
-use mainframe_types::sync::LockExt as _;
+use mainframe_types::sync::LockExt;
 use std::collections::HashMap;
 use std::future::Future;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -287,4 +287,5 @@ pub fn rpc_id_string(request_id: &str) -> String {
 }
 
 #[cfg(test)]
+#[path = "facade_conn_tests.rs"]
 mod tests;

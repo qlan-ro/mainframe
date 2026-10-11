@@ -132,6 +132,7 @@ async fn start_alias_launch(
         .unwrap();
     tokio::time::timeout(std::time::Duration::from_secs(5), async {
         while !ready.exists() {
+            // OS child; Tokio time cannot be paused.
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         }
     })

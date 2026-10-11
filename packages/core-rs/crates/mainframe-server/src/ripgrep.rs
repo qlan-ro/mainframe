@@ -179,4 +179,5 @@ fn list_files_blocking(dir_path: &str, opts: &ListFilesOptions) -> Vec<String> {
 }
 
 #[cfg(test)]
+#[path = "ripgrep_tests.rs"]
 mod tests;

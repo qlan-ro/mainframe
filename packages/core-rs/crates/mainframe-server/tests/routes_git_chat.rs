@@ -7,39 +7,12 @@
 
 mod support;
 
-use std::path::Path;
-
 use mainframe_types::chat_patch::ChatPatch;
 use reqwest::StatusCode;
 use serde_json::{Value, json};
 use support::{TestServer, spawn_test_server};
 
-fn run_git(cwd: &Path, args: &[&str]) {
-    let out = std::process::Command::new("git")
-        .args(args)
-        .current_dir(cwd)
-        .env("GIT_CONFIG_GLOBAL", "/dev/null")
-        .env("GIT_CONFIG_SYSTEM", "/dev/null")
-        .output()
-        .unwrap();
-    assert!(
-        out.status.success(),
-        "git {args:?} failed: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-}
-
-fn init_repo() -> tempfile::TempDir {
-    let dir = tempfile::tempdir().unwrap();
-    run_git(dir.path(), &["init", "-b", "main"]);
-    run_git(dir.path(), &["config", "user.email", "t@t.com"]);
-    run_git(dir.path(), &["config", "user.name", "T"]);
-    run_git(dir.path(), &["config", "commit.gpgsign", "false"]);
-    std::fs::write(dir.path().join("README.md"), "hello\n").unwrap();
-    run_git(dir.path(), &["add", "-A"]);
-    run_git(dir.path(), &["commit", "-m", "init"]);
-    dir
-}
+use support::init_repo;
 
 async fn create_chat(server: &TestServer, project_id: &str) -> String {
     let pid = project_id.to_string();

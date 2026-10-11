@@ -167,20 +167,11 @@ pub fn router() -> Router<Arc<AppCtx>> {
 
 #[cfg(test)]
 mod tests {
-    use axum::body::to_bytes;
 
     use super::*;
     use crate::ctx::AppCtx;
 
-    async fn read(resp: impl IntoResponse) -> (StatusCode, serde_json::Value) {
-        let resp = resp.into_response();
-        let status = resp.status();
-        let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
-        (
-            status,
-            serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null),
-        )
-    }
+    use crate::test_support::read_json as read;
 
     #[tokio::test]
     async fn set_chat_tags_refuses_a_temporary_chat_409() {
@@ -208,7 +199,7 @@ mod tests {
             axum::body::Bytes::from(r#"{"tags":["feature"]}"#),
         )
         .await;
-        let (status, body) = read(resp).await;
+        let (status, body) = read(resp).await.unwrap();
         assert_eq!(status, StatusCode::CONFLICT);
         assert_eq!(body["error"], "cannot tag a temporary chat");
     }
