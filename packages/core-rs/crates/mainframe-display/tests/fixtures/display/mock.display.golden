@@ -1,0 +1,43 @@
+[
+  {
+    "chatId": "golden",
+    "content": [
+      {
+        "text": "Inspect files",
+        "type": "text"
+      }
+    ],
+    "id": "mock-0",
+    "timestamp": "2026-10-07T12:00:00Z",
+    "type": "user"
+  },
+  {
+    "chatId": "golden",
+    "content": [
+      {
+        "text": "Working 🦀",
+        "type": "text"
+      },
+      {
+        "category": "default",
+        "id": "read",
+        "input": {
+          "file_path": "a.rs"
+        },
+        "name": "Read",
+        "result": {
+          "content": "hello",
+          "isError": false
+        },
+        "type": "tool_call"
+      },
+      {
+        "text": "Answer é",
+        "type": "text"
+      }
+    ],
+    "id": "mock-1",
+    "timestamp": "2026-10-07T12:00:00Z",
+    "type": "assistant"
+  }
+]

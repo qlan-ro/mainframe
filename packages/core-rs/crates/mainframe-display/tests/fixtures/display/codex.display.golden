@@ -1,0 +1,106 @@
+[
+  {
+    "chatId": "golden",
+    "content": [
+      {
+        "text": "Inspect files",
+        "type": "text"
+      }
+    ],
+    "id": "codex-0",
+    "timestamp": "2026-10-07T12:00:00Z",
+    "type": "user"
+  },
+  {
+    "chatId": "golden",
+    "content": [
+      {
+        "text": "Working 🦀",
+        "type": "text"
+      },
+      {
+        "category": "default",
+        "id": "read",
+        "input": {
+          "file_path": "a.rs"
+        },
+        "name": "Read",
+        "result": {
+          "content": "hello",
+          "isError": false
+        },
+        "type": "tool_call"
+      },
+      {
+        "text": "Answer é",
+        "type": "text"
+      }
+    ],
+    "id": "codex-1",
+    "metadata": {
+      "presentationSources": {
+        "sources": [
+          {
+            "path": [
+              0
+            ],
+            "presentation": {
+              "finalEligible": false,
+              "phase": "commentary",
+              "provider": "codex",
+              "state": "running",
+              "turnId": "turn-1",
+              "version": 1
+            },
+            "sourceBlockIndex": 0,
+            "sourceMessageId": "codex-1",
+            "streaming": false
+          },
+          {
+            "path": [
+              1
+            ],
+            "presentation": {
+              "finalEligible": false,
+              "phase": "work",
+              "provider": "codex",
+              "state": "running",
+              "turnId": "turn-1",
+              "version": 1
+            },
+            "sourceBlockIndex": 0,
+            "sourceMessageId": "codex-2",
+            "streaming": false
+          },
+          {
+            "path": [
+              2
+            ],
+            "presentation": {
+              "finalEligible": true,
+              "phase": "final_answer",
+              "provider": "codex",
+              "state": "running",
+              "turnId": "turn-1",
+              "version": 1
+            },
+            "sourceBlockIndex": 0,
+            "sourceMessageId": "codex-4",
+            "streaming": false
+          }
+        ],
+        "version": 1
+      },
+      "transcriptPresentation": {
+        "finalEligible": false,
+        "phase": "commentary",
+        "provider": "codex",
+        "state": "running",
+        "turnId": "turn-1",
+        "version": 1
+      }
+    },
+    "timestamp": "2026-10-07T12:00:00Z",
+    "type": "assistant"
+  }
+]

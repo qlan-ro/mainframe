@@ -1,0 +1,98 @@
+[
+  {
+    "id": "codex-0",
+    "chatId": "golden",
+    "type": "user",
+    "content": [
+      {
+        "type": "text",
+        "text": "Inspect files"
+      }
+    ],
+    "timestamp": "2026-10-07T12:00:00Z"
+  },
+  {
+    "id": "codex-1",
+    "chatId": "golden",
+    "type": "assistant",
+    "content": [
+      {
+        "type": "text",
+        "text": "<mainframe-command-response id=\"x\">Working 🦀</mainframe-command-response>"
+      }
+    ],
+    "timestamp": "2026-10-07T12:00:00Z",
+    "metadata": {
+      "transcriptPresentation": {
+        "version": 1,
+        "provider": "codex",
+        "turnId": "turn-1",
+        "state": "running",
+        "phase": "commentary",
+        "finalEligible": false
+      }
+    }
+  },
+  {
+    "id": "codex-2",
+    "chatId": "golden",
+    "type": "assistant",
+    "content": [
+      {
+        "type": "tool_use",
+        "id": "read",
+        "name": "Read",
+        "input": {
+          "file_path": "a.rs"
+        }
+      }
+    ],
+    "timestamp": "2026-10-07T12:00:00Z",
+    "metadata": {
+      "transcriptPresentation": {
+        "version": 1,
+        "provider": "codex",
+        "turnId": "turn-1",
+        "state": "running",
+        "phase": "work",
+        "finalEligible": false
+      }
+    }
+  },
+  {
+    "id": "codex-3",
+    "chatId": "golden",
+    "type": "tool_result",
+    "content": [
+      {
+        "type": "tool_result",
+        "toolUseId": "read",
+        "content": "hello",
+        "isError": false
+      }
+    ],
+    "timestamp": "2026-10-07T12:00:00Z"
+  },
+  {
+    "id": "codex-4",
+    "chatId": "golden",
+    "type": "assistant",
+    "content": [
+      {
+        "type": "text",
+        "text": "Answer é"
+      }
+    ],
+    "timestamp": "2026-10-07T12:00:00Z",
+    "metadata": {
+      "transcriptPresentation": {
+        "version": 1,
+        "provider": "codex",
+        "turnId": "turn-1",
+        "state": "running",
+        "phase": "final_answer",
+        "finalEligible": true
+      }
+    }
+  }
+]

@@ -1,0 +1,68 @@
+[
+  {
+    "id": "mock-0",
+    "chatId": "golden",
+    "type": "user",
+    "content": [
+      {
+        "type": "text",
+        "text": "Inspect files"
+      }
+    ],
+    "timestamp": "2026-10-07T12:00:00Z"
+  },
+  {
+    "id": "mock-1",
+    "chatId": "golden",
+    "type": "assistant",
+    "content": [
+      {
+        "type": "text",
+        "text": "<mainframe-command-response id=\"x\">Working 🦀</mainframe-command-response>"
+      }
+    ],
+    "timestamp": "2026-10-07T12:00:00Z"
+  },
+  {
+    "id": "mock-2",
+    "chatId": "golden",
+    "type": "assistant",
+    "content": [
+      {
+        "type": "tool_use",
+        "id": "read",
+        "name": "Read",
+        "input": {
+          "file_path": "a.rs"
+        }
+      }
+    ],
+    "timestamp": "2026-10-07T12:00:00Z"
+  },
+  {
+    "id": "mock-3",
+    "chatId": "golden",
+    "type": "tool_result",
+    "content": [
+      {
+        "type": "tool_result",
+        "toolUseId": "read",
+        "content": "hello",
+        "isError": false
+      }
+    ],
+    "timestamp": "2026-10-07T12:00:00Z"
+  },
+  {
+    "id": "mock-4",
+    "chatId": "golden",
+    "type": "assistant",
+    "content": [
+      {
+        "type": "text",
+        "text": "Answer é"
+      }
+    ],
+    "timestamp": "2026-10-07T12:00:00Z"
+  }
+]

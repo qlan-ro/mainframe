@@ -1395,6 +1395,7 @@ name = "mainframe-adapter-api"
 version = "0.0.0"
 dependencies = [
  "dashmap",
+ "mainframe-display",
  "mainframe-runtime",
  "mainframe-types",
  "serde",
@@ -1522,7 +1523,6 @@ dependencies = [
  "dashmap",
  "dirs",
  "mainframe-adapter-api",
- "mainframe-adapter-claude",
  "mainframe-adapter-codex",
  "mainframe-background-tasks",
  "mainframe-db",

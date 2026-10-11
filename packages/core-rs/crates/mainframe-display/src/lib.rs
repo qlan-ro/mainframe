@@ -1,8 +1,4 @@
-//! `mainframe-display` — the adapter-agnostic display pipeline.
-//!
-//! It holds the neutral `DisplayMessage` pieces that do NOT reference Claude
-//! event / JSONL shapes; Claude-specific message code lives in
-//! `mainframe-adapter-claude::messages` instead.
+//! Adapter-neutral message grouping, projection, and display conversion.
 #![forbid(unsafe_code)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
@@ -30,3 +26,19 @@ pub use projection::{
     DisplayDelta, DisplayProjector, DisplaySnapshot, FullRebuildProjector, ProjectionInput,
     ProjectionStats, RawChange, RawChanges,
 };
+pub mod command_metadata;
+pub mod decoders;
+pub mod display_assistant;
+pub mod display_pipeline_markers;
+pub mod display_tool_groups;
+pub mod display_user;
+pub mod incremental;
+pub mod message_grouping;
+pub mod message_parsing;
+pub mod parse_ask_user_question;
+pub mod presentation_display;
+pub mod presentation_grouping;
+#[cfg(test)]
+mod presentation_grouping_tests;
+pub mod task_subject_backfill;
+pub use decoders::ToolResultDecoders;
