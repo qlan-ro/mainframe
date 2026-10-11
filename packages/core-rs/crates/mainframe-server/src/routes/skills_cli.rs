@@ -38,7 +38,7 @@ fn fail_with_tail(error: &str, tail: &str, exit_code: Option<i32>) -> Response {
 
 fn map_error(operation: &str, project_id: &str, err: SkillsCliError) -> Response {
     match err {
-        SkillsCliError::Rejected(reason) => fail(StatusCode::BAD_REQUEST, reason),
+        SkillsCliError::Rejected(reason) => fail(StatusCode::BAD_REQUEST, reason.to_string()),
         SkillsCliError::Busy => fail(
             StatusCode::CONFLICT,
             "A skills operation is already running for this project",

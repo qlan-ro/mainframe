@@ -3,11 +3,14 @@ use std::sync::{Arc, Mutex};
 
 use mainframe_adapter_api::{AdapterError, AdapterSession, BoxFuture};
 use mainframe_services::settings::read_setting;
+use mainframe_services::workspace::session_files::SessionFilesError;
+use mainframe_services::workspace::worktree::WorktreeError;
 use mainframe_services::workspace::{create_worktree, move_session_files, remove_worktree};
 use mainframe_types::adapter::model_endpoint;
 use mainframe_types::chat::Project;
 use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::events::DaemonEvent;
+use mainframe_types::http_status::{HttpStatus, NotFound, StatusKind};
 use mainframe_types::settings::{ExecutionMode, GeneralConfig};
 use mainframe_types::settings_kv::SettingsKv;
 use tracing::warn;
@@ -27,13 +30,37 @@ use mainframe_runtime::sync::KeyedMutex;
 /// routes return them as the error text.
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
+    #[error(transparent)]
+    NotFound(#[from] NotFound),
+    /// The chat's state refuses the change; the text says why and what to do
+    /// instead.
     #[error("{0}")]
-    Message(String),
+    Refused(String),
     /// Rebinding stops and restarts the CLI, which would cut a turn off mid-answer.
     #[error("Finish or stop the current response before switching worktrees")]
     ChatBusy,
+    /// `git worktree add` failed (a taken branch name, a bad base).
+    #[error(transparent)]
+    Worktree(#[from] WorktreeError),
+    /// The chat's transcripts could not follow it into the worktree; the chat
+    /// keeps running on its previous binding.
+    #[error("{TRANSCRIPT_MOVE_FAILED}")]
+    TranscriptMoveFailed(#[source] SessionFilesError),
     #[error(transparent)]
     Adapter(#[from] AdapterError),
+}
+
+impl HttpStatus for ConfigError {
+    fn status_kind(&self) -> StatusKind {
+        match self {
+            Self::NotFound(_) => StatusKind::NotFound,
+            Self::Refused(_) | Self::Worktree(WorktreeError::Git(_)) => StatusKind::BadRequest,
+            Self::ChatBusy => StatusKind::Conflict,
+            Self::Worktree(WorktreeError::Io(_))
+            | Self::TranscriptMoveFailed(_)
+            | Self::Adapter(_) => StatusKind::Internal,
+        }
+    }
 }
 
 /// Injected dependency surface for [`ChatConfigManager`].
@@ -95,12 +122,8 @@ pub trait ConfigManagerDeps: Send + Sync {
         session_id: &'a str,
         old_dir: &'a str,
         new_dir: &'a str,
-    ) -> BoxFuture<'a, Result<(), String>> {
-        Box::pin(async move {
-            move_session_files(session_id, old_dir, new_dir)
-                .await
-                .map_err(|e| e.to_string())
-        })
+    ) -> BoxFuture<'a, Result<(), SessionFilesError>> {
+        Box::pin(move_session_files(session_id, old_dir, new_dir))
     }
 }
 
@@ -155,7 +178,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
     fn require_active_chat(&self, chat_id: &str) -> Result<Arc<Mutex<ActiveChat>>, ConfigError> {
         self.deps
             .get_active_chat(chat_id)
-            .ok_or_else(|| ConfigError::Message(format!("Chat {chat_id} not found")))
+            .ok_or_else(|| NotFound::new("Chat", chat_id).into())
     }
 
     /// Kill the spawned adapter session, if any, and detach it from the active chat.
@@ -365,7 +388,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
                     "failed to move session files; restarting the chat on its current binding"
                 );
                 self.deps.start_chat(chat_id).await;
-                return Err(ConfigError::Message(TRANSCRIPT_MOVE_FAILED.to_string()));
+                return Err(ConfigError::TranscriptMoveFailed(err));
             }
         };
 
@@ -407,7 +430,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
             && *new_adapter != cur_adapter
             && (has_claude_session || self.deps.has_native_session(chat_id))
         {
-            return Err(ConfigError::Message(
+            return Err(ConfigError::Refused(
                 "Use switch-provider to change this chat's provider".to_string(),
             ));
         }
@@ -461,7 +484,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
         let name = self.deps.adapter_name(&cur_adapter);
         let live = self.deps.live_background_tasks(chat_id);
         if let Some(refusal) = respawn_refusal(session_spawned, live, &name) {
-            return Err(ConfigError::Message(refusal));
+            return Err(ConfigError::Refused(refusal));
         }
         self.respawn_with_config(
             chat_id,
@@ -505,7 +528,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
         let project = self
             .deps
             .projects_get(&project_id)
-            .ok_or_else(|| ConfigError::Message("Project not found".to_string()))?;
+            .ok_or_else(|| NotFound::unnamed("Project"))?;
 
         if let Some(session_id) = claude_session_id {
             // Mid-session path. The worktree is created while the chat still runs,
@@ -516,8 +539,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
                 base_branch,
                 branch_name,
             )
-            .await
-            .map_err(|e| ConfigError::Message(e.to_string()))?;
+            .await?;
             return self
                 .rebind_live_session(
                     &cell,
@@ -546,8 +568,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
             base_branch,
             branch_name,
         )
-        .await
-        .map_err(|e| ConfigError::Message(e.to_string()))?;
+        .await?;
         // A switched chat whose new segment hasn't sent yet still owns its
         // earlier sessions; returning to one resumes it from the worktree.
         let active = ActiveSession {
@@ -569,7 +590,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
                 error = %err,
                 "failed to move session files into the new worktree"
             );
-            ConfigError::Message(TRANSCRIPT_MOVE_FAILED.to_string())
+            ConfigError::TranscriptMoveFailed(err)
         })?;
         self.apply_worktree_update(
             &cell,
@@ -608,7 +629,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
             let project = self
                 .deps
                 .projects_get(&project_id)
-                .ok_or_else(|| ConfigError::Message("Project not found".to_string()))?;
+                .ok_or_else(|| NotFound::unnamed("Project"))?;
             return self
                 .rebind_live_session(
                     &cell,
@@ -657,7 +678,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
             return Ok(());
         };
         if has_claude_session || self.deps.has_native_session(chat_id) {
-            return Err(ConfigError::Message(
+            return Err(ConfigError::Refused(
                 "Cannot disable worktree after session has started".to_string(),
             ));
         }
@@ -789,10 +810,10 @@ mod tests {
             _session_id: &'a str,
             _old_dir: &'a str,
             _new_dir: &'a str,
-        ) -> BoxFuture<'a, Result<(), String>> {
+        ) -> BoxFuture<'a, Result<(), SessionFilesError>> {
             Box::pin(async move {
                 match &self.move_files_error {
-                    Some(err) => Err(err.clone()),
+                    Some(err) => Err(std::io::Error::other(err.clone()).into()),
                     None => Ok(()),
                 }
             })

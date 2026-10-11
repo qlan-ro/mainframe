@@ -22,20 +22,23 @@ impl TunnelManager {
         }
     }
 
-    pub(super) fn on_exit_before_ready(&self, label: &str, exit: TunnelExit) -> String {
+    pub(super) fn on_exit_before_ready(&self, label: &str, exit: TunnelExit) -> TunnelStartError {
         let code = exit
             .code
             .map(|c| c.to_string())
             .unwrap_or_else(|| "null".to_string());
-        let msg = format!("Tunnel \"{label}\" process exited before ready (code {code})");
+        let error = TunnelStartError::ExitedEarly {
+            label: label.to_string(),
+            code,
+        };
         self.broadcast(DaemonEvent::TunnelStatus {
             state: TunnelState::Error,
             label: label.to_string(),
             url: None,
             dns_verified: None,
-            error: Some(msg.clone()),
+            error: Some(error.to_string()),
         });
-        msg
+        error
     }
 
     /// Post-ready exit handling (TS `child.once('exit')` `else` branch): remove

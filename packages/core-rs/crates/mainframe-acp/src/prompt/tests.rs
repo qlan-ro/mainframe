@@ -150,8 +150,23 @@ async fn a_command_name_outside_the_identifier_charset_is_rejected_before_the_po
         panic!("expected an error, got {:?}", response.outcome);
     };
     assert_eq!(error.code, error_codes::INVALID_PARAMS);
-    assert!(error.message.contains("command.name"));
+    assert_eq!(
+        error.message,
+        "invalid params: command.name must match ^[a-zA-Z0-9_-]+$"
+    );
     assert!(port.sent.lock().unwrap().is_empty());
+}
+
+#[test]
+fn an_empty_command_source_is_refused_with_the_wire_text() {
+    let meta: PromptSendMeta = serde_json::from_value(json!({
+        "command": { "name": "review", "source": "" }
+    }))
+    .unwrap();
+    assert_eq!(
+        validate_command(&meta).unwrap_err().to_string(),
+        "command.source must be non-empty"
+    );
 }
 
 #[tokio::test]

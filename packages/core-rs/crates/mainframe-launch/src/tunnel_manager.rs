@@ -31,6 +31,7 @@ use tokio::time::{sleep, timeout};
 use crate::process::{
     BoxFuture, ChildRegistryPort, ManagedChildEntry, ManagedChildKind, NoopChildRegistry, now_ms,
 };
+use crate::tunnel_error::TunnelStartError;
 use mainframe_runtime::process::Signal;
 
 /// Fire-and-forget DaemonEvent sink.
@@ -41,7 +42,6 @@ pub type BroadcastFn = Arc<dyn Fn(DaemonEvent) + Send + Sync>;
 pub(crate) type SignalFn = Arc<dyn Fn(u32, Signal) -> BoxFuture<'static, bool> + Send + Sync>;
 
 const REGISTERED_MARKER: &str = "Registered tunnel connection";
-const CLOUDFLARED_NOT_FOUND: &str = "cloudflared not found. Install it from https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/";
 
 /// Named/quick-tunnel start options.
 #[derive(Debug, Clone, Default)]

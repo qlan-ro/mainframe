@@ -14,12 +14,7 @@ impl ClaudeSession {
 
         let real = tokio::fs::canonicalize(&self.project_path)
             .await
-            .map_err(|_| {
-                AdapterError::Message(format!(
-                    "Project directory does not exist or is not accessible: {}",
-                    self.project_path
-                ))
-            })?;
+            .map_err(|_| AdapterError::ProjectDirMissing(self.project_path.clone()))?;
         self.state().real_project_path = real.to_string_lossy().to_string();
 
         let mut cmd = build_spawn_command(
@@ -49,7 +44,7 @@ impl ClaudeSession {
         let handle = self.bind_child(pid, &process);
         self.wait_for_exit(process.exit(), handle, active_sink);
         self.get_process_info()
-            .ok_or_else(|| AdapterError::Message("spawn produced no process info".to_string()))
+            .ok_or(AdapterError::Invariant("spawn produced no process info"))
     }
     async fn endpoint_options(
         &self,
@@ -64,11 +59,7 @@ impl ClaudeSession {
         let proxy_env = match &endpoint_model {
             Some(bare) => {
                 options.model = Some(bare.clone());
-                Some(
-                    cliproxy::resolve_env(None, options.small_fast_model.as_deref(), bare)
-                        .await
-                        .map_err(AdapterError::Message)?,
-                )
+                Some(cliproxy::resolve_env(None, options.small_fast_model.as_deref(), bare).await?)
             }
             None => None,
         };

@@ -31,7 +31,7 @@ impl CodexSession {
                 Some(json!({ "threadId": thread_id, "turnId": turn_id })),
             )
             .await
-            .map_err(|e| AdapterError::Message(e.0))?;
+            .map_err(AdapterError::from)?;
         Ok(())
     }
     pub(super) fn build_handlers(&self, approval: Arc<ApprovalHandler>) -> JsonRpcHandlers {

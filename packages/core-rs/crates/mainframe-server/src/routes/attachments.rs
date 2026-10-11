@@ -19,7 +19,6 @@ use mainframe_services::attachment::attachment_store::AttachmentKind;
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::async_err::internal_error;
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok};
 
@@ -126,7 +125,7 @@ async fn upload(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>, body: By
         }
         Err(e) => {
             log_upload(&id, count, total_bytes, "save failed");
-            internal_error("Failed to save attachments", &e)
+            crate::error_status::fail_or_internal("Failed to save attachments", &e)
         }
     }
 }

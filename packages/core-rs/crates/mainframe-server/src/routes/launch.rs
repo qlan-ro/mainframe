@@ -155,7 +155,7 @@ async fn get_configs(
     let env = load_project_env(&path).await;
     match parse_launch_config(&parsed, &env) {
         Ok(config) => ok(json!(config.configurations)),
-        Err(error) => fail(StatusCode::BAD_REQUEST, error),
+        Err(error) => fail(StatusCode::BAD_REQUEST, error.to_string()),
     }
 }
 
@@ -186,7 +186,7 @@ async fn start(
     let env = load_project_env(&path).await;
     let parsed = match parse_launch_config(&parsed_json, &env) {
         Ok(config) => config,
-        Err(error) => return fail(StatusCode::BAD_REQUEST, error),
+        Err(error) => return fail(StatusCode::BAD_REQUEST, error.to_string()),
     };
     let Some(config) = parsed.configurations.into_iter().find(|c| c.name == name) else {
         return fail(

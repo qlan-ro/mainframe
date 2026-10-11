@@ -67,8 +67,8 @@ impl Pump {
                     batch = apply_effects(&self.project_path, events).await;
                     base = next_base;
                 }
-                Err(message) => {
-                    self.sink.on_error(AdapterError::Message(message));
+                Err(error) => {
+                    self.sink.on_error(error);
                     return;
                 }
             }
@@ -102,7 +102,7 @@ impl Pump {
     /// The turn just ended: dequeue the oldest prompt the daemon parked behind it,
     /// ack it the way the CLI's `isReplay` user event does, and take its recorded
     /// turn. `None` leaves the session idle.
-    fn next_queued_turn(&self) -> Option<Result<(Vec<RecordedEvent>, i64), String>> {
+    fn next_queued_turn(&self) -> Option<Result<(Vec<RecordedEvent>, i64), AdapterError>> {
         let (uuid, batch, base, error) = {
             let mut state = self.state.lock_recover();
             if !state.turn_in_flight {
@@ -122,7 +122,7 @@ impl Pump {
         tracing::debug!(chat_id = %self.chat_id, %uuid, "mock-cli starting a queued prompt's turn");
         self.sink.on_queued_processed(&uuid);
         Some(match error {
-            Some(message) => Err(message),
+            Some(message) => Err(AdapterError::Message(message)),
             None => Ok((batch, base)),
         })
     }

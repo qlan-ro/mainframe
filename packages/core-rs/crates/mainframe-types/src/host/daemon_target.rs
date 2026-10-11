@@ -1,3 +1,4 @@
+use crate::validation::RefinementError;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -46,15 +47,15 @@ pub struct DaemonMeta {
 
 impl DaemonMeta {
     /// The `.min(1)` refinements from `DaemonMetaSchema` (id/label/host non-empty).
-    pub fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), RefinementError> {
         if self.id.is_empty() {
-            return Err("id must contain at least 1 character".to_string());
+            return Err(RefinementError::TooShort("id"));
         }
         if self.label.is_empty() {
-            return Err("label must contain at least 1 character".to_string());
+            return Err(RefinementError::TooShort("label"));
         }
         if self.host.is_empty() {
-            return Err("host must contain at least 1 character".to_string());
+            return Err(RefinementError::TooShort("host"));
         }
         Ok(())
     }

@@ -16,9 +16,9 @@ impl CodexSession {
         let executable = self.history_executable.lock_recover().clone();
         crate::effective_model::probe(&executable, self.resolved_path.as_str(), &self.project_path)
             .await
-            .ok_or_else(|| {
-                AdapterError::Message("Could not resolve the configured Codex model".into())
-            })
+            .ok_or(AdapterError::Unavailable(
+                "Could not resolve the configured Codex model",
+            ))
     }
 
     pub(super) async fn model_for_turn(

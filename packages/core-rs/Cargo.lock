@@ -1385,6 +1385,7 @@ dependencies = [
  "mainframe-types",
  "serde",
  "serde_json",
+ "thiserror",
  "tokio",
  "tracing",
 ]
@@ -1462,6 +1463,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "thiserror",
  "tokio",
  "tracing",
 ]
@@ -1578,6 +1580,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "thiserror",
  "tokio",
  "tracing",
  "wiremock",
@@ -1771,6 +1774,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "tempfile",
+ "thiserror",
  "tokio",
  "toml",
  "tower-http",

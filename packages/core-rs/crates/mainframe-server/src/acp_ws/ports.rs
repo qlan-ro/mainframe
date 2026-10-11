@@ -131,9 +131,7 @@ impl GatePort for ManagerPorts {
         Box::pin(async move {
             match &self.manager {
                 Some(manager) => manager.respond_to_permission(chat_id, response).await,
-                None => Err(PermissionError::Message(
-                    "chat manager unavailable".to_string(),
-                )),
+                None => Err(PermissionError::ManagerUnavailable),
             }
         })
     }

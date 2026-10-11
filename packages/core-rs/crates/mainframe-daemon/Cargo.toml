@@ -19,6 +19,7 @@ dashmap = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 reqwest = { workspace = true }
+thiserror = { workspace = true }
 qrcode = { workspace = true }
 nanoid = { workspace = true }
 mainframe-server = { workspace = true }

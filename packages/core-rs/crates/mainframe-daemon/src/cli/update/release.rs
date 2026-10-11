@@ -5,6 +5,8 @@
 
 use serde::Deserialize;
 
+use super::UpdateError;
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct GhAsset {
     pub name: String,
@@ -24,7 +26,7 @@ pub struct GhRelease {
 
 /// Maps the running platform to the release
 /// artifact filename it should install.
-pub(crate) fn standalone_artifact_name(platform: &str, arch: &str) -> Result<String, String> {
+pub(crate) fn standalone_artifact_name(platform: &str, arch: &str) -> Result<String, UpdateError> {
     let os = match platform {
         "darwin" => Some("darwin"),
         "linux" => Some("linux"),
@@ -37,9 +39,10 @@ pub(crate) fn standalone_artifact_name(platform: &str, arch: &str) -> Result<Str
     };
     match (os, cpu) {
         (Some(os), Some(cpu)) => Ok(format!("mainframe-daemon-{os}-{cpu}.tar.gz")),
-        _ => Err(format!(
-            "Unsupported platform for self-update: {platform}-{arch}"
-        )),
+        _ => Err(UpdateError::UnsupportedPlatform {
+            platform: platform.to_string(),
+            arch: arch.to_string(),
+        }),
     }
 }
 
@@ -50,7 +53,7 @@ pub(crate) fn pick_release(
     releases: &[GhRelease],
     version: Option<&str>,
     include_prerelease: bool,
-) -> Result<GhRelease, String> {
+) -> Result<GhRelease, UpdateError> {
     let published: Vec<&GhRelease> = releases.iter().filter(|r| !r.draft).collect();
 
     if let Some(version) = version {
@@ -59,7 +62,7 @@ pub(crate) fn pick_release(
             .iter()
             .find(|r| r.tag_name == version || norm(&r.tag_name) == norm(version))
             .map(|r| (*r).clone())
-            .ok_or_else(|| format!("No release found for version {version}"));
+            .ok_or_else(|| UpdateError::NoSuchVersion(version.to_string()));
     }
 
     if let Some(newest) = published
@@ -69,22 +72,22 @@ pub(crate) fn pick_release(
         return Ok((*newest).clone());
     }
 
-    let hint = if published.iter().any(|r| r.prerelease) {
-        " Only pre-releases exist — retry with `mainframe update --pre`."
-    } else {
-        ""
-    };
-    Err(format!("No matching release found.{hint}"))
+    Err(UpdateError::NoMatchingRelease {
+        only_prereleases: published.iter().any(|r| r.prerelease),
+    })
 }
 
 /// `assetUrl()` — resolves the download URL of `artifact` within a release.
-pub(crate) fn asset_url(release: &GhRelease, artifact: &str) -> Result<String, String> {
+pub(crate) fn asset_url(release: &GhRelease, artifact: &str) -> Result<String, UpdateError> {
     release
         .assets
         .iter()
         .find(|a| a.name == artifact)
         .map(|a| a.browser_download_url.clone())
-        .ok_or_else(|| format!("Release {} does not include {artifact}.", release.tag_name))
+        .ok_or_else(|| UpdateError::MissingAsset {
+            tag: release.tag_name.clone(),
+            artifact: artifact.to_string(),
+        })
 }
 
 #[derive(Debug, Default)]
@@ -168,14 +171,14 @@ pub(crate) fn assert_not_downgrade(
     release: &GhRelease,
     current_version: &str,
     force: bool,
-) -> Result<(), String> {
+) -> Result<(), UpdateError> {
     if force || compare_semver(&release.tag_name, current_version) > 0 {
         return Ok(());
     }
-    Err(format!(
-        "{} is not newer than the running version (v{current_version}). Refusing to downgrade — pass --force to override.",
-        release.tag_name
-    ))
+    Err(UpdateError::NotNewer {
+        tag: release.tag_name.clone(),
+        current: current_version.to_string(),
+    })
 }
 
 #[cfg(test)]

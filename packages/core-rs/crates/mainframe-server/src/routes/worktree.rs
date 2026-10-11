@@ -19,10 +19,11 @@ use axum::routing::{get, post};
 use serde::Deserialize;
 
 use mainframe_background_tasks::kill::{KillTasksForChatArgs, SessionLike, kill_tasks_for_chat};
-use mainframe_chat::config_manager::ConfigError;
 use mainframe_services::workspace::{get_worktrees, remove_worktree, short_branch};
 
 use crate::ctx::AppCtx;
+use crate::error_status::{fail_with, status_of};
+use crate::input_error::InputError;
 use crate::orchestration_deps::branch_name_ok;
 use crate::respond::{fail, ok, ok_empty};
 use crate::routes::projects::parse_body;
@@ -63,15 +64,6 @@ fn validate_enable_fork(body: &Bytes) -> Result<(String, String), Response> {
     }
 }
 
-/// A rebind refused mid-turn is a conflict, not bad input — the same request
-/// succeeds once the response finishes.
-fn config_error_status(err: &ConfigError) -> StatusCode {
-    match err {
-        ConfigError::ChatBusy => StatusCode::CONFLICT,
-        _ => StatusCode::BAD_REQUEST,
-    }
-}
-
 async fn enable_worktree(
     State(ctx): State<Arc<AppCtx>>,
     Path(id): Path<String>,
@@ -89,7 +81,7 @@ async fn enable_worktree(
         Ok(()) => ok_empty(),
         Err(err) => {
             tracing::warn!(chat_id = %id, %err, "enable-worktree failed");
-            fail(config_error_status(&err), err.to_string())
+            fail_with(&err)
         }
     }
 }
@@ -103,7 +95,7 @@ async fn disable_worktree(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>
         Ok(()) => ok_empty(),
         Err(err) => {
             tracing::warn!(chat_id = %id, %err, "disable-worktree failed");
-            fail(config_error_status(&err), err.to_string())
+            fail_with(&err)
         }
     }
 }
@@ -127,8 +119,7 @@ async fn fork_worktree(
     match cm.fork_to_worktree(&id, &base, &branch).await {
         Ok(new_chat_id) => ok(serde_json::json!({ "chatId": new_chat_id })),
         Err(err) => {
-            let status = StatusCode::from_u16(err.status_code())
-                .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+            let status = status_of(&err);
             tracing::warn!(chat_id = %id, %err, "fork-worktree failed");
             fail(status, err.to_string())
         }
@@ -182,7 +173,7 @@ async fn attach_worktree(
         Ok(()) => ok_empty(),
         Err(err) => {
             tracing::warn!(chat_id = %id, %err, "attach-worktree failed");
-            fail(config_error_status(&err), err.to_string())
+            fail_with(&err)
         }
     }
 }
@@ -217,9 +208,9 @@ async fn delete_worktree(
         .await
     {
         Ok(()) => ok_empty(),
-        Err(message) => {
-            tracing::warn!(project_id = %id, worktree_path = %worktree_path, %message, "delete-worktree failed");
-            fail(StatusCode::BAD_REQUEST, message)
+        Err(err) => {
+            tracing::warn!(project_id = %id, worktree_path = %worktree_path, %err, "delete-worktree failed");
+            fail_with(&err)
         }
     }
 }
@@ -234,7 +225,7 @@ async fn validate_and_delete_worktree(
     project_path: &str,
     worktree_path: &str,
     branch_name: Option<String>,
-) -> Result<(), String> {
+) -> Result<(), InputError> {
     let real_project_path = tokio::fs::canonicalize(project_path)
         .await
         .map(|p| p.to_string_lossy().into_owned())
@@ -242,9 +233,9 @@ async fn validate_and_delete_worktree(
     let real_worktree_path = tokio::fs::canonicalize(worktree_path)
         .await
         .map(|p| p.to_string_lossy().into_owned())
-        .map_err(|_| "Worktree path does not exist".to_string())?;
+        .map_err(|_| InputError::Rejected("Worktree path does not exist"))?;
     if real_worktree_path == real_project_path {
-        return Err("Cannot delete the main worktree".to_string());
+        return Err(InputError::Rejected("Cannot delete the main worktree"));
     }
 
     let worktrees = get_worktrees(project_path).await;
@@ -252,12 +243,16 @@ async fn validate_and_delete_worktree(
         .into_iter()
         .find(|wt| wt.path == real_worktree_path || wt.path == worktree_path);
     let Some(matched) = matched else {
-        return Err("Worktree path is not a registered worktree of this project".to_string());
+        return Err(InputError::Rejected(
+            "Worktree path is not a registered worktree of this project",
+        ));
     };
     let resolved_branch =
         branch_name.or_else(|| matched.branch.as_ref().map(|b| short_branch(b).to_string()));
     let Some(resolved_branch) = resolved_branch else {
-        return Err("Cannot determine branch name for worktree".to_string());
+        return Err(InputError::Rejected(
+            "Cannot determine branch name for worktree",
+        ));
     };
 
     // Kill background tasks for every chat whose worktree resolves to this one.
@@ -339,6 +334,38 @@ mod tests {
             read(list_worktrees(State(ctx.clone()), Path("nope".into())).await).await;
         assert_eq!(status, StatusCode::NOT_FOUND);
         assert_eq!(body["error"], "Project not found");
+    }
+
+    /// Intentional change: enabling a worktree on an unknown chat answered
+    /// 400; the chat is missing, so it is now a 404 with the same text.
+    #[tokio::test]
+    async fn enable_on_an_unknown_chat_is_404() {
+        let ctx = AppCtx::test_ctx_with_chat_manager();
+        let resp = enable_worktree(
+            State(ctx.clone()),
+            Path("ghost".into()),
+            axum::body::Bytes::from(r#"{"baseBranch":"main","branchName":"feat"}"#),
+        )
+        .await;
+        let (status, body) = read(resp).await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert_eq!(body["error"], "Chat ghost not found");
+    }
+
+    /// Intentional change: forking an unknown chat into a worktree answered
+    /// 500; it is now a 404 with the same text.
+    #[tokio::test]
+    async fn fork_of_an_unknown_chat_is_404() {
+        let ctx = AppCtx::test_ctx_with_chat_manager();
+        let resp = fork_worktree(
+            State(ctx.clone()),
+            Path("ghost".into()),
+            axum::body::Bytes::from(r#"{"baseBranch":"main","branchName":"feat"}"#),
+        )
+        .await;
+        let (status, body) = read(resp).await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert_eq!(body["error"], "Chat ghost not found");
     }
 
     #[tokio::test]

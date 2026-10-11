@@ -39,8 +39,7 @@ async fn enoent_is_not_ok() {
         }),
     );
     let r = lsof_writers_detailed(&process, "/p").await;
-    assert!(r.is_err());
-    assert!(r.unwrap_err().to_lowercase().contains("lsof"));
+    assert_eq!(r.unwrap_err().to_string(), "lsof not installed");
 }
 
 #[tokio::test]

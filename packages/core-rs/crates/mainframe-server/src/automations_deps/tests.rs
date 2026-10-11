@@ -8,6 +8,8 @@ use mainframe_automations::ports::{
     AgentOutcome, AgentPort, AgentRequest, AutomationEvent, CuratedEvent, EventSink, EventSource,
     Notification, NotificationLinks, Notifier, RunSummary, RunTriggerSummary, WorktreeRequest,
 };
+use mainframe_chat::chat_manager::SendError;
+use mainframe_chat::config_manager::ConfigError;
 use mainframe_db::DatabaseManager;
 use mainframe_services::push::PushService;
 use mainframe_types::BoxFuture;
@@ -62,7 +64,7 @@ impl AgentChatPort for FakeChatPort {
         chat_id: &'a str,
         base_branch: &'a str,
         branch_name: &'a str,
-    ) -> BoxFuture<'a, Result<(), String>> {
+    ) -> BoxFuture<'a, Result<(), ConfigError>> {
         self.record(format!("worktree:{chat_id}:{base_branch}:{branch_name}"));
         Box::pin(async { Ok(()) })
     }
@@ -71,12 +73,13 @@ impl AgentChatPort for FakeChatPort {
         &'a self,
         chat_id: &'a str,
         content: &'a str,
-    ) -> BoxFuture<'a, Result<(), String>> {
+    ) -> BoxFuture<'a, Result<(), SendError>> {
         self.record(format!("send:{chat_id}:{content}"));
         let fail = self.fail_send;
+        let chat_id = chat_id.to_string();
         Box::pin(async move {
             if fail {
-                Err("send failed".to_string())
+                Err(SendError::NotRunning(chat_id))
             } else {
                 Ok(())
             }
@@ -267,7 +270,7 @@ async fn failed_send_surfaces_and_clears_the_pending_receiver() {
     let (tx, _rx) = broadcast::channel(16);
     let port = agent_port(fake, tx);
     let err = port.start(request(Some("p1"))).await.unwrap_err();
-    assert_eq!(err.to_string(), "send failed");
+    assert_eq!(err.to_string(), "Chat chat_1 not running");
 }
 
 #[test]

@@ -8,6 +8,7 @@
 use std::path::Path;
 use std::rc::Rc;
 
+use mainframe_types::http_status::{HttpStatus, StatusKind};
 use rusqlite::Connection;
 
 pub mod actor;
@@ -48,9 +49,9 @@ pub use projects::ProjectsRepository;
 pub use settings::SettingsRepository;
 pub use tags::TagsRepository;
 
-/// Fallible-operation error for the whole DB layer. `Message` carries a verbatim
-/// human string whose exact text is preserved (several are asserted by regex in
-/// tests and cross the wire).
+/// Fallible-operation error for the whole DB layer. The texts of `NotFound`,
+/// `Invalid` and `Invariant` reach REST bodies verbatim, so they are part of the
+/// wire contract.
 #[derive(Debug, thiserror::Error)]
 pub enum DbError {
     #[error(transparent)]
@@ -59,8 +60,35 @@ pub enum DbError {
     Json(#[from] serde_json::Error),
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    /// The worker thread that owns the connection could not take or answer
+    /// the request.
+    #[error("database worker {0}")]
+    Worker(&'static str),
+    /// A row the operation names does not exist (`Tag not found: rust`).
+    #[error("{entity} not found: {id}")]
+    NotFound { entity: &'static str, id: String },
+    /// The caller's input breaks a rule the store enforces: an invalid tag
+    /// name, a protected row.
     #[error("{0}")]
-    Message(String),
+    Invalid(String),
+    /// Stored rows, or a file the layer just wrote, contradict an invariant
+    /// the operation relies on. Never the caller's fault.
+    #[error("{0}")]
+    Invariant(String),
+}
+
+impl HttpStatus for DbError {
+    fn status_kind(&self) -> StatusKind {
+        match self {
+            Self::NotFound { .. } => StatusKind::NotFound,
+            Self::Invalid(_) => StatusKind::BadRequest,
+            Self::Sqlite(_)
+            | Self::Json(_)
+            | Self::Io(_)
+            | Self::Worker(_)
+            | Self::Invariant(_) => StatusKind::Internal,
+        }
+    }
 }
 
 /// Serialize a serde enum to its wire/DB string (e.g. `ChatStatus::Active` →
@@ -68,7 +96,7 @@ pub enum DbError {
 pub(crate) fn enum_to_db_string<T: serde::Serialize>(value: &T) -> Result<String, DbError> {
     match serde_json::to_value(value)? {
         serde_json::Value::String(s) => Ok(s),
-        other => Err(DbError::Message(format!(
+        other => Err(DbError::Invariant(format!(
             "expected string enum, got {other}"
         ))),
     }

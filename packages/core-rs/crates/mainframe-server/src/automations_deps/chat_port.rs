@@ -3,7 +3,8 @@
 
 use std::sync::Arc;
 
-use mainframe_chat::chat_manager::ChatManager;
+use mainframe_chat::chat_manager::{ChatManager, SendError};
+use mainframe_chat::config_manager::ConfigError;
 use mainframe_orchestration::last_assistant_text;
 use mainframe_types::BoxFuture;
 use mainframe_types::chat::NewChat;
@@ -28,12 +29,12 @@ pub trait AgentChatPort: Send + Sync {
         chat_id: &'a str,
         base_branch: &'a str,
         branch_name: &'a str,
-    ) -> BoxFuture<'a, Result<(), String>>;
+    ) -> BoxFuture<'a, Result<(), ConfigError>>;
     fn send_message<'a>(
         &'a self,
         chat_id: &'a str,
         content: &'a str,
-    ) -> BoxFuture<'a, Result<(), String>>;
+    ) -> BoxFuture<'a, Result<(), SendError>>;
     /// The last assistant text block — the step's `result` output and the A2
     /// parse input (without the push notification length cap).
     fn last_assistant_text<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, String>;
@@ -89,12 +90,11 @@ impl AgentChatPort for ChatManagerPort {
         chat_id: &'a str,
         base_branch: &'a str,
         branch_name: &'a str,
-    ) -> BoxFuture<'a, Result<(), String>> {
+    ) -> BoxFuture<'a, Result<(), ConfigError>> {
         Box::pin(async move {
             self.chats
                 .enable_worktree(chat_id, base_branch, branch_name)
                 .await
-                .map_err(|err| err.to_string())
         })
     }
 
@@ -102,13 +102,8 @@ impl AgentChatPort for ChatManagerPort {
         &'a self,
         chat_id: &'a str,
         content: &'a str,
-    ) -> BoxFuture<'a, Result<(), String>> {
-        Box::pin(async move {
-            self.chats
-                .send_message(chat_id, content, None, None)
-                .await
-                .map_err(|err| err.to_string())
-        })
+    ) -> BoxFuture<'a, Result<(), SendError>> {
+        Box::pin(async move { self.chats.send_message(chat_id, content, None, None).await })
     }
 
     fn last_assistant_text<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, String> {

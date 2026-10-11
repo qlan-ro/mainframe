@@ -16,6 +16,8 @@ use mainframe_runtime::config::{PartialMainframeConfig, get_config, save_config}
 use serde_json::{Value, json};
 
 use crate::ctx::AppCtx;
+use crate::error_status::fail_with;
+use crate::input_error::InputError;
 use crate::respond::{fail, ok, ok_empty};
 
 async fn get_status(State(ctx): State<Arc<AppCtx>>) -> Response {
@@ -52,7 +54,7 @@ async fn start(State(ctx): State<Arc<AppCtx>>, body: Option<Json<Value>>) -> Res
     let body = body.map(|Json(v)| v).unwrap_or_else(|| json!({}));
     let (body_token, body_url) = match parse_start_body(&body) {
         Ok(pair) => pair,
-        Err(error) => return fail(StatusCode::BAD_REQUEST, error),
+        Err(error) => return fail_with(&error),
     };
 
     // Fall back to the persisted config when the renderer omits a token — this
@@ -97,7 +99,7 @@ async fn start(State(ctx): State<Arc<AppCtx>>, body: Option<Json<Value>>) -> Res
             }
             ok(json!({ "url": url }))
         }
-        Err(message) => fail(StatusCode::INTERNAL_SERVER_ERROR, message),
+        Err(error) => fail(StatusCode::INTERNAL_SERVER_ERROR, error.to_string()),
     }
 }
 
@@ -108,7 +110,7 @@ async fn stop(State(ctx): State<Arc<AppCtx>>, body: Option<Json<Value>>) -> Resp
     let body = body.map(|Json(v)| v).unwrap_or_else(|| json!({}));
     let clear_config = match parse_stop_body(&body) {
         Ok(clear) => clear,
-        Err(error) => return fail(StatusCode::BAD_REQUEST, error),
+        Err(error) => return fail_with(&error),
     };
 
     manager.stop("daemon").await;
@@ -130,26 +132,26 @@ async fn stop(State(ctx): State<Arc<AppCtx>>, body: Option<Json<Value>>) -> Resp
 }
 
 /// Start body: an optional non-empty `token` and an optional URL `url`.
-fn parse_start_body(body: &Value) -> Result<(Option<String>, Option<String>), String> {
+fn parse_start_body(body: &Value) -> Result<(Option<String>, Option<String>), InputError> {
     let token = match body.get("token") {
         None | Some(Value::Null) => None,
         Some(Value::String(s)) if !s.is_empty() => Some(s.clone()),
-        _ => return Err("Invalid token".to_string()),
+        _ => return Err(InputError::Rejected("Invalid token")),
     };
     let url = match body.get("url") {
         None | Some(Value::Null) => None,
         Some(Value::String(s)) if is_url(s) => Some(s.clone()),
-        _ => return Err("Invalid url".to_string()),
+        _ => return Err(InputError::Rejected("Invalid url")),
     };
     Ok((token, url))
 }
 
 /// Stop body: an optional boolean `clearConfig`.
-fn parse_stop_body(body: &Value) -> Result<bool, String> {
+fn parse_stop_body(body: &Value) -> Result<bool, InputError> {
     match body.get("clearConfig") {
         None | Some(Value::Null) => Ok(false),
         Some(Value::Bool(b)) => Ok(*b),
-        _ => Err("Invalid clearConfig".to_string()),
+        _ => Err(InputError::Rejected("Invalid clearConfig")),
     }
 }
 
@@ -175,19 +177,34 @@ mod tests {
 
     #[test]
     fn start_body_validation() {
-        assert_eq!(parse_start_body(&json!({})), Ok((None, None)));
+        assert_eq!(parse_start_body(&json!({})).unwrap(), (None, None));
         assert_eq!(
-            parse_start_body(&json!({ "token": "t", "url": "https://x.com" })),
-            Ok((Some("t".to_string()), Some("https://x.com".to_string())))
+            parse_start_body(&json!({ "token": "t", "url": "https://x.com" })).unwrap(),
+            (Some("t".to_string()), Some("https://x.com".to_string()))
         );
-        assert!(parse_start_body(&json!({ "token": "" })).is_err());
-        assert!(parse_start_body(&json!({ "url": "not-a-url" })).is_err());
+        assert_eq!(
+            parse_start_body(&json!({ "token": "" }))
+                .unwrap_err()
+                .to_string(),
+            "Invalid token"
+        );
+        assert_eq!(
+            parse_start_body(&json!({ "url": "not-a-url" }))
+                .unwrap_err()
+                .to_string(),
+            "Invalid url"
+        );
     }
 
     #[test]
     fn stop_body_validation() {
-        assert_eq!(parse_stop_body(&json!({})), Ok(false));
-        assert_eq!(parse_stop_body(&json!({ "clearConfig": true })), Ok(true));
-        assert!(parse_stop_body(&json!({ "clearConfig": "yes" })).is_err());
+        assert!(!parse_stop_body(&json!({})).unwrap());
+        assert!(parse_stop_body(&json!({ "clearConfig": true })).unwrap());
+        assert_eq!(
+            parse_stop_body(&json!({ "clearConfig": "yes" }))
+                .unwrap_err()
+                .to_string(),
+            "Invalid clearConfig"
+        );
     }
 }

@@ -82,9 +82,7 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
     ) -> Result<(), PermissionError> {
         let session = active.lock_recover().session.clone();
         let Some(session) = session else {
-            return Err(PermissionError::Message(format!(
-                "No session for chat {chat_id}"
-            )));
+            return Err(PermissionError::NoSession(chat_id.to_string()));
         };
 
         session.respond_to_permission(response.clone()).await?;

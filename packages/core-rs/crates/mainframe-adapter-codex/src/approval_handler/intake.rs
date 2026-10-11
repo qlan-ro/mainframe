@@ -192,8 +192,7 @@ impl ApprovalHandler {
     fn report_unanswered(&self, result: Result<(), crate::jsonrpc::JsonRpcError>) {
         if let Err(error) = result {
             tracing::warn!(module = "codex:approvals", %error, "codex: server request not answered");
-            self.sink
-                .on_error(mainframe_adapter_api::AdapterError::Message(error.0));
+            self.sink.on_error(error.into());
         }
     }
 }

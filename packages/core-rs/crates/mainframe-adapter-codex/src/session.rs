@@ -145,7 +145,7 @@ impl CodexSession {
 }
 
 pub(crate) fn de<T: DeserializeOwned>(v: Value) -> Result<T, AdapterError> {
-    serde_json::from_value(v).map_err(|e| AdapterError::Message(e.to_string()))
+    serde_json::from_value(v).map_err(AdapterError::from)
 }
 
 #[cfg(test)]

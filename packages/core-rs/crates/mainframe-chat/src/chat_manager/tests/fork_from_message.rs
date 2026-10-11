@@ -5,6 +5,7 @@
 
 use super::*;
 use mainframe_adapter_api::ForkCut;
+use mainframe_types::http_status::StatusKind;
 
 fn parent() -> Chat {
     // `enrich_chat` stats StoreDeps's fixed project path; keep it present so
@@ -104,11 +105,31 @@ async fn each_refusal_maps_to_its_status_and_creates_no_chat() {
         "queued".to_string(),
         serde_json::json!(true),
     )]));
-    let cases: Vec<(&str, Vec<ChatMessage>, ForkChatError, u16)> = vec![
-        ("nope", Vec::new(), ForkChatError::MessageNotFound, 404),
-        ("u2-reply", Vec::new(), ForkChatError::NotAUserMessage, 400),
-        ("u1", Vec::new(), ForkChatError::NothingBeforeMessage, 409),
-        ("u4", vec![queued], ForkChatError::MessageNotSent, 409),
+    let cases: Vec<(&str, Vec<ChatMessage>, ForkChatError, StatusKind)> = vec![
+        (
+            "nope",
+            Vec::new(),
+            ForkChatError::MessageNotFound,
+            StatusKind::NotFound,
+        ),
+        (
+            "u2-reply",
+            Vec::new(),
+            ForkChatError::NotAUserMessage,
+            StatusKind::BadRequest,
+        ),
+        (
+            "u1",
+            Vec::new(),
+            ForkChatError::NothingBeforeMessage,
+            StatusKind::Conflict,
+        ),
+        (
+            "u4",
+            vec![queued],
+            ForkChatError::MessageNotSent,
+            StatusKind::Conflict,
+        ),
     ];
     for (id, extra_live, expected, status) in cases {
         let (deps, mgr) = setup(parent());
@@ -120,7 +141,7 @@ async fn each_refusal_maps_to_its_status_and_creates_no_chat() {
         let before_count = deps.chat_count();
         let err = mgr.fork_chat("c1", before(id)).await.unwrap_err();
         assert_eq!(err, expected, "{id}");
-        assert_eq!(err.status_code(), status, "{id}");
+        assert_eq!(err.status_kind(), status, "{id}");
         assert_eq!(deps.chat_count(), before_count, "{id}");
         assert!(deps.pin_requests().is_empty(), "{id}: nothing is pinned");
     }
@@ -134,7 +155,7 @@ async fn a_transcript_that_disagrees_with_the_chat_is_unresolved() {
     show_live(&mgr, live);
     let err = mgr.fork_chat("c1", before("live-2")).await.unwrap_err();
     assert!(matches!(err, ForkChatError::ForkPointUnresolved(_)));
-    assert_eq!(err.status_code(), 409);
+    assert_eq!(err.status_kind(), StatusKind::Conflict);
     assert!(deps.pin_requests().is_empty());
 }
 
@@ -150,7 +171,7 @@ async fn the_adapters_point_not_found_reason_is_a_409_and_creates_no_chat() {
             "This message joined a turn that was already running".to_string()
         )
     );
-    assert_eq!(err.status_code(), 409);
+    assert_eq!(err.status_kind(), StatusKind::Conflict);
     assert_eq!(deps.chat_count(), before_count);
 }
 

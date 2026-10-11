@@ -53,7 +53,7 @@ pub(super) async fn build_with_backend<B: KeyringBackend + 'static>(
 /// A cheap round trip on a throwaway label — the only reliable way to learn
 /// whether the keychain backend actually works on this machine before
 /// committing to it for the whole process lifetime.
-fn probe<B: KeyringBackend>(backend: &B) -> Result<(), String> {
+fn probe<B: KeyringBackend>(backend: &B) -> Result<(), keyring::Error> {
     backend.set(PROBE_LABEL, "probe")?;
     backend.delete(PROBE_LABEL)
 }

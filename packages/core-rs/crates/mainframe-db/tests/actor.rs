@@ -47,6 +47,6 @@ async fn cancelling_the_waiter_does_not_cancel_an_accepted_write() {
 
 #[test]
 fn opening_errors_keep_the_original_message() {
-    let result = SqliteActor::<()>::spawn(|| Err(DbError::Message("open failed".into())));
+    let result = SqliteActor::<()>::spawn(|| Err(DbError::Invariant("open failed".into())));
     assert_eq!(result.err().unwrap().to_string(), "open failed");
 }

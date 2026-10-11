@@ -491,6 +491,12 @@ async fn source_accepted_for_shorthand_https_allowlist_and_ssh() {
             "expected {source:?} to be accepted"
         );
     }
+    assert_eq!(
+        mainframe_server::skills_cli::validate::validate_source("/etc/skills")
+            .unwrap_err()
+            .to_string(),
+        "Source must be an owner/repo shorthand, an allow-listed github.com/gitlab.com URL, or an SSH remote"
+    );
 }
 
 #[tokio::test]
@@ -501,11 +507,15 @@ async fn skill_name_allows_spaces_and_dots_and_rejects_dash_prefix_and_control_c
             "expected {accepted:?} to be accepted"
         );
     }
-    for rejected in ["-x", "a\u{7}b", ""] {
-        assert!(
-            mainframe_server::skills_cli::validate::validate_skill_name(rejected).is_err(),
-            "expected {rejected:?} to be rejected"
-        );
+    let rejections = [
+        ("-x", "Skill name must not start with a dash"),
+        ("a\u{7}b", "Skill name must not contain control characters"),
+        ("", "Skill name must not be empty"),
+    ];
+    for (rejected, text) in rejections {
+        let err = mainframe_server::skills_cli::validate::validate_skill_name(rejected)
+            .expect_err("rejected");
+        assert_eq!(err.to_string(), text, "{rejected:?}");
     }
 }
 

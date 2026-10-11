@@ -29,8 +29,7 @@ pub(super) async fn build(
         Some(registry) => registry,
         None => {
             let mut registry = ActionRegistry::new();
-            register_all_actions(&mut registry)
-                .map_err(|err| StoreError::Task(format!("action registry: {}", err.0)))?;
+            register_all_actions(&mut registry).map_err(StoreError::ActionRegistry)?;
             Arc::new(registry)
         }
     };

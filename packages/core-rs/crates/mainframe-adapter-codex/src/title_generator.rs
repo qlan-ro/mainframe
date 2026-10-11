@@ -35,20 +35,20 @@ pub(crate) async fn generate_codex_title(
     .await
     .map_err(|error| match error {
         mainframe_runtime::process::ExecError::Timeout => {
-            AdapterError::Message("codex title generation timed out".into())
+            AdapterError::Timeout("codex title generation timed out")
         }
         mainframe_runtime::process::ExecError::Spawn(error)
         | mainframe_runtime::process::ExecError::Io(error) => AdapterError::from(error),
-        error => AdapterError::Message(error.to_string()),
+        error => AdapterError::Exec(error),
     })?;
 
     // A `codex` too old for these flags exits non-zero with `unexpected argument`
     // rather than running the prompt, so a failed exit must not be parsed as a title.
     if !output.status.success() {
-        return Err(AdapterError::Message(format!(
-            "codex title generation exited with {}",
-            output.status
-        )));
+        return Err(AdapterError::Exited {
+            what: "codex title generation",
+            detail: output.status.to_string(),
+        });
     }
 
     Ok(finalize_title(&String::from_utf8_lossy(&output.stdout)))

@@ -19,6 +19,8 @@ pub struct Notification {
     pub links: NotificationLinks,
 }
 
+/// A notification delivery failure. It is only logged, and no caller
+/// branches on the cause, so it stays a message.
 #[derive(Debug, Clone, thiserror::Error)]
 #[error("{0}")]
 pub struct NotifyError(pub String);

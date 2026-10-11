@@ -70,7 +70,7 @@ impl ForkCopy<'_> {
         active: bool,
     ) -> Result<(), DbError> {
         let Some(source) = self.segments.iter().find(|s| s.id == source_id).cloned() else {
-            return Err(DbError::Message(format!(
+            return Err(DbError::Invariant(format!(
                 "parent segment {source_id} not found"
             )));
         };
@@ -111,7 +111,9 @@ impl ForkCopy<'_> {
             .natives
             .iter()
             .find(|n| n.id == parent_ref)
-            .ok_or_else(|| DbError::Message(format!("parent native row {parent_ref} not found")))?;
+            .ok_or_else(|| {
+                DbError::Invariant(format!("parent native row {parent_ref} not found"))
+            })?;
         let id = format!("ns_{}", nanoid::nanoid!());
         match role {
             ForkSegmentRole::Pinned => {
@@ -135,7 +137,7 @@ impl ForkCopy<'_> {
     fn pending_segment(&self) -> Result<(), DbError> {
         let adapter = natives::active(self.db, self.parent_id)?
             .map(|n| n.adapter_id)
-            .ok_or_else(|| DbError::Message("parent has no active segment".into()))?;
+            .ok_or_else(|| DbError::Invariant("parent has no active segment".into()))?;
         let native_ref = format!("ns_{}", nanoid::nanoid!());
         natives::insert_fresh(self.db, &native_ref, self.fork_id, &adapter, self.model)?;
         let id = format!("seg_{}", nanoid::nanoid!());

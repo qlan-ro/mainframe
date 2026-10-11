@@ -33,11 +33,7 @@ pub trait AdapterSession: Send + Sync {
         uuid: Option<String>,
     ) -> BoxFuture<'_, Result<(), AdapterError>> {
         let _ = (message, uuid);
-        Box::pin(async {
-            Err(AdapterError::Message(
-                "this adapter cannot steer a running turn".to_string(),
-            ))
-        })
+        Box::pin(async { Err(AdapterError::Unsupported("steer a running turn")) })
     }
 
     fn spawn(

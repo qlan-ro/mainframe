@@ -1,3 +1,4 @@
+use crate::validation::RefinementError;
 use serde::{Deserialize, Serialize};
 
 /// Visual tint for a repo suggestion tile. `accent` = churn/neutral; `amber` = TODO/warning.
@@ -25,15 +26,15 @@ impl Suggestion {
     /// non-empty (`z.string().min(1)`) constraints on `icon`, `title`, `prefill`.
     /// `meta` is a plain `z.string()` (empty allowed); `tint` is enforced by the
     /// enum during deserialization.
-    pub fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), RefinementError> {
         if self.icon.is_empty() {
-            return Err("icon must contain at least 1 character".to_string());
+            return Err(RefinementError::TooShort("icon"));
         }
         if self.title.is_empty() {
-            return Err("title must contain at least 1 character".to_string());
+            return Err(RefinementError::TooShort("title"));
         }
         if self.prefill.is_empty() {
-            return Err("prefill must contain at least 1 character".to_string());
+            return Err(RefinementError::TooShort("prefill"));
         }
         Ok(())
     }

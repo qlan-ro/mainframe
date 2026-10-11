@@ -13,6 +13,7 @@
 
 use std::time::Duration;
 
+use mainframe_adapter_api::AdapterError;
 use mainframe_types::adapter::AdapterModel;
 
 mod config;
@@ -199,8 +200,10 @@ pub(crate) async fn resolve_env(
     config_path_override: Option<&str>,
     small_fast_override: Option<&str>,
     selected_model: &str,
-) -> Result<CliProxyEnv, String> {
-    const UNREACHABLE: &str = "CLIProxyAPI is not reachable — start it with `brew services start cliproxyapi`, or pick a Claude model.";
+) -> Result<CliProxyEnv, AdapterError> {
+    const UNREACHABLE: AdapterError = AdapterError::Unavailable(
+        "CLIProxyAPI is not reachable — start it with `brew services start cliproxyapi`, or pick a Claude model.",
+    );
 
     let config = discover(config_path_override).await.ok_or(UNREACHABLE)?;
     let catalog = fetch_models(&config).await.ok_or(UNREACHABLE)?;

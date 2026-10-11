@@ -176,10 +176,10 @@ fn effective_path_unknown_project_none() {
 
 // --- handle_upgrade ---------------------------------------------------------
 
-fn assert_reject(outcome: &UpgradeOutcome, needle: &str) {
+fn assert_reject(outcome: &UpgradeOutcome, expected: StatusKind) {
     match outcome {
-        UpgradeOutcome::Reject(status) => assert!(status.contains(needle), "status was {status}"),
-        UpgradeOutcome::Proceed(_) => panic!("expected Reject({needle}), got Proceed"),
+        UpgradeOutcome::Reject(status) => assert_eq!(*status, expected),
+        UpgradeOutcome::Proceed(_) => panic!("expected Reject({expected:?}), got Proceed"),
     }
 }
 
@@ -190,7 +190,7 @@ async fn rejects_upgrade_for_unknown_project_with_404() {
     let outcome = handler
         .handle_upgrade("unknown-id", "typescript", None)
         .await;
-    assert_reject(&outcome, "404");
+    assert_reject(&outcome, StatusKind::NotFound);
 }
 
 #[tokio::test]
@@ -201,7 +201,7 @@ async fn rejects_upgrade_for_unsupported_language_with_404() {
     });
     let handler: LspConnectionHandler<FakeDb, FakeChats> = LspConnectionHandler::new(manager(), db);
     let outcome = handler.handle_upgrade("p1", "rust", None).await;
-    assert_reject(&outcome, "404");
+    assert_reject(&outcome, StatusKind::NotFound);
 }
 
 #[tokio::test]
@@ -216,7 +216,7 @@ async fn rejects_upgrade_with_409_when_worktree_missing() {
     let outcome = handler
         .handle_upgrade("p1", "typescript", Some("chat-missing-wt"))
         .await;
-    assert_reject(&outcome, "409");
+    assert_reject(&outcome, StatusKind::Conflict);
 }
 
 #[tokio::test]
@@ -237,7 +237,7 @@ async fn proceeds_with_worktree_path_as_project_path() {
         .await;
     match outcome {
         UpgradeOutcome::Proceed(handle) => assert_eq!(handle.project_path, wt_path),
-        UpgradeOutcome::Reject(s) => panic!("expected Proceed, got Reject({s})"),
+        UpgradeOutcome::Reject(s) => panic!("expected Proceed, got Reject({s:?})"),
     }
     m.shutdown_all().await;
 }
@@ -254,7 +254,7 @@ async fn proceeds_with_project_root_when_no_chat_id() {
     let outcome = handler.handle_upgrade("p1", "typescript", None).await;
     match outcome {
         UpgradeOutcome::Proceed(handle) => assert_eq!(handle.project_path, root_path),
-        UpgradeOutcome::Reject(s) => panic!("expected Proceed, got Reject({s})"),
+        UpgradeOutcome::Reject(s) => panic!("expected Proceed, got Reject({s:?})"),
     }
     m.shutdown_all().await;
 }

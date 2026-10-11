@@ -117,9 +117,9 @@ impl SegmentsRepository {
     pub fn replace_active_native(&self, chat_id: &str) -> Result<SegmentLayout, DbError> {
         let tx = self.db.unchecked_transaction()?;
         let segment = crate::chat_segments::active(&tx, chat_id)?
-            .ok_or_else(|| DbError::Message(format!("chat {chat_id} has no active segment")))?;
+            .ok_or_else(|| DbError::Invariant(format!("chat {chat_id} has no active segment")))?;
         let native = natives::active(&tx, chat_id)?
-            .ok_or_else(|| DbError::Message(format!("chat {chat_id} has no active session")))?;
+            .ok_or_else(|| DbError::Invariant(format!("chat {chat_id} has no active session")))?;
         let fresh = format!("ns_{}", nanoid::nanoid!());
         natives::insert_fresh(
             &tx,

@@ -31,13 +31,13 @@ impl TunnelManager {
         port: u16,
         label: &str,
         options: Option<TunnelStartOptions>,
-    ) -> Result<String, String> {
+    ) -> Result<String, TunnelStartError> {
         // Stop any existing tunnel for this label to prevent leaks.
         self.stop(label).await;
 
         let gate = self.spawn_gate.lock().await;
         if *gate {
-            return Err("Daemon is shutting down".to_string());
+            return Err(TunnelStartError::ShuttingDown);
         }
 
         let options = options.unwrap_or_default();
@@ -75,19 +75,15 @@ impl TunnelManager {
         {
             Ok(child) => child,
             Err(err) => {
-                let message = if err.kind() == std::io::ErrorKind::NotFound {
-                    CLOUDFLARED_NOT_FOUND.to_string()
-                } else {
-                    err.to_string()
-                };
+                let error = TunnelStartError::spawn(err);
                 self.broadcast(DaemonEvent::TunnelStatus {
                     state: TunnelState::Error,
                     label: label.to_string(),
                     url: None,
                     dns_verified: None,
-                    error: Some(message.clone()),
+                    error: Some(error.to_string()),
                 });
-                return Err(message);
+                return Err(error);
             }
         };
 
@@ -128,18 +124,18 @@ impl TunnelManager {
                 }
                 () = &mut start_deadline => {
                     process.terminate(self.config.stop_grace).await;
-                    let msg = format!(
-                        "Tunnel \"{label}\" timed out after {}ms",
-                        self.config.start_timeout.as_millis()
-                    );
+                    let error = TunnelStartError::Timeout {
+                        label: label.to_string(),
+                        ms: self.config.start_timeout.as_millis(),
+                    };
                     self.broadcast(DaemonEvent::TunnelStatus {
                         state: TunnelState::Error,
                         label: label.to_string(),
                         url: None,
                         dns_verified: None,
-                        error: Some(msg.clone()),
+                        error: Some(error.to_string()),
                     });
-                    return Err(msg);
+                    return Err(error);
                 }
                 exit = process.exited() => {
                     return Err(self.on_exit_before_ready(label, exit));

@@ -15,7 +15,9 @@ use axum::routing::get;
 use mainframe_types::search::SearchContentResult;
 
 use crate::ctx::AppCtx;
+use crate::error_status::fail_with;
 use crate::fs_utils::{has_binary_extension, relative};
+use crate::input_error::InputError;
 use crate::respond::{fail, ok};
 use crate::ripgrep::{RipgrepOptions, search_with_ripgrep};
 use crate::routes::files::resolve_base;
@@ -105,7 +107,7 @@ async fn content_search(
 ) -> Response {
     let (query, scope_path) = match validate_query(&q) {
         Ok(v) => v,
-        Err(msg) => return fail(StatusCode::BAD_REQUEST, msg),
+        Err(err) => return fail_with(&err),
     };
     let include_ignored = qget(&q, "includeIgnored") == Some("true");
 
@@ -143,10 +145,10 @@ async fn content_search(
 }
 
 /// `ContentSearchQuery`: `q` min 2 (custom msg), `path` min 1 (custom msg).
-fn validate_query(q: &HashMap<String, String>) -> Result<(&str, &str), String> {
+fn validate_query(q: &HashMap<String, String>) -> Result<(&str, &str), InputError> {
     let query = qget(q, "q");
     let path = qget(q, "path");
-    let mut issues: Vec<&str> = Vec::new();
+    let mut issues: Vec<&'static str> = Vec::new();
     match query {
         None => issues.push("Required"),
         Some(s) if s.chars().count() < 2 => issues.push("Query must be at least 2 characters"),
@@ -158,7 +160,7 @@ fn validate_query(q: &HashMap<String, String>) -> Result<(&str, &str), String> {
         _ => {}
     }
     if !issues.is_empty() {
-        return Err(issues.join(", "));
+        return Err(InputError::Issues(issues));
     }
     Ok((query.unwrap_or_default(), path.unwrap_or_default()))
 }

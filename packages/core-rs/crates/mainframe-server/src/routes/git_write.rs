@@ -20,6 +20,8 @@ use serde_json::{Value, json};
 
 use crate::async_err::internal_error;
 use crate::ctx::AppCtx;
+use crate::error_status::fail_with;
+use crate::input_error::InputError;
 use crate::respond::{fail, ok, ok_empty};
 
 use super::git::{ChatIdQuery, get_effective_path, git_error_message, parse_json_body};
@@ -109,7 +111,7 @@ async fn resolve(
 
 /// Deserialize the already-parsed body `Value` into a schema `T`. `Err` carries
 /// the validation message the caller turns into a 400.
-fn body_of<T: DeserializeOwned>(body: Value) -> Result<T, String> {
+fn body_of<T: DeserializeOwned>(body: Value) -> Result<T, InputError> {
     parse_json_body::<T>(body.to_string().as_bytes())
 }
 
@@ -169,7 +171,7 @@ async fn checkout(
     };
     let data: CheckoutBody = match body_of(val) {
         Ok(d) => d,
-        Err(m) => return fail(StatusCode::BAD_REQUEST, m),
+        Err(m) => return fail_with(&m),
     };
     if data.branch.is_empty() {
         return fail(StatusCode::BAD_REQUEST, "branch must not be empty");
@@ -192,7 +194,7 @@ async fn commit(
     };
     let data: CommitBody = match body_of(val) {
         Ok(d) => d,
-        Err(m) => return fail(StatusCode::BAD_REQUEST, m),
+        Err(m) => return fail_with(&m),
     };
     if data.message.is_empty() {
         return fail(StatusCode::BAD_REQUEST, "Commit message cannot be empty");
@@ -218,7 +220,7 @@ async fn create_branch(
     };
     let data: CreateBranchBody = match body_of(val) {
         Ok(d) => d,
-        Err(m) => return fail(StatusCode::BAD_REQUEST, m),
+        Err(m) => return fail_with(&m),
     };
     if !is_valid_branch_name(&data.name) {
         return fail(StatusCode::BAD_REQUEST, "Invalid branch name");
@@ -244,7 +246,7 @@ async fn fetch(
     };
     let data: FetchBody = match body_of(val) {
         Ok(d) => d,
-        Err(m) => return fail(StatusCode::BAD_REQUEST, m),
+        Err(m) => return fail_with(&m),
     };
     git_result(
         ctx.git
@@ -267,7 +269,7 @@ async fn pull(
     };
     let data: PullBody = match body_of(val) {
         Ok(d) => d,
-        Err(m) => return fail(StatusCode::BAD_REQUEST, m),
+        Err(m) => return fail_with(&m),
     };
     let lb = data.local_branch.as_deref().is_some_and(|s| !s.is_empty());
     let b = data.branch.as_deref().is_some_and(|s| !s.is_empty());
@@ -302,7 +304,7 @@ async fn push(
     };
     let data: PushBody = match body_of(val) {
         Ok(d) => d,
-        Err(m) => return fail(StatusCode::BAD_REQUEST, m),
+        Err(m) => return fail_with(&m),
     };
     git_result(
         ctx.git
@@ -325,7 +327,7 @@ async fn merge(
     };
     let data: BranchArgBody = match body_of(val) {
         Ok(d) => d,
-        Err(m) => return fail(StatusCode::BAD_REQUEST, m),
+        Err(m) => return fail_with(&m),
     };
     if data.branch.is_empty() {
         return fail(StatusCode::BAD_REQUEST, "branch must not be empty");
@@ -345,7 +347,7 @@ async fn rebase(
     };
     let data: BranchArgBody = match body_of(val) {
         Ok(d) => d,
-        Err(m) => return fail(StatusCode::BAD_REQUEST, m),
+        Err(m) => return fail_with(&m),
     };
     if data.branch.is_empty() {
         return fail(StatusCode::BAD_REQUEST, "branch must not be empty");
@@ -381,7 +383,7 @@ async fn rename_branch(
     };
     let data: RenameBranchBody = match body_of(val) {
         Ok(d) => d,
-        Err(m) => return fail(StatusCode::BAD_REQUEST, m),
+        Err(m) => return fail_with(&m),
     };
     if data.old_name.is_empty() || !is_valid_branch_name(&data.new_name) {
         return fail(StatusCode::BAD_REQUEST, "Invalid branch name");
@@ -407,7 +409,7 @@ async fn delete_branch(
     };
     let data: DeleteBranchBody = match body_of(val) {
         Ok(d) => d,
-        Err(m) => return fail(StatusCode::BAD_REQUEST, m),
+        Err(m) => return fail_with(&m),
     };
     if data.name.is_empty() {
         return fail(StatusCode::BAD_REQUEST, "name must not be empty");

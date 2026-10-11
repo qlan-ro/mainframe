@@ -48,9 +48,8 @@ pub async fn list_skills(
         )
         .await;
     client.close();
-    let response = response.map_err(|error| AdapterError::Message(error.0))?;
-    let response: SkillsResponse = serde_json::from_value(response)
-        .map_err(|error| AdapterError::Message(error.to_string()))?;
+    let response = response.map_err(AdapterError::from)?;
+    let response: SkillsResponse = serde_json::from_value(response).map_err(AdapterError::from)?;
     Ok(response
         .data
         .into_iter()

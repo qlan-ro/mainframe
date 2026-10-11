@@ -23,6 +23,7 @@ use serde_json::{Map, Value, json};
 
 use crate::async_err::internal_error;
 use crate::ctx::AppCtx;
+use crate::error_status::fail_with;
 use crate::respond::{fail, ok, ok_empty};
 use mainframe_runtime::fs::resolve_and_validate_path;
 
@@ -103,7 +104,7 @@ fn chat_git_fail(err: &GitServiceError, label: &str) -> Response {
 async fn status(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
     let data: StatusBody = match parse_json_body(&body) {
         Ok(d) => d,
-        Err(m) => return fail(StatusCode::BAD_REQUEST, m),
+        Err(m) => return fail_with(&m),
     };
     let (svc, _) = match resolve_chat_ctx(&ctx, &data.chat_id, None, false).await {
         Ok(v) => v,
@@ -126,7 +127,7 @@ async fn unstage(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
 async fn stage_impl(ctx: Arc<AppCtx>, body: Bytes, unstage: bool) -> Response {
     let data: StageBody = match parse_json_body(&body) {
         Ok(d) => d,
-        Err(m) => return fail(StatusCode::BAD_REQUEST, m),
+        Err(m) => return fail_with(&m),
     };
     let (svc, _) = match resolve_chat_ctx(&ctx, &data.chat_id, Some(&data.files), true).await {
         Ok(v) => v,
@@ -149,7 +150,7 @@ async fn stage_impl(ctx: Arc<AppCtx>, body: Bytes, unstage: bool) -> Response {
 async fn commit(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
     let data: CommitBody = match parse_json_body(&body) {
         Ok(d) => d,
-        Err(m) => return fail(StatusCode::BAD_REQUEST, m),
+        Err(m) => return fail_with(&m),
     };
     if data.message.is_empty() {
         return fail(StatusCode::BAD_REQUEST, "Commit message cannot be empty");
@@ -174,7 +175,7 @@ async fn commit(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
 async fn push(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
     let data: StatusBody = match parse_json_body(&body) {
         Ok(d) => d,
-        Err(m) => return fail(StatusCode::BAD_REQUEST, m),
+        Err(m) => return fail_with(&m),
     };
     let (svc, _) = match resolve_chat_ctx(&ctx, &data.chat_id, None, false).await {
         Ok(v) => v,
@@ -195,7 +196,7 @@ async fn diff_since_main(
 ) -> Response {
     let data: DiffSinceMainBody = match parse_json_body(&body) {
         Ok(d) => d,
-        Err(m) => return fail(StatusCode::BAD_REQUEST, m),
+        Err(m) => return fail_with(&m),
     };
     let base_path = match get_effective_path(&ctx, &id, data.chat_id.as_deref()).await {
         Ok(Some(p)) => p,

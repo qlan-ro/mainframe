@@ -114,7 +114,7 @@ pub(crate) fn record_native_id(
             let segment =
                 open_context_reset(db, chat_id, &native.adapter_id, native.model.as_deref())?;
             let fresh = natives::active(db, chat_id)?
-                .ok_or_else(|| DbError::Message("context reset left no active segment".into()))?;
+                .ok_or_else(|| DbError::Invariant("context reset left no active segment".into()))?;
             natives::set_native_id(db, &fresh.id, Some(native_id), path)?;
             RecordOutcome::Reset {
                 segment_id: segment.id,

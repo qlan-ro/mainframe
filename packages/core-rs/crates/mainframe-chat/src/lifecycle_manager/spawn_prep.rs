@@ -10,6 +10,7 @@ use mainframe_types::sync::LockExt as _;
 use std::sync::{Arc, Mutex};
 
 use mainframe_types::chat::Chat;
+use mainframe_types::http_status::NotFound;
 
 use crate::chat_cwd::chat_cwd;
 use crate::no_persistence;
@@ -37,13 +38,11 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             chat.scratch_path.as_deref(),
             project_path,
         )
-        .ok_or_else(|| LifecycleError::Message(format!("Project {} not found", chat.project_id)))?;
+        .ok_or_else(|| NotFound::new("Project", chat.project_id.clone()))?;
         // A non-project chat has no project directory to check — its cwd is
         // its own scratch path, ensured to exist just below.
         if chat.worktree_path.is_none() && !chat.no_project && !self.deps.path_exists(&cwd) {
-            return Err(LifecycleError::Message(format!(
-                "Project directory does not exist or is not accessible: {cwd}"
-            )));
+            return Err(LifecycleError::ProjectDirMissing(cwd));
         }
         if let Some(scratch) = chat.scratch_path.clone() {
             self.deps.ensure_dir(&scratch).await;

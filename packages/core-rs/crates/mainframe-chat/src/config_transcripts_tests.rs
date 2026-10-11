@@ -62,10 +62,10 @@ impl ConfigManagerDeps for Deps {
         session_id: &'a str,
         _old_dir: &'a str,
         _new_dir: &'a str,
-    ) -> BoxFuture<'a, Result<(), String>> {
+    ) -> BoxFuture<'a, Result<(), SessionFilesError>> {
         Box::pin(async move {
             if self.fail_on.as_deref() == Some(session_id) {
-                return Err("disk full".to_string());
+                return Err(std::io::Error::other("disk full").into());
             }
             self.moved.lock().unwrap().push(session_id.to_string());
             Ok(())
@@ -154,6 +154,6 @@ async fn a_failed_move_stops_and_keeps_earlier_paths() {
     let err = relocate_claude_transcripts(&deps, "chat", codex_active(), "/p", "/wt")
         .await
         .unwrap_err();
-    assert_eq!(err, "disk full");
+    assert_eq!(err.to_string(), "disk full");
     assert_eq!(deps.paths.lock().unwrap().len(), 1);
 }

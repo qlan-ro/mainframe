@@ -6,6 +6,7 @@
 //! are not project-keyed, and borrowed sessions belong to another chat.
 
 use mainframe_services::workspace::get_claude_project_dir;
+use mainframe_services::workspace::session_files::SessionFilesError;
 
 use crate::config_manager::ConfigManagerDeps;
 use crate::event_handler::compute_session_file_path;
@@ -37,7 +38,7 @@ pub(crate) async fn relocate_claude_transcripts<D: ConfigManagerDeps>(
     active: ActiveSession<'_>,
     old_dir: &str,
     new_dir: &str,
-) -> Result<Option<String>, String> {
+) -> Result<Option<String>, SessionFilesError> {
     let sessions = claude_sessions(deps, chat_id, &active);
     let old_project = get_claude_project_dir(old_dir);
     let new_project = get_claude_project_dir(new_dir);

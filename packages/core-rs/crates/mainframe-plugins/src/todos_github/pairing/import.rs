@@ -1,18 +1,28 @@
 //! Importing a selected GitHub issue as a new local task (AC3, AC5).
-//! `import_one`'s errors are plain strings — the caller in `mod.rs` turns
-//! them into a `Skipped` row rather than failing the whole batch.
+//! The caller in `mod.rs` turns an [`ImportError`] into a `Skipped` row whose
+//! reason is the error's text, rather than failing the whole batch.
 
 use mainframe_types::time::now_iso8601;
 
 use crate::PluginError;
 use crate::context::PluginContext;
 use crate::db_context::text;
-use crate::github_port::RepoRef;
+use crate::github_port::{GitHubPortError, RepoRef};
 use crate::todos_github::labels::syncable_labels;
 use crate::todos_github::store;
 
 use super::Imported;
 use super::fetch::fetch_todo_number;
+
+/// Why one issue could not be imported. The text becomes the `Skipped`
+/// row's reason.
+#[derive(Debug, thiserror::Error)]
+pub(super) enum ImportError {
+    #[error(transparent)]
+    GitHub(#[from] GitHubPortError),
+    #[error(transparent)]
+    Store(#[from] PluginError),
+}
 
 pub(super) async fn import_one(
     ctx: &PluginContext,
@@ -20,12 +30,11 @@ pub(super) async fn import_one(
     credential_label: &str,
     repo: &RepoRef,
     issue_number: i64,
-) -> Result<Imported, String> {
+) -> Result<Imported, ImportError> {
     let issue = ctx
         .github
         .get_issue(repo, issue_number as u64, credential_label)
-        .await
-        .map_err(|err| err.to_string())?;
+        .await?;
     let labels = syncable_labels(&issue.labels);
     let now = now_iso8601();
     let todo_id = nanoid::nanoid!();
@@ -38,8 +47,7 @@ pub(super) async fn import_one(
         &labels,
         &now,
     )
-    .await
-    .map_err(|err| err.to_string())?;
+    .await?;
 
     store::insert_pair(
         ctx,
@@ -60,8 +68,7 @@ pub(super) async fn import_one(
             created_at: now,
         },
     )
-    .await
-    .map_err(|err| err.to_string())?;
+    .await?;
 
     Ok(Imported {
         issue_number,

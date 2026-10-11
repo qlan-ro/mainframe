@@ -20,6 +20,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use tokio::sync::watch;
 
+use crate::tunnel_error::TunnelStartError;
 use crate::tunnel_manager::TunnelManager;
 
 #[cfg(test)]
@@ -50,7 +51,7 @@ pub struct PortTunnelEntryInfo {
     pub ready: bool,
 }
 
-type StartOutcome = Result<String, String>;
+type StartOutcome = Result<String, TunnelStartError>;
 type Waiters = watch::Sender<Option<StartOutcome>>;
 
 enum Entry {
@@ -78,8 +79,6 @@ enum StartAction {
     Wait(watch::Receiver<Option<StartOutcome>>),
     Spawn(Waiters),
 }
-
-const CANCELLED: &str = "Tunnel start cancelled";
 
 pub struct PortTunnelRegistry {
     manager: Arc<TunnelManager>,
@@ -170,7 +169,7 @@ impl PortTunnelRegistry {
         }
         self.manager.stop(label).await;
         self.lock().remove(&port);
-        Err(CANCELLED.to_string())
+        Err(TunnelStartError::Cancelled)
     }
 
     /// Idempotent. Stopping a tunnel that is still starting is recorded as a
@@ -246,7 +245,7 @@ async fn await_outcome(waiters: &mut watch::Receiver<Option<StartOutcome>>) -> S
             return outcome;
         }
         if waiters.changed().await.is_err() {
-            return Err("Tunnel start abandoned".to_string());
+            return Err(TunnelStartError::Abandoned);
         }
     }
 }

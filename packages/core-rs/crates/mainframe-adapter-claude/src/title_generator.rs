@@ -49,13 +49,15 @@ pub async fn generate_claude_title(
     .await
     .map_err(|error| match error {
         mainframe_runtime::process::ExecError::Timeout => {
-            AdapterError::Message("claude title generation timed out".into())
+            AdapterError::Timeout("claude title generation timed out")
         }
         mainframe_runtime::process::ExecError::Spawn(error)
-        | mainframe_runtime::process::ExecError::Io(error) => {
-            AdapterError::Message(format!("failed to spawn title binary {binary}: {error}"))
-        }
-        error => AdapterError::Message(error.to_string()),
+        | mainframe_runtime::process::ExecError::Io(error) => AdapterError::Spawn {
+            what: "title binary",
+            binary: binary.to_string(),
+            source: error,
+        },
+        error => AdapterError::Exec(error),
     })?;
 
     interpret_output(output, binary)
@@ -79,9 +81,10 @@ fn interpret_output(
         } else {
             stderr
         };
-        return Err(AdapterError::Message(format!(
-            "claude title generation exited with {status}: {stderr}"
-        )));
+        return Err(AdapterError::Exited {
+            what: "claude title generation",
+            detail: format!("{status}: {stderr}"),
+        });
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);

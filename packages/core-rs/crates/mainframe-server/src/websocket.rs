@@ -32,6 +32,7 @@ use mainframe_lsp::{
 };
 use mainframe_types::chat::{Chat, Project};
 use mainframe_types::events::{ClientEvent, DaemonEvent};
+use mainframe_types::http_status::StatusKind;
 use serde::Deserialize;
 use tokio::sync::{broadcast, mpsc};
 
@@ -206,15 +207,9 @@ pub(crate) async fn lsp_ws_handler(
     }
 }
 
-/// Map the raw HTTP status line the LSP handler returns onto an axum response.
-fn reject_response(status_line: &str) -> Response {
-    let status = status_line
-        .split_whitespace()
-        .nth(1)
-        .and_then(|code| code.parse::<u16>().ok())
-        .and_then(|code| StatusCode::from_u16(code).ok())
-        .unwrap_or(StatusCode::BAD_GATEWAY);
-    status.into_response()
+/// The bare status response that refuses an LSP upgrade.
+fn reject_response(kind: StatusKind) -> Response {
+    crate::error_status::status_code(kind).into_response()
 }
 
 /// Bridge an accepted LSP WebSocket to its spawned language-server child: cancel
@@ -417,7 +412,7 @@ async fn handle_text(
             out_tx,
             &DaemonEvent::Error {
                 chat_id: None,
-                error: err.message(),
+                error: err.to_string(),
             },
         ),
     }

@@ -56,7 +56,7 @@ pub(crate) async fn load_history_inner(
             Some(json!({ "threadId": resume_thread_id, "includeTurns": true })),
         )
         .await
-        .map_err(|e| AdapterError::Message(e.0))?)?;
+        .map_err(AdapterError::from)?)?;
 
     let turns = truncate_at_turn_cap(
         read.thread.turns.unwrap_or_default(),

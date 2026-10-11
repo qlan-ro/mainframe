@@ -1,9 +1,10 @@
 //! Tag CRUD and per-chat tag assignment.
 //!
 //! `TagColor` is the shared palette enum (an out-of-palette color fails the body
-//! parse → 400). Mutating handlers wrap the repo call and surface any error as a
-//! 400 with the verbatim message; the read handlers let an error fall through to
-//! the opaque 500. DELETE deviates from the rest of the API on purpose: it ends
+//! parse → 400). Mutating handlers answer a rejected name with a 400 and a
+//! missing tag with a 404, both with the verbatim message; any other store
+//! failure, like every read failure, is the opaque 500. DELETE deviates from the
+//! rest of the API on purpose: it ends
 //! 204 with NO body, not the `{success}` envelope (wire contract:
 //! `packages/ui/src/lib/api/tags.ts` sends it through `requestNoContent`).
 
@@ -19,6 +20,7 @@ use mainframe_types::tags::TagColor;
 use serde::Deserialize;
 
 use crate::ctx::AppCtx;
+use crate::error_status::fail_or_internal;
 use crate::respond::{fail, ok};
 use crate::routes::chat_discard::refuse_if_temporary;
 use crate::routes::projects::parse_body;
@@ -40,10 +42,6 @@ struct SetChatTagsBody {
     tags: Vec<String>,
 }
 
-fn bad_request(err: &mainframe_db::DbError) -> Response {
-    fail(StatusCode::BAD_REQUEST, err.to_string())
-}
-
 async fn list(State(ctx): State<Arc<AppCtx>>) -> Response {
     match ctx.db.call(|db| db.tags.list()).await {
         Ok(tags) => ok(tags),
@@ -58,7 +56,7 @@ async fn create(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
     let CreateBody { name, color } = parsed;
     match ctx.db.call(move |db| db.tags.upsert(&name, color)).await {
         Ok(tag) => (StatusCode::CREATED, ok(tag)).into_response(),
-        Err(err) => bad_request(&err),
+        Err(err) => fail_or_internal("create tag", &err),
     }
 }
 
@@ -93,7 +91,7 @@ async fn update(State(ctx): State<Arc<AppCtx>>, Path(name): Path<String>, body: 
         .await;
     match result {
         Ok(tag) => ok(tag),
-        Err(err) => bad_request(&err),
+        Err(err) => fail_or_internal("update tag", &err),
     }
 }
 
@@ -147,7 +145,7 @@ async fn set_chat_tags(
         // `ChatManager::sync_chat_tags` (mirrors the tags onto the cached active
         // chat) is not called here.
         Ok(persisted) => ok(persisted),
-        Err(err) => bad_request(&err),
+        Err(err) => fail_or_internal("set chat tags", &err),
     }
 }
 

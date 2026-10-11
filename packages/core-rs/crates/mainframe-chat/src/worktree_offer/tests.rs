@@ -1,4 +1,5 @@
 use super::*;
+use mainframe_types::http_status::StatusKind;
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -488,7 +489,7 @@ async fn dismiss_rejects_a_path_that_is_not_pending_and_writes_nothing() {
         .unwrap_err();
 
     assert!(matches!(err, OfferError::NotPending), "got {err:?}");
-    assert_eq!(err.status_code(), 400);
+    assert_eq!(err.status_kind(), StatusKind::BadRequest);
     assert_eq!(h.deps.dismiss_writes(), no_writes());
     assert_eq!(h.deps.events(), no_events());
     assert_eq!(
@@ -632,7 +633,7 @@ async fn claim_accept_guards_one_switch_at_a_time_and_leaves_the_offer_pending()
         .claim_accept(CHAT, "/repo/.worktrees/ghost")
         .unwrap_err();
     assert!(matches!(unknown, OfferError::NotPending), "got {unknown:?}");
-    assert_eq!(unknown.status_code(), 400);
+    assert_eq!(unknown.status_kind(), StatusKind::BadRequest);
 
     let claimed = h.registry.claim_accept(CHAT, "/repo/.worktrees/a").unwrap();
     assert_eq!(claimed, offer("/repo/.worktrees/a", Some("feat/a"), T1));
@@ -650,7 +651,7 @@ async fn claim_accept_guards_one_switch_at_a_time_and_leaves_the_offer_pending()
         .claim_accept(CHAT, "/repo/.worktrees/b")
         .unwrap_err();
     assert!(matches!(busy, OfferError::SwitchInProgress), "got {busy:?}");
-    assert_eq!(busy.status_code(), 409);
+    assert_eq!(busy.status_kind(), StatusKind::Conflict);
 
     h.registry.release_accept(CHAT);
     let reclaimed = h.registry.claim_accept(CHAT, "/repo/.worktrees/b").unwrap();
@@ -693,7 +694,7 @@ async fn dismiss_rejects_the_path_of_an_in_flight_switch_and_writes_nothing() {
     let err = h.registry.dismiss(CHAT, "/repo/.worktrees/a").unwrap_err();
 
     assert!(matches!(err, OfferError::SwitchInProgress), "got {err:?}");
-    assert_eq!(err.status_code(), 409);
+    assert_eq!(err.status_kind(), StatusKind::Conflict);
     assert_eq!(h.deps.dismiss_writes(), no_writes());
     assert_eq!(h.deps.events(), no_events());
     assert_eq!(

@@ -25,6 +25,13 @@ const STDERR_TAIL_LINES: usize = 20;
 #[error("{0}")]
 pub struct JsonRpcError(pub String);
 
+impl From<JsonRpcError> for mainframe_adapter_api::AdapterError {
+    /// A JSON-RPC error reply's text is the app-server's own.
+    fn from(error: JsonRpcError) -> Self {
+        Self::Message(error.0)
+    }
+}
+
 type PendingTx = oneshot::Sender<Result<Value, JsonRpcError>>;
 
 /// The four callbacks the client fans events out to (mirrors `JsonRpcHandlers`).

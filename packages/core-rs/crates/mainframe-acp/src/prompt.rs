@@ -76,7 +76,7 @@ pub async fn dispatch_prompt(request: JsonRpcRequest, port: &dyn PromptPort) -> 
     let text = extract_text(&prompt.prompt);
     let send_meta = extract_send_meta(prompt.meta.as_ref());
     if let Err(reason) = validate_command(&send_meta) {
-        return rpc::error_response(id, rpc::invalid_params(&reason));
+        return rpc::error_response(id, rpc::invalid_params(&reason.to_string()));
     }
     match port.send_prompt(&prompt.session_id, &text, send_meta).await {
         Ok(acceptance) => {
@@ -104,18 +104,28 @@ pub async fn dispatch_cancel(params: Option<Value>, port: &dyn PromptPort) {
 /// The `^[a-zA-Z0-9_-]+$` identifier rule the legacy `message.send` frame
 /// enforced (command-injection seam) — a named command reaches the CLI as a
 /// slash invocation, so its name must stay a bare identifier.
-fn validate_command(meta: &PromptSendMeta) -> Result<(), String> {
+fn validate_command(meta: &PromptSendMeta) -> Result<(), CommandMetaError> {
     let Some(command) = meta.command.as_ref() else {
         return Ok(());
     };
     let name_ok = mainframe_types::ids::is_safe_identifier(&command.name);
     if !name_ok {
-        return Err("command.name must match ^[a-zA-Z0-9_-]+$".to_string());
+        return Err(CommandMetaError::UnsafeName);
     }
     if command.source.is_empty() {
-        return Err("command.source must be non-empty".to_string());
+        return Err(CommandMetaError::EmptySource);
     }
     Ok(())
+}
+
+/// A slash-command `_meta` the facade refuses. The text is the JSON-RPC
+/// `invalid params` message the client sees.
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
+enum CommandMetaError {
+    #[error("command.name must match ^[a-zA-Z0-9_-]+$")]
+    UnsafeName,
+    #[error("command.source must be non-empty")]
+    EmptySource,
 }
 
 /// The Mainframe send context riding `PromptRequest._meta`: uploaded attachment

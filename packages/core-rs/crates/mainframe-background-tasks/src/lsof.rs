@@ -121,7 +121,20 @@ async fn real_exec(
     }
 }
 
-async fn run_lsof(process: &crate::process::ProcessDeps, path: &str) -> Result<String, String> {
+/// Why an `lsof` probe gave no answer. Only logged and skipped: a failed
+/// probe never marks a task stopped.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub(crate) enum LsofError {
+    #[error("lsof not installed")]
+    NotInstalled,
+    #[error("lsof killed by signal {0}")]
+    Signal(String),
+    /// `code` renders as the exit code, the error code text, or `undefined`.
+    #[error("lsof exited code={0}")]
+    Exited(String),
+}
+
+async fn run_lsof(process: &crate::process::ProcessDeps, path: &str) -> Result<String, LsofError> {
     let exec = lock_seam(process).exec.clone();
     let result = exec(
         "lsof".to_string(),
@@ -147,12 +160,12 @@ async fn run_lsof(process: &crate::process::ProcessDeps, path: &str) -> Result<S
                     (g.logger)("lsof binary not found; background-task OS fallbacks disabled");
                     g.warned_missing = true;
                 }
-                return Err("lsof not installed".to_string());
+                return Err(LsofError::NotInstalled);
             }
             if let Some(signal) = e.signal {
-                return Err(format!("lsof killed by signal {signal}"));
+                return Err(LsofError::Signal(signal));
             }
-            Err(format!("lsof exited code={}", code_display(&e.code)))
+            Err(LsofError::Exited(code_display(&e.code)))
         }
     }
 }
@@ -162,7 +175,7 @@ use mainframe_runtime::process::inspect::parse_pids;
 pub(crate) async fn lsof_writers_detailed(
     process: &crate::process::ProcessDeps,
     path: &str,
-) -> Result<Vec<u32>, String> {
+) -> Result<Vec<u32>, LsofError> {
     let stdout = run_lsof(process, path).await?;
     Ok(parse_pids(&stdout, |m| m == "w" || m == "u"))
 }

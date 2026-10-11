@@ -53,7 +53,24 @@ pub enum StoreError {
     #[error(transparent)]
     Io(#[from] std::io::Error),
 
-    /// A `spawn_blocking` worker was cancelled or panicked.
+    /// The `spawn_blocking` open task was cancelled or panicked.
     #[error("store task failed: {0}")]
-    Task(String),
+    Task(#[from] tokio::task::JoinError),
+
+    /// A store operation panicked on the worker; the connection survives.
+    #[error("store task failed: database operation panicked")]
+    Panicked,
+
+    /// The worker thread that owns the automation store could not take or
+    /// answer the request.
+    #[error("store task failed: database worker {0}")]
+    Worker(&'static str),
+
+    /// A daemon-store failure with no automation-specific shape.
+    #[error("store task failed: {0}")]
+    Db(mainframe_db::DbError),
+
+    /// The built-in action registry refused a manifest at boot.
+    #[error("store task failed: action registry: {0}")]
+    ActionRegistry(#[source] crate::actions::ActionError),
 }

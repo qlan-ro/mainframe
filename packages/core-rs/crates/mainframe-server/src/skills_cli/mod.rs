@@ -66,9 +66,9 @@ pub trait SkillsCliRunner: Send + Sync {
 /// Failure outcomes the four entry points can return.
 #[derive(Debug)]
 pub enum SkillsCliError {
-    /// Rejected input (source/skill-name/scope/empty-skills) — never reaches
-    /// the CLI runner.
-    Rejected(String),
+    /// Rejected input (source/skill-name/empty-skills) — never reaches the
+    /// CLI runner.
+    Rejected(validate::SkillInputError),
     /// A second operation for this project is already in flight.
     Busy,
     /// The CLI itself failed: nonzero exit, spawn failure, or timeout.
@@ -279,7 +279,7 @@ pub async fn uninstall(
 fn validate_skills(skills: &[String]) -> Result<(), SkillsCliError> {
     if skills.is_empty() {
         return Err(SkillsCliError::Rejected(
-            "At least one skill is required".to_string(),
+            validate::SkillInputError::NoSkills,
         ));
     }
     for skill in skills {

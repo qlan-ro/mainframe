@@ -7,6 +7,7 @@ use super::{PortTunnelRegistry, PortTunnelScope, port_tunnel_label};
 use crate::test_support::{
     spawn_count, write_counting_cloudflared, write_silent_cloudflared, write_slow_cloudflared,
 };
+use crate::tunnel_error::TunnelStartError;
 use crate::tunnel_manager::{TunnelConfig, TunnelManager};
 
 fn registry_with(bin: String) -> (Arc<TunnelManager>, Arc<PortTunnelRegistry>) {
@@ -155,7 +156,7 @@ async fn stopping_a_mid_start_tunnel_cancels_it_once_it_resolves() {
     enter_mid_start(starting.as_mut()).await;
     registry.stop(5173).await;
 
-    assert_eq!(starting.await, Err("Tunnel start cancelled".to_string()));
+    assert!(matches!(starting.await, Err(TunnelStartError::Cancelled)));
     assert_eq!(manager.get_url(&port_tunnel_label(5173)), None);
     assert_eq!(registry.list(), vec![]);
 }
@@ -245,8 +246,8 @@ async fn starts_during_cancelled_child_teardown_share_the_cancelled_outcome() {
         registry.start(5173, scope("chat-b")).await
     };
     let (first, second) = tokio::join!(starting, second);
-    assert_eq!(first, Err("Tunnel start cancelled".to_string()));
-    assert_eq!(second, Err("Tunnel start cancelled".to_string()));
+    assert!(matches!(first, Err(TunnelStartError::Cancelled)));
+    assert!(matches!(second, Err(TunnelStartError::Cancelled)));
     assert_eq!(manager.live_count(), 0);
     assert!(registry.list().is_empty());
 }

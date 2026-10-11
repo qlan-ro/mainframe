@@ -181,18 +181,13 @@ impl HistorySnapshotCache {
         chat_id: &str,
         fingerprint: HistoryFingerprint,
         messages: Vec<ChatMessage>,
-    ) -> Result<(), String> {
-        tokio::fs::create_dir_all(&self.dir)
-            .await
-            .map_err(|e| e.to_string())?;
+    ) -> Result<(), SnapshotWriteError> {
+        tokio::fs::create_dir_all(&self.dir).await?;
         let json = serde_json::to_vec(&Snapshot {
             fingerprint,
             messages,
-        })
-        .map_err(|e| e.to_string())?;
-        mainframe_runtime::fs::write_atomic(&self.snapshot_path(chat_id), &json, false)
-            .await
-            .map_err(|e| e.to_string())?;
+        })?;
+        mainframe_runtime::fs::write_atomic(&self.snapshot_path(chat_id), &json, false).await?;
         self.prune().await;
         Ok(())
     }
@@ -235,3 +230,14 @@ impl HistorySnapshotCache {
 #[cfg(test)]
 #[path = "history_cache_tests.rs"]
 mod tests;
+
+/// Why a history snapshot could not be written; logged, never surfaced.
+#[derive(Debug, thiserror::Error)]
+enum SnapshotWriteError {
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+    #[error(transparent)]
+    Json(#[from] serde_json::Error),
+    #[error(transparent)]
+    Write(#[from] mainframe_runtime::fs::AtomicWriteError),
+}

@@ -25,7 +25,7 @@ impl From<ActorError> for DbError {
     fn from(error: ActorError) -> Self {
         match error {
             ActorError::Io(error) => Self::Io(error),
-            other => Self::Message(other.to_string()),
+            ActorError::Worker(what) => Self::Worker(what),
         }
     }
 }

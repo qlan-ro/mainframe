@@ -272,7 +272,14 @@ async fn fork_refuses_a_side_chat() {
         .unwrap_err();
     // StubAdapter isn't fork-capable, so this may surface as Unsupported
     // rather than Temporary — either way, fork never succeeds for a side chat.
-    assert_ne!(err.status_code(), 200);
+    assert!(
+        matches!(
+            err,
+            mainframe_chat::chat_manager::ForkChatError::Unsupported(_)
+                | mainframe_chat::chat_manager::ForkChatError::Temporary
+        ),
+        "{err:?}"
+    );
 }
 
 // ── project removal cascade ─────────────────────────────────────────────

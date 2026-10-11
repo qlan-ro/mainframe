@@ -9,6 +9,7 @@ use mainframe_types::segment::{
 
 use super::*;
 use crate::segments::SegmentStore;
+use mainframe_types::seam_error::SeamError;
 
 #[derive(Default)]
 pub(super) struct FakeStore {
@@ -63,15 +64,19 @@ impl SegmentStore for FakeStore {
     fn layout(&self, _chat_id: &str) -> Option<SegmentLayout> {
         Some(self.layout.lock().unwrap().clone())
     }
-    fn commit_switch(&self, commit: &SwitchCommit) -> Result<SegmentLayout, String> {
+    fn commit_switch(&self, commit: &SwitchCommit) -> Result<SegmentLayout, SeamError> {
         self.commits.lock().unwrap().push(commit.clone());
         self.apply(commit);
         Ok(self.layout.lock().unwrap().clone())
     }
-    fn replace_active_native(&self, _chat_id: &str) -> Result<SegmentLayout, String> {
-        Err("not expected in these tests".into())
+    fn replace_active_native(&self, _chat_id: &str) -> Result<SegmentLayout, SeamError> {
+        Err(SeamError::msg("not expected in these tests"))
     }
-    fn insert_pending_handoff(&self, record: &HandoffRecord, marker: &str) -> Result<(), String> {
+    fn insert_pending_handoff(
+        &self,
+        record: &HandoffRecord,
+        marker: &str,
+    ) -> Result<(), SeamError> {
         let mut l = self.layout.lock().unwrap();
         l.handoffs
             .retain(|h| h.target_segment_id != record.target_segment_id);

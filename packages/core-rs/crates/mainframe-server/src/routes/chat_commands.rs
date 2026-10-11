@@ -148,7 +148,7 @@ async fn trust_workspace(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>)
         Ok(()) => ok_empty(),
         Err(err) => {
             tracing::error!(chat_id = %id, %err, "trust-workspace failed");
-            fail(StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
+            crate::error_status::fail_with(&err)
         }
     }
 }

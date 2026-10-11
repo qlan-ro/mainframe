@@ -67,6 +67,11 @@ async fn post_rejects_has_prefix() {
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(
+        body,
+        json!({ "success": false, "error": "Names starting with \"has-\" are reserved." })
+    );
 }
 
 #[tokio::test]
@@ -274,6 +279,11 @@ async fn put_chat_tags_rejects_reserved_prefix() {
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(
+        body,
+        json!({ "success": false, "error": "Names starting with \"has-\" are reserved." })
+    );
 }
 
 #[tokio::test]

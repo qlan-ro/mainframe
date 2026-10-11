@@ -41,7 +41,11 @@ async fn held_start_exits_before_shell_deadline(registered: bool) {
         .unwrap();
     fixture::assert_pid_gone(pid);
     assert_eq!(
-        tunnels.start(31415, "late", None).await.unwrap_err(),
+        tunnels
+            .start(31415, "late", None)
+            .await
+            .unwrap_err()
+            .to_string(),
         "Daemon is shutting down"
     );
     request.abort();

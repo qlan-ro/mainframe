@@ -17,11 +17,11 @@ use super::{CredentialError, CredentialStore, Credentials};
 
 /// One secret slot, addressed by label.
 pub(crate) trait KeyringBackend: Send + Sync {
-    fn get(&self, label: &str) -> Result<Option<String>, String>;
-    fn set(&self, label: &str, secret: &str) -> Result<(), String>;
+    fn get(&self, label: &str) -> Result<Option<String>, keyring::Error>;
+    fn set(&self, label: &str, secret: &str) -> Result<(), keyring::Error>;
     /// Deleting an absent label is not an error — `CredentialStore::delete`
     /// on an already-gone label is a no-op for every backend.
-    fn delete(&self, label: &str) -> Result<(), String>;
+    fn delete(&self, label: &str) -> Result<(), keyring::Error>;
 }
 
 /// Its own service namespace, separate from the Tauri shell's
@@ -38,25 +38,22 @@ impl SystemKeyringBackend {
 }
 
 impl KeyringBackend for SystemKeyringBackend {
-    fn get(&self, label: &str) -> Result<Option<String>, String> {
-        let entry = keyring::Entry::new(SERVICE, label).map_err(|err| err.to_string())?;
-        match entry.get_password() {
+    fn get(&self, label: &str) -> Result<Option<String>, keyring::Error> {
+        match keyring::Entry::new(SERVICE, label)?.get_password() {
             Ok(secret) => Ok(Some(secret)),
             Err(keyring::Error::NoEntry) => Ok(None),
-            Err(err) => Err(err.to_string()),
+            Err(err) => Err(err),
         }
     }
 
-    fn set(&self, label: &str, secret: &str) -> Result<(), String> {
-        let entry = keyring::Entry::new(SERVICE, label).map_err(|err| err.to_string())?;
-        entry.set_password(secret).map_err(|err| err.to_string())
+    fn set(&self, label: &str, secret: &str) -> Result<(), keyring::Error> {
+        keyring::Entry::new(SERVICE, label)?.set_password(secret)
     }
 
-    fn delete(&self, label: &str) -> Result<(), String> {
-        let entry = keyring::Entry::new(SERVICE, label).map_err(|err| err.to_string())?;
-        match entry.delete_credential() {
+    fn delete(&self, label: &str) -> Result<(), keyring::Error> {
+        match keyring::Entry::new(SERVICE, label)?.delete_credential() {
             Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-            Err(err) => Err(err.to_string()),
+            Err(err) => Err(err),
         }
     }
 }
@@ -130,9 +127,7 @@ impl<B: KeyringBackend + 'static> CredentialStore for KeyringCredentialStore<B> 
     ) -> BoxFuture<'a, Result<(), CredentialError>> {
         Box::pin(async move {
             let json = serde_json::to_string(&creds)?;
-            self.backend
-                .set(label, &json)
-                .map_err(CredentialError::Keyring)?;
+            self.backend.set(label, &json)?;
             let mut labels = self.labels.write().await;
             labels.insert(label.to_string());
             self.persist_index(&labels).await
@@ -141,9 +136,7 @@ impl<B: KeyringBackend + 'static> CredentialStore for KeyringCredentialStore<B> 
 
     fn delete<'a>(&'a self, label: &'a str) -> BoxFuture<'a, Result<(), CredentialError>> {
         Box::pin(async move {
-            self.backend
-                .delete(label)
-                .map_err(CredentialError::Keyring)?;
+            self.backend.delete(label)?;
             let mut labels = self.labels.write().await;
             labels.remove(label);
             self.persist_index(&labels).await

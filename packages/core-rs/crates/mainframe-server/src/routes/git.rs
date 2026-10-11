@@ -21,6 +21,7 @@ use serde_json::json;
 
 use crate::async_err::internal_error;
 use crate::ctx::AppCtx;
+use crate::input_error::InputError;
 use crate::respond::{fail, ok};
 use mainframe_runtime::fs::resolve_and_validate_path;
 
@@ -59,8 +60,8 @@ pub(crate) fn git_error_message(err: &GitServiceError) -> String {
 
 /// Parse a JSON request body into `T` (an empty/malformed body becomes a
 /// validation error → 400).
-pub(crate) fn parse_json_body<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, String> {
-    serde_json::from_slice(bytes).map_err(|e| e.to_string())
+pub(crate) fn parse_json_body<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, InputError> {
+    Ok(serde_json::from_slice(bytes)?)
 }
 
 /// The project-scoped effective-path resolver.

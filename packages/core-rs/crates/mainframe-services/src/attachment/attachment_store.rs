@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use mainframe_types::http_status::{HttpStatus, StatusKind};
 use serde::{Deserialize, Serialize};
 
 /// A single safe path segment — matches nanoid's alphabet; rejects `..`, `/`, etc.
@@ -44,8 +45,9 @@ pub struct StoredAttachmentMeta {
 /// results when a read fails.
 #[derive(Debug, thiserror::Error)]
 pub enum AttachmentError {
-    #[error("{0}")]
-    Message(String),
+    /// A chat id that is not a single safe path segment.
+    #[error("Invalid chatId path segment: {0:?}")]
+    InvalidChatId(String),
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]
@@ -54,6 +56,15 @@ pub enum AttachmentError {
 
 pub struct AttachmentStore {
     base_dir: PathBuf,
+}
+
+impl HttpStatus for AttachmentError {
+    fn status_kind(&self) -> StatusKind {
+        match self {
+            Self::InvalidChatId(_) => StatusKind::BadRequest,
+            Self::Io(_) | Self::Json(_) => StatusKind::Internal,
+        }
+    }
 }
 
 impl AttachmentStore {
@@ -67,9 +78,7 @@ impl AttachmentStore {
     /// safe path segment, closing the path-traversal seam.
     fn chat_dir(&self, chat_id: &str) -> Result<PathBuf, AttachmentError> {
         if !mainframe_types::ids::is_safe_identifier(chat_id) {
-            return Err(AttachmentError::Message(format!(
-                "Invalid chatId path segment: {chat_id:?}"
-            )));
+            return Err(AttachmentError::InvalidChatId(chat_id.to_string()));
         }
         Ok(self.base_dir.join(chat_id))
     }
@@ -467,7 +476,9 @@ mod tests {
                 }],
             )
             .await;
-        assert!(matches!(err, Err(AttachmentError::Message(m)) if m.contains("Invalid chatId")));
+        let err = err.unwrap_err();
+        assert!(matches!(err, AttachmentError::InvalidChatId(_)));
+        assert_eq!(err.to_string(), "Invalid chatId path segment: \"../evil\"");
     }
 
     #[tokio::test]
