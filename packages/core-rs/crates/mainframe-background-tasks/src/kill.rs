@@ -121,4 +121,5 @@ pub use chat::{
 };
 
 #[cfg(test)]
+#[path = "kill_tests.rs"]
 mod tests;

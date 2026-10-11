@@ -33,4 +33,5 @@ fn writers_exec(pids: &'static [u32]) -> ExecFn {
 
 use mainframe_types::time::now_ms;
 
+#[path = "liveness_tests_ticks.rs"]
 mod ticks;

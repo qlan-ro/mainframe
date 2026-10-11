@@ -188,15 +188,18 @@ async fn wallclock_jump_triggers_wake_mode_end() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn stop_prevents_further_ticks() {
     let tracker = Arc::new(BackgroundTaskTracker::new());
     let calls = Arc::new(AtomicUsize::new(0));
     let calls2 = calls.clone();
+    let ticked = Arc::new(tokio::sync::Notify::new());
+    let notify = ticked.clone();
     set_exec_for_tests(
         &tracker.process,
         Arc::new(move |_c, _a| {
             calls2.fetch_add(1, Ordering::SeqCst);
+            notify.notify_one();
             Box::pin(async {
                 Ok(ExecOk {
                     stdout: String::new(),
@@ -214,14 +217,15 @@ async fn stop_prevents_further_ticks() {
         tracker: tracker.clone(),
         interval_ms: Some(20),
     });
-    tokio::time::sleep(std::time::Duration::from_millis(70)).await;
+    ticked.notified().await;
     sched.stop();
     let after_stop = calls.load(Ordering::SeqCst);
     assert!(
         after_stop >= 1,
         "scheduler should have ticked at least once"
     );
-    tokio::time::sleep(std::time::Duration::from_millis(60)).await;
+    tokio::time::advance(std::time::Duration::from_millis(60)).await;
+    tokio::task::yield_now().await;
     assert_eq!(
         calls.load(Ordering::SeqCst),
         after_stop,

@@ -2,7 +2,7 @@ use super::*;
 use crate::lsof::{ExecCode, ExecFn, ExecOk, LsofExecError, set_exec_for_tests};
 use crate::tracker::TaskSeed;
 use mainframe_types::background_task::{BackgroundTaskToolName, BackgroundWorkKind};
-use mainframe_types::sync::LockExt as _;
+use mainframe_types::sync::LockExt;
 use std::collections::VecDeque;
 use std::fs;
 use tempfile::tempdir;
@@ -133,7 +133,11 @@ fn build_sweep_fixture(make_symlink: bool) -> SweepFixture {
     }
 }
 
+#[path = "kill_tests_kill_chat.rs"]
 mod kill_chat;
+#[path = "kill_tests_kill_task.rs"]
 mod kill_task;
+#[path = "kill_tests_tree_signal.rs"]
 mod tree_signal;
+#[path = "kill_tests_worktree_sweep.rs"]
 mod worktree_sweep;

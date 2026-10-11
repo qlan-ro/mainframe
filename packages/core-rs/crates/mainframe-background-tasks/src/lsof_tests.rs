@@ -29,4 +29,5 @@ async fn injected_processes_do_not_leak_between_trackers() {
     assert_eq!(b, vec![22]);
 }
 
+#[path = "lsof_tests_exec_and_parse.rs"]
 mod exec_and_parse;

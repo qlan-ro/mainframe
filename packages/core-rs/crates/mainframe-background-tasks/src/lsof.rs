@@ -1,4 +1,4 @@
-use mainframe_types::sync::LockExt as _;
+use mainframe_types::sync::LockExt;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -195,4 +195,5 @@ pub(crate) async fn lsof_any(process: &crate::process::ProcessDeps, path: &str) 
 }
 
 #[cfg(test)]
+#[path = "lsof_tests.rs"]
 mod tests;
