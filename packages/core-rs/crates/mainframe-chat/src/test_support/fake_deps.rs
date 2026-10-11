@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use mainframe_adapter_api::ForkPinRequest;
+use mainframe_adapter_api::{AdapterSession, ForkPinRequest};
 use mainframe_services::workspace::WorktreeEntry;
 use mainframe_types::adapter::{AdapterInfo, SessionOptions};
 use mainframe_types::chat::{Chat, ChatMessage};
@@ -74,6 +74,9 @@ impl FakeDeps {
     }
     pub(crate) fn set_spawn_ok(&self, ok: bool) {
         *self.adapters.spawn_ok.lock().unwrap() = ok;
+    }
+    pub(crate) fn set_session_to_return(&self, session: Arc<dyn AdapterSession>) {
+        *self.adapters.session_to_return.lock().unwrap() = Some(session);
     }
     pub(crate) fn set_fork_capable(&self, fork: bool) {
         *self.adapters.fork_capable.lock().unwrap() = fork;

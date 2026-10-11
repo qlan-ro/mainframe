@@ -7,7 +7,7 @@ use mainframe_types::sync::LockExt as _;
 /// straight read of the assembled bundle.
 struct Collaborators {
     event_handler: Arc<EventHandler>,
-    lifecycle: Arc<ChatLifecycleManager<LcDeps>>,
+    lifecycle: Arc<ChatLifecycleManager>,
     permission_handler: ChatPermissionHandler<PhDeps>,
     config: ChatConfigManager<CmDeps>,
     worktree_offers: Arc<WorktreeOfferRegistry>,
@@ -20,7 +20,11 @@ impl Collaborators {
     ) -> Self {
         let worktree_offers = Arc::new(WorktreeOfferRegistry::new(shared.clone()));
         let event_handler = Arc::new(EventHandler::new(shared.clone(), worktree_offers.clone()));
-        let lifecycle = deps_lifecycle::build(shared, &event_handler, &worktree_offers);
+        let lifecycle = Arc::new(ChatLifecycleManager::new(
+            shared.clone(),
+            event_handler.clone(),
+            worktree_offers.clone(),
+        ));
         let permission_handler =
             deps_permission::build(shared, &event_handler, &lifecycle, self_ref);
         let config = deps_config::build(shared, &lifecycle, &worktree_offers);

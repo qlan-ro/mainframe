@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use dashmap::DashMap;
 use mainframe_adapter_api::{
     AdapterError, AdapterSession, BoxFuture, ForkPinError, ForkPinRequest, ImageInput,
-    PlanModeActionHandler, SessionSink,
+    PlanModeActionHandler,
 };
 use mainframe_services::commands::{find_mainframe_command, wrap_mainframe_command};
 use mainframe_services::workspace::is_worktree_present;
@@ -37,7 +37,7 @@ use crate::event_handler::{EventHandler, PushOut};
 use crate::external_session_service::{ExternalSessionDeps, ExternalSessionService};
 use crate::fork::{PendingForkState, fork_title};
 use crate::history_cache::{HistoryFingerprint, HistorySnapshotCache};
-use crate::lifecycle_manager::{ChatLifecycleManager, LifecycleError, LifecycleManagerDeps};
+use crate::lifecycle_manager::{ChatLifecycleManager, LifecycleError};
 use crate::message_cache::MessageCache;
 use crate::message_markers::visible_message_text;
 use crate::permission_handler::{ChatPermissionHandler, PermissionError, PermissionHandlerDeps};
@@ -56,7 +56,6 @@ mod construct;
 mod delivery;
 mod deps;
 mod deps_config;
-mod deps_lifecycle;
 mod deps_permission;
 mod deps_recovery;
 mod discard;
@@ -87,6 +86,7 @@ pub use errors::{
 };
 pub use external_facade::ExternalSessionFacade;
 pub use history::ResumeSnapshot;
+pub(crate) use shared::compose_if_multi;
 pub(crate) use shared::remap_history as remap_history_for;
 pub use side_chat::OpenSideChatError;
 pub use update::ProcessedAttachments;
@@ -96,7 +96,6 @@ pub use update::ProcessedAttachments;
 pub use crate::fork::{AdapterForkInfo, ForkChatError, ForkCreateInput, ForkPoint};
 
 use deps_config::CmDeps;
-use deps_lifecycle::LcDeps;
 use deps_permission::PhDeps;
 pub(crate) use state::ChatShared;
 // `enrich_chat`/`is_working` have no direct caller left in this file — every
@@ -118,7 +117,7 @@ type QueuedRefs = Arc<Mutex<Vec<QueuedMessageRef>>>;
 pub struct ChatManager {
     shared: Arc<ChatShared>,
     event_handler: Arc<EventHandler>,
-    lifecycle: Arc<ChatLifecycleManager<LcDeps>>,
+    lifecycle: Arc<ChatLifecycleManager>,
     permission_handler: ChatPermissionHandler<PhDeps>,
     config: ChatConfigManager<CmDeps>,
     idle_scanner: Mutex<crate::idle_scanner::IdleSessionScanner>,

@@ -16,7 +16,7 @@ use crate::chat_cwd::chat_cwd;
 use crate::no_persistence;
 use crate::types::ActiveChat;
 
-use super::{ChatLifecycleManager, LifecycleError, LifecycleManagerDeps};
+use super::{ChatLifecycleManager, LifecycleError};
 
 /// The per-spawn cwd + persistence decision.
 pub(super) struct SpawnPlan {
@@ -24,7 +24,7 @@ pub(super) struct SpawnPlan {
     pub(super) no_persistence: bool,
 }
 
-impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
+impl ChatLifecycleManager {
     /// Resolves `chat`'s effective spawn cwd (a non-project chat's scratch
     /// directory is ensured to exist, created lazily on first use and
     /// recreated if deleted since) and the no-persistence decision.
@@ -41,15 +41,17 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         .ok_or_else(|| NotFound::new("Project", chat.project_id.clone()))?;
         // A non-project chat has no project directory to check — its cwd is
         // its own scratch path, ensured to exist just below.
-        if chat.worktree_path.is_none() && !chat.no_project && !self.deps.path_exists(&cwd) {
+        if chat.worktree_path.is_none() && !chat.no_project && !self.shared.deps.path_exists(&cwd) {
             return Err(LifecycleError::ProjectDirMissing(cwd));
         }
         if let Some(scratch) = chat.scratch_path.clone() {
-            self.deps.ensure_dir(&scratch).await;
+            self.shared.deps.ensure_dir(&scratch).await;
         }
         let no_persistence = no_persistence::no_persistence_for_spawn(
             chat.temporary,
-            self.deps.adapter_supports_no_persistence(&chat.adapter_id),
+            self.shared
+                .deps
+                .adapter_supports_no_persistence(&chat.adapter_id),
         );
         Ok(SpawnPlan {
             cwd,
@@ -66,7 +68,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         cell: &Arc<Mutex<ActiveChat>>,
         no_persistence: bool,
     ) {
-        self.deps.chats_update(
+        self.shared.deps.chats_update(
             chat_id,
             &ChatPatch {
                 vendor_session_ephemeral: Some(no_persistence),

@@ -69,6 +69,20 @@ pub(super) async fn apply_tuning_impl(
     }
 }
 
+/// Composes a multi-segment chat's history; `None` for a single-segment chat
+/// (or a deps impl without segments), whose one session loads as before.
+pub(crate) async fn compose_if_multi(
+    deps: &dyn ChatManagerDeps,
+    chat_id: &str,
+) -> Option<crate::segments::compose::Composed> {
+    let store = deps.segment_store()?;
+    let layout = store
+        .layout(chat_id)
+        .filter(mainframe_types::segment::SegmentLayout::is_multi_segment)?;
+    let chat = deps.chats_get(chat_id)?;
+    Some(crate::segments::compose::compose(deps, &chat, &layout).await)
+}
+
 /// Build a stateless history-load session for `chat` (shared by the facade's
 /// `get_messages`/`get_messages_from_disk` and the permission handler's history
 /// restore). `None` when the chat has no Claude session / pending fork / adapter

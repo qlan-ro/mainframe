@@ -44,6 +44,13 @@ impl Default for FakeProjectPaths {
 
 impl FakeProjectPaths {}
 
+impl FakeProjectPaths {
+    pub(crate) fn set_present_paths(&self, paths: &[&str]) {
+        let paths = paths.iter().map(|path| (*path).to_string()).collect();
+        *self.present_paths.lock().unwrap() = Some(paths);
+    }
+}
+
 fn temp_default(name: &str) -> String {
     std::env::temp_dir()
         .join(name)

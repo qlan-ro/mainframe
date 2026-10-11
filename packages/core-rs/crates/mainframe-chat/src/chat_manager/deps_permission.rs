@@ -10,7 +10,7 @@ use mainframe_types::sync::LockExt as _;
 /// re-implementing the send path (`attach_self` sets `self_ref`).
 struct PlanHostImpl {
     event_handler: Arc<EventHandler>,
-    lifecycle: Arc<ChatLifecycleManager<LcDeps>>,
+    lifecycle: Arc<ChatLifecycleManager>,
     shared: Arc<ChatShared>,
     self_ref: Arc<std::sync::OnceLock<std::sync::Weak<ChatManager>>>,
 }
@@ -58,7 +58,7 @@ impl PlanHost for PlanHostImpl {
 pub(super) struct PhDeps {
     shared: Arc<ChatShared>,
     event_handler: Arc<EventHandler>,
-    lifecycle: Arc<ChatLifecycleManager<LcDeps>>,
+    lifecycle: Arc<ChatLifecycleManager>,
     plan_mode: Arc<PlanModeHandler<ChatPlanModeCtx>>,
 }
 
@@ -147,7 +147,7 @@ impl PermissionHandlerDeps for PhDeps {
 pub(super) fn build(
     shared: &Arc<ChatShared>,
     event_handler: &Arc<EventHandler>,
-    lifecycle: &Arc<ChatLifecycleManager<LcDeps>>,
+    lifecycle: &Arc<ChatLifecycleManager>,
     self_ref: &Arc<std::sync::OnceLock<std::sync::Weak<ChatManager>>>,
 ) -> ChatPermissionHandler<PhDeps> {
     let permissions = &shared.permissions;

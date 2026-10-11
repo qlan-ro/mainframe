@@ -46,9 +46,7 @@ impl ChatManager {
     async fn load_history_into_cache(&self, chat_id: &str) -> Vec<ChatMessage> {
         // Multi-segment chats compose from several transcripts; the snapshot
         // cache keys on one session's sources, so they bypass it.
-        if let Some(composed) =
-            deps_lifecycle::compose_if_multi(self.shared.deps.as_ref(), chat_id).await
-        {
+        if let Some(composed) = compose_if_multi(self.shared.deps.as_ref(), chat_id).await {
             return self.finish_composed_load(chat_id, composed);
         }
         let Some(session) = self.history_session(chat_id) else {
@@ -122,9 +120,7 @@ impl ChatManager {
     /// Load messages from disk, bypassing the in-memory cache (session-files route
     /// needs subagent file changes absent from the cache during an active session).
     pub async fn get_messages_from_disk(&self, chat_id: &str) -> Vec<ChatMessage> {
-        if let Some(composed) =
-            deps_lifecycle::compose_if_multi(self.shared.deps.as_ref(), chat_id).await
-        {
+        if let Some(composed) = compose_if_multi(self.shared.deps.as_ref(), chat_id).await {
             return composed.messages;
         }
         let Some(session) = self.history_session(chat_id) else {

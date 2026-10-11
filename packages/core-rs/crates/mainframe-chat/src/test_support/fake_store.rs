@@ -22,6 +22,8 @@ pub(crate) struct FakeChatStore {
     /// The chat rows, keyed by id, `sideChatId` NOT yet derived (raw DB row
     /// shape); reads apply `derive_side_chat_id` the way the DB subquery does.
     pub(crate) chats: Mutex<HashMap<String, Chat>>,
+    /// Every `chats_create` input, in order.
+    pub(crate) created: Mutex<Vec<NewChat>>,
     /// Every `chats_update` call, in order.
     pub(crate) updates: Mutex<Vec<(String, ChatPatch)>>,
     /// Every `(chat_id, mention name)` `chats_add_mention` recorded.
@@ -109,7 +111,8 @@ impl ChatStore for FakeDeps {
         chat.side_chat_id = FakeChatStore::derive_side_chat_id(id, &all);
         Some(chat)
     }
-    fn chats_create(&self, _new_chat: &NewChat) -> Chat {
+    fn chats_create(&self, new_chat: &NewChat) -> Chat {
+        self.store.created.lock().unwrap().push(new_chat.clone());
         // The repository persists before returning: offload-of-a-just-created
         // chat tests need `chats_get("new")` to find it afterward.
         let chat = test_chat("new");

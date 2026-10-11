@@ -4,7 +4,7 @@ use crate::config_transcripts::OwnedNativeSession;
 
 pub(super) struct CmDeps {
     shared: Arc<ChatShared>,
-    lifecycle: Arc<ChatLifecycleManager<LcDeps>>,
+    lifecycle: Arc<ChatLifecycleManager>,
     worktree_offers: Arc<WorktreeOfferRegistry>,
 }
 
@@ -122,7 +122,7 @@ impl ConfigManagerDeps for CmDeps {
 
 pub(super) fn build(
     shared: &Arc<ChatShared>,
-    lifecycle: &Arc<ChatLifecycleManager<LcDeps>>,
+    lifecycle: &Arc<ChatLifecycleManager>,
     worktree_offers: &Arc<WorktreeOfferRegistry>,
 ) -> ChatConfigManager<CmDeps> {
     ChatConfigManager::new(CmDeps {
