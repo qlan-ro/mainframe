@@ -22,6 +22,7 @@ async fn a_rejected_model_probe_handshake_closes_the_child_process() {
         if !is_alive(&pid).await {
             return;
         }
+        // OS child; Tokio time cannot be paused.
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
     }
     let _ = tokio::process::Command::new("/bin/kill")

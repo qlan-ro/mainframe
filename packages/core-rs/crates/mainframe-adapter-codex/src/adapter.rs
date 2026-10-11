@@ -1,4 +1,4 @@
-use mainframe_types::sync::LockExt as _;
+use mainframe_types::sync::LockExt;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
@@ -183,4 +183,5 @@ impl CodexAdapter {
 mod contract;
 
 #[cfg(test)]
+#[path = "adapter_tests.rs"]
 mod tests;
