@@ -58,17 +58,21 @@ impl<C: PlanModeContext> PlanModeHandler<C> {
     ) -> Result<(), SeamError> {
         let exec = response.execution_mode.unwrap_or(ExecutionMode::Default);
         let snapshot = {
-            let mut guard = active.lock_recover();
+            let guard = active.lock_recover();
             if Some(exec) != guard.chat.permission_mode || guard.chat.plan_mode == Some(true) {
-                guard.chat.permission_mode = Some(exec);
-                guard.chat.plan_mode = Some(false);
-                Some(guard.chat.clone())
+                let mut chat = guard.chat.clone();
+                chat.permission_mode = Some(exec);
+                chat.plan_mode = Some(false);
+                Some(chat)
             } else {
                 None
             }
         };
         if let Some(chat) = snapshot {
             self.ctx.update_and_emit(chat, exec, false)?;
+            let mut guard = active.lock_recover();
+            guard.chat.permission_mode = Some(exec);
+            guard.chat.plan_mode = Some(false);
         }
         Ok(())
     }

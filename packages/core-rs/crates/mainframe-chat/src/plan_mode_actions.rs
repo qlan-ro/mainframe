@@ -1,7 +1,4 @@
-//! Production `PlanActionContext`/`PlanModeContext` pair. Wires the dispatcher
-//! in `plan_mode_handler.rs` to `ChatManager`'s private
-//! active-chat/message/permission state via the narrow `PlanHost` seam, so this
-//! module never names `EhDeps`/`LcDeps` and `chat_manager.rs` stays wiring-only.
+//! Plan actions over shared chat state and lifecycle callbacks.
 
 use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::sync::LockExt as _;
@@ -19,9 +16,6 @@ use crate::context_tracker::extract_latest_plan_file_from_messages;
 use crate::plan_mode_handler::PlanModeContext;
 use crate::types::ActiveChat;
 
-/// The narrow seam back into `ChatManager`'s privately-typed event/lifecycle
-/// pieces (`EventHandler<EhDeps>` / `ChatLifecycleManager<LcDeps>`), so this
-/// module depends on neither.
 pub(crate) trait PlanHost: Send + Sync {
     fn emit_event(&self, event: DaemonEvent);
     fn clear_display_state(&self, chat_id: &str);

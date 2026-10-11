@@ -1,11 +1,3 @@
-//! Unit tests for `ChatPlanActionCtx` against a fake `PlanHost` plus a real
-//! `PermissionManager`/`MessageCache` and the crate's recording `FakeDeps`
-//! (`chat_manager::tests`, exposed `pub(crate)` for reuse here rather than
-//! duplicating a second `ChatManagerDeps` fake). The `PlanHostImpl`-specific
-//! "no ChatManager attached" case lives beside it in `chat_manager/tests/`
-//! instead — this module intentionally never names `EhDeps`/`LcDeps`, and a real
-//! `PlanHostImpl` needs both.
-
 use super::*;
 use crate::test_support::FakeDeps;
 use crate::test_support::test_chat;
@@ -233,4 +225,40 @@ fn clear_messages_empties_the_cache_for_that_chat_only() {
         ctx.shared.messages.lock().unwrap().get("c2"),
         Some(&untouched)
     );
+}
+
+#[test]
+fn failed_no_process_plan_write_keeps_the_cached_mode_retryable() {
+    let mut chat = test_chat("c1");
+    chat.plan_mode = Some(true);
+    chat.permission_mode = None;
+    let deps = FakeDeps::with_chats(vec![chat.clone()]);
+    let shared = ChatShared::new(deps.clone());
+    let active = Arc::new(Mutex::new(ActiveChat::new(chat, None)));
+    shared.active_chats.insert("c1".into(), active.clone());
+    let handler = crate::plan_mode_handler::PlanModeHandler::new(ChatPlanModeCtx {
+        shared,
+        host: Arc::new(FakeHost::default()),
+    });
+    let response = serde_json::from_value(serde_json::json!({
+        "requestId": "r1", "toolUseId": "t1", "behavior": "allow", "executionMode": "acceptEdits"
+    }))
+    .unwrap();
+    *deps.store.write_failure.lock().unwrap() = Some("database unavailable".into());
+    assert!(handler.handle_no_process(&active, &response).is_err());
+    assert_eq!(active.lock().unwrap().chat.plan_mode, Some(true));
+    assert_eq!(active.lock().unwrap().chat.permission_mode, None);
+    assert!(deps.events().is_empty());
+    *deps.store.write_failure.lock().unwrap() = None;
+    handler.handle_no_process(&active, &response).unwrap();
+    assert_eq!(active.lock().unwrap().chat.plan_mode, Some(false));
+    assert_eq!(
+        active.lock().unwrap().chat.permission_mode,
+        Some(ExecutionMode::AcceptEdits)
+    );
+    assert_eq!(deps.store.updates.lock().unwrap().len(), 1);
+    assert!(matches!(
+        deps.events().as_slice(),
+        [DaemonEvent::ChatUpdated { .. }]
+    ));
 }
