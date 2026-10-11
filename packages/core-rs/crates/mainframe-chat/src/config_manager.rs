@@ -8,7 +8,6 @@ use mainframe_services::workspace::worktree::WorktreeError;
 use mainframe_services::workspace::{create_worktree, remove_worktree};
 use mainframe_types::adapter::model_endpoint;
 use mainframe_types::chat_patch::ChatPatch;
-use mainframe_types::events::DaemonEvent;
 use mainframe_types::http_status::{HttpStatus, NotFound, StatusKind};
 use mainframe_types::settings::{ExecutionMode, GeneralConfig};
 use tracing::warn;

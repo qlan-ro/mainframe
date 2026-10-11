@@ -26,7 +26,6 @@ impl PlanModeActionHandler for ClaudePlanModeHandler {
                 permission_mode: Some(exec),
                 clear_claude_session_id: false,
             })?;
-            ctx.emit_chat_updated();
 
             if ctx.session_is_spawned() {
                 ctx.session_set_permission_mode(exec).await?;
@@ -146,10 +145,8 @@ mod tests {
         }
         fn update_chat(&self, patch: PlanChatUpdate) -> Result<(), AdapterError> {
             self.rec().updates.push(patch);
-            Ok(())
-        }
-        fn emit_chat_updated(&self) {
             self.rec().chat_updated += 1;
+            Ok(())
         }
         fn emit_event(&self, event: DaemonEvent) {
             self.rec().events.push(event);

@@ -48,10 +48,8 @@ impl PlanActionContext for MockCtx {
             return Err(AdapterError::Message("database unavailable".into()));
         }
         self.rec().updates.push(patch);
-        Ok(())
-    }
-    fn emit_chat_updated(&self) {
         self.rec().update_events += 1;
+        Ok(())
     }
     fn emit_event(&self, _event: DaemonEvent) {}
     fn session_is_spawned(&self) -> bool {

@@ -109,9 +109,9 @@ impl ChatManager {
     }
 
     pub fn unarchive_chat(&self, chat_id: &str) -> Option<Chat> {
-        storage_event!(
+        let update = storage_event!(
             self.shared,
-            self.shared.deps.chats_update(
+            self.shared.prepare_update(
                 chat_id,
                 &ChatPatch {
                     status: Some(mainframe_types::chat::ChatStatus::Active),
@@ -121,17 +121,14 @@ impl ChatManager {
             None
         );
         let chat = storage_event!(self.shared, self.shared.deps.chats_get(chat_id), None)?;
-        self.emit(DaemonEvent::ChatUpdated {
-            chat: chat.clone(),
-            reason: None,
-        });
+        update.emit(chat.clone(), None);
         Some(chat)
     }
 
     pub fn rename_chat(&self, chat_id: &str, title: &str) {
-        storage_event!(
+        let update = storage_event!(
             self.shared,
-            self.shared.deps.chats_update(
+            self.shared.prepare_update(
                 chat_id,
                 &ChatPatch {
                     title: Some(title.to_string()),
@@ -143,7 +140,7 @@ impl ChatManager {
             cell.lock_recover().chat.title = Some(title.to_string());
         }
         if let Some(chat) = storage_event!(self.shared, self.shared.deps.chats_get(chat_id)) {
-            self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
+            update.emit(chat, None);
         }
     }
 

@@ -94,9 +94,9 @@ impl PlanActionContext for ChatPlanActionCtx {
     }
 
     fn update_chat(&self, patch: PlanChatUpdate) -> Result<(), AdapterError> {
-        self.shared
-            .deps
-            .chats_update(
+        let update = self
+            .shared
+            .prepare_update(
                 &self.chat_id,
                 &ChatPatch {
                     permission_mode: patch.permission_mode,
@@ -122,16 +122,11 @@ impl PlanActionContext for ChatPlanActionCtx {
             if patch.clear_claude_session_id {
                 guard.chat.claude_session_id = None;
             }
+            let chat = guard.chat.clone();
+            drop(guard);
+            update.emit(chat, None);
         }
         Ok(())
-    }
-
-    fn emit_chat_updated(&self) {
-        let chat = self.active().map(|a| a.lock_recover().chat.clone());
-        if let Some(chat) = chat {
-            self.host
-                .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
-        }
     }
 
     fn emit_event(&self, event: DaemonEvent) {

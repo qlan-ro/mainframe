@@ -76,3 +76,29 @@ fn failed_update_returns_an_error_without_a_success_event() {
     );
     assert!(deps.events().is_empty());
 }
+
+#[test]
+fn persisted_update_waits_for_ordered_work_before_emitting_its_reason() {
+    use crate::chat_manager::ChatShared;
+    use crate::test_support::{FakeDeps, test_chat};
+    use mainframe_types::events::{ChatUpdatedReason, DaemonEvent};
+    let deps = FakeDeps::arc();
+    let shared = ChatShared::new(deps.clone());
+    let update = shared
+        .prepare_update(
+            "c1",
+            &ChatPatch {
+                title: Some("updated".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    assert_eq!(deps.store.updates.lock().unwrap().len(), 1);
+    assert!(deps.events().is_empty());
+    let mut chat = test_chat("c1");
+    chat.title = Some("updated".into());
+    update.emit(chat, Some(ChatUpdatedReason::Completed));
+    assert!(
+        matches!(deps.events().as_slice(), [DaemonEvent::ChatUpdated { chat, reason: Some(ChatUpdatedReason::Completed) }] if chat.title.as_deref() == Some("updated"))
+    );
+}

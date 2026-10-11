@@ -92,13 +92,36 @@ impl ChatShared {
         chat: Chat,
         patch: &ChatPatch,
     ) -> Result<(), mainframe_types::seam_error::SeamError> {
-        self.deps.chats_update(&chat.id, patch)?;
-        self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
+        self.prepare_update(&chat.id, patch)?.emit(chat, None);
         Ok(())
     }
 }
 
+#[must_use]
+pub(crate) struct PendingChatUpdate<'a> {
+    shared: &'a ChatShared,
+}
+
+impl PendingChatUpdate<'_> {
+    pub(crate) fn emit(
+        self,
+        chat: Chat,
+        reason: Option<mainframe_types::events::ChatUpdatedReason>,
+    ) {
+        self.shared.emit(DaemonEvent::ChatUpdated { chat, reason });
+    }
+}
+
 impl ChatShared {
+    pub(crate) fn prepare_update(
+        &self,
+        chat_id: &str,
+        patch: &ChatPatch,
+    ) -> Result<PendingChatUpdate<'_>, mainframe_types::seam_error::SeamError> {
+        self.deps.chats_update(chat_id, patch)?;
+        Ok(PendingChatUpdate { shared: self })
+    }
+
     pub(crate) fn report_storage_error(&self, error: &mainframe_types::seam_error::SeamError) {
         tracing::error!(%error, "chat storage operation failed");
         self.emit(DaemonEvent::Error {

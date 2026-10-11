@@ -101,7 +101,7 @@ impl ChatConfigManager {
         if updates == ChatPatch::default() {
             return model_error.map_or(Ok(()), Err);
         }
-        self.shared.deps.chats_update(chat_id, &updates)?;
+        let update = self.shared.prepare_update(chat_id, &updates)?;
         // Model switch can invalidate the live tuning (e.g. xhigh/ultracode on a model that
         // doesn't support them). Re-resolve against the new model and re-apply.
         if updates.model.is_some() {
@@ -113,8 +113,7 @@ impl ChatConfigManager {
             .await;
         }
         let chat = cell.lock_recover().chat.clone();
-        self.shared
-            .emit(DaemonEvent::ChatUpdated { chat, reason: None });
+        update.emit(chat, None);
         model_error.map_or(Ok(()), Err)
     }
 

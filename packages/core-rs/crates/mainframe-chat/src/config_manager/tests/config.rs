@@ -1,3 +1,5 @@
+use mainframe_types::events::DaemonEvent;
+
 use super::*;
 
 #[tokio::test]
