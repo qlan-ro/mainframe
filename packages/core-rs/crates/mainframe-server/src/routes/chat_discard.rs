@@ -1,6 +1,8 @@
 //! `POST /api/chats/{id}/discard`, and the temporary-chat refusal shared by the
 //! pin/tag/archive/unarchive guards.
 
+#[cfg(test)]
+use axum::response::IntoResponse;
 use std::sync::Arc;
 
 use axum::Router;
@@ -26,27 +28,18 @@ pub(crate) fn refuse_if_temporary(chat: &Chat, action: &str) -> Option<Response>
     })
 }
 
-async fn discard(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
-    let lookup = id.clone();
-    let chat = match ctx.db.call(move |db| db.chats.get(&lookup)).await {
-        Ok(Some(chat)) => chat,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
-        Err(err) => return crate::async_err::internal_error("get chat", &err),
-    };
+async fn discard(
+    State(ctx): State<Arc<AppCtx>>,
+    Path(id): Path<String>,
+) -> Result<Response, crate::respond::ApiError> {
+    let chat = ctx.require_chat(&id).await?;
     if !chat.temporary {
-        return fail(StatusCode::CONFLICT, "chat is not temporary");
+        return Err(crate::respond::ApiError::Conflict(
+            "chat is not temporary".into(),
+        ));
     }
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "discard is a Phase-4 seam (ChatManager unavailable)");
-        return fail(StatusCode::INTERNAL_SERVER_ERROR, "discard unavailable");
-    };
-    match cm.discard_chat(&id).await {
-        Ok(()) => ok_empty(),
-        Err(err) => {
-            tracing::error!(chat_id = %id, %err, "discard failed");
-            crate::error_status::fail_with(&err)
-        }
-    }
+    ctx.chat.chat_manager.discard_chat(&id).await?;
+    Ok(ok_empty())
 }
 
 pub fn router() -> Router<Arc<AppCtx>> {
@@ -60,7 +53,8 @@ mod tests {
     use super::*;
     use mainframe_types::chat::NewChat;
 
-    async fn read(resp: Response) -> (StatusCode, serde_json::Value) {
+    async fn read(resp: impl IntoResponse) -> (StatusCode, serde_json::Value) {
+        let resp = resp.into_response();
         let status = resp.status();
         let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
         (
@@ -81,11 +75,13 @@ mod tests {
     async fn discard_refuses_a_non_temporary_chat() {
         let ctx = AppCtx::test_ctx();
         let project = ctx
+            .core
             .db
             .call(|db| db.projects.create("/tmp/discard-not-temp", None))
             .await
             .unwrap();
         let chat = ctx
+            .core
             .db
             .call(move |db| {
                 db.chats.create(&NewChat {
@@ -127,13 +123,14 @@ mod tests {
 
     #[tokio::test]
     async fn discard_deletes_the_row_and_scratch_dir_and_404s_on_the_next_get() {
-        let ctx = AppCtx::test_ctx_with_chat_manager();
-        ctx.adapter_registry
+        let ctx = AppCtx::test_ctx();
+        ctx.core
+            .adapter_registry
             .register(crate::chat_test_support::StubAdapter::new("claude", false));
         let created = ctx
+            .chat
             .chat_manager
             .as_ref()
-            .unwrap()
             .create_chat_with_defaults(
                 NewChat {
                     project_id: mainframe_types::chat::NO_PROJECT_ID.to_string(),
@@ -148,6 +145,7 @@ mod tests {
         let chat_id = created.id;
 
         let scratch_path = ctx
+            .core
             .db
             .call({
                 let chat_id = chat_id.clone();
@@ -168,7 +166,8 @@ mod tests {
         );
         let lookup = chat_id.clone();
         assert!(
-            ctx.db
+            ctx.core
+                .db
                 .call(move |db| db.chats.get(&lookup))
                 .await
                 .unwrap()

@@ -1,7 +1,6 @@
 use super::*;
 use crate::lsp_manager::{ClientRef, CommandResolver, LspManager};
 use crate::lsp_registry::{LspRegistry, ResolvedCommand};
-use mainframe_types::chat::{Chat, ChatStatus, Project};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -9,96 +8,6 @@ use std::sync::atomic::AtomicBool;
 use tokio::sync::mpsc;
 
 // --- fixtures / fakes -------------------------------------------------------
-
-fn make_project(id: &str, path: &str) -> Project {
-    Project {
-        id: id.to_string(),
-        name: "test".to_string(),
-        path: path.to_string(),
-        created_at: "2020-01-01T00:00:00.000Z".to_string(),
-        last_opened_at: "2020-01-01T00:00:00.000Z".to_string(),
-        parent_project_id: None,
-        available: None,
-    }
-}
-
-fn make_chat(
-    project_id: &str,
-    worktree_path: Option<&str>,
-    worktree_missing: Option<bool>,
-) -> Chat {
-    Chat {
-        id: "chat".to_string(),
-        adapter_id: "claude".to_string(),
-        project_id: project_id.to_string(),
-        title: None,
-        claude_session_id: None,
-        session_file_path: None,
-        model: None,
-        permission_mode: None,
-        plan_mode: None,
-        status: ChatStatus::Active,
-        created_at: "2020-01-01T00:00:00.000Z".to_string(),
-        updated_at: "2020-01-01T00:00:00.000Z".to_string(),
-        total_cost: 0.0,
-        total_tokens_input: 0,
-        total_tokens_output: 0,
-        last_context_tokens_input: 0,
-        last_context_total_tokens: None,
-        last_context_max_tokens: None,
-        context_files: None,
-        mentions: None,
-        modified_files: None,
-        worktree_path: worktree_path.map(|s| s.to_string()),
-        branch_name: None,
-        process_state: None,
-        display_status: None,
-        is_running: None,
-        background_activity: None,
-        worktree_missing,
-        directory_missing: None,
-        missing_directory_path: None,
-        transcript_missing: None,
-        todos: None,
-        pinned: None,
-        tuning: mainframe_types::chat::SessionTuning {
-            effort: None,
-            fast: None,
-            ultracode: None,
-            adaptive_thinking: None,
-        },
-        detected_prs: None,
-        tags: None,
-        automation_run_id: None,
-        temporary: false,
-        no_project: false,
-        context_lost_at: None,
-        vendor_session_ephemeral: false,
-        scratch_path: None,
-        parent_chat_id: None,
-        side_chat_id: None,
-        side_chat_waiting: None,
-        orchestration: Default::default(),
-    }
-}
-
-struct FakeDb {
-    project: Option<Project>,
-}
-impl ProjectStore for FakeDb {
-    fn get_project(&self, _project_id: &str) -> Option<Project> {
-        self.project.clone()
-    }
-}
-
-struct FakeChats {
-    chat: Option<Chat>,
-}
-impl ChatStore for FakeChats {
-    fn get_chat(&self, _chat_id: &str) -> Option<Chat> {
-        self.chat.clone()
-    }
-}
 
 struct FakeResolver;
 impl CommandResolver for FakeResolver {
@@ -123,57 +32,6 @@ fn manager() -> Arc<LspManager> {
     ))
 }
 
-// --- get_effective_path -----------------------------------------------------
-
-#[test]
-fn effective_path_returns_project_root_without_chat() {
-    let db = FakeDb {
-        project: Some(make_project("p1", "/project/root")),
-    };
-    let path = get_effective_path(&db, None, "p1", None);
-    assert_eq!(path.as_deref(), Some("/project/root"));
-}
-
-#[test]
-fn effective_path_returns_worktree_for_live_worktree() {
-    let db = FakeDb {
-        project: Some(make_project("p1", "/project/root")),
-    };
-    let chats = FakeChats {
-        chat: Some(make_chat("p1", Some("/wt/feat"), Some(false))),
-    };
-    let path = get_effective_path(&db, Some(&chats), "p1", Some("chat-1"));
-    assert_eq!(path.as_deref(), Some("/wt/feat"));
-}
-
-#[test]
-fn effective_path_none_for_missing_worktree() {
-    let db = FakeDb {
-        project: Some(make_project("p1", "/project/root")),
-    };
-    let chats = FakeChats {
-        chat: Some(make_chat("p1", Some("/wt/feat"), Some(true))),
-    };
-    assert!(get_effective_path(&db, Some(&chats), "p1", Some("chat-1")).is_none());
-}
-
-#[test]
-fn effective_path_rejects_cross_project_chat() {
-    let db = FakeDb {
-        project: Some(make_project("p1", "/project/root")),
-    };
-    let chats = FakeChats {
-        chat: Some(make_chat("other", Some("/wt/feat"), Some(false))),
-    };
-    assert!(get_effective_path(&db, Some(&chats), "p1", Some("chat-1")).is_none());
-}
-
-#[test]
-fn effective_path_unknown_project_none() {
-    let db = FakeDb { project: None };
-    assert!(get_effective_path(&db, None, "p1", None).is_none());
-}
-
 // --- handle_upgrade ---------------------------------------------------------
 
 fn assert_reject(outcome: &UpgradeOutcome, expected: StatusKind) {
@@ -184,57 +42,31 @@ fn assert_reject(outcome: &UpgradeOutcome, expected: StatusKind) {
 }
 
 #[tokio::test]
-async fn rejects_upgrade_for_unknown_project_with_404() {
-    let handler: LspConnectionHandler<FakeDb, FakeChats> =
-        LspConnectionHandler::new(manager(), Arc::new(FakeDb { project: None }));
+async fn rejects_deleted_scope_with_404() {
+    let handler = LspConnectionHandler::new(manager());
     let outcome = handler
-        .handle_upgrade("unknown-id", "typescript", None)
+        .handle_upgrade("p1", "typescript", "/nonexistent-mainframe-lsp-scope")
         .await;
     assert_reject(&outcome, StatusKind::NotFound);
 }
 
 #[tokio::test]
-async fn rejects_upgrade_for_unsupported_language_with_404() {
-    let tmp = tempfile::tempdir().unwrap();
-    let db = Arc::new(FakeDb {
-        project: Some(make_project("p1", tmp.path().to_str().unwrap())),
-    });
-    let handler: LspConnectionHandler<FakeDb, FakeChats> = LspConnectionHandler::new(manager(), db);
-    let outcome = handler.handle_upgrade("p1", "rust", None).await;
-    assert_reject(&outcome, StatusKind::NotFound);
-}
-
-#[tokio::test]
-async fn rejects_upgrade_with_409_when_worktree_missing() {
-    let db = Arc::new(FakeDb {
-        project: Some(make_project("p1", "/project/root")),
-    });
-    let chats = Arc::new(FakeChats {
-        chat: Some(make_chat("p1", Some("/wt/feat"), Some(true))),
-    });
-    let handler = LspConnectionHandler::with_chats(manager(), db, chats);
+async fn rejects_unsupported_language_with_404() {
+    let root = tempfile::tempdir().unwrap();
+    let handler = LspConnectionHandler::new(manager());
     let outcome = handler
-        .handle_upgrade("p1", "typescript", Some("chat-missing-wt"))
+        .handle_upgrade("p1", "rust", root.path().to_str().unwrap())
         .await;
-    assert_reject(&outcome, StatusKind::Conflict);
+    assert_reject(&outcome, StatusKind::NotFound);
 }
 
 #[tokio::test]
 async fn proceeds_with_worktree_path_as_project_path() {
-    let root = tempfile::tempdir().unwrap();
     let wt = tempfile::tempdir().unwrap();
     let wt_path = wt.path().to_str().unwrap().to_string();
-    let db = Arc::new(FakeDb {
-        project: Some(make_project("p1", root.path().to_str().unwrap())),
-    });
-    let chats = Arc::new(FakeChats {
-        chat: Some(make_chat("p1", Some(&wt_path), Some(false))),
-    });
     let m = manager();
-    let handler = LspConnectionHandler::with_chats(m.clone(), db, chats);
-    let outcome = handler
-        .handle_upgrade("p1", "typescript", Some("chat-wt-1"))
-        .await;
+    let handler = LspConnectionHandler::new(m.clone());
+    let outcome = handler.handle_upgrade("p1", "typescript", &wt_path).await;
     match outcome {
         UpgradeOutcome::Proceed(handle) => assert_eq!(handle.project_path, wt_path),
         UpgradeOutcome::Reject(s) => panic!("expected Proceed, got Reject({s:?})"),
@@ -246,12 +78,11 @@ async fn proceeds_with_worktree_path_as_project_path() {
 async fn proceeds_with_project_root_when_no_chat_id() {
     let root = tempfile::tempdir().unwrap();
     let root_path = root.path().to_str().unwrap().to_string();
-    let db = Arc::new(FakeDb {
-        project: Some(make_project("p1", &root_path)),
-    });
     let m = manager();
-    let handler: LspConnectionHandler<FakeDb, FakeChats> = LspConnectionHandler::new(m.clone(), db);
-    let outcome = handler.handle_upgrade("p1", "typescript", None).await;
+    let handler = LspConnectionHandler::new(m.clone());
+    let outcome = handler
+        .handle_upgrade("p1", "typescript", root.path().to_str().unwrap())
+        .await;
     match outcome {
         UpgradeOutcome::Proceed(handle) => assert_eq!(handle.project_path, root_path),
         UpgradeOutcome::Reject(s) => panic!("expected Proceed, got Reject({s:?})"),
@@ -262,9 +93,6 @@ async fn proceeds_with_project_root_when_no_chat_id() {
 #[tokio::test]
 async fn closes_stale_client_when_new_client_connects() {
     let tmp = tempfile::tempdir().unwrap();
-    let db = Arc::new(FakeDb {
-        project: Some(make_project("p1", tmp.path().to_str().unwrap())),
-    });
     let m = manager();
 
     // Spawn a handle and attach a live (OPEN) client.
@@ -276,8 +104,10 @@ async fn closes_stale_client_when_new_client_connects() {
     let (close_tx, mut close_rx) = mpsc::unbounded_channel::<(u16, String)>();
     handle.set_client(Some(ClientRef::new(open.clone(), close_tx)));
 
-    let handler: LspConnectionHandler<FakeDb, FakeChats> = LspConnectionHandler::new(m.clone(), db);
-    let _ = handler.handle_upgrade("p1", "typescript", None).await;
+    let handler = LspConnectionHandler::new(m.clone());
+    let _ = handler
+        .handle_upgrade("p1", "typescript", tmp.path().to_str().unwrap())
+        .await;
 
     let (code, reason) = close_rx.recv().await.unwrap();
     assert_eq!(code, 1001);

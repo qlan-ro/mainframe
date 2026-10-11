@@ -12,6 +12,7 @@ async fn resolves_the_configured_executable_in_the_project_directory() {
     let server = spawn_test_server(None).await;
     server
         .ctx
+        .core
         .adapter_registry
         .register(Arc::new(ClaudeAdapter::default()));
     let dir = tempfile::tempdir().unwrap();
@@ -29,6 +30,7 @@ printf '{"type":"control_response","response":{"request_id":"effective-model","s
     let executable = exe.to_string_lossy().into_owned();
     let project = server
         .ctx
+        .core
         .db
         .call(move |db| {
             db.settings
@@ -67,6 +69,7 @@ printf '%s\n' '{"type":"control_response","response":{"request_id":"effective-mo
     let executable = exe.to_string_lossy().into_owned();
     h.server
         .ctx
+        .core
         .db
         .call(move |db| {
             db.settings
@@ -91,11 +94,13 @@ async fn provider_read_preserves_a_model_missing_from_the_catalog() {
     let server = spawn_test_server(None).await;
     server
         .ctx
+        .core
         .adapter_registry
         .register(Arc::new(ClaudeAdapter::default()));
-    server.ctx.adapter_registry.seed_static_snapshots();
+    server.ctx.core.adapter_registry.seed_static_snapshots();
     server
         .ctx
+        .core
         .db
         .call(|db| {
             db.settings

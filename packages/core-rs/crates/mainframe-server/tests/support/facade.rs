@@ -1,9 +1,4 @@
-//! A `TestServer` with a REAL `ChatManager` wired as `ctx.chat_manager` and
-//! the facade hub as its chat surface — the fixture the `acp_ws_*` live-wiring
-//! tests need, since the plain `spawn_test_server` harness runs with
-//! `chat_manager: None`. Mirrors `chat_background_activity.rs`'s harness, plus
-//! the facade hub and a pre-created project/chat so a test can prompt a real
-//! session immediately.
+//! A test server with a facade-backed chat manager and a pre-created project/chat.
 
 use mainframe_types::settings_kv::MemorySettings;
 use std::net::SocketAddr;
@@ -46,6 +41,7 @@ impl FacadeServer {
         let profile = self.profile.clone();
         self.server
             .ctx
+            .core
             .db
             .call(move |d| {
                 d.chats.create(&mainframe_types::chat::NewChat {
@@ -128,37 +124,31 @@ pub async fn spawn_facade_server_with(
         })
         .unwrap();
 
-    let ctx = Arc::new(AppCtx {
-        db,
-        git: GitFactory,
-        services: Services {
-            attachments: Arc::new(AttachmentStore::new(data_dir.path().join("attachments"))),
-            push: Arc::new(PushService::new()),
-            watcher: Arc::new(watcher),
-        },
-        broadcast,
-        adapter_registry,
-        background_tasks: tracker,
-        claude_workflows: Arc::new(ClaudeWorkflowStore::new()),
-        chat_manager: Some(manager),
-        launch_registry: None,
-        tunnel_manager: None,
-        port_tunnels: None,
-        lsp_manager: None,
-        plugin_manager: None,
-        automations: None,
-        orchestration: None,
-        quota: None,
-        data_dir: data_dir.path().to_path_buf(),
-        version: "0.0.0-test".to_string(),
-        port: 0,
-        auth_secret: None,
-        resolved_path: mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
-        tunnel_url: Arc::new(std::sync::RwLock::new(None)),
-        ws_clients: Arc::new(DashMap::new()),
-        facade_hub,
-        facade_heartbeat_interval_ms: heartbeat_interval_ms,
-    });
+    let ctx = Arc::new(
+        AppCtx::test_builder(db, data_dir.path().to_path_buf())
+            .git(GitFactory)
+            .services(Services {
+                attachments: Arc::new(AttachmentStore::new(data_dir.path().join("attachments"))),
+                push: Arc::new(PushService::new()),
+                watcher: Arc::new(watcher),
+            })
+            .broadcast(broadcast)
+            .adapter_registry(adapter_registry)
+            .background_tasks(tracker)
+            .claude_workflows(Arc::new(ClaudeWorkflowStore::new()))
+            .chat_manager(manager)
+            .automations(None)
+            .version("0.0.0-test".to_string())
+            .port(0)
+            .auth_secret(None)
+            .resolved_path(mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"))
+            .tunnel_url(Arc::new(std::sync::RwLock::new(None)))
+            .ws_clients(Arc::new(DashMap::new()))
+            .facade_hub(facade_hub)
+            .facade_heartbeat_interval_ms(heartbeat_interval_ms)
+            .build()
+            .unwrap(),
+    );
     spawn_broadcast_pump(Arc::clone(&ctx));
 
     let app = build_app(Arc::clone(&ctx));

@@ -19,7 +19,7 @@ use serde_json::json;
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok, ok_empty};
 use crate::routes::automations::{engine, engine_error, unavailable};
-use crate::routes::projects::parse_body;
+use crate::routes::body::parse_body;
 
 fn invalid_label(label: &str) -> Response {
     fail(
@@ -118,13 +118,11 @@ async fn put_credential(
     };
     match engine.set_credential(&label, parsed.token).await {
         Ok(()) => ok_empty(),
-        Err(err) => {
-            tracing::error!(label, error = %err, "set credential failed");
-            fail(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "failed to save credential",
-            )
-        }
+        Err(err) => crate::respond::fail_internal(
+            format!("set credential failed label={}", label),
+            &err,
+            "failed to save credential",
+        ),
     }
 }
 
@@ -137,13 +135,11 @@ async fn delete_credential(State(ctx): State<Arc<AppCtx>>, Path(label): Path<Str
     }
     match engine.delete_credential(&label).await {
         Ok(()) => ok_empty(),
-        Err(err) => {
-            tracing::error!(label, error = %err, "delete credential failed");
-            fail(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "failed to delete credential",
-            )
-        }
+        Err(err) => crate::respond::fail_internal(
+            format!("delete credential failed label={}", label),
+            &err,
+            "failed to delete credential",
+        ),
     }
 }
 

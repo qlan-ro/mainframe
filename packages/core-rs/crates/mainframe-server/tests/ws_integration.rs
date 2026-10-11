@@ -159,6 +159,7 @@ async fn file_subscribe_rejects_chat_project_ownership_mismatch() {
     let proj_a_for_chat = proj_a.clone();
     let chat_id = server
         .ctx
+        .core
         .db
         .call(move |db| {
             db.chats.create(&mainframe_types::chat::NewChat {
@@ -224,16 +225,18 @@ async fn connection_global_event_reaches_unsubscribed_client() {
     ws.wait_for("connection.ready").await;
 
     // chat.notification is connection-global — delivered even without a subscription.
-    let _ = server
-        .ctx
-        .broadcast
-        .send(mainframe_types::events::DaemonEvent::ChatNotification {
-            chat_id: "background-chat".into(),
-            title: "Task Complete".into(),
-            body: "done".into(),
-            level: mainframe_types::events::ChatNotificationLevel::Success,
-            kind: Some(mainframe_types::events::ChatNotificationKind::TaskComplete),
-        });
+    let _ =
+        server
+            .ctx
+            .core
+            .broadcast
+            .send(mainframe_types::events::DaemonEvent::ChatNotification {
+                chat_id: "background-chat".into(),
+                title: "Task Complete".into(),
+                body: "done".into(),
+                level: mainframe_types::events::ChatNotificationLevel::Success,
+                kind: Some(mainframe_types::events::ChatNotificationKind::TaskComplete),
+            });
     let event = ws.wait_for("chat.notification").await;
     assert_eq!(event["chatId"], "background-chat");
 }
@@ -248,6 +251,7 @@ async fn chat_scoped_event_withheld_from_unsubscribed_client() {
     // client that never subscribed to that chat.
     let _ = server
         .ctx
+        .core
         .broadcast
         .send(mainframe_types::events::DaemonEvent::ChatEnded {
             chat_id: "background-chat".into(),

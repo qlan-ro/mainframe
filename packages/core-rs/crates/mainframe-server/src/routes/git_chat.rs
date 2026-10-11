@@ -12,7 +12,7 @@ use axum::Router;
 use axum::body::Bytes;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use mainframe_git::GitService;
 use mainframe_git::git_parse::{parse_diff_name_status, parse_status_buckets};
@@ -23,13 +23,14 @@ use serde_json::{Map, Value, json};
 
 use crate::async_err::internal_error;
 use crate::ctx::AppCtx;
-use crate::error_status::fail_with;
+use crate::respond::fail_with;
 use crate::respond::{fail, ok, ok_empty};
+use crate::routes::body::parse_json_body;
 use mainframe_runtime::fs::resolve_and_validate_path;
 
 use super::git::{
     chat_worktree_missing, get_effective_path, git_error_message, is_not_git_repo_err,
-    parse_json_body, resolve_chat_path,
+    resolve_chat_path,
 };
 
 #[derive(Debug, Deserialize)]
@@ -65,29 +66,34 @@ async fn resolve_chat_ctx(
     chat_id: &str,
     files: Option<&[String]>,
     validate_paths: bool,
-) -> Result<(GitService, String), Response> {
+) -> Result<(GitService, String), crate::respond::ApiError> {
     let work_dir = match resolve_chat_path(ctx, chat_id).await {
         Ok(Some(w)) => w,
         Ok(None) => {
             return Err(match chat_worktree_missing(ctx, chat_id).await {
-                Ok(true) => fail(StatusCode::CONFLICT, "Worktree missing"),
-                Ok(false) => fail(StatusCode::NOT_FOUND, "Chat not found"),
-                Err(e) => internal_error("Failed to resolve chat path", &e),
+                Ok(true) => crate::respond::ApiError::new(StatusCode::CONFLICT, "Worktree missing"),
+                Ok(false) => crate::respond::ApiError::new(StatusCode::NOT_FOUND, "Chat not found"),
+                Err(e) => crate::respond::ApiError::internal("Failed to resolve chat path", &e),
             });
         }
-        Err(e) => return Err(internal_error("Failed to resolve chat path", &e)),
+        Err(e) => {
+            return Err(crate::respond::ApiError::internal(
+                "Failed to resolve chat path",
+                &e,
+            ));
+        }
     };
     if validate_paths && let Some(files) = files {
         for file in files {
             if resolve_and_validate_path(&work_dir, file).await.is_none() {
-                return Err(fail(
+                return Err(crate::respond::ApiError::new(
                     StatusCode::BAD_REQUEST,
                     format!("Path outside project: {file}"),
                 ));
             }
         }
     }
-    Ok((ctx.git.for_project(work_dir.clone()), work_dir))
+    Ok((ctx.core.git.for_project(work_dir.clone()), work_dir))
 }
 
 /// Git failure arm: log unless the error is "not a git repository", then
@@ -108,7 +114,7 @@ async fn status(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
     };
     let (svc, _) = match resolve_chat_ctx(&ctx, &data.chat_id, None, false).await {
         Ok(v) => v,
-        Err(r) => return r,
+        Err(r) => return r.into_response(),
     };
     match svc.status_raw().await {
         Ok(raw) => ok(parse_status_buckets(&raw)),
@@ -131,7 +137,7 @@ async fn stage_impl(ctx: Arc<AppCtx>, body: Bytes, unstage: bool) -> Response {
     };
     let (svc, _) = match resolve_chat_ctx(&ctx, &data.chat_id, Some(&data.files), true).await {
         Ok(v) => v,
-        Err(r) => return r,
+        Err(r) => return r.into_response(),
     };
     if data.files.is_empty() {
         return ok_empty();
@@ -157,7 +163,7 @@ async fn commit(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
     }
     let (svc, _) = match resolve_chat_ctx(&ctx, &data.chat_id, Some(&data.files), true).await {
         Ok(v) => v,
-        Err(r) => return r,
+        Err(r) => return r.into_response(),
     };
     let outcome = async {
         if !data.files.is_empty() {
@@ -179,7 +185,7 @@ async fn push(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
     };
     let (svc, _) = match resolve_chat_ctx(&ctx, &data.chat_id, None, false).await {
         Ok(v) => v,
-        Err(r) => return r,
+        Err(r) => return r.into_response(),
     };
     match svc.push(None, None).await {
         Ok(PushResult::Rejected { message }) => fail(StatusCode::BAD_REQUEST, message),
@@ -222,7 +228,7 @@ async fn diff_since_main_not_found(ctx: &AppCtx, chat_id: Option<&str>) -> Respo
             Err(e) => return internal_error("Failed to resolve project path", &e),
         }
     }
-    fail(StatusCode::NOT_FOUND, "Project not found")
+    crate::respond::ApiError::project_not_found().into_response()
 }
 
 async fn compute_diff_since_main(
@@ -230,7 +236,7 @@ async fn compute_diff_since_main(
     base_path: &str,
     files: Option<&[String]>,
 ) -> Result<Value, GitServiceError> {
-    let svc = ctx.git.for_project(base_path.to_string());
+    let svc = ctx.core.git.for_project(base_path.to_string());
     let Some(bi) = svc.detect_base_branch().await? else {
         return Ok(json!({ "diffs": {}, "baseBranch": null, "mergeBase": null }));
     };

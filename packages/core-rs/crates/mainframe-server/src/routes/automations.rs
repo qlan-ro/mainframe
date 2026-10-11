@@ -21,13 +21,13 @@ use serde_json::json;
 
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok, ok_empty};
-use crate::routes::projects::parse_body;
+use crate::routes::body::parse_body;
 
 const OUTPUT_PREVIEW_MAX_BYTES: usize = 32 * 1024;
 
 /// Every handler self-gates on the engine (503 when it is absent).
 pub(crate) fn engine(ctx: &AppCtx) -> Option<&Arc<AutomationsEngine>> {
-    ctx.automations.as_ref()
+    ctx.services.automations.as_ref()
 }
 
 pub(crate) fn unavailable() -> Response {
@@ -110,7 +110,7 @@ async fn get_one(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Resp
     let Some(engine) = engine(&ctx) else {
         return unavailable();
     };
-    match registration::get_with_registrations(engine, &id, ctx.port).await {
+    match registration::get_with_registrations(engine, &id, ctx.core.port).await {
         Ok(Some(summary)) => ok(summary),
         Ok(None) => fail(StatusCode::NOT_FOUND, "automation not found"),
         Err(err) => engine_error(err),

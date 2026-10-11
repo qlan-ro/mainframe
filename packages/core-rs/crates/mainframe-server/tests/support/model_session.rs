@@ -18,7 +18,7 @@ impl ModelSession {
 
     pub async fn with_models(chat_model: Option<&str>, provider_model: Option<&str>) -> Self {
         let harness = spawn_facade_server(Arc::new(ClaudeAdapter::default())).await;
-        let root = &harness.server.ctx.data_dir;
+        let root = &harness.server.ctx.core.data_dir;
         let exe = root.join("claude-model-cli");
         std::fs::write(&exe, include_str!("claude_model_cli.py")).unwrap();
         std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -33,6 +33,7 @@ impl ModelSession {
         harness
             .server
             .ctx
+            .core
             .db
             .call(move |db| {
                 db.settings
@@ -58,7 +59,7 @@ impl ModelSession {
     }
 
     pub fn manager(&self) -> &Arc<ChatManager> {
-        self.0.server.ctx.chat_manager.as_ref().unwrap()
+        &self.0.server.ctx.chat.chat_manager
     }
 
     pub async fn resume(&self) {
@@ -104,6 +105,7 @@ impl ModelSession {
         self.0
             .server
             .ctx
+            .core
             .db
             .call(move |db| db.chats.get(&id))
             .await
@@ -132,7 +134,11 @@ impl ModelSession {
     }
 
     pub fn configure(&self, model: &str) {
-        std::fs::write(self.0.server.ctx.data_dir.join("configured-model"), model).unwrap();
+        std::fs::write(
+            self.0.server.ctx.core.data_dir.join("configured-model"),
+            model,
+        )
+        .unwrap();
     }
 
     pub async fn provider_model(&self, model: &str) {
@@ -140,6 +146,7 @@ impl ModelSession {
         self.0
             .server
             .ctx
+            .core
             .db
             .call(move |db| db.settings.set("provider", "claude.defaultModel", &model))
             .await
@@ -147,7 +154,7 @@ impl ModelSession {
     }
 
     pub fn session_launches(&self) -> Vec<Vec<String>> {
-        std::fs::read_to_string(self.0.server.ctx.data_dir.join("launches.jsonl"))
+        std::fs::read_to_string(self.0.server.ctx.core.data_dir.join("launches.jsonl"))
             .unwrap()
             .lines()
             .map(|line| serde_json::from_str::<Vec<String>>(line).unwrap())
@@ -161,6 +168,7 @@ impl Drop for ModelSession {
         self.0
             .server
             .ctx
+            .core
             .adapter_registry
             .get("claude")
             .unwrap()

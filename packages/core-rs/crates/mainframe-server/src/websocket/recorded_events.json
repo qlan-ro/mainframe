@@ -1,0 +1,14 @@
+[
+  {"type":"file:changed","path":"/project/file"},
+  {"type":"chat.ended","chatId":"a"},
+  {"type":"chat.ended","chatId":"b"},
+  {"type":"error","chatId":"a","error":"a failed"},
+  {"type":"error","error":"global failure"},
+  {"type":"chat.notification","chatId":"b","title":"Done","body":"b finished","level":"success"},
+  {"type":"chat.offloaded","chatId":"a"},
+  {"type":"automation.notification","runId":"r","automationId":"auto","title":"Done","body":"run finished","links":{"runId":"r","chatIds":["b"]}},
+  {"type":"worktree.offer.snapshot","chatId":"a","offers":[]},
+  {"type":"subscribe:ack","chatId":"b"},
+  {"type":"process.ready","processId":"p","claudeSessionId":"s"},
+  {"type":"context.updated","chatId":"b","filePaths":[]}
+]

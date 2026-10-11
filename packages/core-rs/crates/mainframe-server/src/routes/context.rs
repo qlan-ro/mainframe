@@ -1,12 +1,3 @@
-//! Session context, session-file content read, and add-mention.
-//!
-//! `session-file` resolves the chat and project via db, then reads the file
-//! through `resolve_readable_path`. `mentions` goes through
-//! `ChatManager::add_mention` (persists and emits `context.updated`) when the
-//! manager is wired, else persists via `db.chats.add_mention`, and returns the
-//! built mention. `context` needs `ChatManager::get_session_context` and returns
-//! the failure envelope when the manager is unwired.
-
 use std::sync::Arc;
 
 use axum::Router;
@@ -22,32 +13,20 @@ use mainframe_types::time::now_iso8601;
 
 use crate::ctx::AppCtx;
 use crate::path_utils::resolve_readable_path;
-use crate::respond::{fail, ok};
-use crate::routes::projects::parse_body;
+use crate::respond::{ApiError, fail, ok};
+use crate::routes::body::parse_body;
 
-async fn context(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
-    // The chat/project 404 resolution reads the db directly (the effective path
-    // uses the raw worktreePath, so enrichment is irrelevant here);
-    // `get_session_context` needs the AdapterRegistry + AttachmentStore that only
-    // the ChatManager holds.
+async fn context(
+    State(ctx): State<Arc<AppCtx>>,
+    Path(id): Path<String>,
+) -> Result<Response, ApiError> {
     let lookup = id.clone();
-    let chat = match ctx.db.call(move |db| db.chats.get(&lookup)).await {
-        Ok(Some(chat)) => chat,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
-        Err(err) => return crate::async_err::internal_error("get chat", &err),
-    };
+    let chat = ctx.require_chat(&lookup).await?;
     let project_id = chat.project_id.clone();
-    let project = match ctx.db.call(move |db| db.projects.get(&project_id)).await {
-        Ok(Some(project)) => project,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Project not found"),
-        Err(err) => return crate::async_err::internal_error("get project", &err),
-    };
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "getSessionContext needs ChatManager (unwired)");
-        return fail(StatusCode::INTERNAL_SERVER_ERROR, "Operation failed");
-    };
+    let project = ctx.require_project(&project_id).await?;
+    let cm = &ctx.chat.chat_manager;
     let effective_path = chat.worktree_path.clone().unwrap_or(project.path);
-    ok(cm.get_session_context(&id, &effective_path).await)
+    Ok(ok(cm.get_session_context(&id, &effective_path).await))
 }
 
 #[derive(Deserialize)]
@@ -59,32 +38,26 @@ async fn session_file(
     State(ctx): State<Arc<AppCtx>>,
     Path(id): Path<String>,
     Query(q): Query<SessionFileQuery>,
-) -> Response {
+) -> Result<Response, ApiError> {
     let lookup = id.clone();
-    let chat = match ctx.db.call(move |db| db.chats.get(&lookup)).await {
-        Ok(Some(chat)) => chat,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
-        Err(err) => return crate::async_err::internal_error("get chat", &err),
-    };
+    let chat = ctx.require_chat(&lookup).await?;
     let project_id = chat.project_id.clone();
-    let project = match ctx.db.call(move |db| db.projects.get(&project_id)).await {
-        Ok(Some(project)) => project,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Project not found"),
-        Err(err) => return crate::async_err::internal_error("get project", &err),
-    };
+    let project = ctx.require_project(&project_id).await?;
     let Some(file_path) = q.path.filter(|p| !p.is_empty()) else {
-        return fail(StatusCode::BAD_REQUEST, "path query required");
+        return Err(ApiError::BadRequest("path query required".into()));
     };
 
     let session_base = chat.worktree_path.clone().unwrap_or(project.path);
     let Some(full_path) = resolve_readable_path(&session_base, &file_path).await else {
-        return fail(StatusCode::FORBIDDEN, "Path outside project");
+        return Err(ApiError::new(StatusCode::FORBIDDEN, "Path outside project"));
     };
     match tokio::fs::read_to_string(&full_path).await {
-        Ok(content) => ok(serde_json::json!({ "path": file_path, "content": content })),
+        Ok(content) => Ok(ok(
+            serde_json::json!({ "path": file_path, "content": content }),
+        )),
         Err(err) => {
             tracing::warn!(path = %file_path, %err, "Failed to read session file");
-            fail(StatusCode::NOT_FOUND, "File not found")
+            Err(ApiError::NotFound("File not found".into()))
         }
     }
 }
@@ -120,16 +93,9 @@ async fn add_mention(
         path: b.path,
         timestamp: now_iso8601(),
     };
-    // `ChatManager::add_mention` persists the mention AND emits `context.updated`.
-    // When the manager is unwired (the test harness) the db write is the load-bearing
-    // effect; the WS emit is skipped (no broadcast bus without the manager).
-    if let Some(cm) = ctx.chat_manager.as_ref() {
+    {
+        let cm = &ctx.chat.chat_manager;
         cm.add_mention(&id, mention.clone());
-    } else {
-        let (cid, m) = (id, mention.clone());
-        if let Err(err) = ctx.db.call(move |db| db.chats.add_mention(&cid, &m)).await {
-            return crate::async_err::internal_error("add mention", &err);
-        }
     }
     ok(mention)
 }
@@ -145,8 +111,10 @@ pub fn router() -> Router<Arc<AppCtx>> {
 mod tests {
     use super::*;
     use axum::body::to_bytes;
+    use axum::response::IntoResponse;
 
-    async fn read(resp: Response) -> (StatusCode, serde_json::Value) {
+    async fn read(resp: impl IntoResponse) -> (StatusCode, serde_json::Value) {
+        let resp = resp.into_response();
         let status = resp.status();
         let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
         (

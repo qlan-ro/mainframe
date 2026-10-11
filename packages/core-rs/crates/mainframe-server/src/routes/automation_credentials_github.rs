@@ -28,7 +28,7 @@ use serde_json::json;
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok};
 use crate::routes::automations::{engine, unavailable};
-use crate::routes::projects::parse_body;
+use crate::routes::body::parse_body;
 
 const GITHUB_CREDENTIAL_LABEL: &str = "github";
 
@@ -110,13 +110,11 @@ async fn poll_and_respond(
                 .await
             {
                 Ok(()) => ok(json!({ "status": "connected" })),
-                Err(err) => {
-                    tracing::error!(error = %err, "failed to persist the GitHub device-flow token");
-                    fail(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "failed to save the GitHub connection",
-                    )
-                }
+                Err(err) => crate::respond::fail_internal(
+                    "failed to persist the GitHub device-flow token",
+                    &err,
+                    "failed to save the GitHub connection",
+                ),
             }
         }
         Ok(PollOutcome::Pending) => ok(json!({ "status": "pending" })),

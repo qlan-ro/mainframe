@@ -4,7 +4,6 @@
 use std::sync::Arc;
 
 use axum::Router;
-use axum::body::Bytes;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::Response;
@@ -14,8 +13,8 @@ use serde::Deserialize;
 use mainframe_types::chat::{NO_PROJECT_ID, NewChat};
 
 use crate::ctx::AppCtx;
-use crate::respond::{fail, ok};
-use crate::routes::projects::parse_body;
+use crate::respond::ok;
+use crate::routes::body::RequestJson;
 
 #[cfg(test)]
 mod tests;
@@ -51,9 +50,9 @@ enum ChatHome {
 /// projectId or `noProject: true`, worktree fields paired, and never a
 /// worktree on a non-project chat. Returns the adapter id and the chat's
 /// home on success.
-fn validate_shape(b: &CreateChatBody) -> Result<(String, ChatHome), Response> {
+fn validate_shape(b: &CreateChatBody) -> Result<(String, ChatHome), crate::respond::ApiError> {
     let Some(adapter_id) = b.adapter_id.clone().filter(|s| !s.is_empty()) else {
-        return Err(fail(
+        return Err(crate::respond::ApiError::new(
             StatusCode::BAD_REQUEST,
             "projectId and adapterId are required",
         ));
@@ -65,21 +64,21 @@ fn validate_shape(b: &CreateChatBody) -> Result<(String, ChatHome), Response> {
         (Some(pid), false) => ChatHome::Project(pid),
         (None, true) => ChatHome::NoProject,
         _ => {
-            return Err(fail(
+            return Err(crate::respond::ApiError::new(
                 StatusCode::BAD_REQUEST,
                 "exactly one of projectId or noProject is required",
             ));
         }
     };
     if b.worktree_path.is_none() != b.branch_name.is_none() {
-        return Err(fail(
+        return Err(crate::respond::ApiError::new(
             StatusCode::BAD_REQUEST,
             "worktreePath and branchName must be provided together",
         ));
     }
     if matches!(home, ChatHome::NoProject) && (b.worktree_path.is_some() || b.branch_name.is_some())
     {
-        return Err(fail(
+        return Err(crate::respond::ApiError::new(
             StatusCode::BAD_REQUEST,
             "a non-project chat cannot have a worktree",
         ));
@@ -88,44 +87,28 @@ fn validate_shape(b: &CreateChatBody) -> Result<(String, ChatHome), Response> {
 }
 
 /// Resolves to the hidden scratch id for a non-project chat, else the real
-/// project's id after confirming it exists (an unknown or scratch id 400s,
+/// project's id after confirming it exists (an unknown or scratch id 404s,
 /// since `projects.get` excludes the hidden row).
-async fn resolve_project_id(ctx: &Arc<AppCtx>, home: ChatHome) -> Result<String, Response> {
+async fn resolve_project_id(
+    ctx: &Arc<AppCtx>,
+    home: ChatHome,
+) -> Result<String, crate::respond::ApiError> {
     let pid = match home {
         ChatHome::NoProject => return Ok(NO_PROJECT_ID.to_string()),
         ChatHome::Project(pid) => pid,
     };
-    match ctx.db.call(move |db| db.projects.get(&pid)).await {
-        Ok(Some(project)) => Ok(project.id),
-        Ok(None) => Err(fail(StatusCode::BAD_REQUEST, "Project not found")),
-        Err(err) => Err(crate::async_err::internal_error("get project", &err)),
-    }
+    Ok(ctx.require_project(&pid).await?.id)
 }
 
-async fn create(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
-    let Some(b) = parse_body::<CreateChatBody>(&body) else {
-        return fail(StatusCode::BAD_REQUEST, "Invalid request body");
-    };
-    let (adapter_id, home) = match validate_shape(&b) {
-        Ok(v) => v,
-        Err(resp) => return resp,
-    };
-    let resolved_project_id = match resolve_project_id(&ctx, home).await {
-        Ok(id) => id,
-        Err(resp) => return resp,
-    };
+async fn create(
+    State(ctx): State<Arc<AppCtx>>,
+    body: RequestJson<CreateChatBody>,
+) -> Result<Response, crate::respond::ApiError> {
+    let b = body.0?;
+    let (adapter_id, home) = validate_shape(&b)?;
+    let resolved_project_id = resolve_project_id(&ctx, home).await?;
 
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(
-            project_id = %resolved_project_id,
-            %adapter_id,
-            "createChat is a Phase-4 seam (ChatManager unavailable)"
-        );
-        return fail(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "createChatWithDefaults unavailable",
-        );
-    };
+    let cm = &ctx.chat.chat_manager;
     let chat = cm
         .create_chat_with_defaults(
             NewChat {
@@ -141,7 +124,7 @@ async fn create(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
             b.branch_name.as_deref(),
         )
         .await;
-    ok(chat)
+    Ok(ok(chat))
 }
 
 pub fn router() -> Router<Arc<AppCtx>> {

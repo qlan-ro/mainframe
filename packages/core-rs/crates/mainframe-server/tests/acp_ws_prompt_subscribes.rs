@@ -21,6 +21,7 @@ async fn server_with_mock_adapter() -> TestServer {
     let server = spawn_test_server(None).await;
     server
         .ctx
+        .core
         .adapter_registry
         .register(std::sync::Arc::new(MockCliAdapter::default()));
     server
@@ -66,6 +67,7 @@ async fn prompting_subscribes_the_connection() {
 
     server
         .ctx
+        .chat
         .facade_hub
         .on_chat_surface_event(revision_event("chat-1", "hello"));
     let frame = ws.read_event().await;
@@ -149,6 +151,7 @@ async fn attach_precedes_a_still_blocked_prompts_own_reply() {
     facade
         .server
         .ctx
+        .chat
         .facade_hub
         .on_chat_surface_event(revision_event(&chat_a, "t35-marker"));
     let marker = read_until(&mut ws, |v| {

@@ -67,7 +67,7 @@ async fn returns_the_tail_of_a_spool_file_under_the_real_spool_root() {
 
     let server = spawn_test_server(None).await;
     seed(
-        &server.ctx.background_tasks,
+        &server.ctx.core.background_tasks,
         "chat-tail",
         "task-tail",
         output_path.to_string_lossy().into_owned(),
@@ -90,7 +90,7 @@ async fn rejects_a_path_outside_the_spool_root() {
 
     let server = spawn_test_server(None).await;
     seed(
-        &server.ctx.background_tasks,
+        &server.ctx.core.background_tasks,
         "chat-outside",
         "task-outside",
         output_path.to_string_lossy().into_owned(),

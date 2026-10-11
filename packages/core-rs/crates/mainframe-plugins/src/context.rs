@@ -15,7 +15,6 @@ use mainframe_types::events::DaemonEvent;
 use mainframe_types::plugin::{
     ChatSummary, PluginAttachmentMeta, PluginCapability, PluginManifest, UiZone,
 };
-use mainframe_types::settings::NotificationConfig;
 use mainframe_types::settings_kv::SettingsKv;
 use rusqlite::types::Value as SqlValue;
 use serde::Serialize;
@@ -124,7 +123,7 @@ pub trait PluginUi: Send + Sync {
     fn remove_panel(&self, id: Option<&str>);
     fn add_action(&self, id: &str, label: &str, shortcut: &str, icon: Option<&str>);
     fn remove_action(&self, id: &str);
-    fn notify(&self, options: NotifyOptions);
+    fn notify(&self, options: NotifyOptions) -> BoxFuture<'_, ()>;
 }
 
 /// `ChatServiceAPI` exposed to plugins.
@@ -146,20 +145,17 @@ pub trait ChatService: Send + Sync {
 /// TS `buildPluginContext` depends on). The chat accessors are synchronous; the
 /// daemon implements them over its `Db` actor's `call_blocking` bridge.
 pub trait PluginHostDb: Send + Sync {
-    fn chats_list(&self, project_id: &str) -> Vec<Chat>;
-    fn chats_get(&self, id: &str) -> Option<Chat>;
+    fn chats_list(&self, project_id: &str) -> Result<Vec<Chat>, PluginError>;
+    fn chats_get(&self, id: &str) -> Result<Option<Chat>, PluginError>;
     fn chats_create(
         &self,
         project_id: &str,
         adapter_id: &str,
         model: Option<&str>,
         permission_mode: Option<&str>,
-    ) -> Chat;
+    ) -> Result<Chat, PluginError>;
     /// The host settings store (provider defaults for `chat:create`).
     fn settings(&self) -> &dyn SettingsKv;
-    /// The effective notification config. Synchronous because the UI context's
-    /// `notify` gate runs on a non-async path.
-    fn notification_config(&self) -> NotificationConfig;
 }
 
 type UnloadFn = Box<dyn FnOnce() + Send>;
@@ -223,7 +219,20 @@ pub fn build_plugin_context(deps: PluginContextDeps) -> Result<Arc<PluginContext
     let ui: Arc<dyn PluginUi> =
         if has(PluginCapability::UiPanels) || has(PluginCapability::UiNotifications) {
             let host_db = Arc::clone(&deps.host_db);
-            let gate = Box::new(move || host_db.notification_config().other.plugin);
+            let gate: crate::ui_context::NotifyGate = Box::new(move || {
+                let host_db = host_db.clone();
+                Box::pin(async move {
+                    let raw = mainframe_services::settings::read_setting(
+                        host_db.settings(),
+                        "general",
+                        "notifications",
+                    )
+                    .await;
+                    mainframe_services::notifications::parse_notification_config(raw.as_deref())
+                        .other
+                        .plugin
+                })
+            });
             Arc::new(create_plugin_ui_context(
                 &deps.manifest.id,
                 Arc::clone(&deps.emit),
@@ -333,7 +342,9 @@ mod guards {
         fn remove_panel(&self, _id: Option<&str>) {}
         fn add_action(&self, _id: &str, _label: &str, _shortcut: &str, _icon: Option<&str>) {}
         fn remove_action(&self, _id: &str) {}
-        fn notify(&self, _options: NotifyOptions) {}
+        fn notify(&self, _options: NotifyOptions) -> BoxFuture<'_, ()> {
+            Box::pin(async {})
+        }
     }
 
     pub use crate::github_port_guard::GuardGitHub;

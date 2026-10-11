@@ -7,11 +7,10 @@ use std::sync::Arc;
 use axum::Router;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 
 use crate::ctx::AppCtx;
-use crate::error_status::fail_with;
 use crate::respond::{fail, ok_empty};
 
 /// Which recovery op a route runs, mapped to its ChatManager method + log label.
@@ -40,14 +39,9 @@ async fn run(ctx: &Arc<AppCtx>, chat_id: &str, action: RecoveryAction) -> Respon
         );
     }
     let label = action.label();
-    // The recovery ops are ChatManager-backed with no db fallback; when the
-    // manager is unwired (the test harness) the route reports the seam.
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id, "chat recovery needs ChatManager (unwired)");
-        return fail(StatusCode::INTERNAL_SERVER_ERROR, "Operation failed");
-    };
+    let cm = &ctx.chat.chat_manager;
     if cm.get_chat(chat_id).is_none() {
-        return fail(StatusCode::NOT_FOUND, "Chat not found");
+        return crate::respond::ApiError::chat_not_found().into_response();
     }
     let result = match action {
         RecoveryAction::RecreateWorktree => cm.recreate_worktree(chat_id).await,
@@ -56,12 +50,7 @@ async fn run(ctx: &Arc<AppCtx>, chat_id: &str, action: RecoveryAction) -> Respon
     };
     match result {
         Ok(()) => ok_empty(),
-        Err(err) => {
-            // The error's own class picks the status; its message crosses
-            // the wire verbatim.
-            tracing::warn!(chat_id, %err, "{label} failed");
-            fail_with(&err)
-        }
+        Err(err) => crate::respond::fail_domain(format!("{label} failed chat_id={chat_id}"), &err),
     }
 }
 
@@ -102,12 +91,8 @@ mod tests {
         (status, body)
     }
 
-    // Without a wired ChatManager the recovery ops have no db fallback, so every
-    // route reports the seam (like the other manager-backed routes). The
-    // chat-404, 409-branch-gone, and happy-path cases are covered by the
-    // degraded_recovery / chat_manager oracle in mainframe-chat.
     #[tokio::test]
-    async fn recovery_routes_report_the_seam_without_a_chat_manager() {
+    async fn recovery_routes_report_missing_chat() {
         let ctx = AppCtx::test_ctx();
         for action in [
             RecoveryAction::RecreateWorktree,
@@ -115,8 +100,8 @@ mod tests {
             RecoveryAction::ContinueInProjectRoot,
         ] {
             let (status, body) = read(run(&ctx, "c1", action).await).await;
-            assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
-            assert_eq!(body["error"], "Operation failed");
+            assert_eq!(status, StatusCode::NOT_FOUND);
+            assert_eq!(body["error"], "Chat not found");
         }
     }
 }

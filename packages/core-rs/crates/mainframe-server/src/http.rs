@@ -22,10 +22,11 @@ use tower_http::limit::RequestBodyLimitLayer;
 use crate::acp_ws::acp_ws_handler;
 use crate::cors_origin::is_allowed_origin;
 use crate::ctx::AppCtx;
+use crate::lsp_websocket::lsp_ws_handler;
 use crate::middleware::auth::auth_middleware;
 use crate::middleware::compression::compression_layer;
 use crate::routes;
-use crate::websocket::{lsp_ws_handler, ws_handler};
+use crate::websocket::ws_handler;
 
 /// 30mb JSON body limit. Public so integration tests can assert both edges of
 /// the limit against this value instead of hardcoding it.
@@ -50,9 +51,6 @@ pub fn build_app(ctx: Arc<AppCtx>) -> Router {
         .merge(routes::git_write::router())
         .merge(routes::git_chat::router())
         .merge(routes::attachments::router())
-        // Chat lifecycle + orchestration surfaces; the ChatManager-backed
-        // handlers self-gate on `ctx.chat_manager` and fall back to the
-        // failure-path envelope when it is `None` (the route-unit harness).
         .merge(routes::chats::router())
         .merge(routes::chat_commands::router())
         .merge(routes::chat_fork::router())
@@ -69,8 +67,7 @@ pub fn build_app(ctx: Arc<AppCtx>) -> Router {
         .merge(routes::external_sessions::router())
         .merge(routes::background_tasks::router())
         .merge(routes::adapters::router())
-        .merge(routes::agents::router())
-        .merge(routes::skills::router())
+        .merge(routes::adapter_catalog::router())
         .merge(routes::skills_cli::router())
         .merge(routes::skills_registry::router())
         .merge(routes::suggestions::router())
@@ -97,7 +94,8 @@ pub fn build_app(ctx: Arc<AppCtx>) -> Router {
     // Plugin routes — the PluginManager owns a parent router (listing + per-plugin
     // sub-routers) mounted under `/api/plugins`, behind the auth layer. Its state
     // is already applied (Router<()>), so it nests as a service.
-    if let Some(plugin_manager) = ctx.plugin_manager.as_ref() {
+    {
+        let plugin_manager = &ctx.infra.plugin_manager;
         http = http.nest_service("/api/plugins", plugin_manager.router());
     }
 

@@ -18,6 +18,7 @@ async fn set_setting(server: &TestServer, category: &str, key: &str, value: &str
     let (c, k, v) = (category.to_string(), key.to_string(), value.to_string());
     server
         .ctx
+        .core
         .db
         .call(move |db| db.settings.set(&c, &k, &v))
         .await
@@ -28,6 +29,7 @@ async fn get_setting(server: &TestServer, category: &str, key: &str) -> Option<S
     let (c, k) = (category.to_string(), key.to_string());
     server
         .ctx
+        .core
         .db
         .call(move |db| db.settings.get(&c, &k))
         .await

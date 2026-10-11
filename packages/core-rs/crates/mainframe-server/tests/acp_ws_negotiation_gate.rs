@@ -19,6 +19,7 @@ async fn server_with_mock_adapter() -> TestServer {
     let server = spawn_test_server(None).await;
     server
         .ctx
+        .core
         .adapter_registry
         .register(std::sync::Arc::new(MockCliAdapter::default()));
     server
@@ -29,6 +30,7 @@ async fn server_with_mock_adapter() -> TestServer {
 async fn assert_not_attached(server: &TestServer, ws: &mut WsClient) {
     server
         .ctx
+        .chat
         .facade_hub
         .on_chat_surface_event(revision_event("chat-1", "hello"));
     let frame = tokio::time::timeout(Duration::from_millis(200), ws.read_event()).await;

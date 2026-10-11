@@ -58,7 +58,7 @@ pub struct CliOutcome {
 
 /// The runner seam: production wiring passes [`ProcessRunner`]; tests pass a
 /// recording double. Not an `AppCtx` field — constructed per call from
-/// `ctx.resolved_path`, since it carries no state beyond the `PATH`.
+/// `ctx.core.resolved_path`, since it carries no state beyond the `PATH`.
 pub trait SkillsCliRunner: Send + Sync {
     fn run(&self, spec: CommandSpec, timeout_ms: u64) -> BoxFuture<'_, CliOutcome>;
 }

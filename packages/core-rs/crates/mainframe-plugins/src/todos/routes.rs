@@ -82,11 +82,13 @@ pub(crate) async fn patch_todo(
     if let Some(status) = &patch.status
         && *status != existing.status
     {
-        ctx.ui.notify(NotifyOptions {
-            title: format!("#{} {}", updated.number, updated.title),
-            body: format!("Moved to {}", status.label()),
-            level: Some("success".to_string()),
-        });
+        ctx.ui
+            .notify(NotifyOptions {
+                title: format!("#{} {}", updated.number, updated.title),
+                body: format!("Moved to {}", status.label()),
+                level: Some("success".to_string()),
+            })
+            .await;
     }
     json_response(StatusCode::OK, json!({ "todo": updated }))
 }
@@ -135,11 +137,13 @@ async fn warn_open_dependencies(ctx: &PluginContext, todo: &Todo) -> Result<(), 
         .map(|dependency| format!("#{} {}", dependency.number, dependency.title))
         .collect::<Vec<_>>();
     if !open.is_empty() {
-        ctx.ui.notify(NotifyOptions {
-            title: format!("#{} {} has open dependencies", todo.number, todo.title),
-            body: open.join(", "),
-            level: Some("warning".to_string()),
-        });
+        ctx.ui
+            .notify(NotifyOptions {
+                title: format!("#{} {} has open dependencies", todo.number, todo.title),
+                body: open.join(", "),
+                level: Some("warning".to_string()),
+            })
+            .await;
     }
     Ok(())
 }

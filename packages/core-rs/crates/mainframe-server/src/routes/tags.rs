@@ -20,10 +20,10 @@ use mainframe_types::tags::TagColor;
 use serde::Deserialize;
 
 use crate::ctx::AppCtx;
-use crate::error_status::fail_or_internal;
-use crate::respond::{fail, ok};
+use crate::respond::fail_or_internal;
+use crate::respond::{ApiError, fail, ok};
+use crate::routes::body::parse_body;
 use crate::routes::chat_discard::refuse_if_temporary;
-use crate::routes::projects::parse_body;
 
 #[derive(Deserialize)]
 struct CreateBody {
@@ -43,7 +43,7 @@ struct SetChatTagsBody {
 }
 
 async fn list(State(ctx): State<Arc<AppCtx>>) -> Response {
-    match ctx.db.call(|db| db.tags.list()).await {
+    match ctx.core.db.call(|db| db.tags.list()).await {
         Ok(tags) => ok(tags),
         Err(err) => crate::async_err::internal_error("list tags", &err),
     }
@@ -54,7 +54,12 @@ async fn create(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
         return fail(StatusCode::BAD_REQUEST, "Invalid request body");
     };
     let CreateBody { name, color } = parsed;
-    match ctx.db.call(move |db| db.tags.upsert(&name, color)).await {
+    match ctx
+        .core
+        .db
+        .call(move |db| db.tags.upsert(&name, color))
+        .await
+    {
         Ok(tag) => (StatusCode::CREATED, ok(tag)).into_response(),
         Err(err) => fail_or_internal("create tag", &err),
     }
@@ -69,7 +74,7 @@ async fn update(State(ctx): State<Arc<AppCtx>>, Path(name): Path<String>, body: 
     }
 
     let lookup = name.clone();
-    match ctx.db.call(move |db| db.tags.get(&lookup)).await {
+    match ctx.core.db.call(move |db| db.tags.get(&lookup)).await {
         Ok(Some(_)) => {}
         Ok(None) => return fail(StatusCode::NOT_FOUND, "Tag not found"),
         Err(err) => return crate::async_err::internal_error("get tag", &err),
@@ -77,6 +82,7 @@ async fn update(State(ctx): State<Arc<AppCtx>>, Path(name): Path<String>, body: 
 
     let PatchBody { rename, color } = parsed;
     let result = ctx
+        .core
         .db
         .call(move |db| {
             if let Some(ref new_name) = rename {
@@ -97,19 +103,24 @@ async fn update(State(ctx): State<Arc<AppCtx>>, Path(name): Path<String>, body: 
 
 async fn remove(State(ctx): State<Arc<AppCtx>>, Path(name): Path<String>) -> Response {
     let lookup = name.clone();
-    match ctx.db.call(move |db| db.tags.get(&lookup)).await {
+    match ctx.core.db.call(move |db| db.tags.get(&lookup)).await {
         Ok(Some(_)) => {}
         Ok(None) => return fail(StatusCode::NOT_FOUND, "Tag not found"),
         Err(err) => return crate::async_err::internal_error("get tag", &err),
     }
-    match ctx.db.call(move |db| db.tags.remove(&name)).await {
+    match ctx.core.db.call(move |db| db.tags.remove(&name)).await {
         Ok(()) => StatusCode::NO_CONTENT.into_response(),
         Err(err) => crate::async_err::internal_error("remove tag", &err),
     }
 }
 
 async fn list_chat_tags(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
-    match ctx.db.call(move |db| db.chat_tags.list_for_chat(&id)).await {
+    match ctx
+        .core
+        .db
+        .call(move |db| db.chat_tags.list_for_chat(&id))
+        .await
+    {
         Ok(tags) => ok(tags),
         Err(err) => crate::async_err::internal_error("list chat tags", &err),
     }
@@ -119,22 +130,17 @@ async fn set_chat_tags(
     State(ctx): State<Arc<AppCtx>>,
     Path(id): Path<String>,
     body: Bytes,
-) -> Response {
+) -> Result<Response, ApiError> {
     let Some(parsed): Option<SetChatTagsBody> = parse_body(&body) else {
-        return fail(StatusCode::BAD_REQUEST, "Invalid request body");
+        return Err(ApiError::BadRequest("Invalid request body".into()));
     };
-    let lookup = id.clone();
-    match ctx.db.call(move |db| db.chats.get(&lookup)).await {
-        Ok(Some(chat)) => {
-            if let Some(resp) = refuse_if_temporary(&chat, "tag") {
-                return resp;
-            }
-        }
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
-        Err(err) => return crate::async_err::internal_error("get chat", &err),
+    let chat = ctx.require_chat(&id).await?;
+    if let Some(response) = refuse_if_temporary(&chat, "tag") {
+        return Ok(response);
     }
     let tags = parsed.tags;
     let result = ctx
+        .core
         .db
         .call(move |db| {
             db.chat_tags.set_for_chat(&id, &tags, &db.tags)?;
@@ -144,8 +150,8 @@ async fn set_chat_tags(
     match result {
         // `ChatManager::sync_chat_tags` (mirrors the tags onto the cached active
         // chat) is not called here.
-        Ok(persisted) => ok(persisted),
-        Err(err) => fail_or_internal("set chat tags", &err),
+        Ok(persisted) => Ok(ok(persisted)),
+        Err(err) => Ok(fail_or_internal("set chat tags", &err)),
     }
 }
 
@@ -166,7 +172,8 @@ mod tests {
     use super::*;
     use crate::ctx::AppCtx;
 
-    async fn read(resp: Response) -> (StatusCode, serde_json::Value) {
+    async fn read(resp: impl IntoResponse) -> (StatusCode, serde_json::Value) {
+        let resp = resp.into_response();
         let status = resp.status();
         let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
         (
@@ -179,6 +186,7 @@ mod tests {
     async fn set_chat_tags_refuses_a_temporary_chat_409() {
         let ctx = AppCtx::test_ctx();
         let chat_id = ctx
+            .core
             .db
             .call(|db| {
                 let project = db.projects.create("/tmp/tags-temp", None)?;

@@ -1,8 +1,8 @@
 use super::*;
+use crate::ctx::{AppCtx, GitFactory, Services};
+use crate::db::Db;
 use dashmap::DashMap;
 use mainframe_db::DatabaseManager;
-use mainframe_server::ctx::{AppCtx, GitFactory, Services};
-use mainframe_server::db::Db;
 use mainframe_services::{
     attachment::AttachmentStore, files::FileWatcherService, push::PushService,
 };
@@ -16,40 +16,36 @@ pub(super) fn app(data_dir: &tempfile::TempDir, tunnels: Arc<TunnelManager>) -> 
     let watcher = FileWatcherService::new(move |event| {
         let _ = watcher_tx.send(event);
     });
-    let ctx = Arc::new(AppCtx {
-        db,
-        git: GitFactory,
-        services: Services {
-            attachments: Arc::new(AttachmentStore::new(data_dir.path().join("attachments"))),
-            push: Arc::new(PushService::new()),
-            watcher: Arc::new(watcher),
-        },
-        broadcast,
-        adapter_registry: Arc::new(mainframe_adapter_api::AdapterRegistry::new()),
-        background_tasks: Arc::new(
-            mainframe_background_tasks::tracker::BackgroundTaskTracker::new(),
-        ),
-        claude_workflows: Arc::new(mainframe_claude_workflows::store::ClaudeWorkflowStore::new()),
-        chat_manager: None,
-        launch_registry: None,
-        tunnel_manager: Some(tunnels),
-        port_tunnels: None,
-        lsp_manager: None,
-        plugin_manager: None,
-        automations: None,
-        orchestration: None,
-        quota: None,
-        data_dir: data_dir.path().to_path_buf(),
-        version: "0.0.0-test".to_string(),
-        port: 31415,
-        auth_secret: None,
-        resolved_path: mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
-        tunnel_url: Arc::new(std::sync::RwLock::new(None)),
-        ws_clients: Arc::new(DashMap::new()),
-        facade_hub: Arc::new(mainframe_server::FacadeHub::default()),
-        facade_heartbeat_interval_ms: 1000,
-    });
-    mainframe_server::routes::tunnel::router().with_state(ctx)
+    let ctx = Arc::new(
+        AppCtx::test_builder(db, data_dir.path().to_path_buf())
+            .git(GitFactory)
+            .services(Services {
+                attachments: Arc::new(AttachmentStore::new(data_dir.path().join("attachments"))),
+                push: Arc::new(PushService::new()),
+                watcher: Arc::new(watcher),
+            })
+            .broadcast(broadcast)
+            .adapter_registry(Arc::new(mainframe_adapter_api::AdapterRegistry::new()))
+            .background_tasks(Arc::new(
+                mainframe_background_tasks::tracker::BackgroundTaskTracker::new(),
+            ))
+            .claude_workflows(Arc::new(
+                mainframe_claude_workflows::store::ClaudeWorkflowStore::new(),
+            ))
+            .tunnel_manager(tunnels)
+            .automations(None)
+            .version("0.0.0-test".to_string())
+            .port(31415)
+            .auth_secret(None)
+            .resolved_path(mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"))
+            .tunnel_url(Arc::new(std::sync::RwLock::new(None)))
+            .ws_clients(Arc::new(DashMap::new()))
+            .facade_hub(Arc::new(crate::FacadeHub::default()))
+            .facade_heartbeat_interval_ms(1000)
+            .build()
+            .unwrap(),
+    );
+    crate::routes::tunnel::router().with_state(ctx)
 }
 
 pub(super) fn tunnels(

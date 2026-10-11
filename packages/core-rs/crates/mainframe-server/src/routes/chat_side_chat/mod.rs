@@ -15,9 +15,9 @@ use serde::Deserialize;
 use mainframe_chat::chat_manager::OpenSideChatError;
 
 use crate::ctx::AppCtx;
-use crate::error_status::status_of;
+use crate::respond::status_of;
 use crate::respond::{fail, ok};
-use crate::routes::projects::parse_body;
+use crate::routes::body::parse_body;
 use mainframe_types::ids::is_safe_identifier;
 
 #[cfg(test)]
@@ -44,16 +44,17 @@ async fn open_side_chat(
     if parse_body::<OpenSideChatBody>(&body).is_none() {
         return fail(StatusCode::BAD_REQUEST, "Invalid request body");
     }
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "open_side_chat needs ChatManager (unwired)");
-        return fail(StatusCode::INTERNAL_SERVER_ERROR, "side chat unavailable");
-    };
+    let cm = &ctx.chat.chat_manager;
     match cm.open_side_chat(&id).await {
         Ok(chat) => ok(chat),
         Err(err) => {
             let status = status_for(&err);
             if status == StatusCode::INTERNAL_SERVER_ERROR {
-                tracing::error!(chat_id = %id, %err, "open_side_chat failed");
+                return crate::respond::fail_internal(
+                    format!("open_side_chat failed chat_id={id}"),
+                    &err,
+                    err.to_string(),
+                );
             }
             fail(status, err.to_string())
         }

@@ -1,10 +1,4 @@
-//! The launch-process control routes.
-//!
-//! Four endpoints under `/api/projects/:id/launch`: `status`, `configs`,
-//! `:name/start`, `:name/stop`. Each resolves the worktree-aware effective path
-//! (`AppCtx::effective_path`) from the `:id` param + `?chatId`, then delegates to the
-//! per-project `LaunchManager` obtained from `ctx.launch_registry`. Launch configs
-//! are always read + validated from disk — never trusted from the request body.
+//! Launch controls retain the stored scope path so deleted worktrees remain stoppable.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -12,7 +6,7 @@ use std::sync::Arc;
 use axum::Router;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use mainframe_launch::parse_launch_config;
 use serde::Deserialize;
@@ -28,13 +22,19 @@ struct ChatQuery {
     chat_id: Option<String>,
 }
 
-/// Resolve the effective launch path for `(project_id, chatId)`, or `None` (→ 404).
 async fn resolve_launch_path(
     ctx: &Arc<AppCtx>,
     project_id: &str,
     chat_id: Option<&str>,
-) -> Option<String> {
-    ctx.effective_path(project_id, chat_id).await
+    allow_missing: bool,
+) -> Result<String, crate::respond::ApiError> {
+    match ctx.resolve_scope(project_id, chat_id).await {
+        Ok(scope) => Ok(scope.path),
+        Err(mainframe_services::workspace::ScopeError::WorktreeMissing(scope)) if allow_missing => {
+            Ok(scope.path)
+        }
+        Err(error) => Err(error.into()),
+    }
 }
 
 /// Parse a `.env` file into key-value pairs (`^([A-Za-z_][A-Za-z0-9_]*)=(.*)`).
@@ -81,25 +81,16 @@ async fn get_status(
     Path(project_id): Path<String>,
     Query(q): Query<ChatQuery>,
 ) -> Response {
-    let Some(path) = resolve_launch_path(&ctx, &project_id, q.chat_id.as_deref()).await else {
-        return fail(StatusCode::NOT_FOUND, "Project not found");
+    let path = match resolve_launch_path(&ctx, &project_id, q.chat_id.as_deref(), true).await {
+        Ok(path) => path,
+        Err(error) => return error.into_response(),
     };
-    let manager = ctx
-        .launch_registry
-        .as_ref()
-        .map(|r| r.get_or_create(&project_id, &path));
-    let statuses = manager
-        .as_ref()
-        .map(|m| m.get_all_statuses())
-        .unwrap_or_default();
+    let manager = ctx.infra.launch_registry.get_or_create(&project_id, &path);
+    let statuses = manager.get_all_statuses();
 
     // Include tunnel URLs for running processes (keyed `preview:<name>`).
     let mut tunnel_urls: HashMap<String, String> = HashMap::new();
-    if let Some(tunnel_manager) = ctx
-        .launch_registry
-        .as_ref()
-        .and_then(|r| r.tunnel_manager.as_ref())
-    {
+    if let Some(tunnel_manager) = ctx.infra.launch_registry.tunnel_manager.as_ref() {
         for name in statuses.keys() {
             if let Some(url) = tunnel_manager.get_url(&format!("preview:{name}")) {
                 tunnel_urls.insert(name.clone(), url);
@@ -112,9 +103,7 @@ async fn get_status(
     let mut output_buffer = serde_json::Map::new();
     for name in statuses.keys() {
         let entries: Vec<serde_json::Value> = manager
-            .as_ref()
-            .map(|m| m.get_output_buffer(name))
-            .unwrap_or_default()
+            .get_output_buffer(name)
             .into_iter()
             .map(|e| json!({ "stream": e.stream, "data": e.data }))
             .collect();
@@ -134,8 +123,9 @@ async fn get_configs(
     Path(project_id): Path<String>,
     Query(q): Query<ChatQuery>,
 ) -> Response {
-    let Some(path) = resolve_launch_path(&ctx, &project_id, q.chat_id.as_deref()).await else {
-        return fail(StatusCode::NOT_FOUND, "Project not found");
+    let path = match resolve_launch_path(&ctx, &project_id, q.chat_id.as_deref(), false).await {
+        Ok(path) => path,
+        Err(error) => return error.into_response(),
     };
     let launch_json_path = std::path::Path::new(&path)
         .join(".mainframe")
@@ -164,8 +154,9 @@ async fn start(
     Path((project_id, name)): Path<(String, String)>,
     Query(q): Query<ChatQuery>,
 ) -> Response {
-    let Some(path) = resolve_launch_path(&ctx, &project_id, q.chat_id.as_deref()).await else {
-        return fail(StatusCode::NOT_FOUND, "Project not found");
+    let path = match resolve_launch_path(&ctx, &project_id, q.chat_id.as_deref(), false).await {
+        Ok(path) => path,
+        Err(error) => return error.into_response(),
     };
 
     // Read + validate the launch config from disk — never trust the client body.
@@ -194,25 +185,18 @@ async fn start(
             format!("Configuration \"{name}\" not found in launch.json"),
         );
     };
-    let Some(registry) = ctx.launch_registry.as_ref() else {
-        return fail(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "LaunchRegistry not available",
-        );
-    };
+    let registry = &ctx.infra.launch_registry;
     let manager = registry.get_or_create(&project_id, &path);
     match manager.start(&config).await {
         Ok(()) => ok_empty(),
-        Err(err) => {
-            tracing::warn!(
-                module = "routes:launch",
-                project_id,
-                name,
-                %err,
-                "failed to start launch process"
-            );
-            fail(StatusCode::INTERNAL_SERVER_ERROR, "Failed to start process")
-        }
+        Err(err) => crate::respond::fail_internal(
+            format!(
+                "failed to start launch process project_id={} name={}",
+                project_id, name
+            ),
+            &err,
+            "Failed to start process",
+        ),
     }
 }
 
@@ -221,10 +205,12 @@ async fn stop(
     Path((project_id, name)): Path<(String, String)>,
     Query(q): Query<ChatQuery>,
 ) -> Response {
-    let Some(path) = resolve_launch_path(&ctx, &project_id, q.chat_id.as_deref()).await else {
-        return fail(StatusCode::NOT_FOUND, "Project not found");
+    let path = match resolve_launch_path(&ctx, &project_id, q.chat_id.as_deref(), true).await {
+        Ok(path) => path,
+        Err(error) => return error.into_response(),
     };
-    if let Some(registry) = ctx.launch_registry.as_ref() {
+    {
+        let registry = &ctx.infra.launch_registry;
         registry.get_or_create(&project_id, &path).stop(&name).await;
     }
     ok_empty()

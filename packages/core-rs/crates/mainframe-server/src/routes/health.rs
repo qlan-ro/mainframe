@@ -29,7 +29,7 @@ pub struct HealthResponse {
 pub(crate) async fn get_health(State(ctx): State<Arc<AppCtx>>) -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "ok",
-        version: ctx.version.clone(),
+        version: ctx.core.version.clone(),
         pid: std::process::id(),
         timestamp: mainframe_types::time::now_iso8601(),
         // The tunnel URL is interior-mutable, so this reflects the daemon-tunnel

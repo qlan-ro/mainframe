@@ -95,39 +95,39 @@ pub async fn spawn_test_server_with(opts: TestServerOptions) -> TestServer {
         let _ = watcher_tx.send(event);
     });
     let port_tunnels = tunnel.map(|stub| build_port_tunnels(data_dir.path(), stub, &broadcast));
-    let ctx = Arc::new(AppCtx {
-        db,
-        git: GitFactory,
-        services: Services {
-            attachments: Arc::new(AttachmentStore::new(data_dir.path().join("attachments"))),
-            push: Arc::new(PushService::new()),
-            watcher: Arc::new(watcher),
-        },
-        broadcast,
-        adapter_registry: Arc::new(mainframe_adapter_api::AdapterRegistry::new()),
-        background_tasks: Arc::new(
-            mainframe_background_tasks::tracker::BackgroundTaskTracker::new(),
-        ),
-        claude_workflows: Arc::new(mainframe_claude_workflows::store::ClaudeWorkflowStore::new()),
-        chat_manager: None,
-        launch_registry: None,
-        tunnel_manager: None,
-        port_tunnels,
-        lsp_manager: None,
-        plugin_manager: None,
-        automations: None,
-        orchestration: None,
-        quota: None,
-        data_dir: data_dir.path().to_path_buf(),
-        version: "0.0.0-test".to_string(),
-        port,
-        auth_secret,
-        resolved_path: mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
-        tunnel_url: Arc::new(std::sync::RwLock::new(None)),
-        ws_clients: Arc::new(DashMap::new()),
-        facade_hub: Arc::new(mainframe_server::FacadeHub::default()),
-        facade_heartbeat_interval_ms,
-    });
+    let ctx = Arc::new(
+        AppCtx::test_builder(db, data_dir.path().to_path_buf())
+            .git(GitFactory)
+            .services(Services {
+                attachments: Arc::new(AttachmentStore::new(data_dir.path().join("attachments"))),
+                push: Arc::new(PushService::new()),
+                watcher: Arc::new(watcher),
+            })
+            .broadcast(broadcast)
+            .adapter_registry(Arc::new(mainframe_adapter_api::AdapterRegistry::new()))
+            .background_tasks(Arc::new(
+                mainframe_background_tasks::tracker::BackgroundTaskTracker::new(),
+            ))
+            .claude_workflows(Arc::new(
+                mainframe_claude_workflows::store::ClaudeWorkflowStore::new(),
+            ))
+            .port_tunnels(port_tunnels.unwrap_or_else(|| {
+                Arc::new(mainframe_launch::PortTunnelRegistry::new(Arc::new(
+                    mainframe_launch::TunnelManager::new(None),
+                )))
+            }))
+            .automations(None)
+            .version("0.0.0-test".to_string())
+            .port(port)
+            .auth_secret(auth_secret)
+            .resolved_path(mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"))
+            .tunnel_url(Arc::new(std::sync::RwLock::new(None)))
+            .ws_clients(Arc::new(DashMap::new()))
+            .facade_hub(Arc::new(mainframe_server::FacadeHub::default()))
+            .facade_heartbeat_interval_ms(facade_heartbeat_interval_ms)
+            .build()
+            .unwrap(),
+    );
     spawn_broadcast_pump(Arc::clone(&ctx));
 
     let app = build_app(Arc::clone(&ctx));
@@ -211,6 +211,7 @@ impl TestServer {
         let did = device_id.to_string();
         let epoch = self
             .ctx
+            .core
             .db
             .call(move |db| {
                 db.devices.add(&did, "Test Device")?;
@@ -225,6 +226,7 @@ impl TestServer {
     pub async fn create_project(&self, path: &str) -> String {
         let path = path.to_string();
         self.ctx
+            .core
             .db
             .call(move |db| db.projects.create(&path, None))
             .await

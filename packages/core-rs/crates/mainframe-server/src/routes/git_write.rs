@@ -12,7 +12,7 @@ use axum::Router;
 use axum::body::Bytes;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
@@ -20,11 +20,12 @@ use serde_json::{Value, json};
 
 use crate::async_err::internal_error;
 use crate::ctx::AppCtx;
-use crate::error_status::fail_with;
 use crate::input_error::InputError;
+use crate::respond::fail_with;
 use crate::respond::{fail, ok, ok_empty};
+use crate::routes::body::parse_json_body;
 
-use super::git::{ChatIdQuery, get_effective_path, git_error_message, parse_json_body};
+use super::git::{ChatIdQuery, get_effective_path, git_error_message};
 
 // ── body schemas ─────────────────────────────────────────────────────────────
 
@@ -95,7 +96,7 @@ async fn resolve(
     project_id: &str,
     query_chat_id: Option<&str>,
     bytes: &[u8],
-) -> Result<(String, Value), Response> {
+) -> Result<(String, Value), crate::respond::ApiError> {
     let body: Value = serde_json::from_slice(bytes).unwrap_or(Value::Null);
     let chat_id = query_chat_id.map(str::to_string).or_else(|| {
         body.get("chatId")
@@ -104,8 +105,14 @@ async fn resolve(
     });
     match get_effective_path(ctx, project_id, chat_id.as_deref()).await {
         Ok(Some(path)) => Ok((path, body)),
-        Ok(None) => Err(fail(StatusCode::NOT_FOUND, "Project not found")),
-        Err(e) => Err(internal_error("Failed to resolve project path", &e)),
+        Ok(None) => Err(crate::respond::ApiError::new(
+            StatusCode::NOT_FOUND,
+            "Project not found",
+        )),
+        Err(e) => Err(crate::respond::ApiError::internal(
+            "Failed to resolve project path",
+            &e,
+        )),
     }
 }
 
@@ -124,8 +131,7 @@ fn git_result<T: serde::Serialize>(
     match result {
         Ok(v) => ok(v),
         Err(e) => {
-            tracing::warn!(error = %e, "{label} failed");
-            fail(StatusCode::INTERNAL_SERVER_ERROR, git_error_message(&e))
+            crate::respond::fail_internal(format!("{label} failed"), &e, git_error_message(&e))
         }
     }
 }
@@ -138,8 +144,7 @@ fn git_empty(
     match result {
         Ok(()) => ok_empty(),
         Err(e) => {
-            tracing::warn!(error = %e, "{label} failed");
-            fail(StatusCode::INTERNAL_SERVER_ERROR, git_error_message(&e))
+            crate::respond::fail_internal(format!("{label} failed"), &e, git_error_message(&e))
         }
     }
 }
@@ -153,10 +158,13 @@ async fn branches(
 ) -> Response {
     let base_path = match get_effective_path(&ctx, &id, q.chat_id.as_deref()).await {
         Ok(Some(p)) => p,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Project not found"),
+        Ok(None) => return crate::respond::ApiError::project_not_found().into_response(),
         Err(e) => return internal_error("Failed to resolve project path", &e),
     };
-    git_result(ctx.git.for_project(base_path).branches().await, "branches")
+    git_result(
+        ctx.core.git.for_project(base_path).branches().await,
+        "branches",
+    )
 }
 
 async fn checkout(
@@ -167,7 +175,7 @@ async fn checkout(
 ) -> Response {
     let (path, val) = match resolve(&ctx, &id, q.chat_id.as_deref(), &body).await {
         Ok(v) => v,
-        Err(r) => return r,
+        Err(r) => return r.into_response(),
     };
     let data: CheckoutBody = match body_of(val) {
         Ok(d) => d,
@@ -177,7 +185,7 @@ async fn checkout(
         return fail(StatusCode::BAD_REQUEST, "branch must not be empty");
     }
     git_empty(
-        ctx.git.for_project(path).checkout(&data.branch).await,
+        ctx.core.git.for_project(path).checkout(&data.branch).await,
         "checkout",
     )
 }
@@ -190,7 +198,7 @@ async fn commit(
 ) -> Response {
     let (path, val) = match resolve(&ctx, &id, q.chat_id.as_deref(), &body).await {
         Ok(v) => v,
-        Err(r) => return r,
+        Err(r) => return r.into_response(),
     };
     let data: CommitBody = match body_of(val) {
         Ok(d) => d,
@@ -199,12 +207,15 @@ async fn commit(
     if data.message.is_empty() {
         return fail(StatusCode::BAD_REQUEST, "Commit message cannot be empty");
     }
-    match ctx.git.for_project(path).commit_all(&data.message).await {
+    match ctx
+        .core
+        .git
+        .for_project(path)
+        .commit_all(&data.message)
+        .await
+    {
         Ok(commit) => ok(json!({ "commit": commit })),
-        Err(e) => {
-            tracing::warn!(error = %e, "commit failed");
-            fail(StatusCode::INTERNAL_SERVER_ERROR, git_error_message(&e))
-        }
+        Err(e) => crate::respond::fail_internal("commit failed", &e, git_error_message(&e)),
     }
 }
 
@@ -216,7 +227,7 @@ async fn create_branch(
 ) -> Response {
     let (path, val) = match resolve(&ctx, &id, q.chat_id.as_deref(), &body).await {
         Ok(v) => v,
-        Err(r) => return r,
+        Err(r) => return r.into_response(),
     };
     let data: CreateBranchBody = match body_of(val) {
         Ok(d) => d,
@@ -226,7 +237,8 @@ async fn create_branch(
         return fail(StatusCode::BAD_REQUEST, "Invalid branch name");
     }
     git_empty(
-        ctx.git
+        ctx.core
+            .git
             .for_project(path)
             .create_branch(&data.name, data.start_point.as_deref())
             .await,
@@ -242,14 +254,15 @@ async fn fetch(
 ) -> Response {
     let (path, val) = match resolve(&ctx, &id, q.chat_id.as_deref(), &body).await {
         Ok(v) => v,
-        Err(r) => return r,
+        Err(r) => return r.into_response(),
     };
     let data: FetchBody = match body_of(val) {
         Ok(d) => d,
         Err(m) => return fail_with(&m),
     };
     git_result(
-        ctx.git
+        ctx.core
+            .git
             .for_project(path)
             .fetch(data.remote.as_deref())
             .await,
@@ -265,7 +278,7 @@ async fn pull(
 ) -> Response {
     let (path, val) = match resolve(&ctx, &id, q.chat_id.as_deref(), &body).await {
         Ok(v) => v,
-        Err(r) => return r,
+        Err(r) => return r.into_response(),
     };
     let data: PullBody = match body_of(val) {
         Ok(d) => d,
@@ -280,7 +293,8 @@ async fn pull(
         );
     }
     git_result(
-        ctx.git
+        ctx.core
+            .git
             .for_project(path)
             .pull(
                 data.remote.as_deref(),
@@ -300,14 +314,15 @@ async fn push(
 ) -> Response {
     let (path, val) = match resolve(&ctx, &id, q.chat_id.as_deref(), &body).await {
         Ok(v) => v,
-        Err(r) => return r,
+        Err(r) => return r.into_response(),
     };
     let data: PushBody = match body_of(val) {
         Ok(d) => d,
         Err(m) => return fail_with(&m),
     };
     git_result(
-        ctx.git
+        ctx.core
+            .git
             .for_project(path)
             .push(data.branch.as_deref(), data.remote.as_deref())
             .await,
@@ -323,7 +338,7 @@ async fn merge(
 ) -> Response {
     let (path, val) = match resolve(&ctx, &id, q.chat_id.as_deref(), &body).await {
         Ok(v) => v,
-        Err(r) => return r,
+        Err(r) => return r.into_response(),
     };
     let data: BranchArgBody = match body_of(val) {
         Ok(d) => d,
@@ -332,7 +347,10 @@ async fn merge(
     if data.branch.is_empty() {
         return fail(StatusCode::BAD_REQUEST, "branch must not be empty");
     }
-    git_result(ctx.git.for_project(path).merge(&data.branch).await, "merge")
+    git_result(
+        ctx.core.git.for_project(path).merge(&data.branch).await,
+        "merge",
+    )
 }
 
 async fn rebase(
@@ -343,7 +361,7 @@ async fn rebase(
 ) -> Response {
     let (path, val) = match resolve(&ctx, &id, q.chat_id.as_deref(), &body).await {
         Ok(v) => v,
-        Err(r) => return r,
+        Err(r) => return r.into_response(),
     };
     let data: BranchArgBody = match body_of(val) {
         Ok(d) => d,
@@ -353,7 +371,7 @@ async fn rebase(
         return fail(StatusCode::BAD_REQUEST, "branch must not be empty");
     }
     git_result(
-        ctx.git.for_project(path).rebase(&data.branch).await,
+        ctx.core.git.for_project(path).rebase(&data.branch).await,
         "rebase",
     )
 }
@@ -366,9 +384,9 @@ async fn abort(
 ) -> Response {
     let (path, _val) = match resolve(&ctx, &id, q.chat_id.as_deref(), &body).await {
         Ok(v) => v,
-        Err(r) => return r,
+        Err(r) => return r.into_response(),
     };
-    git_result(ctx.git.for_project(path).abort().await, "abort")
+    git_result(ctx.core.git.for_project(path).abort().await, "abort")
 }
 
 async fn rename_branch(
@@ -379,7 +397,7 @@ async fn rename_branch(
 ) -> Response {
     let (path, val) = match resolve(&ctx, &id, q.chat_id.as_deref(), &body).await {
         Ok(v) => v,
-        Err(r) => return r,
+        Err(r) => return r.into_response(),
     };
     let data: RenameBranchBody = match body_of(val) {
         Ok(d) => d,
@@ -389,7 +407,8 @@ async fn rename_branch(
         return fail(StatusCode::BAD_REQUEST, "Invalid branch name");
     }
     git_empty(
-        ctx.git
+        ctx.core
+            .git
             .for_project(path)
             .rename_branch(&data.old_name, &data.new_name)
             .await,
@@ -405,7 +424,7 @@ async fn delete_branch(
 ) -> Response {
     let (path, val) = match resolve(&ctx, &id, q.chat_id.as_deref(), &body).await {
         Ok(v) => v,
-        Err(r) => return r,
+        Err(r) => return r.into_response(),
     };
     let data: DeleteBranchBody = match body_of(val) {
         Ok(d) => d,
@@ -415,7 +434,8 @@ async fn delete_branch(
         return fail(StatusCode::BAD_REQUEST, "name must not be empty");
     }
     git_result(
-        ctx.git
+        ctx.core
+            .git
             .for_project(path)
             .delete_branch(
                 &data.name,
@@ -435,9 +455,12 @@ async fn update_all(
 ) -> Response {
     let (path, _val) = match resolve(&ctx, &id, q.chat_id.as_deref(), &body).await {
         Ok(v) => v,
-        Err(r) => return r,
+        Err(r) => return r.into_response(),
     };
-    git_result(ctx.git.for_project(path).update_all().await, "updateAll")
+    git_result(
+        ctx.core.git.for_project(path).update_all().await,
+        "updateAll",
+    )
 }
 
 pub fn router() -> Router<Arc<AppCtx>> {

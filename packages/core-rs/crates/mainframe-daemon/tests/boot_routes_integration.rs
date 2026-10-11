@@ -7,51 +7,11 @@
 //! permitted here (RUST RULES `#[cfg(test)]` exemption).
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use std::net::SocketAddr;
-use std::sync::Arc;
-
 use axum::Router;
-use dashmap::DashMap;
-use mainframe_adapter_api::AdapterRegistry;
-use mainframe_background_tasks::tracker::BackgroundTaskTracker;
-use mainframe_db::DatabaseManager;
-use mainframe_launch::{BroadcastFn, LaunchRegistry, TunnelManager};
-use mainframe_lsp::{LspManager, LspRegistry};
-use mainframe_plugins::manager::PluginManagerDeps;
-use mainframe_plugins::{EmitSink, PluginContext, PluginError, PluginHostDb, PluginManager};
-use mainframe_server::ctx::{AppCtx, GitFactory, Services};
-use mainframe_server::db::Db;
+use mainframe_plugins::{PluginContext, PluginError};
 use mainframe_server::{build_app, spawn_broadcast_pump};
-use mainframe_services::attachment::AttachmentStore;
-use mainframe_services::files::FileWatcherService;
-use mainframe_services::push::PushService;
-use mainframe_types::chat::Chat;
-use mainframe_types::events::DaemonEvent;
 use mainframe_types::plugin::PluginManifest;
-
-/// The minimal `PluginHostDb` the wired PluginManager needs (unused by the listing
-/// route, which reads only the loaded manifests + tracked panels/actions).
-struct NullHostDb;
-
-impl PluginHostDb for NullHostDb {
-    fn chats_list(&self, _project_id: &str) -> Vec<Chat> {
-        Vec::new()
-    }
-    fn chats_get(&self, _id: &str) -> Option<Chat> {
-        None
-    }
-    fn chats_create(&self, _p: &str, _a: &str, _m: Option<&str>, _mode: Option<&str>) -> Chat {
-        unreachable!("chats_create is not exercised by the listing route")
-    }
-    fn settings(&self) -> &dyn mainframe_types::settings_kv::SettingsKv {
-        static EMPTY: std::sync::LazyLock<mainframe_types::settings_kv::MemorySettings> =
-            std::sync::LazyLock::new(Default::default);
-        &*EMPTY
-    }
-    fn notification_config(&self) -> mainframe_types::settings::NotificationConfig {
-        mainframe_types::settings::NotificationConfig::default()
-    }
-}
+use std::{net::SocketAddr, sync::Arc};
 
 async fn demo_plugin(_ctx: Arc<PluginContext>) -> Result<Router<()>, PluginError> {
     Ok(Router::new())
@@ -75,71 +35,41 @@ fn manifest(id: &str) -> PluginManifest {
 #[tokio::test]
 async fn boot_serves_launch_plugins_and_lsp_happy_paths() {
     let data_dir = tempfile::tempdir().unwrap();
-    let db = Db::spawn(|| DatabaseManager::open(std::path::Path::new(":memory:"))).unwrap();
-
-    // Seed a project so the launch route resolves an effective path.
-    let project = db
+    let config = mainframe_runtime::config::MainframeConfig {
+        port: 0,
+        data_dir: data_dir.path().to_string_lossy().into_owned(),
+        tunnel: None,
+        tunnel_url: None,
+        tunnel_token: None,
+        auth_secret: None,
+    };
+    let paths = mainframe_runtime::config::boot_paths(&config, data_dir.path());
+    let daemon = mainframe_server::bootstrap::Bootstrap::new(
+        config,
+        paths,
+        mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
+        None,
+        "test".into(),
+    )
+    .bind()
+    .await
+    .unwrap()
+    .build()
+    .await
+    .unwrap();
+    let ctx = daemon.ctx.clone();
+    let project = ctx
+        .core
+        .db
         .call(|d| d.projects.create("/tmp/boot-routes-test", Some("Boot")))
         .await
         .unwrap();
-    let project_id = project.id.clone();
-
-    let (broadcast, _keepalive) = tokio::sync::broadcast::channel::<DaemonEvent>(64);
-    let watcher_tx = broadcast.clone();
-
-    let noop_event: BroadcastFn = Arc::new(|_| {});
-    let tunnel_manager = Arc::new(TunnelManager::new(Some(Arc::clone(&noop_event))));
-    let launch_registry = Arc::new(LaunchRegistry::new(
-        Arc::clone(&noop_event),
-        Some(Arc::clone(&tunnel_manager)),
-    ));
-    let lsp_manager = Arc::new(LspManager::new(Arc::new(LspRegistry::new())));
-
-    let emit: EmitSink = Arc::new(|_| {});
-    let host_db: Arc<dyn PluginHostDb> = Arc::new(NullHostDb);
-    let plugin_manager = Arc::new(PluginManager::new(PluginManagerDeps {
-        host_db,
-        emit,
-        github: None,
-    }));
-    plugin_manager
+    let project_id = project.id;
+    ctx.infra
+        .plugin_manager
         .load_builtin(manifest("demo"), data_dir.path().to_path_buf(), demo_plugin)
         .await
         .unwrap();
-
-    let ctx = Arc::new(AppCtx {
-        db,
-        git: GitFactory,
-        services: Services {
-            attachments: Arc::new(AttachmentStore::new(data_dir.path().join("attachments"))),
-            push: Arc::new(PushService::new()),
-            watcher: Arc::new(FileWatcherService::new(move |event| {
-                let _ = watcher_tx.send(event);
-            })),
-        },
-        broadcast,
-        data_dir: data_dir.path().to_path_buf(),
-        version: "0.0.0-test".to_string(),
-        port: 0,
-        auth_secret: None,
-        resolved_path: mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
-        tunnel_url: Arc::new(std::sync::RwLock::new(None)),
-        ws_clients: Arc::new(DashMap::new()),
-        facade_hub: Arc::new(mainframe_server::FacadeHub::default()),
-        facade_heartbeat_interval_ms: mainframe_acp::DEFAULT_HEARTBEAT_INTERVAL_MS,
-        adapter_registry: Arc::new(AdapterRegistry::new()),
-        background_tasks: Arc::new(BackgroundTaskTracker::new()),
-        claude_workflows: Arc::new(mainframe_claude_workflows::store::ClaudeWorkflowStore::new()),
-        chat_manager: None,
-        launch_registry: Some(Arc::clone(&launch_registry)),
-        tunnel_manager: Some(Arc::clone(&tunnel_manager)),
-        port_tunnels: None,
-        lsp_manager: Some(Arc::clone(&lsp_manager)),
-        plugin_manager: Some(Arc::clone(&plugin_manager)),
-        automations: None,
-        orchestration: None,
-        quota: None,
-    });
     spawn_broadcast_pump(Arc::clone(&ctx));
 
     let app = build_app(Arc::clone(&ctx));

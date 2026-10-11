@@ -99,7 +99,7 @@ fn initialize_request(id: i64, opt_in: Option<bool>) -> JsonRpcRequest {
 #[tokio::test]
 async fn a_successful_initialize_with_the_opt_in_meta_marks_the_connection() {
     let ctx = AppCtx::test_ctx();
-    let (_id, connection, _rx) = ctx.facade_hub.register("mock-cli".to_string());
+    let (_id, connection, _rx) = ctx.chat.facade_hub.register("mock-cli".to_string());
 
     handle_inbound(
         &serde_json::to_string(&initialize_request(1, Some(true))).unwrap(),
@@ -119,7 +119,7 @@ async fn a_successful_initialize_with_the_opt_in_meta_marks_the_connection() {
 #[tokio::test]
 async fn an_initialize_without_the_opt_in_meta_leaves_revision_cursors_off() {
     let ctx = AppCtx::test_ctx();
-    let (_id, connection, _rx) = ctx.facade_hub.register("mock-cli".to_string());
+    let (_id, connection, _rx) = ctx.chat.facade_hub.register("mock-cli".to_string());
 
     handle_inbound(
         &serde_json::to_string(&initialize_request(1, None)).unwrap(),
@@ -137,7 +137,7 @@ async fn an_initialize_without_the_opt_in_meta_leaves_revision_cursors_off() {
 #[tokio::test]
 async fn an_explicit_false_opt_in_leaves_revision_cursors_off() {
     let ctx = AppCtx::test_ctx();
-    let (_id, connection, _rx) = ctx.facade_hub.register("mock-cli".to_string());
+    let (_id, connection, _rx) = ctx.chat.facade_hub.register("mock-cli".to_string());
 
     handle_inbound(
         &serde_json::to_string(&initialize_request(1, Some(false))).unwrap(),
@@ -155,7 +155,7 @@ async fn an_explicit_false_opt_in_leaves_revision_cursors_off() {
 #[tokio::test]
 async fn a_failed_initialize_does_not_mark_the_opt_in() {
     let ctx = AppCtx::test_ctx();
-    let (_id, connection, _rx) = ctx.facade_hub.register("mock-cli".to_string());
+    let (_id, connection, _rx) = ctx.chat.facade_hub.register("mock-cli".to_string());
     let mut request = initialize_request(1, Some(true));
     if let Some(params) = request.params.as_mut() {
         params["protocolVersion"] = json!(999_999);

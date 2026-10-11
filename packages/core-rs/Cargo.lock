@@ -1766,6 +1766,7 @@ dependencies = [
  "mainframe-orchestration",
  "mainframe-plugins",
  "mainframe-runtime",
+ "mainframe-server",
  "mainframe-services",
  "mainframe-types",
  "nanoid",
@@ -1788,6 +1789,7 @@ name = "mainframe-services"
 version = "0.0.0"
 dependencies = [
  "dirs",
+ "mainframe-db",
  "mainframe-git",
  "mainframe-runtime",
  "mainframe-types",

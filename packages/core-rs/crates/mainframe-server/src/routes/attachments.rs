@@ -125,7 +125,7 @@ async fn upload(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>, body: By
         }
         Err(e) => {
             log_upload(&id, count, total_bytes, "save failed");
-            crate::error_status::fail_or_internal("Failed to save attachments", &e)
+            crate::respond::fail_or_internal("Failed to save attachments", &e)
         }
     }
 }

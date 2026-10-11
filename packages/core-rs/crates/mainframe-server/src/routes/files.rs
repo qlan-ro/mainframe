@@ -13,13 +13,10 @@ use axum::Router;
 use axum::body::Bytes;
 use axum::extract::{Path as AxPath, Query, State};
 use axum::http::StatusCode;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use axum::routing::get;
-use mainframe_db::{DatabaseManager, DbError};
-use mainframe_types::chat::{Chat, Project};
 use serde::Serialize;
 
-use crate::async_err::internal_error;
 use crate::ctx::AppCtx;
 use crate::fs_utils::{has_binary_extension, is_ignored_dir, path_resolve, relative};
 use crate::input_error::InputError;
@@ -39,56 +36,15 @@ struct FsEntry {
     path: String,
 }
 
-// ── effective-path resolution ────────────────────────────────────────────────
-
-/// Sync effective-path resolution (runs on the DB thread): project not found →
-/// `None`; a `chatId` from a different project → `None`; a live worktree wins
-/// over the project root. `worktreeMissing` is a ChatManager runtime field
-/// absent from the DB (always `None` here), so the missing-worktree
-/// short-circuit is inert.
-pub(crate) fn effective_path_sync(
-    db: &DatabaseManager,
-    project_id: &str,
-    chat_id: Option<&str>,
-) -> Result<Option<String>, DbError> {
-    let Some(project) = db.projects.get(project_id)? else {
-        return Ok(None);
-    };
-    if let Some(cid) = chat_id
-        && let Some(chat) = db.chats.get(cid)?
-    {
-        if chat.project_id != project_id {
-            return Ok(None);
-        }
-        if let Some(worktree) = chat.worktree_path {
-            // TODO: honor ChatManager's runtime worktreeMissing.
-            if chat.worktree_missing == Some(true) {
-                return Ok(None);
-            }
-            return Ok(Some(worktree));
-        }
-    }
-    Ok(Some(project.path))
-}
-
-/// Handler-side base resolver: `Ok(base)` or an already-built `404`/`500`
-/// response. Wraps [`effective_path_sync`] on the DB thread.
 pub(crate) async fn resolve_base(
     ctx: &AppCtx,
     project_id: &str,
     chat_id: Option<&str>,
-) -> Result<String, Response> {
-    let pid = project_id.to_string();
-    let cid = chat_id.map(str::to_string);
-    match ctx
-        .db
-        .call(move |db| effective_path_sync(db, &pid, cid.as_deref()))
+) -> Result<String, crate::respond::ApiError> {
+    ctx.resolve_scope(project_id, chat_id)
         .await
-    {
-        Ok(Some(base)) => Ok(base),
-        Ok(None) => Err(fail(StatusCode::NOT_FOUND, "Project not found")),
-        Err(err) => Err(internal_error("resolving effective path", &err)),
-    }
+        .map(|scope| scope.path)
+        .map_err(Into::into)
 }
 
 fn qget<'a>(q: &'a HashMap<String, String>, key: &str) -> Option<&'a str> {
@@ -104,7 +60,7 @@ async fn tree(
 ) -> Response {
     let base = match resolve_base(&ctx, &id, qget(&q, "chatId")).await {
         Ok(b) => b,
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     };
     // `req.query.path || '.'` — an empty string is falsy → '.'.
     let dir_path = qget(&q, "path").filter(|p| !p.is_empty()).unwrap_or(".");
@@ -179,14 +135,14 @@ async fn search_files(
 ) -> Response {
     let base = match resolve_base(&ctx, &id, qget(&q, "chatId")).await {
         Ok(b) => b,
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     };
     let query = qget(&q, "q").unwrap_or("").to_lowercase();
     if query.is_empty() {
         return ok(Vec::<FileHit>::new());
     }
     if tokio::fs::canonicalize(&base).await.is_err() {
-        return fail(StatusCode::NOT_FOUND, "Project not found");
+        return crate::respond::ApiError::project_not_found().into_response();
     }
     let limit = parse_limit(qget(&q, "limit"), 50, 200);
     let scan_limit = limit.saturating_mul(4);
@@ -265,11 +221,11 @@ async fn files_list(
 ) -> Response {
     let base = match resolve_base(&ctx, &id, qget(&q, "chatId")).await {
         Ok(b) => b,
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     };
     let limit = parse_limit(qget(&q, "limit"), 5000, 5000);
     if tokio::fs::canonicalize(&base).await.is_err() {
-        return fail(StatusCode::NOT_FOUND, "Project not found");
+        return crate::respond::ApiError::project_not_found().into_response();
     }
 
     let mut files: Vec<String> = Vec::new();
@@ -322,7 +278,7 @@ async fn file_content(
 ) -> Response {
     let base = match resolve_base(&ctx, &id, qget(&q, "chatId")).await {
         Ok(b) => b,
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     };
     let Some(file_path) = qget(&q, "path").filter(|p| !p.is_empty()) else {
         return fail(StatusCode::BAD_REQUEST, "path query required");
@@ -366,7 +322,7 @@ async fn write_file(
     let chat_id = parsed.get("chatId").and_then(|v| v.as_str());
     let file_path = match require_nonempty_string(&parsed, "path") {
         Ok(p) => p,
-        Err(err) => return crate::error_status::fail_with(&err),
+        Err(err) => return crate::respond::fail_with(&err),
     };
     // `content` must be a string (an empty string is valid). Missing/non-string
     // returns the Zod v4 type-mismatch message.
@@ -383,17 +339,18 @@ async fn write_file(
 
     let base = match resolve_base(&ctx, &id, chat_id).await {
         Ok(b) => b,
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     };
     let Some(full) = resolve_and_validate_path(&base, file_path).await else {
         return fail(StatusCode::FORBIDDEN, "Path outside project");
     };
     match tokio::fs::write(&full, content).await {
         Ok(()) => ok(serde_json::json!({ "path": file_path })),
-        Err(err) => {
-            tracing::warn!(error = %err, path = file_path, "Failed to write file");
-            fail(StatusCode::INTERNAL_SERVER_ERROR, "Failed to write file")
-        }
+        Err(err) => crate::respond::fail_internal(
+            format!("Failed to write file path={}", file_path),
+            &err,
+            "Failed to write file",
+        ),
     }
 }
 
@@ -421,31 +378,12 @@ async fn resolve_path(
     };
     let chat_id = qget(&q, "chatId").map(str::to_string);
 
-    let pid = id.clone();
-    let cid = chat_id.clone();
-    let lookup = ctx
-        .db
-        .call(move |db| Ok((db.projects.get(&pid)?, chat_lookup(db, cid.as_deref())?)))
-        .await;
-    let (project, chat) = match lookup {
-        Ok(v) => v,
-        Err(err) => return internal_error("resolving path", &err),
+    let scope = match ctx.resolve_scope(&id, chat_id.as_deref()).await {
+        Ok(scope) => scope,
+        Err(error) => return crate::respond::ApiError::from(error).into_response(),
     };
-    let Some(project) = project else {
-        return fail(StatusCode::NOT_FOUND, "Project not found");
-    };
-    // worktreeMissing is a ChatManager runtime field (always None from the DB) —
-    // the 409 branch is structurally present but inert here.
-    if let Some(chat) = &chat
-        && chat.worktree_missing == Some(true)
-    {
-        return fail(StatusCode::CONFLICT, "Worktree missing");
-    }
-    let Some(base) = effective_from(&project, chat.as_ref(), &id) else {
-        return fail(StatusCode::NOT_FOUND, "Project not found");
-    };
-
-    let base_kind = if base != project.path {
+    let base = scope.path;
+    let base_kind = if base != scope.project_path {
         "worktree"
     } else {
         "project"
@@ -464,28 +402,6 @@ async fn resolve_path(
         "basePath": real_base,
         "contained": contained,
     }))
-}
-
-fn chat_lookup(db: &DatabaseManager, chat_id: Option<&str>) -> Result<Option<Chat>, DbError> {
-    match chat_id {
-        Some(cid) => db.chats.get(cid),
-        None => Ok(None),
-    }
-}
-
-fn effective_from(project: &Project, chat: Option<&Chat>, project_id: &str) -> Option<String> {
-    if let Some(chat) = chat {
-        if chat.project_id != project_id {
-            return None;
-        }
-        if let Some(worktree) = &chat.worktree_path {
-            if chat.worktree_missing == Some(true) {
-                return None;
-            }
-            return Some(worktree.clone());
-        }
-    }
-    Some(project.path.clone())
 }
 
 /// Resolve `requested` against `base`: strict containment → `contained:true`;
@@ -591,10 +507,11 @@ async fn external_file_content(Query(q): Query<HashMap<String, String>>) -> Resp
                 )
             }
         }
-        Err(err) => {
-            tracing::warn!(error = %err, path = resolved, "Failed to read external file");
-            fail(StatusCode::INTERNAL_SERVER_ERROR, "Failed to read file")
-        }
+        Err(err) => crate::respond::fail_internal(
+            format!("Failed to read external file path={}", resolved),
+            &err,
+            "Failed to read file",
+        ),
     }
 }
 

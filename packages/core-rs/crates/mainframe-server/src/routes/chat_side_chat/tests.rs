@@ -36,18 +36,20 @@ async fn setup() -> (Arc<AppCtx>, mainframe_types::chat::Project, Chat) {
     // gating (the archived/side-chat/id checks) to be what each test below
     // is really about.
     std::fs::create_dir_all("/tmp/side-chat-route").unwrap();
-    let ctx = crate::ctx::AppCtx::test_ctx_with_chat_manager();
-    ctx.adapter_registry
+    let ctx = crate::ctx::AppCtx::test_ctx();
+    ctx.core
+        .adapter_registry
         .register(crate::chat_test_support::StubAdapter::new("claude", false));
     let project = ctx
+        .core
         .db
         .call(|db| db.projects.create("/tmp/side-chat-route", None))
         .await
         .unwrap();
     let parent = ctx
+        .chat
         .chat_manager
         .as_ref()
-        .unwrap()
         .create_chat_with_defaults(
             NewChat {
                 project_id: project.id.clone(),
@@ -88,7 +90,7 @@ async fn an_empty_body_is_accepted() {
 
 #[tokio::test]
 async fn an_unknown_parent_404s() {
-    let ctx = AppCtx::test_ctx_with_chat_manager();
+    let ctx = AppCtx::test_ctx();
     let (status, body) = open(&ctx, "nope", b"").await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert!(body["error"].as_str().unwrap().contains("not found"));
@@ -97,9 +99,9 @@ async fn an_unknown_parent_404s() {
 #[tokio::test]
 async fn an_archived_parent_409s() {
     let (ctx, _project, parent) = setup().await;
-    ctx.chat_manager
+    ctx.chat
+        .chat_manager
         .as_ref()
-        .unwrap()
         .archive_chat(&parent.id, false)
         .await;
 
@@ -153,6 +155,7 @@ async fn two_concurrent_opens_leave_one_row() {
 
     let project_id = project.id.clone();
     let rows = ctx
+        .core
         .db
         .call(move |db| db.chats.list(&project_id))
         .await
@@ -169,7 +172,7 @@ async fn list_filtered_excludes_the_side_chat_with_and_without_include_temporary
     let (ctx, project, parent) = setup().await;
     let (_, body) = open(&ctx, &parent.id, b"").await;
     let side_id = body["data"]["id"].as_str().unwrap().to_string();
-    let cm = ctx.chat_manager.as_ref().unwrap();
+    let cm = &ctx.chat.chat_manager;
 
     let default_list = cm.list_filtered(Some(&project.id), None, false, true, false);
     assert!(!default_list.iter().any(|c| c.id == side_id));
@@ -185,18 +188,20 @@ async fn filter_temporary_drops_a_side_chat_even_when_include_temporary_is_set()
     // Pure unit coverage of the DB-level exclusion through the same filters
     // the wired `list` route builds.
     std::fs::create_dir_all("/tmp/side-chat-filtered").unwrap();
-    let ctx = AppCtx::test_ctx_with_chat_manager();
-    ctx.adapter_registry
+    let ctx = AppCtx::test_ctx();
+    ctx.core
+        .adapter_registry
         .register(crate::chat_test_support::StubAdapter::new("claude", false));
     let project = ctx
+        .core
         .db
         .call(|db| db.projects.create("/tmp/side-chat-filtered", None))
         .await
         .unwrap();
     let parent = ctx
+        .chat
         .chat_manager
         .as_ref()
-        .unwrap()
         .create_chat_with_defaults(
             NewChat {
                 project_id: project.id.clone(),
@@ -207,15 +212,16 @@ async fn filter_temporary_drops_a_side_chat_even_when_include_temporary_is_set()
             None,
         )
         .await;
-    ctx.chat_manager
+    ctx.chat
+        .chat_manager
         .as_ref()
-        .unwrap()
         .open_side_chat(&parent.id)
         .await
         .unwrap();
 
     let project_id = project.id.clone();
     let rows = ctx
+        .core
         .db
         .call(move |db| {
             db.chats.list_filtered(&ChatListFilters {
@@ -264,9 +270,9 @@ async fn fork_refuses_a_side_chat() {
     let side_id = body["data"]["id"].as_str().unwrap().to_string();
 
     let err = ctx
+        .chat
         .chat_manager
         .as_ref()
-        .unwrap()
         .fork_chat(&side_id, mainframe_chat::chat_manager::ForkPoint::Current)
         .await
         .unwrap_err();
@@ -289,7 +295,7 @@ async fn removing_the_project_deletes_the_side_chats_row() {
     let (ctx, project, parent) = setup().await;
     let (_, body) = open(&ctx, &parent.id, b"").await;
     let side_id = body["data"]["id"].as_str().unwrap().to_string();
-    let cm = ctx.chat_manager.as_ref().unwrap();
+    let cm = &ctx.chat.chat_manager;
 
     cm.remove_project(&project.id).await.unwrap();
 
@@ -324,7 +330,8 @@ async fn ids_of(resp: Response) -> Vec<String> {
 }
 
 async fn seed_a_side_chat(ctx: &Arc<AppCtx>) -> (String, String, String) {
-    ctx.db
+    ctx.core
+        .db
         .call(|db| {
             let project = db.projects.create("/tmp/side-chat-list", None)?;
             let parent = db.chats.create(&mainframe_types::chat::NewChat {

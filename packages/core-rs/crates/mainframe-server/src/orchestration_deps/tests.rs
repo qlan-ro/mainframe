@@ -15,18 +15,20 @@ use crate::chat_test_support::StubAdapter;
 use crate::ctx::AppCtx;
 
 async fn setup() -> (Arc<AppCtx>, DaemonOrchestrationPort, String, String) {
-    let ctx = AppCtx::test_ctx_with_orchestration();
-    ctx.adapter_registry
+    let ctx = AppCtx::test_ctx();
+    ctx.core
+        .adapter_registry
         .register(StubAdapter::new("claude", false));
     let dir = std::env::temp_dir().join(format!("mf-orch-{}", nanoid::nanoid!()));
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.to_string_lossy().into_owned();
     let project = ctx
+        .core
         .db
         .call(move |d| d.projects.create(&path, None))
         .await
         .unwrap();
-    let chats = ctx.chat_manager.clone().unwrap();
+    let chats = ctx.chat.chat_manager.clone();
     let caller = chats
         .create_chat(NewChat {
             project_id: project.id.clone(),
@@ -36,9 +38,9 @@ async fn setup() -> (Arc<AppCtx>, DaemonOrchestrationPort, String, String) {
         .await;
     let port = DaemonOrchestrationPort::new(
         chats,
-        ctx.db.clone(),
-        Arc::clone(&ctx.adapter_registry),
-        ctx.broadcast.clone(),
+        ctx.core.db.clone(),
+        Arc::clone(&ctx.core.adapter_registry),
+        ctx.core.broadcast.clone(),
     );
     (ctx, port, project.id, caller.id)
 }
@@ -138,8 +140,8 @@ async fn invalid_workspaces_are_refused_before_anything_is_created() {
 #[tokio::test]
 async fn a_spawn_through_the_chat_manager_issues_a_credential() {
     let (ctx, _port, _project_id, caller) = setup().await;
-    let service = ctx.orchestration.clone().unwrap();
-    let chats = ctx.chat_manager.clone().unwrap();
+    let service = ctx.chat.orchestration.clone();
+    let chats = ctx.chat.chat_manager.clone();
     assert!(!service.credentials().has_credential(&caller));
     chats.start_chat(&caller).await;
     assert!(service.credentials().has_credential(&caller));
@@ -153,7 +155,7 @@ async fn a_delegated_child_reports_its_task_and_boot_interrupts_open_tasks() {
     let mut launch = request(&project_id, &caller, LaunchWorkspace::ProjectRoot);
     launch.parent_chat_id = Some(caller.clone());
     let child = port.launch_chat(launch).await.unwrap();
-    let store = super::DbTaskStore::new(ctx.db.clone());
+    let store = super::DbTaskStore::new(ctx.core.db.clone());
     store
         .insert(running_task("task_1", &caller, &child.id))
         .await
@@ -162,7 +164,7 @@ async fn a_delegated_child_reports_its_task_and_boot_interrupts_open_tasks() {
     port.chat_changed(&caller);
     port.chat_changed(&child.id);
 
-    let chats = ctx.chat_manager.clone().unwrap();
+    let chats = ctx.chat.chat_manager.clone();
     let child_chat = chats.get_chat(&child.id).unwrap();
     let delegation = child_chat.orchestration.delegation.clone().unwrap();
     assert_eq!(delegation.task_id, "task_1");
@@ -181,7 +183,7 @@ async fn a_delegated_child_reports_its_task_and_boot_interrupts_open_tasks() {
     let row = listed.iter().find(|c| c.id == child.id).unwrap();
     assert_eq!(row.task_id.as_deref(), Some("task_1"));
 
-    ctx.orchestration.clone().unwrap().reconcile_boot().await;
+    ctx.chat.orchestration.clone().reconcile_boot().await;
     let after = store.get("task_1").await.unwrap();
     assert_eq!(after.status, TaskStatus::Interrupted);
     assert_eq!(after.delivery, TaskDelivery::Dropped);
@@ -195,7 +197,7 @@ async fn a_delegated_child_reports_its_task_and_boot_interrupts_open_tasks() {
 #[tokio::test]
 async fn interrupting_a_chat_through_the_real_hook_cascades_through_its_whole_task_tree() {
     let (ctx, port, project_id, caller) = setup().await;
-    let store = super::DbTaskStore::new(ctx.db.clone());
+    let store = super::DbTaskStore::new(ctx.core.db.clone());
     let mut launch = request(&project_id, &caller, LaunchWorkspace::ProjectRoot);
     launch.parent_chat_id = Some(caller.clone());
     let child = port.launch_chat(launch).await.unwrap();
@@ -211,7 +213,7 @@ async fn interrupting_a_chat_through_the_real_hook_cascades_through_its_whole_ta
         .await
         .unwrap();
 
-    let chats = ctx.chat_manager.clone().unwrap();
+    let chats = ctx.chat.chat_manager.clone();
     // The real path: `ChatManager::interrupt_chat` → `OrchestrationHooks::
     // on_chat_stopping` → `OrchestrationService::cascade_stop`, not a direct
     // call into the service and not `FakePort`.
@@ -233,7 +235,7 @@ async fn a_task_chats_permission_push_names_its_parent_and_opens_the_top_level_c
     use super::push::{DelegatedPush, delegated_permission_push};
 
     let (ctx, port, project_id, caller) = setup().await;
-    let store = super::DbTaskStore::new(ctx.db.clone());
+    let store = super::DbTaskStore::new(ctx.core.db.clone());
     let mut launch = request(&project_id, &caller, LaunchWorkspace::ProjectRoot);
     launch.parent_chat_id = Some(caller.clone());
     let child = port.launch_chat(launch).await.unwrap();
@@ -249,7 +251,7 @@ async fn a_task_chats_permission_push_names_its_parent_and_opens_the_top_level_c
     }
 
     assert_eq!(
-        delegated_permission_push(&ctx.db, &child.id),
+        delegated_permission_push(&ctx.core.db, &child.id),
         Some(DelegatedPush {
             body: "\"Review\" (task of \"Untitled session\") needs permission".into(),
             open_chat_id: caller.clone(),
@@ -258,11 +260,11 @@ async fn a_task_chats_permission_push_names_its_parent_and_opens_the_top_level_c
     // A grandchild's card sits inside its parent's card, so the push still
     // opens the chat the sidebar lists.
     assert_eq!(
-        delegated_permission_push(&ctx.db, &grandchild.id),
+        delegated_permission_push(&ctx.core.db, &grandchild.id),
         Some(DelegatedPush {
             body: "\"Race check\" (task of \"Review\") needs permission".into(),
             open_chat_id: caller.clone(),
         })
     );
-    assert_eq!(delegated_permission_push(&ctx.db, &caller), None);
+    assert_eq!(delegated_permission_push(&ctx.core.db, &caller), None);
 }

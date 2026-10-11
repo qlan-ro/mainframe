@@ -16,6 +16,7 @@ fn client() -> reqwest::Client {
 async fn seed_chat(server: &TestServer) -> String {
     server
         .ctx
+        .core
         .db
         .call(|db| {
             let project = db.projects.create("/tmp/tags-proj", Some("p"))?;
@@ -91,6 +92,7 @@ async fn patch_renames() {
     let server = spawn_test_server(None).await;
     server
         .ctx
+        .core
         .db
         .call(|db| db.tags.upsert("feat", None))
         .await
@@ -104,11 +106,18 @@ async fn patch_renames() {
     assert_eq!(resp.status(), StatusCode::OK);
     let has_feature = server
         .ctx
+        .core
         .db
         .call(|db| db.tags.get("feature"))
         .await
         .unwrap();
-    let has_feat = server.ctx.db.call(|db| db.tags.get("feat")).await.unwrap();
+    let has_feat = server
+        .ctx
+        .core
+        .db
+        .call(|db| db.tags.get("feat"))
+        .await
+        .unwrap();
     assert!(has_feature.is_some());
     assert!(has_feat.is_none());
 }
@@ -130,6 +139,7 @@ async fn patch_empty_body_returns_400() {
     let server = spawn_test_server(None).await;
     server
         .ctx
+        .core
         .db
         .call(|db| db.tags.upsert("feature", None))
         .await
@@ -148,6 +158,7 @@ async fn patch_updates_color_only() {
     let server = spawn_test_server(None).await;
     server
         .ctx
+        .core
         .db
         .call(|db| db.tags.upsert("feature", None))
         .await
@@ -163,6 +174,7 @@ async fn patch_updates_color_only() {
     assert_eq!(body["data"]["color"], "red");
     let tag = server
         .ctx
+        .core
         .db
         .call(|db| db.tags.get("feature"))
         .await
@@ -176,6 +188,7 @@ async fn patch_applies_rename_and_color() {
     let server = spawn_test_server(None).await;
     server
         .ctx
+        .core
         .db
         .call(|db| db.tags.upsert("feat", None))
         .await
@@ -190,7 +203,13 @@ async fn patch_applies_rename_and_color() {
     let body: serde_json::Value = resp.json().await.unwrap();
     assert_eq!(body["data"]["name"], "feature");
     assert_eq!(body["data"]["color"], "red");
-    let has_feat = server.ctx.db.call(|db| db.tags.get("feat")).await.unwrap();
+    let has_feat = server
+        .ctx
+        .core
+        .db
+        .call(|db| db.tags.get("feat"))
+        .await
+        .unwrap();
     assert!(has_feat.is_none());
 }
 
@@ -199,6 +218,7 @@ async fn delete_removes_with_empty_204_body() {
     let server = spawn_test_server(None).await;
     server
         .ctx
+        .core
         .db
         .call(|db| db.tags.upsert("feature", None))
         .await
@@ -213,6 +233,7 @@ async fn delete_removes_with_empty_204_body() {
     assert_eq!(text, "");
     let gone = server
         .ctx
+        .core
         .db
         .call(|db| db.tags.get("feature"))
         .await

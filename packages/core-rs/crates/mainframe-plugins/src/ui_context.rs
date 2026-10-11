@@ -12,7 +12,8 @@ use mainframe_types::plugin::UiZone;
 use crate::context::{EmitSink, NotifyOptions, PluginUi};
 
 /// Optional gate — when present and it returns false, `notify` emissions drop.
-type NotifyGate = Box<dyn Fn() -> bool + Send + Sync>;
+pub(crate) type NotifyGate =
+    Box<dyn Fn() -> mainframe_adapter_api::BoxFuture<'static, bool> + Send + Sync>;
 
 pub struct UiContextImpl {
     plugin_id: String,
@@ -96,18 +97,20 @@ impl PluginUi for UiContextImpl {
         });
     }
 
-    fn notify(&self, options: NotifyOptions) {
-        if let Some(gate) = &self.is_notify_enabled
-            && !gate()
-        {
-            return;
-        }
-        (self.emit)(DaemonEvent::PluginNotification {
-            plugin_id: self.plugin_id.clone(),
-            title: options.title,
-            body: options.body,
-            level: options.level,
-        });
+    fn notify(&self, options: NotifyOptions) -> mainframe_adapter_api::BoxFuture<'_, ()> {
+        Box::pin(async move {
+            if let Some(gate) = &self.is_notify_enabled
+                && !gate().await
+            {
+                return;
+            }
+            (self.emit)(DaemonEvent::PluginNotification {
+                plugin_id: self.plugin_id.clone(),
+                title: options.title,
+                body: options.body,
+                level: options.level,
+            });
+        })
     }
 }
 
@@ -140,15 +143,17 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn notify_gate_drops_when_disabled() {
+    #[tokio::test]
+    async fn notify_gate_drops_when_disabled() {
         let (seen, emit) = sink();
-        let ui = create_plugin_ui_context("todos", emit, Some(Box::new(|| false)));
+        let ui =
+            create_plugin_ui_context("todos", emit, Some(Box::new(|| Box::pin(async { false }))));
         ui.notify(NotifyOptions {
             title: "t".into(),
             body: "b".into(),
             level: Some("success".into()),
-        });
+        })
+        .await;
         assert!(seen.lock().unwrap().is_empty());
     }
 

@@ -1,9 +1,4 @@
-//! List and import external CLI sessions.
-//!
-//! Both endpoints go through `ChatManager::external_session_service()`, wired in
-//! `chat_deps::build_chat_manager` via `ExternalSessionDeps for DaemonChatDeps`.
-//! When no `ChatManager` is present (e.g. the route-unit test harness), they fall
-//! back to the "external session service unavailable" 500.
+//! Lists and imports CLI sessions through ChatManager external-session services.
 
 use std::sync::Arc;
 
@@ -17,7 +12,7 @@ use serde::Deserialize;
 
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok};
-use crate::routes::projects::parse_body;
+use crate::routes::body::parse_body;
 
 const SERVICE_UNAVAILABLE: &str = "external session service unavailable";
 
@@ -38,11 +33,7 @@ async fn list(
         tracing::warn!(%project_id, "invalid external-sessions query");
         return fail(StatusCode::BAD_REQUEST, "Invalid query params");
     }
-    let Some(service) = ctx
-        .chat_manager
-        .as_ref()
-        .and_then(|m| m.external_session_service())
-    else {
+    let Some(service) = ctx.chat.chat_manager.external_session_service() else {
         return fail(StatusCode::INTERNAL_SERVER_ERROR, SERVICE_UNAVAILABLE);
     };
     service.start_auto_scan(&project_id);
@@ -87,11 +78,7 @@ async fn import(
         tracing::warn!(%project_id, "invalid import request body");
         return fail(StatusCode::BAD_REQUEST, "Invalid request body");
     };
-    let Some(service) = ctx
-        .chat_manager
-        .as_ref()
-        .and_then(|m| m.external_session_service())
-    else {
+    let Some(service) = ctx.chat.chat_manager.external_session_service() else {
         return fail(StatusCode::INTERNAL_SERVER_ERROR, SERVICE_UNAVAILABLE);
     };
     let chat = service
@@ -148,7 +135,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn list_valid_query_without_chat_manager_500() {
+    async fn list_valid_query_uses_the_real_service() {
         let ctx = AppCtx::test_ctx();
         let resp = list(
             State(ctx.clone()),
@@ -160,8 +147,8 @@ mod tests {
         )
         .await;
         let (status, body) = read(resp).await;
-        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
-        assert_eq!(body["error"], SERVICE_UNAVAILABLE);
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["success"], true);
     }
 
     #[tokio::test]
@@ -179,7 +166,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn import_valid_body_without_chat_manager_500() {
+    async fn import_valid_body_uses_the_real_service() {
         let ctx = AppCtx::test_ctx();
         let resp = import(
             State(ctx.clone()),
@@ -188,7 +175,7 @@ mod tests {
         )
         .await;
         let (status, body) = read(resp).await;
-        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
-        assert_eq!(body["error"], SERVICE_UNAVAILABLE);
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["success"], true);
     }
 }

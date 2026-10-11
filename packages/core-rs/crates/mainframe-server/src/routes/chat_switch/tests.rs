@@ -30,21 +30,24 @@ async fn switch(
 
 async fn setup() -> (Arc<AppCtx>, Chat) {
     std::fs::create_dir_all("/tmp/chat-switch-route").unwrap();
-    let ctx = crate::ctx::AppCtx::test_ctx_with_chat_manager();
-    ctx.adapter_registry
+    let ctx = crate::ctx::AppCtx::test_ctx();
+    ctx.core
+        .adapter_registry
         .register(crate::chat_test_support::StubAdapter::new("claude", false));
-    ctx.adapter_registry
+    ctx.core
+        .adapter_registry
         .register(crate::chat_test_support::StubAdapter::new("codex", false));
-    ctx.adapter_registry.seed_static_snapshots();
+    ctx.core.adapter_registry.seed_static_snapshots();
     let project = ctx
+        .core
         .db
         .call(|db| db.projects.create("/tmp/chat-switch-route", None))
         .await
         .unwrap();
     let chat = ctx
+        .chat
         .chat_manager
         .as_ref()
-        .unwrap()
         .create_chat_with_defaults(
             NewChat {
                 project_id: project.id.clone(),
@@ -78,7 +81,7 @@ async fn a_bad_adapter_id_or_chat_id_400s() {
 
 #[tokio::test]
 async fn an_unknown_chat_404s() {
-    let ctx = AppCtx::test_ctx_with_chat_manager();
+    let ctx = AppCtx::test_ctx();
     let (status, body) = switch(&ctx, "nope", br#"{"adapterId":"codex"}"#).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(body["error"], "Chat nope not found");

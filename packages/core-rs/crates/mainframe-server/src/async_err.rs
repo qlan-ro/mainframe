@@ -3,17 +3,18 @@
 //! `500 {success:false,error:"Internal server error"}` — never leaking the
 //! underlying message to the client.
 
+#[cfg(test)]
 use axum::http::StatusCode;
 use axum::response::Response;
 
-use crate::respond::fail;
+use crate::respond::ApiError;
+use axum::response::IntoResponse;
 
 /// Log `err` under `context` (via `tracing`) and return the opaque `500`
 /// envelope. The caller's error is never sent to the client — only a fixed
 /// "Internal server error" string.
 pub fn internal_error(context: &str, err: &dyn std::fmt::Display) -> Response {
-    tracing::error!(error = %err, "{context}");
-    fail(StatusCode::INTERNAL_SERVER_ERROR, "Internal server error")
+    ApiError::internal(context, err).into_response()
 }
 
 #[cfg(test)]

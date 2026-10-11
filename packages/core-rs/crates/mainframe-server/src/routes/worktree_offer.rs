@@ -14,9 +14,8 @@ use axum::routing::post;
 use serde::Deserialize;
 
 use crate::ctx::AppCtx;
-use crate::error_status::status_of;
 use crate::respond::{fail, ok_empty};
-use crate::routes::projects::parse_body;
+use crate::routes::body::parse_body;
 
 #[derive(Deserialize)]
 struct OfferBody {
@@ -44,19 +43,11 @@ async fn accept_worktree_offer(
     let Some(path) = worktree_path(&body) else {
         return fail(StatusCode::BAD_REQUEST, MISSING_PATH);
     };
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "accept-worktree-offer needs ChatManager (unwired)");
-        return fail(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Failed to switch worktree",
-        );
-    };
+    let cm = &ctx.chat.chat_manager;
     match cm.accept_worktree_offer(&id, &path).await {
         Ok(()) => ok_empty(),
         Err(err) => {
-            let status = status_of(&err);
-            tracing::warn!(chat_id = %id, %err, "accept-worktree-offer failed");
-            fail(status, err.to_string())
+            crate::respond::fail_domain(format!("accept-worktree-offer failed chat_id={id}"), &err)
         }
     }
 }
@@ -69,19 +60,11 @@ async fn dismiss_worktree_offer(
     let Some(path) = worktree_path(&body) else {
         return fail(StatusCode::BAD_REQUEST, MISSING_PATH);
     };
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "dismiss-worktree-offer needs ChatManager (unwired)");
-        return fail(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Failed to switch worktree",
-        );
-    };
+    let cm = &ctx.chat.chat_manager;
     match cm.dismiss_worktree_offer(&id, &path) {
         Ok(()) => ok_empty(),
         Err(err) => {
-            let status = status_of(&err);
-            tracing::warn!(chat_id = %id, %err, "dismiss-worktree-offer failed");
-            fail(status, err.to_string())
+            crate::respond::fail_domain(format!("dismiss-worktree-offer failed chat_id={id}"), &err)
         }
     }
 }
@@ -155,7 +138,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn accept_and_dismiss_fail_with_unwired_chat_manager_500() {
+    async fn accept_and_dismiss_reject_an_offer_that_is_not_pending() {
         let ctx = AppCtx::test_ctx();
         let (accept_status, accept_body) = read(
             accept_worktree_offer(
@@ -166,8 +149,11 @@ mod tests {
             .await,
         )
         .await;
-        assert_eq!(accept_status, StatusCode::INTERNAL_SERVER_ERROR);
-        assert_eq!(accept_body["error"], "Failed to switch worktree");
+        assert_eq!(accept_status, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            accept_body["error"],
+            "No pending worktree offer for that path"
+        );
 
         let (dismiss_status, dismiss_body) = read(
             dismiss_worktree_offer(
@@ -178,7 +164,10 @@ mod tests {
             .await,
         )
         .await;
-        assert_eq!(dismiss_status, StatusCode::INTERNAL_SERVER_ERROR);
-        assert_eq!(dismiss_body["error"], "Failed to switch worktree");
+        assert_eq!(dismiss_status, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            dismiss_body["error"],
+            "No pending worktree offer for that path"
+        );
     }
 }

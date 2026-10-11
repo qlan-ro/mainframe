@@ -14,28 +14,33 @@ use super::github_port::{GitHubIssues, RepoRef};
 #[derive(Default)]
 struct NullHostDb;
 impl PluginHostDb for NullHostDb {
-    fn chats_list(&self, _p: &str) -> Vec<Chat> {
-        Vec::new()
+    fn chats_list(&self, _p: &str) -> Result<Vec<Chat>, crate::PluginError> {
+        Ok(Vec::new())
     }
-    fn chats_get(&self, _id: &str) -> Option<Chat> {
-        None
+    fn chats_get(&self, _id: &str) -> Result<Option<Chat>, crate::PluginError> {
+        Ok(None)
     }
-    fn chats_create(&self, p: &str, a: &str, _m: Option<&str>, _mode: Option<&str>) -> Chat {
-        serde_json::from_value(serde_json::json!({
-            "id": "chat-1", "adapterId": a, "projectId": p, "status": "active",
-            "createdAt": "2026-01-01T00:00:00.000Z", "updatedAt": "2026-01-01T00:00:00.000Z",
-            "totalCost": 0.0, "totalTokensInput": 0, "totalTokensOutput": 0,
-            "lastContextTokensInput": 0,
-        }))
-        .unwrap()
+    fn chats_create(
+        &self,
+        p: &str,
+        a: &str,
+        _m: Option<&str>,
+        _mode: Option<&str>,
+    ) -> Result<Chat, crate::PluginError> {
+        Ok({
+            serde_json::from_value(serde_json::json!({
+                "id": "chat-1", "adapterId": a, "projectId": p, "status": "active",
+                "createdAt": "2026-01-01T00:00:00.000Z", "updatedAt": "2026-01-01T00:00:00.000Z",
+                "totalCost": 0.0, "totalTokensInput": 0, "totalTokensOutput": 0,
+                "lastContextTokensInput": 0,
+            }))
+            .unwrap()
+        })
     }
     fn settings(&self) -> &dyn mainframe_types::settings_kv::SettingsKv {
         static EMPTY: std::sync::LazyLock<mainframe_types::settings_kv::MemorySettings> =
             std::sync::LazyLock::new(Default::default);
         &*EMPTY
-    }
-    fn notification_config(&self) -> mainframe_types::settings::NotificationConfig {
-        mainframe_types::settings::NotificationConfig::default()
     }
 }
 

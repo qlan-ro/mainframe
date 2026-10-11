@@ -17,8 +17,8 @@ use serde_json::json;
 
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok, ok_empty};
+use crate::routes::body::parse_body;
 use crate::routes::files::resolve_base;
-use crate::routes::projects::parse_body;
 use crate::skills_cli::{
     self, ManifestOutcome, ProbeOutcome, ProcessRunner, Scope, SkillsCliError,
 };
@@ -116,10 +116,10 @@ fn probe_json(outcome: ProbeOutcome) -> serde_json::Value {
 async fn manifest(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
     let base = match resolve_base(&ctx, &id, None).await {
         Ok(b) => b,
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     };
-    let runner = ProcessRunner::new(ctx.resolved_path.clone());
-    match skills_cli::manifest(&runner, &ctx.resolved_path, &id, &base).await {
+    let runner = ProcessRunner::new(ctx.core.resolved_path.clone());
+    match skills_cli::manifest(&runner, &ctx.core.resolved_path, &id, &base).await {
         Ok(outcome) => ok(manifest_json(outcome)),
         Err(err) => map_error("manifest", &id, err),
     }
@@ -133,7 +133,7 @@ struct ProbeBody {
 async fn probe(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>, body: Bytes) -> Response {
     let base = match resolve_base(&ctx, &id, None).await {
         Ok(b) => b,
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     };
     let Some(parsed) = parse_body::<ProbeBody>(&body) else {
         return fail(StatusCode::BAD_REQUEST, "Invalid request body");
@@ -141,8 +141,8 @@ async fn probe(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>, body: Byt
     let Some(source) = parsed.source.filter(|s| !s.is_empty()) else {
         return fail(StatusCode::BAD_REQUEST, "source is required");
     };
-    let runner = ProcessRunner::new(ctx.resolved_path.clone());
-    match skills_cli::probe(&runner, &ctx.resolved_path, &id, &base, &source).await {
+    let runner = ProcessRunner::new(ctx.core.resolved_path.clone());
+    match skills_cli::probe(&runner, &ctx.core.resolved_path, &id, &base, &source).await {
         Ok(outcome) => ok(probe_json(outcome)),
         Err(err) => map_error("probe", &id, err),
     }
@@ -160,7 +160,7 @@ struct InstallBody {
 async fn install(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>, body: Bytes) -> Response {
     let base = match resolve_base(&ctx, &id, None).await {
         Ok(b) => b,
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     };
     let Some(parsed) = parse_body::<InstallBody>(&body) else {
         return fail(StatusCode::BAD_REQUEST, "Invalid request body");
@@ -175,10 +175,10 @@ async fn install(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>, body: B
         );
     };
     let skills = parsed.skills.unwrap_or_default();
-    let runner = ProcessRunner::new(ctx.resolved_path.clone());
+    let runner = ProcessRunner::new(ctx.core.resolved_path.clone());
     let result = skills_cli::install(
         &runner,
-        &ctx.resolved_path,
+        &ctx.core.resolved_path,
         &id,
         &base,
         &source,
@@ -208,7 +208,7 @@ async fn uninstall(
 ) -> Response {
     let base = match resolve_base(&ctx, &id, None).await {
         Ok(b) => b,
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     };
     let Some(parsed) = parse_body::<UninstallBody>(&body) else {
         return fail(StatusCode::BAD_REQUEST, "Invalid request body");
@@ -220,10 +220,10 @@ async fn uninstall(
         );
     };
     let skills = parsed.skills.unwrap_or_default();
-    let runner = ProcessRunner::new(ctx.resolved_path.clone());
+    let runner = ProcessRunner::new(ctx.core.resolved_path.clone());
     let result = skills_cli::uninstall(
         &runner,
-        &ctx.resolved_path,
+        &ctx.core.resolved_path,
         &id,
         &base,
         &skills,

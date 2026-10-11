@@ -10,51 +10,11 @@
 
 use std::sync::Arc;
 
-use mainframe_types::chat::{Chat, Project};
 use mainframe_types::http_status::StatusKind;
 use tokio::sync::mpsc;
 
 use crate::lsp_manager::{LspManager, LspServerHandle};
 use crate::lsp_proxy::bridge_ws_to_process;
-
-/// Read-only project lookup.
-pub trait ProjectStore: Send + Sync {
-    fn get_project(&self, project_id: &str) -> Option<Project>;
-}
-
-/// Read-only chat lookup.
-pub trait ChatStore: Send + Sync {
-    fn get_chat(&self, chat_id: &str) -> Option<Chat>;
-}
-
-/// Worktree-aware effective path. Parity with `getEffectivePath`: the chat's
-/// worktree when the chatId points to a live worktree; the project root otherwise.
-/// Rejects cross-project access and missing worktrees by returning `None`.
-pub fn get_effective_path(
-    projects: &dyn ProjectStore,
-    chats: Option<&dyn ChatStore>,
-    project_id: &str,
-    chat_id: Option<&str>,
-) -> Option<String> {
-    let project = projects.get_project(project_id)?;
-    if let Some(chat_id) = chat_id
-        && let Some(chat) = chats.and_then(|c| c.get_chat(chat_id))
-    {
-        // Guard: reject cross-project access.
-        if chat.project_id != project_id {
-            return None;
-        }
-        if let Some(worktree_path) = &chat.worktree_path
-            && !worktree_path.is_empty()
-        {
-            if chat.worktree_missing == Some(true) {
-                return None;
-            }
-            return Some(worktree_path.clone());
-        }
-    }
-    Some(project.path)
-}
 
 /// The outcome of pre-upgrade validation. The server maps `Reject` onto the
 /// handshake's HTTP status, and `Proceed` onto accepting the WS.
@@ -66,27 +26,13 @@ pub enum UpgradeOutcome {
 }
 
 /// Handles `/lsp/...` WebSocket upgrades: validation, spawn, and client attach.
-pub struct LspConnectionHandler<P: ProjectStore, C: ChatStore> {
+pub struct LspConnectionHandler {
     manager: Arc<LspManager>,
-    db: Arc<P>,
-    chats: Option<Arc<C>>,
 }
 
-impl<P: ProjectStore, C: ChatStore> LspConnectionHandler<P, C> {
-    pub fn new(manager: Arc<LspManager>, db: Arc<P>) -> Self {
-        Self {
-            manager,
-            db,
-            chats: None,
-        }
-    }
-
-    pub fn with_chats(manager: Arc<LspManager>, db: Arc<P>, chats: Arc<C>) -> Self {
-        Self {
-            manager,
-            db,
-            chats: Some(chats),
-        }
+impl LspConnectionHandler {
+    pub fn new(manager: Arc<LspManager>) -> Self {
+        Self { manager }
     }
 
     /// Validate an upgrade, closing any stale client and spawning the server.
@@ -95,49 +41,10 @@ impl<P: ProjectStore, C: ChatStore> LspConnectionHandler<P, C> {
         &self,
         project_id: &str,
         language: &str,
-        chat_id: Option<&str>,
+        effective_path: &str,
     ) -> UpgradeOutcome {
-        // Validate project exists.
-        if self.db.get_project(project_id).is_none() {
-            tracing::warn!(
-                project_id,
-                language,
-                "LSP upgrade rejected: unknown project"
-            );
-            return UpgradeOutcome::Reject(StatusKind::NotFound);
-        }
-
-        // Refuse a missing worktree with 409 so the client can surface a clear error
-        // instead of silently falling back to the project root.
-        if let (Some(chat_id), Some(chats)) = (chat_id, self.chats.as_ref())
-            && let Some(chat) = chats.get_chat(chat_id)
-            && chat.worktree_missing == Some(true)
-        {
-            tracing::warn!(
-                project_id,
-                language,
-                chat_id,
-                "LSP upgrade rejected: worktree missing"
-            );
-            return UpgradeOutcome::Reject(StatusKind::Conflict);
-        }
-
-        // Resolve effective path (worktree vs project root).
-        let chats_ref = self.chats.as_ref().map(|c| c.as_ref() as &dyn ChatStore);
-        let Some(effective_path) =
-            get_effective_path(self.db.as_ref(), chats_ref, project_id, chat_id)
-        else {
-            tracing::warn!(
-                project_id,
-                language,
-                ?chat_id,
-                "LSP upgrade rejected: project or worktree not found"
-            );
-            return UpgradeOutcome::Reject(StatusKind::NotFound);
-        };
-
         // Validate effective path exists on disk (async — no sync I/O).
-        if let Err(err) = tokio::fs::metadata(&effective_path).await {
+        if let Err(err) = tokio::fs::metadata(effective_path).await {
             tracing::warn!(%err, project_id, path = %effective_path, "LSP upgrade rejected: project path not found");
             return UpgradeOutcome::Reject(StatusKind::NotFound);
         }
@@ -172,7 +79,7 @@ impl<P: ProjectStore, C: ChatStore> LspConnectionHandler<P, C> {
         // Spawn or reuse the server, worktree-aware.
         match self
             .manager
-            .get_or_spawn(project_id, language, &effective_path)
+            .get_or_spawn(project_id, language, effective_path)
             .await
         {
             Ok(handle) => UpgradeOutcome::Proceed(handle),

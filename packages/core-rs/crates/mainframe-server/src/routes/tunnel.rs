@@ -1,7 +1,7 @@
 //! The cloudflared tunnel routes.
 //!
 //! Four endpoints under `/api/tunnel`: `status`, `config`, `start`, `stop`. `start`
-//! and `stop` drive `ctx.tunnel_manager`, update the `/health` tunnel URL via
+//! and `stop` drive `ctx.infra.tunnel_manager`, update the `/health` tunnel URL via
 //! `set_tunnel_url`, and persist the tunnel config through `save_config`.
 
 use std::sync::Arc;
@@ -16,19 +16,13 @@ use mainframe_runtime::config::{PartialMainframeConfig, get_config, save_config}
 use serde_json::{Value, json};
 
 use crate::ctx::AppCtx;
-use crate::error_status::fail_with;
 use crate::input_error::InputError;
+use crate::respond::fail_with;
 use crate::respond::{fail, ok, ok_empty};
 
 async fn get_status(State(ctx): State<Arc<AppCtx>>) -> Response {
-    let url = ctx
-        .tunnel_manager
-        .as_ref()
-        .and_then(|t| t.get_url("daemon"));
-    let verified = match (&url, ctx.tunnel_manager.as_ref()) {
-        (Some(_), Some(manager)) => manager.verify("daemon").await,
-        _ => false,
-    };
+    let url = ctx.infra.tunnel_manager.get_url("daemon");
+    let verified = url.is_some() && ctx.infra.tunnel_manager.verify("daemon").await;
     ok(json!({ "running": url.is_some(), "url": url, "verified": verified }))
 }
 
@@ -47,7 +41,8 @@ async fn get_config_route() -> Response {
 }
 
 async fn start(State(ctx): State<Arc<AppCtx>>, body: Option<Json<Value>>) -> Response {
-    let (Some(manager), true) = (ctx.tunnel_manager.as_ref(), ctx.port != 0) else {
+    let manager = &ctx.infra.tunnel_manager;
+    if ctx.core.port == 0 {
         return fail(StatusCode::BAD_REQUEST, "Tunnel not available");
     };
 
@@ -77,7 +72,7 @@ async fn start(State(ctx): State<Arc<AppCtx>>, body: Option<Json<Value>>) -> Res
         token: Some(token),
         url: named_url,
     });
-    match manager.start(ctx.port, "daemon", options).await {
+    match manager.start(ctx.core.port, "daemon", options).await {
         Ok(url) => {
             ctx.set_tunnel_url(Some(url.clone()));
             // Only persist new credentials when the caller explicitly provided them.
@@ -104,9 +99,7 @@ async fn start(State(ctx): State<Arc<AppCtx>>, body: Option<Json<Value>>) -> Res
 }
 
 async fn stop(State(ctx): State<Arc<AppCtx>>, body: Option<Json<Value>>) -> Response {
-    let Some(manager) = ctx.tunnel_manager.as_ref() else {
-        return fail(StatusCode::BAD_REQUEST, "Tunnel not available");
-    };
+    let manager = &ctx.infra.tunnel_manager;
     let body = body.map(|Json(v)| v).unwrap_or_else(|| json!({}));
     let clear_config = match parse_stop_body(&body) {
         Ok(clear) => clear,

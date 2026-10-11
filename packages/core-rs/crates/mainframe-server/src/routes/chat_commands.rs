@@ -1,9 +1,4 @@
-//! Chat config PATCH, interrupt/resume/trust-workspace commands, and queue
-//! edit/cancel (chat create lives in `chat_create`).
-//!
-//! Every route goes through the `ChatManager` facade and is gated on the manager
-//! being wired. Existence is checked against `ctx.db.chats` so 404s are honoured
-//! before the facade call.
+//! Chat configuration, interrupt/resume/trust commands, and queue edits through ChatManager.
 
 use std::sync::Arc;
 
@@ -11,7 +6,7 @@ use axum::Router;
 use axum::body::Bytes;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use axum::routing::{patch, post};
 use serde::Deserialize;
 
@@ -19,18 +14,18 @@ use mainframe_types::settings::ExecutionMode;
 
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok, ok_empty};
-use crate::routes::projects::parse_body;
+use crate::routes::body::parse_body;
 
 /// serde only invokes this when the key is present, so a plain `Option<T>`
 /// would collapse an explicit JSON `null` into the same `None` as an absent
 /// key. Wrapping in `Some` here keeps absent → outer `None` and present
 /// (including `null`) → outer `Some`, which is what the `projectId` presence
 /// check needs.
-async fn chat_exists(ctx: &Arc<AppCtx>, id: &str) -> Result<bool, Response> {
+async fn chat_exists(ctx: &Arc<AppCtx>, id: &str) -> Result<bool, crate::respond::ApiError> {
     let lookup = id.to_string();
-    match ctx.db.call(move |db| db.chats.get(&lookup)).await {
+    match ctx.core.db.call(move |db| db.chats.get(&lookup)).await {
         Ok(chat) => Ok(chat.is_some()),
-        Err(err) => Err(crate::async_err::internal_error("get chat", &err)),
+        Err(err) => Err(crate::respond::ApiError::internal("get chat", &err)),
     }
 }
 
@@ -70,17 +65,11 @@ async fn update_config(
         return fail(StatusCode::BAD_REQUEST, "projectId cannot be changed");
     }
     match chat_exists(&ctx, &id).await {
-        Ok(false) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
+        Ok(false) => return crate::respond::ApiError::chat_not_found().into_response(),
         Ok(true) => {}
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     }
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "updateChatConfig is a Phase-4 seam (ChatManager unavailable)");
-        return fail(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "updateChatConfig unavailable",
-        );
-    };
+    let cm = &ctx.chat.chat_manager;
     match cm
         .update_chat_config(
             &id,
@@ -93,63 +82,49 @@ async fn update_config(
     {
         Ok(()) => match cm.get_chat(&id) {
             Some(chat) => ok(chat),
-            None => fail(StatusCode::NOT_FOUND, "Chat not found"),
+            None => crate::respond::ApiError::chat_not_found().into_response(),
         },
-        Err(err) => {
-            tracing::error!(chat_id = %id, %err, "updateChatConfig failed");
-            fail(StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
-        }
+        Err(err) => crate::respond::fail_internal(
+            format!("updateChatConfig failed chat_id={}", id),
+            &err,
+            err.to_string(),
+        ),
     }
 }
 
 /// Shared command scaffold: 404 when the chat is unknown, else run + okEmpty.
 async fn interrupt(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
     match chat_exists(&ctx, &id).await {
-        Ok(false) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
+        Ok(false) => return crate::respond::ApiError::chat_not_found().into_response(),
         Ok(true) => {}
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     }
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "interrupt is a Phase-4 seam (ChatManager unavailable)");
-        return fail(StatusCode::INTERNAL_SERVER_ERROR, "interrupt unavailable");
-    };
+    let cm = &ctx.chat.chat_manager;
     cm.interrupt_chat(&id).await;
     ok_empty()
 }
 
 async fn resume(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
     match chat_exists(&ctx, &id).await {
-        Ok(false) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
+        Ok(false) => return crate::respond::ApiError::chat_not_found().into_response(),
         Ok(true) => {}
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     }
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "resume is a Phase-4 seam (ChatManager unavailable)");
-        return fail(StatusCode::INTERNAL_SERVER_ERROR, "resume unavailable");
-    };
+    let cm = &ctx.chat.chat_manager;
     cm.resume_chat(&id).await;
     ok_empty()
 }
 
 async fn trust_workspace(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
     match chat_exists(&ctx, &id).await {
-        Ok(false) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
+        Ok(false) => return crate::respond::ApiError::chat_not_found().into_response(),
         Ok(true) => {}
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     }
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "trustWorkspace is a Phase-4 seam (ChatManager unavailable)");
-        return fail(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "trustWorkspace unavailable",
-        );
-    };
+    let cm = &ctx.chat.chat_manager;
     match cm.trust_workspace(&id).await {
         Ok(()) => ok_empty(),
-        Err(err) => {
-            tracing::error!(chat_id = %id, %err, "trust-workspace failed");
-            crate::error_status::fail_with(&err)
-        }
+        Err(err) => crate::respond::fail_domain(format!("trust-workspace failed id={id}"), &err),
     }
 }
 
@@ -170,20 +145,18 @@ async fn queue_edit(
         return fail(StatusCode::BAD_REQUEST, "content is required");
     };
     match chat_exists(&ctx, &id).await {
-        Ok(false) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
+        Ok(false) => return crate::respond::ApiError::chat_not_found().into_response(),
         Ok(true) => {}
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     }
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "queue.edit is a Phase-4 seam (ChatManager unavailable)");
-        return fail(StatusCode::INTERNAL_SERVER_ERROR, "queue.edit unavailable");
-    };
+    let cm = &ctx.chat.chat_manager;
     match cm.edit_queued_message(&id, &message_id, &content).await {
         Ok(()) => ok_empty(),
-        Err(err) => {
-            tracing::error!(chat_id = %id, %err, "queue.edit failed");
-            fail(StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
-        }
+        Err(err) => crate::respond::fail_internal(
+            format!("queue.edit failed chat_id={}", id),
+            &err,
+            err.to_string(),
+        ),
     }
 }
 
@@ -192,23 +165,18 @@ async fn queue_cancel(
     Path((id, message_id)): Path<(String, String)>,
 ) -> Response {
     match chat_exists(&ctx, &id).await {
-        Ok(false) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
+        Ok(false) => return crate::respond::ApiError::chat_not_found().into_response(),
         Ok(true) => {}
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     }
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "queue.cancel is a Phase-4 seam (ChatManager unavailable)");
-        return fail(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "queue.cancel unavailable",
-        );
-    };
+    let cm = &ctx.chat.chat_manager;
     match cm.cancel_queued_message(&id, &message_id).await {
         Ok(()) => ok_empty(),
-        Err(err) => {
-            tracing::error!(chat_id = %id, %err, "queue.cancel failed");
-            fail(StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
-        }
+        Err(err) => crate::respond::fail_internal(
+            format!("queue.cancel failed chat_id={}", id),
+            &err,
+            err.to_string(),
+        ),
     }
 }
 

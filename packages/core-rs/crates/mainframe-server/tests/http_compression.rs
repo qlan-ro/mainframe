@@ -3,7 +3,7 @@
 //! staying untouched — all against the production `build_app` router (real
 //! spawned app, no mocks).
 //!
-//! `GET /api/chats/{id}/messages` self-gates on `ctx.chat_manager`, which this
+//! `GET /api/chats/{id}/messages` self-gates on `ctx.chat.chat_manager`, which this
 //! harness leaves `None`, so it never produces a large real payload here. The
 //! negotiation/byte-identity/threshold criteria are proven instead
 //! against `GET /api/projects/{id}/files?path=big.txt`, a large *real* payload
@@ -156,9 +156,6 @@ async fn small_responses_pass_through_uncompressed() {
 
 #[tokio::test]
 async fn chat_history_route_is_byte_identical_through_the_layer() {
-    // This harness leaves `chat_manager: None`, so the envelope here is the
-    // small failure body, below the floor either way — the job of this test is
-    // byte-identity, not proving compression on this route.
     let server = spawn_test_server(None).await;
     let path = "/api/chats/c1/messages";
 
@@ -178,7 +175,8 @@ async fn chat_history_route_is_byte_identical_through_the_layer() {
     assert!(identity_headers.get("content-encoding").is_none());
 
     let json: serde_json::Value = serde_json::from_slice(&identity_body).unwrap();
-    assert_eq!(json["success"], false);
+    assert_eq!(identity_status, StatusCode::OK);
+    assert_eq!(json["success"], true);
 }
 
 // ── CORS and attachments under compression ──────────────────────────────────

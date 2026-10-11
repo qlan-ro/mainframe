@@ -5,8 +5,7 @@ use std::sync::Arc;
 
 use axum::Router;
 use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use mainframe_git::git_parse::github_repo_from_url;
 use serde::Serialize;
@@ -14,7 +13,7 @@ use serde_json::json;
 
 use crate::async_err::internal_error;
 use crate::ctx::AppCtx;
-use crate::respond::{fail, ok};
+use crate::respond::ok;
 use crate::routes::git::{ChatIdQuery, get_effective_path, is_not_git_repo_err};
 
 /// A GitHub remote derived from `git remote -v`, offered to the repo-link
@@ -36,10 +35,11 @@ async fn github_remotes(
 ) -> Response {
     let base_path = match get_effective_path(&ctx, &id, q.chat_id.as_deref()).await {
         Ok(Some(p)) => p,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Project not found"),
+        Ok(None) => return crate::respond::ApiError::project_not_found().into_response(),
         Err(e) => return internal_error("Failed to resolve project path", &e),
     };
     let raw_remotes = match ctx
+        .core
         .git
         .for_project(base_path.clone())
         .remotes_with_urls()
@@ -129,6 +129,7 @@ mod tests {
 
         let ctx = AppCtx::test_ctx();
         let project = ctx
+            .core
             .db
             .call({
                 let path = dir.to_string_lossy().into_owned();
@@ -182,6 +183,7 @@ mod tests {
 
         let ctx = AppCtx::test_ctx();
         let project = ctx
+            .core
             .db
             .call({
                 let path = dir.to_string_lossy().into_owned();

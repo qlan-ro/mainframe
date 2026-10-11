@@ -35,9 +35,7 @@ pub fn router() -> Router<Arc<AppCtx>> {
 }
 
 async fn handle(State(ctx): State<Arc<AppCtx>>, req: Request) -> Response {
-    let Some(service) = ctx.orchestration.as_ref() else {
-        return StatusCode::SERVICE_UNAVAILABLE.into_response();
-    };
+    let service = &ctx.chat.orchestration;
     if req.method() != Method::POST {
         let mut resp = StatusCode::METHOD_NOT_ALLOWED.into_response();
         resp.headers_mut()
@@ -46,7 +44,7 @@ async fn handle(State(ctx): State<Arc<AppCtx>>, req: Request) -> Response {
     }
     let caller = match admit(service, req.headers()) {
         Ok(caller) => caller,
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     };
     let body = match axum::body::to_bytes(req.into_body(), MCP_BODY_LIMIT_BYTES).await {
         Ok(body) => body,
@@ -59,16 +57,30 @@ async fn handle(State(ctx): State<Arc<AppCtx>>, req: Request) -> Response {
     }
 }
 
+struct AdmissionError(StatusCode);
+
+impl IntoResponse for AdmissionError {
+    fn into_response(self) -> Response {
+        let mut response = self.0.into_response();
+        if self.0 == StatusCode::UNAUTHORIZED {
+            response.headers_mut().insert(
+                WWW_AUTHENTICATE,
+                HeaderValue::from_static("Bearer realm=\"mainframe\""),
+            );
+        }
+        response
+    }
+}
+
 /// Every check that needs only the headers, in the spec's order.
-#[allow(clippy::result_large_err)]
-fn admit(service: &OrchestrationService, headers: &HeaderMap) -> Result<Caller, Response> {
+fn admit(service: &OrchestrationService, headers: &HeaderMap) -> Result<Caller, AdmissionError> {
     if headers.contains_key(ORIGIN) {
         tracing::warn!(reason = "origin_header", "mcp request refused");
-        return Err(StatusCode::FORBIDDEN.into_response());
+        return Err(AdmissionError(StatusCode::FORBIDDEN));
     }
     if FORWARDING_HEADERS.iter().any(|h| headers.contains_key(*h)) {
         tracing::warn!(reason = "forwarded_request", "mcp request refused");
-        return Err(StatusCode::FORBIDDEN.into_response());
+        return Err(AdmissionError(StatusCode::FORBIDDEN));
     }
     let caller = authenticate(service, headers)?;
     let json = headers
@@ -80,19 +92,21 @@ fn admit(service: &OrchestrationService, headers: &HeaderMap) -> Result<Caller, 
                 .is_some_and(|m| m.trim().eq_ignore_ascii_case("application/json"))
         });
     if !json {
-        return Err(StatusCode::UNSUPPORTED_MEDIA_TYPE.into_response());
+        return Err(AdmissionError(StatusCode::UNSUPPORTED_MEDIA_TYPE));
     }
     let version = headers
         .get("mcp-protocol-version")
         .map(|v| v.to_str().unwrap_or(""));
     if version.is_some_and(|v| !is_supported_version(v)) {
-        return Err(StatusCode::BAD_REQUEST.into_response());
+        return Err(AdmissionError(StatusCode::BAD_REQUEST));
     }
     Ok(caller)
 }
 
-#[allow(clippy::result_large_err)]
-fn authenticate(service: &OrchestrationService, headers: &HeaderMap) -> Result<Caller, Response> {
+fn authenticate(
+    service: &OrchestrationService,
+    headers: &HeaderMap,
+) -> Result<Caller, AdmissionError> {
     let token = headers
         .get(AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
@@ -107,12 +121,7 @@ fn authenticate(service: &OrchestrationService, headers: &HeaderMap) -> Result<C
         },
     };
     tracing::warn!(reason, "mcp request unauthorized");
-    let mut resp = StatusCode::UNAUTHORIZED.into_response();
-    resp.headers_mut().insert(
-        WWW_AUTHENTICATE,
-        HeaderValue::from_static("Bearer realm=\"mainframe\""),
-    );
-    Err(resp)
+    Err(AdmissionError(StatusCode::UNAUTHORIZED))
 }
 
 fn json_response(status: StatusCode, value: &serde_json::Value) -> Response {

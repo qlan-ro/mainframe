@@ -17,45 +17,22 @@
 use mainframe_types::sync::LockExt as _;
 use std::collections::HashSet;
 use std::net::SocketAddr;
-use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
-use axum::extract::ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade};
-use axum::extract::{ConnectInfo, Path, Query, State};
+use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
+use axum::extract::{ConnectInfo, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use dashmap::DashMap;
-use mainframe_lsp::lsp_connection::attach_client_with_capture;
-use mainframe_lsp::{
-    ChatStore, ClientRef, LspConnectionHandler, LspServerHandle, ProjectStore, ReattachAction,
-    UpgradeOutcome, bridge_ws_to_process, cached_initialize_reply, classify_reattach_first,
-};
-use mainframe_types::chat::{Chat, Project};
 use mainframe_types::events::{ClientEvent, DaemonEvent};
-use mainframe_types::http_status::StatusKind;
 use serde::Deserialize;
 use tokio::sync::{broadcast, mpsc};
 
 use crate::ctx::AppCtx;
-use crate::db::Db;
 use crate::middleware::auth::validate_device_token;
 use crate::net::{is_localhost, trust_proxy_client_ip};
 use crate::ws_file_watch::{WsFileWatch, resolve_subscribe_base, validate_relative};
 use crate::ws_schemas::parse_client_event;
-
-/// Event types delivered to every connected client regardless of per-chat
-/// subscription (unread-dot / attention-badge for backgrounded chats). A gate
-/// on a backgrounded chat reaches the sessions list through `chat.updated`
-/// (chatId-less on the wire, so global) carrying `displayStatus: waiting`.
-// `chat.offloaded` carries a `chatId` (so a naive fan-out would restrict it to
-// that chat's subscribers), but the renderer must drop the chat's controller
-// even when no client has that chat's thread open — so it is connection-global
-// like the other two.
-const CONNECTION_GLOBAL_EVENT_TYPES: [&str; 3] = [
-    "chat.notification",
-    "automation.notification",
-    "chat.offloaded",
-];
 
 /// Per-connection registry entry. Holds the outbound sink and the shared chat
 /// subscription set (read by the fan-out, written by the connection task).
@@ -94,13 +71,13 @@ pub(crate) async fn authenticate_ws_upgrade(
 ) -> bool {
     let forwarded = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok());
     let ip = trust_proxy_client_ip(&peer.ip().to_string(), forwarded);
-    let secret = ctx.auth_secret.clone();
+    let secret = ctx.core.auth_secret.clone();
 
     if !is_ws_auth_required(&ip, secret.as_deref()) {
         return true;
     }
     let authed = match (token, secret) {
-        (Some(token), Some(secret)) => validate_device_token(&ctx.db, secret, token)
+        (Some(token), Some(secret)) => validate_device_token(&ctx.core.db, secret, token)
             .await
             .is_some(),
         _ => false,
@@ -130,220 +107,11 @@ pub(crate) async fn ws_handler(
     upgrade.on_upgrade(move |socket| handle_socket(socket, ctx))
 }
 
-/// `?token=`/`?chatId=` on the LSP upgrade URL.
-#[derive(Debug, Deserialize)]
-pub(crate) struct LspWsQuery {
-    token: Option<String>,
-    #[serde(rename = "chatId")]
-    chat_id: Option<String>,
-}
-
-/// Read-only `ProjectStore` over the DB actor (`db.projects.get`).
-struct DbProjectStore {
-    db: Db,
-}
-
-impl ProjectStore for DbProjectStore {
-    fn get_project(&self, project_id: &str) -> Option<Project> {
-        let id = project_id.to_string();
-        self.db
-            .call_blocking(move |d| d.projects.get(&id))
-            .ok()
-            .flatten()
-    }
-}
-
-/// Read-only `ChatStore` over the DB actor (`db.chats.get`).
-struct DbChatStore {
-    db: Db,
-}
-
-impl ChatStore for DbChatStore {
-    fn get_chat(&self, chat_id: &str) -> Option<Chat> {
-        let id = chat_id.to_string();
-        self.db
-            .call_blocking(move |d| d.chats.get(&id))
-            .ok()
-            .flatten()
-    }
-}
-
-/// The `/lsp/:projectId/:language` WS route handler. Self-authenticates (token
-/// query param unless loopback), validates + spawns the language server via the
-/// `LspConnectionHandler`, then bridges the accepted socket to the child process.
-pub(crate) async fn lsp_ws_handler(
-    State(ctx): State<Arc<AppCtx>>,
-    ConnectInfo(peer): ConnectInfo<SocketAddr>,
-    Path((project_id, language)): Path<(String, String)>,
-    Query(query): Query<LspWsQuery>,
-    headers: HeaderMap,
-    upgrade: WebSocketUpgrade,
-) -> Response {
-    if !authenticate_ws_upgrade(&ctx, &peer, &headers, query.token).await {
-        return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
-    }
-
-    let Some(manager) = ctx.lsp_manager.clone() else {
-        // No LSP manager wired — the `/lsp/...` route has nothing to serve.
-        return (StatusCode::NOT_FOUND, "Not Found").into_response();
-    };
-
-    let handler = LspConnectionHandler::with_chats(
-        Arc::clone(&manager),
-        Arc::new(DbProjectStore { db: ctx.db.clone() }),
-        Arc::new(DbChatStore { db: ctx.db.clone() }),
-    );
-    match handler
-        .handle_upgrade(&project_id, &language, query.chat_id.as_deref())
-        .await
-    {
-        UpgradeOutcome::Reject(status_line) => reject_response(status_line),
-        UpgradeOutcome::Proceed(handle) => {
-            let manager = Arc::clone(&manager);
-            upgrade.on_upgrade(move |socket| {
-                drive_lsp_socket(socket, handle, manager, project_id, language)
-            })
-        }
-    }
-}
-
-/// The bare status response that refuses an LSP upgrade.
-fn reject_response(kind: StatusKind) -> Response {
-    crate::error_status::status_code(kind).into_response()
-}
-
-/// Bridge an accepted LSP WebSocket to its spawned language-server child: cancel
-/// the idle reaper, attach the client (first-connect capture vs reconnect
-/// replay), relay frames both ways, and on disconnect detach + restart the idle
-/// timer.
-async fn drive_lsp_socket(
-    mut socket: WebSocket,
-    handle: Arc<LspServerHandle>,
-    manager: Arc<mainframe_lsp::LspManager>,
-    project_id: String,
-    language: String,
-) {
-    let reattach = handle.has_initialize_result();
-    tracing::info!(
-        project_id,
-        language,
-        reattach,
-        "LSP WebSocket client connected"
-    );
-    manager.cancel_idle_timer(&handle);
-
-    // Client → process (incoming) and process → client (outgoing) channels, plus a
-    // ClientRef the manager can close (server exit / replacement).
-    let (incoming_tx, incoming_rx) = mpsc::unbounded_channel::<String>();
-    let (outgoing_tx, mut outgoing_rx) = mpsc::unbounded_channel::<String>();
-    let open = Arc::new(AtomicBool::new(true));
-    let (close_tx, mut close_rx) = mpsc::unbounded_channel::<(u16, String)>();
-    handle.set_client(Some(ClientRef::new(Arc::clone(&open), close_tx)));
-
-    // First-connect: bridge immediately with init-result capture. Reconnect: defer
-    // the bridge until the client's init handshake replays from cache.
-    let mut incoming_rx = Some(incoming_rx);
-    let mut bridge_started = false;
-    if !reattach && let Some(rx) = incoming_rx.take() {
-        attach_client_with_capture(&handle, rx, outgoing_tx.clone());
-        bridge_started = true;
-    }
-
-    let key = format!("{project_id}:{language}");
-    loop {
-        tokio::select! {
-            incoming = socket.recv() => {
-                match incoming {
-                    Some(Ok(Message::Text(text))) => {
-                        let text = text.to_string();
-                        if reattach && !bridge_started {
-                            match classify_reattach_first(&text) {
-                                ReattachAction::ReplayInitialize { id } => {
-                                    if let Some(result) = handle.initialize_result() {
-                                        tracing::info!(project_id, language, "Replaying cached initialize result for reconnecting client");
-                                        let _ = outgoing_tx.send(cached_initialize_reply(&id, &result));
-                                    }
-                                }
-                                ReattachAction::SkipInitialized => {
-                                    bridge_started = start_reattach_bridge(&handle, &mut incoming_rx, &outgoing_tx);
-                                }
-                                ReattachAction::Forward => {
-                                    bridge_started = start_reattach_bridge(&handle, &mut incoming_rx, &outgoing_tx);
-                                    if bridge_started {
-                                        let _ = incoming_tx.send(text);
-                                    }
-                                }
-                            }
-                        } else {
-                            let _ = incoming_tx.send(text);
-                        }
-                    }
-                    Some(Ok(Message::Close(_))) | None => break,
-                    Some(Ok(_)) => {}
-                    Some(Err(_)) => break,
-                }
-            }
-            outbound = outgoing_rx.recv() => {
-                match outbound {
-                    Some(payload) => {
-                        if socket.send(Message::Text(payload.into())).await.is_err() {
-                            break;
-                        }
-                    }
-                    None => break,
-                }
-            }
-            closed = close_rx.recv() => {
-                if let Some((code, reason)) = closed {
-                    let _ = socket
-                        .send(Message::Close(Some(CloseFrame { code, reason: reason.into() })))
-                        .await;
-                }
-                break;
-            }
-        }
-    }
-
-    // Disconnect: detach the client + restart the idle reaper (onConnection close).
-    tracing::info!(project_id, language, "LSP WebSocket client disconnected");
-    open.store(false, std::sync::atomic::Ordering::SeqCst);
-    handle.set_cleanup(None);
-    handle.set_client(None);
-    manager.start_idle_timer(&key, &handle);
-}
-
-/// Start the plain (no-capture) reattach bridge when the child's stdio is still
-/// available. Returns whether the bridge started. The current `mainframe-lsp` seam
-/// consumes the child's stdout/stderr on the first attach, so a reconnect after the
-/// first bridge was torn down cannot re-proxy — flagged as a known LSP-reattach gap.
-fn start_reattach_bridge(
-    handle: &Arc<LspServerHandle>,
-    incoming_rx: &mut Option<mpsc::UnboundedReceiver<String>>,
-    outgoing_tx: &mpsc::UnboundedSender<String>,
-) -> bool {
-    let (Some(rx), Some(stdout), Some(stderr)) = (
-        incoming_rx.take(),
-        handle.take_stdout(),
-        handle.take_stderr(),
-    ) else {
-        tracing::warn!(
-            "LSP reattach: child stdio unavailable (consumed by prior bridge) — cannot re-proxy"
-        );
-        return false;
-    };
-    let bridge = bridge_ws_to_process(rx, outgoing_tx.clone(), handle.stdin_tx(), stdout, stderr);
-    handle.set_cleanup(Some(bridge));
-    true
-}
-
-/// Drive one accepted connection: register it, send `connection.ready`, then
-/// `select!` between inbound frames and the outbound mpsc until either side
-/// closes. On close, unregister and drop every file watch.
 async fn handle_socket(mut socket: WebSocket, ctx: Arc<AppCtx>) {
     let client_id = nanoid::nanoid!();
     let (out_tx, mut out_rx) = mpsc::unbounded_channel::<String>();
     let subscriptions: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
-    ctx.ws_clients.insert(
+    ctx.infra.ws_clients.insert(
         client_id.clone(),
         ClientHandle {
             tx: out_tx.clone(),
@@ -362,7 +130,7 @@ async fn handle_socket(mut socket: WebSocket, ctx: Arc<AppCtx>) {
     // authoritative (the renderer resets on connect). The live probe broadcast
     // fires once at boot, before any client connects, so a reconnecting client
     // would otherwise never learn the catalog. Mirrors buildConnectReplayEvents.
-    for event in build_connect_replay_events(&ctx.adapter_registry.get_snapshots()) {
+    for event in build_connect_replay_events(&ctx.core.adapter_registry.get_snapshots()) {
         send(&out_tx, &event);
     }
 
@@ -395,7 +163,7 @@ async fn handle_socket(mut socket: WebSocket, ctx: Arc<AppCtx>) {
         }
     }
 
-    ctx.ws_clients.remove(&client_id);
+    ctx.infra.ws_clients.remove(&client_id);
     file_watch.unsubscribe_all(&ctx.services.watcher);
 }
 
@@ -430,11 +198,7 @@ async fn handle_client_event(
             subscriptions.lock_recover().insert(chat_id.clone());
             // Sent even when empty: this snapshot is the client's only re-seed
             // path for offers, so a reconnect must also clear stale ones.
-            let offers = ctx
-                .chat_manager
-                .as_ref()
-                .map(|cm| cm.worktree_offers_for_chat(&chat_id))
-                .unwrap_or_default();
+            let offers = ctx.chat.chat_manager.worktree_offers_for_chat(&chat_id);
             send(
                 out_tx,
                 &DaemonEvent::WorktreeOfferSnapshot {
@@ -482,12 +246,7 @@ async fn handle_subscribe_file(
     let base = if path.starts_with('/') {
         Some(path.clone())
     } else if let Some(project_id) = project_id.clone() {
-        let chat_id = chat_id.clone();
-        ctx.db
-            .call(move |db| Ok(resolve_subscribe_base(db, &project_id, chat_id.as_deref())))
-            .await
-            .ok()
-            .flatten()
+        resolve_subscribe_base(ctx, &project_id, chat_id.as_deref()).await
     } else {
         tracing::warn!(
             path,
@@ -539,11 +298,11 @@ async fn handle_subscribe_file(
 /// delivers each event to the subscribed clients per the scoping rules. Mirrors
 /// `broadcastEvent`. Call once, after the runtime is up.
 pub fn spawn_broadcast_pump(ctx: Arc<AppCtx>) {
-    let mut rx = ctx.broadcast.subscribe();
+    let mut rx = ctx.core.broadcast.subscribe();
     tokio::spawn(async move {
         loop {
             match rx.recv().await {
-                Ok(event) => fanout(&ctx.ws_clients, &event),
+                Ok(event) => fanout(&ctx.infra.ws_clients, &event),
                 Err(broadcast::error::RecvError::Lagged(n)) => {
                     tracing::warn!(dropped = n, "ws broadcast lagged");
                 }
@@ -564,15 +323,8 @@ fn fanout(clients: &WsClients, event: &DaemonEvent) {
             return;
         }
     };
-    // A second (structural) serialization purely to read `type`/`chatId` for
-    // gating — the wire payload above keeps the struct field order.
-    let value = serde_json::to_value(event).unwrap_or(serde_json::Value::Null);
-    let type_name = value
-        .get("type")
-        .and_then(|v| v.as_str())
-        .unwrap_or_default();
-    let chat_id = value.get("chatId").and_then(|v| v.as_str());
-    let is_global = CONNECTION_GLOBAL_EVENT_TYPES.contains(&type_name);
+    let chat_id = event.chat_id();
+    let is_global = event.is_connection_global();
 
     for entry in clients.iter() {
         let handle = entry.value();
@@ -804,7 +556,7 @@ mod tests {
     #[tokio::test]
     async fn a_forged_leftmost_forwarded_for_cannot_claim_loopback() {
         let mut ctx = Arc::try_unwrap(AppCtx::test_ctx()).unwrap_or_else(|_| unreachable!());
-        ctx.auth_secret = Some("secret".to_string());
+        ctx.core.auth_secret = Some("secret".to_string());
         let ctx = Arc::new(ctx);
 
         let peer: SocketAddr = "127.0.0.1:9999".parse().unwrap();
@@ -818,3 +570,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "websocket/filter_tests.rs"]
+mod filter_tests;

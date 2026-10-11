@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use axum::Router;
 use axum::extract::{Path as AxPath, State};
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use mainframe_git::{GitService, parse_diff_name_status, parse_status_lines};
 use mainframe_types::suggestion::Suggestion;
@@ -102,7 +102,7 @@ async fn gather_todo_matches(base_path: &str) -> Vec<String> {
 async fn handle_suggestions(ctx: &AppCtx, id: &str) -> Response {
     let base_path = match resolve_base(ctx, id, None).await {
         Ok(b) => b,
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     };
 
     let churn_input = gather_churn(&base_path).await;

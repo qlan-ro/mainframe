@@ -15,9 +15,9 @@ use axum::routing::{get, post};
 use mainframe_types::segment::SwitchProviderRequest;
 
 use crate::ctx::AppCtx;
-use crate::error_status::status_of;
+use crate::respond::status_of;
 use crate::respond::{fail, ok};
-use crate::routes::projects::parse_body;
+use crate::routes::body::parse_body;
 
 #[cfg(test)]
 mod tests;
@@ -36,19 +36,17 @@ async fn switch_provider(
     if !mainframe_types::ids::is_safe_identifier(&req.adapter_id) {
         return fail(StatusCode::BAD_REQUEST, "Invalid adapterId");
     }
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "switch_provider needs ChatManager (unwired)");
-        return fail(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "provider switch unavailable",
-        );
-    };
+    let cm = &ctx.chat.chat_manager;
     match cm.switch_provider(&id, &req).await {
         Ok(chat) => ok(chat),
         Err(err) => {
             let status = status_of(&err);
             if status == StatusCode::INTERNAL_SERVER_ERROR {
-                tracing::error!(chat_id = %id, %err, "provider switch failed");
+                return crate::respond::fail_internal(
+                    format!("provider switch failed chat_id={id}"),
+                    &err,
+                    err.to_string(),
+                );
             }
             fail(status, err.to_string())
         }
@@ -61,6 +59,7 @@ async fn list_segments(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -
     }
     let lookup = id.clone();
     let result = ctx
+        .core
         .db
         .call(move |db| match db.chats.get(&lookup)? {
             Some(_) => db.segments.list_wire(&lookup).map(Some),

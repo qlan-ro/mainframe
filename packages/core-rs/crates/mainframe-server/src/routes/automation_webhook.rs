@@ -56,13 +56,11 @@ async fn ingest(
             StatusCode::NO_CONTENT.into_response()
         }
         WebhookDecision::Duplicate | WebhookDecision::Accepted { .. } => ok_empty(),
-        WebhookDecision::StartFailed { error } => {
-            tracing::error!(hook_id, error, "webhook delivery failed to start a run");
-            fail(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "failed to start automation run",
-            )
-        }
+        WebhookDecision::StartFailed { error } => crate::respond::fail_internal(
+            format!("webhook delivery failed to start a run hook_id={}", hook_id),
+            &error,
+            "failed to start automation run",
+        ),
     }
 }
 

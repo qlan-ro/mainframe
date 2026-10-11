@@ -1,6 +1,6 @@
 //! A minimal `Adapter`/`AdapterSession` pair that actually "spawns" (unlike
 //! `routes/session_transcripts.rs`'s `StubAdapter`, whose `create_session` is
-//! `unreachable!`) — for route tests that need `ctx.chat_manager` wired to a
+//! `unreachable!`) — for route tests that need `ctx.chat.chat_manager` wired to a
 //! real `ChatManager` and drive it through a create/start round trip without
 //! touching a real CLI process.
 #![cfg(test)]
@@ -23,7 +23,7 @@ use mainframe_types::transcript::TranscriptLocation;
 
 mod app_ctx;
 
-pub(crate) use app_ctx::{test_ctx, test_ctx_with_chat_manager, test_ctx_with_orchestration};
+pub(crate) use app_ctx::build_test_context;
 
 static NEXT_SESSION_ID: AtomicUsize = AtomicUsize::new(1);
 

@@ -58,7 +58,7 @@ async fn register_arms_the_hook_and_returns_the_local_ingest_url() {
         body["data"]["url"],
         format!(
             "http://127.0.0.1:{}/api/automation-webhooks/hook-1",
-            h.ctx.port
+            h.ctx.core.port
         ),
         "the daemon has no public tunnel — the URL is the local ingest endpoint"
     );
@@ -162,7 +162,7 @@ async fn get_embeds_the_registration_only_once_the_hook_is_armed() {
         registration["url"],
         format!(
             "http://127.0.0.1:{}/api/automation-webhooks/hook-1",
-            h.ctx.port
+            h.ctx.core.port
         )
     );
     assert_eq!(registration["lastDeliveryAt"], Value::Null);

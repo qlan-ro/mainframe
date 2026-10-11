@@ -44,7 +44,7 @@ pub(super) async fn register(
     };
     match engine.arm_webhook(&id, &trigger_id).await {
         Ok(Some(state)) => ok(ArmedRegistration {
-            registration: to_wire(&state, ctx.port),
+            registration: to_wire(&state, ctx.core.port),
             secret: state.secret,
         }),
         Ok(None) => fail(
