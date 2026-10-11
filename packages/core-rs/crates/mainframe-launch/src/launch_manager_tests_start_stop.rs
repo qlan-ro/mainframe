@@ -64,10 +64,12 @@ async fn restart_during_stop_teardown_respawns_after_exit() {
         None,
         None,
         None,
-        default_read_command(),
-        LaunchTimings {
-            stop_grace: Duration::from_millis(300),
-            ..LaunchTimings::default()
+        crate::launch_manager::LaunchExecution {
+            read_process_command: default_read_command(),
+            timings: LaunchTimings {
+                stop_grace: Duration::from_millis(300),
+                ..LaunchTimings::default()
+            },
         },
     ));
 

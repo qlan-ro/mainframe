@@ -231,18 +231,26 @@ pub async fn probe(
     Ok(probe_parse::parse_probe(&raw))
 }
 
-// The 8-argument signature is pinned by tests/skills_cli_unit.rs's doc
-// comment; a params struct would diverge from it.
-#[allow(clippy::too_many_arguments)]
+pub struct InstallRequest<'a> {
+    pub project_id: &'a str,
+    pub project_path: &'a str,
+    pub source: &'a str,
+    pub skills: &'a [String],
+    pub scope: Scope,
+    pub adapter_id: Option<&'a str>,
+}
+
 pub async fn install(
     runner: &dyn SkillsCliRunner,
     path: &ResolvedPath,
-    project_id: &str,
-    project_path: &str,
-    source: &str,
-    skills: &[String],
-    scope: Scope,
-    adapter_id: Option<&str>,
+    InstallRequest {
+        project_id,
+        project_path,
+        source,
+        skills,
+        scope,
+        adapter_id,
+    }: InstallRequest<'_>,
 ) -> Result<(), SkillsCliError> {
     let _guard = locks::acquire(project_id).ok_or(SkillsCliError::Busy)?;
     validate::validate_source(source).map_err(SkillsCliError::Rejected)?;

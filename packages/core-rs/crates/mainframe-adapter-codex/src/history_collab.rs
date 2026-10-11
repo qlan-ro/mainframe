@@ -18,16 +18,27 @@ use crate::thread_registry::AgentMetadata;
 /// converted transcript under it (skipping the child's user-prompt echo,
 /// splitting `tool_result` blocks into their own `ChatMessage`s — same shape
 /// the legacy `emit_collab_agent` produced).
-#[allow(clippy::too_many_arguments)]
+pub(crate) struct SubAgentCard<'a> {
+    pub(crate) chat_id: &'a str,
+    pub(crate) card_id: &'a str,
+    pub(crate) child_thread_id: &'a str,
+    pub(crate) agent_path: Option<&'a str>,
+    pub(crate) prompt: Option<&'a str>,
+    pub(crate) child_items_by_thread: &'a HashMap<String, Vec<ThreadItem>>,
+    pub(crate) agent_meta_by_thread: &'a HashMap<String, AgentMetadata>,
+}
+
 pub(crate) fn emit_sub_agent_card(
     messages: &mut Vec<ChatMessage>,
-    chat_id: &str,
-    card_id: &str,
-    child_thread_id: &str,
-    agent_path: Option<&str>,
-    prompt: Option<&str>,
-    child_items_by_thread: &HashMap<String, Vec<ThreadItem>>,
-    agent_meta_by_thread: &HashMap<String, AgentMetadata>,
+    SubAgentCard {
+        chat_id,
+        card_id,
+        child_thread_id,
+        agent_path,
+        prompt,
+        child_items_by_thread,
+        agent_meta_by_thread,
+    }: SubAgentCard<'_>,
 ) {
     let title = card_title(agent_meta_by_thread.get(child_thread_id), agent_path);
     let prompt_text = prompt.unwrap_or_default().to_string();

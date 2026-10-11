@@ -7,6 +7,13 @@ use serde_json::{Map, Value};
 
 use super::{AutomationCheckpoint, CheckpointStep, StepKind, StepStatus, epoch_ms_now};
 
+pub(crate) struct StepTransition {
+    pub(crate) status: StepStatus,
+    pub(crate) outputs: Option<Map<String, Value>>,
+    pub(crate) error: Option<String>,
+    pub(crate) wake_at: Option<i64>,
+}
+
 impl AutomationCheckpoint {
     /// Writes one stepRef entry. `outputs` land only on `succeeded` (a failed
     /// re-run must not clobber earlier outputs); `startedAt` survives
@@ -14,16 +21,17 @@ impl AutomationCheckpoint {
     /// running-to-waiting rewrite must not drop what a verb stamped between
     /// commits. `wake_at` is the caller's to set explicitly (only `park_step`
     /// and the agent verb pass one); every other transition clears it.
-    #[allow(clippy::too_many_arguments)]
     pub(crate) fn set_step(
         &mut self,
         step_ref: &str,
         step_id: &str,
         kind: StepKind,
-        status: StepStatus,
-        outputs: Option<Map<String, Value>>,
-        error: Option<String>,
-        wake_at: Option<i64>,
+        StepTransition {
+            status,
+            outputs,
+            error,
+            wake_at,
+        }: StepTransition,
     ) {
         let now = epoch_ms_now();
         let existing = self.steps.get(step_ref);
@@ -76,10 +84,12 @@ impl AutomationCheckpoint {
             step_ref,
             step_id,
             kind,
-            StepStatus::Waiting,
-            None,
-            None,
-            wake_at,
+            crate::store::StepTransition {
+                status: StepStatus::Waiting,
+                outputs: None,
+                error: None,
+                wake_at,
+            },
         );
         self.recompute_wake_at();
     }

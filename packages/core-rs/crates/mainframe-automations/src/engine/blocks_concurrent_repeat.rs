@@ -171,10 +171,12 @@ async fn mark_watermark(
                 &marker,
                 &block_id,
                 StepKind::RepeatWatermark,
-                StepStatus::Succeeded,
-                Some(outputs),
-                None,
-                None,
+                crate::store::StepTransition {
+                    status: StepStatus::Succeeded,
+                    outputs: Some(outputs),
+                    error: None,
+                    wake_at: None,
+                },
             );
         })
         .await?;

@@ -33,17 +33,17 @@ pub(super) fn encode_tool_group(
         }) = call
             && *category != ToolCategory::Hidden
         {
-            out.push(tool_call_item(
+            out.push(tool_call_item(crate::encoder::tool_call::ToolCallInput {
                 id,
                 name,
                 input,
-                *category,
+                category: *category,
                 result,
-                &source_container,
-                group_id.as_deref(),
-                *timing,
+                container: &source_container,
+                group_id: group_id.as_deref(),
+                timing: *timing,
                 command_execution,
-            ));
+            }));
         }
     }
 }
@@ -65,17 +65,30 @@ fn status_for(result: &Option<ToolCallResult>) -> ToolCallStatus {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+pub(super) struct ToolCallInput<'a> {
+    pub(super) id: &'a str,
+    pub(super) name: &'a str,
+    pub(super) input: &'a HashMap<String, Value>,
+    pub(super) category: ToolCategory,
+    pub(super) result: &'a Option<ToolCallResult>,
+    pub(super) container: &'a Container<'a>,
+    pub(super) group_id: Option<&'a str>,
+    pub(super) timing: Option<ToolCallTiming>,
+    pub(super) command_execution: &'a Option<Box<CommandExecutionMetadata>>,
+}
+
 pub(super) fn tool_call_item(
-    id: &str,
-    name: &str,
-    input: &HashMap<String, Value>,
-    category: ToolCategory,
-    result: &Option<ToolCallResult>,
-    container: &Container<'_>,
-    group_id: Option<&str>,
-    timing: Option<ToolCallTiming>,
-    command_execution: &Option<Box<CommandExecutionMetadata>>,
+    ToolCallInput {
+        id,
+        name,
+        input,
+        category,
+        result,
+        container,
+        group_id,
+        timing,
+        command_execution,
+    }: ToolCallInput<'_>,
 ) -> EncodedItem {
     EncodedItem::ToolCall {
         id: id.to_string(),

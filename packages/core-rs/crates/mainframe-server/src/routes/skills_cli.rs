@@ -179,12 +179,14 @@ async fn install(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>, body: B
     let result = skills_cli::install(
         &runner,
         &ctx.core.resolved_path,
-        &id,
-        &base,
-        &source,
-        &skills,
-        scope,
-        parsed.adapter_id.as_deref(),
+        crate::skills_cli::InstallRequest {
+            project_id: &id,
+            project_path: &base,
+            source: &source,
+            skills: &skills,
+            scope,
+            adapter_id: parsed.adapter_id.as_deref(),
+        },
     )
     .await;
     match result {

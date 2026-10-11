@@ -157,7 +157,6 @@ fn on_wait(
 /// Registers `child_thread_id`'s card and emits its opening tool_use — a no-op
 /// when the child is already known, regardless of whether that card has since
 /// resolved (a resolved entry still blocks a duplicate open).
-#[allow(clippy::too_many_arguments)]
 fn open_card(
     child_thread_id: &str,
     card_id: String,
@@ -172,13 +171,15 @@ fn open_card(
     }
     emit_sub_agent_card(
         messages,
-        ctx.chat_id,
-        &card_id,
-        child_thread_id,
-        agent_path,
-        prompt,
-        ctx.child_items_by_thread,
-        ctx.agent_meta_by_thread,
+        crate::history_collab::SubAgentCard {
+            chat_id: ctx.chat_id,
+            card_id: &card_id,
+            child_thread_id,
+            agent_path,
+            prompt,
+            child_items_by_thread: ctx.child_items_by_thread,
+            agent_meta_by_thread: ctx.agent_meta_by_thread,
+        },
     );
     cards.insert(
         child_thread_id.to_string(),

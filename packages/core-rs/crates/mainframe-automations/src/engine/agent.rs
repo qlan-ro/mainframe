@@ -90,10 +90,12 @@ impl AgentVerb {
                     &step_ref,
                     &step_id,
                     StepKind::AskAgent,
-                    StepStatus::Waiting,
-                    None,
-                    None,
-                    wake_at,
+                    crate::store::StepTransition {
+                        status: StepStatus::Waiting,
+                        outputs: None,
+                        error: None,
+                        wake_at,
+                    },
                 );
                 if let Some(entry) = cp.steps.get_mut(&step_ref) {
                     entry.chat_id = Some(chat_id);

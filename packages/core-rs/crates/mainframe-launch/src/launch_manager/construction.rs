@@ -1,5 +1,10 @@
 use super::*;
 
+pub(crate) struct LaunchExecution {
+    pub(crate) read_process_command: ReadCommandFn,
+    pub(crate) timings: LaunchTimings,
+}
+
 impl LaunchManager {
     pub fn new(
         project_id: impl Into<String>,
@@ -16,8 +21,10 @@ impl LaunchManager {
             tunnel_manager,
             resolved_path,
             child_registry,
-            default_read_command(),
-            LaunchTimings::default(),
+            crate::launch_manager::LaunchExecution {
+                read_process_command: default_read_command(),
+                timings: LaunchTimings::default(),
+            },
         )
     }
 
@@ -40,12 +47,13 @@ impl LaunchManager {
             tunnel_manager,
             resolved_path,
             child_registry,
-            read_process_command,
-            LaunchTimings::default(),
+            crate::launch_manager::LaunchExecution {
+                read_process_command,
+                timings: LaunchTimings::default(),
+            },
         )
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub(crate) fn with_timings(
         project_id: impl Into<String>,
         project_path: impl Into<String>,
@@ -53,8 +61,10 @@ impl LaunchManager {
         tunnel_manager: Option<Arc<TunnelManager>>,
         resolved_path: Option<mainframe_runtime::ResolvedPath>,
         child_registry: Option<Arc<dyn ChildRegistryPort>>,
-        read_process_command: ReadCommandFn,
-        timings: LaunchTimings,
+        LaunchExecution {
+            read_process_command,
+            timings,
+        }: LaunchExecution,
     ) -> Self {
         Self {
             spawn_gate: Arc::new(tokio::sync::Mutex::new(false)),
