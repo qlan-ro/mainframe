@@ -6,7 +6,6 @@ use std::sync::{Arc, Mutex};
 use mainframe_types::chat::Chat;
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::plugin::{PluginCapability, PluginManifest};
-use mainframe_types::settings::NotificationConfig;
 use mainframe_types::settings_kv::{MemorySettings, SettingsKv};
 use mainframe_types::time::now_iso8601;
 use serde_json::json;
@@ -42,11 +41,11 @@ fn make_chat(id: &str, project_id: &str) -> Chat {
 }
 
 impl PluginHostDb for FakeHostDb {
-    fn chats_list(&self, _project_id: &str) -> Vec<Chat> {
-        Vec::new()
+    fn chats_list(&self, _project_id: &str) -> Result<Vec<Chat>, crate::PluginError> {
+        Ok(Vec::new())
     }
-    fn chats_get(&self, _id: &str) -> Option<Chat> {
-        None
+    fn chats_get(&self, _id: &str) -> Result<Option<Chat>, crate::PluginError> {
+        Ok(None)
     }
     fn chats_create(
         &self,
@@ -54,20 +53,19 @@ impl PluginHostDb for FakeHostDb {
         adapter_id: &str,
         model: Option<&str>,
         permission_mode: Option<&str>,
-    ) -> Chat {
-        self.created.lock().unwrap().push((
-            project_id.to_string(),
-            adapter_id.to_string(),
-            model.map(str::to_string),
-            permission_mode.map(str::to_string),
-        ));
-        make_chat("chat-1", project_id)
+    ) -> Result<Chat, crate::PluginError> {
+        Ok({
+            self.created.lock().unwrap().push((
+                project_id.to_string(),
+                adapter_id.to_string(),
+                model.map(str::to_string),
+                permission_mode.map(str::to_string),
+            ));
+            make_chat("chat-1", project_id)
+        })
     }
     fn settings(&self) -> &dyn SettingsKv {
         &self.settings
-    }
-    fn notification_config(&self) -> NotificationConfig {
-        NotificationConfig::default()
     }
 }
 

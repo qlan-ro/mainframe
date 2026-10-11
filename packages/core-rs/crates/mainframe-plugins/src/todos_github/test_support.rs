@@ -7,7 +7,6 @@ use std::sync::Arc;
 use axum::extract::State;
 use mainframe_types::chat::Chat;
 use mainframe_types::plugin::{PluginCapability, PluginManifest};
-use mainframe_types::settings::NotificationConfig;
 use mainframe_types::settings_kv::{MemorySettings, SettingsKv};
 
 use crate::context::{PluginContextDeps, PluginHostDb, build_plugin_context};
@@ -20,11 +19,11 @@ struct FakeHostDb {
 }
 
 impl PluginHostDb for FakeHostDb {
-    fn chats_list(&self, _project_id: &str) -> Vec<Chat> {
-        Vec::new()
+    fn chats_list(&self, _project_id: &str) -> Result<Vec<Chat>, crate::PluginError> {
+        Ok(Vec::new())
     }
-    fn chats_get(&self, _id: &str) -> Option<Chat> {
-        None
+    fn chats_get(&self, _id: &str) -> Result<Option<Chat>, crate::PluginError> {
+        Ok(None)
     }
     fn chats_create(
         &self,
@@ -32,14 +31,11 @@ impl PluginHostDb for FakeHostDb {
         _adapter_id: &str,
         _model: Option<&str>,
         _permission_mode: Option<&str>,
-    ) -> Chat {
+    ) -> Result<Chat, crate::PluginError> {
         unreachable!("the sync engine never creates chats")
     }
     fn settings(&self) -> &dyn SettingsKv {
         &self.settings
-    }
-    fn notification_config(&self) -> NotificationConfig {
-        NotificationConfig::default()
     }
 }
 

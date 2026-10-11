@@ -50,7 +50,7 @@ impl ChatService for HostChatService {
     fn list_chats(&self, project_id: &str) -> BoxFuture<'_, Result<Vec<ChatSummary>, PluginError>> {
         let project_id = project_id.to_string();
         Box::pin(async move {
-            let chats = self.host_db.chats_list(&project_id);
+            let chats = self.host_db.chats_list(&project_id)?;
             Ok(chats.iter().map(to_summary).collect())
         })
     }
@@ -60,7 +60,7 @@ impl ChatService for HostChatService {
         chat_id: &str,
     ) -> BoxFuture<'_, Result<Option<ChatSummary>, PluginError>> {
         let chat_id = chat_id.to_string();
-        Box::pin(async move { Ok(self.host_db.chats_get(&chat_id).as_ref().map(to_summary)) })
+        Box::pin(async move { Ok(self.host_db.chats_get(&chat_id)?.as_ref().map(to_summary)) })
     }
 
     fn can_create_chat(&self) -> bool {
@@ -107,7 +107,7 @@ impl ChatService for HostChatService {
                 &effective_adapter,
                 effective_model.as_deref(),
                 effective_mode.as_deref(),
-            );
+            )?;
             let chat_id = chat.id.clone();
             (self.emit)(DaemonEvent::ChatCreated { chat, source: None });
             Ok(CreateChatResult { chat_id })

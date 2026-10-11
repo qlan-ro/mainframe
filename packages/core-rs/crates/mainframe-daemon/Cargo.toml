@@ -12,22 +12,27 @@ name = "mainframe-daemon"
 path = "src/main.rs"
 
 [dependencies]
+nanoid = { workspace = true }
 tokio = { workspace = true }
-axum = { workspace = true }
 tracing = { workspace = true }
-dashmap = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 reqwest = { workspace = true }
 thiserror = { workspace = true }
 qrcode = { workspace = true }
-nanoid = { workspace = true }
 mainframe-server = { workspace = true }
-mainframe-acp = { workspace = true }
 mainframe-runtime = { workspace = true }
+mainframe-types = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+wiremock = { workspace = true }
+
+axum = { workspace = true }
+dashmap = { workspace = true }
+mainframe-acp = { workspace = true }
 mainframe-db = { workspace = true }
 mainframe-services = { workspace = true }
-mainframe-types = { workspace = true }
 mainframe-github = { workspace = true }
 mainframe-adapter-api = { workspace = true }
 mainframe-adapter-claude = { workspace = true }
@@ -39,7 +44,3 @@ mainframe-claude-workflows = { workspace = true }
 mainframe-launch = { workspace = true }
 mainframe-plugins = { workspace = true }
 mainframe-lsp = { workspace = true }
-
-[dev-dependencies]
-tempfile = { workspace = true }
-wiremock = { workspace = true }

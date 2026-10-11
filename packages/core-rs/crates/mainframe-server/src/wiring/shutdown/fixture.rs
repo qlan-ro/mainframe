@@ -1,8 +1,8 @@
 use super::*;
+use crate::ctx::{AppCtx, GitFactory, Services};
+use crate::db::Db;
 use dashmap::DashMap;
 use mainframe_db::DatabaseManager;
-use mainframe_server::ctx::{AppCtx, GitFactory, Services};
-use mainframe_server::db::Db;
 use mainframe_services::{
     attachment::AttachmentStore, files::FileWatcherService, push::PushService,
 };
@@ -40,11 +40,11 @@ pub(super) fn app(data_dir: &tempfile::TempDir, tunnels: Arc<TunnelManager>) -> 
             .resolved_path(mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"))
             .tunnel_url(Arc::new(std::sync::RwLock::new(None)))
             .ws_clients(Arc::new(DashMap::new()))
-            .facade_hub(Arc::new(mainframe_server::FacadeHub::default()))
+            .facade_hub(Arc::new(crate::FacadeHub::default()))
             .facade_heartbeat_interval_ms(1000)
             .build(),
     );
-    mainframe_server::routes::tunnel::router().with_state(ctx)
+    crate::routes::tunnel::router().with_state(ctx)
 }
 
 pub(super) fn tunnels(

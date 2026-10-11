@@ -173,7 +173,10 @@ mod tests {
         // Axum has already percent-decoded `cla%20ude` into `cla ude` by here.
         let (status, body) = body_json(get_quota(State(ctx), Path("cla ude".into())).await).await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
-        assert_eq!(body, serde_json::json!({"success":false,"error":"invalid provider id"}));
+        assert_eq!(
+            body,
+            serde_json::json!({"success":false,"error":"invalid provider id"})
+        );
     }
 
     #[tokio::test]
