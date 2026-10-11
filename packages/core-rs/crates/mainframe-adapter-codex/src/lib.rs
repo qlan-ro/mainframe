@@ -80,3 +80,7 @@ mod presentation_sink;
 mod rollout_profile_test;
 mod thread_read_types;
 mod transcript_presentation;
+
+mod skills_provider;
+
+mod quota_source;

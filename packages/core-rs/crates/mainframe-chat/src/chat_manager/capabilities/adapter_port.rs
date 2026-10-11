@@ -35,8 +35,6 @@ pub trait AdapterPort: Send + Sync {
         chat_id: &'a str,
     ) -> BoxFuture<'a, Option<mainframe_types::chat::ResolvedTuning>>;
 
-    fn apply_codex_provider_tuning(&self, session: &Arc<dyn AdapterSession>);
-
     fn generate_title<'a>(
         &'a self,
         adapter_id: &'a str,

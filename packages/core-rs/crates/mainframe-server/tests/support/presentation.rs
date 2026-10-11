@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 pub fn handler(cache: Arc<Mutex<MessageCache>>, subagent: &str) -> EventHandler {
     mainframe_chat::test_support::presentation_handler(
         cache,
-        || Box::new(mainframe_adapter_claude::messages::incremental::IncrementalProjector::new()),
+        || Box::new(mainframe_display::incremental::IncrementalProjector::new()),
         Some(ToolCategories {
             subagent: std::collections::HashSet::from([subagent.into()]),
             hidden: Default::default(),

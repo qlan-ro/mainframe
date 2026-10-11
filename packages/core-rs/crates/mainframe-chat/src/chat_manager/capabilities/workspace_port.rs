@@ -1,17 +1,13 @@
 use super::*;
 
 pub trait WorkspacePort: Send + Sync {
-    fn move_claude_session_files<'a>(
+    fn relocate_transcript<'a>(
         &'a self,
+        adapter_id: &'a str,
         session_id: &'a str,
         old_dir: &'a str,
         new_dir: &'a str,
-    ) -> BoxFuture<'a, Result<(), mainframe_services::workspace::session_files::SessionFilesError>>
-    {
-        Box::pin(mainframe_services::workspace::move_session_files(
-            session_id, old_dir, new_dir,
-        ))
-    }
+    ) -> BoxFuture<'a, Result<Option<String>, mainframe_adapter_api::AdapterError>>;
 
     fn branch_exists<'a>(&'a self, project: &'a str, branch: &'a str) -> BoxFuture<'a, bool> {
         Box::pin(mainframe_services::workspace::branch_exists(

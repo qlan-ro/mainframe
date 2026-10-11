@@ -118,11 +118,10 @@ Tier 2  mainframe-services   workspace/attachment/push/todos/commands/notificati
         mainframe-adapter-codex    Codex CLI: app-server JSON-RPC
         mainframe-adapter-mock     fixture-replay adapter for tests/demos
                              Claude deps: types, runtime, adapter-api, display,
-                               background-tasks, claude-workflows, services, orchestration
-                             Codex deps: types, runtime, adapter-api,
+                               background-tasks, claude-workflows, orchestration
+                             Codex deps: types, runtime, adapter-api, display,
                                background-tasks, orchestration
-                             Mock deps: types, adapter-api, background-tasks,
-                               claude-workflows
+                             Mock deps: types, adapter-api, background-tasks, display
 
 Tier 3  mainframe-chat       ChatManager: per-chat session orchestration
                              (depends on adapter-api and db, not the concrete adapter crates)
@@ -145,7 +144,7 @@ Tier 5  mainframe-daemon     bin: boots everything mainframe-server aggregates
 | `mainframe-runtime` | Process-level concerns: config load/merge (`$MAINFRAME_DATA_DIR`, `config.json`), logging setup, auth-secret handling, and login-shell `PATH` resolution (threaded explicitly into every child spawn — see [Boot sequence](#boot-sequence-and-process-ownership) for why). |
 | `mainframe-db` | `DatabaseManager`, the migration runner, and repositories for `projects`, `chats`, `settings`, `devices`, `tags`, `chat_tags`. Synchronous `rusqlite` on one connection, matching the synchronous `better-sqlite3` API it replaced; callers reach it through `mainframe-db::actor::SqliteActor`, exposed by `mainframe-server::db` and the chat storage capability. |
 | `mainframe-git` | The git subprocess primitive, porcelain-output parsers, `GitService`, and a per-project async lock so concurrent git commands on one repo serialize. |
-| `mainframe-display` | The adapter-agnostic half of the message pipeline: tool categorization/grouping, unified-diff parsing, content truncation. Claude-specific message shapes live in `mainframe-adapter-claude` instead. |
+| `mainframe-display` | Full and incremental message projection, presentation provenance, tool grouping, unified-diff parsing, and content truncation. Adapter-provided `ToolResultDecoders` interpret tool answers and command tags. |
 | `mainframe-background-tasks` | Tracks long-running background tasks (spool files on disk), process-group kill, and liveness reconciliation after a daemon restart. |
 | `mainframe-claude-workflows` | Server-side state for Claude's `/workflows` runs — seeded from `task_started`, updated via `task_progress`, reconciled against on-disk `wf_<runId>.json` records. |
 | `mainframe-launch` | Runs `.mainframe/launches.json` dev-server/sandbox processes per project and manages `cloudflared` tunnels for exposing them (used by the mobile companion). |
@@ -336,7 +335,7 @@ state machine per chat, tying a live `AdapterSession` to the cached display
 messages, the FIFO permission queue, and session config. Display messages are
 NOT recomputed from scratch on every partial: each chat keeps a stateful
 `DisplayProjector` (`mainframe-display`; the daemon wires
-`IncrementalProjector` for every adapter) that turns a raw-cache mutation
+`IncrementalProjector` with the registered adapters’ display decoders) that turns a raw-cache mutation
 plus the live streaming overlay into a container-level `DisplayDelta` —
 touching only the containers a mutation actually affected. `mainframe-server`'s
 ACP facade hub encodes and diffs only those changed containers

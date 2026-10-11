@@ -142,10 +142,8 @@ impl mainframe_adapter_api::Adapter for DualAdapter {
     fn get_version(&self) -> BoxFuture<'_, Result<Option<String>, AdapterError>> {
         Box::pin(async { Ok(None) })
     }
-    fn list_models(
-        &self,
-    ) -> BoxFuture<'_, Result<Vec<mainframe_types::adapter::AdapterModel>, AdapterError>> {
-        Box::pin(async { Ok(Vec::new()) })
+    fn catalog(&self) -> Vec<mainframe_types::adapter::AdapterModel> {
+        Vec::new()
     }
     fn create_session(&self, _options: SessionOptions) -> Arc<dyn AdapterSession> {
         Arc::new(DualHistorySession)

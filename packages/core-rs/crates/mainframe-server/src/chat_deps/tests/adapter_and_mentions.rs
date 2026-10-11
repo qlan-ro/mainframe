@@ -164,7 +164,6 @@ fn test_deps() -> DaemonChatDeps {
         launch: Arc::new(NoopLaunchStopper),
         scope_tunnels: Arc::new(NoopScopeTunnelStopper),
         quota: Arc::new(quota),
-        claude_external_session_cache: new_external_session_cache(),
         claude_workflows: Arc::new(ClaudeWorkflowStore::new()),
         data_dir: std::env::temp_dir().join("mf-chat-deps-test-data"),
     }
@@ -176,8 +175,7 @@ async fn unknown_adapter_id_logs_and_returns_none() {
     let (subscriber, events) = LogCapture::install();
     let _guard = tracing::subscriber::set_default(subscriber);
 
-    let result =
-        AdapterPort::generate_title(&deps, "not-a-real-adapter", "hello", "claude").await;
+    let result = AdapterPort::generate_title(&deps, "not-a-real-adapter", "hello", "claude").await;
 
     assert_eq!(result, None);
     assert_eq!(

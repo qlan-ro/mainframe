@@ -49,13 +49,33 @@ impl Daemon {
     }
 
     fn start_quota_scheduler(&self) -> ClaudeQuotaScheduler {
+        let sources: Vec<_> = self
+            .ctx
+            .core
+            .adapter_registry
+            .get_all()
+            .into_iter()
+            .filter_map(|adapter| {
+                adapter
+                    .quota_source()
+                    .map(|source| (adapter.id().to_string(), source.poll()))
+            })
+            .collect();
+        let periodic: Vec<_> = sources
+            .iter()
+            .filter(|(_, poll)| *poll)
+            .map(|(id, _)| id.clone())
+            .collect();
         let quota = self.handles.quota_manager.clone();
         let clients = self.ctx.infra.ws_clients.clone();
         let mut scheduler = ClaudeQuotaScheduler::new(ClaudeQuotaSchedulerDeps {
             refresh: Arc::new(move || {
                 let quota = quota.clone();
+                let periodic = periodic.clone();
                 Box::pin(async move {
-                    quota.refresh("claude").await;
+                    for id in periodic {
+                        quota.refresh(&id).await;
+                    }
                     Ok::<(), SeamError>(())
                 })
             }),
@@ -65,7 +85,11 @@ impl Daemon {
         scheduler.start();
         let quota = self.handles.quota_manager.clone();
         tokio::spawn(async move {
-            quota.refresh("codex").await;
+            for (id, poll) in sources {
+                if !poll {
+                    quota.refresh(&id).await;
+                }
+            }
         });
         scheduler
     }

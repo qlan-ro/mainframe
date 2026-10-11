@@ -12,7 +12,6 @@ use mainframe_chat::degraded_recovery::DegradedRecoveryError;
 use mainframe_chat::lifecycle_manager::LifecycleError;
 use mainframe_chat::permission_handler::PermissionError;
 use mainframe_chat::worktree_offer::OfferError;
-use mainframe_services::workspace::session_files::SessionFilesError;
 use mainframe_types::http_status::{HttpStatus, NotFound, StatusKind};
 use mainframe_types::seam_error::SeamError;
 
@@ -89,7 +88,7 @@ fn config_errors() {
             "Finish or stop the current response before switching worktrees"
         )
     );
-    let moved = SessionFilesError::Io(std::io::Error::other("disk full"));
+    let moved = AdapterError::Io(std::io::Error::other("disk full"));
     assert_eq!(
         wire(&ConfigError::TranscriptMoveFailed(moved.into())),
         pair(

@@ -204,38 +204,14 @@ pub(super) fn set_or_delete(
 
 // ── Claude config-conflict detection ─────────────────────────────────────────────
 
-fn is_truthy(value: &Value) -> bool {
-    match value {
-        Value::Null => false,
-        Value::Bool(b) => *b,
-        Value::String(s) => !s.is_empty(),
-        Value::Number(n) => n.as_f64().is_some_and(|f| f != 0.0),
-        Value::Array(_) | Value::Object(_) => true,
-    }
-}
-
-async fn config_conflicts(Path(adapter_id): Path<String>) -> Response {
-    if adapter_id != "claude" {
-        return ok(json!({ "conflicts": [] }));
-    }
-    let mut conflicts: Vec<&str> = Vec::new();
-    if let Some(home) = dirs::home_dir() {
-        let settings_path = home.join(".claude").join("settings.json");
-        if let Ok(raw) = tokio::fs::read_to_string(&settings_path).await
-            && let Ok(settings) = serde_json::from_str::<Value>(&raw)
-            && let Some(permissions) = settings.get("permissions")
-        {
-            if permissions.get("defaultMode").is_some_and(is_truthy) {
-                conflicts.push("defaultMode");
-            }
-            if permissions.get("allow").is_some_and(is_truthy) {
-                conflicts.push("allowedTools");
-            }
-            if permissions.get("deny").is_some_and(is_truthy) {
-                conflicts.push("deniedTools");
-            }
-        }
-    }
+async fn config_conflicts(
+    State(ctx): State<Arc<AppCtx>>,
+    Path(adapter_id): Path<String>,
+) -> Response {
+    let conflicts = match ctx.core.adapter_registry.get(&adapter_id) {
+        Some(adapter) => adapter.config_conflicts().await,
+        None => Vec::new(),
+    };
     ok(json!({ "conflicts": conflicts }))
 }
 
@@ -255,6 +231,25 @@ pub fn router() -> Router<Arc<AppCtx>> {
 
 #[cfg(test)]
 mod notification_tests {
+    #[tokio::test]
+    async fn conflicts_use_registered_capabilities_and_keep_unknown_adapters_empty() {
+        use axum::body::to_bytes;
+        let ctx = AppCtx::test_ctx();
+        let mut adapter = crate::chat_test_support::StubAdapter::new("third-provider", false);
+        Arc::get_mut(&mut adapter).unwrap().conflicts = vec!["allowedTools".into()];
+        ctx.core.adapter_registry.register(adapter);
+        for (id, expected) in [
+            ("third-provider", json!(["allowedTools"])),
+            ("missing", json!([])),
+        ] {
+            let response = config_conflicts(State(ctx.clone()), Path(id.into())).await;
+            assert_eq!(response.status(), StatusCode::OK);
+            let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+            let body: Value = serde_json::from_slice(&bytes).unwrap();
+            assert_eq!(body["data"]["conflicts"], expected);
+        }
+    }
+
     use super::*;
     #[test]
     fn settings_write_refreshes_notification_snapshot() {

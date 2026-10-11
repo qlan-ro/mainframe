@@ -38,8 +38,8 @@ mod partial_overlay;
 mod worktree_tool;
 
 const PUSH_BODY_MAX_LENGTH: usize = 200;
-/// `computeSessionFilePath` — encode a cwd the Claude way and point at the jsonl.
-pub fn compute_session_file_path(cwd: &str, session_id: &str) -> String {
+#[cfg(any(test, feature = "test-support"))]
+pub(crate) fn compute_session_file_path(cwd: &str, session_id: &str) -> String {
     let encoded = mainframe_types::paths::encode_claude_project_path(cwd);
     let safe_session = mainframe_types::paths::encode_claude_project_path(session_id);
     let home = dirs::home_dir().unwrap_or_default();

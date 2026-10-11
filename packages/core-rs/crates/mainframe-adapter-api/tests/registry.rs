@@ -232,31 +232,31 @@ impl Adapter for FakeAdapter {
         let v = self.version.clone();
         Box::pin(async move { Ok(Some(v)) })
     }
-    fn list_models(&self) -> BoxFuture<'_, Result<Vec<AdapterModel>, AdapterError>> {
-        self.list_models_calls.fetch_add(1, Ordering::SeqCst);
-        let models = self
-            .list_models_seq
-            .lock()
-            .unwrap()
-            .pop_front()
-            .unwrap_or_else(|| self.list_models_default.clone());
-        Box::pin(async move { Ok(models) })
+    fn catalog(&self) -> Vec<AdapterModel> {
+        self.fallback_models.clone()
     }
-    fn has_probe_models(&self) -> bool {
-        self.has_probe
-    }
-    fn probe_models(
+
+    fn refresh_catalog(
         &self,
         executable_path: Option<String>,
     ) -> BoxFuture<'_, Result<Option<Vec<AdapterModel>>, AdapterError>> {
-        self.probe_calls.fetch_add(1, Ordering::SeqCst);
-        self.probe_args.lock().unwrap().push(executable_path);
-        let r = self.probe_result.clone();
-        Box::pin(async move { Ok(r) })
+        if self.has_probe {
+            self.probe_calls.fetch_add(1, Ordering::SeqCst);
+            self.probe_args.lock().unwrap().push(executable_path);
+            let result = self.probe_result.clone();
+            Box::pin(async move { Ok(result) })
+        } else {
+            self.list_models_calls.fetch_add(1, Ordering::SeqCst);
+            let models = self
+                .list_models_seq
+                .lock()
+                .unwrap()
+                .pop_front()
+                .unwrap_or_else(|| self.list_models_default.clone());
+            Box::pin(async move { Ok(Some(models)) })
+        }
     }
-    fn get_fallback_models(&self) -> Option<Vec<AdapterModel>> {
-        Some(self.fallback_models.clone())
-    }
+
     fn create_session(&self, _options: SessionOptions) -> Arc<dyn AdapterSession> {
         Arc::new(StubSession)
     }

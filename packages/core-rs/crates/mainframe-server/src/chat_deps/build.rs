@@ -52,7 +52,6 @@ pub fn build_chat_manager(params: ChatManagerParams) -> Arc<ChatManager> {
         launch,
         scope_tunnels,
         quota,
-        claude_external_session_cache: new_external_session_cache(),
         claude_workflows,
         data_dir,
     });

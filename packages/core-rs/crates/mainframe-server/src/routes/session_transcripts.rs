@@ -163,8 +163,8 @@ mod tests {
         fn get_version(&self) -> BoxFuture<'_, Result<Option<String>, AdapterError>> {
             Box::pin(async { Ok(None) })
         }
-        fn list_models(&self) -> BoxFuture<'_, Result<Vec<AdapterModel>, AdapterError>> {
-            Box::pin(async { Ok(vec![]) })
+        fn catalog(&self) -> Vec<AdapterModel> {
+            Vec::new()
         }
         fn create_session(&self, _options: SessionOptions) -> Arc<dyn AdapterSession> {
             unreachable!("resolve_one never spawns a session")
@@ -211,8 +211,8 @@ mod tests {
         fn get_version(&self) -> BoxFuture<'_, Result<Option<String>, AdapterError>> {
             Box::pin(async { Ok(None) })
         }
-        fn list_models(&self) -> BoxFuture<'_, Result<Vec<AdapterModel>, AdapterError>> {
-            Box::pin(async { Ok(vec![]) })
+        fn catalog(&self) -> Vec<AdapterModel> {
+            Vec::new()
         }
         fn create_session(&self, _options: SessionOptions) -> Arc<dyn AdapterSession> {
             unreachable!("resolve_one never spawns a session")

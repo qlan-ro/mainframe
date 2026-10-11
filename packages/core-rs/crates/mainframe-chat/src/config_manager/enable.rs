@@ -89,7 +89,7 @@ impl ChatConfigManager {
             adapter_id: &adapter,
             session_id: None,
         };
-        relocate_claude_transcripts(
+        relocate_transcripts(
             self.shared.deps.as_ref(),
             chat_id,
             active,

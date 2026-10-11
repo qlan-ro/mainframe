@@ -385,20 +385,9 @@ async fn tool_result(
         Err(error) => return Err(error),
         Ok(None) => return Err(ApiError::NotFound("No session file for chat".into())),
     };
-    // A Codex chat's session file is a rollout, where the tool call's display
-    // id is the rollout `call_id`; everything else is a Claude JSONL.
-    let content = if chat.adapter_id == "codex" {
-        mainframe_adapter_codex::read_tool_result_from_rollout::read_tool_result_from_rollout(
-            &file_path,
-            &tool_use_id,
-        )
-        .await
-    } else {
-        mainframe_adapter_claude::messages::read_tool_result_from_jsonl::read_tool_result_from_jsonl(
-            &file_path,
-            &tool_use_id,
-        )
-        .await
+    let content = match ctx.core.adapter_registry.get(&chat.adapter_id) {
+        Some(adapter) => adapter.read_tool_result(file_path, tool_use_id).await,
+        None => None,
     };
     match content {
         Some(content) => Ok(ok(serde_json::json!({ "content": content }))),
@@ -779,6 +768,8 @@ mod tests {
         let rollout = dir.path().join("rollout.jsonl");
         std::fs::write(&rollout, r#"{"type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"call_1","output":"codex result"}}"#).unwrap();
         let mut adapter = StubAdapter::new("codex", false);
+        Arc::get_mut(&mut adapter).unwrap().tool_reader =
+            Some(Arc::new(mainframe_adapter_codex::CodexAdapter::default()));
         Arc::get_mut(&mut adapter).unwrap().transcript_location = Some(
             TranscriptLocation::Present(rollout.to_string_lossy().into_owned()),
         );
@@ -828,6 +819,9 @@ mod tests {
         let jsonl = dir.path().join("session.jsonl");
         std::fs::write(&jsonl, r#"{"message":{"content":[{"type":"tool_result","tool_use_id":"tool_1","content":"claude result"}]}}"#).unwrap();
         let mut adapter = StubAdapter::new("claude", false);
+        Arc::get_mut(&mut adapter).unwrap().tool_reader = Some(Arc::new(
+            mainframe_adapter_claude::adapter::ClaudeAdapter::default(),
+        ));
         Arc::get_mut(&mut adapter).unwrap().transcript_location = Some(
             TranscriptLocation::Present(jsonl.to_string_lossy().into_owned()),
         );

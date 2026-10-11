@@ -90,7 +90,7 @@ fn settled_cache(count: usize) -> MessageCache {
 }
 
 fn make_projector() -> Box<dyn DisplayProjector> {
-    Box::new(mainframe_adapter_claude::messages::incremental::IncrementalProjector::new())
+    Box::new(mainframe_display::incremental::IncrementalProjector::new())
 }
 
 /// `handle_display_revision`'s "encode only `delta.changes`" conversion,

@@ -990,10 +990,6 @@ impl ChatLifecycleManager {
             .ok_or_else(|| NotFound::new("Adapter", chat.adapter_id.clone()))?;
         cell.lock_recover().session = Some(session.clone());
 
-        if chat.adapter_id == "codex" {
-            self.shared.deps.apply_codex_provider_tuning(&session);
-        }
-
         let sink = self
             .event_handler
             .build_sink(chat_id, Some(session.id().to_string()));

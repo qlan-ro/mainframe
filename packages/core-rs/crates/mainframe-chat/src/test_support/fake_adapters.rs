@@ -171,7 +171,6 @@ impl AdapterPort for FakeDeps {
         let resolved = self.adapters.resolved_tuning.lock_recover().clone();
         Box::pin(async move { resolved })
     }
-    fn apply_codex_provider_tuning(&self, _session: &Arc<dyn AdapterSession>) {}
     fn generate_title<'a>(
         &'a self,
         _adapter_id: &'a str,

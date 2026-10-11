@@ -22,14 +22,22 @@ impl AdapterPort for DaemonChatDeps {
         raw: &[ChatMessage],
         categories: Option<&ToolCategories>,
     ) -> Vec<DisplayMessage> {
-        prepare_messages_for_client(raw, categories)
+        mainframe_display::display_pipeline::prepare_messages_with_decoders(
+            raw,
+            categories,
+            self.display_decoders().as_ref(),
+        )
     }
 
     fn display_projector(&self) -> Box<dyn mainframe_display::DisplayProjector> {
-        Box::new(mainframe_adapter_claude::messages::incremental::IncrementalProjector::new())
+        Box::new(
+            mainframe_display::incremental::IncrementalProjector::with_decoders(
+                self.display_decoders(),
+            ),
+        )
     }
     fn strip_command_tags(&self, text: &str) -> String {
-        strip_mainframe_command_tags(text)
+        self.display_decoders().strip_command_tags(text)
     }
     fn initial_transcript_path(
         &self,
@@ -94,17 +102,24 @@ impl AdapterPort for DaemonChatDeps {
                 }
             };
             let models = match self.adapters.get(&chat.adapter_id) {
-                Some(adapter) => adapter.list_models().await.unwrap_or_default(),
+                Some(adapter) => {
+                    let catalog = adapter.catalog();
+                    if catalog.is_empty() {
+                        match adapter.refresh_catalog(None).await {
+                            Ok(models) => models.unwrap_or_default(),
+                            Err(error) => {
+                                tracing::warn!(%error, "tuning catalog refresh failed");
+                                Vec::new()
+                            }
+                        }
+                    } else {
+                        catalog
+                    }
+                }
                 None => Vec::new(),
             };
             Some(resolve_tuning_for_chat(&chat, &self.db, &models).await)
         })
-    }
-    fn apply_codex_provider_tuning(&self, _session: &Arc<dyn AdapterSession>) {
-        // TODO: `set_codex_provider_tuning` (personality, reasoning summary) is a
-        // Codex-only session method that the generic `AdapterSession` trait does not
-        // expose, so this cannot reach it and the tuning stays at its default.
-        // The no-op is correct for every non-Codex adapter.
     }
     fn generate_title<'a>(
         &'a self,
@@ -205,5 +220,18 @@ impl AdapterPort for DaemonChatDeps {
             .get_snapshots()
             .into_iter()
             .find(|info| info.id == adapter_id)
+    }
+}
+
+impl DaemonChatDeps {
+    fn display_decoders(&self) -> Arc<dyn mainframe_display::ToolResultDecoders> {
+        let mut adapters = self.adapters.get_all();
+        adapters.sort_by(|a, b| a.id().cmp(b.id()));
+        Arc::new(mainframe_display::decoders::DecoderSet(
+            adapters
+                .iter()
+                .map(|adapter| adapter.display_decoders())
+                .collect(),
+        ))
     }
 }

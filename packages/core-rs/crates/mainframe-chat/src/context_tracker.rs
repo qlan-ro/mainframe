@@ -446,16 +446,8 @@ mod tests {
         > {
             Box::pin(async { Ok(None) })
         }
-        fn list_models(
-            &self,
-        ) -> mainframe_adapter_api::BoxFuture<
-            '_,
-            Result<
-                Vec<mainframe_types::adapter::AdapterModel>,
-                mainframe_adapter_api::AdapterError,
-            >,
-        > {
-            Box::pin(async { Ok(Vec::new()) })
+        fn catalog(&self) -> Vec<mainframe_types::adapter::AdapterModel> {
+            Vec::new()
         }
         fn create_session(
             &self,

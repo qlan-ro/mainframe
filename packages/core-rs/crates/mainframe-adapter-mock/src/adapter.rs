@@ -184,6 +184,18 @@ fn model(
 }
 
 impl Adapter for MockCliAdapter {
+    fn refresh_in_e2e(&self) -> bool {
+        true
+    }
+
+    fn skills(&self) -> Option<Arc<dyn mainframe_adapter_api::SkillsProvider>> {
+        Some(Arc::new(crate::skills_provider::Provider))
+    }
+
+    fn display_decoders(&self) -> Arc<dyn mainframe_display::ToolResultDecoders> {
+        Arc::new(mainframe_display::decoders::MainframeDecoders)
+    }
+
     fn id(&self) -> &str {
         self.identity.as_ref().map_or(DEFAULT_ID, |(id, _)| id)
     }
@@ -206,11 +218,8 @@ impl Adapter for MockCliAdapter {
     fn get_version(&self) -> BoxFuture<'_, Result<Option<String>, AdapterError>> {
         Box::pin(async { Ok(Some("0.1.0".to_string())) })
     }
-    fn list_models(&self) -> BoxFuture<'_, Result<Vec<AdapterModel>, AdapterError>> {
-        Box::pin(async { Ok(models()) })
-    }
-    fn get_fallback_models(&self) -> Option<Vec<AdapterModel>> {
-        Some(models())
+    fn catalog(&self) -> Vec<AdapterModel> {
+        models()
     }
 
     fn create_session(&self, options: SessionOptions) -> Arc<dyn AdapterSession> {

@@ -35,7 +35,7 @@ use tokio::sync::broadcast;
 use tracing::info;
 
 use crate::wiring::events::spawn_task_event_bridge;
-use crate::wiring::quota::{register_quota_identity_resolvers, register_quota_pullers};
+use crate::wiring::quota::register_quota_sources;
 use crate::wiring::reconcile::{spawn_reconcile, spawn_worktree_backfill};
 use crate::wiring::refresh::DaemonRefreshDeps;
 use crate::wiring::{builtin_plugins, e2e_mock, github_issues_port};

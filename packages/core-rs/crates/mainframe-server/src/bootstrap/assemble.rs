@@ -53,9 +53,13 @@ async fn quota(bound: &BoundBootstrap, resources: &Resources) -> Arc<QuotaManage
             let _ = emit.send(event);
         }),
     }));
-    register_quota_identity_resolvers(&quota);
     quota.load_from_disk().await;
-    register_quota_pullers(&quota, &bound.db, &bound.input.resolved_path);
+    register_quota_sources(
+        &quota,
+        &resources.adapters,
+        &bound.db,
+        &bound.input.resolved_path,
+    );
     quota
 }
 

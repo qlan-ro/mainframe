@@ -34,6 +34,8 @@ pub(crate) struct StubAdapter {
     id: String,
     no_persistence: bool,
     pub(crate) transcript_location: Option<TranscriptLocation>,
+    pub(crate) conflicts: Vec<String>,
+    pub(crate) tool_reader: Option<Arc<dyn Adapter>>,
     /// How many `StubSession::kill` calls this adapter's sessions have seen
     /// (shared across every session it hands out) — lets a caller prove a
     /// project/chat teardown actually stopped a live process.
@@ -46,12 +48,27 @@ impl StubAdapter {
             id: id.to_string(),
             no_persistence,
             transcript_location: None,
+            tool_reader: None,
+            conflicts: Vec::new(),
             kills: Arc::new(AtomicUsize::new(0)),
         })
     }
 }
 
 impl Adapter for StubAdapter {
+    fn config_conflicts(&self) -> BoxFuture<'_, Vec<String>> {
+        Box::pin(async { self.conflicts.clone() })
+    }
+
+    fn read_tool_result(&self, path: String, tool_id: String) -> BoxFuture<'_, Option<String>> {
+        Box::pin(async move {
+            match &self.tool_reader {
+                Some(reader) => reader.read_tool_result(path, tool_id).await,
+                None => None,
+            }
+        })
+    }
+
     fn id(&self) -> &str {
         &self.id
     }
@@ -81,8 +98,8 @@ impl Adapter for StubAdapter {
     fn get_version(&self) -> BoxFuture<'_, Result<Option<String>, AdapterError>> {
         Box::pin(async { Ok(None) })
     }
-    fn list_models(&self) -> BoxFuture<'_, Result<Vec<AdapterModel>, AdapterError>> {
-        Box::pin(async { Ok(Vec::new()) })
+    fn catalog(&self) -> Vec<AdapterModel> {
+        Vec::new()
     }
     fn create_session(&self, options: SessionOptions) -> Arc<dyn AdapterSession> {
         let id = options.chat_id.clone().unwrap_or_else(|| {
