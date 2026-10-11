@@ -10,7 +10,7 @@ use crate::ports::{AgentOutcome, AgentPortError};
 use crate::store::StepStatus;
 
 use super::agent::{AgentVerb, WaitKey};
-use super::expects::{build_correction_message, parse_expected};
+use super::expects::{ExpectedOutputError, build_correction_message, parse_expected};
 use super::{OutOfBandOutcome, SettleError};
 
 enum Verdict {
@@ -18,7 +18,7 @@ enum Verdict {
     Fail(String),
     /// A2 mismatch with retry budget left: send ONE corrective message into
     /// the same session and judge its outcome.
-    Retry(String),
+    Retry(ExpectedOutputError),
 }
 
 impl AgentVerb {

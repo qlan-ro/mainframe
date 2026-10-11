@@ -47,6 +47,8 @@ pub struct ActionCtx {
     pub worktree_path: Option<String>,
 }
 
+/// A step action's failure. The text is the step error the run shows, and no
+/// caller branches on the cause, so it stays a message.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("{0}")]
 pub struct ActionError(pub String);

@@ -71,7 +71,7 @@ impl From<ActorError> for StoreError {
     fn from(error: ActorError) -> Self {
         match error {
             ActorError::Io(error) => Self::Io(error),
-            other => Self::Task(other.to_string()),
+            ActorError::Worker(what) => Self::Worker(what),
         }
     }
 }
@@ -82,7 +82,7 @@ impl From<mainframe_db::DbError> for StoreError {
             mainframe_db::DbError::Sqlite(error) => Self::Sqlite(error),
             mainframe_db::DbError::Json(error) => Self::Json(error),
             mainframe_db::DbError::Io(error) => Self::Io(error),
-            other => Self::Task(other.to_string()),
+            other => Self::Db(other),
         }
     }
 }
@@ -92,7 +92,7 @@ impl AutomationDb {
         let path: PathBuf = path.as_ref().to_path_buf();
         tokio::task::spawn_blocking(move || Self::open_blocking(&path))
             .await
-            .map_err(|e| StoreError::Task(e.to_string()))?
+            .map_err(StoreError::Task)?
     }
 
     fn open_blocking(path: &Path) -> Result<Self, StoreError> {
@@ -136,7 +136,7 @@ impl AutomationDb {
             .call_mut(move |conn| {
                 // A failed operation must not retire the automation connection.
                 std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(conn)))
-                    .map_err(|_| StoreError::Task("database operation panicked".into()))?
+                    .map_err(|_| StoreError::Panicked)?
             })
             .await
     }

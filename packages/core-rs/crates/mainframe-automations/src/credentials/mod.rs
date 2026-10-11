@@ -82,7 +82,7 @@ pub enum CredentialError {
     #[error("credential store serialization failed: {0}")]
     Json(#[from] serde_json::Error),
     #[error("keychain store failed: {0}")]
-    Keyring(String),
+    Keyring(#[from] keyring::Error),
     /// A `RefreshingCredentialStore` couldn't renew an expired GitHub-App
     /// token — surfaced verbatim as a step failure (contract: matches the
     /// `credential '<label>' not found` naming style).

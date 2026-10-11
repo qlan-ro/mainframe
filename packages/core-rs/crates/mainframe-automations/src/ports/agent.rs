@@ -6,6 +6,9 @@ use mainframe_types::BoxFuture;
 
 use crate::domain::ExpectedOutput;
 
+/// Why the chat system could not start or steer an ask_agent session. The
+/// text becomes the step error, and no caller branches on the cause, so it
+/// stays a message.
 #[derive(Debug, Clone, thiserror::Error)]
 #[error("{0}")]
 pub struct AgentPortError(pub String);

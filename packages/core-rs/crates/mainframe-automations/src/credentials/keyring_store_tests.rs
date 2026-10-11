@@ -14,12 +14,12 @@ struct FakeKeyringBackend {
 }
 
 impl KeyringBackend for FakeKeyringBackend {
-    fn get(&self, label: &str) -> Result<Option<String>, String> {
+    fn get(&self, label: &str) -> Result<Option<String>, keyring::Error> {
         self.get_calls.lock().unwrap().push(label.to_string());
         Ok(self.secrets.lock().unwrap().get(label).cloned())
     }
 
-    fn set(&self, label: &str, secret: &str) -> Result<(), String> {
+    fn set(&self, label: &str, secret: &str) -> Result<(), keyring::Error> {
         self.secrets
             .lock()
             .unwrap()
@@ -27,7 +27,7 @@ impl KeyringBackend for FakeKeyringBackend {
         Ok(())
     }
 
-    fn delete(&self, label: &str) -> Result<(), String> {
+    fn delete(&self, label: &str) -> Result<(), keyring::Error> {
         self.secrets.lock().unwrap().remove(label);
         Ok(())
     }

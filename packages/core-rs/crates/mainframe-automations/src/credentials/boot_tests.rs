@@ -25,16 +25,20 @@ impl FakeKeyringBackend {
 }
 
 impl KeyringBackend for FakeKeyringBackend {
-    fn get(&self, label: &str) -> Result<Option<String>, String> {
+    fn get(&self, label: &str) -> Result<Option<String>, keyring::Error> {
         if self.fail {
-            return Err("keychain unavailable (fake)".to_string());
+            return Err(keyring::Error::NoStorageAccess(
+                "keychain unavailable (fake)".into(),
+            ));
         }
         Ok(self.secrets.lock().unwrap().get(label).cloned())
     }
 
-    fn set(&self, label: &str, secret: &str) -> Result<(), String> {
+    fn set(&self, label: &str, secret: &str) -> Result<(), keyring::Error> {
         if self.fail {
-            return Err("keychain unavailable (fake)".to_string());
+            return Err(keyring::Error::NoStorageAccess(
+                "keychain unavailable (fake)".into(),
+            ));
         }
         self.secrets
             .lock()
@@ -43,9 +47,11 @@ impl KeyringBackend for FakeKeyringBackend {
         Ok(())
     }
 
-    fn delete(&self, label: &str) -> Result<(), String> {
+    fn delete(&self, label: &str) -> Result<(), keyring::Error> {
         if self.fail {
-            return Err("keychain unavailable (fake)".to_string());
+            return Err(keyring::Error::NoStorageAccess(
+                "keychain unavailable (fake)".into(),
+            ));
         }
         self.secrets.lock().unwrap().remove(label);
         Ok(())
