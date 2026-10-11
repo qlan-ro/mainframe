@@ -11,14 +11,15 @@ impl ChatManager {
     /// removal (which deletes chat rows directly, bypassing retirement too).
     /// Best-effort throughout: every failure is logged, never surfaced.
     pub async fn sweep_unreferenced_fork_snapshots(&self) {
-        let root = self.deps.fork_snapshots_dir();
-        let referenced: std::collections::HashSet<String> = self
-            .deps
-            .chats_list_all()
-            .into_iter()
-            .filter_map(|chat| self.deps.get_pending_fork(&chat.id))
-            .map(|pending| pending.snapshot_dir)
-            .collect();
+        let root = self.shared.deps.fork_snapshots_dir();
+        let mut referenced = std::collections::HashSet::new();
+        for chat in storage_event!(self.shared, self.shared.deps.chats_list_all()) {
+            if let Some(pending) =
+                storage_event!(self.shared, self.shared.deps.get_pending_fork(&chat.id))
+            {
+                referenced.insert(pending.snapshot_dir);
+            }
+        }
 
         let mut entries = match tokio::fs::read_dir(&root).await {
             Ok(entries) => entries,

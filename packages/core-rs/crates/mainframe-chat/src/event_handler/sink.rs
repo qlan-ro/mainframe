@@ -1,14 +1,14 @@
 use super::*;
 
-impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
+impl SessionSinkImpl {
     pub(super) fn emit_display(&self) {
-        let categories = self.deps.get_tool_categories(&self.chat_id);
+        let categories = self.shared.deps.get_tool_categories(&self.chat_id);
         emit_display_for(
             &self.chat_id,
             &self.messages,
             &self.partial_overlays,
             categories.as_ref(),
-            self.deps.as_ref(),
+            self.shared.deps.as_ref(),
             self.chat_surface.get(),
         );
     }
@@ -71,31 +71,21 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
     /// what `on_permission` emits for a freshly enqueued front request.
     pub(super) fn promote_next(&self, next: Option<ControlRequest>) {
         if let Some(next) = next {
-            let notify = self.deps.should_notify_permission(Some(&next.tool_name));
             self.notify_surface(ChatSurfaceEvent::GateRaised {
                 chat_id: self.chat_id.clone(),
                 request: next.clone(),
             });
-            if notify {
-                let tool = &next.tool_name;
-                self.deps.send_push(PushOut {
-                    chat_id: self.chat_id.clone(),
-                    title: "Permission Required".to_string(),
-                    body: format!("Agent wants to run: {tool}"),
-                    push_type: "permission".to_string(),
-                    priority: "high".to_string(),
-                });
-            }
+            self.shared.permission_push(&self.chat_id, &next.tool_name);
         }
-        if let Some(cell) = self.deps.get_active_chat(&self.chat_id) {
+        if let Some(cell) = self.shared.active(&self.chat_id) {
             let chat = cell.lock_recover().chat.clone();
-            self.deps
-                .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
+            self.shared
+                .emit(DaemonEvent::ChatUpdated { chat, reason: None });
         }
     }
 }
 
-impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
+impl SessionSink for SessionSinkImpl {
     fn on_message_with_presentation(
         &self,
         content: Vec<MessageContent>,

@@ -38,7 +38,7 @@ fn control_request(request_id: &str) -> ControlRequest {
 /// both surfaces call.
 #[tokio::test]
 async fn answering_a_permission_normally_emits_gate_resolved_on_the_chat_surface() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let surface = RecordingSurface::arc();
     let mgr = ChatManager::new(deps).with_chat_surface(surface.clone());
     seed_active(
@@ -69,7 +69,7 @@ async fn answering_a_permission_normally_emits_gate_resolved_on_the_chat_surface
 /// surface too, not just via the legacy `DaemonEvent`.
 #[tokio::test]
 async fn answering_the_front_request_raises_the_promoted_one_on_the_chat_surface() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let surface = RecordingSurface::arc();
     let mgr = ChatManager::new(deps).with_chat_surface(surface.clone());
     seed_active(
@@ -100,7 +100,7 @@ async fn answering_the_front_request_raises_the_promoted_one_on_the_chat_surface
 /// this emission `GateRegistry::forget_chat` has no production caller.
 #[tokio::test]
 async fn ending_a_chat_emits_chat_ended_on_the_chat_surface() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let surface = RecordingSurface::arc();
     let mgr = ChatManager::new(deps).with_chat_surface(surface.clone());
     seed_active(
@@ -127,7 +127,7 @@ async fn removing_a_project_emits_chat_ended_for_each_of_its_chats() {
     c1.project_id = "p1".to_string();
     let mut c2 = test_chat("c2");
     c2.project_id = "p1".to_string();
-    let deps = StoreDeps::with_chats(vec![c1, c2]);
+    let deps = FakeDeps::with_chats(vec![c1, c2]);
     let surface = RecordingSurface::arc();
     let mgr = ChatManager::new(deps).with_chat_surface(surface.clone());
 
@@ -151,7 +151,7 @@ async fn removing_a_project_emits_chat_ended_for_each_of_its_chats() {
 
 #[tokio::test]
 async fn archiving_a_chat_emits_chat_ended_on_the_chat_surface() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let surface = RecordingSurface::arc();
     let mgr = ChatManager::new(deps).with_chat_surface(surface.clone());
     seed_active(

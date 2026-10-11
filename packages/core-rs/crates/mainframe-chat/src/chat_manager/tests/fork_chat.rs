@@ -1,5 +1,5 @@
 //! `ChatManager::fork_chat` tests. A child module of
-//! `tests`, so it sees `tests`' private `StoreDeps`.
+//! `tests`, so it sees `tests`' private `FakeDeps`.
 
 use super::*;
 use mainframe_types::http_status::StatusKind;
@@ -7,7 +7,7 @@ use mainframe_types::seam_error::SeamError;
 
 fn chat_with(id: &str, adapter_id: &str, claude_session_id: Option<&str>) -> Chat {
     // `enrich_chat`'s directory-missing check stats the real filesystem against
-    // StoreDeps's fixed "/tmp/test" project path — make sure it exists so every
+    // FakeDeps's fixed "/tmp/test" project path — make sure it exists so every
     // test below is about fork_chat's OWN gating, not directory presence.
     std::fs::create_dir_all("/tmp/test").expect("create the fake project dir");
     let mut c = test_chat(id);
@@ -19,7 +19,7 @@ fn chat_with(id: &str, adapter_id: &str, claude_session_id: Option<&str>) -> Cha
 
 #[tokio::test]
 async fn unknown_chat_id_is_not_found() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps);
     let err = mgr.fork_chat("nope", ForkPoint::Current).await.unwrap_err();
     assert_eq!(err, ForkChatError::NotFound("nope".to_string()));
@@ -29,7 +29,7 @@ async fn unknown_chat_id_is_not_found() {
 #[tokio::test]
 async fn adapter_without_fork_capability_is_unsupported_422() {
     let chat = chat_with("c1", "codex", Some("sess-1"));
-    let deps = StoreDeps::with_chats(vec![chat]);
+    let deps = FakeDeps::with_chats(vec![chat]);
     // adapter_fork_info defaults to `{ fork: false }` unless configured.
     let mgr = ChatManager::new(deps);
     let err = mgr.fork_chat("c1", ForkPoint::Current).await.unwrap_err();
@@ -43,7 +43,7 @@ async fn adapter_without_fork_capability_is_unsupported_422() {
 #[tokio::test]
 async fn adapter_with_a_version_specific_reason_surfaces_it_422() {
     let chat = chat_with("c1", "codex", Some("sess-1"));
-    let deps = StoreDeps::with_chats(vec![chat]);
+    let deps = FakeDeps::with_chats(vec![chat]);
     deps.set_fork_unavailable_reason(
         "Forking Codex chats needs Codex CLI 0.143.0 or newer (installed: 0.140.0)",
     );
@@ -66,7 +66,7 @@ async fn adapter_with_a_version_specific_reason_surfaces_it_422() {
 async fn a_temporary_chat_is_refused_409() {
     let mut chat = chat_with("c1", "claude", Some("sess-1"));
     chat.temporary = true;
-    let deps = StoreDeps::with_chats(vec![chat]);
+    let deps = FakeDeps::with_chats(vec![chat]);
     deps.set_fork_capable(true);
     let mgr = ChatManager::new(deps);
     let err = mgr.fork_chat("c1", ForkPoint::Current).await.unwrap_err();
@@ -79,7 +79,7 @@ async fn a_no_project_chat_is_refused_409() {
     let mut chat = chat_with("c1", "claude", Some("sess-1"));
     chat.project_id = mainframe_types::chat::NO_PROJECT_ID.to_string();
     chat.no_project = true;
-    let deps = StoreDeps::with_chats(vec![chat]);
+    let deps = FakeDeps::with_chats(vec![chat]);
     deps.set_fork_capable(true);
     let mgr = ChatManager::new(deps);
     let err = mgr.fork_chat("c1", ForkPoint::Current).await.unwrap_err();
@@ -90,7 +90,7 @@ async fn a_no_project_chat_is_refused_409() {
 #[tokio::test]
 async fn no_provider_session_is_nothing_to_fork_yet_409() {
     let chat = chat_with("c1", "claude", None);
-    let deps = StoreDeps::with_chats(vec![chat]);
+    let deps = FakeDeps::with_chats(vec![chat]);
     deps.set_fork_capable(true);
     let mgr = ChatManager::new(deps);
     let err = mgr.fork_chat("c1", ForkPoint::Current).await.unwrap_err();
@@ -102,7 +102,7 @@ async fn no_provider_session_is_nothing_to_fork_yet_409() {
 async fn missing_transcript_is_refused_409() {
     let mut chat = chat_with("c1", "claude", Some("sess-1"));
     chat.transcript_missing = Some(true);
-    let deps = StoreDeps::with_chats(vec![chat]);
+    let deps = FakeDeps::with_chats(vec![chat]);
     deps.set_fork_capable(true);
     let mgr = ChatManager::new(deps);
     let err = mgr.fork_chat("c1", ForkPoint::Current).await.unwrap_err();
@@ -114,7 +114,7 @@ async fn missing_transcript_is_refused_409() {
 async fn a_running_turn_is_refused_409() {
     let mut chat = chat_with("c1", "claude", Some("sess-1"));
     chat.process_state = Some(Some(ProcessState::Working));
-    let deps = StoreDeps::with_chats(vec![chat]);
+    let deps = FakeDeps::with_chats(vec![chat]);
     deps.set_fork_capable(true);
     let mgr = ChatManager::new(deps);
     let err = mgr.fork_chat("c1", ForkPoint::Current).await.unwrap_err();
@@ -127,7 +127,7 @@ async fn a_running_turn_is_refused_409() {
 // `display_status`/`is_running` from live state (the permission manager's
 // pending queue), so a fake chat's manually-set `Waiting` status here would
 // never survive to `fork_chat`'s check — it isn't a meaningful test of this
-// gate through `StoreDeps`.
+// gate through `FakeDeps`.
 
 /// Spec edge case: background tasks alone widen `display_status` to `Working`,
 /// but the main turn isn't running — fork must still succeed.
@@ -136,7 +136,7 @@ async fn an_idle_chat_with_background_tasks_only_still_forks() {
     let mut chat = chat_with("c1", "claude", Some("sess-1"));
     chat.display_status = Some(DisplayStatus::Working);
     chat.is_running = Some(false);
-    let deps = StoreDeps::with_chats(vec![chat]);
+    let deps = FakeDeps::with_chats(vec![chat]);
     deps.set_fork_capable(true);
     let mgr = ChatManager::new(deps);
     assert!(mgr.fork_chat("c1", ForkPoint::Current).await.is_ok());
@@ -145,7 +145,7 @@ async fn an_idle_chat_with_background_tasks_only_still_forks() {
 #[tokio::test]
 async fn success_creates_the_fork_and_emits_chat_created() {
     let chat = chat_with("c1", "claude", Some("sess-1"));
-    let deps = StoreDeps::with_chats(vec![chat]);
+    let deps = FakeDeps::with_chats(vec![chat]);
     deps.set_fork_capable(true);
     let mgr = ChatManager::new(deps.clone());
 
@@ -165,7 +165,7 @@ async fn success_creates_the_fork_and_emits_chat_created() {
 #[tokio::test]
 async fn a_pin_failure_leaves_no_new_chat() {
     let chat = chat_with("c1", "claude", Some("sess-1"));
-    let deps = StoreDeps::with_chats(vec![chat]);
+    let deps = FakeDeps::with_chats(vec![chat]);
     deps.set_fork_capable(true);
     deps.fail_pin("cli crashed");
     let mgr = ChatManager::new(deps.clone());
@@ -179,7 +179,7 @@ async fn a_pin_failure_leaves_no_new_chat() {
 #[tokio::test]
 async fn a_pin_transcript_missing_maps_to_409_not_500() {
     let chat = chat_with("c1", "claude", Some("sess-1"));
-    let deps = StoreDeps::with_chats(vec![chat]);
+    let deps = FakeDeps::with_chats(vec![chat]);
     deps.set_fork_capable(true);
     deps.fail_pin_transcript_missing();
     let mgr = ChatManager::new(deps);
@@ -194,7 +194,7 @@ async fn a_pin_transcript_missing_maps_to_409_not_500() {
 #[tokio::test]
 async fn a_pin_unsupported_after_capability_passed_is_still_422() {
     let chat = chat_with("c1", "claude", Some("sess-1"));
-    let deps = StoreDeps::with_chats(vec![chat]);
+    let deps = FakeDeps::with_chats(vec![chat]);
     deps.set_fork_capable(true);
     deps.fail_pin_unsupported();
     let mgr = ChatManager::new(deps);
@@ -206,7 +206,7 @@ async fn a_pin_unsupported_after_capability_passed_is_still_422() {
 #[tokio::test]
 async fn an_insert_failure_leaves_no_new_chat() {
     let chat = chat_with("c1", "claude", Some("sess-1"));
-    let deps = StoreDeps::with_chats(vec![chat]);
+    let deps = FakeDeps::with_chats(vec![chat]);
     deps.set_fork_capable(true);
     deps.fail_create_fork("db is full");
     let mgr = ChatManager::new(deps.clone());

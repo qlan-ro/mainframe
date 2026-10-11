@@ -17,21 +17,21 @@ fn history() -> ChatMessage {
 
 /// A manager whose `c1` always loads cold, backed by one stat-able fake
 /// transcript file and a cache dir this test alone owns.
-async fn cold_manager(dir: &tempfile::TempDir) -> (Arc<StoreDeps>, ChatManager, PathBuf) {
+async fn cold_manager(dir: &tempfile::TempDir) -> (Arc<FakeDeps>, ChatManager, PathBuf) {
     let transcript = dir.path().join("session.jsonl");
     tokio::fs::write(&transcript, "{\"line\":1}\n")
         .await
         .unwrap();
     let mut chat = test_chat("c1");
     chat.claude_session_id = Some("session".into());
-    let deps = StoreDeps::with_chats(vec![chat]);
-    *deps.history.lock().unwrap() = Some(vec![history()]);
-    *deps.transcript_present.lock().unwrap() = Some(true);
+    let deps = FakeDeps::with_chats(vec![chat]);
+    *deps.adapters.history.lock().unwrap() = Some(vec![history()]);
+    *deps.adapters.transcript_present.lock().unwrap() = Some(true);
     deps.set_history_sources(vec![transcript.clone()]);
     deps.set_history_cache_dir(&dir.path().join("cache").to_string_lossy());
     let manager = ChatManager::new(deps.clone());
     {
-        let mut cache = manager.messages.lock().unwrap();
+        let mut cache = manager.shared.messages.lock().unwrap();
         for id in 0..50 {
             let chat_id = format!("pinned-{id}");
             cache.pin(&chat_id);
@@ -59,13 +59,13 @@ async fn a_second_cold_load_of_an_unchanged_transcript_hits_the_snapshot() {
     let (deps, manager, _) = cold_manager(&dir).await;
 
     assert_eq!(manager.get_messages("c1").await, vec![history()]);
-    assert_eq!(deps.history_loads.load(Ordering::SeqCst), 1);
+    assert_eq!(deps.adapters.history_loads.load(Ordering::SeqCst), 1);
     wait_for_snapshot(&dir).await;
-    assert!(manager.messages.lock().unwrap().get("c1").is_none());
+    assert!(manager.shared.messages.lock().unwrap().get("c1").is_none());
 
     assert_eq!(manager.get_messages("c1").await, vec![history()]);
     assert_eq!(
-        deps.history_loads.load(Ordering::SeqCst),
+        deps.adapters.history_loads.load(Ordering::SeqCst),
         1,
         "an unchanged transcript must be served from the snapshot, not reparsed"
     );
@@ -86,7 +86,7 @@ async fn a_changed_transcript_misses_the_snapshot_and_reparses() {
         .unwrap();
     assert_eq!(manager.get_messages("c1").await, vec![history()]);
     assert_eq!(
-        deps.history_loads.load(Ordering::SeqCst),
+        deps.adapters.history_loads.load(Ordering::SeqCst),
         2,
         "a changed transcript must be reparsed"
     );
@@ -100,7 +100,7 @@ async fn a_session_without_history_sources_never_touches_the_cache() {
 
     manager.get_messages("c1").await;
     manager.get_messages("c1").await;
-    assert_eq!(deps.history_loads.load(Ordering::SeqCst), 2);
+    assert_eq!(deps.adapters.history_loads.load(Ordering::SeqCst), 2);
     tokio::time::sleep(Duration::from_millis(20)).await;
     assert!(
         tokio::fs::metadata(dir.path().join("cache")).await.is_err(),

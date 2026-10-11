@@ -138,8 +138,9 @@ async fn deletion_notification_stops_scope_launches_and_preview_tunnels() {
     f.ctx
         .chat
         .chat_manager
-        .notify_worktree_deleted(&f.project, &f.path)
-        .await;
+        .stop_worktree_services(&f.project, &f.path)
+        .await
+        .unwrap();
     assert!(!mainframe_runtime::process::is_alive(f.tunnel_pid));
     assert_eq!(f.ctx.infra.tunnel_manager.get_url("preview:web"), None);
     let statuses = f
@@ -173,8 +174,9 @@ async fn deleted_worktree_start_and_configs_use_the_file_route_error_text() {
     f.ctx
         .chat
         .chat_manager
-        .notify_worktree_deleted(&f.project, &f.path)
-        .await;
+        .stop_worktree_services(&f.project, &f.path)
+        .await
+        .unwrap();
 }
 
 fn tunnels(data: &tempfile::TempDir) -> Arc<TunnelManager> {
@@ -195,6 +197,62 @@ fn tunnels(data: &tempfile::TempDir) -> Arc<TunnelManager> {
             ..Default::default()
         },
     ))
+}
+
+#[tokio::test]
+async fn aliased_worktree_stop_reaches_launch_preview_and_port_tunnel_before_removal() {
+    let f = fixture().await;
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    f.ctx
+        .infra
+        .port_tunnels
+        .start(
+            port,
+            mainframe_launch::PortTunnelScope {
+                project_id: f.project.clone(),
+                chat_id: f.chat.clone(),
+            },
+        )
+        .await
+        .unwrap();
+    let port_pid: u32 = std::fs::read_to_string(f._data.path().join("tunnel.pid"))
+        .unwrap()
+        .trim()
+        .parse()
+        .unwrap();
+    let alias = f._data.path().join("worktree-alias");
+    std::os::unix::fs::symlink(&f.path, &alias).unwrap();
+    let mut events = f.ctx.core.broadcast.subscribe();
+    let affected = f
+        .ctx
+        .chat
+        .chat_manager
+        .stop_worktree_services(&f.project, &format!("{}/", alias.display()))
+        .await
+        .unwrap();
+    assert_eq!(affected, vec![f.chat.clone()]);
+    assert!(f.worktree.path().exists());
+    assert!(!mainframe_runtime::process::is_alive(f.tunnel_pid));
+    assert!(!mainframe_runtime::process::is_alive(port_pid));
+    assert_eq!(
+        f.ctx.infra.tunnel_manager.get_url(&format!("port:{port}")),
+        None
+    );
+    while let Ok(event) = events.try_recv() {
+        assert!(!matches!(
+            event,
+            mainframe_types::events::DaemonEvent::ChatUpdated { .. }
+        ));
+    }
+    f.worktree.close().unwrap();
+    f.ctx.chat.chat_manager.emit_chat_updated(&f.chat);
+    let event = events.recv().await.unwrap();
+    let mainframe_types::events::DaemonEvent::ChatUpdated { chat, .. } = event else {
+        panic!("expected chat.updated after removal");
+    };
+    assert_eq!(chat.id, f.chat);
+    assert_eq!(chat.worktree_missing, Some(true));
 }
 
 async fn serve(ctx: &Arc<AppCtx>) -> String {

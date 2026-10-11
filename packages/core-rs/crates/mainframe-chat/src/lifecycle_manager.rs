@@ -3,29 +3,27 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
-use dashmap::DashMap;
-use mainframe_adapter_api::{AdapterError, AdapterSession, BoxFuture, SessionSink};
+use mainframe_adapter_api::AdapterError;
 use mainframe_runtime::sync::{FlightClaim, FlightWaiter, SingleFlight};
 use mainframe_services::settings::{normalize_saved_default_model, read_setting};
 use mainframe_types::adapter::{SessionOptions, SessionSpawnOptions};
-use mainframe_types::chat::{Chat, ChatMessage, ChatStatus, NewChat, ProcessState, ResolvedTuning};
+use mainframe_types::chat::{Chat, ChatMessage, ChatStatus, NewChat, ProcessState};
 use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::http_status::{HttpStatus, NotFound, StatusKind};
 use mainframe_types::settings::ExecutionMode;
-use mainframe_types::settings_kv::SettingsKv;
 use mainframe_types::time::now_iso8601;
 use tracing::{debug, info, warn};
 
 use crate::chat_cwd::chat_cwd;
+use crate::chat_manager::ChatShared;
 use crate::chat_surface::{self, ChatSurface, ChatSurfaceEvent};
-use crate::fork::PendingForkState;
-use crate::message_cache::MessageCache;
+use crate::event_handler::EventHandler;
 use crate::no_persistence;
 use crate::orchestration_hooks::OrchestrationSlot;
-use crate::permission_manager::PermissionManager;
 use crate::title_generator::resolve_title_binary;
 use crate::types::ActiveChat;
+use crate::worktree_offer::WorktreeOfferRegistry;
 
 mod spawn_prep;
 
@@ -44,14 +42,13 @@ pub(crate) fn is_last_active_chat_for_scope(
     })
 }
 
-/// Registry of active chats (SHARED_MAP; per-entity values are `Arc<Mutex<ActiveChat>>`).
-pub type ActiveChatRegistry = Arc<DashMap<String, Arc<Mutex<ActiveChat>>>>;
-
 use mainframe_types::time::now_ms;
 
 /// Errors surfaced by lifecycle ops (strings cross the wire; copied verbatim).
 #[derive(Debug, thiserror::Error)]
 pub enum LifecycleError {
+    #[error(transparent)]
+    Store(#[from] mainframe_types::seam_error::SeamError),
     /// The chat, its project or its adapter is gone.
     #[error(transparent)]
     NotFound(#[from] NotFound),
@@ -72,121 +69,13 @@ pub enum LifecycleError {
 impl HttpStatus for LifecycleError {
     fn status_kind(&self) -> StatusKind {
         match self {
+            Self::Store(_) => StatusKind::Internal,
             Self::NotFound(_) => StatusKind::NotFound,
             Self::WorktreeMissing(_) | Self::ProjectDirMissing(_) | Self::DirtyWorkingTree => {
                 StatusKind::Conflict
             }
             Self::NotLoaded(_) | Self::Adapter(_) => StatusKind::Internal,
         }
-    }
-}
-
-/// Injected dependency surface for the lifecycle manager.
-pub trait LifecycleManagerDeps: Send + Sync {
-    // db ----------------------------------------------------------------------
-    fn chats_get(&self, id: &str) -> Option<Chat>;
-    fn chats_create(&self, new_chat: &NewChat) -> Chat;
-    fn chats_update(&self, chat_id: &str, patch: &ChatPatch);
-    fn chats_list(&self, project_id: &str) -> Vec<Chat>;
-    fn projects_get_path(&self, project_id: &str) -> Option<String>;
-    /// The settings store (provider defaults, title generation).
-    fn settings(&self) -> &dyn SettingsKv;
-    /// Record the worktrees that already existed when the chat activated, so a
-    /// switch offer only ever names one registered since.
-    fn seed_worktree_baseline<'a>(
-        &'a self,
-        _chat_id: &'a str,
-        _project_path: &'a str,
-    ) -> Option<BoxFuture<'a, ()>> {
-        None
-    }
-
-    // adapters + sink ---------------------------------------------------------
-    fn create_session(
-        &self,
-        adapter_id: &str,
-        options: SessionOptions,
-    ) -> Option<Arc<dyn AdapterSession>>;
-    fn build_sink(&self, chat_id: &str, session_id: &str) -> Arc<dyn SessionSink>;
-
-    // events + attachments + tracker/launch seams ----------------------------
-    fn emit_event(&self, event: DaemonEvent);
-    fn attachment_delete_chat<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()>;
-    fn kill_tasks_for_chat<'a>(
-        &'a self,
-        chat_id: &'a str,
-        worktree_path: Option<String>,
-        session: Option<Arc<dyn AdapterSession>>,
-    ) -> BoxFuture<'a, ()>;
-    fn remove_worktree<'a>(
-        &'a self,
-        project_path: &'a str,
-        worktree_path: &'a str,
-        branch_name: &'a str,
-    ) -> BoxFuture<'a, ()>;
-    fn stop_launch_processes<'a>(
-        &'a self,
-        project_id: &'a str,
-        effective_path: &'a str,
-    ) -> Option<BoxFuture<'a, ()>>;
-    /// Tear down the scope's port tunnels. Separate from
-    /// `stop_launch_processes`, which no-ops for a scope that never ran a
-    /// launch config — the very scopes a localhost chip is most likely to have
-    /// tunnelled.
-    fn stop_scope_tunnels<'a>(
-        &'a self,
-        project_id: &'a str,
-        effective_path: &'a str,
-    ) -> Option<BoxFuture<'a, ()>>;
-
-    // Claude-specific + tuning seams ------------------------------------------
-    /// Post `loadHistory`: mention extraction + PR-URL scan + plan/skill-file
-    /// extraction (all Claude-specific — adapter-claude — so injected here).
-    fn scan_loaded_history<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()>;
-    fn resolve_tuning<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, Option<ResolvedTuning>>;
-    /// `session.setCodexProviderTuning(...)` for the codex adapter (no-op elsewhere).
-    fn apply_codex_provider_tuning(&self, session: &Arc<dyn AdapterSession>);
-    /// Adapter-aware LLM title generation (`adapter.generateTitle`) — shells out;
-    /// injected so tests skip it. The impl resolves `adapters.get(adapterId)` and
-    /// returns `None` when that adapter has no `generateTitle` (deterministic title
-    /// stands).
-    fn generate_title<'a>(
-        &'a self,
-        adapter_id: &'a str,
-        content: &'a str,
-        binary: &'a str,
-    ) -> BoxFuture<'a, Option<String>>;
-    /// `isWorkingTreeDirty(projectPath)` — `git status --porcelain` non-empty.
-    fn is_working_tree_dirty<'a>(&'a self, project_path: &'a str) -> BoxFuture<'a, bool>;
-    /// `existsSync(worktreePath)`.
-    fn path_exists(&self, path: &str) -> bool;
-    /// The per-spawn no-persistence capability read, from the adapter registry
-    /// — never derived from the adapter id itself.
-    fn adapter_supports_no_persistence(&self, adapter_id: &str) -> bool;
-    /// `fs.mkdir(scratchPath, { recursive: true })`, run before every spawn so
-    /// a non-project chat's scratch directory exists on first use and is
-    /// recreated if it was deleted since.
-    fn ensure_dir<'a>(&'a self, path: &'a str) -> BoxFuture<'a, ()>;
-    /// The no-persistence context-loss write (`db.chats.markContextLost`).
-    fn mark_context_lost(&self, chat_id: &str, context_lost_at: &str);
-    /// `db.chats.getPendingFork(chatId)`: a fork's session builders
-    /// (`do_load_chat`/`do_start_chat`) resume from this when the chat has no
-    /// own session yet, or falls back to it when its own transcript went
-    /// missing. Defaulted to `None` — the correct answer for every chat this
-    /// feature doesn't touch.
-    fn get_pending_fork(&self, chat_id: &str) -> Option<PendingForkState> {
-        let _ = chat_id;
-        None
-    }
-    /// A multi-segment chat's composed history and the index its active
-    /// segment starts at. `None` (the default) means a single-segment chat,
-    /// loaded from its one session as before segments existed.
-    fn compose_history<'a>(
-        &'a self,
-        chat_id: &'a str,
-    ) -> BoxFuture<'a, Option<(Vec<ChatMessage>, usize)>> {
-        let _ = chat_id;
-        Box::pin(async { None })
     }
 }
 
@@ -219,36 +108,32 @@ struct Guards {
     history: SingleFlight,
 }
 
-pub struct ChatLifecycleManager<D: LifecycleManagerDeps + 'static> {
-    deps: Arc<D>,
-    active_chats: ActiveChatRegistry,
-    messages: Arc<Mutex<MessageCache>>,
-    permissions: Arc<Mutex<PermissionManager>>,
+pub struct ChatLifecycleManager {
+    shared: Arc<ChatShared>,
+    /// Builds each spawned session's sink.
+    event_handler: Arc<EventHandler>,
+    /// Seeded with the worktrees a chat already knows when it activates.
+    worktree_offers: Arc<WorktreeOfferRegistry>,
     guards: Arc<Mutex<Guards>>,
     /// Set post-construction via [`Self::set_chat_surface`] — mirrors
     /// `EventHandler`'s identical `OnceLock` pattern so a manager built with
-    /// no surface attached (most unit tests) is a no-op, not a compile-time
-    /// obligation on every `LifecycleManagerDeps` fake.
+    /// no surface attached (most unit tests) is a no-op, not a construction
+    /// obligation.
     chat_surface: Arc<OnceLock<Arc<dyn ChatSurface>>>,
-    /// The orchestration MCP hooks; inert until the daemon attaches them.
-    orchestration: OrchestrationSlot,
 }
 
-impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
-    pub fn new(
-        deps: Arc<D>,
-        active_chats: ActiveChatRegistry,
-        messages: Arc<Mutex<MessageCache>>,
-        permissions: Arc<Mutex<PermissionManager>>,
+impl ChatLifecycleManager {
+    pub(crate) fn new(
+        shared: Arc<ChatShared>,
+        event_handler: Arc<EventHandler>,
+        worktree_offers: Arc<WorktreeOfferRegistry>,
     ) -> Self {
         Self {
-            deps,
-            active_chats,
-            messages,
-            permissions,
+            shared,
+            event_handler,
+            worktree_offers,
             guards: Arc::new(Mutex::new(Guards::default())),
             chat_surface: Arc::new(OnceLock::new()),
-            orchestration: OrchestrationSlot::default(),
         }
     }
 
@@ -258,21 +143,18 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         let _ = self.chat_surface.set(surface);
     }
 
-    /// Shares the chat manager's slot, so one attach reaches both spawns and
-    /// the reads that show the agent outbox.
-    #[must_use]
-    pub(crate) fn with_orchestration(mut self, slot: OrchestrationSlot) -> Self {
-        self.orchestration = slot;
-        self
-    }
-
-    /// The orchestration hooks every spawn and teardown path consults.
+    /// The orchestration hooks every spawn and teardown path consults — the
+    /// chat manager's slot, so one attach reaches both spawns and the reads
+    /// that show the agent outbox.
     pub fn orchestration(&self) -> &OrchestrationSlot {
-        &self.orchestration
+        &self.shared.orchestration
     }
 
     fn get_active(&self, chat_id: &str) -> Option<Arc<Mutex<ActiveChat>>> {
-        self.active_chats.get(chat_id).map(|e| e.value().clone())
+        self.shared
+            .active_chats
+            .get(chat_id)
+            .map(|e| e.value().clone())
     }
 
     /// Bump `chat_id`'s in-memory "last used" clock to now, if its registry
@@ -290,7 +172,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
     fn chat_or_db(&self, chat_id: &str) -> Option<Chat> {
         self.get_active(chat_id)
             .map(|c| c.lock_recover().chat.clone())
-            .or_else(|| self.deps.chats_get(chat_id))
+            .or_else(|| storage_event!(self.shared, Some(chat_id); self.shared.deps.chats_get(chat_id), None))
     }
 
     pub async fn create_chat(
@@ -298,19 +180,19 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         new_chat: NewChat,
         worktree_path: Option<&str>,
         branch_name: Option<&str>,
-    ) -> Chat {
+    ) -> Result<Chat, LifecycleError> {
         let project_id = new_chat.project_id.clone();
         let adapter_id = new_chat.adapter_id.clone();
-        let mut chat = self.deps.chats_create(&new_chat);
+        let mut chat = self.shared.deps.chats_create(&new_chat)?;
         if let (Some(wt), Some(branch)) = (worktree_path, branch_name) {
-            self.deps.chats_update(
+            self.shared.deps.chats_update(
                 &chat.id,
                 &ChatPatch {
                     worktree_path: Some(Some(wt.to_string())),
                     branch_name: Some(Some(branch.to_string())),
                     ..Default::default()
                 },
-            );
+            )?;
             chat.worktree_path = Some(wt.to_string());
             chat.branch_name = Some(branch.to_string());
         }
@@ -321,16 +203,16 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             worktree_path,
             "chat created"
         );
-        self.active_chats.insert(
+        self.shared.active_chats.insert(
             chat.id.clone(),
             Arc::new(Mutex::new(ActiveChat::new(chat.clone(), None))),
         );
-        self.messages.lock_recover().pin(&chat.id);
-        self.deps.emit_event(DaemonEvent::ChatCreated {
+        self.shared.messages.lock_recover().pin(&chat.id);
+        self.shared.emit(DaemonEvent::ChatCreated {
             chat: chat.clone(),
             source: None,
         });
-        chat
+        Ok(chat)
     }
 
     pub async fn create_chat_with_defaults(
@@ -338,7 +220,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         mut new_chat: NewChat,
         worktree_path: Option<&str>,
         branch_name: Option<&str>,
-    ) -> Chat {
+    ) -> Result<Chat, LifecycleError> {
         let adapter_id = new_chat.adapter_id.clone();
         let mut effective_plan_mode = false;
 
@@ -362,18 +244,20 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             }
         }
 
-        let mut chat = self.create_chat(new_chat, worktree_path, branch_name).await;
+        let mut chat = self
+            .create_chat(new_chat, worktree_path, branch_name)
+            .await?;
         if effective_plan_mode {
             chat.plan_mode = Some(true);
-            self.deps.chats_update(
+            self.shared.deps.chats_update(
                 &chat.id,
                 &ChatPatch {
                     plan_mode: Some(true),
                     ..Default::default()
                 },
-            );
+            )?;
         }
-        chat
+        Ok(chat)
     }
 
     pub async fn resume_chat(&self, chat_id: &str) {
@@ -388,19 +272,19 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             // TS: `if yolo → start; else if !hasPending → start`. Both branches call
             // startChat, so the identical arms collapse to one guard (hasPending is
             // still short-circuited when yolo, matching the original evaluation).
-            let no_pending = || !self.permissions.lock_recover().has_pending(chat_id);
+            let no_pending = || !self.shared.permissions.lock_recover().has_pending(chat_id);
             if is_yolo || no_pending() {
                 self.start_chat(chat_id).await;
             }
         }
 
-        self.deps.emit_event(DaemonEvent::ChatUpdated {
+        self.shared.emit(DaemonEvent::ChatUpdated {
             chat: chat.clone(),
             reason: None,
         });
 
         if let Some(todos) = chat.todos {
-            self.deps.emit_event(DaemonEvent::TodosUpdated {
+            self.shared.emit(DaemonEvent::TodosUpdated {
                 chat_id: chat_id.to_string(),
                 todos,
             });
@@ -423,7 +307,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             let g = self.guards.lock_recover();
             if let Some(existing) = g.loading.get(chat_id) {
                 Flight::Await(existing)
-            } else if self.active_chats.contains_key(chat_id) {
+            } else if self.shared.active_chats.contains_key(chat_id) {
                 Flight::Skip
             } else {
                 match g.loading.claim(chat_id) {
@@ -485,7 +369,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             };
             if spawned {
                 if let Some(process) = process {
-                    self.deps.emit_event(DaemonEvent::ProcessStarted {
+                    self.shared.emit(DaemonEvent::ProcessStarted {
                         chat_id: chat_id.to_string(),
                         process,
                     });
@@ -519,7 +403,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         drop(notify);
         if let Err(err) = result {
             warn!(?err, chat_id, "startChat failed");
-            self.deps.emit_event(DaemonEvent::Error {
+            self.shared.emit(DaemonEvent::Error {
                 chat_id: Some(chat_id.to_string()),
                 error: err.to_string(),
             });
@@ -539,7 +423,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         };
 
         {
-            let mut perms = self.permissions.lock_recover();
+            let mut perms = self.shared.permissions.lock_recover();
             perms.clear(chat_id);
             perms.mark_interrupted(chat_id);
         }
@@ -587,7 +471,8 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         let chat = self.chat_or_db(chat_id);
 
         let worktree_path = chat.as_ref().and_then(|c| c.worktree_path.clone());
-        self.deps
+        self.shared
+            .deps
             .kill_tasks_for_chat(
                 chat_id,
                 if delete_worktree {
@@ -604,36 +489,42 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         {
             warn!(?err, chat_id, "session.kill failed on archive");
         }
-        self.orchestration.revoke(chat_id);
+        self.shared.orchestration.revoke(chat_id);
 
         let project_path = chat
             .as_ref()
-            .and_then(|c| self.deps.projects_get_path(&c.project_id));
+            .and_then(|c| self.shared.deps.projects_get_path(&c.project_id));
         let effective_path = worktree_path.clone().or_else(|| project_path.clone());
 
         if let (Some(chat), Some(project_path), Some(effective_path)) =
             (&chat, &project_path, &effective_path)
         {
             let last_user = is_last_active_chat_for_scope(
-                &self.deps.chats_list(&chat.project_id),
+                &self.shared.best_effort(
+                    chat_id,
+                    self.shared.deps.chats_list(&chat.project_id),
+                    Vec::new(),
+                ),
                 project_path,
                 effective_path,
                 chat_id,
             );
             if last_user {
                 if let Some(fut) = self
+                    .shared
                     .deps
                     .stop_launch_processes(&chat.project_id, effective_path)
                 {
                     fut.await;
                 }
                 if let Some(fut) = self
+                    .shared
                     .deps
                     .stop_scope_tunnels(&chat.project_id, effective_path)
                 {
                     fut.await;
                 }
-                self.deps.emit_event(DaemonEvent::LaunchScopeReleased {
+                self.shared.emit(DaemonEvent::LaunchScopeReleased {
                     project_id: chat.project_id.clone(),
                     effective_path: effective_path.clone(),
                 });
@@ -644,19 +535,26 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             && let (Some(chat), Some(project_path)) = (&chat, &project_path)
             && let (Some(wt), Some(branch)) = (&chat.worktree_path, &chat.branch_name)
         {
-            self.deps.remove_worktree(project_path, wt, branch).await;
+            self.shared
+                .deps
+                .remove_worktree(project_path, wt, branch)
+                .await;
         }
 
-        self.deps.attachment_delete_chat(chat_id).await;
-        self.deps.chats_update(
+        self.shared.deps.attachment_delete_chat(chat_id).await;
+        self.shared.best_effort(
             chat_id,
-            &ChatPatch {
-                status: Some(ChatStatus::Archived),
-                ..Default::default()
-            },
+            self.shared.deps.chats_update(
+                chat_id,
+                &ChatPatch {
+                    status: Some(ChatStatus::Archived),
+                    ..Default::default()
+                },
+            ),
+            (),
         );
         info!(chat_id, "chat archived");
-        self.deps.emit_event(DaemonEvent::ChatEnded {
+        self.shared.emit(DaemonEvent::ChatEnded {
             chat_id: chat_id.to_string(),
         });
     }
@@ -675,7 +573,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         {
             warn!(?err, chat_id, "session.kill failed on stopChat");
         }
-        self.orchestration.revoke(chat_id);
+        self.shared.orchestration.revoke(chat_id);
         cell.lock_recover().session = None;
     }
 
@@ -687,7 +585,8 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         };
         let session = cell.lock_recover().session.clone();
 
-        self.deps
+        self.shared
+            .deps
             .kill_tasks_for_chat(chat_id, None, session.clone())
             .await;
 
@@ -696,16 +595,20 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         {
             warn!(?err, chat_id, "session.kill failed on endChat");
         }
-        self.orchestration.revoke(chat_id);
+        self.shared.orchestration.revoke(chat_id);
 
-        self.deps.chats_update(
+        self.shared.best_effort(
             chat_id,
-            &ChatPatch {
-                status: Some(ChatStatus::Ended),
-                ..Default::default()
-            },
+            self.shared.deps.chats_update(
+                chat_id,
+                &ChatPatch {
+                    status: Some(ChatStatus::Ended),
+                    ..Default::default()
+                },
+            ),
+            (),
         );
-        self.deps.emit_event(DaemonEvent::ChatEnded {
+        self.shared.emit(DaemonEvent::ChatEnded {
             chat_id: chat_id.to_string(),
         });
     }
@@ -720,11 +623,12 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             .chat_or_db(chat_id)
             .ok_or_else(|| NotFound::new("Chat", chat_id))?;
         let project_path = self
+            .shared
             .deps
             .projects_get_path(&source_chat.project_id)
             .ok_or_else(|| NotFound::unnamed("Project"))?;
 
-        if self.deps.is_working_tree_dirty(&project_path).await {
+        if self.shared.deps.is_working_tree_dirty(&project_path).await {
             return Err(LifecycleError::DirtyWorkingTree);
         }
 
@@ -744,11 +648,20 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
                 None,
                 None,
             )
-            .await;
+            .await?;
         // The `enableWorktree(newChatId, base, branch)` step is owned by
         // chat_manager (it holds the config_manager); it invokes this via the
         // returned new chat id.
         Ok(new_chat.id)
+    }
+
+    /// A multi-segment chat's composed history and the index its active
+    /// segment starts at; `None` for a single-segment chat, loaded from its
+    /// one session as before segments existed.
+    async fn compose_history(&self, chat_id: &str) -> Option<(Vec<ChatMessage>, usize)> {
+        let composed =
+            crate::chat_manager::compose_if_multi(self.shared.deps.as_ref(), chat_id).await?;
+        Some((composed.messages, composed.active_from))
     }
 
     pub(crate) async fn do_generate_title(&self, chat_id: &str, content: &str) {
@@ -764,9 +677,13 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             return;
         };
         let adapter_id = cell.lock_recover().chat.adapter_id.clone();
-        if read_setting(self.deps.settings(), "general", "titleGeneration.disabled")
-            .await
-            .as_deref()
+        if read_setting(
+            self.shared.deps.settings(),
+            "general",
+            "titleGeneration.disabled",
+        )
+        .await
+        .as_deref()
             == Some("true")
         {
             debug!(
@@ -783,11 +700,12 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         );
 
         if let Some(title) = self
+            .shared
             .deps
             .generate_title(&adapter_id, content, &binary)
             .await
         {
-            self.apply_generated_title(chat_id, &cell, title);
+            self.apply_generated_title(&cell, title);
         } else {
             debug!(
                 chat_id,
@@ -798,21 +716,21 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         }
     }
 
-    fn apply_generated_title(&self, chat_id: &str, cell: &Arc<Mutex<ActiveChat>>, title: String) {
+    fn apply_generated_title(&self, cell: &Arc<Mutex<ActiveChat>>, title: String) {
         let chat = {
             let mut guard = cell.lock_recover();
             guard.chat.title = Some(title.clone());
             guard.chat.clone()
         };
-        self.deps.chats_update(
-            chat_id,
-            &ChatPatch {
-                title: Some(title),
-                ..Default::default()
-            },
-        );
-        self.deps
-            .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
+        self.shared
+            .prepare_live_update(
+                &chat.id,
+                &ChatPatch {
+                    title: Some(title),
+                    ..Default::default()
+                },
+            )
+            .emit(chat, None);
     }
 
     /// The no-persistence context-loss transition. No-op unless
@@ -826,11 +744,15 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         if !no_persistence::take_context_loss(chat, &now) {
             return;
         }
-        self.deps.mark_context_lost(chat_id, &now);
+        self.shared.best_effort(
+            chat_id,
+            self.shared.deps.mark_context_lost(chat_id, &now),
+            (),
+        );
         if let Some(cell) = self.get_active(chat_id) {
             cell.lock_recover().chat = chat.clone();
         }
-        self.deps.emit_event(DaemonEvent::ChatUpdated {
+        self.shared.emit(DaemonEvent::ChatUpdated {
             chat: chat.clone(),
             reason: None,
         });
@@ -847,22 +769,24 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
     /// first send after `session/resume` — raises no resync: "no previous
     /// entry" counts as changed, an unchanged list does not.
     async fn do_load_chat(&self, chat_id: &str) -> bool {
-        let Some(mut chat) = self.deps.chats_get(chat_id) else {
+        let Some(mut chat) =
+            storage_event!(self.shared, Some(chat_id); self.shared.deps.chats_get(chat_id), false)
+        else {
             warn!(chat_id, "doLoadChat: chat not found");
             return false;
         };
-        self.active_chats.insert(
+        self.shared.active_chats.insert(
             chat_id.to_string(),
             Arc::new(Mutex::new(ActiveChat::new(chat.clone(), None))),
         );
-        self.messages.lock_recover().pin(chat_id);
+        self.shared.messages.lock_recover().pin(chat_id);
 
         // Before any resume target is read below, a dead ephemeral session's
         // context loss must be marked (clears `claude_session_id`, so the early
         // return just past it fires and no session is created).
         self.mark_context_lost_if_needed(chat_id, &mut chat);
 
-        let project_path = self.deps.projects_get_path(&chat.project_id);
+        let project_path = self.shared.deps.projects_get_path(&chat.project_id);
         let Some(effective_path) = chat_cwd(
             chat.worktree_path.as_deref(),
             chat.scratch_path.as_deref(),
@@ -874,14 +798,14 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         // baseline, and it must be re-seeded on every activation after a restart.
         // A non-project chat has no worktrees to baseline (`project_path` is
         // `None` for the hidden scratch row).
-        if let Some(project_path) = &project_path
-            && let Some(fut) = self.deps.seed_worktree_baseline(chat_id, project_path)
-        {
-            fut.await;
+        if let Some(project_path) = &project_path {
+            self.worktree_offers
+                .seed_baseline(chat_id, project_path)
+                .await;
         }
 
         if let Some(wt) = &chat.worktree_path
-            && !self.deps.path_exists(wt)
+            && !self.shared.deps.path_exists(wt)
         {
             return false;
         }
@@ -894,12 +818,14 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         // A multi-segment chat composes every segment's history, even while
         // its active segment has no session yet (switched, nothing sent):
         // returning early below would hide the earlier segments.
-        let composed = self.deps.compose_history(chat_id).await;
+        let composed = self.compose_history(chat_id).await;
         let own_id = chat.claude_session_id.clone();
-        let fork_source = self
-            .deps
-            .get_pending_fork(chat_id)
-            .map(|pending| pending.fork_source);
+        let fork_source = storage_event!(
+            self.shared, Some(chat_id);
+            self.shared.deps.get_pending_fork(chat_id),
+            false
+        )
+        .map(|pending| pending.fork_source);
         if own_id.is_none() && fork_source.is_none() {
             return match composed {
                 Some(history) => self.finish_load(chat_id, Some(history)).await,
@@ -907,7 +833,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             };
         }
 
-        let Some(session) = self.deps.create_session(
+        let Some(session) = self.shared.deps.create_session(
             &chat.adapter_id,
             SessionOptions {
                 project_path: effective_path,
@@ -947,13 +873,14 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         if let Some((remapped, active_from)) = history
             && !remapped.is_empty()
         {
-            let mut messages = self.messages.lock_recover();
+            let mut messages = self.shared.messages.lock_recover();
             let previous = messages.get(chat_id).cloned();
             messages.set(chat_id, remapped);
             let remapped = messages.get(chat_id).cloned().unwrap_or_default();
             drop(messages);
             let active_slice = &remapped[active_from.min(remapped.len())..];
-            self.permissions
+            self.shared
+                .permissions
                 .lock_recover()
                 .restore_pending_permission(chat_id, active_slice);
             // Raise the resync only when the reload actually changed the
@@ -967,7 +894,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         // of this crate's dep set, so the whole post-load scan is one injected
         // seam; `mainframe-server`'s `chat_deps.rs` implements it over the
         // session's own history.
-        self.deps.scan_loaded_history(chat_id).await;
+        self.shared.deps.scan_loaded_history(chat_id).await;
         if cache_reloaded {
             // Notify here, not just from the public `load_chat` wrapper: a
             // resumed SEND also reaches this via `do_start_chat`'s own
@@ -988,7 +915,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
     /// One `provider.<adapter>.<field>` setting; `None` when unset or unreadable.
     async fn provider_setting(&self, adapter_id: &str, field: &str) -> Option<String> {
         read_setting(
-            self.deps.settings(),
+            self.shared.deps.settings(),
             "provider",
             &format!("{adapter_id}.{field}"),
         )
@@ -1017,7 +944,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         };
         if spawned {
             if let Some(process) = process {
-                self.deps.emit_event(DaemonEvent::ProcessStarted {
+                self.shared.emit(DaemonEvent::ProcessStarted {
                     chat_id: chat_id.to_string(),
                     process,
                 });
@@ -1026,12 +953,12 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         }
 
         if let Some(wt) = &chat.worktree_path
-            && !self.deps.path_exists(wt)
+            && !self.shared.deps.path_exists(wt)
         {
             return Err(LifecycleError::WorktreeMissing(wt.clone()));
         }
 
-        let project_path = self.deps.projects_get_path(&chat.project_id);
+        let project_path = self.shared.deps.projects_get_path(&chat.project_id);
         // Clear a dead resume target (and stamp the loss) before it is read
         // into `SessionOptions.chat_id` below.
         self.mark_context_lost_if_needed(chat_id, &mut chat);
@@ -1043,10 +970,12 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         // source can both be present (a crashed first turn already got an
         // `on_init`), so both ride along and the adapter's own resolver decides.
         let fork_source = self
+            .shared
             .deps
-            .get_pending_fork(chat_id)
+            .get_pending_fork(chat_id)?
             .map(|pending| pending.fork_source);
         let session = self
+            .shared
             .deps
             .create_session(
                 &chat.adapter_id,
@@ -1062,10 +991,12 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         cell.lock_recover().session = Some(session.clone());
 
         if chat.adapter_id == "codex" {
-            self.deps.apply_codex_provider_tuning(&session);
+            self.shared.deps.apply_codex_provider_tuning(&session);
         }
 
-        let sink = self.deps.build_sink(chat_id, session.id());
+        let sink = self
+            .event_handler
+            .build_sink(chat_id, Some(session.id().to_string()));
 
         let executable_path = self
             .provider_setting(&chat.adapter_id, "executablePath")
@@ -1076,7 +1007,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         let small_fast_model = self
             .provider_setting(&chat.adapter_id, "cliproxySmallFastModel")
             .await;
-        let tuning = self.deps.resolve_tuning(chat_id).await;
+        let tuning = self.shared.deps.resolve_tuning(chat_id).await;
         let default_model = self.default_model_for(&chat.adapter_id).await;
 
         // The no-persistence flag write: persisted and mirrored into the active
@@ -1096,13 +1027,13 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
                     small_fast_model,
                     default_model,
                     no_persistence: Some(plan.no_persistence),
-                    orchestration_mcp: self.orchestration.issue(chat_id, session.id()),
+                    orchestration_mcp: self.shared.orchestration.issue(chat_id, session.id()),
                 }),
                 Some(sink),
             )
             .await?;
         info!(chat_id, "chat session started");
-        self.deps.emit_event(DaemonEvent::ProcessStarted {
+        self.shared.emit(DaemonEvent::ProcessStarted {
             chat_id: chat_id.to_string(),
             process,
         });
@@ -1124,49 +1055,10 @@ mod orchestration_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fork::PendingForkState;
     use crate::test_support::{FakeSession, test_chat};
-    use mainframe_types::settings_kv::MemorySettings;
-    use std::collections::HashSet;
-
-    /// A `SessionSink` that drops every callback — enough to let a spawn
-    /// decision test reach `session.spawn` without a real event-handler
-    /// wiring.
-    struct NoopSink;
-    impl SessionSink for NoopSink {
-        fn on_init(&self, _session_id: &str) {}
-        fn on_message(
-            &self,
-            _content: Vec<mainframe_types::chat::MessageContent>,
-            _metadata: Option<mainframe_types::adapter::MessageMetadata>,
-        ) {
-        }
-        fn on_tool_result(
-            &self,
-            _content: Vec<mainframe_types::chat::MessageContent>,
-            _vendor_id: Option<String>,
-        ) {
-        }
-        fn on_permission(&self, _request: mainframe_types::adapter::ControlRequest) {}
-        fn on_result(&self, _data: mainframe_types::adapter::SessionResult) {}
-        fn on_exit(&self, _code: Option<i32>) {}
-        fn on_error(&self, _error: AdapterError) {}
-        fn on_compact(&self, _vendor_id: Option<&str>) {}
-        fn on_compact_start(&self) {}
-        fn on_context_usage(&self, _usage: mainframe_types::adapter::ContextUsage) {}
-        fn on_plan_file(&self, _file_path: &str) {}
-        fn on_skill_file(&self, _entry: mainframe_types::context::SkillFileEntry) {}
-        fn on_queued_processed(&self, _uuid: &str) {}
-        fn on_todo_update(&self, _todos: Vec<mainframe_types::chat::TodoItem>) {}
-        fn on_pr_detected(&self, _pr: mainframe_types::adapter::DetectedPr) {}
-        fn on_cli_message(&self, _text: &str) {}
-        fn on_skill_loaded(&self, _entry: mainframe_adapter_api::LoadedSkill) {}
-        fn on_subagent_child(
-            &self,
-            _parent_tool_use_id: &str,
-            _blocks: Vec<mainframe_types::chat::MessageContent>,
-        ) {
-        }
-    }
+    use mainframe_adapter_api::AdapterSession;
+    use mainframe_types::settings_kv::{MemorySettings, SettingsKv as _};
 
     pub(super) fn chat_over(id: &str, worktree: Option<&str>, status: ChatStatus) -> Chat {
         let mut c = test_chat(id);
@@ -1229,294 +1121,103 @@ mod tests {
     }
 
     // ── archiveChat (kills-tasks + releases-scope) ───────────────────────────
-    pub(super) struct FakeDeps {
+    pub(super) use crate::test_support::FakeDeps;
+
+    /// The shared fake with `chat` and its `siblings` stored in a project at
+    /// `/proj` whose launch scope can be stopped.
+    pub(super) fn fake(chat: Chat, siblings: Vec<Chat>) -> Arc<FakeDeps> {
+        let mut chats = vec![chat];
+        chats.extend(siblings);
+        let deps = FakeDeps::with_chats(chats);
+        deps.set_project_path("/proj");
+        *deps.workspace.has_launches.lock().unwrap() = true;
+        deps
+    }
+
+    /// `fake`, over a scope that never ran a launch config (where
+    /// `LaunchRegistry::get` yields `None` and `stop_launch_processes` with it).
+    fn launchless(chat: Chat, siblings: Vec<Chat>) -> Arc<FakeDeps> {
+        let deps = fake(chat, siblings);
+        *deps.workspace.has_launches.lock().unwrap() = false;
+        deps
+    }
+
+    pub(super) fn title_disabled(chat: Chat) -> Arc<FakeDeps> {
+        let deps = FakeDeps {
+            settings: MemorySettings::default().with("general", "titleGeneration.disabled", "true"),
+            ..FakeDeps::default()
+        };
+        deps.store.insert(chat);
+        deps.set_project_path("/proj");
+        *deps.workspace.has_launches.lock().unwrap() = true;
+        Arc::new(deps)
+    }
+
+    /// Like [`fake`], but `adapter_supports_no_persistence` answers `true`
+    /// and `create_session` hands out `session` (so `do_start_chat` reaches
+    /// the rule-7 flag write before its `spawn()` call).
+    pub(super) fn no_persistence_capable(
         chat: Chat,
-        created_chat: Mutex<Option<NewChat>>,
-        siblings: Vec<Chat>,
-        order: Mutex<Vec<String>>,
-        pub(super) events: Mutex<Vec<DaemonEvent>>,
-        stop_calls: Mutex<Vec<(String, String)>>,
-        tunnel_stop_calls: Mutex<Vec<(String, String)>>,
-        present_paths: Mutex<Option<HashSet<String>>>,
-        /// `false` reproduces a scope that never ran a launch config, where
-        /// `LaunchRegistry::get` yields `None` and `stop_launch_processes` with it.
-        has_launches: bool,
-        /// Titles the deps observed `chats_update` writing (only when
-        /// `patch.title.is_some()`, so unrelated lifecycle updates don't pollute
-        /// title-logging assertions).
-        pub(super) title_updates: Mutex<Vec<String>>,
-        /// The settings rows `settings()` serves.
-        settings: MemorySettings,
-        /// `adapter_supports_no_persistence` answer.
-        adapter_no_persistence: Mutex<bool>,
-        /// Every `ensure_dir` path, in order.
-        pub(super) ensure_dir_calls: Mutex<Vec<String>>,
-        /// Every `mark_context_lost(chat_id, context_lost_at)` call, in order.
-        pub(super) mark_context_lost_calls: Mutex<Vec<(String, String)>>,
-        /// Every `vendor_session_ephemeral` value `chats_update` observed.
-        pub(super) vendor_session_ephemeral_updates: Mutex<Vec<bool>>,
-        /// `get_pending_fork` answer; `None` for every test outside the
-        /// fork-session-building coverage.
-        pending_fork: Mutex<Option<PendingForkState>>,
-        /// When `Some`, `create_session` returns it instead of the default
-        /// `None` every pre-existing test relies on.
-        session_to_return: Mutex<Option<Arc<dyn AdapterSession>>>,
-        /// Every `SessionOptions` a test's `create_session` call received, so a
-        /// fork test can assert `chat_id`/`fork_source` without a real adapter.
-        pub(super) create_session_calls: Mutex<Vec<SessionOptions>>,
-        /// When `true`, `build_sink` returns an inert `NoopSink` instead of
-        /// `unreachable!()` — only the fork tests that exercise `do_start_chat`
-        /// far enough to reach it opt in.
-        allow_build_sink: Mutex<bool>,
+        session: Arc<dyn AdapterSession>,
+    ) -> Arc<FakeDeps> {
+        let deps = fake(chat, Vec::new());
+        deps.set_session_to_return(session);
+        *deps.adapters.no_persistence_capability.lock().unwrap() = true;
+        deps
     }
 
-    impl FakeDeps {
-        pub(super) fn new(chat: Chat, siblings: Vec<Chat>) -> Arc<Self> {
-            Self::build(chat, siblings, true, false)
-        }
+    /// Titles the store observed `chats_update` writing.
+    pub(super) fn title_updates(deps: &FakeDeps) -> Vec<String> {
+        deps.store
+            .updates
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|(_, patch)| patch.title.clone())
+            .collect()
+    }
 
-        fn launchless(chat: Chat, siblings: Vec<Chat>) -> Arc<Self> {
-            Self::build(chat, siblings, false, false)
-        }
+    /// Every `vendor_session_ephemeral` value `chats_update` observed.
+    fn vendor_session_ephemeral_updates(deps: &FakeDeps) -> Vec<bool> {
+        deps.store
+            .updates
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|(_, patch)| patch.vendor_session_ephemeral)
+            .collect()
+    }
 
-        pub(super) fn title_disabled(chat: Chat) -> Arc<Self> {
-            Self::build(chat, Vec::new(), true, true)
-        }
-
-        pub(super) fn build(
-            chat: Chat,
-            siblings: Vec<Chat>,
-            has_launches: bool,
-            disabled: bool,
-        ) -> Arc<Self> {
-            Arc::new(Self {
-                chat,
-                created_chat: Mutex::new(None),
-                siblings,
-                order: Mutex::new(Vec::new()),
-                events: Mutex::new(Vec::new()),
-                stop_calls: Mutex::new(Vec::new()),
-                tunnel_stop_calls: Mutex::new(Vec::new()),
-                present_paths: Mutex::new(None),
-                has_launches,
-                title_updates: Mutex::new(Vec::new()),
-                settings: if disabled {
-                    MemorySettings::default().with("general", "titleGeneration.disabled", "true")
-                } else {
-                    MemorySettings::default()
-                },
-                adapter_no_persistence: Mutex::new(false),
-                ensure_dir_calls: Mutex::new(Vec::new()),
-                mark_context_lost_calls: Mutex::new(Vec::new()),
-                vendor_session_ephemeral_updates: Mutex::new(Vec::new()),
-                pending_fork: Mutex::new(None),
-                session_to_return: Mutex::new(None),
-                create_session_calls: Mutex::new(Vec::new()),
-                allow_build_sink: Mutex::new(false),
-            })
-        }
-
-        /// Like [`Self::new`], but `adapter_supports_no_persistence` answers
-        /// `true` and `create_session` hands out `session` (so `do_start_chat`
-        /// reaches the rule-7 flag write before its `spawn()` call).
-        pub(super) fn no_persistence_capable(
-            chat: Chat,
-            session: Arc<dyn AdapterSession>,
-        ) -> Arc<Self> {
-            let deps = Self::build(chat, Vec::new(), true, false);
-            deps.set_session_to_return(session);
-            deps.allow_build_sink();
-            *deps.adapter_no_persistence.lock().unwrap() = true;
-            deps
-        }
-
-        fn set_present_paths(&self, paths: &[&str]) {
-            let paths = paths.iter().map(|path| (*path).to_string()).collect();
-            *self.present_paths.lock().unwrap() = Some(paths);
-        }
-
-        async fn set_saved_default_model(&self, adapter_id: &str, model: Option<&str>) {
-            let key = format!("{adapter_id}.defaultModel");
-            match model {
-                Some(model) => self.settings.set("provider", &key, model).await.unwrap(),
-                None => self.settings.delete("provider", &key).await.unwrap(),
-            }
-        }
-
-        pub(super) fn set_pending_fork(&self, pending: PendingForkState) {
-            *self.pending_fork.lock().unwrap() = Some(pending);
-        }
-
-        pub(super) fn set_session_to_return(&self, session: Arc<dyn AdapterSession>) {
-            *self.session_to_return.lock().unwrap() = Some(session);
-        }
-
-        pub(super) fn allow_build_sink(&self) {
-            *self.allow_build_sink.lock().unwrap() = true;
+    async fn set_saved_default_model(deps: &FakeDeps, adapter_id: &str, model: Option<&str>) {
+        let key = format!("{adapter_id}.defaultModel");
+        match model {
+            Some(model) => deps.settings.set("provider", &key, model).await.unwrap(),
+            None => deps.settings.delete("provider", &key).await.unwrap(),
         }
     }
 
-    impl LifecycleManagerDeps for FakeDeps {
-        fn chats_get(&self, _id: &str) -> Option<Chat> {
-            Some(self.chat.clone())
-        }
-        fn chats_create(&self, new_chat: &NewChat) -> Chat {
-            *self.created_chat.lock().unwrap() = Some(new_chat.clone());
-            self.chat.clone()
-        }
-        fn chats_update(&self, _chat_id: &str, patch: &ChatPatch) {
-            if let Some(title) = &patch.title {
-                self.title_updates.lock().unwrap().push(title.clone());
-            }
-            if let Some(v) = patch.vendor_session_ephemeral {
-                self.vendor_session_ephemeral_updates
-                    .lock()
-                    .unwrap()
-                    .push(v);
-            }
-        }
-        fn chats_list(&self, _project_id: &str) -> Vec<Chat> {
-            let mut all = vec![self.chat.clone()];
-            all.extend(self.siblings.clone());
-            all
-        }
-        fn projects_get_path(&self, _project_id: &str) -> Option<String> {
-            Some("/proj".to_string())
-        }
-        fn settings(&self) -> &dyn SettingsKv {
-            &self.settings
-        }
-
-        fn create_session(&self, _a: &str, o: SessionOptions) -> Option<Arc<dyn AdapterSession>> {
-            self.create_session_calls.lock().unwrap().push(o);
-            self.session_to_return.lock().unwrap().clone()
-        }
-        fn build_sink(&self, _chat_id: &str, _session_id: &str) -> Arc<dyn SessionSink> {
-            if *self.allow_build_sink.lock().unwrap() {
-                Arc::new(NoopSink)
-            } else {
-                unreachable!("not exercised")
-            }
-        }
-        fn emit_event(&self, event: DaemonEvent) {
-            self.events.lock().unwrap().push(event);
-        }
-        fn attachment_delete_chat<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, ()> {
-            Box::pin(async {})
-        }
-        fn kill_tasks_for_chat<'a>(
-            &'a self,
-            _chat_id: &'a str,
-            worktree_path: Option<String>,
-            _session: Option<Arc<dyn AdapterSession>>,
-        ) -> BoxFuture<'a, ()> {
-            self.order.lock().unwrap().push(format!(
-                "kill:{}",
-                worktree_path.as_deref().unwrap_or("no-wt")
-            ));
-            Box::pin(async {})
-        }
-        fn remove_worktree<'a>(
-            &'a self,
-            _project_path: &'a str,
-            _worktree_path: &'a str,
-            _branch_name: &'a str,
-        ) -> BoxFuture<'a, ()> {
-            Box::pin(async {})
-        }
-        fn stop_launch_processes<'a>(
-            &'a self,
-            project_id: &'a str,
-            effective_path: &'a str,
-        ) -> Option<BoxFuture<'a, ()>> {
-            if !self.has_launches {
-                return None;
-            }
-            self.stop_calls
-                .lock()
-                .unwrap()
-                .push((project_id.to_string(), effective_path.to_string()));
-            Some(Box::pin(async {}))
-        }
-        fn stop_scope_tunnels<'a>(
-            &'a self,
-            project_id: &'a str,
-            effective_path: &'a str,
-        ) -> Option<BoxFuture<'a, ()>> {
-            self.tunnel_stop_calls
-                .lock()
-                .unwrap()
-                .push((project_id.to_string(), effective_path.to_string()));
-            Some(Box::pin(async {}))
-        }
-        fn scan_loaded_history<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, ()> {
-            Box::pin(async {})
-        }
-        fn resolve_tuning<'a>(
-            &'a self,
-            _chat_id: &'a str,
-        ) -> BoxFuture<'a, Option<ResolvedTuning>> {
-            Box::pin(async { None })
-        }
-        fn apply_codex_provider_tuning(&self, _session: &Arc<dyn AdapterSession>) {}
-        fn generate_title<'a>(
-            &'a self,
-            _adapter_id: &'a str,
-            _content: &'a str,
-            _binary: &'a str,
-        ) -> BoxFuture<'a, Option<String>> {
-            Box::pin(async { None })
-        }
-        fn is_working_tree_dirty<'a>(&'a self, _project_path: &'a str) -> BoxFuture<'a, bool> {
-            Box::pin(async { false })
-        }
-        fn path_exists(&self, path: &str) -> bool {
-            self.present_paths
-                .lock()
-                .unwrap()
-                .as_ref()
-                .is_none_or(|paths| paths.contains(path))
-        }
-        fn adapter_supports_no_persistence(&self, _adapter_id: &str) -> bool {
-            *self.adapter_no_persistence.lock().unwrap()
-        }
-        fn ensure_dir<'a>(&'a self, path: &'a str) -> BoxFuture<'a, ()> {
-            self.ensure_dir_calls.lock().unwrap().push(path.to_string());
-            Box::pin(async {})
-        }
-        fn mark_context_lost(&self, chat_id: &str, context_lost_at: &str) {
-            self.mark_context_lost_calls
-                .lock()
-                .unwrap()
-                .push((chat_id.to_string(), context_lost_at.to_string()));
-        }
-        fn get_pending_fork(&self, _chat_id: &str) -> Option<PendingForkState> {
-            self.pending_fork.lock().unwrap().clone()
-        }
-    }
-
-    pub(super) fn manager(deps: Arc<FakeDeps>) -> ChatLifecycleManager<FakeDeps> {
-        ChatLifecycleManager::new(
-            deps,
-            Arc::new(DashMap::new()),
-            Arc::new(Mutex::new(MessageCache::new())),
-            Arc::new(Mutex::new(PermissionManager::new())),
-        )
+    /// A lifecycle manager over `deps`, with the event handler and offer
+    /// registry it needs built over the same shared state.
+    pub(super) fn manager(deps: Arc<FakeDeps>) -> ChatLifecycleManager {
+        let shared = ChatShared::new(deps);
+        let offers = Arc::new(WorktreeOfferRegistry::new(shared.clone()));
+        let handler = Arc::new(EventHandler::new(shared.clone(), offers.clone()));
+        ChatLifecycleManager::new(shared, handler, offers)
     }
 
     #[tokio::test]
     async fn fork_to_worktree_keeps_accept_edits_permission_mode() {
         let mut source = chat_over("source", None, ChatStatus::Active);
         source.permission_mode = Some(ExecutionMode::AcceptEdits);
-        let deps = FakeDeps::new(source, Vec::new());
+        let deps = fake(source, Vec::new());
         let mgr = manager(deps.clone());
 
         mgr.fork_to_worktree("source", "main", "feature")
             .await
             .unwrap();
 
-        let created = deps.created_chat.lock().unwrap();
-        let permission = created.as_ref().unwrap().permission_mode.as_deref();
+        let created = deps.store.created.lock().unwrap();
+        let permission = created[0].permission_mode.as_deref();
         assert_eq!(permission, Some("acceptEdits"));
         let parsed: ExecutionMode =
             serde_json::from_value(serde_json::Value::String(permission.unwrap().to_string()))
@@ -1531,11 +1232,11 @@ mod tests {
             c.branch_name = Some("feat/x".to_string());
             c
         };
-        let deps = FakeDeps::new(chat.clone(), Vec::new());
+        let deps = fake(chat.clone(), Vec::new());
         let mgr = manager(deps.clone());
         // Insert an active chat whose FakeSession records its own kill order.
         let session = FakeSession::with_activity(true, None);
-        mgr.active_chats.insert(
+        mgr.shared.active_chats.insert(
             "c1".to_string(),
             Arc::new(Mutex::new(ActiveChat::new(chat, Some(session.clone())))),
         );
@@ -1544,8 +1245,8 @@ mod tests {
 
         // killTasksForChat is called (with the worktree path) BEFORE session.kill;
         // the deps seam records the kill-tasks call and FakeSession counts its kill.
-        let order = deps.order.lock().unwrap();
-        assert!(order.iter().any(|s| s == "kill:/wt/x"));
+        let order = deps.workspace.order.lock().unwrap();
+        assert!(order.iter().any(|s| s == "kill:c1:/wt/x"));
         assert_eq!(session.kills(), 1);
     }
 
@@ -1556,19 +1257,19 @@ mod tests {
             c.branch_name = Some("feat/x".to_string());
             c
         };
-        let deps = FakeDeps::new(chat, Vec::new());
+        let deps = fake(chat, Vec::new());
         let mgr = manager(deps.clone());
         mgr.archive_chat("c1", false).await; // keep-worktree
 
         assert_eq!(
-            deps.stop_calls.lock().unwrap().as_slice(),
+            deps.workspace.stop_calls.lock().unwrap().as_slice(),
             &[("p1".to_string(), "/wt/x".to_string())]
         );
         assert_eq!(
-            deps.tunnel_stop_calls.lock().unwrap().as_slice(),
+            deps.workspace.tunnel_stop_calls.lock().unwrap().as_slice(),
             &[("p1".to_string(), "/wt/x".to_string())]
         );
-        assert!(deps.events.lock().unwrap().iter().any(|e| matches!(
+        assert!(deps.emitter.events.lock().unwrap().iter().any(|e| matches!(
             e,
             DaemonEvent::LaunchScopeReleased { project_id, effective_path }
                 if project_id == "p1" && effective_path == "/wt/x"
@@ -1585,16 +1286,16 @@ mod tests {
             c.branch_name = Some("feat/x".to_string());
             c
         };
-        let deps = FakeDeps::launchless(chat, Vec::new());
+        let deps = launchless(chat, Vec::new());
         let mgr = manager(deps.clone());
         mgr.archive_chat("c1", false).await;
 
-        assert!(deps.stop_calls.lock().unwrap().is_empty());
+        assert!(deps.workspace.stop_calls.lock().unwrap().is_empty());
         assert_eq!(
-            deps.tunnel_stop_calls.lock().unwrap().as_slice(),
+            deps.workspace.tunnel_stop_calls.lock().unwrap().as_slice(),
             &[("p1".to_string(), "/wt/x".to_string())]
         );
-        assert!(deps.events.lock().unwrap().iter().any(|e| matches!(
+        assert!(deps.emitter.events.lock().unwrap().iter().any(|e| matches!(
             e,
             DaemonEvent::LaunchScopeReleased { project_id, effective_path }
                 if project_id == "p1" && effective_path == "/wt/x"
@@ -1609,14 +1310,15 @@ mod tests {
             c
         };
         let sibling = chat_over("c2", Some("/wt/x"), ChatStatus::Active);
-        let deps = FakeDeps::new(chat, vec![sibling]);
+        let deps = fake(chat, vec![sibling]);
         let mgr = manager(deps.clone());
         mgr.archive_chat("c1", false).await;
 
-        assert!(deps.stop_calls.lock().unwrap().is_empty());
-        assert!(deps.tunnel_stop_calls.lock().unwrap().is_empty());
+        assert!(deps.workspace.stop_calls.lock().unwrap().is_empty());
+        assert!(deps.workspace.tunnel_stop_calls.lock().unwrap().is_empty());
         assert!(
             !deps
+                .emitter
                 .events
                 .lock()
                 .unwrap()
@@ -1628,19 +1330,19 @@ mod tests {
     #[tokio::test]
     async fn no_worktree_last_user_releases_the_project_root_scope() {
         let chat = chat_over("c1", None, ChatStatus::Active);
-        let deps = FakeDeps::new(chat, Vec::new());
+        let deps = fake(chat, Vec::new());
         let mgr = manager(deps.clone());
         mgr.archive_chat("c1", false).await;
 
         assert_eq!(
-            deps.stop_calls.lock().unwrap().as_slice(),
+            deps.workspace.stop_calls.lock().unwrap().as_slice(),
             &[("p1".to_string(), "/proj".to_string())]
         );
         assert_eq!(
-            deps.tunnel_stop_calls.lock().unwrap().as_slice(),
+            deps.workspace.tunnel_stop_calls.lock().unwrap().as_slice(),
             &[("p1".to_string(), "/proj".to_string())]
         );
-        assert!(deps.events.lock().unwrap().iter().any(|e| matches!(
+        assert!(deps.emitter.events.lock().unwrap().iter().any(|e| matches!(
             e,
             DaemonEvent::LaunchScopeReleased { effective_path, .. } if effective_path == "/proj"
         )));
@@ -1649,13 +1351,13 @@ mod tests {
     #[tokio::test]
     async fn start_chat_emits_a_chat_scoped_error_when_the_project_directory_is_gone() {
         let chat = chat_over("c1", None, ChatStatus::Active);
-        let deps = FakeDeps::new(chat, Vec::new());
-        deps.set_present_paths(&[]);
+        let deps = fake(chat, Vec::new());
+        deps.paths.set_present_paths(&[]);
         let mgr = manager(deps.clone());
 
         mgr.start_chat("c1").await;
 
-        let events = deps.events.lock().unwrap();
+        let events = deps.emitter.events.lock().unwrap();
         assert!(events.iter().any(|event| matches!(
             event,
             DaemonEvent::Error { chat_id: Some(chat_id), error }
@@ -1673,13 +1375,13 @@ mod tests {
     #[tokio::test]
     async fn start_chat_emits_a_chat_scoped_error_when_the_worktree_is_gone() {
         let chat = chat_over("c1", Some("/wt/gone"), ChatStatus::Active);
-        let deps = FakeDeps::new(chat, Vec::new());
-        deps.set_present_paths(&["/proj"]);
+        let deps = fake(chat, Vec::new());
+        deps.paths.set_present_paths(&["/proj"]);
         let mgr = manager(deps.clone());
 
         mgr.start_chat("c1").await;
 
-        let events = deps.events.lock().unwrap();
+        let events = deps.emitter.events.lock().unwrap();
         assert!(events.iter().any(|event| matches!(
             event,
             DaemonEvent::Error { chat_id: Some(chat_id), error }
@@ -1697,13 +1399,13 @@ mod tests {
     #[tokio::test]
     async fn start_chat_proceeds_when_the_worktree_is_live_and_the_project_path_is_gone() {
         let chat = chat_over("c1", Some("/wt/live"), ChatStatus::Active);
-        let deps = FakeDeps::new(chat, Vec::new());
-        deps.set_present_paths(&["/wt/live"]);
+        let deps = fake(chat, Vec::new());
+        deps.paths.set_present_paths(&["/wt/live"]);
         let mgr = manager(deps.clone());
 
         mgr.start_chat("c1").await;
 
-        let events = deps.events.lock().unwrap();
+        let events = deps.emitter.events.lock().unwrap();
         assert!(!events.iter().any(|event| matches!(
             event,
             DaemonEvent::Error { error, .. }
@@ -1717,55 +1419,36 @@ mod tests {
     async fn temporary_and_capable_writes_the_ephemeral_flag_before_spawning() {
         let mut chat = chat_over("c1", None, ChatStatus::Active);
         chat.temporary = true;
-        let deps = FakeDeps::no_persistence_capable(chat, FakeSession::with_activity(false, None));
+        let deps = no_persistence_capable(chat, FakeSession::with_activity(false, None));
         let mgr = manager(deps.clone());
 
         mgr.start_chat("c1").await;
 
-        assert_eq!(
-            deps.vendor_session_ephemeral_updates
-                .lock()
-                .unwrap()
-                .as_slice(),
-            &[true]
-        );
+        assert_eq!(vendor_session_ephemeral_updates(&deps).as_slice(), &[true]);
     }
 
     #[tokio::test]
     async fn not_temporary_never_writes_the_ephemeral_flag_even_when_capable() {
         let chat = chat_over("c1", None, ChatStatus::Active); // temporary: false (default)
-        let deps = FakeDeps::no_persistence_capable(chat, FakeSession::with_activity(false, None));
+        let deps = no_persistence_capable(chat, FakeSession::with_activity(false, None));
         let mgr = manager(deps.clone());
 
         mgr.start_chat("c1").await;
 
-        assert_eq!(
-            deps.vendor_session_ephemeral_updates
-                .lock()
-                .unwrap()
-                .as_slice(),
-            &[false]
-        );
+        assert_eq!(vendor_session_ephemeral_updates(&deps).as_slice(), &[false]);
     }
 
     #[tokio::test]
     async fn temporary_without_the_capability_never_writes_the_ephemeral_flag() {
         let mut chat = chat_over("c1", None, ChatStatus::Active);
         chat.temporary = true;
-        let deps = FakeDeps::new(chat, Vec::new());
+        let deps = fake(chat, Vec::new());
         deps.set_session_to_return(FakeSession::with_activity(false, None));
-        deps.allow_build_sink();
         let mgr = manager(deps.clone());
 
         mgr.start_chat("c1").await;
 
-        assert_eq!(
-            deps.vendor_session_ephemeral_updates
-                .lock()
-                .unwrap()
-                .as_slice(),
-            &[false]
-        );
+        assert_eq!(vendor_session_ephemeral_updates(&deps).as_slice(), &[false]);
     }
 
     #[tokio::test]
@@ -1774,15 +1457,18 @@ mod tests {
         chat.temporary = true;
         chat.vendor_session_ephemeral = true;
         chat.claude_session_id = Some("dead-sess".to_string());
-        let deps = FakeDeps::no_persistence_capable(chat, FakeSession::with_activity(false, None));
+        let deps = no_persistence_capable(chat, FakeSession::with_activity(false, None));
         let mgr = manager(deps.clone());
 
         mgr.start_chat("c1").await;
 
-        assert_eq!(deps.mark_context_lost_calls.lock().unwrap().len(), 1);
-        assert_eq!(deps.mark_context_lost_calls.lock().unwrap()[0].0, "c1");
+        assert_eq!(deps.store.mark_context_lost_calls.lock().unwrap().len(), 1);
+        assert_eq!(
+            deps.store.mark_context_lost_calls.lock().unwrap()[0].0,
+            "c1"
+        );
         // The dead id must never reach `create_session` as a resume target.
-        let calls = deps.create_session_calls.lock().unwrap();
+        let calls = deps.adapters.created_sessions.lock().unwrap();
         assert!(calls.iter().all(|o| o.chat_id.is_none()));
     }
 
@@ -1790,20 +1476,19 @@ mod tests {
     async fn a_non_project_chat_ensures_its_scratch_directory_on_every_start() {
         let mut chat = chat_over("c1", None, ChatStatus::Active);
         chat.scratch_path = Some("/data/scratch/c1".to_string());
-        let deps = FakeDeps::new(chat, Vec::new());
+        let deps = fake(chat, Vec::new());
         deps.set_session_to_return(FakeSession::with_activity(false, None));
-        deps.allow_build_sink();
         let mgr = manager(deps.clone());
 
         mgr.start_chat("c1").await;
 
         assert_eq!(
-            deps.ensure_dir_calls.lock().unwrap().as_slice(),
+            deps.paths.ensure_dir_calls.lock().unwrap().as_slice(),
             &["/data/scratch/c1".to_string()]
         );
         // Its cwd is the scratch path, not the (unrelated) project path.
         assert_eq!(
-            deps.create_session_calls.lock().unwrap()[0].project_path,
+            deps.adapters.created_sessions.lock().unwrap()[0].project_path,
             "/data/scratch/c1"
         );
     }
@@ -1811,27 +1496,26 @@ mod tests {
     #[tokio::test]
     async fn a_project_chat_never_calls_ensure_dir() {
         let chat = chat_over("c1", None, ChatStatus::Active);
-        let deps = FakeDeps::new(chat, Vec::new());
+        let deps = fake(chat, Vec::new());
         deps.set_session_to_return(FakeSession::with_activity(false, None));
-        deps.allow_build_sink();
         let mgr = manager(deps.clone());
 
         mgr.start_chat("c1").await;
 
-        assert!(deps.ensure_dir_calls.lock().unwrap().is_empty());
+        assert!(deps.paths.ensure_dir_calls.lock().unwrap().is_empty());
     }
 
     #[tokio::test]
     async fn default_model_for_uses_only_explicit_provider_settings() {
-        let deps = FakeDeps::new(chat_over("c1", None, ChatStatus::Active), Vec::new());
-        let mgr = manager(deps);
+        let deps = fake(chat_over("c1", None, ChatStatus::Active), Vec::new());
+        let mgr = manager(deps.clone());
         for (saved, expected) in [
             (Some("custom-model"), Some("custom-model")),
             (Some("default"), None),
             (Some(""), None),
             (None, None),
         ] {
-            mgr.deps.set_saved_default_model("codex", saved).await;
+            set_saved_default_model(&deps, "codex", saved).await;
             assert_eq!(mgr.default_model_for("codex").await.as_deref(), expected);
         }
     }
@@ -1851,14 +1535,14 @@ mod tests {
     #[tokio::test]
     async fn do_load_chat_resumes_an_unsent_fork_from_its_pending_fork_source() {
         let chat = chat_over("fork-1", None, ChatStatus::Active);
-        let deps = FakeDeps::new(chat, Vec::new());
-        deps.set_pending_fork(pending_fork());
+        let deps = fake(chat, Vec::new());
+        deps.set_pending_fork("fork-1", pending_fork());
         deps.set_session_to_return(FakeSession::with_activity(false, None));
         let mgr = manager(deps.clone());
 
         mgr.load_chat("fork-1").await;
 
-        let calls = deps.create_session_calls.lock().unwrap();
+        let calls = deps.adapters.created_sessions.lock().unwrap();
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].chat_id, None);
         assert_eq!(calls[0].fork_source, Some(pending_fork().fork_source));
@@ -1870,30 +1554,32 @@ mod tests {
     #[tokio::test]
     async fn do_load_chat_skips_session_creation_with_no_session_and_no_pending_fork() {
         let chat = chat_over("c1", None, ChatStatus::Active);
-        let deps = FakeDeps::new(chat, Vec::new());
+        let deps = fake(chat, Vec::new());
         let mgr = manager(deps.clone());
 
         mgr.load_chat("c1").await;
 
-        assert!(deps.create_session_calls.lock().unwrap().is_empty());
+        assert!(deps.adapters.created_sessions.lock().unwrap().is_empty());
     }
 
     #[tokio::test]
     async fn do_start_chat_passes_the_pending_fork_source_to_the_spawn_session() {
         let chat = chat_over("fork-1", None, ChatStatus::Active);
-        let deps = FakeDeps::new(chat, Vec::new());
-        deps.set_pending_fork(pending_fork());
+        let deps = fake(chat, Vec::new());
+        deps.set_pending_fork("fork-1", pending_fork());
         // Not spawned, so `start_chat` proceeds past `do_load_chat`'s session to
         // build (and record the options for) a fresh spawn session.
         deps.set_session_to_return(FakeSession::with_activity(false, None));
-        deps.allow_build_sink();
         let mgr = manager(deps.clone());
 
         mgr.start_chat("fork-1").await;
 
-        let calls = deps.create_session_calls.lock().unwrap();
+        let calls = deps.adapters.created_sessions.lock().unwrap();
         let last = calls.last().expect("start_chat builds a spawn session");
         assert_eq!(last.chat_id, None);
         assert_eq!(last.fork_source, Some(pending_fork().fork_source));
     }
 }
+
+#[cfg(test)]
+mod storage_tests;

@@ -105,22 +105,21 @@ async fn harness(session_id: &str) -> Harness {
     })
     .unwrap();
 
-    let manager = build_chat_manager(
-        db.clone(),
-        Arc::new(AdapterRegistry::new()),
-        Arc::clone(&tracker),
-        Arc::clone(&attachments),
-        Arc::clone(&push),
-        GitFactory,
-        broadcast.clone(),
-        Arc::new(NoopLaunchStopper),
-        Arc::new(NoopScopeTunnelStopper),
+    let manager = build_chat_manager(mainframe_server::ChatManagerParams {
+        db: db.clone(),
+        adapters: Arc::new(AdapterRegistry::new()),
+        background_tasks: Arc::clone(&tracker),
+        attachments: Arc::clone(&attachments),
+        push: Arc::clone(&push),
+        git: GitFactory,
+        broadcast: broadcast.clone(),
+        launch: Arc::new(NoopLaunchStopper),
+        scope_tunnels: Arc::new(NoopScopeTunnelStopper),
         quota,
-        Arc::clone(&store),
-        mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
-        None,
-        data_dir.path().to_path_buf(),
-    );
+        claude_workflows: Arc::clone(&store),
+        chat_surface: None,
+        data_dir: data_dir.path().to_path_buf(),
+    });
 
     let ctx = Arc::new(
         AppCtx::test_builder(db, data_dir.path().to_path_buf())

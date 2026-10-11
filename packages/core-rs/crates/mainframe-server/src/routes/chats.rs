@@ -61,7 +61,7 @@ pub(crate) async fn list(State(ctx): State<Arc<AppCtx>>, Query(q): Query<ListQue
     let synth: Vec<String> = q.synthetic.as_deref().map(split_csv).unwrap_or_default();
     let has_worktree = synth.iter().any(|s| s == "has-worktree");
     let include_temporary = q.include_temporary.unwrap_or(false);
-    ok(ctx.chat.chat_manager.list_filtered(
+    crate::respond::storage(ctx.chat.chat_manager.list_filtered(
         q.project.as_deref(),
         tags_all.as_deref(),
         has_worktree,
@@ -97,16 +97,19 @@ pub(crate) async fn list_for_project(
     Query(q): Query<ListForProjectQuery>,
 ) -> Response {
     let include_temporary = q.include_temporary.unwrap_or(false);
-    ok(filter_temporary(
-        ctx.chat.chat_manager.list_chats(&project_id),
-        include_temporary,
-    ))
+    crate::respond::storage(
+        ctx.chat
+            .chat_manager
+            .list_chats(&project_id)
+            .map(|chats| filter_temporary(chats, include_temporary)),
+    )
 }
 
 pub(crate) async fn get_one(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
-    match ctx.chat.chat_manager.get_chat(&id) {
-        Some(chat) => ok(chat),
-        None => crate::respond::ApiError::chat_not_found().into_response(),
+    match ctx.chat.chat_manager.try_get_chat(&id) {
+        Ok(Some(chat)) => ok(chat),
+        Ok(None) => crate::respond::ApiError::chat_not_found().into_response(),
+        Err(error) => crate::respond::ApiError::from(error).into_response(),
     }
 }
 
@@ -947,6 +950,7 @@ mod tests {
                 None,
             )
             .await
+            .unwrap()
             .id
     }
 

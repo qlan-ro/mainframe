@@ -35,7 +35,7 @@ impl ChatManager {
     ) -> Result<Chat, SwitchError> {
         // An unsent fork's pre-send history bounds its borrowed pin. Read it
         // before the claim: a history read waits out the claim.
-        let fork_history = match self.deps.get_pending_fork(chat_id) {
+        let fork_history = match self.shared.deps.get_pending_fork(chat_id)? {
             Some(_) => self.get_messages(chat_id).await,
             None => Vec::new(),
         };
@@ -77,9 +77,9 @@ impl ChatManager {
         let chat = self
             .get_chat(chat_id)
             .ok_or_else(|| SwitchError::NotFound(chat_id.to_string()))?;
-        let target = self.deps.adapter_info(&req.adapter_id);
-        let from_name = self.deps.adapter_fork_info(&chat.adapter_id).name;
-        let queued = queued_for_chat(&self.queued_refs, chat_id).len();
+        let target = self.shared.deps.adapter_info(&req.adapter_id);
+        let from_name = self.shared.deps.adapter_fork_info(&chat.adapter_id).name;
+        let queued = self.shared.queued_for_chat(chat_id).len();
         check_switch_allowed(&SwitchCheck {
             chat: &chat,
             target_id: &req.adapter_id,
@@ -102,10 +102,15 @@ impl ChatManager {
         if req.adapter_id == chat.adapter_id {
             return Ok(SwitchOutcome::Done(Box::new(chat)));
         }
-        let store = self.deps.segment_store().ok_or(SwitchError::Unavailable)?;
-        let unsent_fork = self.deps.get_pending_fork(chat_id).is_some();
+        let store = self
+            .shared
+            .deps
+            .segment_store()
+            .ok_or(SwitchError::Unavailable)?;
+        let unsent_fork = self.shared.deps.get_pending_fork(chat_id)?.is_some();
         if !unsent_fork && !store.has_native_id(chat_id) {
             let target_plan_mode = self
+                .shared
                 .deps
                 .adapter_info(&req.adapter_id)
                 .is_some_and(|a| a.capabilities.plan_mode);
@@ -120,7 +125,7 @@ impl ChatManager {
             return Err(SwitchError::UnsentFork);
         }
         let default_model = read_setting(
-            self.deps.settings(),
+            self.shared.deps.settings(),
             "provider",
             &format!("{}.defaultModel", req.adapter_id),
         )
@@ -141,6 +146,7 @@ impl ChatManager {
         default_model: Option<String>,
     ) -> Result<SwitchCommit, SwitchError> {
         let caps = self
+            .shared
             .deps
             .adapter_info(&req.adapter_id)
             .map(|a| a.capabilities);
@@ -172,12 +178,16 @@ impl ChatManager {
         layout: &mut SegmentLayout,
         messages: &[ChatMessage],
     ) -> Option<BorrowConversion> {
-        let pending = self.deps.get_pending_fork(&chat.id)?;
+        let pending = storage_event!(
+            self.shared,
+            self.shared.deps.get_pending_fork(&chat.id),
+            None
+        )?;
         let parent_layout = chat
             .parent_chat_id
             .clone()
             .flatten()
-            .and_then(|parent| self.deps.segment_store()?.layout(&parent));
+            .and_then(|parent| self.shared.deps.segment_store()?.layout(&parent));
         let conversion = borrow_conversion(&BorrowInput {
             chat,
             layout,
@@ -210,8 +220,9 @@ impl ChatManager {
         layout: &SegmentLayout,
     ) -> Result<Chat, SwitchError> {
         let fresh = self
+            .shared
             .deps
-            .chats_get(chat_id)
+            .chats_get(chat_id)?
             .ok_or_else(|| SwitchError::NotFound(chat_id.to_string()))?;
         if let Some(cell) = self.get_active(chat_id) {
             cell.lock_recover().chat = fresh;
@@ -236,7 +247,7 @@ impl ChatManager {
         commit: &SwitchCommit,
         layout: &SegmentLayout,
     ) -> bool {
-        let mut messages = self.messages.lock_recover();
+        let mut messages = self.shared.messages.lock_recover();
         // A cold chat composes its dividers on load; only a warm cache is edited.
         if messages.get(chat_id).is_none_or(Vec::is_empty) {
             return false;
@@ -246,7 +257,7 @@ impl ChatManager {
             changed |= messages.remove_by_id(chat_id, &divider_id(&pending.segment_id));
         }
         if let Some(open) = &commit.open_segment {
-            let name_of = |id: &str| self.deps.adapter_fork_info(id).name;
+            let name_of = |id: &str| self.shared.deps.adapter_fork_info(id).name;
             if let Some(divider) = divider_for(chat_id, layout, &open.id, &name_of) {
                 messages.append(chat_id, divider);
                 changed = true;

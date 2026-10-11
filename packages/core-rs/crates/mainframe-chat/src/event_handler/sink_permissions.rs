@@ -1,32 +1,23 @@
 use super::*;
 
-impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
+impl SessionSinkImpl {
     pub(super) fn handle_permission(&self, request: ControlRequest) {
         let is_first = self
             .permissions
             .lock_recover()
             .enqueue(&self.chat_id, request.clone());
         if is_first {
-            let notify = self.deps.should_notify_permission(Some(&request.tool_name));
             self.notify_surface(ChatSurfaceEvent::GateRaised {
                 chat_id: self.chat_id.clone(),
                 request: request.clone(),
             });
-            if let Some(cell) = self.deps.get_active_chat(&self.chat_id) {
+            if let Some(cell) = self.shared.active(&self.chat_id) {
                 let chat = cell.lock_recover().chat.clone();
-                self.deps
-                    .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
+                self.shared
+                    .emit(DaemonEvent::ChatUpdated { chat, reason: None });
             }
-            if notify {
-                let tool = &request.tool_name;
-                self.deps.send_push(PushOut {
-                    chat_id: self.chat_id.clone(),
-                    title: "Permission Required".to_string(),
-                    body: format!("Agent wants to run: {tool}"),
-                    push_type: "permission".to_string(),
-                    priority: "high".to_string(),
-                });
-            }
+            self.shared
+                .permission_push(&self.chat_id, &request.tool_name);
         }
     }
 

@@ -64,7 +64,7 @@ impl ChatManager {
             attachment_ids: attachment_ids.filter(|a| !a.is_empty()).map(|a| a.to_vec()),
             timestamp: message.timestamp.clone(),
         };
-        self.queued_refs.lock_recover().push(r);
+        self.shared.queued_refs.lock_recover().push(r);
         self.notify_queue_changed(chat_id);
         info!(
             chat_id,
@@ -79,7 +79,10 @@ impl ChatManager {
     /// the call itself then failed — the CLI never got it, so it must not
     /// look queued either.
     pub(super) fn remove_queued_ref(&self, chat_id: &str, uuid: &str) {
-        self.queued_refs.lock_recover().retain(|q| q.uuid != uuid);
+        self.shared
+            .queued_refs
+            .lock_recover()
+            .retain(|q| q.uuid != uuid);
         self.notify_queue_changed(chat_id);
     }
 }

@@ -62,6 +62,7 @@ impl ChatManager {
         }
 
         let (side_chat, _created) = self
+            .shared
             .deps
             .chats_find_or_create_side_chat(&parent)
             .map_err(OpenSideChatError::InsertFailed)?;
@@ -79,7 +80,7 @@ impl ChatManager {
         if let Some(cell) = self.get_active(parent_id) {
             cell.lock_recover().chat.side_chat_id = side_chat_id;
         }
-        if let Some(chat) = self.deps.chats_get(parent_id) {
+        if let Some(chat) = storage_event!(self.shared, self.shared.deps.chats_get(parent_id)) {
             self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
         }
     }

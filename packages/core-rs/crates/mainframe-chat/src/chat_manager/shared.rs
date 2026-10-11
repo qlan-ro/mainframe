@@ -1,4 +1,4 @@
-//! Free helpers shared across the facade and the sub-manager Deps wrappers.
+//! Helpers shared by the chat facade and its managers.
 use super::*;
 use mainframe_types::sync::LockExt as _;
 
@@ -50,7 +50,7 @@ pub(super) fn enrich_chat(
 /// `ChatManager.applyTuning` — live-apply resolved tuning to the running session.
 /// Shared by the facade method and the config manager's `apply_tuning` dep (a model
 /// switch re-resolves + re-applies). No live session → applied at next spawn.
-pub(super) async fn apply_tuning_impl(
+pub(crate) async fn apply_tuning_impl(
     active_chats: &Registry,
     deps: &Arc<dyn ChatManagerDeps>,
     chat_id: &str,
@@ -69,43 +69,28 @@ pub(super) async fn apply_tuning_impl(
     }
 }
 
-// ── queued-ref helpers (shared by the facade + EhDeps) ───────────────────────
-
-pub(super) fn queued_for_chat(refs: &QueuedRefs, chat_id: &str) -> Vec<QueuedMessageRef> {
-    refs.lock_recover()
-        .iter()
-        .filter(|r| r.chat_id == chat_id)
-        .cloned()
-        .collect()
-}
-
-pub(super) fn handle_queued_processed(refs: &QueuedRefs, chat_id: &str, uuid: &str) {
-    let removed = {
-        let mut guard = refs.lock_recover();
-        guard
-            .iter()
-            .position(|r| r.uuid == uuid)
-            .map(|i| guard.remove(i))
+/// Composes a multi-segment chat's history; `None` for a single-segment chat
+/// (or a deps impl without segments), whose one session loads as before.
+pub(crate) async fn compose_if_multi(
+    deps: &dyn ChatManagerDeps,
+    chat_id: &str,
+) -> Option<crate::segments::compose::Composed> {
+    let store = deps.segment_store()?;
+    let layout = store
+        .layout(chat_id)
+        .filter(mainframe_types::segment::SegmentLayout::is_multi_segment)?;
+    let chat = match deps.chats_get(chat_id) {
+        Ok(chat) => chat?,
+        Err(error) => {
+            tracing::error!(%error, chat_id, "history storage read failed");
+            deps.emit_event(DaemonEvent::Error {
+                chat_id: Some(chat_id.into()),
+                error: error.to_string(),
+            });
+            return None;
+        }
     };
-    if let Some(r) = removed {
-        info!(
-            chat_id,
-            uuid,
-            message_id = r.message_id,
-            "CLI processed queued message"
-        );
-    }
-}
-
-pub(super) fn clear_all_queued_for_chat(refs: &QueuedRefs, chat_id: &str) {
-    let mut guard = refs.lock_recover();
-    let before = guard.len();
-    guard.retain(|r| r.chat_id != chat_id);
-    let removed = before - guard.len();
-    drop(guard);
-    if removed > 0 {
-        info!(chat_id, removed, "cleared queued refs for exited chat");
-    }
+    Some(crate::segments::compose::compose(deps, &chat, &layout).await)
 }
 
 /// Build a stateless history-load session for `chat` (shared by the facade's
@@ -115,13 +100,24 @@ pub(super) fn clear_all_queued_for_chat(refs: &QueuedRefs, chat_id: &str) {
 /// `chats.pending_fork`'s `fork_source` instead; this is the path a freshly
 /// forked chat's pre-first-message history takes (still in `active_chats`, so
 /// `load_chat` never runs `do_load_chat` for it).
-pub(super) fn build_history_session(
+pub(crate) fn build_history_session(
     deps: &Arc<dyn ChatManagerDeps>,
     chat: &Chat,
     chat_id: &str,
 ) -> Option<Arc<dyn AdapterSession>> {
     let own_id = chat.claude_session_id.clone();
-    let fork_source = deps.get_pending_fork(chat_id).map(|p| p.fork_source);
+    let fork_source = match deps.get_pending_fork(chat_id) {
+        Ok(value) => value,
+        Err(error) => {
+            tracing::error!(%error, chat_id, "pending fork read failed");
+            deps.emit_event(DaemonEvent::Error {
+                chat_id: Some(chat_id.into()),
+                error: error.to_string(),
+            });
+            return None;
+        }
+    }
+    .map(|p| p.fork_source);
     if own_id.is_none() && fork_source.is_none() {
         return None;
     }

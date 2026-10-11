@@ -2,7 +2,7 @@
 //! a freshly forked
 //! chat has no `claude_session_id` yet, so its history load must resume from
 //! `chats.pending_fork` instead of bailing out early. A child module of
-//! `tests`, so it sees `tests`' private `StoreDeps`.
+//! `tests`, so it sees `tests`' private `FakeDeps`.
 
 use super::*;
 
@@ -23,7 +23,7 @@ fn fork_source() -> ForkSource {
 
 #[tokio::test]
 async fn an_unsent_forks_history_resumes_from_the_pending_fork_source() {
-    let deps = StoreDeps::with_chats(vec![unsent_fork("fork-1")]);
+    let deps = FakeDeps::with_chats(vec![unsent_fork("fork-1")]);
     deps.set_pending_fork(
         "fork-1",
         PendingForkState {
@@ -32,7 +32,7 @@ async fn an_unsent_forks_history_resumes_from_the_pending_fork_source() {
             provisional_title: "Untitled (fork)".to_string(),
         },
     );
-    *deps.history.lock().unwrap() = Some(vec![history_message()]);
+    *deps.adapters.history.lock().unwrap() = Some(vec![history_message()]);
     let mgr = ChatManager::new(deps);
 
     let messages = mgr.get_messages("fork-1").await;
@@ -47,8 +47,8 @@ async fn an_unsent_forks_history_resumes_from_the_pending_fork_source() {
 /// resume — the pre-existing "no history" behavior must be unchanged.
 #[tokio::test]
 async fn a_chat_with_no_session_and_no_pending_fork_has_no_history() {
-    let deps = StoreDeps::with_chats(vec![unsent_fork("c1")]);
-    *deps.history.lock().unwrap() = Some(vec![history_message()]);
+    let deps = FakeDeps::with_chats(vec![unsent_fork("c1")]);
+    *deps.adapters.history.lock().unwrap() = Some(vec![history_message()]);
     let mgr = ChatManager::new(deps);
 
     assert!(mgr.get_messages("c1").await.is_empty());

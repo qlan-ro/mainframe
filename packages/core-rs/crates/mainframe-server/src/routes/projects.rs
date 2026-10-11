@@ -209,7 +209,8 @@ mod tests {
                 None,
                 None,
             )
-            .await;
+            .await
+            .unwrap();
         ctx.chat.chat_manager.as_ref().start_chat(&chat.id).await;
 
         let (status, _) =

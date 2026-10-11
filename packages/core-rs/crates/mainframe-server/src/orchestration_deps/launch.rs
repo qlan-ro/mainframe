@@ -38,7 +38,8 @@ impl DaemonOrchestrationPort {
                 placement.worktree_path.as_deref(),
                 placement.branch_name.as_deref(),
             )
-            .await;
+            .await
+            .map_err(|error| PortError::Internal(error.to_string()))?;
         if let Some((base, branch)) = &placement.new_worktree
             && let Err(err) = self.chats.enable_worktree(&chat.id, base, branch).await
         {

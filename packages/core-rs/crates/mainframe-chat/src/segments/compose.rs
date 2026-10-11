@@ -60,9 +60,21 @@ async fn load_natives(
     let active_native = layout.active().map(|s| s.native_session_ref.clone());
     for native in natives_in_use(layout) {
         let is_active = active_native.as_deref() == Some(native.id.as_str());
-        let fork_source = is_active
-            .then(|| deps.get_pending_fork(&chat.id).map(|p| p.fork_source))
-            .flatten();
+        let fork_source = if is_active {
+            match deps.get_pending_fork(&chat.id) {
+                Ok(pending) => pending.map(|p| p.fork_source),
+                Err(error) => {
+                    tracing::error!(%error, chat_id = %chat.id, "pending fork read failed");
+                    deps.emit_event(mainframe_types::events::DaemonEvent::Error {
+                        chat_id: Some(chat.id.clone()),
+                        error: error.to_string(),
+                    });
+                    return loaded;
+                }
+            }
+        } else {
+            None
+        };
         if native.native_session_id.is_none() && fork_source.is_none() {
             continue;
         }

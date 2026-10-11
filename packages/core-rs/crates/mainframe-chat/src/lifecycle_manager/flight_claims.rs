@@ -10,7 +10,7 @@
 
 use super::*;
 
-impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
+impl ChatLifecycleManager {
     /// Step 1 of the offload sequence (plan "Design"): claim the offload slot
     /// for `chat_id`, or refuse when the chat has any loading, starting,
     /// interrupting, history, or send activity, or an offload already claimed
@@ -43,7 +43,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
     /// the race in between — so the returned guard's registration is always
     /// visible to `try_claim_offload`'s busy check (or this call waited for
     /// that offload to finish first).
-    pub(crate) async fn begin_send(self: &Arc<Self>, chat_id: &str) -> SendGuard<D> {
+    pub(crate) async fn begin_send(self: &Arc<Self>, chat_id: &str) -> SendGuard {
         loop {
             let waiting = {
                 let mut g = self.guards.lock_recover();
@@ -95,12 +95,12 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         }
     }
 
-    /// Pass-through to the injected `emit_event` (already enrich-on-emit for
+    /// Pass-through to the shared emit (enrich-on-emit for
     /// `ChatUpdated`/`ChatCreated`; a no-op enrichment for anything else,
     /// including `ChatOffloaded`) — lets `idle_offload` broadcast without
-    /// needing its own copy of `deps`.
+    /// needing its own copy of the shared state.
     pub(crate) fn emit_event(&self, event: DaemonEvent) {
-        self.deps.emit_event(event);
+        self.shared.emit(event);
     }
 }
 
@@ -108,12 +108,12 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
 /// in-flight count on drop so an early return (`?`, the worktree-missing
 /// early-out in `send_message`) can't leak the count and permanently block
 /// offload for that chat.
-pub(crate) struct SendGuard<D: LifecycleManagerDeps + 'static> {
-    lifecycle: Arc<ChatLifecycleManager<D>>,
+pub(crate) struct SendGuard {
+    lifecycle: Arc<ChatLifecycleManager>,
     chat_id: String,
 }
 
-impl<D: LifecycleManagerDeps + 'static> Drop for SendGuard<D> {
+impl Drop for SendGuard {
     fn drop(&mut self) {
         self.lifecycle.end_send(&self.chat_id);
     }

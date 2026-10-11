@@ -53,7 +53,7 @@ fn update_message_presentation(message: &mut ChatMessage, update: &PresentationU
     }
 }
 
-impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
+impl SessionSinkImpl {
     pub(super) fn partial_with_presentation(
         &self,
         id: &str,

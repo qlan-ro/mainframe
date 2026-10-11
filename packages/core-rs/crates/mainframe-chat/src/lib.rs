@@ -1,17 +1,33 @@
 //! `mainframe-chat` — the `ChatManager` state machine and session orchestration.
 //!
 //! Active chats live in a shared `DashMap` registry of per-chat
-//! `Arc<Mutex<ActiveChat>>` cells (`ActiveChatRegistry`); the permission queue
+//! `Arc<Mutex<ActiveChat>>` cells (`Registry`); the permission queue
 //! stays FIFO per chat, and a chat lock is never held across an `.await` that
 //! emits events or does session I/O.
 #![forbid(unsafe_code)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
+
+macro_rules! storage_event {
+    ($shared:expr, $result:expr $(, $fallback:expr)?) => {
+        storage_event!($shared, None; $result $(, $fallback)?)
+    };
+    ($shared:expr, $chat_id:expr; $result:expr $(, $fallback:expr)?) => {
+        match $result {
+            Ok(value) => value,
+            Err(error) => {
+                $shared.report_storage_error($chat_id, &error);
+                return $($fallback)?;
+            }
+        }
+    };
+}
 
 pub mod attachment_processor;
 pub mod attention_request;
 pub mod chat_cwd;
 pub mod chat_manager;
 pub mod chat_surface;
+
 mod chat_teardown;
 pub mod config_manager;
 pub mod config_respawn_guard;
@@ -45,9 +61,12 @@ pub mod worktree_offer_scan;
 
 mod history_cache;
 
-#[cfg(test)]
-mod test_support;
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
+#[allow(dead_code, clippy::unwrap_used, clippy::expect_used)]
+pub mod test_support;
+#[cfg(any(test, feature = "test-support"))]
 mod test_support_chat;
 
 mod tool_call_timing;
+
+mod chat_store;

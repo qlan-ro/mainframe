@@ -74,7 +74,7 @@ fn leaf_texts(messages: &[DisplayMessage]) -> Vec<&str> {
 /// live `DisplayRevision` it just observed against `get_resume_snapshot`'s
 /// own read of the same state.
 fn mgr_with_surface() -> (Arc<RecordingSurface>, ChatManager) {
-    let deps = StoreDeps::with_chats(vec![test_chat("c1")]);
+    let deps = FakeDeps::with_chats(vec![test_chat("c1")]);
     let mgr = ChatManager::new(deps);
     let surface = RecordingSurface::arc();
     (surface.clone(), mgr.with_chat_surface(surface))
@@ -242,9 +242,9 @@ async fn a_superseded_sessions_exit_does_not_clear_the_newer_sessions_overlay() 
 /// plain `get_display_messages`'s output, byte for byte.
 #[tokio::test]
 async fn with_no_overlay_the_snapshot_matches_plain_display_messages() {
-    let deps = StoreDeps::with_chats(vec![test_chat("c1")]);
+    let deps = FakeDeps::with_chats(vec![test_chat("c1")]);
     let mgr = ChatManager::new(deps);
-    mgr.messages.lock().unwrap().set(
+    mgr.shared.messages.lock().unwrap().set(
         "c1",
         vec![mainframe_types::chat::ChatMessage {
             id: "h1".to_string(),

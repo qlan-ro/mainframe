@@ -1,11 +1,11 @@
 use super::*;
 
-impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
+impl SessionSinkImpl {
     pub(super) fn handle_result(&self, data: SessionResult) {
         if self.take_partial_overlay() {
             self.emit_display();
         }
-        let Some(cell) = self.deps.get_active_chat(&self.chat_id) else {
+        let Some(cell) = self.shared.active(&self.chat_id) else {
             return;
         };
         self.retire_fork();
@@ -13,17 +13,23 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         let totals = self.result_totals(&cell, &data);
         let now = now_iso8601();
         let refs_after = self.reconcile_result_queue();
-        self.persist_result(&cell, &data, totals, refs_after.len(), now);
+        let update = self.persist_result(&cell, &data, totals, refs_after.len(), now);
         self.record_segment_result(&data);
         let (reason, was_interrupted, is_error) = self.result_reason(&data);
-        self.emit_result_state(&cell, reason, was_interrupted, is_error);
+        self.emit_result_state(update, &cell, reason, was_interrupted, is_error);
         self.emit_turn_duration(&cell);
         self.result_notifications(&data, cost, was_interrupted, is_error);
     }
 
     fn retire_fork(&self) {
-        if let Some(pending) = self.deps.get_pending_fork(&self.chat_id) {
-            self.deps.clear_pending_fork(&self.chat_id);
+        if let Some(pending) = storage_event!(
+            self.shared, Some(&self.chat_id);
+            self.shared.deps.get_pending_fork(&self.chat_id)
+        ) {
+            storage_event!(
+                self.shared, Some(&self.chat_id);
+                self.shared.deps.clear_pending_fork(&self.chat_id)
+            );
             let chat_id = self.chat_id.clone();
             let snapshot_dir = pending.snapshot_dir;
             tokio::spawn(async move {
@@ -73,7 +79,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         totals: (f64, i64, i64),
         queue_remaining: usize,
         now: String,
-    ) {
+    ) -> crate::chat_manager::PendingChatUpdate<'_> {
         let next_process_state = if queue_remaining > 0 {
             ProcessState::Working
         } else {
@@ -88,7 +94,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         // "keep stored" here; a zero must never clobber a real stored size.
         let context_update: Option<i64> = data.context_tokens.filter(|&v| v > 0);
 
-        self.deps.chats_update(
+        let update = self.shared.prepare_live_update(
             &self.chat_id,
             &ChatPatch {
                 total_cost: Some(totals.0),
@@ -111,6 +117,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
             guard.chat.process_state = Some(Some(next_process_state));
             guard.chat.updated_at = now;
         }
+        update
     }
     fn result_reason(&self, data: &SessionResult) -> (ChatUpdatedReason, bool, bool) {
         let was_interrupted = self
@@ -135,6 +142,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
     }
     fn emit_result_state(
         &self,
+        update: crate::chat_manager::PendingChatUpdate<'_>,
         cell: &Arc<Mutex<ActiveChat>>,
         reason: ChatUpdatedReason,
         was_interrupted: bool,
@@ -148,10 +156,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
             is_error,
             "onResult: emitting chat.updated with processState=idle"
         );
-        self.deps.emit_event(DaemonEvent::ChatUpdated {
-            chat,
-            reason: Some(reason),
-        });
+        update.emit(chat, Some(reason));
         self.notify_surface(ChatSurfaceEvent::TurnFinished {
             chat_id: self.chat_id.clone(),
             stop_reason: match reason {

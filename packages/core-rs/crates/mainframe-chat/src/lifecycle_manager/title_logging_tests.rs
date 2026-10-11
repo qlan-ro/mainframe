@@ -10,7 +10,7 @@ use mainframe_types::chat::ChatStatus;
 use mainframe_types::events::DaemonEvent;
 use tracing::Level;
 
-use super::tests::{FakeDeps, chat_over, manager};
+use super::tests::{FakeDeps, chat_over, fake, manager, title_disabled, title_updates};
 use crate::test_support::LogCapture;
 use crate::types::ActiveChat;
 
@@ -31,9 +31,10 @@ fn assert_logged_once_and_title_untouched(
         LogCapture::events_with_reason(events),
         vec![(Level::DEBUG, expected_reason.to_string())]
     );
-    assert!(deps.title_updates.lock().unwrap().is_empty());
+    assert!(title_updates(deps).is_empty());
     assert!(
         !deps
+            .emitter
             .events
             .lock()
             .unwrap()
@@ -45,7 +46,7 @@ fn assert_logged_once_and_title_untouched(
 #[tokio::test]
 async fn evicted_chat_logs_chat_not_active_and_leaves_the_title_alone() {
     let chat = chat_over("c1", None, ChatStatus::Active);
-    let deps = FakeDeps::new(chat, Vec::new());
+    let deps = fake(chat, Vec::new());
     let mgr = manager(deps.clone());
     // Nothing inserted into active_chats: the spawned title task lost the
     // race against chat eviction.
@@ -61,7 +62,7 @@ async fn evicted_chat_logs_chat_not_active_and_leaves_the_title_alone() {
 async fn disabled_setting_logs_disabled_by_setting() {
     let mut chat = chat_over("c1", None, ChatStatus::Active);
     chat.title = Some("Fallback Title".to_string());
-    let deps = FakeDeps::title_disabled(chat.clone());
+    let deps = title_disabled(chat.clone());
     let mgr = manager(deps.clone());
     let cell = Arc::new(Mutex::new(ActiveChat::new(chat, None)));
     mgr_insert(&mgr, "c1", cell.clone());
@@ -81,7 +82,7 @@ async fn disabled_setting_logs_disabled_by_setting() {
 async fn none_outcome_logs_no_title_and_keeps_the_fallback() {
     let mut chat = chat_over("c1", None, ChatStatus::Active);
     chat.title = Some("Fallback Title".to_string());
-    let deps = FakeDeps::new(chat.clone(), Vec::new());
+    let deps = fake(chat.clone(), Vec::new());
     let mgr = manager(deps.clone());
     let cell = Arc::new(Mutex::new(ActiveChat::new(chat, None)));
     mgr_insert(&mgr, "c1", cell.clone());
@@ -102,10 +103,20 @@ async fn none_outcome_logs_no_title_and_keeps_the_fallback() {
 /// so it reaches the registry through the manager's own crate-visible type
 /// rather than reconstructing one — inserting directly mirrors what
 /// `super::tests` does inline.
-fn mgr_insert(
-    mgr: &super::ChatLifecycleManager<FakeDeps>,
-    chat_id: &str,
-    cell: Arc<Mutex<ActiveChat>>,
-) {
-    mgr.active_chats.insert(chat_id.to_string(), cell);
+fn mgr_insert(mgr: &super::ChatLifecycleManager, chat_id: &str, cell: Arc<Mutex<ActiveChat>>) {
+    mgr.shared.active_chats.insert(chat_id.to_string(), cell);
+}
+
+#[test]
+fn failed_title_write_emits_the_live_title() {
+    let chat = chat_over("c1", None, ChatStatus::Active);
+    let deps = fake(chat.clone(), Vec::new());
+    let mgr = manager(deps.clone());
+    let cell = Arc::new(Mutex::new(ActiveChat::new(chat, None)));
+    *deps.store.write_failure.lock().unwrap() = Some("write failed".into());
+    mgr.apply_generated_title(&cell, "Generated".into());
+    assert!(matches!(deps.events().as_slice(), [
+        DaemonEvent::Error { chat_id: Some(id), .. },
+        DaemonEvent::ChatUpdated { chat, reason: None }
+    ] if id == "c1" && chat.title.as_deref() == Some("Generated")));
 }

@@ -171,22 +171,21 @@ pub fn harness(adapter: Option<Arc<StubAdapter>>, seed_missing: Option<bool>) ->
     })
     .unwrap();
 
-    let manager = build_chat_manager(
-        db.clone(),
-        registry,
-        Arc::new(BackgroundTaskTracker::new()),
-        Arc::new(AttachmentStore::new(data_dir.path().join("attachments"))),
-        Arc::new(PushService::new()),
-        GitFactory,
-        broadcast.clone(),
-        Arc::new(NoopLaunchStopper),
-        Arc::new(NoopScopeTunnelStopper),
+    let manager = build_chat_manager(mainframe_server::ChatManagerParams {
+        db: db.clone(),
+        adapters: registry,
+        background_tasks: Arc::new(BackgroundTaskTracker::new()),
+        attachments: Arc::new(AttachmentStore::new(data_dir.path().join("attachments"))),
+        push: Arc::new(PushService::new()),
+        git: GitFactory,
+        broadcast: broadcast.clone(),
+        launch: Arc::new(NoopLaunchStopper),
+        scope_tunnels: Arc::new(NoopScopeTunnelStopper),
         quota,
-        Arc::new(ClaudeWorkflowStore::new()),
-        mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
-        None,
-        data_dir.path().to_path_buf(),
-    );
+        claude_workflows: Arc::new(ClaudeWorkflowStore::new()),
+        chat_surface: None,
+        data_dir: data_dir.path().to_path_buf(),
+    });
 
     Harness {
         manager,

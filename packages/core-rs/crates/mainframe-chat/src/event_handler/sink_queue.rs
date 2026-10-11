@@ -1,6 +1,6 @@
 use super::*;
 
-impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
+impl SessionSinkImpl {
     pub(super) fn handle_queued_processed(&self, uuid: &str) {
         debug!(
             chat_id = self.chat_id,
@@ -39,14 +39,14 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
                 uuid, "onQueuedProcessed: message not found in cache or already processed"
             );
         }
-        self.deps.on_queued_processed(&self.chat_id, uuid);
+        self.shared.handle_queued_processed(&self.chat_id, uuid);
         self.notify_surface(ChatSurfaceEvent::QueueChanged {
             chat_id: self.chat_id.clone(),
-            refs: self.deps.get_queued_refs(&self.chat_id),
+            refs: self.shared.queued_for_chat(&self.chat_id),
         });
     }
     pub(super) fn reconcile_result_queue(&self) -> Vec<QueuedMessageRef> {
-        let refs_before = self.deps.get_queued_refs(&self.chat_id);
+        let refs_before = self.shared.queued_for_chat(&self.chat_id);
         let ref_uuids: HashSet<String> = refs_before.iter().map(|r| r.uuid.clone()).collect();
         let mut cached_queued_uuids: HashSet<String> = HashSet::new();
         let mut display_changed = false;
@@ -66,7 +66,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
                         uuid = u,
                         "onResult: orphan metadata.queued (no matching ref) — clearing"
                     );
-                    self.deps.on_queued_processed(&self.chat_id, &u);
+                    self.shared.handle_queued_processed(&self.chat_id, &u);
                 }
             }
         }
@@ -78,7 +78,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
                     uuid = r.uuid,
                     "onResult: orphan queuedRef (no matching cached message) — pruning"
                 );
-                self.deps.on_queued_processed(&self.chat_id, &r.uuid);
+                self.shared.handle_queued_processed(&self.chat_id, &r.uuid);
             }
         }
 
@@ -86,7 +86,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
             self.emit_display();
         }
 
-        let refs_after = self.deps.get_queued_refs(&self.chat_id);
+        let refs_after = self.shared.queued_for_chat(&self.chat_id);
         self.notify_surface(ChatSurfaceEvent::QueueChanged {
             chat_id: self.chat_id.clone(),
             refs: refs_after.clone(),

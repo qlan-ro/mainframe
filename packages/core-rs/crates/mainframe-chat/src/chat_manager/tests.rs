@@ -1,5 +1,5 @@
-//! Chat-manager tests for queueing, recovery, timing, command routing, and
 //! project teardown.
+//! Chat-manager tests for queueing, recovery, timing, command routing, and
 
 use super::*;
 use crate::test_support::test_chat;
@@ -7,11 +7,9 @@ use mainframe_adapter_api::{
     ContextFiles, ImageInput, PlanModeActionHandler, SessionSink, StopBackgroundTaskResult,
 };
 use mainframe_types::adapter::{AdapterProcess, ControlResponse, SessionSpawnOptions};
-use mainframe_types::background_task::BackgroundTask;
 use mainframe_types::chat::{Chat, ChatStatus, ProcessState};
 use mainframe_types::context::SkillFileEntry;
 use mainframe_types::http_status::{HttpStatus as _, StatusKind};
-use mainframe_types::seam_error::SeamError;
 use mainframe_types::settings::ExecutionMode;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -33,848 +31,9 @@ mod resume_snapshot;
 mod segment_fake;
 mod side_chat;
 mod teardown;
+mod wire_golden;
 
-// ── fake ChatManagerDeps ─────────────────────────────────────────────────────
-
-#[derive(Default)]
-pub(crate) struct StoreDeps {
-    store: Mutex<HashMap<String, Chat>>,
-    events: Mutex<Vec<DaemonEvent>>,
-    updates: Mutex<Vec<(String, ChatPatch)>>,
-    order: Arc<Mutex<Vec<String>>>,
-    project_removed: Mutex<Vec<String>>,
-    mentions: Mutex<Vec<(String, String)>>,
-    /// `adapter.isTranscriptPresent` result (None = cannot determine).
-    transcript_present: Mutex<Option<bool>>,
-    /// When `Some`, `create_session` yields a session whose `load_history` returns it.
-    history: Mutex<Option<Vec<ChatMessage>>>,
-    /// Counts `load_history` across every session this fake hands out.
-    history_loads: Arc<AtomicUsize>,
-    /// Every `SessionOptions` `create_session` was called with, in order — lets
-    /// a test assert the resume anchor (`chat_id`) and `session_file_path`
-    /// actually threaded into a post-offload respawn (AC7).
-    created_sessions: Mutex<Vec<mainframe_types::adapter::SessionOptions>>,
-    /// What every `FakeSession` this hands out sets `spawn_ok` to (AC7 needs a
-    /// real spawn success to observe the post-resume send).
-    spawn_ok: Mutex<bool>,
-    /// Records every path `trust_workspace` persisted, for assertion.
-    trusted_paths: Mutex<Vec<String>>,
-    /// When `Some`, `write_workspace_trust` fails with this message instead of
-    /// recording the call.
-    fail_trust_write: Mutex<Option<String>>,
-    /// When `Some`, `projects_remove` records the id and then fails with this message.
-    fail_project_remove: Mutex<Option<String>>,
-    /// What `generate_title` returns.
-    generated_title: Mutex<Option<String>>,
-    /// The `content` of every `generate_title` call, in order.
-    generate_title_calls: Mutex<Vec<String>>,
-    /// When set, `generate_title` awaits `notified()` on it before returning.
-    title_gate: Mutex<Option<Arc<tokio::sync::Notify>>>,
-    /// When set, `process_attachments` returns a clone of it; `None` keeps
-    /// today's `ProcessedAttachments::default()`.
-    attachments: Mutex<Option<ProcessedAttachments>>,
-    /// What `extract_mentions_from_text` returns.
-    mentions_found: Mutex<bool>,
-    /// What `create_plan_mode_handler` returns, so plan-mode dispatcher tests
-    /// can inject a recorder (or leave `None` for the unresolved-handler path).
-    plan_handler: Mutex<Option<Arc<dyn PlanModeActionHandler>>>,
-    /// What `adapter_supports_no_persistence` answers.
-    no_persistence_capability: Mutex<bool>,
-    /// Every `ensure_dir` path, in order.
-    ensure_dir_calls: Mutex<Vec<String>>,
-    /// Every `mark_context_lost(chat_id, context_lost_at)` call, in order.
-    mark_context_lost_calls: Mutex<Vec<(String, String)>>,
-    /// Every `remove_scratch_dir` path, in order.
-    remove_scratch_dir_calls: Mutex<Vec<String>>,
-    /// When `Some`, `remove_scratch_dir` fails with this message instead of
-    /// recording success. Cleared by the test between a failing call and a
-    /// retry, so `discard_chat` can be proven retryable.
-    fail_remove_scratch_dir: Mutex<Option<String>>,
-    /// `adapter_fork_info(adapter_id).fork` — fork_chat tests flip
-    /// this on; every other test leaves the trait default (`false`).
-    fork_capable: Mutex<bool>,
-    /// `adapter_fork_info(adapter_id).unavailable_reason` —
-    /// version-gate tests set this to prove the reason wins over the generic
-    /// `Unsupported` message; every other test leaves it `None`.
-    fork_unavailable_reason: Mutex<Option<String>>,
-    /// When `Some`, `pin_fork_point` fails with this instead of echoing the
-    /// source session id back as the snapshot path.
-    pin_failure: Mutex<Option<PinFailure>>,
-    /// Every `pin_fork_point` request, in order — the from-message tests
-    /// assert the cut the chat layer resolved.
-    pin_requests: Mutex<Vec<ForkPinRequest>>,
-    /// When `Some`, `create_fork` fails with this message instead of inserting.
-    create_fork_failure: Mutex<Option<String>>,
-    /// Every `create_fork` input, so tests can assert the copied segments.
-    fork_inserts: Mutex<Vec<ForkCreateInput>>,
-    /// `db.chats.pendingFork` per chat id, for the lifecycle/history/title tests
-    /// that resume an unsent fork.
-    pending_forks: Mutex<HashMap<String, PendingForkState>>,
-    /// `fork_snapshots_dir()` override, for the startup-sweep tests (a real
-    /// tempdir the sweep can list and remove from).
-    fork_snapshots_dir: Mutex<Option<String>>,
-    /// `AdapterSession::history_sources()` for every `FakeSession` this hands
-    /// out — empty by default (the trait's own "do not cache" default), so
-    /// only the history-cache integration test that sets real, stat-able
-    /// paths here ever exercises it.
-    history_sources: Mutex<Vec<std::path::PathBuf>>,
-    /// `history_cache_dir()` override, for the same test (a real tempdir it
-    /// alone owns, so it can't collide with any other test's chat ids).
-    history_cache_dir: Mutex<Option<String>>,
-    /// `segment_store()` — set once by the provider-switch tests; every other
-    /// test leaves it unset (single-segment chats, as before segments existed).
-    segment_store: std::sync::OnceLock<Arc<dyn crate::segments::SegmentStore>>,
-    /// `adapter_info(adapter_id)` answers, keyed by adapter id.
-    adapter_infos: Mutex<HashMap<String, mainframe_types::adapter::AdapterInfo>>,
-}
-
-/// `pin_fork_point`'s configurable failure, for fork_chat's status-mapping tests.
-#[derive(Clone)]
-pub(crate) enum PinFailure {
-    Unsupported,
-    TranscriptMissing,
-    Failed(String),
-    PointNotFound(String),
-}
-
-impl StoreDeps {
-    pub(crate) fn arc() -> Arc<Self> {
-        Arc::new(Self::default())
-    }
-    pub(crate) fn with_chats(chats: Vec<Chat>) -> Arc<Self> {
-        let d = Self::default();
-        {
-            let mut s = d.store.lock().unwrap();
-            for c in chats {
-                s.insert(c.id.clone(), c);
-            }
-        }
-        Arc::new(d)
-    }
-    pub(crate) fn events(&self) -> Vec<DaemonEvent> {
-        self.events.lock().unwrap().clone()
-    }
-    pub(crate) fn order(&self) -> Vec<String> {
-        self.order.lock().unwrap().clone()
-    }
-    pub(crate) fn created_sessions(&self) -> Vec<mainframe_types::adapter::SessionOptions> {
-        self.created_sessions.lock().unwrap().clone()
-    }
-    pub(crate) fn set_spawn_ok(&self, ok: bool) {
-        *self.spawn_ok.lock().unwrap() = ok;
-    }
-    pub(crate) fn set_fork_capable(&self, fork: bool) {
-        *self.fork_capable.lock().unwrap() = fork;
-    }
-    pub(crate) fn set_fork_unavailable_reason(&self, reason: &str) {
-        *self.fork_unavailable_reason.lock().unwrap() = Some(reason.to_string());
-    }
-    pub(crate) fn fail_pin(&self, message: &str) {
-        *self.pin_failure.lock().unwrap() = Some(PinFailure::Failed(message.to_string()));
-    }
-    pub(crate) fn fail_pin_transcript_missing(&self) {
-        *self.pin_failure.lock().unwrap() = Some(PinFailure::TranscriptMissing);
-    }
-    pub(crate) fn fail_pin_unsupported(&self) {
-        *self.pin_failure.lock().unwrap() = Some(PinFailure::Unsupported);
-    }
-    pub(crate) fn fail_pin_point_not_found(&self, reason: &str) {
-        *self.pin_failure.lock().unwrap() = Some(PinFailure::PointNotFound(reason.to_string()));
-    }
-    pub(crate) fn fork_inserts(&self) -> Vec<ForkCreateInput> {
-        self.fork_inserts.lock().unwrap().clone()
-    }
-    pub(crate) fn pin_requests(&self) -> Vec<ForkPinRequest> {
-        self.pin_requests.lock().unwrap().clone()
-    }
-    pub(crate) fn set_history(&self, history: Vec<ChatMessage>) {
-        *self.history.lock().unwrap() = Some(history);
-    }
-    pub(crate) fn fail_create_fork(&self, message: &str) {
-        *self.create_fork_failure.lock().unwrap() = Some(message.to_string());
-    }
-    pub(crate) fn set_pending_fork(&self, chat_id: &str, pending: PendingForkState) {
-        self.pending_forks
-            .lock()
-            .unwrap()
-            .insert(chat_id.to_string(), pending);
-    }
-    pub(crate) fn chat_count(&self) -> usize {
-        self.store.lock().unwrap().len()
-    }
-    pub(crate) fn set_fork_snapshots_dir(&self, dir: &str) {
-        *self.fork_snapshots_dir.lock().unwrap() = Some(dir.to_string());
-    }
-    pub(crate) fn set_history_sources(&self, sources: Vec<std::path::PathBuf>) {
-        *self.history_sources.lock().unwrap() = sources;
-    }
-    pub(crate) fn set_segment_store(&self, store: Arc<dyn crate::segments::SegmentStore>) {
-        let _ = self.segment_store.set(store);
-    }
-    pub(crate) fn set_adapter_info(&self, info: mainframe_types::adapter::AdapterInfo) {
-        self.adapter_infos
-            .lock()
-            .unwrap()
-            .insert(info.id.clone(), info);
-    }
-    pub(crate) fn set_history_cache_dir(&self, dir: &str) {
-        *self.history_cache_dir.lock().unwrap() = Some(dir.to_string());
-    }
-    /// A snapshot of every stored chat, `sideChatId` NOT yet derived (raw DB
-    /// row shape). Callers apply `derive_side_chat_id`/`with_derived_side_chat_ids`.
-    fn raw_chats(&self) -> Vec<Chat> {
-        self.store.lock().unwrap().values().cloned().collect()
-    }
-    /// Mirrors the DB's correlated `sideChatId` subquery for this
-    /// in-memory double: the id of the (at most one) temporary chat in `all`
-    /// whose `parent_chat_id` is `chat_id`.
-    fn derive_side_chat_id(chat_id: &str, all: &[Chat]) -> Option<String> {
-        all.iter()
-            .find(|c| {
-                c.temporary && c.parent_chat_id.as_ref().and_then(|p| p.as_deref()) == Some(chat_id)
-            })
-            .map(|c| c.id.clone())
-    }
-    fn with_derived_side_chat_ids(&self, mut chats: Vec<Chat>) -> Vec<Chat> {
-        let snapshot = chats.clone();
-        for c in &mut chats {
-            c.side_chat_id = Self::derive_side_chat_id(&c.id, &snapshot);
-        }
-        chats
-    }
-
-    /// A trivial 1:1 echo (one `DisplayMessage` per raw `ChatMessage`,
-    /// carrying the same id/timestamp/type and its leaf content verbatim,
-    /// `Node` content dropped) — real conversion (grouping, tag stripping)
-    /// lives outside this crate's dep set. Carrying the type and leaf
-    /// content through is what lets `resume_overlay.rs`'s
-    /// streaming-attribution assertions (which need an `Assistant` message
-    /// whose own last leaf matches the overlay's) exercise the real
-    /// projection path, not just COUNT/id-order retention checks. Shared by
-    /// `prepare_messages_for_client` (REST) and `display_projector` (the
-    /// live/resume path), so both answer identically.
-    fn convert(raw: &[ChatMessage], _categories: Option<&ToolCategories>) -> Vec<DisplayMessage> {
-        raw.iter()
-            .map(|m| DisplayMessage {
-                id: m.id.clone(),
-                chat_id: m.chat_id.clone(),
-                r#type: match m.r#type {
-                    ChatMessageType::User => mainframe_types::display::DisplayMessageType::User,
-                    ChatMessageType::Error => mainframe_types::display::DisplayMessageType::Error,
-                    ChatMessageType::Permission => {
-                        mainframe_types::display::DisplayMessageType::Permission
-                    }
-                    ChatMessageType::System => mainframe_types::display::DisplayMessageType::System,
-                    _ => mainframe_types::display::DisplayMessageType::Assistant,
-                },
-                content: m
-                    .content
-                    .iter()
-                    .filter_map(|c| match c {
-                        MessageContent::Leaf(leaf) => {
-                            Some(mainframe_types::display::DisplayContent::Leaf(leaf.clone()))
-                        }
-                        MessageContent::Node(_) => None,
-                    })
-                    .collect(),
-                timestamp: m.timestamp.clone(),
-                metadata: None,
-            })
-            .collect()
-    }
-}
-
-impl ChatManagerDeps for StoreDeps {
-    fn emit_event(&self, event: DaemonEvent) {
-        self.events.lock().unwrap().push(event);
-    }
-    fn get_tool_categories(&self, _chat_id: &str) -> Option<ToolCategories> {
-        None
-    }
-    /// A trivial 1:1 echo (one `DisplayMessage` per raw `ChatMessage`,
-    /// carrying the same id/timestamp/type and its leaf content verbatim,
-    /// `Node` content dropped) — real conversion (grouping, tag stripping)
-    /// lives outside this crate's dep set. Carrying the type and leaf
-    /// content through is what lets `resume_overlay.rs`'s
-    /// streaming-attribution assertions (which need an `Assistant` message
-    /// whose own last leaf matches the overlay's) exercise the real
-    /// `project_display` path, not just COUNT/id-order retention checks.
-    fn prepare_messages_for_client(
-        &self,
-        raw: &[ChatMessage],
-        categories: Option<&ToolCategories>,
-    ) -> Vec<DisplayMessage> {
-        Self::convert(raw, categories)
-    }
-    /// Wraps the same 1:1 echo in a `FullRebuildProjector`: the
-    /// closure appends the overlay itself before converting, reproducing
-    /// what the deleted `project_display` free function used to do for
-    /// every `EventHandlerDeps`/`ChatManagerDeps` caller.
-    fn display_projector(&self) -> Box<dyn mainframe_display::DisplayProjector> {
-        Box::new(mainframe_display::FullRebuildProjector::new(
-            |raw, overlay, categories| {
-                let combined: Vec<ChatMessage> = match overlay {
-                    Some(o) => raw
-                        .iter()
-                        .cloned()
-                        .chain(std::iter::once(o.clone()))
-                        .collect(),
-                    None => raw.to_vec(),
-                };
-                StoreDeps::convert(&combined, categories)
-            },
-        ))
-    }
-    fn strip_command_tags(&self, text: &str) -> String {
-        text.to_string()
-    }
-    fn chats_get(&self, id: &str) -> Option<Chat> {
-        let all = self.raw_chats();
-        let mut chat = all.iter().find(|c| c.id == id)?.clone();
-        chat.side_chat_id = Self::derive_side_chat_id(id, &all);
-        Some(chat)
-    }
-    fn chats_create(&self, _new_chat: &mainframe_types::chat::NewChat) -> Chat {
-        let chat = test_chat("new");
-        // The repository persists before returning:
-        // offload-of-a-just-created-chat tests need `chats_get("new")` to find
-        // it afterward, the same way a real `create_chat` leaves a row behind.
-        self.store
-            .lock()
-            .unwrap()
-            .insert(chat.id.clone(), chat.clone());
-        chat
-    }
-    fn chats_delete(&self, chat_id: &str) {
-        self.store.lock().unwrap().remove(chat_id);
-    }
-    fn remove_scratch_dir<'a>(
-        &'a self,
-        scratch_path: &'a str,
-    ) -> BoxFuture<'a, Result<(), SeamError>> {
-        self.remove_scratch_dir_calls
-            .lock()
-            .unwrap()
-            .push(scratch_path.to_string());
-        let fail = self.fail_remove_scratch_dir.lock().unwrap().clone();
-        Box::pin(async move {
-            match fail {
-                Some(msg) => Err(SeamError::msg(msg)),
-                None => Ok(()),
-            }
-        })
-    }
-    fn chats_update(&self, chat_id: &str, patch: &ChatPatch) {
-        self.updates
-            .lock()
-            .unwrap()
-            .push((chat_id.to_string(), patch.clone()));
-        if let Some(c) = self.store.lock().unwrap().get_mut(chat_id) {
-            if let Some(ps) = patch.process_state {
-                c.process_state = Some(ps);
-            }
-            if let Some(tm) = patch.transcript_missing {
-                c.transcript_missing = Some(tm);
-            }
-            if let Some(title) = patch.title.clone() {
-                c.title = Some(title);
-            }
-            if let Some(vse) = patch.vendor_session_ephemeral {
-                c.vendor_session_ephemeral = vse;
-            }
-            // config-after-offload tests assert the model/worktree
-            // binding actually persisted to the store, not just the live cell.
-            if let Some(model) = patch.model.clone() {
-                c.model = Some(model);
-            }
-            if let Some(worktree_path) = patch.worktree_path.clone() {
-                c.worktree_path = worktree_path;
-            }
-            if let Some(branch_name) = patch.branch_name.clone() {
-                c.branch_name = branch_name;
-            }
-        }
-    }
-    fn chats_list(&self, _project_id: &str) -> Vec<Chat> {
-        self.with_derived_side_chat_ids(self.raw_chats())
-    }
-    fn chats_list_all(&self) -> Vec<Chat> {
-        self.with_derived_side_chat_ids(self.raw_chats())
-    }
-    fn chats_list_filtered(
-        &self,
-        _project_id: Option<&str>,
-        _tags_all: Option<&[String]>,
-        _has_worktree: bool,
-        _include_archived: bool,
-        _include_temporary: bool,
-    ) -> Vec<Chat> {
-        self.with_derived_side_chat_ids(self.raw_chats())
-    }
-    fn chats_add_mention(&self, chat_id: &str, mention: &mainframe_types::context::SessionMention) {
-        self.mentions
-            .lock()
-            .unwrap()
-            .push((chat_id.to_string(), mention.name.clone()));
-    }
-    fn chats_reset_working_to_idle(&self) -> i64 {
-        let mut count = 0;
-        let mut s = self.store.lock().unwrap();
-        for c in s.values_mut() {
-            if c.process_state == Some(Some(ProcessState::Working)) {
-                c.process_state = Some(Some(ProcessState::Idle));
-                count += 1;
-            }
-        }
-        count
-    }
-    fn projects_get_path(&self, _project_id: &str) -> Option<String> {
-        Some("/tmp/test".to_string())
-    }
-    fn initial_transcript_path(&self, _: &str, _: &str, _: &str) -> Option<String> {
-        None
-    }
-    fn projects_remove(&self, project_id: &str) -> Result<(), SeamError> {
-        self.project_removed
-            .lock()
-            .unwrap()
-            .push(project_id.to_string());
-        match self.fail_project_remove.lock().unwrap().clone() {
-            Some(msg) => Err(SeamError::msg(msg)),
-            None => Ok(()),
-        }
-    }
-    fn write_workspace_trust<'a>(
-        &'a self,
-        project_path: &'a str,
-    ) -> BoxFuture<'a, Result<(), SeamError>> {
-        Box::pin(async move {
-            if let Some(msg) = self.fail_trust_write.lock().unwrap().clone() {
-                return Err(SeamError::msg(msg));
-            }
-            self.trusted_paths
-                .lock()
-                .unwrap()
-                .push(project_path.to_string());
-            Ok(())
-        })
-    }
-    fn settings(&self) -> &dyn mainframe_types::settings_kv::SettingsKv {
-        crate::test_support::no_settings()
-    }
-    fn add_plan_file(&self, _chat_id: &str, _file_path: &str) -> bool {
-        false
-    }
-    fn add_skill_file(&self, _chat_id: &str, _entry: &SkillFileEntry) -> bool {
-        false
-    }
-    fn update_todos(&self, _chat_id: &str, _todos: &[mainframe_types::chat::TodoItem]) {}
-    fn add_detected_prs(
-        &self,
-        _chat_id: &str,
-        _prs: &[mainframe_types::adapter::DetectedPr],
-    ) -> Vec<mainframe_types::adapter::DetectedPr> {
-        Vec::new()
-    }
-    fn create_session(
-        &self,
-        _adapter_id: &str,
-        options: mainframe_types::adapter::SessionOptions,
-    ) -> Option<Arc<dyn AdapterSession>> {
-        self.created_sessions.lock().unwrap().push(options);
-        self.history.lock().unwrap().clone().map(|history| {
-            Arc::new(crate::test_support::FakeSession {
-                history,
-                history_loads: Some(Arc::clone(&self.history_loads)),
-                history_sources: self.history_sources.lock().unwrap().clone(),
-                spawn_ok: *self.spawn_ok.lock().unwrap(),
-                ..Default::default()
-            }) as Arc<dyn AdapterSession>
-        })
-    }
-    fn create_plan_mode_handler(
-        &self,
-        _adapter_id: &str,
-    ) -> Option<Arc<dyn PlanModeActionHandler>> {
-        self.plan_handler.lock().unwrap().clone()
-    }
-
-    fn attachment_delete_chat<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, ()> {
-        Box::pin(async {})
-    }
-    fn process_attachments<'a>(
-        &'a self,
-        _chat_id: &'a str,
-        _attachment_ids: &'a [String],
-    ) -> BoxFuture<'a, ProcessedAttachments> {
-        let p = self.attachments.lock().unwrap().clone().unwrap_or_default();
-        Box::pin(async move { p })
-    }
-    fn kill_tasks_for_chat<'a>(
-        &'a self,
-        chat_id: &'a str,
-        worktree_path: Option<String>,
-        _session: Option<Arc<dyn AdapterSession>>,
-    ) -> BoxFuture<'a, ()> {
-        self.order.lock().unwrap().push(format!(
-            "kill:{chat_id}:{}",
-            worktree_path.as_deref().unwrap_or("no-wt")
-        ));
-        Box::pin(async {})
-    }
-    fn remove_worktree<'a>(
-        &'a self,
-        _project_path: &'a str,
-        _worktree_path: &'a str,
-        _branch_name: &'a str,
-    ) -> BoxFuture<'a, ()> {
-        Box::pin(async {})
-    }
-    fn stop_launch_processes<'a>(
-        &'a self,
-        _project_id: &'a str,
-        _effective_path: &'a str,
-    ) -> Option<BoxFuture<'a, ()>> {
-        None
-    }
-    fn stop_scope_tunnels<'a>(
-        &'a self,
-        _project_id: &'a str,
-        _effective_path: &'a str,
-    ) -> Option<BoxFuture<'a, ()>> {
-        None
-    }
-    fn scan_loaded_history<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, ()> {
-        Box::pin(async {})
-    }
-    fn resolve_tuning<'a>(
-        &'a self,
-        _chat_id: &'a str,
-    ) -> BoxFuture<'a, Option<mainframe_types::chat::ResolvedTuning>> {
-        Box::pin(async { None })
-    }
-    fn get_session_context<'a>(
-        &'a self,
-        _chat_id: &'a str,
-        _project_path: &'a str,
-        _session: Option<Arc<dyn AdapterSession>>,
-        _adapter_id: Option<String>,
-    ) -> BoxFuture<'a, mainframe_types::context::SessionContext> {
-        Box::pin(async {
-            mainframe_types::context::SessionContext {
-                global_files: Vec::new(),
-                project_files: Vec::new(),
-                mentions: Vec::new(),
-                attachments: Vec::new(),
-                modified_files: Vec::new(),
-                skill_files: Vec::new(),
-            }
-        })
-    }
-    fn apply_codex_provider_tuning(&self, _session: &Arc<dyn AdapterSession>) {}
-    fn generate_title<'a>(
-        &'a self,
-        _adapter_id: &'a str,
-        content: &'a str,
-        _binary: &'a str,
-    ) -> BoxFuture<'a, Option<String>> {
-        self.generate_title_calls
-            .lock()
-            .unwrap()
-            .push(content.to_string());
-        let gate = self.title_gate.lock().unwrap().clone();
-        let result = self.generated_title.lock().unwrap().clone();
-        Box::pin(async move {
-            if let Some(gate) = gate {
-                gate.notified().await;
-            }
-            result
-        })
-    }
-    fn is_working_tree_dirty<'a>(&'a self, _project_path: &'a str) -> BoxFuture<'a, bool> {
-        Box::pin(async { false })
-    }
-    fn path_exists(&self, _path: &str) -> bool {
-        true
-    }
-    fn should_notify_permission(&self, _tool_name: Option<&str>) -> bool {
-        false
-    }
-    fn notify_task_complete(&self) -> bool {
-        false
-    }
-    fn notify_session_error(&self) -> bool {
-        false
-    }
-    fn notify_attention_request(&self) -> bool {
-        true
-    }
-    fn extract_mentions_from_text(&self, _chat_id: &str, _text: &str) -> bool {
-        *self.mentions_found.lock().unwrap()
-    }
-    fn tracker_remove_chat(&self, _chat_id: &str) {}
-    /// Empty on purpose: mainframe-server's chat_background_activity test covers the wiring (#273).
-    fn tracker_list_live(&self, _chat_id: &str) -> Vec<BackgroundTask> {
-        Vec::new()
-    }
-    /// Empty on purpose: chat_deps.rs's tracker_end_all_running_delegates_... test covers the wiring (#273).
-    fn tracker_end_all_running(&self, _chat_id: &str) {}
-    /// Empty on purpose: chat_deps.rs's workflow_runs_stop_all_delegates_... test covers the wiring.
-    fn workflow_runs_stop_all(&self, _chat_id: &str) {}
-    /// `transcript_present` = `Some(true)` reports the transcript where the chat
-    /// row says it is, so presence tests never also re-point the path.
-    fn locate_transcript<'a>(
-        &'a self,
-        _adapter_id: &'a str,
-        session_id: &'a str,
-        _project_path: &'a str,
-        session_file_path: Option<&'a str>,
-    ) -> BoxFuture<'a, Option<mainframe_types::transcript::TranscriptLocation>> {
-        use mainframe_types::transcript::TranscriptLocation;
-        let present = *self.transcript_present.lock().unwrap();
-        let path = session_file_path
-            .map(str::to_string)
-            .unwrap_or_else(|| format!("/transcripts/{session_id}.jsonl"));
-        Box::pin(async move {
-            present.map(|present| {
-                if present {
-                    TranscriptLocation::Present(path)
-                } else {
-                    TranscriptLocation::Missing
-                }
-            })
-        })
-    }
-    fn chats_clear_session(&self, chat_id: &str) {
-        if let Some(c) = self.store.lock().unwrap().get_mut(chat_id) {
-            c.claude_session_id = None;
-            c.session_file_path = None;
-            c.transcript_missing = Some(false);
-        }
-    }
-    fn chats_clear_worktree(&self, chat_id: &str) {
-        if let Some(c) = self.store.lock().unwrap().get_mut(chat_id) {
-            c.worktree_path = None;
-            c.branch_name = None;
-        }
-    }
-    fn adapter_supports_no_persistence(&self, _adapter_id: &str) -> bool {
-        *self.no_persistence_capability.lock().unwrap()
-    }
-    fn ensure_dir<'a>(&'a self, path: &'a str) -> BoxFuture<'a, ()> {
-        self.ensure_dir_calls.lock().unwrap().push(path.to_string());
-        Box::pin(async {})
-    }
-    fn mark_context_lost(&self, chat_id: &str, context_lost_at: &str) {
-        self.mark_context_lost_calls
-            .lock()
-            .unwrap()
-            .push((chat_id.to_string(), context_lost_at.to_string()));
-        if let Some(c) = self.store.lock().unwrap().get_mut(chat_id) {
-            c.context_lost_at = Some(context_lost_at.to_string());
-            c.claude_session_id = None;
-            c.session_file_path = None;
-            c.vendor_session_ephemeral = false;
-        }
-    }
-    fn adapter_fork_info(&self, adapter_id: &str) -> AdapterForkInfo {
-        AdapterForkInfo {
-            name: adapter_id.to_string(),
-            fork: *self.fork_capable.lock().unwrap(),
-            unavailable_reason: self.fork_unavailable_reason.lock().unwrap().clone(),
-        }
-    }
-    fn pin_fork_point<'a>(
-        &'a self,
-        _adapter_id: &'a str,
-        request: ForkPinRequest,
-    ) -> BoxFuture<'a, Result<ForkSource, ForkPinError>> {
-        let failure = self.pin_failure.lock().unwrap().clone();
-        self.pin_requests.lock().unwrap().push(request.clone());
-        Box::pin(async move {
-            match failure {
-                Some(PinFailure::Unsupported) => Err(ForkPinError::Unsupported),
-                Some(PinFailure::TranscriptMissing) => Err(ForkPinError::TranscriptMissing),
-                Some(PinFailure::Failed(message)) => Err(ForkPinError::Failed(message)),
-                Some(PinFailure::PointNotFound(reason)) => Err(ForkPinError::PointNotFound(reason)),
-                // A cut is echoed as the pinned turn so tests can see it
-                // survive into the stored pending fork.
-                None => Ok(ForkSource {
-                    source_session_id: request.source_session_id,
-                    resume_path: Some(format!("{}/snapshot.jsonl", request.dest_dir)),
-                    last_turn_id: request.cut.map(|cut| cut.vendor_message_id),
-                }),
-            }
-        })
-    }
-    fn create_fork(&self, insert: &ForkCreateInput) -> Result<Chat, SeamError> {
-        if let Some(message) = self.create_fork_failure.lock().unwrap().clone() {
-            return Err(SeamError::msg(message));
-        }
-        self.fork_inserts.lock().unwrap().push(insert.clone());
-        let id = format!("fork-{}", self.store.lock().unwrap().len());
-        let chat = Chat {
-            id: id.clone(),
-            adapter_id: insert.adapter_id.clone(),
-            project_id: insert.project_id.clone(),
-            title: insert.title.clone(),
-            claude_session_id: None,
-            session_file_path: None,
-            model: insert.model.clone(),
-            permission_mode: insert.permission_mode,
-            plan_mode: Some(insert.plan_mode),
-            status: ChatStatus::Active,
-            created_at: "2026-01-01T00:00:00.000Z".to_string(),
-            updated_at: "2026-01-01T00:00:00.000Z".to_string(),
-            total_cost: 0.0,
-            total_tokens_input: 0,
-            total_tokens_output: 0,
-            last_context_tokens_input: 0,
-            last_context_total_tokens: None,
-            last_context_max_tokens: None,
-            context_files: None,
-            mentions: None,
-            modified_files: None,
-            worktree_path: insert.worktree_path.clone(),
-            branch_name: insert.branch_name.clone(),
-            process_state: None,
-            display_status: None,
-            is_running: None,
-            background_activity: None,
-            worktree_missing: None,
-            directory_missing: None,
-            missing_directory_path: None,
-            transcript_missing: None,
-            todos: None,
-            pinned: None,
-            tuning: mainframe_types::chat::SessionTuning {
-                effort: Some(insert.effort),
-                fast: Some(insert.fast),
-                ultracode: Some(insert.ultracode),
-                adaptive_thinking: Some(insert.adaptive_thinking),
-            },
-            detected_prs: None,
-            tags: None,
-            automation_run_id: None,
-            temporary: false,
-            no_project: false,
-            context_lost_at: None,
-            vendor_session_ephemeral: false,
-            scratch_path: None,
-            parent_chat_id: Some(Some(insert.parent_chat_id.clone())),
-            side_chat_id: None,
-            side_chat_waiting: None,
-            orchestration: Default::default(),
-        };
-        self.store.lock().unwrap().insert(id.clone(), chat.clone());
-        self.pending_forks
-            .lock()
-            .unwrap()
-            .insert(id, insert.pending_fork.clone());
-        Ok(chat)
-    }
-    fn get_pending_fork(&self, chat_id: &str) -> Option<PendingForkState> {
-        self.pending_forks.lock().unwrap().get(chat_id).cloned()
-    }
-    fn clear_pending_fork(&self, chat_id: &str) {
-        self.pending_forks.lock().unwrap().remove(chat_id);
-    }
-    fn fork_snapshots_dir(&self) -> String {
-        self.fork_snapshots_dir
-            .lock()
-            .unwrap()
-            .clone()
-            .unwrap_or_else(|| {
-                std::env::temp_dir()
-                    .join("mainframe-fork-snapshots-test-default")
-                    .to_string_lossy()
-                    .into_owned()
-            })
-    }
-    fn history_cache_dir(&self) -> String {
-        self.history_cache_dir
-            .lock()
-            .unwrap()
-            .clone()
-            .unwrap_or_else(|| {
-                std::env::temp_dir()
-                    .join("mainframe-history-cache-test-default")
-                    .to_string_lossy()
-                    .into_owned()
-            })
-    }
-    fn segment_store(&self) -> Option<&dyn crate::segments::SegmentStore> {
-        self.segment_store.get().map(|store| store.as_ref())
-    }
-    fn adapter_info(&self, adapter_id: &str) -> Option<mainframe_types::adapter::AdapterInfo> {
-        self.adapter_infos.lock().unwrap().get(adapter_id).cloned()
-    }
-    fn chats_find_or_create_side_chat(&self, parent: &Chat) -> Result<(Chat, bool), SeamError> {
-        let all = self.raw_chats();
-        if let Some(existing_id) = Self::derive_side_chat_id(&parent.id, &all)
-            && let Some(existing) = all.iter().find(|c| c.id == existing_id)
-        {
-            return Ok((existing.clone(), false));
-        }
-        let id = format!("side-{}", nanoid::nanoid!());
-        let now = "2026-01-01T00:00:00.000Z".to_string();
-        let side_chat = Chat {
-            id: id.clone(),
-            adapter_id: parent.adapter_id.clone(),
-            project_id: parent.project_id.clone(),
-            title: None,
-            claude_session_id: None,
-            session_file_path: None,
-            model: parent.model.clone(),
-            permission_mode: parent.permission_mode,
-            plan_mode: parent.plan_mode,
-            status: ChatStatus::Active,
-            created_at: now.clone(),
-            updated_at: now,
-            total_cost: 0.0,
-            total_tokens_input: 0,
-            total_tokens_output: 0,
-            last_context_tokens_input: 0,
-            last_context_total_tokens: None,
-            last_context_max_tokens: None,
-            context_files: None,
-            mentions: None,
-            modified_files: None,
-            worktree_path: parent.worktree_path.clone(),
-            branch_name: parent.branch_name.clone(),
-            process_state: None,
-            display_status: None,
-            is_running: None,
-            background_activity: None,
-            worktree_missing: None,
-            directory_missing: None,
-            missing_directory_path: None,
-            transcript_missing: None,
-            todos: None,
-            pinned: None,
-            tuning: mainframe_types::chat::SessionTuning {
-                effort: None,
-                fast: None,
-                ultracode: None,
-                adaptive_thinking: None,
-            },
-            detected_prs: None,
-            tags: None,
-            automation_run_id: None,
-            temporary: true,
-            no_project: parent.no_project,
-            context_lost_at: None,
-            vendor_session_ephemeral: false,
-            scratch_path: parent.scratch_path.clone(),
-            parent_chat_id: Some(Some(parent.id.clone())),
-            side_chat_id: None,
-            side_chat_waiting: None,
-            orchestration: Default::default(),
-        };
-        self.store.lock().unwrap().insert(id, side_chat.clone());
-        Ok((side_chat, true))
-    }
-}
+pub(crate) use crate::test_support::FakeDeps;
 
 // ── recording AdapterSession ─────────────────────────────────────────────────
 
@@ -1065,7 +224,7 @@ impl AdapterSession for RecSession {
 }
 
 fn seed_active(mgr: &ChatManager, chat_id: &str, chat: Chat, session: Arc<dyn AdapterSession>) {
-    mgr.active_chats.insert(
+    mgr.shared.active_chats.insert(
         chat_id.to_string(),
         Arc::new(Mutex::new(ActiveChat::new(chat, Some(session)))),
     );
@@ -1079,10 +238,11 @@ async fn settle() {
     }
 }
 
-/// Every `title` present in `deps.updates` — the store-patch log, not the
+/// Every `title` present in `deps.store.updates` — the store-patch log, not the
 /// event stream. Assertions about broadcasts must read `deps.events()` instead.
-fn titles_written(deps: &StoreDeps) -> Vec<String> {
-    deps.updates
+fn titles_written(deps: &FakeDeps) -> Vec<String> {
+    deps.store
+        .updates
         .lock()
         .unwrap()
         .iter()
@@ -1105,7 +265,7 @@ fn working_chat(id: &str, title: Option<&str>, working: bool) -> Chat {
 
 #[tokio::test]
 async fn writes_to_cli_immediately_with_uuid_and_records_queued_ref() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps.clone());
     let session = RecSession::new("c1", true, true);
     seed_active(
@@ -1128,7 +288,7 @@ async fn writes_to_cli_immediately_with_uuid_and_records_queued_ref() {
 
 #[tokio::test]
 async fn steer_folds_into_a_working_turn_and_refuses_an_idle_one() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps);
     let session = RecSession::new("c1", true, true);
     seed_active(
@@ -1163,7 +323,7 @@ async fn steer_folds_into_a_working_turn_and_refuses_an_idle_one() {
 /// Working at all, so the fix is that it never writes `process_state`.
 #[tokio::test]
 async fn a_steer_that_loses_the_turn_end_race_does_not_relatch_working() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps.clone());
     let session = RecSession::new("c1", true, true);
     *session.steer_err.lock().unwrap() = Some("turn already ended".to_string());
@@ -1180,7 +340,8 @@ async fn a_steer_that_loses_the_turn_end_race_does_not_relatch_working() {
     // Steering must never write `process_state`, successful or not: a new
     // turn's `set_working` is the only legitimate source of that patch.
     assert!(
-        deps.updates
+        deps.store
+            .updates
             .lock()
             .unwrap()
             .iter()
@@ -1204,7 +365,7 @@ async fn a_steer_that_loses_the_turn_end_race_does_not_relatch_working() {
 /// (`on_queued_processed`).
 #[tokio::test]
 async fn a_queued_steer_records_a_ref_instead_of_restarting_the_turn() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps.clone());
     let session = RecSession::new("c1", true, true);
     seed_active(
@@ -1213,7 +374,7 @@ async fn a_queued_steer_records_a_ref_instead_of_restarting_the_turn() {
         working_chat("c1", Some("t"), true),
         session.clone(),
     );
-    deps.events.lock().unwrap().clear();
+    deps.emitter.events.lock().unwrap().clear();
 
     mgr.steer_message("c1", "also run the tests").await.unwrap();
 
@@ -1243,7 +404,7 @@ async fn a_queued_steer_records_a_ref_instead_of_restarting_the_turn() {
 
 #[tokio::test]
 async fn handle_queued_processed_deletes_the_ref() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps);
     let session = RecSession::new("c1", true, true);
     seed_active(&mgr, "c1", working_chat("c1", Some("t"), true), session);
@@ -1256,7 +417,7 @@ async fn handle_queued_processed_deletes_the_ref() {
 
 #[tokio::test]
 async fn cancel_success_removes_the_bubble_and_emits_cancelled() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps.clone());
     let session = RecSession::new("c1", true, true);
     seed_active(
@@ -1283,14 +444,14 @@ async fn cancel_success_removes_the_bubble_and_emits_cancelled() {
 
 #[tokio::test]
 async fn cancel_lost_race_emits_nothing_and_keeps_the_ref() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps.clone());
     let session = RecSession::new("c1", true, false); // CLI already consumed it
     seed_active(&mgr, "c1", working_chat("c1", Some("t"), true), session);
 
     mgr.send_message("c1", "racey", None, None).await.unwrap();
     let r = mgr.get_queued_for_chat("c1")[0].clone();
-    deps.events.lock().unwrap().clear();
+    deps.emitter.events.lock().unwrap().clear();
 
     mgr.cancel_queued_message("c1", &r.message_id)
         .await
@@ -1302,7 +463,7 @@ async fn cancel_lost_race_emits_nothing_and_keeps_the_ref() {
 
 #[tokio::test]
 async fn edit_lost_race_silently_discards_the_edit() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps.clone());
     let session = RecSession::new("c1", true, false);
     seed_active(
@@ -1317,7 +478,7 @@ async fn edit_lost_race_silently_discards_the_edit() {
         .unwrap();
     let r = mgr.get_queued_for_chat("c1")[0].clone();
     session.send_message_calls.lock().unwrap().clear();
-    deps.events.lock().unwrap().clear();
+    deps.emitter.events.lock().unwrap().clear();
 
     mgr.edit_queued_message("c1", &r.message_id, "edited")
         .await
@@ -1332,7 +493,7 @@ async fn edit_lost_race_silently_discards_the_edit() {
 
 #[tokio::test]
 async fn stamps_turn_started_at_right_before_dispatching_to_the_cli() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps);
     let session = RecSession::new("c1", false, true);
     seed_active(&mgr, "c1", working_chat("c1", Some("t"), false), session);
@@ -1357,7 +518,7 @@ fn stored(id: &str, ps: Option<Option<ProcessState>>) -> Chat {
 
 #[tokio::test]
 async fn resets_a_working_chat_to_idle() {
-    let deps = StoreDeps::with_chats(vec![
+    let deps = FakeDeps::with_chats(vec![
         stored("c-working", Some(Some(ProcessState::Working))),
         stored("c-idle", Some(Some(ProcessState::Idle))),
         stored("c-null", Some(None)),
@@ -1365,43 +526,46 @@ async fn resets_a_working_chat_to_idle() {
     let mgr = ChatManager::new(deps.clone());
     mgr.recover_stale_working_state();
     assert_eq!(
-        deps.chats_get("c-working").unwrap().process_state,
+        deps.chats_get("c-working").unwrap().unwrap().process_state,
         Some(Some(ProcessState::Idle))
     );
 }
 
 #[tokio::test]
 async fn leaves_an_already_idle_chat_unchanged() {
-    let deps = StoreDeps::with_chats(vec![
+    let deps = FakeDeps::with_chats(vec![
         stored("c-working", Some(Some(ProcessState::Working))),
         stored("c-idle", Some(Some(ProcessState::Idle))),
     ]);
     let mgr = ChatManager::new(deps.clone());
     mgr.recover_stale_working_state();
     assert_eq!(
-        deps.chats_get("c-idle").unwrap().process_state,
+        deps.chats_get("c-idle").unwrap().unwrap().process_state,
         Some(Some(ProcessState::Idle))
     );
 }
 
 #[tokio::test]
 async fn does_not_touch_a_chat_whose_process_state_is_null() {
-    let deps = StoreDeps::with_chats(vec![stored("c-null", Some(None))]);
+    let deps = FakeDeps::with_chats(vec![stored("c-null", Some(None))]);
     let mgr = ChatManager::new(deps.clone());
     mgr.recover_stale_working_state();
-    assert_eq!(deps.chats_get("c-null").unwrap().process_state, Some(None));
+    assert_eq!(
+        deps.chats_get("c-null").unwrap().unwrap().process_state,
+        Some(None)
+    );
 }
 
 #[tokio::test]
 async fn is_a_no_op_when_no_chats_are_stored() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps);
     mgr.recover_stale_working_state(); // must not panic
 }
 
 #[tokio::test]
 async fn resets_every_working_chat_when_multiple_are_stale() {
-    let deps = StoreDeps::with_chats(vec![
+    let deps = FakeDeps::with_chats(vec![
         stored("w1", Some(Some(ProcessState::Working))),
         stored("w2", Some(Some(ProcessState::Working))),
         stored("ok", Some(Some(ProcessState::Idle))),
@@ -1409,15 +573,15 @@ async fn resets_every_working_chat_when_multiple_are_stale() {
     let mgr = ChatManager::new(deps.clone());
     mgr.recover_stale_working_state();
     assert_eq!(
-        deps.chats_get("w1").unwrap().process_state,
+        deps.chats_get("w1").unwrap().unwrap().process_state,
         Some(Some(ProcessState::Idle))
     );
     assert_eq!(
-        deps.chats_get("w2").unwrap().process_state,
+        deps.chats_get("w2").unwrap().unwrap().process_state,
         Some(Some(ProcessState::Idle))
     );
     assert_eq!(
-        deps.chats_get("ok").unwrap().process_state,
+        deps.chats_get("ok").unwrap().unwrap().process_state,
         Some(Some(ProcessState::Idle))
     );
 }
@@ -1432,7 +596,7 @@ fn cmd_chat() -> Chat {
 }
 
 fn cmd_manager() -> (ChatManager, Arc<RecSession>) {
-    let deps = StoreDeps::with_chats(vec![cmd_chat()]);
+    let deps = FakeDeps::with_chats(vec![cmd_chat()]);
     let mgr = ChatManager::new(deps);
     let session = RecSession::new("chat-1", false, true);
     seed_active(&mgr, "chat-1", cmd_chat(), session.clone());
@@ -1506,7 +670,7 @@ async fn calls_send_message_with_wrapped_content_when_source_is_mainframe() {
 
 #[tokio::test]
 async fn updates_process_state_to_working_after_command_routing() {
-    let deps = StoreDeps::with_chats(vec![cmd_chat()]);
+    let deps = FakeDeps::with_chats(vec![cmd_chat()]);
     let mgr = ChatManager::new(deps.clone());
     seed_active(
         &mgr,
@@ -1527,7 +691,8 @@ async fn updates_process_state_to_working_after_command_routing() {
     .await
     .unwrap();
     assert!(
-        deps.updates
+        deps.store
+            .updates
             .lock()
             .unwrap()
             .iter()
@@ -1573,11 +738,11 @@ async fn sends_unknown_slash_command_with_args_as_plain_text() {
 
 // ── command-first title (#257) ───────────────────────────────────────────────
 
-fn title_cmd_manager(title: Option<&str>) -> (ChatManager, Arc<StoreDeps>, Arc<RecSession>) {
+fn title_cmd_manager(title: Option<&str>) -> (ChatManager, Arc<FakeDeps>, Arc<RecSession>) {
     let mut chat = test_chat("chat-1");
     chat.title = title.map(str::to_string);
     chat.process_state = Some(Some(ProcessState::Idle));
-    let deps = StoreDeps::with_chats(vec![chat.clone()]);
+    let deps = FakeDeps::with_chats(vec![chat.clone()]);
     let mgr = ChatManager::new(deps.clone());
     let session = RecSession::new("chat-1", false, true);
     seed_active(&mgr, "chat-1", chat, session.clone());
@@ -1630,7 +795,8 @@ async fn provider_command_first_message_sets_the_fallback_title() {
     assert!(session.send_message_calls.lock().unwrap().is_empty());
 
     assert!(
-        deps.updates
+        deps.store
+            .updates
             .lock()
             .unwrap()
             .iter()
@@ -1639,7 +805,7 @@ async fn provider_command_first_message_sets_the_fallback_title() {
     );
 
     assert_eq!(
-        deps.chats_get("chat-1").unwrap().title,
+        deps.chats_get("chat-1").unwrap().unwrap().title,
         Some("/compact".to_string())
     );
     assert!(events.iter().any(
@@ -1665,13 +831,13 @@ async fn mainframe_command_first_message_titles_from_typed_text_not_the_wrapper(
     .unwrap();
     settle().await;
 
-    let title = deps.chats_get("chat-1").unwrap().title;
+    let title = deps.chats_get("chat-1").unwrap().unwrap().title;
     assert_eq!(title.as_deref(), Some("/greet Say hello to the team"));
     let title = title.unwrap();
     assert!(!title.contains("<mainframe-command"));
     assert!(!title.contains("<mainframe-command-response"));
 
-    let calls = deps.generate_title_calls.lock().unwrap().clone();
+    let calls = deps.adapters.generate_title_calls.lock().unwrap().clone();
     assert_eq!(calls, vec!["/greet Say hello to the team".to_string()]);
     assert!(calls.iter().all(|c| !c.contains("<mainframe-command")));
 
@@ -1682,7 +848,7 @@ async fn mainframe_command_first_message_titles_from_typed_text_not_the_wrapper(
 #[tokio::test]
 async fn command_first_message_generated_title_overwrites_the_fallback() {
     let (mgr, deps, _session) = title_cmd_manager(None);
-    *deps.generated_title.lock().unwrap() = Some("Compact the session".to_string());
+    *deps.adapters.generated_title.lock().unwrap() = Some("Compact the session".to_string());
 
     mgr.send_message(
         "chat-1",
@@ -1726,7 +892,7 @@ async fn command_first_message_generated_title_overwrites_the_fallback() {
         vec!["/compact".to_string(), "Compact the session".to_string()]
     );
     assert_eq!(
-        deps.chats_get("chat-1").unwrap().title,
+        deps.chats_get("chat-1").unwrap().unwrap().title,
         Some("Compact the session".to_string())
     );
 }
@@ -1751,6 +917,7 @@ async fn command_into_an_already_titled_chat_leaves_the_title_untouched() {
 
     assert!(
         !deps
+            .store
             .updates
             .lock()
             .unwrap()
@@ -1761,15 +928,21 @@ async fn command_into_an_already_titled_chat_leaves_the_title_untouched() {
         DaemonEvent::ChatUpdated { chat, .. } => chat.title.as_deref() == Some("Test chat"),
         _ => true,
     }));
-    assert!(deps.generate_title_calls.lock().unwrap().is_empty());
+    assert!(
+        deps.adapters
+            .generate_title_calls
+            .lock()
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[tokio::test]
 async fn title_generation_is_not_awaited_by_a_command_send() {
     let (mgr, deps, _session) = title_cmd_manager(None);
-    *deps.generated_title.lock().unwrap() = Some("Compacted session".to_string());
+    *deps.adapters.generated_title.lock().unwrap() = Some("Compacted session".to_string());
     let gate = Arc::new(tokio::sync::Notify::new());
-    *deps.title_gate.lock().unwrap() = Some(gate.clone());
+    *deps.adapters.title_gate.lock().unwrap() = Some(gate.clone());
 
     tokio::time::timeout(
         std::time::Duration::from_secs(2),
@@ -1792,7 +965,7 @@ async fn title_generation_is_not_awaited_by_a_command_send() {
     settle().await;
 
     assert_eq!(
-        deps.chats_get("chat-1").unwrap().title,
+        deps.chats_get("chat-1").unwrap().unwrap().title,
         Some("Compacted session".to_string())
     );
 }
@@ -1806,7 +979,7 @@ async fn plain_text_first_message_still_titles_in_the_same_event_order() {
         .unwrap();
 
     assert_eq!(
-        deps.chats_get("chat-1").unwrap().title,
+        deps.chats_get("chat-1").unwrap().unwrap().title,
         Some("Hello world".to_string())
     );
 
@@ -1842,12 +1015,12 @@ async fn plain_text_first_message_with_a_session_reference_titles_from_the_visib
     settle().await;
 
     assert_eq!(
-        deps.chats_get("chat-1").unwrap().title,
+        deps.chats_get("chat-1").unwrap().unwrap().title,
         Some("what did they change?".to_string()),
         "the fallback title must not leak the raw reference preamble"
     );
     assert_eq!(
-        deps.generate_title_calls.lock().unwrap().clone(),
+        deps.adapters.generate_title_calls.lock().unwrap().clone(),
         vec!["what did they change?".to_string()],
         "the LLM title call must not see the raw reference preamble either"
     );
@@ -1872,17 +1045,17 @@ async fn command_first_fallback_survives_a_generation_that_returns_nothing() {
     settle().await;
 
     assert_eq!(
-        deps.chats_get("chat-1").unwrap().title,
+        deps.chats_get("chat-1").unwrap().unwrap().title,
         Some("/compact".to_string())
     );
-    assert_eq!(deps.generate_title_calls.lock().unwrap().len(), 1);
+    assert_eq!(deps.adapters.generate_title_calls.lock().unwrap().len(), 1);
     assert_eq!(titles_written(&deps), vec!["/compact".to_string()]);
 }
 
 #[tokio::test]
 async fn plain_text_with_attachments_keeps_prefix_images_and_transient_metadata() {
-    let deps = StoreDeps::arc();
-    *deps.attachments.lock().unwrap() = Some(ProcessedAttachments {
+    let deps = FakeDeps::arc();
+    *deps.workspace.attachments.lock().unwrap() = Some(ProcessedAttachments {
         images: vec![ImageInput {
             media_type: "image/png".to_string(),
             data: "AAA".to_string(),
@@ -1956,8 +1129,8 @@ async fn plain_text_with_attachments_keeps_prefix_images_and_transient_metadata(
 
 #[tokio::test]
 async fn mentions_in_plain_text_still_emit_context_updated() {
-    let deps = StoreDeps::arc();
-    *deps.mentions_found.lock().unwrap() = true;
+    let deps = FakeDeps::arc();
+    *deps.workspace.mentions_found.lock().unwrap() = true;
     let mgr = ChatManager::new(deps.clone());
     let session = RecSession::new("c1", false, true);
     seed_active(&mgr, "c1", working_chat("c1", Some("t"), false), session);
@@ -1985,8 +1158,8 @@ async fn calls_kill_tasks_before_session_kill_for_each_chat() {
     c2.project_id = "p1".to_string();
     c2.worktree_path = None;
 
-    let deps = StoreDeps::with_chats(vec![c1.clone(), c2.clone()]);
-    let order = deps.order.clone();
+    let deps = FakeDeps::with_chats(vec![c1.clone(), c2.clone()]);
+    let order = deps.workspace.order.clone();
     let mgr = ChatManager::new(deps.clone());
 
     let s1 = RecSession::with_order("c1", order.clone());
@@ -2001,7 +1174,7 @@ async fn calls_kill_tasks_before_session_kill_for_each_chat() {
     assert!(idx("kill:c1:/wt/c1").unwrap() < idx("sess.kill:c1").unwrap());
     assert!(idx("kill:c2:no-wt").unwrap() < idx("sess.kill:c2").unwrap());
     assert_eq!(
-        deps.project_removed.lock().unwrap().as_slice(),
+        deps.paths.project_removed.lock().unwrap().as_slice(),
         &["p1".to_string()]
     );
 }
@@ -2012,9 +1185,9 @@ async fn remove_project_propagates_a_row_delete_failure() {
     c1.project_id = "p1".to_string();
     c1.worktree_path = Some("/wt/c1".to_string());
 
-    let deps = StoreDeps::with_chats(vec![c1.clone()]);
-    let order = deps.order.clone();
-    *deps.fail_project_remove.lock().unwrap() = Some("database is locked".to_string());
+    let deps = FakeDeps::with_chats(vec![c1.clone()]);
+    let order = deps.workspace.order.clone();
+    *deps.paths.fail_project_remove.lock().unwrap() = Some("database is locked".to_string());
     let mgr = ChatManager::new(deps.clone());
 
     let s1 = RecSession::with_order("c1", order.clone());
@@ -2031,7 +1204,7 @@ async fn remove_project_propagates_a_row_delete_failure() {
     let idx = |s: &str| order.iter().position(|x| x == s);
     assert!(idx("kill:c1:/wt/c1").unwrap() < idx("sess.kill:c1").unwrap());
     assert_eq!(
-        deps.project_removed.lock().unwrap().as_slice(),
+        deps.paths.project_removed.lock().unwrap().as_slice(),
         &["p1".to_string()]
     );
 }
@@ -2044,7 +1217,7 @@ async fn discard_chat_stops_the_process_deletes_the_row_and_removes_the_scratch_
     c1.temporary = true;
     c1.scratch_path = Some("/tmp/mf-scratch/c1".to_string());
 
-    let deps = StoreDeps::with_chats(vec![c1.clone()]);
+    let deps = FakeDeps::with_chats(vec![c1.clone()]);
     let mgr = ChatManager::new(deps.clone());
     let session = RecSession::new("c1", false, true);
     seed_active(&mgr, "c1", c1, session.clone());
@@ -2061,11 +1234,15 @@ async fn discard_chat_stops_the_process_deletes_the_row_and_removes_the_scratch_
         "the active-chat entry must be dropped"
     );
     assert_eq!(
-        deps.remove_scratch_dir_calls.lock().unwrap().as_slice(),
+        deps.workspace
+            .remove_scratch_dir_calls
+            .lock()
+            .unwrap()
+            .as_slice(),
         &["/tmp/mf-scratch/c1".to_string()]
     );
     assert!(
-        deps.chats_get("c1").is_none(),
+        deps.chats_get("c1").unwrap().is_none(),
         "the row must be deleted (a subsequent GET 404s)"
     );
 }
@@ -2076,8 +1253,8 @@ async fn discard_chat_whose_scratch_dir_removal_fails_leaves_the_chat_discardabl
     c1.temporary = true;
     c1.scratch_path = Some("/tmp/mf-scratch/c1".to_string());
 
-    let deps = StoreDeps::with_chats(vec![c1.clone()]);
-    *deps.fail_remove_scratch_dir.lock().unwrap() = Some("permission denied".to_string());
+    let deps = FakeDeps::with_chats(vec![c1.clone()]);
+    *deps.workspace.fail_remove_scratch_dir.lock().unwrap() = Some("permission denied".to_string());
     let mgr = ChatManager::new(deps.clone());
 
     let err = mgr.discard_chat("c1").await.unwrap_err();
@@ -2086,19 +1263,19 @@ async fn discard_chat_whose_scratch_dir_removal_fails_leaves_the_chat_discardabl
         (StatusKind::Internal, "permission denied".to_string())
     );
     assert!(
-        deps.chats_get("c1").is_some(),
+        deps.chats_get("c1").unwrap().is_some(),
         "a failed removal must leave the row (and a retry) intact"
     );
 
     // Retry, this time the removal succeeds.
-    *deps.fail_remove_scratch_dir.lock().unwrap() = None;
+    *deps.workspace.fail_remove_scratch_dir.lock().unwrap() = None;
     assert!(mgr.discard_chat("c1").await.is_ok());
-    assert!(deps.chats_get("c1").is_none());
+    assert!(deps.chats_get("c1").unwrap().is_none());
 }
 
 #[tokio::test]
 async fn discard_chat_404s_for_an_unknown_chat() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps);
     let err = mgr.discard_chat("missing").await.unwrap_err();
     assert_eq!(
@@ -2114,7 +1291,7 @@ use mainframe_types::context::{MentionKind, MentionSource, SessionMention};
 
 #[tokio::test]
 async fn sync_chat_fields_mirrors_tuning_onto_the_cached_active_chat() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps);
     seed_active(
         &mgr,
@@ -2150,7 +1327,7 @@ async fn notify_worktree_deleted_emits_only_for_matching_worktree() {
     with_wt.worktree_path = Some("/wt/x".to_string());
     let without = test_chat("c2");
     let project_id = with_wt.project_id.clone();
-    let deps = StoreDeps::with_chats(vec![with_wt, without]);
+    let deps = FakeDeps::with_chats(vec![with_wt, without]);
     let mgr = ChatManager::new(deps.clone());
 
     mgr.notify_worktree_deleted(&project_id, "/wt/x").await;
@@ -2168,7 +1345,7 @@ async fn notify_worktree_deleted_emits_only_for_matching_worktree() {
 
 #[tokio::test]
 async fn add_mention_persists_and_emits_context_updated() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps.clone());
 
     mgr.add_mention(
@@ -2184,7 +1361,7 @@ async fn add_mention_persists_and_emits_context_updated() {
     );
 
     assert_eq!(
-        deps.mentions.lock().unwrap().as_slice(),
+        deps.store.mentions.lock().unwrap().as_slice(),
         &[("c1".to_string(), "foo.rs".to_string())]
     );
     assert!(
@@ -2196,7 +1373,7 @@ async fn add_mention_persists_and_emits_context_updated() {
 
 #[tokio::test]
 async fn get_effective_path_falls_back_to_the_project_root() {
-    let deps = StoreDeps::with_chats(vec![test_chat("c1")]);
+    let deps = FakeDeps::with_chats(vec![test_chat("c1")]);
     let mgr = ChatManager::new(deps);
     // test_chat has no worktree → project root from projects_get_path.
     assert_eq!(mgr.get_effective_path("c1").as_deref(), Some("/tmp/test"));
@@ -2205,7 +1382,7 @@ async fn get_effective_path_falls_back_to_the_project_root() {
 
 #[tokio::test]
 async fn get_messages_is_empty_without_a_claude_session() {
-    let deps = StoreDeps::with_chats(vec![test_chat("c1")]);
+    let deps = FakeDeps::with_chats(vec![test_chat("c1")]);
     let mgr = ChatManager::new(deps);
     assert!(mgr.get_messages("c1").await.is_empty());
 }
@@ -2417,8 +1594,8 @@ fn history_message() -> ChatMessage {
 async fn get_display_messages_reports_transcript_missing_persists_and_emits() {
     let mut chat = test_chat("c1");
     chat.claude_session_id = Some("sess-1".to_string());
-    let deps = StoreDeps::with_chats(vec![chat]);
-    *deps.transcript_present.lock().unwrap() = Some(false); // transcript gone
+    let deps = FakeDeps::with_chats(vec![chat]);
+    *deps.adapters.transcript_present.lock().unwrap() = Some(false); // transcript gone
     let mgr = ChatManager::new(deps.clone());
 
     let result = mgr.get_display_messages("c1").await;
@@ -2426,6 +1603,7 @@ async fn get_display_messages_reports_transcript_missing_persists_and_emits() {
     assert!(result.transcript_missing);
     assert_eq!(
         deps.store
+            .chats
             .lock()
             .unwrap()
             .get("c1")
@@ -2444,9 +1622,9 @@ async fn get_display_messages_self_heals_a_stale_flag() {
     let mut chat = test_chat("c1");
     chat.claude_session_id = Some("sess-1".to_string());
     chat.transcript_missing = Some(true);
-    let deps = StoreDeps::with_chats(vec![chat]);
-    *deps.transcript_present.lock().unwrap() = Some(true); // transcript back
-    *deps.history.lock().unwrap() = Some(vec![history_message()]);
+    let deps = FakeDeps::with_chats(vec![chat]);
+    *deps.adapters.transcript_present.lock().unwrap() = Some(true); // transcript back
+    *deps.adapters.history.lock().unwrap() = Some(vec![history_message()]);
     let mgr = ChatManager::new(deps.clone());
 
     let result = mgr.get_display_messages("c1").await;
@@ -2454,6 +1632,7 @@ async fn get_display_messages_self_heals_a_stale_flag() {
     assert!(!result.transcript_missing);
     assert_eq!(
         deps.store
+            .chats
             .lock()
             .unwrap()
             .get("c1")
@@ -2469,7 +1648,7 @@ async fn send_message_with_the_flag_clears_the_dead_session_identity() {
     chat.claude_session_id = Some("sess-1".to_string());
     chat.transcript_missing = Some(true);
     chat.session_file_path = Some("/home/u/.claude/projects/x/sess-1.jsonl".to_string());
-    let deps = StoreDeps::with_chats(vec![chat]);
+    let deps = FakeDeps::with_chats(vec![chat]);
     let mgr = ChatManager::new(deps.clone());
 
     // No live session → the send triggers the auto "continue here" reset. The send
@@ -2478,79 +1657,13 @@ async fn send_message_with_the_flag_clears_the_dead_session_identity() {
         .send_message("c1", "continue after transcript loss", None, None)
         .await;
 
-    let row = deps.store.lock().unwrap().get("c1").cloned().unwrap();
+    let row = deps.store.chats.lock().unwrap().get("c1").cloned().unwrap();
     assert_eq!(row.claude_session_id, None);
     assert_eq!(row.session_file_path, None);
     assert_eq!(row.transcript_missing, Some(false));
 }
 
 // ── external_session_service() facade wiring ────────────────────────────────
-
-#[derive(Default)]
-struct FakeExternalDeps {
-    project: Mutex<Option<Project>>,
-    sessions: Mutex<Vec<mainframe_types::adapter::ExternalSession>>,
-    created: Mutex<Vec<(String, String)>>,
-}
-
-impl crate::external_session_service::ExternalSessionDeps for FakeExternalDeps {
-    fn projects_get(&self, _project_id: &str) -> Option<Project> {
-        self.project.lock().unwrap().clone()
-    }
-    fn get_imported_session_ids(&self, _project_id: &str) -> Vec<String> {
-        Vec::new()
-    }
-    fn find_by_external_session_id(&self, _session_id: &str, _project_id: &str) -> Option<Chat> {
-        None
-    }
-    fn chats_create(&self, project_id: &str, adapter_id: &str) -> Chat {
-        self.created
-            .lock()
-            .unwrap()
-            .push((project_id.to_string(), adapter_id.to_string()));
-        let mut c = test_chat("imported");
-        c.project_id = project_id.to_string();
-        c.adapter_id = adapter_id.to_string();
-        c
-    }
-    fn chats_update(&self, _chat_id: &str, _updates: &mainframe_types::chat_patch::ChatPatch) {}
-    fn chats_list(&self, _project_id: &str) -> Vec<Chat> {
-        Vec::new()
-    }
-    fn settings(&self) -> &dyn mainframe_types::settings_kv::SettingsKv {
-        crate::test_support::no_settings()
-    }
-    fn emit_event(&self, _event: DaemonEvent) {}
-    fn generate_title<'a>(
-        &'a self,
-        _adapter_id: &'a str,
-        _content: &'a str,
-        _binary: &'a str,
-    ) -> BoxFuture<'a, Option<String>> {
-        Box::pin(async { None })
-    }
-    fn external_session_adapter_ids(&self) -> Vec<String> {
-        vec!["claude".to_string()]
-    }
-    fn list_external_sessions<'a>(
-        &'a self,
-        _adapter_id: &'a str,
-        _project_path: &'a str,
-        _exclude_ids: &'a [String],
-        _offset: i64,
-        _limit: i64,
-    ) -> BoxFuture<'a, Result<ExternalSessionPage, AdapterError>> {
-        let sessions = self.sessions.lock().unwrap().clone();
-        let total = sessions.len() as i64;
-        Box::pin(async move {
-            Ok(ExternalSessionPage {
-                sessions,
-                total,
-                next_offset: None,
-            })
-        })
-    }
-}
 
 fn external_session(id: &str) -> mainframe_types::adapter::ExternalSession {
     mainframe_types::adapter::ExternalSession {
@@ -2571,28 +1684,22 @@ fn external_session(id: &str) -> mainframe_types::adapter::ExternalSession {
 
 #[tokio::test]
 async fn external_session_service_is_none_until_injected() {
-    let mgr = ChatManager::new(StoreDeps::arc());
+    let mgr = ChatManager::new(FakeDeps::arc());
     assert!(mgr.external_session_service().is_none());
 }
 
 #[tokio::test]
 async fn with_external_sessions_wires_scan_page_through_the_facade() {
-    let ext = Arc::new(FakeExternalDeps::default());
-    *ext.project.lock().unwrap() = Some(Project {
-        id: "p1".into(),
-        name: "p".into(),
-        path: "/tmp/p".into(),
-        created_at: "now".into(),
-        last_opened_at: "now".into(),
-        parent_project_id: None,
-        available: None,
-    });
-    ext.sessions.lock().unwrap().push(external_session("s1"));
-    let service = Arc::new(ExternalSessionService::new(ext));
-    let mgr = ChatManager::new(StoreDeps::arc()).with_external_sessions(service);
+    let ext = Arc::new(FakeDeps::default());
+    ext.set_project_path("/tmp/p");
+    ext.external_sessions
+        .lock()
+        .unwrap()
+        .push(external_session("s1"));
+    let mgr = ChatManager::new(ext.clone()).with_external_sessions(ext.clone());
 
     let facade = mgr.external_session_service().expect("service injected");
-    let page = facade.scan_page("p1", 0, 50).await;
+    let page = facade.scan_page("p1", 0, 50).await.unwrap();
 
     assert_eq!(page.total, 1);
     assert_eq!(page.sessions[0].session_id, "s1");
@@ -2600,28 +1707,33 @@ async fn with_external_sessions_wires_scan_page_through_the_facade() {
 
 #[tokio::test]
 async fn with_external_sessions_wires_import_session_through_the_facade() {
-    let ext = Arc::new(FakeExternalDeps::default());
-    let service = Arc::new(ExternalSessionService::new(ext.clone()));
-    let mgr = ChatManager::new(StoreDeps::arc()).with_external_sessions(service);
+    let ext = Arc::new(FakeDeps::default());
+    let mgr = ChatManager::new(ext.clone()).with_external_sessions(ext.clone());
 
     let facade = mgr.external_session_service().expect("service injected");
     let chat = facade
         .import_session("p1", "s1", "claude", None, None, None)
-        .await;
+        .await
+        .unwrap();
 
     assert_eq!(chat.project_id, "p1");
     assert_eq!(chat.adapter_id, "claude");
     assert_eq!(
-        ext.created.lock().unwrap().as_slice(),
+        ext.store
+            .created
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|c| (c.project_id.clone(), c.adapter_id.clone()))
+            .collect::<Vec<_>>(),
         [("p1".to_string(), "claude".to_string())]
     );
 }
 
 #[tokio::test]
 async fn import_session_title_drops_the_session_reference_preamble() {
-    let ext = Arc::new(FakeExternalDeps::default());
-    let service = Arc::new(ExternalSessionService::new(ext.clone()));
-    let mgr = ChatManager::new(StoreDeps::arc()).with_external_sessions(service);
+    let ext = Arc::new(FakeDeps::default());
+    let mgr = ChatManager::new(ext.clone()).with_external_sessions(ext.clone());
 
     let facade = mgr.external_session_service().expect("service injected");
     let chat = facade
@@ -2633,7 +1745,8 @@ async fn import_session_title_drops_the_session_reference_preamble() {
             None,
             None,
         )
-        .await;
+        .await
+        .unwrap();
 
     assert_eq!(chat.title.as_deref(), Some("look at this"));
 }
@@ -2642,44 +1755,47 @@ async fn import_session_title_drops_the_session_reference_preamble() {
 
 #[tokio::test]
 async fn trust_workspace_persists_the_project_root_when_the_chat_has_no_worktree() {
-    let deps = StoreDeps::with_chats(vec![test_chat("c1")]);
+    let deps = FakeDeps::with_chats(vec![test_chat("c1")]);
     let mgr = ChatManager::new(deps.clone());
 
     mgr.trust_workspace("c1").await.unwrap();
 
-    assert_eq!(*deps.trusted_paths.lock().unwrap(), vec!["/tmp/test"]);
+    assert_eq!(
+        *deps.workspace.trusted_paths.lock().unwrap(),
+        vec!["/tmp/test"]
+    );
 }
 
 #[tokio::test]
 async fn trust_workspace_prefers_the_chat_worktree_path_over_the_project_root() {
     let mut chat = test_chat("c1");
     chat.worktree_path = Some("/home/me/proj-wt".to_string());
-    let deps = StoreDeps::with_chats(vec![chat]);
+    let deps = FakeDeps::with_chats(vec![chat]);
     let mgr = ChatManager::new(deps.clone());
 
     mgr.trust_workspace("c1").await.unwrap();
 
     assert_eq!(
-        *deps.trusted_paths.lock().unwrap(),
+        *deps.workspace.trusted_paths.lock().unwrap(),
         vec!["/home/me/proj-wt"]
     );
 }
 
 #[tokio::test]
 async fn trust_workspace_errors_when_the_chat_is_missing() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps.clone());
 
     let err = mgr.trust_workspace("missing").await.unwrap_err();
 
     assert!(matches!(err, TrustWorkspaceError::ChatNotFound(id) if id == "missing"));
-    assert!(deps.trusted_paths.lock().unwrap().is_empty());
+    assert!(deps.workspace.trusted_paths.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
 async fn trust_workspace_propagates_a_write_failure_without_gating_being_bypassed() {
-    let deps = StoreDeps::with_chats(vec![test_chat("c1")]);
-    *deps.fail_trust_write.lock().unwrap() = Some("disk full".to_string());
+    let deps = FakeDeps::with_chats(vec![test_chat("c1")]);
+    *deps.workspace.fail_trust_write.lock().unwrap() = Some("disk full".to_string());
     let mgr = ChatManager::new(deps.clone());
 
     let err = mgr.trust_workspace("c1").await.unwrap_err();
@@ -2695,7 +1811,7 @@ async fn trust_workspace_propagates_a_write_failure_without_gating_being_bypasse
 
 #[tokio::test]
 async fn accept_worktree_offer_refuses_while_a_turn_is_in_flight() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps.clone());
     seed_active(
         &mgr,
@@ -2717,7 +1833,7 @@ async fn accept_worktree_offer_refuses_while_a_turn_is_in_flight() {
 /// through, since nothing was ever offered here.
 #[tokio::test]
 async fn accept_worktree_offer_reaches_the_registry_when_the_chat_is_idle() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps.clone());
     seed_active(
         &mgr,
@@ -2739,7 +1855,7 @@ async fn accept_worktree_offer_reaches_the_registry_when_the_chat_is_idle() {
 /// The composer's worktree control reaches the config manager directly, not
 /// through an offer, so each of its three rebinds needs the same busy gate.
 async fn working_manager(working: bool) -> ChatManager {
-    let mgr = ChatManager::new(StoreDeps::arc());
+    let mgr = ChatManager::new(FakeDeps::arc());
     seed_active(
         &mgr,
         "c1",
@@ -2794,3 +1910,7 @@ async fn attach_worktree_rebinds_when_the_chat_is_idle() {
     assert_eq!(chat.worktree_path.as_deref(), Some("/tmp/wt"));
     assert_eq!(chat.branch_name.as_deref(), Some("feat/x"));
 }
+
+mod storage_failures;
+
+mod flow_golden;

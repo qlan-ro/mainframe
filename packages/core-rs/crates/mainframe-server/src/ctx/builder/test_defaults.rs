@@ -138,25 +138,24 @@ impl AppCtxBuilder {
     ) -> ChatCtx {
         let facade_hub = self.facade_hub.take().unwrap_or_default();
         let chat_manager = self.chat_manager.take().unwrap_or_else(|| {
-            build_chat_manager(
-                core.db.clone(),
-                core.adapter_registry.clone(),
-                core.background_tasks.clone(),
-                services.attachments.clone(),
-                services.push.clone(),
-                core.git,
-                core.broadcast.clone(),
-                Arc::new(RegistryLaunchStopper::new(infra.launch_registry.clone())),
-                Arc::new(RegistryScopeTunnelStopper::new(
+            build_chat_manager(crate::ChatManagerParams {
+                db: core.db.clone(),
+                adapters: core.adapter_registry.clone(),
+                background_tasks: core.background_tasks.clone(),
+                attachments: services.attachments.clone(),
+                push: services.push.clone(),
+                git: core.git,
+                broadcast: core.broadcast.clone(),
+                launch: Arc::new(RegistryLaunchStopper::new(infra.launch_registry.clone())),
+                scope_tunnels: Arc::new(RegistryScopeTunnelStopper::new(
                     infra.port_tunnels.clone(),
                     core.db.clone(),
                 )),
                 quota,
-                core.claude_workflows.clone(),
-                core.resolved_path.clone(),
-                Some(facade_hub.as_chat_surface()),
-                core.data_dir.clone(),
-            )
+                claude_workflows: core.claude_workflows.clone(),
+                chat_surface: Some(facade_hub.as_chat_surface()),
+                data_dir: core.data_dir.clone(),
+            })
         });
         let orchestration = self.orchestration.take().unwrap_or_else(|| {
             build_orchestration(

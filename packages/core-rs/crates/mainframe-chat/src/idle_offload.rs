@@ -15,32 +15,32 @@ use mainframe_types::chat::QueuedMessageRef;
 use mainframe_types::events::DaemonEvent;
 use tracing::{info, warn};
 
+use crate::chat_manager::Registry;
 use crate::chat_teardown::{ChatTeardown, TeardownMode};
-use crate::event_handler::EventHandlerDeps;
-use crate::idle_scanner::{ActiveChatRegistry, IDLE_THRESHOLD_MS, IdleOffloader, idle_since};
-use crate::lifecycle_manager::{ChatLifecycleManager, LifecycleManagerDeps};
+use crate::idle_scanner::{IDLE_THRESHOLD_MS, IdleOffloader, idle_since};
+use crate::lifecycle_manager::ChatLifecycleManager;
 use crate::permission_manager::PermissionManager;
 
 /// The offload sequence for one `ChatManager`, built once
 /// from the same shared `Arc`s the manager already holds (registry, cache,
 /// permissions, queued refs, lifecycle, event handler) and stored as a trait
 /// object so `IdleSessionScanner`'s periodic task needs no `Weak<ChatManager>`.
-pub struct ChatOffload<L: LifecycleManagerDeps + 'static, E: EventHandlerDeps + 'static> {
-    active_chats: ActiveChatRegistry,
+pub struct ChatOffload {
+    active_chats: Registry,
     permissions: Arc<Mutex<PermissionManager>>,
     queued_refs: Arc<Mutex<Vec<QueuedMessageRef>>>,
-    lifecycle: Arc<ChatLifecycleManager<L>>,
-    teardown: Arc<ChatTeardown<E>>,
+    lifecycle: Arc<ChatLifecycleManager>,
+    teardown: Arc<ChatTeardown>,
     threshold_ms: i64,
 }
 
-impl<L: LifecycleManagerDeps + 'static, E: EventHandlerDeps + 'static> ChatOffload<L, E> {
+impl ChatOffload {
     pub(crate) fn new(
-        active_chats: ActiveChatRegistry,
+        active_chats: Registry,
         permissions: Arc<Mutex<PermissionManager>>,
         queued_refs: Arc<Mutex<Vec<QueuedMessageRef>>>,
-        lifecycle: Arc<ChatLifecycleManager<L>>,
-        teardown: Arc<ChatTeardown<E>>,
+        lifecycle: Arc<ChatLifecycleManager>,
+        teardown: Arc<ChatTeardown>,
     ) -> Self {
         Self::with_threshold(
             active_chats,
@@ -56,11 +56,11 @@ impl<L: LifecycleManagerDeps + 'static, E: EventHandlerDeps + 'static> ChatOfflo
     /// threshold behaves exactly like a chat idle 2+ hours past the real one,
     /// so tests inject a small threshold rather than a fake clock.
     pub(crate) fn with_threshold(
-        active_chats: ActiveChatRegistry,
+        active_chats: Registry,
         permissions: Arc<Mutex<PermissionManager>>,
         queued_refs: Arc<Mutex<Vec<QueuedMessageRef>>>,
-        lifecycle: Arc<ChatLifecycleManager<L>>,
-        teardown: Arc<ChatTeardown<E>>,
+        lifecycle: Arc<ChatLifecycleManager>,
+        teardown: Arc<ChatTeardown>,
         threshold_ms: i64,
     ) -> Self {
         Self {
@@ -162,11 +162,7 @@ impl<L: LifecycleManagerDeps + 'static, E: EventHandlerDeps + 'static> ChatOfflo
     }
 }
 
-impl<L, E> IdleOffloader for ChatOffload<L, E>
-where
-    L: LifecycleManagerDeps + 'static,
-    E: EventHandlerDeps + 'static,
-{
+impl IdleOffloader for ChatOffload {
     fn offload<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()> {
         Box::pin(self.try_offload(chat_id))
     }

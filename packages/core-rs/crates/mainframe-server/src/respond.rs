@@ -51,6 +51,15 @@ pub fn fail_domain(
     }
 }
 
+pub fn storage<T: Serialize>(
+    result: Result<T, mainframe_types::seam_error::SeamError>,
+) -> Response {
+    match result {
+        Ok(value) => ok(value),
+        Err(error) => ApiError::internal("chat storage operation", error).into_response(),
+    }
+}
+
 mod error;
 pub use error::ApiError;
 pub use error::{fail_or_internal, fail_with, status_code, status_of};

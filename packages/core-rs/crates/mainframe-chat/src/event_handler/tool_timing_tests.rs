@@ -1,11 +1,11 @@
-use super::stable_id_characterization_tests::ShapeDeps;
 use super::*;
 use crate::message_cache::timing_tests::{result, timings, tool};
 use serde_json::{Value, json};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 struct Fixture {
-    handler: EventHandler<ShapeDeps>,
+    harness: tests::Harness,
+    handler: Arc<EventHandler>,
     messages: Arc<Mutex<MessageCache>>,
     permissions: Arc<Mutex<PermissionManager>>,
     clock: Arc<AtomicU64>,
@@ -18,9 +18,18 @@ impl Fixture {
         let messages = Arc::new(Mutex::new(MessageCache::with_clock(Arc::new(move || {
             now.load(Ordering::SeqCst)
         }))));
-        let permissions = Arc::new(Mutex::new(PermissionManager::new()));
-        let handler = EventHandler::new(messages.clone(), permissions.clone(), ShapeDeps::new());
+        let harness = tests::Harness::with_queue(
+            Arc::new(Mutex::new(ActiveChat::new(
+                crate::test_support::test_chat("chat-shape"),
+                None,
+            ))),
+            Vec::new(),
+            messages.clone(),
+        );
+        let handler = harness.handler.clone();
+        let permissions = harness.permissions();
         Self {
+            harness,
             handler,
             messages,
             permissions,
@@ -111,7 +120,7 @@ fn tool_timing_sink_replacement_and_stale_exit_cannot_finish_new_sessions_calls(
     fixture.at(1100);
     let resumed = fixture.sink("old");
     resumed.on_message(vec![tool("a")], None);
-    let cell = fixture.handler.deps.get_active_chat("chat-shape").unwrap();
+    let cell = fixture.harness.shared.active("chat-shape").unwrap();
     cell.lock().unwrap().session = Some(Arc::new(crate::test_support::FakeSession::spawned()));
     let new = fixture.sink("sess");
     new.on_message(vec![tool("b")], None);

@@ -3,7 +3,8 @@ use std::sync::{Arc, Mutex};
 
 use mainframe_adapter_api::{AdapterError, PlanActionContext, PlanModeActionHandler};
 use mainframe_types::adapter::ControlResponse;
-use mainframe_types::events::DaemonEvent;
+use mainframe_types::chat::Chat;
+use mainframe_types::seam_error::SeamError;
 use mainframe_types::settings::ExecutionMode;
 use tracing::warn;
 
@@ -17,8 +18,12 @@ use crate::types::ActiveChat;
 /// `resolve_plan_mode_handler`, backed by `Adapter::create_plan_mode_handler`.
 pub trait PlanModeContext: Send + Sync {
     /// `db.chats.update(chatId, { permissionMode, planMode })`.
-    fn chats_update(&self, chat_id: &str, permission_mode: ExecutionMode, plan_mode: bool);
-    fn emit_event(&self, event: DaemonEvent);
+    fn update_and_emit(
+        &self,
+        chat: Chat,
+        permission_mode: ExecutionMode,
+        plan_mode: bool,
+    ) -> Result<(), SeamError>;
     /// `adapter?.createPlanModeHandler()` — `None` when the adapter has no handler.
     fn resolve_plan_mode_handler(&self, adapter_id: &str)
     -> Option<Arc<dyn PlanModeActionHandler>>;
@@ -48,26 +53,28 @@ impl<C: PlanModeContext> PlanModeHandler<C> {
     /// intentionally NOT invoked here — there is no session for it to manipulate.
     pub(crate) fn handle_no_process(
         &self,
-        chat_id: &str,
         active: &Arc<Mutex<ActiveChat>>,
         response: &ControlResponse,
-    ) {
+    ) -> Result<(), SeamError> {
         let exec = response.execution_mode.unwrap_or(ExecutionMode::Default);
         let snapshot = {
-            let mut guard = active.lock_recover();
+            let guard = active.lock_recover();
             if Some(exec) != guard.chat.permission_mode || guard.chat.plan_mode == Some(true) {
-                guard.chat.permission_mode = Some(exec);
-                guard.chat.plan_mode = Some(false);
-                Some(guard.chat.clone())
+                let mut chat = guard.chat.clone();
+                chat.permission_mode = Some(exec);
+                chat.plan_mode = Some(false);
+                Some(chat)
             } else {
                 None
             }
         };
         if let Some(chat) = snapshot {
-            self.ctx.chats_update(chat_id, exec, false);
-            self.ctx
-                .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
+            self.ctx.update_and_emit(chat, exec, false)?;
+            let mut guard = active.lock_recover();
+            guard.chat.permission_mode = Some(exec);
+            guard.chat.plan_mode = Some(false);
         }
+        Ok(())
     }
 
     /// User approved AND asked to clear context. Delegates to the adapter handler.

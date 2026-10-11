@@ -59,7 +59,8 @@ async fn setup() -> (Arc<AppCtx>, mainframe_types::chat::Project, Chat) {
             None,
             None,
         )
-        .await;
+        .await
+        .unwrap();
     (ctx, project, parent)
 }
 
@@ -174,10 +175,14 @@ async fn list_filtered_excludes_the_side_chat_with_and_without_include_temporary
     let side_id = body["data"]["id"].as_str().unwrap().to_string();
     let cm = &ctx.chat.chat_manager;
 
-    let default_list = cm.list_filtered(Some(&project.id), None, false, true, false);
+    let default_list = cm
+        .list_filtered(Some(&project.id), None, false, true, false)
+        .unwrap();
     assert!(!default_list.iter().any(|c| c.id == side_id));
 
-    let with_temporary = cm.list_filtered(Some(&project.id), None, false, true, true);
+    let with_temporary = cm
+        .list_filtered(Some(&project.id), None, false, true, true)
+        .unwrap();
     assert!(!with_temporary.iter().any(|c| c.id == side_id));
 
     assert!(cm.get_chat(&side_id).is_some());
@@ -211,7 +216,8 @@ async fn filter_temporary_drops_a_side_chat_even_when_include_temporary_is_set()
             None,
             None,
         )
-        .await;
+        .await
+        .unwrap();
     ctx.chat
         .chat_manager
         .as_ref()

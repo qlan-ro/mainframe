@@ -3,6 +3,7 @@
 //! Tests need a concrete `dyn AdapterSession` double, so the shared `FakeSession`
 //! lives here to avoid re-stubbing ~20 trait methods per test.
 
+use mainframe_types::sync::LockExt as _;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
@@ -31,6 +32,7 @@ pub struct FakeSession {
     /// plain `Option<i64>` field can't do without interior mutability.
     pub(crate) activity_override: Mutex<Option<i64>>,
     pub kill_count: AtomicUsize,
+    pub apply_tuning_calls: AtomicUsize,
     pub set_model_calls: Mutex<Vec<String>>,
     pub set_permission_mode_calls: Mutex<Vec<ExecutionMode>>,
     pub set_plan_mode_calls: Mutex<Vec<bool>>,
@@ -90,7 +92,7 @@ impl FakeSession {
 
     /// Bump "last activity" to `ts` — see `activity_override`.
     pub fn bump_activity(&self, ts: i64) {
-        *self.activity_override.lock().unwrap() = Some(ts);
+        *self.activity_override.lock_recover() = Some(ts);
     }
 }
 
@@ -104,6 +106,13 @@ fn err<'a, T: Send + 'a>(msg: &str) -> BoxFuture<'a, Result<T, AdapterError>> {
 }
 
 impl AdapterSession for FakeSession {
+    fn apply_tuning(
+        &self,
+        _tuning: mainframe_types::chat::ResolvedTuning,
+    ) -> BoxFuture<'_, Result<(), AdapterError>> {
+        self.apply_tuning_calls.fetch_add(1, Ordering::SeqCst);
+        ok()
+    }
     fn id(&self) -> &str {
         "sess"
     }
@@ -120,7 +129,7 @@ impl AdapterSession for FakeSession {
         self.model_requires_restart
     }
     fn last_activity_at(&self) -> Option<i64> {
-        self.activity_override.lock().unwrap().or(self.activity)
+        self.activity_override.lock_recover().or(self.activity)
     }
 
     fn spawn(
@@ -128,7 +137,7 @@ impl AdapterSession for FakeSession {
         options: Option<SessionSpawnOptions>,
         _sink: Option<Arc<dyn SessionSink>>,
     ) -> BoxFuture<'_, Result<AdapterProcess, AdapterError>> {
-        *self.spawn_options.lock().unwrap() = options;
+        *self.spawn_options.lock_recover() = options;
         if !self.spawn_ok {
             return err("unused");
         }
@@ -174,7 +183,7 @@ impl AdapterSession for FakeSession {
     }
     fn set_model(&self, model: String) -> BoxFuture<'_, Result<(), AdapterError>> {
         let gated = model == "default";
-        self.set_model_calls.lock().unwrap().push(model);
+        self.set_model_calls.lock_recover().push(model);
         if gated && let Some(gate) = &self.model_gate {
             return Box::pin(async move {
                 gate.0.notify_one();
@@ -189,7 +198,7 @@ impl AdapterSession for FakeSession {
         }
     }
     fn set_permission_mode(&self, mode: ExecutionMode) -> BoxFuture<'_, Result<(), AdapterError>> {
-        self.set_permission_mode_calls.lock().unwrap().push(mode);
+        self.set_permission_mode_calls.lock_recover().push(mode);
         if self.set_permission_mode_ok {
             ok()
         } else {
@@ -197,7 +206,7 @@ impl AdapterSession for FakeSession {
         }
     }
     fn set_plan_mode(&self, on: bool) -> BoxFuture<'_, Result<(), AdapterError>> {
-        self.set_plan_mode_calls.lock().unwrap().push(on);
+        self.set_plan_mode_calls.lock_recover().push(on);
         if self.set_plan_mode_ok {
             ok()
         } else {
@@ -252,6 +261,18 @@ impl AdapterSession for FakeSession {
 
 pub use crate::test_support_chat::test_chat;
 
+mod fake_adapters;
+mod fake_deps;
+mod fake_events;
+mod fake_paths;
+mod fake_projection;
+mod fake_push;
+mod fake_rows;
+mod fake_store;
+mod fake_workspace;
+pub(crate) use fake_adapters::FakeAdapterPort;
+pub(crate) use fake_deps::FakeDeps;
+
 /// An empty settings store, for fakes whose every settings read is unset.
 pub fn no_settings() -> &'static mainframe_types::settings_kv::MemorySettings {
     static EMPTY: std::sync::LazyLock<mainframe_types::settings_kv::MemorySettings> =
@@ -263,3 +284,8 @@ pub fn no_settings() -> &'static mainframe_types::settings_kv::MemorySettings {
 /// already, so the tracing capture helper lives there and is re-exported here
 /// for the crate's existing `crate::test_support::LogCapture` call sites.
 pub use mainframe_runtime::log_capture::LogCapture;
+
+mod presentation;
+pub use presentation::presentation_handler;
+
+mod fake_external;

@@ -1,5 +1,5 @@
 //! Pure normalization + dedupe for Claude's `PushNotification` tool call. Kept
-//! free of `EventHandlerDeps` so the rules — trim, empty check, truncation, and
+//! independent of the event handler so the rules — trim, empty check, truncation, and
 //! per-session dedupe — exist in exactly one place.
 
 use std::collections::HashMap;

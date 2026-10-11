@@ -57,7 +57,8 @@ async fn setup() -> (Arc<AppCtx>, Chat) {
             None,
             None,
         )
-        .await;
+        .await
+        .unwrap();
     (ctx, chat)
 }
 

@@ -1,3 +1,4 @@
+use mainframe_types::seam_error::SeamError;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
@@ -14,10 +15,10 @@ use mainframe_types::time::now_iso8601;
 
 /// The `db.chats.*` surface `context-tracker` reads (narrow slice of `DatabaseManager`).
 pub trait ContextDb: Send + Sync {
-    fn add_mention(&self, chat_id: &str, mention: &SessionMention) -> bool;
-    fn get_mentions(&self, chat_id: &str) -> Vec<SessionMention>;
-    fn get_plan_files(&self, chat_id: &str) -> Vec<String>;
-    fn get_skill_files(&self, chat_id: &str) -> Vec<SkillFileEntry>;
+    fn add_mention(&self, chat_id: &str, mention: &SessionMention) -> Result<bool, SeamError>;
+    fn get_mentions(&self, chat_id: &str) -> Result<Vec<SessionMention>, SeamError>;
+    fn get_plan_files(&self, chat_id: &str) -> Result<Vec<String>, SeamError>;
+    fn get_skill_files(&self, chat_id: &str) -> Result<Vec<SkillFileEntry>, SeamError>;
 }
 
 /// `attachmentStore?.list(chatId)`.
@@ -25,12 +26,16 @@ pub trait AttachmentLister: Send + Sync {
     fn list<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, Vec<SessionAttachment>>;
 }
 
-pub fn extract_mentions_from_text(chat_id: &str, text: Option<&str>, db: &dyn ContextDb) -> bool {
+pub fn extract_mentions_from_text(
+    chat_id: &str,
+    text: Option<&str>,
+    db: &dyn ContextDb,
+) -> Result<bool, SeamError> {
     let Some(text) = text else {
-        return false;
+        return Ok(false);
     };
     if text.is_empty() {
-        return false;
+        return Ok(false);
     }
     let chars: Vec<char> = text.chars().collect();
     let mut changed = false;
@@ -57,14 +62,14 @@ pub fn extract_mentions_from_text(chat_id: &str, text: Option<&str>, db: &dyn Co
                 path: Some(cleaned),
                 timestamp: now_iso8601(),
             };
-            if db.add_mention(chat_id, &mention) {
+            if db.add_mention(chat_id, &mention)? {
                 changed = true;
             }
         } else {
             i += 1;
         }
     }
-    changed
+    Ok(changed)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -76,7 +81,7 @@ pub async fn get_session_context(
     session: Option<&Arc<dyn AdapterSession>>,
     attachment_store: Option<&dyn AttachmentLister>,
     adapter_id: Option<&str>,
-) -> SessionContext {
+) -> Result<SessionContext, SeamError> {
     let mut global_files: Vec<ContextFile> = Vec::new();
     let mut project_files: Vec<ContextFile> = Vec::new();
     if let Some(session) = session {
@@ -103,7 +108,7 @@ pub async fn get_session_context(
         .unwrap_or_default();
     let deduped_files = dedupe_context_files(global_files, project_files, project_path, &home_dir);
 
-    let raw_mentions = db.get_mentions(chat_id);
+    let raw_mentions = db.get_mentions(chat_id)?;
     let mentions = raw_mentions
         .into_iter()
         .map(|mut m| {
@@ -116,20 +121,20 @@ pub async fn get_session_context(
         None => Vec::new(),
     };
     let modified_files = db
-        .get_plan_files(chat_id)
+        .get_plan_files(chat_id)?
         .iter()
         .map(|p| to_relative(p))
         .collect();
-    let skill_files = dedupe_skill_files(db.get_skill_files(chat_id), |p| Path::new(p).exists());
+    let skill_files = dedupe_skill_files(db.get_skill_files(chat_id)?, |p| Path::new(p).exists());
 
-    SessionContext {
+    Ok(SessionContext {
         global_files: deduped_files.global,
         project_files: deduped_files.project,
         mentions,
         attachments,
         modified_files,
         skill_files,
-    }
+    })
 }
 
 /// Drop repeated skill entries. The same skill can be persisted under two paths
@@ -389,17 +394,21 @@ mod tests {
         skills: Vec<SkillFileEntry>,
     }
     impl ContextDb for CtxDb {
-        fn add_mention(&self, _chat_id: &str, _mention: &SessionMention) -> bool {
-            false
+        fn add_mention(
+            &self,
+            _chat_id: &str,
+            _mention: &SessionMention,
+        ) -> Result<bool, SeamError> {
+            Ok(false)
         }
-        fn get_mentions(&self, _chat_id: &str) -> Vec<SessionMention> {
-            Vec::new()
+        fn get_mentions(&self, _chat_id: &str) -> Result<Vec<SessionMention>, SeamError> {
+            Ok(Vec::new())
         }
-        fn get_plan_files(&self, _chat_id: &str) -> Vec<String> {
-            Vec::new()
+        fn get_plan_files(&self, _chat_id: &str) -> Result<Vec<String>, SeamError> {
+            Ok(Vec::new())
         }
-        fn get_skill_files(&self, _chat_id: &str) -> Vec<SkillFileEntry> {
-            self.skills.clone()
+        fn get_skill_files(&self, _chat_id: &str) -> Result<Vec<SkillFileEntry>, SeamError> {
+            Ok(self.skills.clone())
         }
     }
 
@@ -583,7 +592,8 @@ mod tests {
             None,
             Some("claude"),
         )
-        .await;
+        .await
+        .unwrap();
 
         assert_eq!(
             out.skill_files,

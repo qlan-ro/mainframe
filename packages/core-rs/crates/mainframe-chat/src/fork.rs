@@ -1,13 +1,9 @@
 //! Pure helpers for the fork-a-chat feature — the pieces `ChatManager::fork_chat`
 //! (`chat_manager/fork_api.rs`) needs that don't touch the registry, the DB or an
-//! adapter: the fork point, the provisional title rule, the deps-boundary data shapes (so
-//! `mainframe-chat` never depends on `mainframe-db`'s `PendingFork`/`ForkInsert`),
-//! and the REST-status class of `ForkChatError`.
+//! adapter: the fork point, provisional title, and REST-status class of `ForkChatError`.
 
-use mainframe_types::adapter::{EffortLevel, ForkSource};
 use mainframe_types::http_status::{HttpStatus, StatusKind};
 use mainframe_types::seam_error::SeamError;
-use mainframe_types::settings::ExecutionMode;
 
 /// Where `ChatManager::fork_chat` cuts the parent's conversation.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -19,17 +15,7 @@ pub enum ForkPoint {
     BeforeMessage(String),
 }
 
-/// `chats.pending_fork`'s in-memory shape, as it crosses the `ChatManagerDeps` /
-/// `LifecycleManagerDeps` / `EventHandlerDeps` boundary. Mirrors
-/// `mainframe_db::chats::PendingFork` field-for-field; kept as a separate type
-/// because this crate does not depend on `mainframe-db` (the daemon-side deps
-/// impl translates both ways).
-#[derive(Debug, Clone, PartialEq)]
-pub struct PendingForkState {
-    pub fork_source: ForkSource,
-    pub snapshot_dir: String,
-    pub provisional_title: String,
-}
+pub use mainframe_db::chats::PendingFork as PendingForkState;
 
 /// What `fork_chat`'s capability check needs from the parent's adapter: its
 /// display name (for the 422 message), whether it can fork at all, and — when
@@ -42,29 +28,7 @@ pub struct AdapterForkInfo {
     pub unavailable_reason: Option<String>,
 }
 
-/// Inputs to the DB's `create_fork`, gathered from the enriched parent chat by
-/// `ChatManager::fork_chat`. A same-shaped mirror of `mainframe_db::chats::ForkInsert`
-/// (owned, not borrowed — it crosses the deps trait boundary).
-#[derive(Debug, Clone)]
-pub struct ForkCreateInput {
-    pub parent_chat_id: String,
-    pub project_id: String,
-    pub adapter_id: String,
-    pub model: Option<String>,
-    pub permission_mode: Option<ExecutionMode>,
-    pub plan_mode: bool,
-    pub effort: Option<EffortLevel>,
-    pub fast: Option<bool>,
-    pub ultracode: Option<bool>,
-    pub adaptive_thinking: Option<bool>,
-    pub worktree_path: Option<String>,
-    pub branch_name: Option<String>,
-    pub title: Option<String>,
-    pub pending_fork: PendingForkState,
-    /// A multi-segment parent's segments, as the fork copies them. `None`
-    /// gives the fork one initial segment.
-    pub segments: Option<mainframe_types::segment::ForkPlan>,
-}
+pub use mainframe_db::chats::ForkCreateInput;
 
 /// The fork's provisional title: `<parent title> (fork)`, without stacking a
 /// second marker on a parent whose own title already ends in it, and

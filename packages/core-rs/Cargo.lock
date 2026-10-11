@@ -1525,6 +1525,7 @@ dependencies = [
  "mainframe-adapter-claude",
  "mainframe-adapter-codex",
  "mainframe-background-tasks",
+ "mainframe-db",
  "mainframe-display",
  "mainframe-runtime",
  "mainframe-services",

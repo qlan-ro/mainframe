@@ -58,7 +58,7 @@ impl ChatManager {
     /// borrowed read-only and bounded where it ended. `None` for a
     /// single-segment parent, whose fork gets one initial segment as before.
     fn fork_segment_plan(&self, chat_id: &str, cut: Option<&ForkCut>) -> Option<ForkPlan> {
-        let layout = self.deps.segment_store()?.layout(chat_id)?;
+        let layout = self.shared.deps.segment_store()?.layout(chat_id)?;
         if !layout.is_multi_segment() {
             return None;
         }
@@ -75,7 +75,7 @@ impl ChatManager {
             .get_chat(chat_id)
             .ok_or_else(|| ForkChatError::NotFound(chat_id.to_string()))?;
 
-        let adapter = self.deps.adapter_fork_info(&parent.adapter_id);
+        let adapter = self.shared.deps.adapter_fork_info(&parent.adapter_id);
         if !adapter.fork {
             return Err(match adapter.unavailable_reason {
                 Some(reason) => ForkChatError::UnavailableWithReason(reason),
@@ -126,11 +126,12 @@ impl ChatManager {
     ) -> Result<(ForkSource, String), ForkChatError> {
         let chat = &parent.chat;
         let project_path = self
+            .shared
             .deps
             .projects_get_path(&chat.project_id)
             .ok_or_else(|| ForkChatError::NotFound(chat.id.clone()))?;
         let cwd = chat.worktree_path.clone().unwrap_or(project_path);
-        let dest_dir = std::path::Path::new(&self.deps.fork_snapshots_dir())
+        let dest_dir = std::path::Path::new(&self.shared.deps.fork_snapshots_dir())
             .join(nanoid::nanoid!())
             .to_string_lossy()
             .into_owned();
@@ -142,7 +143,12 @@ impl ChatManager {
             dest_dir: dest_dir.clone(),
             cut,
         };
-        let err = match self.deps.pin_fork_point(&chat.adapter_id, request).await {
+        let err = match self
+            .shared
+            .deps
+            .pin_fork_point(&chat.adapter_id, request)
+            .await
+        {
             Ok(source) => return Ok((source, dest_dir)),
             Err(ForkPinError::Unsupported) => {
                 ForkChatError::Unsupported(parent.adapter_name.clone())
@@ -187,7 +193,7 @@ impl ChatManager {
             segments,
         };
 
-        let new_chat = match self.deps.create_fork(&insert) {
+        let new_chat = match self.shared.deps.create_fork(&insert) {
             Ok(chat) => chat,
             Err(error) => {
                 remove_snapshot_dir(&dest_dir).await;
@@ -195,11 +201,11 @@ impl ChatManager {
             }
         };
 
-        self.active_chats.insert(
+        self.shared.active_chats.insert(
             new_chat.id.clone(),
             Arc::new(Mutex::new(ActiveChat::new(new_chat.clone(), None))),
         );
-        self.messages.lock_recover().pin(&new_chat.id);
+        self.shared.messages.lock_recover().pin(&new_chat.id);
         self.emit(DaemonEvent::ChatCreated {
             chat: new_chat.clone(),
             source: None,
@@ -225,7 +231,7 @@ mod turn_in_flight_tests {
     use crate::test_support::test_chat;
 
     /// `turn_in_flight` is exercised directly (rather than only through
-    /// `fork_chat`'s `StoreDeps`-backed tests) because `enrich_chat` — which
+    /// `fork_chat`'s `FakeDeps`-backed tests) because `enrich_chat` — which
     /// `get_chat` always runs — recomputes both `is_running` and
     /// `display_status` from live state (process state / the permission
     /// manager's pending queue), so a fake chat's manually-set fields never

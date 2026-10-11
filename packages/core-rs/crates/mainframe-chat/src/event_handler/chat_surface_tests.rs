@@ -4,6 +4,7 @@
 //! raised/resolved, retry, compaction, usage, and a display revision carrying
 //! the same snapshot the legacy emitter computed.
 
+use super::tests::Harness;
 use super::*;
 use crate::chat_surface::{ChatSurface, ChatSurfaceEvent, TurnStopReason};
 use crate::test_support::test_chat;
@@ -29,83 +30,13 @@ impl ChatSurface for RecordingSurface {
     }
 }
 
-struct ShapeDeps {
-    cell: Arc<Mutex<ActiveChat>>,
-}
-
-impl ShapeDeps {
-    fn new(process_state: ProcessState) -> Arc<Self> {
-        let mut chat = test_chat("chat-surface");
-        chat.process_state = Some(Some(process_state));
-        Arc::new(Self {
-            cell: Arc::new(Mutex::new(ActiveChat::new(chat, None))),
-        })
-    }
-}
-
-impl EventHandlerDeps for ShapeDeps {
-    fn get_active_chat(&self, _chat_id: &str) -> Option<Arc<Mutex<ActiveChat>>> {
-        Some(self.cell.clone())
-    }
-    fn emit_event(&self, _event: DaemonEvent) {}
-    fn get_tool_categories(&self, _chat_id: &str) -> Option<ToolCategories> {
-        None
-    }
-    fn on_queued_processed(&self, _chat_id: &str, _uuid: &str) {}
-    fn on_queued_cleared(&self, _chat_id: &str) {}
-    fn get_queued_refs(&self, _chat_id: &str) -> Vec<QueuedMessageRef> {
-        Vec::new()
-    }
-    fn display_projector(&self) -> Box<dyn DisplayProjector> {
-        Box::new(FullRebuildProjector::new(|_raw, _overlay, _categories| {
-            Vec::new()
-        }))
-    }
-    fn strip_command_tags(&self, text: &str) -> String {
-        text.to_string()
-    }
-    fn chats_update(&self, _chat_id: &str, _patch: &ChatPatch) {}
-    fn projects_get_path(&self, _project_id: &str) -> Option<String> {
-        None
-    }
-    fn initial_transcript_path(&self, _: &str, _: &str, _: &str) -> Option<String> {
-        None
-    }
-    fn add_plan_file(&self, _chat_id: &str, _file_path: &str) -> bool {
-        false
-    }
-    fn add_skill_file(&self, _chat_id: &str, _entry: &SkillFileEntry) -> bool {
-        false
-    }
-    fn update_todos(&self, _chat_id: &str, _todos: &[TodoItem]) {}
-    fn add_detected_prs(&self, _chat_id: &str, _prs: &[DetectedPr]) -> Vec<DetectedPr> {
-        Vec::new()
-    }
-    fn should_notify_permission(&self, _tool_name: Option<&str>) -> bool {
-        false
-    }
-    fn notify_task_complete(&self) -> bool {
-        false
-    }
-    fn notify_session_error(&self) -> bool {
-        false
-    }
-    fn notify_attention_request(&self) -> bool {
-        false
-    }
-    fn tracker_end_all_running(&self, _chat_id: &str) {}
-    fn workflow_runs_stop_all(&self, _chat_id: &str) {}
-}
-
 fn sink_with_surface(process_state: ProcessState) -> (Arc<dyn SessionSink>, Arc<RecordingSurface>) {
-    let handler = EventHandler::new(
-        Arc::new(Mutex::new(MessageCache::new())),
-        Arc::new(Mutex::new(PermissionManager::new())),
-        ShapeDeps::new(process_state),
-    );
+    let mut chat = test_chat("chat-surface");
+    chat.process_state = Some(Some(process_state));
+    let h = Harness::new(Arc::new(Mutex::new(ActiveChat::new(chat, None))));
     let surface = RecordingSurface::arc();
-    handler.set_chat_surface(surface.clone());
-    (handler.build_sink("chat-surface", None), surface)
+    h.handler.set_chat_surface(surface.clone());
+    (h.sink("chat-surface"), surface)
 }
 
 fn result(is_error: Option<bool>, subtype: Option<&str>) -> SessionResult {
@@ -254,13 +185,13 @@ fn on_message_notifies_display_revision_with_the_legacy_emitter_snapshot() {
         None,
     );
 
-    // `ShapeDeps::display_projector` returns `Vec::new()` (no Claude-specific
-    // pipeline injected here), so the revision fires with an empty snapshot
-    // — the point under test is that it fires at all, alongside (not
-    // instead of) the legacy `display.message.added` path.
+    // The shared fake projects 1:1 (no Claude-specific pipeline injected
+    // here), so the revision carries the one message — the point under test
+    // is that it fires at all, alongside (not instead of) the legacy
+    // `display.message.added` path.
     assert!(
         surface.events().iter().any(
-            |e| matches!(e, ChatSurfaceEvent::DisplayRevision { delta, .. } if delta.len == 0)
+            |e| matches!(e, ChatSurfaceEvent::DisplayRevision { delta, .. } if delta.len == 1)
         )
     );
 }

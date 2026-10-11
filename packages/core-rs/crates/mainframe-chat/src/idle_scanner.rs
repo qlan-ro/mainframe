@@ -2,13 +2,16 @@
 
 use mainframe_types::sync::LockExt as _;
 use std::sync::Arc;
+#[cfg(test)]
 use std::sync::Mutex;
 
+#[cfg(test)]
 use dashmap::DashMap;
 use mainframe_adapter_api::{AdapterSession, BoxFuture};
 use tokio::task::JoinHandle;
 use tracing::info;
 
+#[cfg(test)]
 use crate::types::ActiveChat;
 
 /// 2 hours.
@@ -16,9 +19,7 @@ pub const IDLE_THRESHOLD_MS: i64 = 2 * 60 * 60 * 1000;
 /// 5 minutes.
 pub const IDLE_SCAN_INTERVAL_MS: u64 = 5 * 60 * 1000;
 
-/// The active-chat registry the scanner reads. Each value is an
-/// `Arc<Mutex<ActiveChat>>`; one interval task runs the scanner.
-pub type ActiveChatRegistry = Arc<DashMap<String, Arc<Mutex<ActiveChat>>>>;
+use crate::chat_manager::Registry;
 
 type NowFn = Arc<dyn Fn() -> i64 + Send + Sync>;
 
@@ -34,7 +35,7 @@ pub trait IdleOffloader: Send + Sync {
 /// and `claudeSessionId` are untouched, so the next user message re-spawns via
 /// `--resume`.
 pub struct IdleSessionScanner {
-    active_chats: ActiveChatRegistry,
+    active_chats: Registry,
     offloader: Arc<dyn IdleOffloader>,
     threshold_ms: i64,
     interval_ms: u64,
@@ -43,7 +44,7 @@ pub struct IdleSessionScanner {
 }
 
 impl IdleSessionScanner {
-    pub fn new(active_chats: ActiveChatRegistry, offloader: Arc<dyn IdleOffloader>) -> Self {
+    pub fn new(active_chats: Registry, offloader: Arc<dyn IdleOffloader>) -> Self {
         Self::with_config(
             active_chats,
             offloader,
@@ -54,7 +55,7 @@ impl IdleSessionScanner {
     }
 
     pub fn with_config(
-        active_chats: ActiveChatRegistry,
+        active_chats: Registry,
         offloader: Arc<dyn IdleOffloader>,
         threshold_ms: i64,
         interval_ms: u64,
@@ -139,11 +140,7 @@ pub fn idle_since(session: Option<&Arc<dyn AdapterSession>>, last_used_at: i64) 
 /// in-flight activity, a Working process) belongs to the offload's own
 /// re-check, so a race between this read and that re-check (AC4) always
 /// resolves in favor of NOT offloading a chat that woke up.
-pub fn select_idle_candidates(
-    active_chats: &ActiveChatRegistry,
-    now: i64,
-    threshold_ms: i64,
-) -> Vec<String> {
+pub fn select_idle_candidates(active_chats: &Registry, now: i64, threshold_ms: i64) -> Vec<String> {
     active_chats
         .iter()
         .filter_map(|entry| {
@@ -161,7 +158,7 @@ pub fn select_idle_candidates(
 }
 
 async fn scan_registry(
-    active_chats: &ActiveChatRegistry,
+    active_chats: &Registry,
     offloader: &dyn IdleOffloader,
     threshold_ms: i64,
     now: &NowFn,
@@ -181,11 +178,11 @@ mod tests {
     use crate::test_support::{FakeSession, test_chat};
     use std::sync::Mutex as StdMutex;
 
-    fn registry() -> ActiveChatRegistry {
+    fn registry() -> Registry {
         Arc::new(DashMap::new())
     }
 
-    fn insert(reg: &ActiveChatRegistry, id: &str, session: Arc<FakeSession>, last_used_at: i64) {
+    fn insert(reg: &Registry, id: &str, session: Arc<FakeSession>, last_used_at: i64) {
         reg.insert(
             id.to_string(),
             Arc::new(Mutex::new(ActiveChat {
@@ -197,7 +194,7 @@ mod tests {
         );
     }
 
-    fn insert_sessionless(reg: &ActiveChatRegistry, id: &str, last_used_at: i64) {
+    fn insert_sessionless(reg: &Registry, id: &str, last_used_at: i64) {
         reg.insert(
             id.to_string(),
             Arc::new(Mutex::new(ActiveChat {

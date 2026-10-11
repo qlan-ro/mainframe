@@ -34,7 +34,7 @@ impl ChatManager {
     }
 
     fn cached_messages(&self, chat_id: &str) -> Option<Vec<ChatMessage>> {
-        let cached = self.messages.lock_recover().get(chat_id).cloned();
+        let cached = self.shared.messages.lock_recover().get(chat_id).cloned();
         cached.filter(|c| !c.is_empty())
     }
 
@@ -46,8 +46,7 @@ impl ChatManager {
     async fn load_history_into_cache(&self, chat_id: &str) -> Vec<ChatMessage> {
         // Multi-segment chats compose from several transcripts; the snapshot
         // cache keys on one session's sources, so they bypass it.
-        if let Some(composed) = deps_lifecycle::compose_if_multi(self.deps.as_ref(), chat_id).await
-        {
+        if let Some(composed) = compose_if_multi(self.shared.deps.as_ref(), chat_id).await {
             return self.finish_composed_load(chat_id, composed);
         }
         let Some(session) = self.history_session(chat_id) else {
@@ -86,10 +85,11 @@ impl ChatManager {
             return remapped;
         }
         let remapped = {
-            let mut messages = self.messages.lock_recover();
+            let mut messages = self.shared.messages.lock_recover();
             messages.set_and_snapshot(chat_id, remapped)
         };
-        self.permissions
+        self.shared
+            .permissions
             .lock_recover()
             .restore_pending_permission(chat_id, &remapped);
         remapped
@@ -106,11 +106,12 @@ impl ChatManager {
             return composed.messages;
         }
         let stored = {
-            let mut messages = self.messages.lock_recover();
+            let mut messages = self.shared.messages.lock_recover();
             messages.set_and_snapshot(chat_id, composed.messages)
         };
         let active_slice = &stored[composed.active_from.min(stored.len())..];
-        self.permissions
+        self.shared
+            .permissions
             .lock_recover()
             .restore_pending_permission(chat_id, active_slice);
         stored
@@ -119,8 +120,7 @@ impl ChatManager {
     /// Load messages from disk, bypassing the in-memory cache (session-files route
     /// needs subagent file changes absent from the cache during an active session).
     pub async fn get_messages_from_disk(&self, chat_id: &str) -> Vec<ChatMessage> {
-        if let Some(composed) = deps_lifecycle::compose_if_multi(self.deps.as_ref(), chat_id).await
-        {
+        if let Some(composed) = compose_if_multi(self.shared.deps.as_ref(), chat_id).await {
             return composed.messages;
         }
         let Some(session) = self.history_session(chat_id) else {
@@ -140,8 +140,9 @@ impl ChatManager {
     /// Reconciling here persists flag flips and broadcasts `chat.updated`.
     pub async fn get_display_messages(&self, chat_id: &str) -> ChatHistoryPayload {
         let raw = self.get_messages(chat_id).await;
-        let categories = self.deps.get_tool_categories(chat_id);
+        let categories = self.shared.deps.get_tool_categories(chat_id);
         let messages = self
+            .shared
             .deps
             .prepare_messages_for_client(&raw, categories.as_ref());
         let transcript_missing = match self.get_chat(chat_id) {
@@ -158,14 +159,12 @@ impl ChatManager {
     /// Reconcile the persisted `transcriptMissing` flag against the transcript file
     /// on disk.
     pub async fn reconcile_transcript(&self, chat: &mut Chat) -> bool {
-        let presence = self.presence_deps();
-        crate::transcript_presence::reconcile_transcript_presence(&presence, chat).await
+        crate::transcript_presence::reconcile_transcript_presence(&self.shared, chat).await
     }
 
     /// Forget the dead CLI session so the next send spawns fresh in the same chat row.
     pub async fn continue_here(&self, chat_id: &str) -> Result<(), DegradedRecoveryError> {
-        let wrapper = self.recovery_wrapper();
-        crate::degraded_recovery::continue_here(&wrapper, chat_id).await
+        crate::degraded_recovery::continue_here(&self.shared, &self.event_handler, chat_id).await
     }
 
     /// Detach the chat from its deleted worktree and rebind it to the project root.
@@ -173,21 +172,19 @@ impl ChatManager {
         &self,
         chat_id: &str,
     ) -> Result<(), DegradedRecoveryError> {
-        let wrapper = self.recovery_wrapper();
-        crate::degraded_recovery::continue_in_project_root(&wrapper, chat_id).await
+        crate::degraded_recovery::continue_in_project_root(&self.shared, chat_id).await
     }
 
     /// Re-add the deleted worktree at its stored path from the stored branch (409 when branch gone).
     pub async fn recreate_worktree(&self, chat_id: &str) -> Result<(), DegradedRecoveryError> {
-        let wrapper = self.recovery_wrapper();
-        crate::degraded_recovery::recreate_chat_worktree(&wrapper, chat_id).await
+        crate::degraded_recovery::recreate_chat_worktree(&self.shared, chat_id).await
     }
 
     /// Build a stateless history-load session for `chat_id`, or `None` when the chat
     /// has no Claude session / adapter / project. Mirrors `getMessages`'s guard chain.
     fn history_session(&self, chat_id: &str) -> Option<Arc<dyn AdapterSession>> {
         let chat = self.get_chat(chat_id)?;
-        build_history_session(&self.deps, &chat, chat_id)
+        build_history_session(&self.shared.deps, &chat, chat_id)
     }
 
     /// Resume-replay snapshot: display history plus any still-open gate for
@@ -226,10 +223,15 @@ impl ChatManager {
         }
     }
 
-    pub async fn get_session_context(&self, chat_id: &str, project_path: &str) -> SessionContext {
+    pub async fn get_session_context(
+        &self,
+        chat_id: &str,
+        project_path: &str,
+    ) -> Result<SessionContext, mainframe_types::seam_error::SeamError> {
         let session = self.get_session_for_chat(chat_id);
         let adapter_id = self.get_chat(chat_id).map(|c| c.adapter_id);
-        self.deps
+        self.shared
+            .deps
             .get_session_context(chat_id, project_path, session, adapter_id)
             .await
     }

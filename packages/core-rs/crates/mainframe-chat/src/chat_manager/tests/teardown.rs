@@ -24,12 +24,12 @@ fn prompt(request_id: &str) -> ControlRequest {
 fn seed_state(mgr: &ChatManager, chat: Chat) {
     seed_active(mgr, "c1", chat, RecSession::new("c1", false, true));
     {
-        let mut messages = mgr.messages.lock().unwrap();
+        let mut messages = mgr.shared.messages.lock().unwrap();
         messages.set("c1", Vec::new());
         messages.pin("c1");
     }
     {
-        let mut permissions = mgr.permissions.lock().unwrap();
+        let mut permissions = mgr.shared.permissions.lock().unwrap();
         permissions.enqueue("c1", prompt("cancelled"));
         permissions.enqueue("c1", prompt("pending"));
         permissions.cancel("c1", "cancelled");
@@ -53,8 +53,8 @@ struct Left {
 }
 
 fn left(mgr: &ChatManager) -> Left {
-    let messages = mgr.messages.lock().unwrap();
-    let mut permissions = mgr.permissions.lock().unwrap();
+    let messages = mgr.shared.messages.lock().unwrap();
+    let mut permissions = mgr.shared.permissions.lock().unwrap();
     Left {
         active: mgr.get_active("c1").is_some(),
         cached: messages.get("c1").is_some(),
@@ -120,7 +120,7 @@ async fn each_mode_keeps_only_its_own_slice_of_chat_state() {
         TeardownMode::End,
         TeardownMode::Offload,
     ] {
-        let mgr = ChatManager::new(StoreDeps::with_chats(vec![test_chat("c1")]));
+        let mgr = ChatManager::new(FakeDeps::with_chats(vec![test_chat("c1")]));
         seed_state(&mgr, test_chat("c1"));
 
         mgr.teardown.clear("c1", mode);
@@ -133,7 +133,7 @@ async fn each_mode_keeps_only_its_own_slice_of_chat_state() {
 async fn discard_chat_forgets_the_chats_worktree_offers() {
     let mut chat = test_chat("c1");
     chat.temporary = true;
-    let mgr = ChatManager::new(StoreDeps::with_chats(vec![chat.clone()]));
+    let mgr = ChatManager::new(FakeDeps::with_chats(vec![chat.clone()]));
     seed_state(&mgr, chat);
 
     mgr.discard_chat("c1").await.unwrap();
@@ -143,7 +143,7 @@ async fn discard_chat_forgets_the_chats_worktree_offers() {
 
 #[tokio::test]
 async fn archive_chat_clears_through_the_archive_mode() {
-    let mgr = ChatManager::new(StoreDeps::with_chats(vec![test_chat("c1")]));
+    let mgr = ChatManager::new(FakeDeps::with_chats(vec![test_chat("c1")]));
     seed_state(&mgr, test_chat("c1"));
 
     mgr.archive_chat("c1", false).await;
@@ -153,7 +153,7 @@ async fn archive_chat_clears_through_the_archive_mode() {
 
 #[tokio::test]
 async fn end_chat_clears_through_the_end_mode() {
-    let mgr = ChatManager::new(StoreDeps::with_chats(vec![test_chat("c1")]));
+    let mgr = ChatManager::new(FakeDeps::with_chats(vec![test_chat("c1")]));
     seed_state(&mgr, test_chat("c1"));
 
     mgr.end_chat("c1").await;

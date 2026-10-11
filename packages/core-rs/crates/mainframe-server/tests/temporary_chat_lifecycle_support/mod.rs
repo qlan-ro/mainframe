@@ -63,22 +63,21 @@ pub fn rebuild_manager(h: &Harness, adapter: Arc<dyn Adapter>) -> Arc<ChatManage
         emit_event: Box::new(|_| {}),
         now: None,
     }));
-    build_chat_manager(
-        h.db.clone(),
-        registry,
-        Arc::new(BackgroundTaskTracker::new()),
-        Arc::new(AttachmentStore::new(h.data_dir.path().join("attachments"))),
-        Arc::new(PushService::new()),
-        GitFactory,
-        h.broadcast.clone(),
-        Arc::new(NoopLaunchStopper),
-        Arc::new(NoopScopeTunnelStopper),
+    build_chat_manager(mainframe_server::ChatManagerParams {
+        db: h.db.clone(),
+        adapters: registry,
+        background_tasks: Arc::new(BackgroundTaskTracker::new()),
+        attachments: Arc::new(AttachmentStore::new(h.data_dir.path().join("attachments"))),
+        push: Arc::new(PushService::new()),
+        git: GitFactory,
+        broadcast: h.broadcast.clone(),
+        launch: Arc::new(NoopLaunchStopper),
+        scope_tunnels: Arc::new(NoopScopeTunnelStopper),
         quota,
-        Arc::new(ClaudeWorkflowStore::new()),
-        mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
-        None,
-        h.data_dir.path().to_path_buf(),
-    )
+        claude_workflows: Arc::new(ClaudeWorkflowStore::new()),
+        chat_surface: None,
+        data_dir: h.data_dir.path().to_path_buf(),
+    })
 }
 
 /// Creates a project-scoped chat directly through the DB (bypassing the route

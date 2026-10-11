@@ -7,7 +7,7 @@ use mainframe_adapter_api::BoxFuture;
 use mainframe_types::chat::ChatStatus;
 use mainframe_types::orchestration::{AgentOutboxEntry, OrchestrationMcpLaunch, SecretToken};
 
-use super::tests::{FakeDeps, chat_over, manager};
+use super::tests::{chat_over, fake, manager};
 use crate::orchestration_hooks::OrchestrationHooks;
 use crate::test_support::FakeSession;
 
@@ -45,10 +45,9 @@ impl OrchestrationHooks for Recorder {
 
 #[tokio::test]
 async fn every_spawn_carries_a_fresh_credential_and_stop_revokes_it() {
-    let deps = FakeDeps::new(chat_over("c1", None, ChatStatus::Active), Vec::new());
+    let deps = fake(chat_over("c1", None, ChatStatus::Active), Vec::new());
     let session = FakeSession::with_activity(false, None);
     deps.set_session_to_return(session.clone());
-    deps.allow_build_sink();
     let mgr = manager(deps.clone());
     let recorder = Arc::new(Recorder::default());
     mgr.orchestration().attach(recorder.clone());
@@ -74,10 +73,9 @@ async fn every_spawn_carries_a_fresh_credential_and_stop_revokes_it() {
 
 #[tokio::test]
 async fn a_manager_without_hooks_spawns_without_the_tools() {
-    let deps = FakeDeps::new(chat_over("c1", None, ChatStatus::Active), Vec::new());
+    let deps = fake(chat_over("c1", None, ChatStatus::Active), Vec::new());
     let session = FakeSession::with_activity(false, None);
     deps.set_session_to_return(session.clone());
-    deps.allow_build_sink();
     let mgr = manager(deps.clone());
 
     mgr.start_chat("c1").await;

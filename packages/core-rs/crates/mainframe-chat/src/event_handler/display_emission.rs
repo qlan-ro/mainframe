@@ -6,12 +6,12 @@ use super::*;
 /// owns all diffing). Holds the `MessageCache` guard across `notify` (same
 /// as before ): emissions are serialized and the hub handles each
 /// synchronously.
-pub(super) fn emit_display_for<D: EventHandlerDeps>(
+pub(super) fn emit_display_for(
     chat_id: &str,
     messages: &Arc<Mutex<MessageCache>>,
     partial_overlays: &PartialOverlays,
     categories: Option<&ToolCategories>,
-    deps: &D,
+    deps: &dyn ChatManagerDeps,
     surface: Option<&Arc<dyn ChatSurface>>,
 ) {
     // The in-flight partial content projects as a synthetic tail message: it

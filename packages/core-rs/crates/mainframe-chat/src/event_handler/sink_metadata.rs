@@ -1,6 +1,6 @@
 use super::*;
 
-impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
+impl SessionSinkImpl {
     pub(super) fn handle_compact(&self, vendor_id: Option<&str>) {
         let message = self.transient_with_id(
             ChatMessageType::System,
@@ -31,23 +31,27 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         // (#197). `chat.updated` is broadcast ungated (unlike chat.contextUsage,
         // which only reaches subscribers), so unsubscribed clients converge too.
         if usage.max_tokens > 0 {
-            self.deps.chats_update(
-                &self.chat_id,
-                &ChatPatch {
-                    last_context_total_tokens: Some(usage.total_tokens as u64),
-                    last_context_max_tokens: Some(usage.max_tokens as u64),
-                    ..Default::default()
-                },
-            );
-            if let Some(cell) = self.deps.get_active_chat(&self.chat_id) {
+            let patch = ChatPatch {
+                last_context_total_tokens: Some(usage.total_tokens as u64),
+                last_context_max_tokens: Some(usage.max_tokens as u64),
+                ..Default::default()
+            };
+            if let Some(cell) = self.shared.active(&self.chat_id) {
                 let chat = {
                     let mut guard = cell.lock_recover();
                     guard.chat.last_context_total_tokens = Some(usage.total_tokens as u64);
                     guard.chat.last_context_max_tokens = Some(usage.max_tokens as u64);
                     guard.chat.clone()
                 };
-                self.deps
-                    .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
+                self.shared
+                    .prepare_live_update(&self.chat_id, &patch)
+                    .emit(chat, None);
+            } else {
+                self.shared.best_effort(
+                    &self.chat_id,
+                    self.shared.deps.chats_update(&self.chat_id, &patch),
+                    (),
+                );
             }
         }
         self.notify_surface(ChatSurfaceEvent::Usage {
@@ -57,8 +61,11 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
     }
 
     pub(super) fn handle_plan_file(&self, file_path: &str) {
-        if self.deps.add_plan_file(&self.chat_id, file_path) {
-            self.deps.emit_event(DaemonEvent::ContextUpdated {
+        if storage_event!(
+            self.shared, Some(&self.chat_id);
+            self.shared.deps.add_plan_file(&self.chat_id, file_path)
+        ) {
+            self.shared.emit(DaemonEvent::ContextUpdated {
                 chat_id: self.chat_id.clone(),
                 file_paths: None,
             });
@@ -66,8 +73,11 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
     }
 
     pub(super) fn handle_skill_file(&self, entry: SkillFileEntry) {
-        if self.deps.add_skill_file(&self.chat_id, &entry) {
-            self.deps.emit_event(DaemonEvent::ContextUpdated {
+        if storage_event!(
+            self.shared, Some(&self.chat_id);
+            self.shared.deps.add_skill_file(&self.chat_id, &entry)
+        ) {
+            self.shared.emit(DaemonEvent::ContextUpdated {
                 chat_id: self.chat_id.clone(),
                 file_paths: None,
             });
@@ -75,30 +85,38 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
     }
 
     pub(super) fn handle_todo_update(&self, todos: Vec<TodoItem>) {
-        self.deps.update_todos(&self.chat_id, &todos);
-        if let Some(cell) = self.deps.get_active_chat(&self.chat_id) {
+        self.shared.best_effort(
+            &self.chat_id,
+            self.shared.deps.update_todos(&self.chat_id, &todos),
+            (),
+        );
+        if let Some(cell) = self.shared.active(&self.chat_id) {
             cell.lock_recover().chat.todos = Some(todos.clone());
         }
-        self.deps.emit_event(DaemonEvent::TodosUpdated {
+        self.shared.emit(DaemonEvent::TodosUpdated {
             chat_id: self.chat_id.clone(),
             todos,
         });
     }
 
     pub(super) fn handle_pr_detected(&self, pr: DetectedPr) {
-        let persisted = self
-            .deps
-            .add_detected_prs(&self.chat_id, std::slice::from_ref(&pr));
+        let persisted = self.shared.best_effort(
+            &self.chat_id,
+            self.shared
+                .deps
+                .add_detected_prs(&self.chat_id, std::slice::from_ref(&pr)),
+            vec![pr.clone()],
+        );
         let Some(first) = persisted.into_iter().next() else {
             return;
         };
-        self.deps.emit_event(DaemonEvent::ChatPrDetected {
+        self.shared.emit(DaemonEvent::ChatPrDetected {
             chat_id: self.chat_id.clone(),
             pr: first,
         });
     }
     pub(super) fn handle_init(&self, session_id: &str) {
-        let Some(cell) = self.deps.get_active_chat(&self.chat_id) else {
+        let Some(cell) = self.shared.active(&self.chat_id) else {
             return;
         };
         let (project_id, adapter_id, worktree_path, scratch_path, session_process_id) = {
@@ -112,34 +130,43 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
                 guard.session.as_ref().map(|s| s.id().to_string()),
             )
         };
-        self.deps.chats_update(
+        self.shared.best_effort(
             &self.chat_id,
-            &ChatPatch {
-                claude_session_id: Some(session_id.to_string()),
-                ..Default::default()
-            },
+            self.shared.deps.chats_update(
+                &self.chat_id,
+                &ChatPatch {
+                    claude_session_id: Some(session_id.to_string()),
+                    ..Default::default()
+                },
+            ),
+            (),
         );
         self.sync_active_divider();
-        let project_path = self.deps.projects_get_path(&project_id);
+        let project_path = self.shared.deps.projects_get_path(&project_id);
         let cwd = crate::chat_cwd::chat_cwd(
             worktree_path.as_deref(),
             scratch_path.as_deref(),
             project_path,
         );
         if let Some(session_file_path) = cwd.as_deref().and_then(|cwd| {
-            self.deps
+            self.shared
+                .deps
                 .initial_transcript_path(&adapter_id, session_id, cwd)
         }) {
-            self.deps.chats_update(
+            self.shared.best_effort(
                 &self.chat_id,
-                &ChatPatch {
-                    session_file_path: Some(session_file_path.clone()),
-                    ..Default::default()
-                },
+                self.shared.deps.chats_update(
+                    &self.chat_id,
+                    &ChatPatch {
+                        session_file_path: Some(session_file_path.clone()),
+                        ..Default::default()
+                    },
+                ),
+                (),
             );
             cell.lock_recover().chat.session_file_path = Some(session_file_path);
         }
-        self.deps.emit_event(DaemonEvent::ProcessReady {
+        self.shared.emit(DaemonEvent::ProcessReady {
             process_id: session_process_id.unwrap_or_default(),
             claude_session_id: session_id.to_string(),
         });

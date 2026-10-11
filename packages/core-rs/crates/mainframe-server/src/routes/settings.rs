@@ -135,15 +135,31 @@ async fn put_general(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
     if let Some(message) = general_patch_error(&patch) {
         return fail(StatusCode::BAD_REQUEST, message);
     }
+    let manager = ctx.chat.chat_manager.clone();
     match ctx
         .core
         .db
-        .call(move |db| write_general(&db.settings, patch))
+        .call(move |db| {
+            write_general_and_refresh(&db.settings, patch, |config| {
+                manager.set_notification_config(config);
+            })
+        })
         .await
     {
         Ok(()) => ok_empty(),
         Err(err) => internal_error("update general settings", &err),
     }
+}
+
+fn write_general_and_refresh(
+    settings: &SettingsRepository,
+    patch: GeneralPatch,
+    refresh: impl FnOnce(mainframe_types::settings::NotificationConfig),
+) -> Result<(), DbError> {
+    write_general(settings, patch)?;
+    let raw = settings.get(GENERAL, "notifications")?;
+    refresh(parse_notification_config(raw.as_deref()));
+    Ok(())
 }
 
 /// Apply a validated patch. A value equal to its default deletes the row, as
@@ -235,4 +251,25 @@ pub fn router() -> Router<Arc<AppCtx>> {
             "/api/adapters/{adapterId}/config-conflicts",
             get(config_conflicts),
         )
+}
+
+#[cfg(test)]
+mod notification_tests {
+    use super::*;
+    #[test]
+    fn settings_write_refreshes_notification_snapshot() {
+        let db = mainframe_db::DatabaseManager::open(std::path::Path::new(":memory:")).unwrap();
+        let snapshot = std::sync::RwLock::new(Arc::new(
+            mainframe_types::settings::NotificationConfig::default(),
+        ));
+        let patch =
+            serde_json::from_value(json!({"notifications":{"chat":{"taskComplete":false}}}))
+                .unwrap();
+        write_general_and_refresh(&db.settings, patch, |config| {
+            *snapshot.write().unwrap() = Arc::new(config);
+        })
+        .unwrap();
+        assert!(!snapshot.read().unwrap().chat.task_complete);
+        assert!(snapshot.read().unwrap().chat.session_error);
+    }
 }

@@ -30,10 +30,8 @@ pub struct PlanChatUpdate {
 pub trait PlanActionContext: Send + Sync {
     fn chat_id(&self) -> String;
 
-    /// Mutate the in-memory `Chat` and persist via `db.chats.update`.
-    fn update_chat(&self, patch: PlanChatUpdate);
-    /// `ctx.emitEvent({ type: 'chat.updated', chat: ctx.chat })`.
-    fn emit_chat_updated(&self);
+    /// Persist the update, mirror it in memory, and emit `chat.updated`.
+    fn update_chat(&self, patch: PlanChatUpdate) -> Result<(), AdapterError>;
     fn emit_event(&self, event: DaemonEvent);
 
     /// `ctx.active.session?.isSpawned`.
@@ -79,8 +77,7 @@ pub async fn clear_context_and_restart(
         plan_mode: Some(false),
         permission_mode: Some(response.execution_mode.unwrap_or(ExecutionMode::Default)),
         clear_claude_session_id: true,
-    });
-    ctx.emit_chat_updated();
+    })?;
 
     ctx.clear_messages();
     ctx.clear_display_state();

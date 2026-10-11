@@ -1,6 +1,6 @@
 use super::*;
 
-impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
+impl SessionSinkImpl {
     pub(super) fn handle_tool_result(
         &self,
         content: Vec<MessageContent>,
@@ -52,19 +52,19 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
     fn emit_tool_effects(&self, effects: ToolEffects) {
         // Once per batch: two `git worktree add`s in one turn need one rescan.
         if effects.worktree_trigger {
-            self.deps.on_worktree_trigger(&self.chat_id);
+            self.worktree_offers.on_trigger(&self.chat_id);
         }
         if effects.transcript_moved {
-            self.deps.on_transcript_moved(&self.chat_id);
+            self.shared.spawn_transcript_refresh(&self.chat_id);
         }
 
         if !effects.edited_paths.is_empty() {
-            self.deps.emit_event(DaemonEvent::ContextUpdated {
+            self.shared.emit(DaemonEvent::ContextUpdated {
                 chat_id: self.chat_id.clone(),
                 file_paths: Some(effects.edited_paths),
             });
         } else if effects.subagent_completed {
-            self.deps.emit_event(DaemonEvent::ContextUpdated {
+            self.shared.emit(DaemonEvent::ContextUpdated {
                 chat_id: self.chat_id.clone(),
                 file_paths: None,
             });

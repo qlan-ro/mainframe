@@ -4,9 +4,11 @@
 //! on the chat-surface seam (the facade's feed); the legacy WS carries only
 //! the `ChatUpdated` re-broadcast.
 
+use super::tests::Harness;
 use super::*;
 use crate::chat_surface::ChatSurface;
 use crate::test_support::test_chat;
+use mainframe_types::chat::Chat;
 
 #[derive(Default)]
 struct GateSurface {
@@ -38,97 +40,38 @@ impl ChatSurface for GateSurface {
     }
 }
 
-struct CancelDeps {
-    cell: Arc<Mutex<ActiveChat>>,
-    events: Mutex<Vec<DaemonEvent>>,
-}
-
-impl CancelDeps {
-    fn new() -> Arc<Self> {
-        Arc::new(Self {
-            cell: cell(),
-            events: Mutex::new(Vec::new()),
-        })
-    }
-
-    fn events_since(&self, from: usize) -> Vec<DaemonEvent> {
-        self.events.lock_recover()[from..].to_vec()
-    }
-
-    fn event_count(&self) -> usize {
-        self.events.lock_recover().len()
-    }
-}
-
-impl EventHandlerDeps for CancelDeps {
-    fn get_active_chat(&self, _chat_id: &str) -> Option<Arc<Mutex<ActiveChat>>> {
-        Some(self.cell.clone())
-    }
-    fn emit_event(&self, event: DaemonEvent) {
-        self.events.lock_recover().push(event);
-    }
-    fn get_tool_categories(&self, _chat_id: &str) -> Option<ToolCategories> {
-        None
-    }
-    fn on_queued_processed(&self, _chat_id: &str, _uuid: &str) {}
-    fn on_queued_cleared(&self, _chat_id: &str) {}
-    fn tracker_end_all_running(&self, _chat_id: &str) {}
-    /// Empty on purpose: chat_deps.rs's workflow_runs_stop_all_delegates_... test covers the wiring.
-    fn workflow_runs_stop_all(&self, _chat_id: &str) {}
-    fn get_queued_refs(&self, _chat_id: &str) -> Vec<QueuedMessageRef> {
-        Vec::new()
-    }
-    fn display_projector(&self) -> Box<dyn DisplayProjector> {
-        Box::new(FullRebuildProjector::new(|_raw, _overlay, _categories| {
-            Vec::new()
-        }))
-    }
-    fn strip_command_tags(&self, text: &str) -> String {
-        text.to_string()
-    }
-    fn chats_update(&self, _chat_id: &str, _patch: &ChatPatch) {}
-    fn projects_get_path(&self, _project_id: &str) -> Option<String> {
-        None
-    }
-    fn initial_transcript_path(&self, _: &str, _: &str, _: &str) -> Option<String> {
-        None
-    }
-    fn add_plan_file(&self, _chat_id: &str, _file_path: &str) -> bool {
-        false
-    }
-    fn add_skill_file(&self, _chat_id: &str, _entry: &SkillFileEntry) -> bool {
-        false
-    }
-    fn update_todos(&self, _chat_id: &str, _todos: &[TodoItem]) {}
-    fn add_detected_prs(&self, _chat_id: &str, _prs: &[DetectedPr]) -> Vec<DetectedPr> {
-        Vec::new()
-    }
-    fn should_notify_permission(&self, _tool_name: Option<&str>) -> bool {
-        true
-    }
-    fn notify_task_complete(&self) -> bool {
-        false
-    }
-    fn notify_session_error(&self) -> bool {
-        false
-    }
-    fn notify_attention_request(&self) -> bool {
-        true
-    }
-}
-
 fn cell() -> Arc<Mutex<ActiveChat>> {
     Arc::new(Mutex::new(ActiveChat::new(test_chat("chat-1"), None)))
 }
 
-fn sink(
-    deps: Arc<CancelDeps>,
-    permissions: Arc<Mutex<PermissionManager>>,
-) -> (Arc<dyn SessionSink>, Arc<GateSurface>) {
-    let handler = EventHandler::new(Arc::new(Mutex::new(MessageCache::new())), permissions, deps);
+/// A sink over "chat-1" with a gate-recording surface attached.
+fn sink() -> (Arc<dyn SessionSink>, Arc<GateSurface>, Harness) {
+    let h = Harness::new(cell());
     let surface = Arc::new(GateSurface::default());
-    handler.set_chat_surface(surface.clone());
-    (handler.build_sink("chat-1", None), surface)
+    h.handler.set_chat_surface(surface.clone());
+    (h.sink("chat-1"), surface, h)
+}
+
+fn events_since(h: &Harness, from: usize) -> Vec<DaemonEvent> {
+    h.deps.events()[from..].to_vec()
+}
+
+fn event_count(h: &Harness) -> usize {
+    h.deps.events().len()
+}
+
+/// The chat as `chat.updated` carries it: the live cell, enriched on emit.
+fn current_chat(h: &Harness) -> Chat {
+    let mut chat = h
+        .shared
+        .active("chat-1")
+        .unwrap()
+        .lock()
+        .unwrap()
+        .chat
+        .clone();
+    h.shared.enrich(&mut chat);
+    chat
 }
 
 fn request(request_id: &str) -> ControlRequest {
@@ -145,12 +88,11 @@ fn request(request_id: &str) -> ControlRequest {
 
 #[test]
 fn cancelling_the_active_request_resolves_it_and_promotes_the_next() {
-    let deps = CancelDeps::new();
-    let permissions = Arc::new(Mutex::new(PermissionManager::new()));
-    let (sink, surface) = sink(deps.clone(), permissions.clone());
+    let (sink, surface, h) = sink();
+    let permissions = h.permissions();
     sink.on_permission(request("r1"));
     sink.on_permission(request("r2"));
-    let before = deps.event_count();
+    let before = event_count(&h);
     let surface_before = surface.event_count();
 
     sink.on_permission_cancelled("r1");
@@ -169,9 +111,9 @@ fn cancelling_the_active_request_resolves_it_and_promotes_the_next() {
         ]
     );
     assert_eq!(
-        deps.events_since(before),
+        events_since(&h, before),
         vec![DaemonEvent::ChatUpdated {
-            chat: deps.cell.lock().unwrap().chat.clone(),
+            chat: current_chat(&h),
             reason: None,
         }]
     );
@@ -183,11 +125,10 @@ fn cancelling_the_active_request_resolves_it_and_promotes_the_next() {
 
 #[test]
 fn cancelling_the_last_request_resolves_it_and_promotes_nothing() {
-    let deps = CancelDeps::new();
-    let permissions = Arc::new(Mutex::new(PermissionManager::new()));
-    let (sink, surface) = sink(deps.clone(), permissions.clone());
+    let (sink, surface, h) = sink();
+    let permissions = h.permissions();
     sink.on_permission(request("r1"));
-    let before = deps.event_count();
+    let before = event_count(&h);
     let surface_before = surface.event_count();
 
     sink.on_permission_cancelled("r1");
@@ -200,9 +141,9 @@ fn cancelling_the_last_request_resolves_it_and_promotes_nothing() {
         }]
     );
     assert_eq!(
-        deps.events_since(before),
+        events_since(&h, before),
         vec![DaemonEvent::ChatUpdated {
-            chat: deps.cell.lock().unwrap().chat.clone(),
+            chat: current_chat(&h),
             reason: None,
         }]
     );
@@ -211,12 +152,11 @@ fn cancelling_the_last_request_resolves_it_and_promotes_nothing() {
 
 #[test]
 fn cancelling_a_queued_request_resolves_it_without_disturbing_the_front() {
-    let deps = CancelDeps::new();
-    let permissions = Arc::new(Mutex::new(PermissionManager::new()));
-    let (sink, surface) = sink(deps.clone(), permissions.clone());
+    let (sink, surface, h) = sink();
+    let permissions = h.permissions();
     sink.on_permission(request("r1"));
     sink.on_permission(request("r2"));
-    let before = deps.event_count();
+    let before = event_count(&h);
     let surface_before = surface.event_count();
 
     sink.on_permission_cancelled("r2");
@@ -228,7 +168,7 @@ fn cancelling_a_queued_request_resolves_it_without_disturbing_the_front() {
             request_id: "r2".to_string(),
         }]
     );
-    assert!(deps.events_since(before).is_empty());
+    assert!(events_since(&h, before).is_empty());
     assert_eq!(
         permissions.lock().unwrap().get_pending("chat-1"),
         Some(&request("r1"))
@@ -238,16 +178,15 @@ fn cancelling_a_queued_request_resolves_it_without_disturbing_the_front() {
 
 #[test]
 fn cancelling_an_unknown_request_emits_nothing_and_leaves_the_queue() {
-    let deps = CancelDeps::new();
-    let permissions = Arc::new(Mutex::new(PermissionManager::new()));
-    let (sink, surface) = sink(deps.clone(), permissions.clone());
+    let (sink, surface, h) = sink();
+    let permissions = h.permissions();
     sink.on_permission(request("r1"));
-    let before = deps.event_count();
+    let before = event_count(&h);
     let surface_before = surface.event_count();
 
     sink.on_permission_cancelled("ghost");
 
-    assert!(deps.events_since(before).is_empty());
+    assert!(events_since(&h, before).is_empty());
     assert!(surface.gate_events_since(surface_before).is_empty());
     assert_eq!(
         permissions.lock().unwrap().get_pending("chat-1"),
@@ -257,9 +196,8 @@ fn cancelling_an_unknown_request_emits_nothing_and_leaves_the_queue() {
 
 #[test]
 fn a_cancelled_request_is_remembered_for_the_answer_guard() {
-    let deps = CancelDeps::new();
-    let permissions = Arc::new(Mutex::new(PermissionManager::new()));
-    let (sink, _surface) = sink(deps.clone(), permissions.clone());
+    let (sink, _surface, h) = sink();
+    let permissions = h.permissions();
     sink.on_permission(request("r1"));
 
     sink.on_permission_cancelled("r1");

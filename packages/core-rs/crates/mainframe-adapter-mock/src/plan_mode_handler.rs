@@ -26,8 +26,7 @@ impl PlanModeActionHandler for MockPlanModeHandler {
                 plan_mode: Some(false),
                 permission_mode: Some(response.execution_mode.unwrap_or(ExecutionMode::Default)),
                 clear_claude_session_id: false,
-            });
-            ctx.emit_chat_updated();
+            })?;
             Ok(())
         })
     }

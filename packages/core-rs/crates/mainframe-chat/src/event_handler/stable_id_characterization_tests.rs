@@ -2,83 +2,23 @@
 //! nanoid. With a vendor id, `MessageMetadata` and `on_tool_result` retain it
 //! as `ChatMessage.id`, including for compaction markers.
 
+use super::tests::Harness;
 use super::*;
 use crate::test_support::test_chat;
 
-pub(super) struct ShapeDeps {
-    cell: Arc<Mutex<ActiveChat>>,
-}
-
-impl ShapeDeps {
-    pub(super) fn new() -> Arc<Self> {
-        Arc::new(Self {
-            cell: Arc::new(Mutex::new(ActiveChat::new(test_chat("chat-shape"), None))),
-        })
-    }
-}
-
-impl EventHandlerDeps for ShapeDeps {
-    fn get_active_chat(&self, _chat_id: &str) -> Option<Arc<Mutex<ActiveChat>>> {
-        Some(self.cell.clone())
-    }
-    fn emit_event(&self, _event: DaemonEvent) {}
-    fn get_tool_categories(&self, _chat_id: &str) -> Option<ToolCategories> {
-        None
-    }
-    fn on_queued_processed(&self, _chat_id: &str, _uuid: &str) {}
-    fn on_queued_cleared(&self, _chat_id: &str) {}
-    fn get_queued_refs(&self, _chat_id: &str) -> Vec<QueuedMessageRef> {
-        Vec::new()
-    }
-    fn display_projector(&self) -> Box<dyn DisplayProjector> {
-        Box::new(FullRebuildProjector::new(|_raw, _overlay, _categories| {
-            Vec::new()
-        }))
-    }
-    fn strip_command_tags(&self, text: &str) -> String {
-        text.to_string()
-    }
-    fn chats_update(&self, _chat_id: &str, _patch: &ChatPatch) {}
-    fn projects_get_path(&self, _project_id: &str) -> Option<String> {
-        None
-    }
-    fn initial_transcript_path(&self, _: &str, _: &str, _: &str) -> Option<String> {
-        None
-    }
-    fn add_plan_file(&self, _chat_id: &str, _file_path: &str) -> bool {
-        false
-    }
-    fn add_skill_file(&self, _chat_id: &str, _entry: &SkillFileEntry) -> bool {
-        false
-    }
-    fn update_todos(&self, _chat_id: &str, _todos: &[TodoItem]) {}
-    fn add_detected_prs(&self, _chat_id: &str, _prs: &[DetectedPr]) -> Vec<DetectedPr> {
-        Vec::new()
-    }
-    fn should_notify_permission(&self, _tool_name: Option<&str>) -> bool {
-        false
-    }
-    fn notify_task_complete(&self) -> bool {
-        false
-    }
-    fn notify_session_error(&self) -> bool {
-        false
-    }
-    fn notify_attention_request(&self) -> bool {
-        false
-    }
-    fn tracker_end_all_running(&self, _chat_id: &str) {}
-    fn workflow_runs_stop_all(&self, _chat_id: &str) {}
-}
-
-fn sink(deps: Arc<ShapeDeps>) -> (Arc<dyn SessionSink>, Arc<Mutex<MessageCache>>) {
+/// A sink over a fresh "chat-shape" whose cache clock is pinned to 1000.
+pub(super) fn shape_harness() -> Harness {
     let messages = Arc::new(Mutex::new(MessageCache::with_clock(Arc::new(|| 1000))));
-    let handler = EventHandler::new(
-        messages.clone(),
-        Arc::new(Mutex::new(PermissionManager::new())),
-        deps,
-    );
-    (handler.build_sink("chat-shape", None), messages)
+    Harness::with_queue(
+        Arc::new(Mutex::new(ActiveChat::new(test_chat("chat-shape"), None))),
+        Vec::new(),
+        messages,
+    )
+}
+
+fn sink() -> (Arc<dyn SessionSink>, Arc<Mutex<MessageCache>>) {
+    let h = shape_harness();
+    (h.sink("chat-shape"), h.messages())
 }
 
 fn bash_tool_use() -> MessageContent {
@@ -148,8 +88,7 @@ fn message_ids(messages: &Arc<Mutex<MessageCache>>) -> Vec<String> {
 /// every call, even when the content is identical.
 #[test]
 fn live_path_mints_a_fresh_id_per_call_regardless_of_identical_content() {
-    let deps = ShapeDeps::new();
-    let (sink, messages) = sink(deps.clone());
+    let (sink, messages) = sink();
 
     sink.on_message(vec![bash_tool_use()], Some(assistant_metadata()));
     sink.on_message(vec![bash_tool_use()], Some(assistant_metadata()));
@@ -170,8 +109,7 @@ fn live_path_mints_a_fresh_id_per_call_regardless_of_identical_content() {
 /// since they are nondeterministic when no vendor id is supplied.
 #[test]
 fn cached_message_shape_is_pinned_for_tool_use_and_tool_result() {
-    let deps = ShapeDeps::new();
-    let (sink, messages) = sink(deps.clone());
+    let (sink, messages) = sink();
 
     sink.on_message(vec![bash_tool_use()], Some(assistant_metadata()));
     sink.on_tool_result(vec![bash_tool_result()], None);
@@ -219,8 +157,7 @@ fn cached_message_shape_is_pinned_for_tool_use_and_tool_result() {
 /// becomes the `ChatMessage.id` verbatim.
 #[test]
 fn a_shared_vendor_id_produces_the_same_message_id_on_message_and_on_tool_result() {
-    let deps = ShapeDeps::new();
-    let (sink, messages) = sink(deps.clone());
+    let (sink, messages) = sink();
     let mut metadata = assistant_metadata();
     metadata.vendor_id = Some("entry-uuid-1".to_string());
 
@@ -239,8 +176,7 @@ fn a_shared_vendor_id_produces_the_same_message_id_on_message_and_on_tool_result
 /// not a minted nanoid, so live and reload agree.
 #[test]
 fn compaction_pill_id_matches_history() {
-    let deps = ShapeDeps::new();
-    let (sink, messages) = sink(deps.clone());
+    let (sink, messages) = sink();
 
     sink.on_compact(Some("entry-uuid-9"));
 

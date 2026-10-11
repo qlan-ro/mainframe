@@ -9,109 +9,45 @@
 use mainframe_types::sync::LockExt;
 mod teardown_tests;
 
+use super::tests::Harness;
 use super::*;
 use crate::chat_surface::{ChatSurface, ChatSurfaceEvent};
+use crate::test_support::FakeDeps;
 use crate::test_support::test_chat;
 use mainframe_types::display::{DisplayContent, DisplayMessageType, StreamingLeafKind};
 
 /// Deps with a 1:1 prepare (each raw message becomes one display message with
 /// the same id) — enough pipeline to observe id continuity on the revision
 /// stream without the Claude-specific grouping (which the adapter crate's own
-/// suites pin).
-#[derive(Default)]
-struct OverlayDeps {
-    events: Mutex<Vec<DaemonEvent>>,
-    /// When true, `prepare_messages_for_client` collapses a trailing run of
-    /// same-type messages into one `DisplayMessage`, keyed by the run's FIRST
-    /// message (id + timestamp) — just enough of the real `group_messages`
-    /// behavior (owned by `mainframe-adapter-claude`, out of this crate's dep
-    /// set) to prove the overlay's own frozen timestamp survives into the
-    /// group it opens. `false` keeps the flat 1:1 conversion every other test
-    /// in this file relies on.
-    group_consecutive: bool,
-}
-
-impl OverlayDeps {
-    fn grouping() -> Self {
-        Self {
-            group_consecutive: true,
-            ..Self::default()
+/// suites pin). The mainframe tag strip stands in for `strip_command_tags`.
+fn overlay_deps(group_consecutive_flag: bool) -> Arc<FakeDeps> {
+    let deps = FakeDeps::arc();
+    deps.adapters
+        .strip_tags
+        .lock()
+        .unwrap()
+        .push("<mainframe-tag/>".to_string());
+    // When grouping, a trailing run of same-type messages collapses into one
+    // `DisplayMessage` keyed by the run's FIRST message (id + timestamp) — just
+    // enough of the real `group_messages` behavior (owned by
+    // `mainframe-adapter-claude`, out of this crate's dep set) to prove the
+    // overlay's own frozen timestamp survives into the group it opens.
+    *deps.adapters.projector.lock().unwrap() = Some(Arc::new(move |raw, overlay, _categories| {
+        let combined: Vec<ChatMessage> = match overlay {
+            Some(o) => raw
+                .iter()
+                .cloned()
+                .chain(std::iter::once(o.clone()))
+                .collect(),
+            None => raw.to_vec(),
+        };
+        if group_consecutive_flag {
+            group_consecutive(&combined)
+        } else {
+            flat_convert(&combined)
         }
-    }
-}
-
-impl EventHandlerDeps for OverlayDeps {
-    fn get_active_chat(&self, _chat_id: &str) -> Option<Arc<Mutex<ActiveChat>>> {
-        Some(Arc::new(Mutex::new(ActiveChat::new(
-            test_chat("chat-partial"),
-            None,
-        ))))
-    }
-    fn emit_event(&self, event: DaemonEvent) {
-        self.events.lock_recover().push(event);
-    }
-    fn get_tool_categories(&self, _chat_id: &str) -> Option<ToolCategories> {
-        None
-    }
-    fn on_queued_processed(&self, _chat_id: &str, _uuid: &str) {}
-    fn on_queued_cleared(&self, _chat_id: &str) {}
-    fn get_queued_refs(&self, _chat_id: &str) -> Vec<QueuedMessageRef> {
-        Vec::new()
-    }
-    fn display_projector(&self) -> Box<dyn DisplayProjector> {
-        let group_consecutive_flag = self.group_consecutive;
-        Box::new(FullRebuildProjector::new(
-            move |raw, overlay, _categories| {
-                let combined: Vec<ChatMessage> = match overlay {
-                    Some(o) => raw
-                        .iter()
-                        .cloned()
-                        .chain(std::iter::once(o.clone()))
-                        .collect(),
-                    None => raw.to_vec(),
-                };
-                if group_consecutive_flag {
-                    group_consecutive(&combined)
-                } else {
-                    flat_convert(&combined)
-                }
-            },
-        ))
-    }
-    fn strip_command_tags(&self, text: &str) -> String {
-        text.replace("<mainframe-tag/>", "")
-    }
-    fn chats_update(&self, _chat_id: &str, _patch: &ChatPatch) {}
-    fn projects_get_path(&self, _project_id: &str) -> Option<String> {
-        None
-    }
-    fn initial_transcript_path(&self, _: &str, _: &str, _: &str) -> Option<String> {
-        None
-    }
-    fn add_plan_file(&self, _chat_id: &str, _file_path: &str) -> bool {
-        false
-    }
-    fn add_skill_file(&self, _chat_id: &str, _entry: &SkillFileEntry) -> bool {
-        false
-    }
-    fn update_todos(&self, _chat_id: &str, _todos: &[TodoItem]) {}
-    fn add_detected_prs(&self, _chat_id: &str, _prs: &[DetectedPr]) -> Vec<DetectedPr> {
-        Vec::new()
-    }
-    fn should_notify_permission(&self, _tool_name: Option<&str>) -> bool {
-        false
-    }
-    fn notify_task_complete(&self) -> bool {
-        false
-    }
-    fn notify_session_error(&self) -> bool {
-        false
-    }
-    fn notify_attention_request(&self) -> bool {
-        false
-    }
-    fn tracker_end_all_running(&self, _chat_id: &str) {}
-    fn workflow_runs_stop_all(&self, _chat_id: &str) {}
+    }));
+    deps
 }
 
 /// 1:1 raw-to-display conversion (every message becomes its own
@@ -240,15 +176,15 @@ fn thinking(t: &str) -> MessageContent {
     })
 }
 
-fn setup() -> (Arc<dyn SessionSink>, Arc<OverlayDeps>, Arc<RevisionSurface>) {
-    let (sink, _messages, deps, surface) = setup_from(Arc::new(OverlayDeps::default()));
+fn setup() -> (Arc<dyn SessionSink>, Arc<FakeDeps>, Arc<RevisionSurface>) {
+    let (sink, _messages, deps, surface) = setup_from(overlay_deps(false));
     (sink, deps, surface)
 }
 
 type SetupParts = (
     Arc<dyn SessionSink>,
     Arc<Mutex<MessageCache>>,
-    Arc<OverlayDeps>,
+    Arc<FakeDeps>,
     Arc<RevisionSurface>,
 );
 
@@ -256,20 +192,18 @@ type SetupParts = (
 /// exposed, so a test can seed history before the first partial — needed to
 /// put a non-assistant message last, which makes the overlay open its OWN
 /// group instead of merging into one already in the cache.
-fn setup_from(deps: Arc<OverlayDeps>) -> SetupParts {
-    let messages = Arc::new(Mutex::new(MessageCache::new()));
-    let handler = EventHandler::new(
-        messages.clone(),
-        Arc::new(Mutex::new(PermissionManager::new())),
-        deps.clone(),
-    );
+fn setup_from(deps: Arc<FakeDeps>) -> SetupParts {
+    let h = overlay_harness(deps.clone());
     let surface = Arc::new(RevisionSurface::default());
-    handler.set_chat_surface(surface.clone());
-    (
-        handler.build_sink("chat-partial", None),
-        messages,
+    h.handler.set_chat_surface(surface.clone());
+    (h.sink("chat-partial"), h.messages(), deps, surface)
+}
+
+/// The handler over `deps` with a fresh "chat-partial" registered.
+fn overlay_harness(deps: Arc<FakeDeps>) -> Harness {
+    Harness::with_deps(
         deps,
-        surface,
+        Arc::new(Mutex::new(ActiveChat::new(test_chat("chat-partial"), None))),
     )
 }
 
@@ -388,7 +322,7 @@ fn a_thinking_partial_streams_as_thinking() {
 /// group would carry a later timestamp than the first.
 #[test]
 fn the_overlay_timestamp_is_frozen_at_the_first_partial() {
-    let (sink, messages, _deps, surface) = setup_from(Arc::new(OverlayDeps::grouping()));
+    let (sink, messages, _deps, surface) = setup_from(overlay_deps(true));
     messages.lock().unwrap().append(
         "chat-partial",
         ChatMessage {

@@ -9,15 +9,15 @@ fn history() -> ChatMessage {
     .unwrap()
 }
 
-fn fully_pinned_cache() -> (Arc<StoreDeps>, ChatManager) {
+fn fully_pinned_cache() -> (Arc<FakeDeps>, ChatManager) {
     let mut chat = test_chat("c1");
     chat.claude_session_id = Some("session".into());
-    let deps = StoreDeps::with_chats(vec![chat]);
-    *deps.history.lock().unwrap() = Some(vec![history()]);
-    *deps.transcript_present.lock().unwrap() = Some(true);
+    let deps = FakeDeps::with_chats(vec![chat]);
+    *deps.adapters.history.lock().unwrap() = Some(vec![history()]);
+    *deps.adapters.transcript_present.lock().unwrap() = Some(true);
     let manager = ChatManager::new(deps.clone());
     {
-        let mut cache = manager.messages.lock().unwrap();
+        let mut cache = manager.shared.messages.lock().unwrap();
         for id in 0..50 {
             let chat_id = format!("pinned-{id}");
             cache.pin(&chat_id);
@@ -45,8 +45,8 @@ async fn cold_history_resume_survives_immediate_eviction_and_restores_permission
     assert_eq!(pending.tool_use_id, "pending-call");
     assert_eq!(pending.tool_name, "Bash");
     assert_eq!(pending.input["command"], "pwd");
-    assert_eq!(deps.history_loads.load(Ordering::SeqCst), 1);
-    let cache = manager.messages.lock().unwrap();
+    assert_eq!(deps.adapters.history_loads.load(Ordering::SeqCst), 1);
+    let cache = manager.shared.messages.lock().unwrap();
     assert!(cache.get("c1").is_none());
     for id in 0..50 {
         assert!(cache.get(&format!("pinned-{id}")).is_some());
@@ -57,5 +57,5 @@ async fn cold_history_resume_survives_immediate_eviction_and_restores_permission
 async fn cold_history_read_survives_immediate_eviction_with_explicit_timing() {
     let (_, manager) = fully_pinned_cache();
     assert_eq!(manager.get_messages("c1").await, vec![history()]);
-    assert!(manager.messages.lock().unwrap().get("c1").is_none());
+    assert!(manager.shared.messages.lock().unwrap().get("c1").is_none());
 }

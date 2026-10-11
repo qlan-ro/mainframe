@@ -1,12 +1,10 @@
 use super::*;
+use crate::test_support::{FakeDeps, test_chat};
 use mainframe_types::http_status::StatusKind;
 
-use std::collections::HashSet;
 use std::sync::Arc;
-use std::sync::Mutex as StdMutex;
-use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicI64, Ordering};
 
-use mainframe_adapter_api::BoxFuture;
 use mainframe_services::workspace::WorktreeEntry;
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::worktree_offer::{WorktreeOfferOutcome, WorktreeSwitchOffer};
@@ -19,92 +17,8 @@ const PROJECT_PATH: &str = "/repo";
 const T1: i64 = 1_700_000_000_000;
 const T2: i64 = 1_700_000_009_999;
 
-/// Records everything the registry does to the outside world: emitted events,
-/// dismissed-set writes, and how often it listed worktrees.
-struct FakeDeps {
-    listing: StdMutex<Vec<WorktreeEntry>>,
-    list_calls: AtomicUsize,
-    events: StdMutex<Vec<DaemonEvent>>,
-    binding: StdMutex<Option<(String, Option<String>)>>,
-    others: StdMutex<HashSet<String>>,
-    dismissed: StdMutex<Vec<String>>,
-    dismiss_writes: StdMutex<Vec<(String, String)>>,
-}
-
-impl Default for FakeDeps {
-    fn default() -> Self {
-        Self {
-            listing: StdMutex::new(Vec::new()),
-            list_calls: AtomicUsize::new(0),
-            events: StdMutex::new(Vec::new()),
-            binding: StdMutex::new(Some((PROJECT_ID.to_string(), None))),
-            others: StdMutex::new(HashSet::new()),
-            dismissed: StdMutex::new(Vec::new()),
-            dismiss_writes: StdMutex::new(Vec::new()),
-        }
-    }
-}
-
-impl FakeDeps {
-    fn events(&self) -> Vec<DaemonEvent> {
-        self.events.lock().unwrap().clone()
-    }
-    fn clear_events(&self) {
-        self.events.lock().unwrap().clear();
-    }
-    fn list_calls(&self) -> usize {
-        self.list_calls.load(Ordering::SeqCst)
-    }
-    fn dismiss_writes(&self) -> Vec<(String, String)> {
-        self.dismiss_writes.lock().unwrap().clone()
-    }
-    fn set_listing(&self, entries: Vec<WorktreeEntry>) {
-        *self.listing.lock().unwrap() = entries;
-    }
-    fn set_binding(&self, worktree_path: Option<&str>) {
-        let binding = (PROJECT_ID.to_string(), worktree_path.map(str::to_string));
-        *self.binding.lock().unwrap() = Some(binding);
-    }
-    fn set_other_chat_worktrees(&self, paths: &[&str]) {
-        *self.others.lock().unwrap() = paths.iter().map(|p| p.to_string()).collect();
-    }
-}
-
-impl WorktreeOfferDeps for FakeDeps {
-    fn emit_event(&self, event: DaemonEvent) {
-        self.events.lock().unwrap().push(event);
-    }
-    fn projects_get_path(&self, _project_id: &str) -> Option<String> {
-        Some(PROJECT_PATH.to_string())
-    }
-    fn chat_binding(&self, _chat_id: &str) -> Option<(String, Option<String>)> {
-        self.binding.lock().unwrap().clone()
-    }
-    fn other_chat_worktrees(&self, _project_id: &str, _chat_id: &str) -> HashSet<String> {
-        self.others.lock().unwrap().clone()
-    }
-    fn get_dismissed_worktrees(&self, _chat_id: &str) -> Vec<String> {
-        self.dismissed.lock().unwrap().clone()
-    }
-    fn add_dismissed_worktree(&self, chat_id: &str, worktree_path: &str) -> bool {
-        self.dismiss_writes
-            .lock()
-            .unwrap()
-            .push((chat_id.to_string(), worktree_path.to_string()));
-        let mut dismissed = self.dismissed.lock().unwrap();
-        if dismissed.iter().any(|p| p == worktree_path) {
-            return false;
-        }
-        dismissed.push(worktree_path.to_string());
-        true
-    }
-    fn list_worktrees<'a>(&'a self, _project_path: &'a str) -> BoxFuture<'a, Vec<WorktreeEntry>> {
-        self.list_calls.fetch_add(1, Ordering::SeqCst);
-        let entries = self.listing.lock().unwrap().clone();
-        Box::pin(async move { entries })
-    }
-}
-
+/// The registry over the shared fake deps: `CHAT` and `OTHER_CHAT` are stored
+/// unbound in `PROJECT_ID`, whose path is `PROJECT_PATH`, until a test rebinds one.
 struct Harness {
     deps: Arc<FakeDeps>,
     clock: Arc<AtomicI64>,
@@ -113,15 +27,40 @@ struct Harness {
 
 impl Harness {
     fn new() -> Self {
-        let deps = Arc::new(FakeDeps::default());
+        let chats = [CHAT, OTHER_CHAT].map(|id| {
+            let mut chat = test_chat(id);
+            chat.project_id = PROJECT_ID.to_string();
+            chat
+        });
+        let deps = FakeDeps::with_chats(chats.to_vec());
+        deps.set_project_path(PROJECT_PATH);
         let clock = Arc::new(AtomicI64::new(T1));
         let ticks = clock.clone();
         let now: NowFn = Arc::new(move || ticks.load(Ordering::SeqCst));
-        let registry = Arc::new(WorktreeOfferRegistry::with_clock(deps.clone(), now));
+        let shared = ChatShared::new(deps.clone());
+        let registry = Arc::new(WorktreeOfferRegistry::with_clock(shared, now));
         Self {
             deps,
             clock,
             registry,
+        }
+    }
+
+    /// Binds `CHAT` to `worktree_path` in the store.
+    fn set_binding(&self, worktree_path: Option<&str>) {
+        let mut chats = self.deps.store.chats.lock().unwrap();
+        if let Some(chat) = chats.get_mut(CHAT) {
+            chat.worktree_path = worktree_path.map(str::to_string);
+        }
+    }
+
+    /// Stores one other chat per path, each bound to it in `PROJECT_ID`.
+    fn set_other_chat_worktrees(&self, paths: &[&str]) {
+        for (i, path) in paths.iter().enumerate() {
+            let mut chat = test_chat(&format!("occupant-{i}"));
+            chat.project_id = PROJECT_ID.to_string();
+            chat.worktree_path = Some((*path).to_string());
+            self.deps.store.insert(chat);
         }
     }
 
@@ -664,7 +603,7 @@ async fn never_offers_a_worktree_already_occupied_under_another_path_spelling() 
     let (_dir, raw, canonical) = temp_worktree();
 
     let own = Harness::new();
-    own.deps.set_binding(Some(raw.as_str()));
+    own.set_binding(Some(raw.as_str()));
     own.seed_empty_baseline().await;
     own.set_worktrees(vec![entry(&canonical, Some("refs/heads/feat/tmp"))]);
     own.rescan().await;
@@ -673,7 +612,7 @@ async fn never_offers_a_worktree_already_occupied_under_another_path_spelling() 
     assert_eq!(own.snapshot(), no_offers());
 
     let other = Harness::new();
-    other.deps.set_other_chat_worktrees(&[raw.as_str()]);
+    other.set_other_chat_worktrees(&[raw.as_str()]);
     other.seed_empty_baseline().await;
     other.set_worktrees(vec![entry(&canonical, Some("refs/heads/feat/tmp"))]);
     other.rescan().await;

@@ -1,12 +1,12 @@
 //! `ChatManager::open_side_chat`, its discard path, and the archive cascade
 //! (— daemon-side-chats). A child module of `tests`, so
-//! it sees `tests`' private `StoreDeps`.
+//! it sees `tests`' private `FakeDeps`.
 use super::*;
 use mainframe_types::http_status::StatusKind;
 
 fn parent_chat(id: &str) -> Chat {
     // `enrich_chat`'s directory-missing check stats the real filesystem against
-    // StoreDeps's fixed "/tmp/test" project path — make sure it exists so every
+    // FakeDeps's fixed "/tmp/test" project path — make sure it exists so every
     // test below is about open_side_chat's OWN gating, not directory presence.
     std::fs::create_dir_all("/tmp/test").expect("create the fake project dir");
     let mut c = test_chat(id);
@@ -25,7 +25,7 @@ fn fake_worktree() -> (tempfile::TempDir, String) {
 
 #[tokio::test]
 async fn unknown_parent_is_not_found() {
-    let deps = StoreDeps::arc();
+    let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps);
     let err = mgr.open_side_chat("nope").await.unwrap_err();
     assert_eq!(err, OpenSideChatError::NotFound("nope".to_string()));
@@ -36,7 +36,7 @@ async fn unknown_parent_is_not_found() {
 async fn an_archived_parent_is_refused_409() {
     let mut chat = parent_chat("c1");
     chat.status = ChatStatus::Archived;
-    let deps = StoreDeps::with_chats(vec![chat]);
+    let deps = FakeDeps::with_chats(vec![chat]);
     let mgr = ChatManager::new(deps);
     let err = mgr.open_side_chat("c1").await.unwrap_err();
     assert_eq!(err, OpenSideChatError::Archived);
@@ -48,7 +48,7 @@ async fn a_side_chat_cannot_open_its_own_side_chat_409() {
     let mut chat = parent_chat("c1");
     chat.temporary = true;
     chat.parent_chat_id = Some(Some("parent-of-c1".to_string()));
-    let deps = StoreDeps::with_chats(vec![chat]);
+    let deps = FakeDeps::with_chats(vec![chat]);
     let mgr = ChatManager::new(deps);
     let err = mgr.open_side_chat("c1").await.unwrap_err();
     assert_eq!(err, OpenSideChatError::ParentIsSideChat);
@@ -59,7 +59,7 @@ async fn a_side_chat_cannot_open_its_own_side_chat_409() {
 async fn a_missing_directory_is_refused_409() {
     let mut chat = parent_chat("c1");
     chat.worktree_path = Some("/tmp/definitely-not-a-real-side-chat-worktree".to_string());
-    let deps = StoreDeps::with_chats(vec![chat]);
+    let deps = FakeDeps::with_chats(vec![chat]);
     let mgr = ChatManager::new(deps);
     let err = mgr.open_side_chat("c1").await.unwrap_err();
     assert_eq!(err, OpenSideChatError::DirectoryMissing);
@@ -71,7 +71,7 @@ async fn a_missing_directory_is_refused_409() {
 async fn a_temporary_non_side_chat_parent_may_open_a_side_chat() {
     let mut chat = parent_chat("c1");
     chat.temporary = true;
-    let deps = StoreDeps::with_chats(vec![chat]);
+    let deps = FakeDeps::with_chats(vec![chat]);
     let mgr = ChatManager::new(deps);
     assert!(mgr.open_side_chat("c1").await.is_ok());
 }
@@ -82,7 +82,7 @@ async fn a_temporary_non_side_chat_parent_may_open_a_side_chat() {
 async fn the_side_chat_starts_empty_temporary_and_parented() {
     let mut chat = parent_chat("c1");
     chat.model = Some("claude-opus".to_string());
-    let deps = StoreDeps::with_chats(vec![chat]);
+    let deps = FakeDeps::with_chats(vec![chat]);
     let mgr = ChatManager::new(deps);
 
     let side = mgr.open_side_chat("c1").await.expect("open should succeed");
@@ -96,7 +96,7 @@ async fn the_side_chat_starts_empty_temporary_and_parented() {
 #[tokio::test]
 async fn opening_twice_reveals_the_existing_side_chat_rather_than_minting_a_second() {
     let chat = parent_chat("c1");
-    let deps = StoreDeps::with_chats(vec![chat]);
+    let deps = FakeDeps::with_chats(vec![chat]);
     let mgr = ChatManager::new(deps.clone());
 
     let first = mgr.open_side_chat("c1").await.expect("first open");
@@ -115,7 +115,7 @@ async fn opening_twice_reveals_the_existing_side_chat_rather_than_minting_a_seco
 #[tokio::test]
 async fn opening_emits_chat_updated_for_the_parent_never_chat_created_for_the_side_chat() {
     let chat = parent_chat("c1");
-    let deps = StoreDeps::with_chats(vec![chat]);
+    let deps = FakeDeps::with_chats(vec![chat]);
     let mgr = ChatManager::new(deps.clone());
 
     let side = mgr.open_side_chat("c1").await.expect("open should succeed");
@@ -138,7 +138,7 @@ async fn opening_emits_chat_updated_for_the_parent_never_chat_created_for_the_si
 #[tokio::test]
 async fn discarding_the_side_chat_deletes_its_row_and_leaves_the_parents_scratch_directory() {
     let chat = parent_chat("c1");
-    let deps = StoreDeps::with_chats(vec![chat]);
+    let deps = FakeDeps::with_chats(vec![chat]);
     let mgr = ChatManager::new(deps.clone());
     let side = mgr.open_side_chat("c1").await.expect("open should succeed");
 
@@ -147,7 +147,13 @@ async fn discarding_the_side_chat_deletes_its_row_and_leaves_the_parents_scratch
         .expect("discard should succeed");
 
     assert!(mgr.get_chat(&side.id).is_none());
-    assert!(deps.remove_scratch_dir_calls.lock().unwrap().is_empty());
+    assert!(
+        deps.workspace
+            .remove_scratch_dir_calls
+            .lock()
+            .unwrap()
+            .is_empty()
+    );
 
     // A subsequent open starts empty again (a fresh row, not the discarded one).
     let reopened = mgr
@@ -162,7 +168,7 @@ async fn discarding_the_side_chat_never_sweeps_its_shared_worktree() {
     let (_dir, wt) = fake_worktree();
     let mut chat = parent_chat("c1");
     chat.worktree_path = Some(wt.clone());
-    let deps = StoreDeps::with_chats(vec![chat]);
+    let deps = FakeDeps::with_chats(vec![chat]);
     let mgr = ChatManager::new(deps.clone());
     let side = mgr.open_side_chat("c1").await.expect("open should succeed");
     assert_eq!(side.worktree_path.as_deref(), Some(wt.as_str()));
@@ -182,7 +188,7 @@ async fn discarding_the_side_chat_never_sweeps_its_shared_worktree() {
 async fn discarding_a_temporary_parent_discards_its_side_chat_first() {
     let mut chat = parent_chat("c1");
     chat.temporary = true;
-    let deps = StoreDeps::with_chats(vec![chat]);
+    let deps = FakeDeps::with_chats(vec![chat]);
     let mgr = ChatManager::new(deps);
     let side = mgr.open_side_chat("c1").await.expect("open should succeed");
 
@@ -201,7 +207,7 @@ async fn archiving_a_parent_discards_its_side_chat_before_the_lifecycle_archive_
     let (_dir, wt) = fake_worktree();
     let mut chat = parent_chat("c1");
     chat.worktree_path = Some(wt.clone());
-    let deps = StoreDeps::with_chats(vec![chat]);
+    let deps = FakeDeps::with_chats(vec![chat]);
     let mgr = ChatManager::new(deps.clone());
     let side = mgr.open_side_chat("c1").await.expect("open should succeed");
 
@@ -229,14 +235,14 @@ async fn archiving_a_parent_discards_its_side_chat_before_the_lifecycle_archive_
 #[tokio::test]
 async fn side_chat_waiting_follows_a_pending_gate_on_the_side_chat_not_the_parent() {
     let chat = parent_chat("c1");
-    let deps = StoreDeps::with_chats(vec![chat]);
+    let deps = FakeDeps::with_chats(vec![chat]);
     let mgr = ChatManager::new(deps);
     let side = mgr.open_side_chat("c1").await.expect("open should succeed");
 
     let idle = mgr.get_chat("c1").unwrap();
     assert_eq!(idle.side_chat_waiting, Some(false));
 
-    mgr.permissions.lock().unwrap().enqueue(
+    mgr.shared.permissions.lock().unwrap().enqueue(
         &side.id,
         mainframe_types::adapter::ControlRequest {
             request_id: "req-1".to_string(),

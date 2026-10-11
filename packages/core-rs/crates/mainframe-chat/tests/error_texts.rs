@@ -91,10 +91,10 @@ fn config_errors() {
     );
     let moved = SessionFilesError::Io(std::io::Error::other("disk full"));
     assert_eq!(
-        wire(&ConfigError::TranscriptMoveFailed(moved)),
+        wire(&ConfigError::TranscriptMoveFailed(moved.into())),
         pair(
             StatusKind::Internal,
-            "Moving the session's history into the worktree failed. The session stayed where it was."
+            "Moving the session's history into the worktree failed. The chat kept its previous binding; some history files may have moved."
         )
     );
     assert_eq!(

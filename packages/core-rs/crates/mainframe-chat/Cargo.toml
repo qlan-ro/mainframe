@@ -7,6 +7,9 @@ publish.workspace = true
 [lints]
 workspace = true
 
+[features]
+test-support = ["mainframe-runtime/test-support"]
+
 [dependencies]
 tokio = { workspace = true }
 dashmap = { workspace = true }
@@ -18,6 +21,7 @@ chrono = { workspace = true }
 nanoid = { workspace = true }
 dirs = { workspace = true }
 mainframe-types = { workspace = true }
+mainframe-db = { workspace = true }
 mainframe-runtime = { workspace = true }
 mainframe-adapter-api = { workspace = true }
 mainframe-display = { workspace = true }

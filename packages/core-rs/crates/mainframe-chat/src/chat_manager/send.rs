@@ -26,10 +26,9 @@ impl ChatManager {
     fn assign_initial_title(&self, cell: &Arc<Mutex<ActiveChat>>, chat_id: &str, content: &str) {
         let current_title = cell.lock_recover().chat.title.clone().unwrap_or_default();
         let title_empty = current_title.is_empty();
-        let is_untouched_fork_title = self
-            .deps
-            .get_pending_fork(chat_id)
-            .is_some_and(|pending| pending.provisional_title == current_title);
+        let is_untouched_fork_title =
+            storage_event!(self.shared, Some(chat_id); self.shared.deps.get_pending_fork(chat_id))
+                .is_some_and(|pending| pending.provisional_title == current_title);
         if !title_empty && !is_untouched_fork_title {
             return;
         }
@@ -44,15 +43,17 @@ impl ChatManager {
                 let mut guard = cell.lock_recover();
                 guard.chat.title = Some(title.clone());
             }
-            self.deps.chats_update(
-                chat_id,
-                &ChatPatch {
-                    title: Some(title),
-                    ..Default::default()
-                },
-            );
             let chat = cell.lock_recover().chat.clone();
-            self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
+            storage_event!(
+                self.shared, Some(chat_id);
+                self.shared.update_and_emit(
+                    chat,
+                    &ChatPatch {
+                        title: Some(title),
+                        ..Default::default()
+                    },
+                )
+            );
         }
         // Title generation runs WITHOUT awaiting: it shells out to the CLI, so
         // awaiting it here would both stall the send and shift its `chat.updated`
@@ -83,6 +84,7 @@ impl ChatManager {
         vendor_id: Option<String>,
     ) -> ChatMessage {
         let message = self
+            .shared
             .messages
             .lock_recover()
             .create_transient_message_with_vendor_id(
@@ -96,7 +98,8 @@ impl ChatManager {
                 },
                 vendor_id,
             );
-        self.messages
+        self.shared
+            .messages
             .lock_recover()
             .append(chat_id, message.clone());
         self.event_handler.emit_display(chat_id);
@@ -121,7 +124,9 @@ impl ChatManager {
             text_prefix,
             attachment_previews,
         } = match attachment_ids {
-            Some(ids) if !ids.is_empty() => self.deps.process_attachments(chat_id, ids).await,
+            Some(ids) if !ids.is_empty() => {
+                self.shared.deps.process_attachments(chat_id, ids).await
+            }
             _ => ProcessedAttachments::default(),
         };
         if !content.is_empty() {
@@ -190,9 +195,7 @@ impl ChatManager {
                 .await?;
         }
         let now = now_iso8601();
-        self.set_working(post, chat_id, &now);
-        let chat = post.lock_recover().chat.clone();
-        self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
+        self.set_working(post, &now);
         // Commands are never queued behind a running turn, so acceptance
         // (send_entry.rs) and start are the same moment — UNLESS a turn was
         // already running: the command still bypasses the queue and runs
@@ -262,13 +265,20 @@ impl ChatManager {
                     if is_queued {
                         self.remove_queued_ref(chat_id, &message_uuid);
                     }
-                    self.messages
+                    self.shared
+                        .messages
                         .lock_recover()
                         .remove_by_id(chat_id, &message.id);
                     self.event_handler.emit_display(chat_id);
                     return Err(err.into());
                 }
-                if self.deps.extract_mentions_from_text(chat_id, content) {
+                if self.shared.best_effort(
+                    chat_id,
+                    self.shared
+                        .deps
+                        .extract_mentions_from_text(chat_id, content),
+                    false,
+                ) {
                     self.emit(DaemonEvent::ContextUpdated {
                         chat_id: chat_id.to_string(),
                         file_paths: None,
@@ -295,7 +305,13 @@ impl ChatManager {
             Some(message_uuid.clone()),
         );
 
-        if self.deps.extract_mentions_from_text(chat_id, content) {
+        if self.shared.best_effort(
+            chat_id,
+            self.shared
+                .deps
+                .extract_mentions_from_text(chat_id, content),
+            false,
+        ) {
             self.emit(DaemonEvent::ContextUpdated {
                 chat_id: chat_id.to_string(),
                 file_paths: None,
@@ -305,9 +321,7 @@ impl ChatManager {
         self.assign_initial_title(post, chat_id, content);
 
         let now = now_iso8601();
-        self.set_working(post, chat_id, &now);
-        let chat = post.lock_recover().chat.clone();
-        self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
+        self.set_working(post, &now);
 
         let uuid = Some(message_uuid.clone());
         // The provider gets the handoff block; the stored message keeps

@@ -1,13 +1,5 @@
-//! Unit tests for `ChatPlanActionCtx` against a fake `PlanHost` plus a real
-//! `PermissionManager`/`MessageCache` and the crate's recording `StoreDeps`
-//! (`chat_manager::tests`, exposed `pub(crate)` for reuse here rather than
-//! duplicating a second `ChatManagerDeps` fake). The `PlanHostImpl`-specific
-//! "no ChatManager attached" case lives beside it in `chat_manager/tests/`
-//! instead — this module intentionally never names `EhDeps`/`LcDeps`, and a real
-//! `PlanHostImpl` needs both.
-
 use super::*;
-use crate::chat_manager::tests::StoreDeps;
+use crate::test_support::FakeDeps;
 use crate::test_support::test_chat;
 use mainframe_types::adapter::ControlRequest;
 use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent};
@@ -43,19 +35,16 @@ fn ctx_with(
     request_id: &str,
     chat: mainframe_types::chat::Chat,
 ) -> ChatPlanActionCtx {
-    let active_chats: PlanRegistry = Arc::new(DashMap::new());
-    let deps = StoreDeps::with_chats(vec![chat.clone()]);
-    active_chats.insert(
+    let deps = FakeDeps::with_chats(vec![chat.clone()]);
+    let shared = ChatShared::new(deps);
+    shared.active_chats.insert(
         chat_id.to_string(),
         Arc::new(Mutex::new(ActiveChat::new(chat, None))),
     );
     ChatPlanActionCtx {
         chat_id: chat_id.to_string(),
         request_id: request_id.to_string(),
-        deps,
-        active_chats,
-        messages: Arc::new(Mutex::new(MessageCache::new())),
-        permissions: Arc::new(Mutex::new(PermissionManager::new())),
+        shared,
         host: Arc::new(FakeHost::default()),
     }
 }
@@ -89,12 +78,21 @@ fn text_message(text: &str) -> ChatMessage {
 #[test]
 fn permissions_shift_pops_only_the_matching_front_request() {
     let ctx = ctx_with("c1", "r2", test_chat("c1"));
-    ctx.permissions.lock().unwrap().enqueue("c1", request("r1"));
-    ctx.permissions.lock().unwrap().enqueue("c1", request("r2"));
+    ctx.shared
+        .permissions
+        .lock()
+        .unwrap()
+        .enqueue("c1", request("r1"));
+    ctx.shared
+        .permissions
+        .lock()
+        .unwrap()
+        .enqueue("c1", request("r2"));
 
     ctx.permissions_shift();
     assert_eq!(
-        ctx.permissions
+        ctx.shared
+            .permissions
             .lock()
             .unwrap()
             .get_pending("c1")
@@ -104,12 +102,21 @@ fn permissions_shift_pops_only_the_matching_front_request() {
     );
 
     let ctx = ctx_with("c1", "r1", test_chat("c1"));
-    ctx.permissions.lock().unwrap().enqueue("c1", request("r1"));
-    ctx.permissions.lock().unwrap().enqueue("c1", request("r2"));
+    ctx.shared
+        .permissions
+        .lock()
+        .unwrap()
+        .enqueue("c1", request("r1"));
+    ctx.shared
+        .permissions
+        .lock()
+        .unwrap()
+        .enqueue("c1", request("r2"));
 
     ctx.permissions_shift();
     assert_eq!(
-        ctx.permissions
+        ctx.shared
+            .permissions
             .lock()
             .unwrap()
             .get_pending("c1")
@@ -129,9 +136,18 @@ fn update_chat_with_clear_claude_session_id_calls_chats_clear_session_and_nulls_
         plan_mode: Some(false),
         permission_mode: None,
         clear_claude_session_id: true,
-    });
+    })
+    .unwrap();
 
-    assert_eq!(ctx.deps.chats_get("c1").unwrap().claude_session_id, None);
+    assert_eq!(
+        ctx.shared
+            .deps
+            .chats_get("c1")
+            .unwrap()
+            .unwrap()
+            .claude_session_id,
+        None
+    );
     assert_eq!(
         ctx.active().unwrap().lock().unwrap().chat.claude_session_id,
         None
@@ -148,10 +164,16 @@ fn update_chat_without_it_never_calls_chats_clear_session() {
         plan_mode: Some(false),
         permission_mode: None,
         clear_claude_session_id: false,
-    });
+    })
+    .unwrap();
 
     assert_eq!(
-        ctx.deps.chats_get("c1").unwrap().claude_session_id,
+        ctx.shared
+            .deps
+            .chats_get("c1")
+            .unwrap()
+            .unwrap()
+            .claude_session_id,
         Some("sess-1".to_string())
     );
     assert_eq!(
@@ -165,7 +187,7 @@ fn recover_latest_plan_file_reads_the_cached_messages() {
     let ctx = ctx_with("c1", "r1", test_chat("c1"));
     assert_eq!(ctx.recover_latest_plan_file(), None);
 
-    ctx.messages.lock().unwrap().set(
+    ctx.shared.messages.lock().unwrap().set(
         "c1",
         vec![
             text_message("Your plan has been saved to: /tmp/old.md"),
@@ -182,14 +204,64 @@ fn recover_latest_plan_file_reads_the_cached_messages() {
 fn clear_messages_empties_the_cache_for_that_chat_only() {
     let ctx = ctx_with("c1", "r1", test_chat("c1"));
     let untouched = vec![text_message("bye")];
-    ctx.messages
+    ctx.shared
+        .messages
         .lock()
         .unwrap()
         .set("c1", vec![text_message("hi")]);
-    ctx.messages.lock().unwrap().set("c2", untouched.clone());
+    ctx.shared
+        .messages
+        .lock()
+        .unwrap()
+        .set("c2", untouched.clone());
 
     ctx.clear_messages();
 
-    assert_eq!(ctx.messages.lock().unwrap().get("c1"), Some(&Vec::new()));
-    assert_eq!(ctx.messages.lock().unwrap().get("c2"), Some(&untouched));
+    assert_eq!(
+        ctx.shared.messages.lock().unwrap().get("c1"),
+        Some(&Vec::new())
+    );
+    assert_eq!(
+        ctx.shared.messages.lock().unwrap().get("c2"),
+        Some(&untouched)
+    );
+}
+
+#[test]
+fn failed_no_process_plan_write_keeps_the_cached_mode_retryable() {
+    let mut chat = test_chat("c1");
+    chat.plan_mode = Some(true);
+    chat.permission_mode = None;
+    let deps = FakeDeps::with_chats(vec![chat.clone()]);
+    let shared = ChatShared::new(deps.clone());
+    let active = Arc::new(Mutex::new(ActiveChat::new(chat, None)));
+    shared.active_chats.insert("c1".into(), active.clone());
+    let handler = crate::plan_mode_handler::PlanModeHandler::new(ChatPlanModeCtx {
+        shared,
+        host: Arc::new(FakeHost::default()),
+    });
+    let response = serde_json::from_value(serde_json::json!({
+        "requestId": "r1", "toolUseId": "t1", "behavior": "allow", "executionMode": "acceptEdits"
+    }))
+    .unwrap();
+    *deps.store.write_failure.lock().unwrap() = Some("database unavailable".into());
+    assert!(handler.handle_no_process(&active, &response).is_err());
+    assert_eq!(active.lock().unwrap().chat.plan_mode, Some(true));
+    assert_eq!(active.lock().unwrap().chat.permission_mode, None);
+    assert!(
+        matches!(deps.events().as_slice(), [DaemonEvent::Error { chat_id: Some(id), .. }] if id == "c1")
+    );
+    deps.clear_events();
+    *deps.store.write_failure.lock().unwrap() = None;
+    handler.handle_no_process(&active, &response).unwrap();
+    assert_eq!(active.lock().unwrap().chat.plan_mode, Some(false));
+    assert_eq!(
+        active.lock().unwrap().chat.permission_mode,
+        Some(ExecutionMode::AcceptEdits)
+    );
+    assert_eq!(deps.store.updates.lock().unwrap().len(), 1);
+    assert!(matches!(
+        deps.events().as_slice(),
+        [DaemonEvent::ChatUpdated { .. }]
+    ));
 }

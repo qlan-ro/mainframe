@@ -1,13 +1,9 @@
-//! Production `PlanActionContext`/`PlanModeContext` pair. Wires the dispatcher
-//! in `plan_mode_handler.rs` to `ChatManager`'s private
-//! active-chat/message/permission state via the narrow `PlanHost` seam, so this
-//! module never names `EhDeps`/`LcDeps` and `chat_manager.rs` stays wiring-only.
+//! Plan actions over shared chat state and lifecycle callbacks.
 
 use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::sync::LockExt as _;
 use std::sync::{Arc, Mutex};
 
-use dashmap::DashMap;
 use mainframe_adapter_api::{
     AdapterError, BoxFuture, PlanActionContext, PlanChatUpdate, PlanModeActionHandler,
 };
@@ -15,18 +11,11 @@ use mainframe_types::adapter::ControlResponse;
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::settings::ExecutionMode;
 
-use crate::chat_manager::ChatManagerDeps;
+use crate::chat_manager::ChatShared;
 use crate::context_tracker::extract_latest_plan_file_from_messages;
-use crate::message_cache::MessageCache;
-use crate::permission_manager::PermissionManager;
 use crate::plan_mode_handler::PlanModeContext;
 use crate::types::ActiveChat;
 
-pub(crate) type PlanRegistry = Arc<DashMap<String, Arc<Mutex<ActiveChat>>>>;
-
-/// The narrow seam back into `ChatManager`'s privately-typed event/lifecycle
-/// pieces (`EventHandler<EhDeps>` / `ChatLifecycleManager<LcDeps>`), so this
-/// module depends on neither.
 pub(crate) trait PlanHost: Send + Sync {
     fn emit_event(&self, event: DaemonEvent);
     fn clear_display_state(&self, chat_id: &str);
@@ -42,41 +31,37 @@ pub(crate) trait PlanHost: Send + Sync {
 /// `PlanModeContext` over `ChatManager`'s shared state (relocated `buildActionContext`
 /// dependency bag).
 pub(crate) struct ChatPlanModeCtx {
-    pub(crate) deps: Arc<dyn ChatManagerDeps>,
-    pub(crate) active_chats: PlanRegistry,
-    pub(crate) messages: Arc<Mutex<MessageCache>>,
-    pub(crate) permissions: Arc<Mutex<PermissionManager>>,
+    pub(crate) shared: Arc<ChatShared>,
     pub(crate) host: Arc<dyn PlanHost>,
 }
 
 impl PlanModeContext for ChatPlanModeCtx {
-    fn chats_update(&self, chat_id: &str, permission_mode: ExecutionMode, plan_mode: bool) {
-        self.deps.chats_update(
-            chat_id,
+    fn update_and_emit(
+        &self,
+        chat: mainframe_types::chat::Chat,
+        permission_mode: ExecutionMode,
+        plan_mode: bool,
+    ) -> Result<(), mainframe_types::seam_error::SeamError> {
+        self.shared.update_and_emit(
+            chat,
             &ChatPatch {
                 permission_mode: Some(permission_mode),
                 plan_mode: Some(plan_mode),
                 ..Default::default()
             },
-        );
-    }
-    fn emit_event(&self, event: DaemonEvent) {
-        self.host.emit_event(event);
+        )
     }
     fn resolve_plan_mode_handler(
         &self,
         adapter_id: &str,
     ) -> Option<Arc<dyn PlanModeActionHandler>> {
-        self.deps.create_plan_mode_handler(adapter_id)
+        self.shared.deps.create_plan_mode_handler(adapter_id)
     }
     fn action_context(&self, chat_id: &str, request_id: &str) -> Arc<dyn PlanActionContext> {
         Arc::new(ChatPlanActionCtx {
             chat_id: chat_id.to_string(),
             request_id: request_id.to_string(),
-            deps: self.deps.clone(),
-            active_chats: self.active_chats.clone(),
-            messages: self.messages.clone(),
-            permissions: self.permissions.clone(),
+            shared: self.shared.clone(),
             host: self.host.clone(),
         })
     }
@@ -84,18 +69,16 @@ impl PlanModeContext for ChatPlanModeCtx {
 
 /// `PlanActionContext` over one chat's `ActiveChat` cell.
 struct ChatPlanActionCtx {
+    shared: Arc<ChatShared>,
     chat_id: String,
     request_id: String,
-    deps: Arc<dyn ChatManagerDeps>,
-    active_chats: PlanRegistry,
-    messages: Arc<Mutex<MessageCache>>,
-    permissions: Arc<Mutex<PermissionManager>>,
     host: Arc<dyn PlanHost>,
 }
 
 impl ChatPlanActionCtx {
     fn active(&self) -> Option<Arc<Mutex<ActiveChat>>> {
-        self.active_chats
+        self.shared
+            .active_chats
             .get(&self.chat_id)
             .map(|e| e.value().clone())
     }
@@ -110,7 +93,24 @@ impl PlanActionContext for ChatPlanActionCtx {
         self.chat_id.clone()
     }
 
-    fn update_chat(&self, patch: PlanChatUpdate) {
+    fn update_chat(&self, patch: PlanChatUpdate) -> Result<(), AdapterError> {
+        let update = self
+            .shared
+            .prepare_update(
+                &self.chat_id,
+                &ChatPatch {
+                    permission_mode: patch.permission_mode,
+                    plan_mode: patch.plan_mode,
+                    ..Default::default()
+                },
+            )
+            .map_err(|error| AdapterError::Message(error.to_string()))?;
+        if patch.clear_claude_session_id {
+            self.shared
+                .deps
+                .chats_clear_session(&self.chat_id)
+                .map_err(|error| AdapterError::Message(error.to_string()))?;
+        }
         if let Some(active) = self.active() {
             let mut guard = active.lock_recover();
             if let Some(plan_mode) = patch.plan_mode {
@@ -122,26 +122,11 @@ impl PlanActionContext for ChatPlanActionCtx {
             if patch.clear_claude_session_id {
                 guard.chat.claude_session_id = None;
             }
+            let chat = guard.chat.clone();
+            drop(guard);
+            update.emit(chat, None);
         }
-        self.deps.chats_update(
-            &self.chat_id,
-            &ChatPatch {
-                permission_mode: patch.permission_mode,
-                plan_mode: patch.plan_mode,
-                ..Default::default()
-            },
-        );
-        if patch.clear_claude_session_id {
-            self.deps.chats_clear_session(&self.chat_id);
-        }
-    }
-
-    fn emit_chat_updated(&self) {
-        let chat = self.active().map(|a| a.lock_recover().chat.clone());
-        if let Some(chat) = chat {
-            self.host
-                .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
-        }
+        Ok(())
     }
 
     fn emit_event(&self, event: DaemonEvent) {
@@ -195,22 +180,30 @@ impl PlanActionContext for ChatPlanActionCtx {
     }
 
     fn permissions_shift(&self) {
-        self.permissions
+        self.shared
+            .permissions
             .lock_recover()
             .shift(&self.chat_id, &self.request_id);
     }
 
     fn recover_latest_plan_file(&self) -> Option<String> {
-        let messages = self.messages.lock_recover();
+        let messages = self.shared.messages.lock_recover();
         extract_latest_plan_file_from_messages(messages.get(&self.chat_id)?)
     }
 
     fn add_plan_file(&self, path: String) -> bool {
-        self.deps.add_plan_file(&self.chat_id, &path)
+        storage_event!(
+            self.shared, Some(&self.chat_id);
+            self.shared.deps.add_plan_file(&self.chat_id, &path),
+            false
+        )
     }
 
     fn clear_messages(&self) {
-        self.messages.lock_recover().set(&self.chat_id, Vec::new());
+        self.shared
+            .messages
+            .lock_recover()
+            .set(&self.chat_id, Vec::new());
     }
 
     fn clear_display_state(&self) {

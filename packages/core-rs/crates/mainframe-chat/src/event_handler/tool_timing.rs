@@ -1,6 +1,6 @@
 use super::*;
 
-impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
+impl SessionSinkImpl {
     pub(super) fn append_timed_and_display(&self, message: ChatMessage) {
         self.messages
             .lock_recover()

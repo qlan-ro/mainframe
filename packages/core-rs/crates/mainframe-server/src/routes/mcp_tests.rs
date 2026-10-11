@@ -58,7 +58,8 @@ impl Server {
                 adapter_id: "claude".into(),
                 ..Default::default()
             })
-            .await;
+            .await
+            .unwrap();
         let service = self.ctx.chat.orchestration.clone();
         let token = service.issue_launch(&chat.id, "sess-1").token;
         (chat.id, token.expose().to_string())

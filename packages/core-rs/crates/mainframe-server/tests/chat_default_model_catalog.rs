@@ -119,22 +119,21 @@ fn harness(saved_default: Option<&str>, chat_adapter_id: &str) -> Harness {
             .unwrap();
     }
 
-    let manager = build_chat_manager(
+    let manager = build_chat_manager(mainframe_server::ChatManagerParams {
         db,
-        registry,
-        tracker,
-        Arc::new(AttachmentStore::new(data_dir.path().join("attachments"))),
-        Arc::new(PushService::new()),
-        GitFactory,
+        adapters: registry,
+        background_tasks: tracker,
+        attachments: Arc::new(AttachmentStore::new(data_dir.path().join("attachments"))),
+        push: Arc::new(PushService::new()),
+        git: GitFactory,
         broadcast,
-        Arc::new(NoopLaunchStopper),
-        Arc::new(NoopScopeTunnelStopper),
+        launch: Arc::new(NoopLaunchStopper),
+        scope_tunnels: Arc::new(NoopScopeTunnelStopper),
         quota,
-        Arc::new(ClaudeWorkflowStore::new()),
-        mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
-        None,
-        data_dir.path().to_path_buf(),
-    );
+        claude_workflows: Arc::new(ClaudeWorkflowStore::new()),
+        chat_surface: None,
+        data_dir: data_dir.path().to_path_buf(),
+    });
 
     Harness {
         manager,
@@ -158,7 +157,8 @@ async fn saved_default_outside_the_catalog_is_preserved() {
             None,
             None,
         )
-        .await;
+        .await
+        .unwrap();
 
     assert_eq!(chat.model.as_deref(), Some("model-retired"));
     let reread = h.manager.get_chat(&chat.id).expect("chat must exist");
@@ -182,7 +182,8 @@ async fn saved_default_present_in_the_catalog_survives() {
             None,
             None,
         )
-        .await;
+        .await
+        .unwrap();
 
     assert_eq!(chat.model.as_deref(), Some("model-live"));
 }
@@ -202,7 +203,8 @@ async fn an_adapter_without_a_snapshot_keeps_the_saved_default() {
             None,
             None,
         )
-        .await;
+        .await
+        .unwrap();
 
     assert_eq!(chat.model.as_deref(), Some("model-retired"));
 }

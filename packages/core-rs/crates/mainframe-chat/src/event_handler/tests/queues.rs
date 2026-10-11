@@ -17,15 +17,10 @@ fn moves_the_acked_message_to_the_end_strips_metadata_and_deletes_the_ref() {
         attachment_ids: None,
         timestamp: String::new(),
     }];
-    let deps = FakeDeps::new(cell(ProcessState::Working, None), refs);
-    let handler = EventHandler::new(
-        messages.clone(),
-        Arc::new(Mutex::new(PermissionManager::new())),
-        deps.clone(),
-    );
+    let h = Harness::with_queue(cell(ProcessState::Working, None), refs, messages.clone());
     let surface = Arc::new(QueueSurface::default());
-    handler.set_chat_surface(surface.clone());
-    let sink = handler.build_sink("c1", None);
+    h.handler.set_chat_surface(surface.clone());
+    let sink = h.sink("c1");
     sink.on_queued_processed("u1");
     assert_eq!(ids(&messages), vec!["assistant-reply", "q"]);
     let moved = messages.lock().unwrap();
@@ -44,7 +39,7 @@ fn moves_the_acked_message_to_the_end_strips_metadata_and_deletes_the_ref() {
             .is_none()
     );
     assert!(m.metadata.as_ref().and_then(|md| md.get("uuid")).is_none());
-    assert_eq!(deps.refs.lock().unwrap().len(), 0);
+    assert_eq!(h.shared.queued_for_chat("c1").len(), 0);
     assert_eq!(surface.snapshots(), vec![Vec::new()]);
 }
 #[test]
@@ -59,13 +54,8 @@ fn moves_an_orphan_queued_message_to_the_end_and_goes_idle() {
         .unwrap()
         .append("c1", umsg("assistant-reply", None));
     let cell = cell(ProcessState::Working, None);
-    let deps = FakeDeps::new(cell.clone(), Vec::new());
-    let handler = EventHandler::new(
-        messages.clone(),
-        Arc::new(Mutex::new(PermissionManager::new())),
-        deps.clone(),
-    );
-    let sink = handler.build_sink("c1", None);
+    let h = Harness::with_queue(cell.clone(), Vec::new(), messages.clone());
+    let sink = h.sink("c1");
     sink.on_result(SessionResult {
         total_cost_usd: Some(0.0),
         usage: None,
@@ -110,12 +100,8 @@ fn moves_all_orphan_queued_messages_to_the_end() {
         .lock()
         .unwrap()
         .append("c1", umsg("assistant-reply", None));
-    let deps = FakeDeps::new(cell(ProcessState::Working, None), Vec::new());
-    let handler = EventHandler::new(
-        messages.clone(),
-        Arc::new(Mutex::new(PermissionManager::new())),
-        deps.clone(),
-    );
+    let h = Harness::with_queue(cell(ProcessState::Working, None), Vec::new(), messages.clone());
+    let handler = h.handler.clone();
     let surface = Arc::new(QueueSurface::default());
     handler.set_chat_surface(surface.clone());
     let sink = handler.build_sink("c1", None);
