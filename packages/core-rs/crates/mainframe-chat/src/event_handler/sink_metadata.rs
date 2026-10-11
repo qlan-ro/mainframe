@@ -121,7 +121,7 @@ impl SessionSinkImpl {
         };
         let (project_id, adapter_id, worktree_path, scratch_path, session_process_id) = {
             let mut guard = cell.lock_recover();
-            guard.chat.claude_session_id = Some(session_id.to_string());
+            guard.chat.vendor_session_id = Some(session_id.to_string());
             (
                 guard.chat.project_id.clone(),
                 guard.chat.adapter_id.clone(),
@@ -135,7 +135,7 @@ impl SessionSinkImpl {
             self.shared.deps.chats_update(
                 &self.chat_id,
                 &ChatPatch {
-                    claude_session_id: Some(session_id.to_string()),
+                    vendor_session_id: Some(session_id.to_string()),
                     ..Default::default()
                 },
             ),
@@ -168,7 +168,7 @@ impl SessionSinkImpl {
         }
         self.shared.emit(DaemonEvent::ProcessReady {
             process_id: session_process_id.unwrap_or_default(),
-            claude_session_id: session_id.to_string(),
+            vendor_session_id: session_id.to_string(),
         });
     }
 }

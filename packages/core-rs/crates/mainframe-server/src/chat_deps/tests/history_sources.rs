@@ -1,4 +1,3 @@
-
 /// Codex-shaped session: `load_history` is the plain `thread/read` replay
 /// (one real `@`-mention, no PR tool output); `load_scan_records` is the
 /// rollout reconstruction, carrying both the PR-create tool pair `load_history`
@@ -70,10 +69,7 @@ impl AdapterSession for DualHistorySession {
     ) -> BoxFuture<'_, Result<(), AdapterError>> {
         Box::pin(async { Ok(()) })
     }
-    fn cancel_queued_message(
-        &self,
-        _uuid: String,
-    ) -> BoxFuture<'_, Result<bool, AdapterError>> {
+    fn cancel_queued_message(&self, _uuid: String) -> BoxFuture<'_, Result<bool, AdapterError>> {
         Box::pin(async { Ok(false) })
     }
     fn get_context_files(&self) -> ContextFiles {
@@ -113,8 +109,7 @@ impl AdapterSession for DualHistorySession {
     fn stop_background_task(
         &self,
         _task_id: String,
-    ) -> BoxFuture<'_, Result<mainframe_adapter_api::StopBackgroundTaskResult, AdapterError>>
-    {
+    ) -> BoxFuture<'_, Result<mainframe_adapter_api::StopBackgroundTaskResult, AdapterError>> {
         Box::pin(async {
             Ok(mainframe_adapter_api::StopBackgroundTaskResult {
                 ok: false,
@@ -149,8 +144,7 @@ impl mainframe_adapter_api::Adapter for DualAdapter {
     }
     fn list_models(
         &self,
-    ) -> BoxFuture<'_, Result<Vec<mainframe_types::adapter::AdapterModel>, AdapterError>>
-    {
+    ) -> BoxFuture<'_, Result<Vec<mainframe_types::adapter::AdapterModel>, AdapterError>> {
         Box::pin(async { Ok(Vec::new()) })
     }
     fn create_session(&self, _options: SessionOptions) -> Arc<dyn AdapterSession> {
@@ -188,7 +182,7 @@ async fn scan_loaded_history_scans_mentions_from_load_history_and_prs_from_load_
                 d.chats.update(
                     &id,
                     &ChatPatch {
-                        claude_session_id: Some("sess-1".to_string()),
+                        vendor_session_id: Some("sess-1".to_string()),
                         ..Default::default()
                     },
                 )

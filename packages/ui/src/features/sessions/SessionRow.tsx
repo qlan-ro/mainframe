@@ -128,7 +128,7 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName, depth }: S
       onFork={actions.onFork}
       canOpenSideChat={canOpenSideChat}
       onOpenSideChat={() => void openSideChat(item.id)}
-      claudeSessionId={custom.claudeSessionId}
+      vendorSessionId={custom.vendorSessionId}
     >
       <ThreadListItemPrimitive.Root asChild data-testid="sessions-row" data-chat-id={item.id}>
         <SidebarMenuItem

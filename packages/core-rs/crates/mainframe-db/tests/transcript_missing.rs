@@ -121,7 +121,7 @@ fn clear_session_clears_identity_and_resets_the_transcript_flag() {
         .update(
             &chat.id,
             &ChatPatch {
-                claude_session_id: Some("dead-session".to_string()),
+                vendor_session_id: Some("dead-session".to_string()),
                 session_file_path: Some(
                     "/home/u/.claude/projects/x/dead-session.jsonl".to_string(),
                 ),
@@ -134,7 +134,7 @@ fn clear_session_clears_identity_and_resets_the_transcript_flag() {
     chats.clear_session(&chat.id).unwrap();
 
     let loaded = chats.get(&chat.id).unwrap().unwrap();
-    assert_eq!(loaded.claude_session_id, None);
+    assert_eq!(loaded.vendor_session_id, None);
     assert_eq!(loaded.session_file_path, None);
     assert_eq!(loaded.transcript_missing, Some(false));
 }

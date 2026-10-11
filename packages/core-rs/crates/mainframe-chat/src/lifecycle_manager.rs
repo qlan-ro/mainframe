@@ -738,7 +738,7 @@ impl ChatLifecycleManager {
     /// otherwise persists the loss, clears the dead resume target on both the
     /// passed-in `chat` and the active cell (if any), and broadcasts the
     /// update — called before either `do_load_chat` or `do_start_chat` reads
-    /// `claude_session_id` as a resume target.
+    /// `vendor_session_id` as a resume target.
     fn mark_context_lost_if_needed(&self, chat_id: &str, chat: &mut Chat) {
         let now = now_iso8601();
         if !no_persistence::take_context_loss(chat, &now) {
@@ -782,7 +782,7 @@ impl ChatLifecycleManager {
         self.shared.messages.lock_recover().pin(chat_id);
 
         // Before any resume target is read below, a dead ephemeral session's
-        // context loss must be marked (clears `claude_session_id`, so the early
+        // context loss must be marked (clears `vendor_session_id`, so the early
         // return just past it fires and no session is created).
         self.mark_context_lost_if_needed(chat_id, &mut chat);
 
@@ -819,7 +819,7 @@ impl ChatLifecycleManager {
         // its active segment has no session yet (switched, nothing sent):
         // returning early below would hide the earlier segments.
         let composed = self.compose_history(chat_id).await;
-        let own_id = chat.claude_session_id.clone();
+        let own_id = chat.vendor_session_id.clone();
         let fork_source = storage_event!(
             self.shared, Some(chat_id);
             self.shared.deps.get_pending_fork(chat_id),
@@ -981,7 +981,7 @@ impl ChatLifecycleManager {
                 &chat.adapter_id,
                 SessionOptions {
                     project_path: plan.cwd,
-                    chat_id: chat.claude_session_id.clone(),
+                    chat_id: chat.vendor_session_id.clone(),
                     mainframe_chat_id: chat_id.to_string(),
                     session_file_path: chat.session_file_path.clone(),
                     fork_source,
@@ -1456,7 +1456,7 @@ mod tests {
         let mut chat = chat_over("c1", None, ChatStatus::Active);
         chat.temporary = true;
         chat.vendor_session_ephemeral = true;
-        chat.claude_session_id = Some("dead-sess".to_string());
+        chat.vendor_session_id = Some("dead-sess".to_string());
         let deps = no_persistence_capable(chat, FakeSession::with_activity(false, None));
         let mgr = manager(deps.clone());
 

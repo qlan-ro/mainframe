@@ -175,7 +175,7 @@ impl Harness {
 
 fn with_session() -> ChatPatch {
     ChatPatch {
-        claude_session_id: Some("parent-session".to_string()),
+        vendor_session_id: Some("parent-session".to_string()),
         ..Default::default()
     }
 }

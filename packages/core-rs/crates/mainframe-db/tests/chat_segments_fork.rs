@@ -22,7 +22,7 @@ fn open() -> (tempfile::TempDir, DatabaseManager, String) {
 
 fn set_session(db: &DatabaseManager, chat_id: &str, session: &str) {
     let update = ChatPatch {
-        claude_session_id: Some(session.to_string()),
+        vendor_session_id: Some(session.to_string()),
         session_file_path: Some(format!("/t/{session}.jsonl")),
         ..Default::default()
     };
@@ -207,7 +207,7 @@ fn a_fork_copies_borrowed_and_pinned_segments() {
 
     let row = db.chats.get(&fork.id).unwrap().unwrap();
     assert_eq!(
-        (row.adapter_id.as_str(), row.claude_session_id.as_deref()),
+        (row.adapter_id.as_str(), row.vendor_session_id.as_deref()),
         ("codex", None)
     );
     // The parent is never mutated.
@@ -288,7 +288,7 @@ fn a_switch_turns_the_unsent_fork_pin_into_a_borrowed_view() {
     assert!(!db.segments.has_native_id(&fork.id).unwrap());
     let row = db.chats.get(&fork.id).unwrap().unwrap();
     assert_eq!(
-        (row.adapter_id.as_str(), row.claude_session_id.as_deref()),
+        (row.adapter_id.as_str(), row.vendor_session_id.as_deref()),
         ("claude", None)
     );
 }

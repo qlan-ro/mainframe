@@ -16,7 +16,7 @@ const COLUMNS: &[Column] = &[
         None => Ok(None),
     }),
     ("claude_session_id = ?", |patch| {
-        match &patch.claude_session_id {
+        match &patch.vendor_session_id {
             Some(v) => Ok(Some(SqlValue::Text(v.clone()))),
             None => Ok(None),
         }

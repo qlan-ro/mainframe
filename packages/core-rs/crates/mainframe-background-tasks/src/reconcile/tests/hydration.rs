@@ -99,7 +99,7 @@ async fn emits_events_for_recovered_tasks() {
 }
 
 #[tokio::test]
-async fn skips_unknown_claude_session_id() {
+async fn skips_unknown_vendor_session_id() {
     let tracker = BackgroundTaskTracker::new();
     set_lsof_writers(&tracker, &[]);
     let sp = new_spool();

@@ -413,7 +413,7 @@ async fn resolve_tool_result_path(
     if let Some(path) = &chat.session_file_path {
         return Ok(Some(path.clone()));
     }
-    let Some(session_id) = &chat.claude_session_id else {
+    let Some(session_id) = &chat.vendor_session_id else {
         return Ok(None);
     };
     let project_id = chat.project_id.clone();
@@ -762,7 +762,7 @@ mod tests {
                 db.chats.update(
                     &chat.id,
                     &ChatPatch {
-                        claude_session_id: Some("session-1".into()),
+                        vendor_session_id: Some("session-1".into()),
                         ..Default::default()
                     },
                 )?;

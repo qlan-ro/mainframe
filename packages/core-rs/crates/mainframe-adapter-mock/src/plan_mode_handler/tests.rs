@@ -143,7 +143,7 @@ async fn approving_with_clear_context_wipes_the_transcript_and_restarts_from_the
         vec![PlanChatUpdate {
             plan_mode: Some(false),
             permission_mode: Some(ExecutionMode::AcceptEdits),
-            clear_claude_session_id: true,
+            clear_vendor_session_id: true,
         }]
     );
     // The chat layer's clear-context branch never forwarded the answer, and the
@@ -186,7 +186,7 @@ async fn approving_without_clear_context_leaves_the_transcript_alone() {
         vec![PlanChatUpdate {
             plan_mode: Some(false),
             permission_mode: Some(ExecutionMode::AcceptEdits),
-            clear_claude_session_id: false,
+            clear_vendor_session_id: false,
         }]
     );
 }

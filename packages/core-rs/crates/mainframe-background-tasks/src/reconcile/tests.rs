@@ -9,12 +9,12 @@ use tokio::sync::broadcast;
 
 // Chat has ~30 fields (most serde-defaulted optionals); build from JSON with
 // only the required fields + the two reconcile reads.
-fn make_chat(claude_session_id: &str, worktree_path: Option<&str>, project_id: &str) -> Chat {
+fn make_chat(vendor_session_id: &str, worktree_path: Option<&str>, project_id: &str) -> Chat {
     let mut v = serde_json::json!({
-        "id": format!("chat-{claude_session_id}"),
+        "id": format!("chat-{vendor_session_id}"),
         "adapterId": "claude",
         "projectId": project_id,
-        "claudeSessionId": claude_session_id,
+        "claudeSessionId": vendor_session_id,
         "status": "active",
         "createdAt": "2026-07-08T00:00:00.000Z",
         "updatedAt": "2026-07-08T00:00:00.000Z",

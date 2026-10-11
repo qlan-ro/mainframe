@@ -12,7 +12,7 @@ const BASE: ForkFromMessageInput = {
   adapterName: 'Codex',
   temporary: false,
   noProject: false,
-  claudeSessionId: 'sess-1',
+  vendorSessionId: 'sess-1',
   transcriptMissing: false,
   directoryMissing: false,
   messageUnsent: false,
@@ -23,7 +23,7 @@ const BASE: ForkFromMessageInput = {
 const ALL_FAILING: ForkFromMessageInput = {
   ...BASE,
   capabilityFork: false,
-  claudeSessionId: undefined,
+  vendorSessionId: undefined,
   transcriptMissing: true,
   directoryMissing: true,
   messageUnsent: true,
@@ -45,7 +45,7 @@ describe('forkFromMessageAvailability', () => {
     expect(reasonOf(ALL_FAILING)).toBe("Forking isn't available for Codex chats yet");
     const step2 = { ...ALL_FAILING, capabilityFork: true };
     expect(reasonOf(step2)).toBe('Nothing to fork yet');
-    const step3 = { ...step2, claudeSessionId: 'sess-1' };
+    const step3 = { ...step2, vendorSessionId: 'sess-1' };
     expect(reasonOf(step3)).toBe("This chat's transcript is missing");
     const step4 = { ...step3, transcriptMissing: false };
     expect(reasonOf(step4)).toBe("This chat's folder is missing");

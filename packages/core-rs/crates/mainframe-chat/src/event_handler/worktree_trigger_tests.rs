@@ -14,7 +14,7 @@ use crate::test_support::{FakeDeps, test_chat};
 fn sink() -> (Arc<dyn SessionSink>, Arc<FakeDeps>) {
     let mut chat = test_chat("chat-wt");
     chat.process_state = Some(Some(ProcessState::Working));
-    chat.claude_session_id = Some("sess-wt".to_string());
+    chat.vendor_session_id = Some("sess-wt".to_string());
     let deps = FakeDeps::arc();
     *deps.adapters.transcript_present.lock().unwrap() = Some(true);
     let h = Harness::with_deps(deps, Arc::new(Mutex::new(ActiveChat::new(chat, None))));

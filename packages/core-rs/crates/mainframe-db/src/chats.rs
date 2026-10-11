@@ -380,13 +380,13 @@ impl ChatsRepository {
         Ok(())
     }
 
-    /// Session columns (`claude_session_id`, `session_file_path`, context
+    /// Session columns (`vendor_session_id`, `session_file_path`, context
     /// usage, `transcript_missing`, adapter and model) are routed through the
     /// segment repository first, in the same transaction, so the `chats`
     /// mirror and the active native-session row never disagree.
     pub fn update(&self, id: &str, updates: &ChatPatch) -> Result<(), DbError> {
         let tx = self.db.unchecked_transaction()?;
-        if let Some(native_id) = &updates.claude_session_id {
+        if let Some(native_id) = &updates.vendor_session_id {
             chat_segments::record_native_id(
                 &tx,
                 id,

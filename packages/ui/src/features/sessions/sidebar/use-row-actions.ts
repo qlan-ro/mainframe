@@ -51,7 +51,7 @@ export function useRowActions(item: SessionItem): RowActions {
       adapterName: adapter?.name ?? item.custom.adapterId,
       temporary: item.custom.temporary,
       noProject: item.custom.noProject,
-      claudeSessionId: item.custom.claudeSessionId,
+      vendorSessionId: item.custom.vendorSessionId,
       transcriptMissing: item.custom.transcriptMissing,
       directoryMissing: item.custom.directoryMissing ?? false,
       isRunning: item.custom.isRunning ?? false,

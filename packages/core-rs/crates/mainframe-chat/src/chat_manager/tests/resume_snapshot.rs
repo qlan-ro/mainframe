@@ -95,7 +95,7 @@ fn tool_result_content(tool_use_id: &str) -> MessageContent {
 #[tokio::test]
 async fn a_resume_snapshot_loads_the_transcript_once() {
     let mut chat = test_chat("c1");
-    chat.claude_session_id = Some("sess-1".to_string());
+    chat.vendor_session_id = Some("sess-1".to_string());
     let deps = FakeDeps::with_chats(vec![chat]);
     // An EMPTY history on purpose: a non-empty one populates the message
     // cache, and the second lookup would then never reach the disk — the case
@@ -123,7 +123,7 @@ async fn a_resume_snapshot_loads_the_transcript_once() {
 #[tokio::test]
 async fn warm_and_cold_snapshots_agree_past_two_thousand() {
     let mut chat = test_chat("c1");
-    chat.claude_session_id = Some("sess-1".to_string());
+    chat.vendor_session_id = Some("sess-1".to_string());
     let deps = FakeDeps::with_chats(vec![chat]);
     let history: Vec<ChatMessage> = (0..2_100).map(numbered_message).collect();
     *deps.adapters.history.lock().unwrap() = Some(history.clone());
@@ -160,7 +160,7 @@ async fn warm_and_cold_snapshots_agree_past_two_thousand() {
 #[tokio::test]
 async fn first_live_revision_extends_the_snapshot_prefix() {
     let mut chat = test_chat("c1");
-    chat.claude_session_id = Some("sess-1".to_string());
+    chat.vendor_session_id = Some("sess-1".to_string());
     let deps = FakeDeps::with_chats(vec![chat]);
     let history: Vec<ChatMessage> = (0..2_100).map(numbered_message).collect();
     *deps.adapters.history.lock().unwrap() = Some(history.clone());

@@ -1,6 +1,6 @@
 //! `chat_native_sessions` rows and the `chats` mirror.
 //!
-//! The mirror invariant: `chats.adapter_id`, `claude_session_id`,
+//! The mirror invariant: `chats.adapter_id`, `vendor_session_id`,
 //! `session_file_path`, the three `last_context_*` columns and
 //! `transcript_missing` always describe the active segment's native session.
 //! Every write to those columns goes through this module, inside the caller's

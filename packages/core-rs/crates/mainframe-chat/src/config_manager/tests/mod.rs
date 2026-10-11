@@ -113,7 +113,7 @@ fn cell_with(session: Arc<FakeSession>) -> Arc<Mutex<ActiveChat>> {
 fn worktreed_chat() -> Chat {
     let mut chat = test_chat("c1");
     chat.adapter_id = "codex".to_string();
-    chat.claude_session_id = Some("sess1".to_string());
+    chat.vendor_session_id = Some("sess1".to_string());
     chat.worktree_path = Some("/old/wt".to_string());
     chat.branch_name = Some("old-branch".to_string());
     chat
@@ -166,7 +166,7 @@ fn git_project() -> (tempfile::TempDir, Project) {
 
 fn claude_live_chat() -> Chat {
     let mut chat = test_chat("c1");
-    chat.claude_session_id = Some("sess1".to_string());
+    chat.vendor_session_id = Some("sess1".to_string());
     chat
 }
 

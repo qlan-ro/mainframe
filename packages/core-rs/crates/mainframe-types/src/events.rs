@@ -125,7 +125,8 @@ pub enum DaemonEvent {
     #[serde(rename = "process.ready")]
     ProcessReady {
         process_id: String,
-        claude_session_id: String,
+        #[serde(rename = "claudeSessionId")]
+        vendor_session_id: String,
     },
     #[serde(rename = "process.stopped")]
     ProcessStopped { process_id: String },

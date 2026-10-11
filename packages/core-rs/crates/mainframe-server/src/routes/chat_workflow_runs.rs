@@ -1,6 +1,6 @@
 //! The disk backfill composer for the chat-history `workflowRuns` fold.
 //!
-//! Only the chat's *current* `claude_session_id` is scanned. Runs
+//! Only the chat's *current* `vendor_session_id` is scanned. Runs
 //! recorded under a pre-resume session id (before the chat's last `--resume`)
 //! are invisible to this backfill and render `Unavailable` — widening the scan
 //! would need the chat's session lineage, which no current call site returns.
@@ -23,7 +23,7 @@ async fn resolve_session(ctx: &AppCtx, chat_id: &str) -> Option<(String, String)
         .await
         .ok()
         .flatten()?;
-    let session_id = chat.claude_session_id?;
+    let session_id = chat.vendor_session_id?;
     let project = ctx
         .core
         .db

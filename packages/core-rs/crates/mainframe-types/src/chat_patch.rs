@@ -18,7 +18,8 @@ pub struct ChatPatch {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub claude_session_id: Option<String>,
+    #[serde(rename = "claudeSessionId")]
+    pub vendor_session_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub session_file_path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

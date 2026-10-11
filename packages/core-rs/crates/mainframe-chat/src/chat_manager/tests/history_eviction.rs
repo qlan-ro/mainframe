@@ -11,7 +11,7 @@ fn history() -> ChatMessage {
 
 fn fully_pinned_cache() -> (Arc<FakeDeps>, ChatManager) {
     let mut chat = test_chat("c1");
-    chat.claude_session_id = Some("session".into());
+    chat.vendor_session_id = Some("session".into());
     let deps = FakeDeps::with_chats(vec![chat]);
     *deps.adapters.history.lock().unwrap() = Some(vec![history()]);
     *deps.adapters.transcript_present.lock().unwrap() = Some(true);

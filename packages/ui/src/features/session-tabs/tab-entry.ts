@@ -26,7 +26,7 @@ function tabForkAvailability(
     adapterName: adapter?.name ?? custom.adapterId,
     temporary: custom.temporary,
     noProject: custom.noProject,
-    claudeSessionId: custom.claudeSessionId,
+    vendorSessionId: custom.vendorSessionId,
     transcriptMissing: custom.transcriptMissing,
     directoryMissing: custom.directoryMissing ?? false,
     isRunning: custom.isRunning ?? false,

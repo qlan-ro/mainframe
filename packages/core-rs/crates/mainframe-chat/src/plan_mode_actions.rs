@@ -105,7 +105,7 @@ impl PlanActionContext for ChatPlanActionCtx {
                 },
             )
             .map_err(|error| AdapterError::Message(error.to_string()))?;
-        if patch.clear_claude_session_id {
+        if patch.clear_vendor_session_id {
             self.shared
                 .deps
                 .chats_clear_session(&self.chat_id)
@@ -119,8 +119,8 @@ impl PlanActionContext for ChatPlanActionCtx {
             if let Some(mode) = patch.permission_mode {
                 guard.chat.permission_mode = Some(mode);
             }
-            if patch.clear_claude_session_id {
-                guard.chat.claude_session_id = None;
+            if patch.clear_vendor_session_id {
+                guard.chat.vendor_session_id = None;
             }
             let chat = guard.chat.clone();
             drop(guard);

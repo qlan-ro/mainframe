@@ -49,7 +49,7 @@ fn seed(deps: &Harness, mutate: impl FnOnce(&mut Chat)) {
 async fn continue_here_clears_session_drops_messages_and_broadcasts() {
     let deps = Harness::default();
     seed(&deps, |c| {
-        c.claude_session_id = Some("dead-sess".to_string());
+        c.vendor_session_id = Some("dead-sess".to_string());
         c.session_file_path = Some("/x/dead-sess.jsonl".to_string());
         c.transcript_missing = Some(true);
     });
@@ -59,13 +59,13 @@ async fn continue_here_clears_session_drops_messages_and_broadcasts() {
         .unwrap();
 
     let row = deps.deps.chats_get("chat-1").unwrap().unwrap();
-    assert_eq!(row.claude_session_id, None);
+    assert_eq!(row.vendor_session_id, None);
     assert_eq!(row.session_file_path, None);
     assert_eq!(row.transcript_missing, Some(false));
     assert_eq!(deps.shared.messages.lock().unwrap().get("chat-1"), None);
     assert_eq!(deps.deps.events().len(), 1);
     let active = deps.shared.active("chat-1").unwrap();
-    assert_eq!(active.lock().unwrap().chat.claude_session_id, None);
+    assert_eq!(active.lock().unwrap().chat.vendor_session_id, None);
 }
 
 #[tokio::test]
@@ -76,7 +76,7 @@ async fn continue_here_kills_a_spawned_session() {
         ..Default::default()
     };
     seed(&deps, |c| {
-        c.claude_session_id = Some("dead-sess".to_string());
+        c.vendor_session_id = Some("dead-sess".to_string());
         c.transcript_missing = Some(true);
     });
 

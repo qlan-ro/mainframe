@@ -70,7 +70,7 @@ impl Harness {
 
 fn chat_with(session_id: Option<&str>, transcript_missing: Option<bool>) -> Chat {
     let mut c = crate::test_support::test_chat("chat-1");
-    c.claude_session_id = session_id.map(str::to_string);
+    c.vendor_session_id = session_id.map(str::to_string);
     c.transcript_missing = transcript_missing;
     c
 }

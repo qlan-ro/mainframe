@@ -8,12 +8,12 @@ impl ChatConfigManager {
         branch_name: Option<&str>,
     ) -> Result<(), ConfigError> {
         let cell = self.require_active_chat(chat_id)?;
-        let (current_worktree, project_id, claude_session_id, adapter) = {
+        let (current_worktree, project_id, vendor_session_id, adapter) = {
             let guard = cell.lock_recover();
             (
                 guard.chat.worktree_path.clone(),
                 guard.chat.project_id.clone(),
-                guard.chat.claude_session_id.clone(),
+                guard.chat.vendor_session_id.clone(),
                 guard.chat.adapter_id.clone(),
             )
         };
@@ -22,7 +22,7 @@ impl ChatConfigManager {
         }
         let branch_name = branch_name.map(str::to_string);
 
-        if let Some(session_id) = claude_session_id {
+        if let Some(session_id) = vendor_session_id {
             let project = self
                 .shared
                 .deps
@@ -63,11 +63,11 @@ impl ChatConfigManager {
         let Some(cell) = self.active_chat(chat_id) else {
             return Ok(());
         };
-        let (worktree_path, has_claude_session, project_id, branch_name) = {
+        let (worktree_path, has_vendor_session, project_id, branch_name) = {
             let guard = cell.lock_recover();
             (
                 guard.chat.worktree_path.clone(),
-                guard.chat.claude_session_id.is_some(),
+                guard.chat.vendor_session_id.is_some(),
                 guard.chat.project_id.clone(),
                 guard.chat.branch_name.clone(),
             )
@@ -75,7 +75,7 @@ impl ChatConfigManager {
         let Some(worktree_path) = worktree_path else {
             return Ok(());
         };
-        if has_claude_session
+        if has_vendor_session
             || self
                 .shared
                 .deps

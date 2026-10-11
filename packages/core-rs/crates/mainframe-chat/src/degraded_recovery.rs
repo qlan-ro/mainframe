@@ -79,7 +79,7 @@ pub(crate) async fn continue_here(
     shared.deps.chats_clear_session(chat_id)?;
     if let Some(cell) = shared.active(chat_id) {
         let mut active = cell.lock_recover();
-        active.chat.claude_session_id = None;
+        active.chat.vendor_session_id = None;
         active.chat.session_file_path = None;
         active.chat.transcript_missing = Some(false);
     }

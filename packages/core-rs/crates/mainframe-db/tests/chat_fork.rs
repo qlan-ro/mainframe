@@ -85,7 +85,7 @@ fn create_fork_round_trips_every_inherited_field_and_parent_chat_id() {
     assert_eq!(fork.worktree_path.as_deref(), Some("/tmp/worktree"));
     assert_eq!(fork.branch_name.as_deref(), Some("feature/fork"));
     assert_eq!(fork.title.as_deref(), Some("Parent title (fork)"));
-    assert_eq!(fork.claude_session_id, None);
+    assert_eq!(fork.vendor_session_id, None);
     assert_eq!(fork.total_cost, 0.0);
     assert_eq!(fork.total_tokens_input, 0);
     assert_eq!(fork.total_tokens_output, 0);

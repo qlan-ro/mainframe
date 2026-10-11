@@ -19,10 +19,10 @@ impl DaemonChatDeps {
                 return None;
             }
         };
-        // An unsent fork has no `claude_session_id` yet; it scans
+        // An unsent fork has no `vendor_session_id` yet; it scans
         // its pending fork's snapshot instead, same as every other session
         // builder (`build_history_session`/`do_load_chat`/`do_start_chat`).
-        let own_id = chat.claude_session_id.clone();
+        let own_id = chat.vendor_session_id.clone();
         let fork_source = match ChatStore::get_pending_fork(self, chat_id) {
             Ok(value) => value.map(|p| p.fork_source),
             Err(error) => {

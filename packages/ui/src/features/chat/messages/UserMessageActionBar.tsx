@@ -64,7 +64,7 @@ const ForkFromHereBar: FC<UserMessageActionBarProps> = ({ prefill }) => {
     adapterName: adapter?.name ?? custom.adapterId,
     temporary: custom.temporary,
     noProject: custom.noProject,
-    claudeSessionId: custom.claudeSessionId,
+    vendorSessionId: custom.vendorSessionId,
     transcriptMissing: custom.transcriptMissing,
     directoryMissing: custom.directoryMissing ?? false,
     messageUnsent: meta.pending === true || meta.error != null,

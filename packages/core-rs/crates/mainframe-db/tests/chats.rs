@@ -552,7 +552,7 @@ fn mark_context_lost_stamps_the_loss_time_and_clears_the_resume_target() {
         .update(
             &chat.id,
             &ChatPatch {
-                claude_session_id: Some("sess-1".to_string()),
+                vendor_session_id: Some("sess-1".to_string()),
                 session_file_path: Some("/tmp/sess-1.jsonl".to_string()),
                 vendor_session_ephemeral: Some(true),
                 ..Default::default()
@@ -569,7 +569,7 @@ fn mark_context_lost_stamps_the_loss_time_and_clears_the_resume_target() {
         fetched.context_lost_at.as_deref(),
         Some("2026-09-24T00:00:00.000Z")
     );
-    assert_eq!(fetched.claude_session_id, None);
+    assert_eq!(fetched.vendor_session_id, None);
     assert_eq!(fetched.session_file_path, None);
     assert!(!fetched.vendor_session_ephemeral);
 }

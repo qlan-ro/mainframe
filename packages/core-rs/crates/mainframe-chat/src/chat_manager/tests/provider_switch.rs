@@ -47,7 +47,7 @@ pub(super) fn text_message(id: &str, kind: ChatMessageType, text: &str) -> ChatM
 fn setup(layout: SegmentLayout, adapter: &str) -> (Arc<FakeDeps>, Arc<FakeStore>, ChatManager) {
     let mut chat = test_chat("c1");
     chat.adapter_id = adapter.into();
-    chat.claude_session_id = (adapter == "claude").then(|| "c-1".to_string());
+    chat.vendor_session_id = (adapter == "claude").then(|| "c-1".to_string());
     let deps = FakeDeps::with_chats(vec![chat.clone()]);
     let store = Arc::new(FakeStore {
         layout: Mutex::new(layout),

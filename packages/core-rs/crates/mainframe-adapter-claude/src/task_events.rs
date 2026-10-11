@@ -47,7 +47,7 @@ pub struct TaskStartedPayload {
 
 /// Context threaded from the session at `task_started` time.
 pub struct TaskStartedCtx {
-    pub claude_session_id: String,
+    pub vendor_session_id: String,
     pub real_cwd: String,
 }
 
@@ -206,7 +206,7 @@ impl ClaudeTaskEvents {
             "{}/{}/{}/tasks/{}.output",
             spool_root().to_string_lossy(),
             encode_cwd_segment(&ctx.real_cwd),
-            ctx.claude_session_id,
+            ctx.vendor_session_id,
             payload.task_id
         );
         self.tracker.start(
@@ -327,7 +327,7 @@ mod tests {
 
     fn ctx() -> TaskStartedCtx {
         TaskStartedCtx {
-            claude_session_id: SESS.to_string(),
+            vendor_session_id: SESS.to_string(),
             real_cwd: CWD.to_string(),
         }
     }

@@ -1593,7 +1593,7 @@ fn history_message() -> ChatMessage {
 #[tokio::test]
 async fn get_display_messages_reports_transcript_missing_persists_and_emits() {
     let mut chat = test_chat("c1");
-    chat.claude_session_id = Some("sess-1".to_string());
+    chat.vendor_session_id = Some("sess-1".to_string());
     let deps = FakeDeps::with_chats(vec![chat]);
     *deps.adapters.transcript_present.lock().unwrap() = Some(false); // transcript gone
     let mgr = ChatManager::new(deps.clone());
@@ -1620,7 +1620,7 @@ async fn get_display_messages_reports_transcript_missing_persists_and_emits() {
 #[tokio::test]
 async fn get_display_messages_self_heals_a_stale_flag() {
     let mut chat = test_chat("c1");
-    chat.claude_session_id = Some("sess-1".to_string());
+    chat.vendor_session_id = Some("sess-1".to_string());
     chat.transcript_missing = Some(true);
     let deps = FakeDeps::with_chats(vec![chat]);
     *deps.adapters.transcript_present.lock().unwrap() = Some(true); // transcript back
@@ -1645,7 +1645,7 @@ async fn get_display_messages_self_heals_a_stale_flag() {
 #[tokio::test]
 async fn send_message_with_the_flag_clears_the_dead_session_identity() {
     let mut chat = test_chat("c1");
-    chat.claude_session_id = Some("sess-1".to_string());
+    chat.vendor_session_id = Some("sess-1".to_string());
     chat.transcript_missing = Some(true);
     chat.session_file_path = Some("/home/u/.claude/projects/x/sess-1.jsonl".to_string());
     let deps = FakeDeps::with_chats(vec![chat]);
@@ -1658,7 +1658,7 @@ async fn send_message_with_the_flag_clears_the_dead_session_identity() {
         .await;
 
     let row = deps.store.chats.lock().unwrap().get("c1").cloned().unwrap();
-    assert_eq!(row.claude_session_id, None);
+    assert_eq!(row.vendor_session_id, None);
     assert_eq!(row.session_file_path, None);
     assert_eq!(row.transcript_missing, Some(false));
 }

@@ -90,7 +90,7 @@ impl ChatManager {
         if parent.no_project {
             return Err(ForkChatError::NoProject);
         }
-        let Some(source_session_id) = parent.claude_session_id.clone() else {
+        let Some(source_session_id) = parent.vendor_session_id.clone() else {
             return Err(ForkChatError::NothingToForkYet);
         };
         if parent.transcript_missing == Some(true) {

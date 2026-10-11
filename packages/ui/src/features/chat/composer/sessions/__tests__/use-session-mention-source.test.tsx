@@ -36,7 +36,7 @@ import { useSessionMentionSource } from '../use-session-mention-source';
 function makeEntry(overrides: {
   remoteId: string;
   title?: string;
-  claudeSessionId?: string | null;
+  vendorSessionId?: string | null;
   projectId?: string;
   updatedAt?: number;
 }) {
@@ -48,7 +48,7 @@ function makeEntry(overrides: {
     custom: {
       projectId: overrides.projectId ?? PROJECT,
       adapterId: 'claude',
-      claudeSessionId: overrides.claudeSessionId === null ? undefined : (overrides.claudeSessionId ?? 'sess'),
+      vendorSessionId: overrides.vendorSessionId === null ? undefined : (overrides.vendorSessionId ?? 'sess'),
       tags: [],
       pinned: false,
       status: 'active',
@@ -70,7 +70,7 @@ describe('useSessionMentionSource — request on mount', () => {
   it('calls resolveSessionTranscripts once on mount with only the candidate ids', async () => {
     __threadItems = [
       makeEntry({ remoteId: 'c1', title: 'One' }),
-      makeEntry({ remoteId: 'c2', title: 'Two', claudeSessionId: null }),
+      makeEntry({ remoteId: 'c2', title: 'Two', vendorSessionId: null }),
     ];
     resolveSessionTranscriptsSpy.mockResolvedValue([{ chatId: 'c1', state: 'resolved', path: '/t/c1.jsonl' }]);
 

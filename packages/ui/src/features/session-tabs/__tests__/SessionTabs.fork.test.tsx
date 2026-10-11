@@ -85,7 +85,7 @@ describe('SessionTabs — Fork item, enabled', () => {
         title: 'Fix the parser',
         custom: {
           adapterId: 'claude',
-          claudeSessionId: 'sess-1',
+          vendorSessionId: 'sess-1',
           transcriptMissing: false,
           directoryMissing: false,
           isRunning: false,
@@ -114,7 +114,7 @@ describe('SessionTabs — Fork item, disabled', () => {
   it('an adapter without the fork capability: disabled, exact reason', () => {
     seedSingleTab({
       adapterId: 'codex',
-      claudeSessionId: 'sess-1',
+      vendorSessionId: 'sess-1',
       transcriptMissing: false,
       directoryMissing: false,
       isRunning: false,
@@ -132,7 +132,7 @@ describe('SessionTabs — Fork item, disabled', () => {
   it('a chat with no provider session: disabled, "Nothing to fork yet"', () => {
     seedSingleTab({
       adapterId: 'claude',
-      claudeSessionId: undefined,
+      vendorSessionId: undefined,
       transcriptMissing: false,
       directoryMissing: false,
       isRunning: false,
@@ -147,7 +147,7 @@ describe('SessionTabs — Fork item, disabled', () => {
   it('a working chat: disabled', () => {
     seedSingleTab({
       adapterId: 'claude',
-      claudeSessionId: 'sess-1',
+      vendorSessionId: 'sess-1',
       transcriptMissing: false,
       directoryMissing: false,
       isRunning: true,
@@ -162,7 +162,7 @@ describe('SessionTabs — Fork item, disabled', () => {
   it('a waiting chat (pending permission/question): disabled', () => {
     seedSingleTab({
       adapterId: 'claude',
-      claudeSessionId: 'sess-1',
+      vendorSessionId: 'sess-1',
       transcriptMissing: false,
       directoryMissing: false,
       isRunning: false,
@@ -177,7 +177,7 @@ describe('SessionTabs — Fork item, disabled', () => {
   it('an idle chat with background tasks only (isRunning false, hasPending false) is enabled', () => {
     seedSingleTab({
       adapterId: 'claude',
-      claudeSessionId: 'sess-1',
+      vendorSessionId: 'sess-1',
       transcriptMissing: false,
       directoryMissing: false,
       isRunning: false,
