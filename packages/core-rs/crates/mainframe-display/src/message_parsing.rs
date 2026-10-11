@@ -161,42 +161,6 @@ fn strip_image_coordinate_note(text: &str) -> String {
 
 fn match_image_note(c: &[char], start: usize) -> Option<usize> {
     let mut i = start;
-    let lit = |c: &[char], i: usize, s: &str| -> Option<usize> {
-        let sc: Vec<char> = s.chars().collect();
-        if i + sc.len() <= c.len() && c[i..i + sc.len()] == sc[..] {
-            Some(i + sc.len())
-        } else {
-            None
-        }
-    };
-    let ws_star = |c: &[char], mut i: usize| -> usize {
-        while i < c.len() && c[i].is_whitespace() {
-            i += 1;
-        }
-        i
-    };
-    let ws_plus = |c: &[char], i: usize| -> Option<usize> {
-        if i < c.len() && c[i].is_whitespace() {
-            Some(ws_star(c, i))
-        } else {
-            None
-        }
-    };
-    let digits = |c: &[char], i: usize| -> Option<usize> {
-        let mut j = i;
-        while j < c.len() && c[j].is_ascii_digit() {
-            j += 1;
-        }
-        if j > i { Some(j) } else { None }
-    };
-    let num = |c: &[char], i: usize| -> Option<usize> {
-        // [0-9.]+
-        let mut j = i;
-        while j < c.len() && (c[j].is_ascii_digit() || c[j] == '.') {
-            j += 1;
-        }
-        if j > i { Some(j) } else { None }
-    };
 
     i = lit(c, i, "[Image:")?;
     i = ws_star(c, i);
@@ -298,3 +262,44 @@ fn remove_mainframe_wrapper(text: &str) -> String {
 #[cfg(test)]
 #[path = "message_parsing_tests.rs"]
 mod tests;
+
+fn lit(c: &[char], i: usize, s: &str) -> Option<usize> {
+    let sc: Vec<char> = s.chars().collect();
+    if i + sc.len() <= c.len() && c[i..i + sc.len()] == sc[..] {
+        Some(i + sc.len())
+    } else {
+        None
+    }
+}
+
+fn ws_star(c: &[char], mut i: usize) -> usize {
+    while i < c.len() && c[i].is_whitespace() {
+        i += 1;
+    }
+    i
+}
+
+fn ws_plus(c: &[char], i: usize) -> Option<usize> {
+    if i < c.len() && c[i].is_whitespace() {
+        Some(ws_star(c, i))
+    } else {
+        None
+    }
+}
+
+fn digits(c: &[char], i: usize) -> Option<usize> {
+    let mut j = i;
+    while j < c.len() && c[j].is_ascii_digit() {
+        j += 1;
+    }
+    if j > i { Some(j) } else { None }
+}
+
+fn num(c: &[char], i: usize) -> Option<usize> {
+    // [0-9.]+
+    let mut j = i;
+    while j < c.len() && (c[j].is_ascii_digit() || c[j] == '.') {
+        j += 1;
+    }
+    if j > i { Some(j) } else { None }
+}

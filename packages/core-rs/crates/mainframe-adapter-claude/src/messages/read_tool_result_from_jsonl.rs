@@ -10,8 +10,7 @@ pub async fn read_tool_result_from_jsonl(file_path: &str, tool_use_id: &str) -> 
         Ok(f) => f,
         Err(err) => {
             tracing::warn!(
-                module = "jsonl-tool-result",
-                err = %err,
+                error = %err,
                 file_path = %file_path,
                 "error scanning session jsonl"
             );
@@ -25,8 +24,7 @@ pub async fn read_tool_result_from_jsonl(file_path: &str, tool_use_id: &str) -> 
             Ok(None) => break,
             Err(err) => {
                 tracing::warn!(
-                    module = "jsonl-tool-result",
-                    err = %err,
+                    error = %err,
                     file_path = %file_path,
                     "error scanning session jsonl"
                 );
@@ -40,18 +38,8 @@ pub async fn read_tool_result_from_jsonl(file_path: &str, tool_use_id: &str) -> 
             Ok(v) => v,
             Err(_) => continue, // tolerate a partially-written trailing line
         };
-        let content = row.get("message").and_then(|m| m.get("content"));
-        let arr = match content.and_then(Value::as_array) {
-            Some(a) => a,
-            None => continue,
-        };
-        for block in arr {
-            if block.is_object()
-                && block.get("type").and_then(Value::as_str) == Some("tool_result")
-                && block.get("tool_use_id").and_then(Value::as_str) == Some(tool_use_id)
-            {
-                return Some(extract_tool_result_content(block.get("content")));
-            }
+        if let Some(result) = matching_result(&row, tool_use_id) {
+            return Some(result);
         }
     }
     None
@@ -60,3 +48,17 @@ pub async fn read_tool_result_from_jsonl(file_path: &str, tool_use_id: &str) -> 
 #[cfg(test)]
 #[path = "read_tool_result_from_jsonl_tests.rs"]
 mod tests;
+
+fn matching_result(row: &Value, tool_use_id: &str) -> Option<String> {
+    let content = row.get("message").and_then(|m| m.get("content"));
+    let arr = content.and_then(Value::as_array)?;
+    for block in arr {
+        if block.is_object()
+            && block.get("type").and_then(Value::as_str) == Some("tool_result")
+            && block.get("tool_use_id").and_then(Value::as_str) == Some(tool_use_id)
+        {
+            return Some(extract_tool_result_content(block.get("content")));
+        }
+    }
+    None
+}

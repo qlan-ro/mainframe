@@ -76,17 +76,7 @@ pub(super) async fn run(
     // for a mode other than "inherit": e.g. Codex `default` really does ask
     // before writes and network now, where before it silently
     // edited unprompted.
-    let permission_mode_meanings: Value = allowed_modes_by_adapter
-        .iter()
-        .map(|(id, allowed)| {
-            let meanings: serde_json::Map<String, Value> = allowed
-                .iter()
-                .map(|m| (mode_label(*m), json!(mode_meaning(id, *m))))
-                .collect();
-            (id.clone(), Value::Object(meanings))
-        })
-        .collect::<serde_json::Map<_, _>>()
-        .into();
+    let permission_mode_meanings = permission_meanings(&allowed_modes_by_adapter);
     Ok(json!({
         "caller": {
             "chatId": caller.id,
@@ -140,3 +130,18 @@ fn adapter_json(adapter: &AdapterView) -> Value {
 #[cfg(test)]
 #[path = "capabilities_tests.rs"]
 mod tests;
+
+fn permission_meanings(allowed_modes_by_adapter: &[(String, Vec<ExecutionMode>)]) -> Value {
+    let permission_mode_meanings: Value = allowed_modes_by_adapter
+        .iter()
+        .map(|(id, allowed)| {
+            let meanings: serde_json::Map<String, Value> = allowed
+                .iter()
+                .map(|m| (mode_label(*m), json!(mode_meaning(id, *m))))
+                .collect();
+            (id.clone(), Value::Object(meanings))
+        })
+        .collect::<serde_json::Map<_, _>>()
+        .into();
+    permission_mode_meanings
+}

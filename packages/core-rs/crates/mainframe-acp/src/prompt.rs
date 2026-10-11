@@ -98,7 +98,9 @@ pub async fn dispatch_cancel(params: Option<Value>, port: &dyn PromptPort) {
     let Ok(notification) = serde_json::from_value::<CancelSessionNotification>(params) else {
         return;
     };
-    let _ = port.cancel(&notification.session_id).await;
+    if let Err(error) = port.cancel(&notification.session_id).await {
+        tracing::warn!(?error, session_id = %notification.session_id, "session cancellation failed");
+    }
 }
 
 /// The `^[a-zA-Z0-9_-]+$` identifier rule the legacy `message.send` frame

@@ -237,66 +237,6 @@ impl ChatManager {
         // state that does not exist yet. A steer that then fails never got
         // the CLI's attention at all, so both are rolled back rather than
         // left to look delivered/queued.
-        let handoff = match delivery {
-            Delivery::Steer => {
-                let message = self.store_user_message(
-                    chat_id,
-                    outgoing.message_content,
-                    transient_metadata,
-                    attachment_ids,
-                    Some(message_uuid.clone()),
-                );
-                // Claude's steer is also a queued send when replay-ack
-                // applies (`queued_message_metadata`): the running
-                // transition is reported once, on the ack, not here too.
-                if is_queued {
-                    self.record_queued_ref(
-                        chat_id,
-                        &message,
-                        message_uuid.clone(),
-                        content,
-                        attachment_ids,
-                    );
-                }
-                if let Err(err) = session
-                    .steer(outgoing.text, Some(message_uuid.clone()))
-                    .await
-                {
-                    if is_queued {
-                        self.remove_queued_ref(chat_id, &message_uuid);
-                    }
-                    self.shared
-                        .messages
-                        .lock_recover()
-                        .remove_by_id(chat_id, &message.id);
-                    self.event_handler.emit_display(chat_id);
-                    return Err(err.into());
-                }
-                if self.shared.best_effort(
-                    chat_id,
-                    self.shared
-                        .deps
-                        .extract_mentions_from_text(chat_id, content),
-                    false,
-                ) {
-                    self.emit(DaemonEvent::ContextUpdated {
-                        chat_id: chat_id.to_string(),
-                        file_paths: None,
-                    });
-                }
-                self.assign_initial_title(post, chat_id, content);
-                if !is_queued {
-                    self.event_handler.notify_chat_surface(
-                        crate::chat_surface::ChatSurfaceEvent::TurnStarted {
-                            chat_id: chat_id.to_string(),
-                        },
-                    );
-                }
-                return Ok(());
-            }
-            Delivery::Turn { handoff } => handoff,
-        };
-
         let message = self.store_user_message(
             chat_id,
             outgoing.message_content,
@@ -304,21 +244,28 @@ impl ChatManager {
             attachment_ids,
             Some(message_uuid.clone()),
         );
+        let handoff = match delivery {
+            Delivery::Steer => {
+                return self
+                    .deliver_steer(
+                        post,
+                        session,
+                        SteerMessage {
+                            chat_id,
+                            content,
+                            attachment_ids,
+                            message,
+                            message_uuid,
+                            is_queued,
+                            text: outgoing.text,
+                        },
+                    )
+                    .await;
+            }
+            Delivery::Turn { handoff } => handoff,
+        };
 
-        if self.shared.best_effort(
-            chat_id,
-            self.shared
-                .deps
-                .extract_mentions_from_text(chat_id, content),
-            false,
-        ) {
-            self.emit(DaemonEvent::ContextUpdated {
-                chat_id: chat_id.to_string(),
-                file_paths: None,
-            });
-        }
-
-        self.assign_initial_title(post, chat_id, content);
+        self.record_message_context(post, chat_id, content);
 
         let now = now_iso8601();
         self.set_working(post, &now);
@@ -350,3 +297,15 @@ fn with_handoff(handoff: Option<&str>, text: String) -> String {
         None => text,
     }
 }
+
+struct SteerMessage<'a> {
+    chat_id: &'a str,
+    content: &'a str,
+    attachment_ids: Option<&'a [String]>,
+    message: ChatMessage,
+    message_uuid: String,
+    is_queued: bool,
+    text: String,
+}
+
+mod delivery;

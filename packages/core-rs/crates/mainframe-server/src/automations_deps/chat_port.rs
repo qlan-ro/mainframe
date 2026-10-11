@@ -14,7 +14,6 @@ pub trait AgentChatPort: Send + Sync {
     /// create so the chat row carries it from birth.
     /// `automation_run_id` stamps the chat as automation-created so the
     /// sessions sidebar hides it from the default list.
-    #[allow(clippy::too_many_arguments)]
     fn create_chat<'a>(
         &'a self,
         project_id: &'a str,

@@ -204,6 +204,10 @@ fn own_source_kind(step: &Step) -> Option<TokenSourceKind> {
     }
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "exhaustive output-token table for automation step variants"
+)]
 fn produced_by(step: &Step) -> Vec<TokenInfo> {
     match step {
         Step::AskAgent(s) => {

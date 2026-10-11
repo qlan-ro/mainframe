@@ -35,55 +35,8 @@ fn normalize_task_v2(payload: &Value) -> Vec<TodoItem> {
         let tool_name = event.get("toolName").and_then(Value::as_str);
         let args = event.get("args");
         match tool_name {
-            Some("TaskCreate") => {
-                let result_str = event.get("result").and_then(Value::as_str).unwrap_or("");
-                let id =
-                    extract_task_number(result_str).unwrap_or_else(|| (map.len() + 1).to_string());
-                let subject = arg_str(args, "subject")
-                    .map(str::to_string)
-                    .unwrap_or_else(|| format!("Task #{id}"));
-                let active_form = arg_str(args, "activeForm")
-                    .map(str::to_string)
-                    .unwrap_or_else(|| subject.clone());
-                let idx = list.len();
-                list.push(TaskState {
-                    subject,
-                    status: "pending".to_string(),
-                    active_form,
-                });
-                map.insert(id, idx);
-            }
-            Some("TaskUpdate") => {
-                let task_id = arg_str(args, "taskId").unwrap_or("");
-                let new_status = arg_str(args, "status").unwrap_or("");
-                if let Some(&idx) = map.get(task_id) {
-                    if !new_status.is_empty() {
-                        list[idx].status = new_status.to_string();
-                    }
-                    if let Some(subject) = arg_str(args, "subject") {
-                        list[idx].subject = subject.to_string();
-                    }
-                    if let Some(active_form) = arg_str(args, "activeForm") {
-                        list[idx].active_form = active_form.to_string();
-                    }
-                } else if !task_id.is_empty() {
-                    let subject = arg_str(args, "subject")
-                        .map(str::to_string)
-                        .unwrap_or_else(|| format!("Task #{task_id}"));
-                    let status = if new_status.is_empty() {
-                        "pending".to_string()
-                    } else {
-                        new_status.to_string()
-                    };
-                    let idx = list.len();
-                    list.push(TaskState {
-                        subject: subject.clone(),
-                        status,
-                        active_form: subject,
-                    });
-                    map.insert(task_id.to_string(), idx);
-                }
-            }
+            Some("TaskCreate") => create_task(event, args, &mut list, &mut map),
+            Some("TaskUpdate") => update_task(args, &mut list, &mut map),
             Some("TaskStop") => {
                 let task_id = arg_str(args, "taskId").unwrap_or("");
                 if let Some(&idx) = map.get(task_id) {
@@ -134,3 +87,58 @@ fn task_status_to_todo_status(status: &str) -> TodoStatus {
 #[cfg(test)]
 #[path = "todo_normalize_tests.rs"]
 mod tests;
+
+fn create_task(
+    event: &Value,
+    args: Option<&Value>,
+    list: &mut Vec<TaskState>,
+    map: &mut HashMap<String, usize>,
+) {
+    let result_str = event.get("result").and_then(Value::as_str).unwrap_or("");
+    let id = extract_task_number(result_str).unwrap_or_else(|| (map.len() + 1).to_string());
+    let subject = arg_str(args, "subject")
+        .map(str::to_string)
+        .unwrap_or_else(|| format!("Task #{id}"));
+    let active_form = arg_str(args, "activeForm")
+        .map(str::to_string)
+        .unwrap_or_else(|| subject.clone());
+    let idx = list.len();
+    list.push(TaskState {
+        subject,
+        status: "pending".to_string(),
+        active_form,
+    });
+    map.insert(id, idx);
+}
+
+fn update_task(args: Option<&Value>, list: &mut Vec<TaskState>, map: &mut HashMap<String, usize>) {
+    let task_id = arg_str(args, "taskId").unwrap_or("");
+    let new_status = arg_str(args, "status").unwrap_or("");
+    if let Some(&idx) = map.get(task_id) {
+        if !new_status.is_empty() {
+            list[idx].status = new_status.to_string();
+        }
+        if let Some(subject) = arg_str(args, "subject") {
+            list[idx].subject = subject.to_string();
+        }
+        if let Some(active_form) = arg_str(args, "activeForm") {
+            list[idx].active_form = active_form.to_string();
+        }
+    } else if !task_id.is_empty() {
+        let subject = arg_str(args, "subject")
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("Task #{task_id}"));
+        let status = if new_status.is_empty() {
+            "pending".to_string()
+        } else {
+            new_status.to_string()
+        };
+        let idx = list.len();
+        list.push(TaskState {
+            subject: subject.clone(),
+            status,
+            active_form: subject,
+        });
+        map.insert(task_id.to_string(), idx);
+    }
+}

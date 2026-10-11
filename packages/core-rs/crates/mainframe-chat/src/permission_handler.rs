@@ -79,7 +79,8 @@ impl ChatPermissionHandler {
     /// Attach the chat-surface observer. Idempotent-once, matching
     /// `EventHandler::set_chat_surface`.
     pub fn set_chat_surface(&self, surface: Arc<dyn ChatSurface>) {
-        let _ = self.chat_surface.set(surface);
+        /* expected */
+        let _ = self.chat_surface.set(surface); // First attachment wins.
     }
 
     fn notify_surface(&self, event: ChatSurfaceEvent) {
@@ -99,7 +100,7 @@ impl ChatPermissionHandler {
 
     pub async fn get_pending_permission(&self, chat_id: &str) -> Option<ControlRequest> {
         if !self.has_pending(chat_id) {
-            let _ = self.load_messages(chat_id).await;
+            self.load_messages(chat_id).await;
         }
         self.pending_permission_as_known(chat_id)
     }

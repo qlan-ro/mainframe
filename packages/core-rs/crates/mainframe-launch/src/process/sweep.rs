@@ -181,7 +181,6 @@ pub async fn sweep_stray_children(
     if platform == SweepPlatform::Win32 {
         if total > 0 {
             tracing::warn!(
-                target: "child-sweep",
                 total,
                 "startup child sweep unsupported on win32; leaving registry intact so orphaned pids are not lost",
             );
@@ -194,58 +193,8 @@ pub async fn sweep_stray_children(
     }
 
     for entry in entries {
-        let command = (deps.process_command)(entry.pid).await;
-        let cwd = if command.is_some() && entry.group {
-            (deps.process_cwd)(entry.pid).await
-        } else {
-            None
-        };
-        if !matches_entry(&entry, command.as_deref(), cwd.as_deref()) {
-            tracing::debug!(
-                target: "child-sweep",
-                pid = entry.pid,
-                kind = ?entry.kind,
-                label = %entry.label,
-                alive = command.is_some(),
-                "pruning child registry entry (process gone or not ours)",
-            );
-            registry.remove(entry.pid).await;
+        if !reap_entry(registry, deps, &entry).await {
             continue;
-        }
-
-        tracing::warn!(
-            target: "child-sweep",
-            pid = entry.pid,
-            kind = ?entry.kind,
-            label = %entry.label,
-            group = entry.group,
-            "reaping stray child orphaned by a previous daemon run",
-        );
-        let killed = (deps.kill)(entry.pid, Signal::Term, entry.group);
-        if !killed {
-            tracing::warn!(
-                target: "child-sweep",
-                pid = entry.pid,
-                kind = ?entry.kind,
-                label = %entry.label,
-                "kept child registry entry: kill failed, orphan may still be alive",
-            );
-            continue;
-        }
-
-        // `kill` reports signal delivery, not death. Mirror stop()'s TERM→KILL
-        // ladder: after a grace period, SIGKILL an orphan (or its still-matching
-        // group) that ignored or slow-handled SIGTERM before pruning its record.
-        sleep(deps.grace.unwrap_or(SIGTERM_GRACE)).await;
-        if orphan_still_matches(&entry, deps).await {
-            tracing::warn!(
-                target: "child-sweep",
-                pid = entry.pid,
-                kind = ?entry.kind,
-                label = %entry.label,
-                "orphan survived SIGTERM, sending SIGKILL",
-            );
-            (deps.kill)(entry.pid, Signal::Kill, entry.group);
         }
         reaped += 1;
         registry.remove(entry.pid).await;
@@ -261,3 +210,60 @@ pub async fn sweep_stray_children(
 #[cfg(test)]
 #[path = "sweep_tests.rs"]
 mod tests;
+
+async fn reap_entry(
+    registry: &dyn ChildRegistryPort,
+    deps: &SweepDeps,
+    entry: &ManagedChildEntry,
+) -> bool {
+    let command = (deps.process_command)(entry.pid).await;
+    let cwd = if command.is_some() && entry.group {
+        (deps.process_cwd)(entry.pid).await
+    } else {
+        None
+    };
+    if !matches_entry(entry, command.as_deref(), cwd.as_deref()) {
+        tracing::debug!(
+            pid = entry.pid,
+            kind = ?entry.kind,
+            label = %entry.label,
+            alive = command.is_some(),
+            "pruning child registry entry (process gone or not ours)",
+        );
+        registry.remove(entry.pid).await;
+        return false;
+    }
+
+    tracing::warn!(
+        pid = entry.pid,
+        kind = ?entry.kind,
+        label = %entry.label,
+        group = entry.group,
+        "reaping stray child orphaned by a previous daemon run",
+    );
+    let killed = (deps.kill)(entry.pid, Signal::Term, entry.group);
+    if !killed {
+        tracing::warn!(
+            pid = entry.pid,
+            kind = ?entry.kind,
+            label = %entry.label,
+            "kept child registry entry: kill failed, orphan may still be alive",
+        );
+        return false;
+    }
+
+    // `kill` reports signal delivery, not death. Mirror stop()'s TERM→KILL
+    // ladder: after a grace period, SIGKILL an orphan (or its still-matching
+    // group) that ignored or slow-handled SIGTERM before pruning its record.
+    sleep(deps.grace.unwrap_or(SIGTERM_GRACE)).await;
+    if orphan_still_matches(entry, deps).await {
+        tracing::warn!(
+            pid = entry.pid,
+            kind = ?entry.kind,
+            label = %entry.label,
+            "orphan survived SIGTERM, sending SIGKILL",
+        );
+        (deps.kill)(entry.pid, Signal::Kill, entry.group);
+    }
+    true
+}

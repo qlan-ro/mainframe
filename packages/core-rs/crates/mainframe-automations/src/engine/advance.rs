@@ -147,6 +147,14 @@ impl Interpreter {
             return Ok(());
         };
 
+        self.settle_walk(run_id, walk_result).await
+    }
+
+    async fn settle_walk(
+        &self,
+        run_id: &str,
+        walk_result: Result<WalkResult, StoreError>,
+    ) -> Result<(), StoreError> {
         match walk_result {
             Ok(result) => {
                 // A8 — cancel_run can finalize while the walk is mid-flight;

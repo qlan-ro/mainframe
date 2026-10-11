@@ -109,40 +109,9 @@ fn parse_configuration(item: &Value) -> Result<LaunchConfiguration, Vec<&'static
         }
     };
 
-    let runtime_executable = match obj.get("runtimeExecutable").and_then(Value::as_str) {
-        Some(v) if !v.is_empty() => {
-            if is_safe_executable(v) {
-                v.to_string()
-            } else {
-                issues
-                    .push("runtimeExecutable must be a safe executable name (no shell operators)");
-                v.to_string()
-            }
-        }
-        _ => {
-            issues.push("runtimeExecutable must be a non-empty string");
-            String::new()
-        }
-    };
+    let runtime_executable = parse_runtime_executable(obj, &mut issues);
 
-    // runtimeArgs: array of strings, optional, default [].
-    let runtime_args = match obj.get("runtimeArgs") {
-        None | Some(Value::Null) => Vec::new(),
-        Some(Value::Array(items)) => {
-            let mut args = Vec::with_capacity(items.len());
-            for arg in items {
-                match arg.as_str() {
-                    Some(s) => args.push(s.to_string()),
-                    None => issues.push("runtimeArgs must be an array of strings"),
-                }
-            }
-            args
-        }
-        Some(_) => {
-            issues.push("runtimeArgs must be an array of strings");
-            Vec::new()
-        }
-    };
+    let runtime_args = parse_runtime_args(obj, &mut issues);
 
     let port = match parse_port(obj.get("port")) {
         Ok(port) => port,
@@ -160,14 +129,7 @@ fn parse_configuration(item: &Value) -> Result<LaunchConfiguration, Vec<&'static
         }
     };
 
-    let preview = match obj.get("preview") {
-        None | Some(Value::Null) => None,
-        Some(Value::Bool(b)) => Some(*b),
-        Some(_) => {
-            issues.push("preview must be a boolean");
-            None
-        }
-    };
+    let preview = parse_preview(obj.get("preview"), &mut issues);
 
     let env = match parse_env(obj.get("env")) {
         Ok(env) => env,
@@ -313,6 +275,8 @@ fn coerce_string(value: &Value) -> Option<String> {
     }
 }
 
+mod fields;
+use fields::{parse_preview, parse_runtime_args, parse_runtime_executable};
 #[cfg(test)]
 #[path = "launch_config_tests.rs"]
 mod tests;

@@ -1,7 +1,10 @@
 //! The axum HTTP app, the WebSocket layer, the response envelope, and path
 //! validation.
 #![forbid(unsafe_code)]
-#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
+#![cfg_attr(
+    test,
+    allow(clippy::too_many_lines, clippy::unwrap_used, clippy::expect_used)
+)]
 pub mod acp_ws;
 pub mod async_err;
 pub mod automations_deps;

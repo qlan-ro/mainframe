@@ -480,39 +480,10 @@ async fn external_file_content(Query(q): Query<HashMap<String, String>>) -> Resp
     if is_blocked_external(&resolved) {
         return fail(StatusCode::FORBIDDEN, "Access to this path is not allowed");
     }
-    let Ok(meta) = tokio::fs::metadata(&resolved).await else {
-        tracing::warn!(path = resolved, "Failed to stat external file");
-        return fail(StatusCode::NOT_FOUND, "File not found");
-    };
-    if !meta.is_file() {
-        return fail(StatusCode::BAD_REQUEST, "Path is not a file");
+    if let Err(response) = validate_external_file(&resolved, is_base64).await {
+        return *response;
     }
-    // Same limits as the project files route: binary viewers need more headroom.
-    let max_mb: u64 = if is_base64 { 10 } else { 2 };
-    if meta.len() > max_mb * 1024 * 1024 {
-        return fail(
-            StatusCode::PAYLOAD_TOO_LARGE,
-            format!("File too large (max {max_mb}MB)"),
-        );
-    }
-    match tokio::fs::read(&resolved).await {
-        Ok(bytes) => {
-            if is_base64 {
-                ok(
-                    serde_json::json!({ "path": resolved, "content": mainframe_types::base64_data::encode(&bytes), "encoding": "base64" }),
-                )
-            } else {
-                ok(
-                    serde_json::json!({ "path": resolved, "content": String::from_utf8_lossy(&bytes) }),
-                )
-            }
-        }
-        Err(err) => crate::respond::fail_internal(
-            format!("Failed to read external file path={}", resolved),
-            &err,
-            "Failed to read file",
-        ),
-    }
+    read_external_file(&resolved, is_base64).await
 }
 
 // ── GET /api/filesystem/browse ───────────────────────────────────────────────
@@ -663,6 +634,8 @@ pub fn router() -> Router<Arc<AppCtx>> {
         )
 }
 
+mod external;
+use external::{read_external_file, validate_external_file};
 #[cfg(test)]
 #[path = "files_tests.rs"]
 mod tests;

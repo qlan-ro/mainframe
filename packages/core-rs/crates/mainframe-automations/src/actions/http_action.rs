@@ -119,19 +119,7 @@ impl Action for HttpRequestAction {
                 )));
             }
 
-            let mut headers = build_headers(input.headers.as_ref())?;
-            if let Some(creds) = &ctx.creds
-                && !headers.contains_key(AUTHORIZATION)
-            {
-                let bearer = HeaderValue::from_str(&format!("Bearer {}", creds.token))
-                    .map_err(|_| invalid("credential token is not a valid header value".into()))?;
-                headers.insert(AUTHORIZATION, bearer);
-            }
-            headers.insert(
-                HeaderName::from_static("x-idempotency-key"),
-                HeaderValue::from_str(&ctx.idempotency_key)
-                    .unwrap_or_else(|_| HeaderValue::from_static("")),
-            );
+            let mut headers = request_headers(&input, ctx)?;
 
             let method = input.method.unwrap_or(Method::Get);
             let mut request = self
@@ -169,10 +157,7 @@ impl Action for HttpRequestAction {
                 )));
             }
 
-            let mut outputs = ActionOutputs::new();
-            outputs.insert("status".to_string(), TokenValue::Number(f64::from(status)));
-            outputs.insert("body".to_string(), TokenValue::Text(body));
-            Ok(outputs)
+            Ok(response_outputs(status, body))
         })
     }
 }
@@ -223,4 +208,29 @@ fn param_specs() -> Vec<ActionParam> {
             json!({"type": "integer", "minimum": 1, "maximum": 120000, "default": 30000}),
         ),
     ]
+}
+
+fn request_headers(input: &HttpInput, ctx: &ActionCtx) -> Result<HeaderMap, ActionError> {
+    let mut headers = build_headers(input.headers.as_ref())?;
+    if let Some(creds) = &ctx.creds
+        && !headers.contains_key(AUTHORIZATION)
+    {
+        let bearer = HeaderValue::from_str(&format!("Bearer {}", creds.token))
+            .map_err(|_| invalid("credential token is not a valid header value".into()))?;
+        headers.insert(AUTHORIZATION, bearer);
+    }
+    headers.insert(
+        HeaderName::from_static("x-idempotency-key"),
+        HeaderValue::from_str(&ctx.idempotency_key)
+            .unwrap_or_else(|_| HeaderValue::from_static("")),
+    );
+
+    Ok(headers)
+}
+
+fn response_outputs(status: u16, body: String) -> ActionOutputs {
+    let mut outputs = ActionOutputs::new();
+    outputs.insert("status".to_string(), TokenValue::Number(f64::from(status)));
+    outputs.insert("body".to_string(), TokenValue::Text(body));
+    outputs
 }

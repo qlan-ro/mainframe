@@ -33,6 +33,7 @@ use resume::start_resume;
 /// channel and may trail frames its own request caused; `sendPrompt` on the
 /// client only reads `_meta.position` from it, and run state comes from the
 /// reducer, not reply ordering).
+#[expect(clippy::too_many_lines, reason = "ACP frame and method routing table")]
 pub async fn handle_inbound(
     text: &str,
     daemon: &DaemonInfo,
@@ -208,11 +209,10 @@ fn spawn_session_method(
             }
         });
         if let Err(err) = work.await {
-            error!(
-                %err,
+            error!( error = %err,
                 session_id = session_id.as_deref().unwrap_or("<none>"),
                 answered = request_id.is_some(),
-                "acp facade: session method failed"
+                "session method failed"
             );
             // A notification (`session/cancel`) has no id to answer under;
             // the log is all it gets.

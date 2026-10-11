@@ -85,7 +85,7 @@ pub(crate) async fn run_liveness_sweep(
             continue;
         }
         let Some(output_path) = task.output_path.clone() else {
-            tracing::warn!(target: "background-tasks:liveness", chat_id = %chat_id, task_id = %task.id, "liveness skip: no outputPath");
+            tracing::warn!(chat_id = %chat_id, task_id = %task.id, "no outputPath");
             continue;
         };
         let pids = match lsof_writers_detailed(&tracker.process, &output_path).await {
@@ -116,25 +116,7 @@ pub(crate) async fn run_liveness_sweep(
             set_miss(miss_map, &chat_id, &task.id, prev + 1);
         }
     }
-    // GC chats no longer tracked; tasks no longer running.
-    let chat_ids: Vec<String> = miss_map.keys().cloned().collect();
-    for chat_id in chat_ids {
-        let Some(live) = live_by_chat.get(&chat_id) else {
-            miss_map.remove(&chat_id);
-            continue;
-        };
-        if let Some(inner) = miss_map.get_mut(&chat_id) {
-            let task_ids: Vec<String> = inner.keys().cloned().collect();
-            for task_id in task_ids {
-                if !live.contains(&task_id) {
-                    inner.remove(&task_id);
-                }
-            }
-            if inner.is_empty() {
-                miss_map.remove(&chat_id);
-            }
-        }
-    }
+    prune_misses(miss_map, &live_by_chat);
 }
 
 type Clock = Arc<dyn Fn() -> i64 + Send + Sync>;
@@ -165,7 +147,7 @@ pub(crate) fn start_liveness_scheduler_with_clock(
             let delta = now - last_tick;
             let force_wake = is_wake(delta, interval_ms);
             if force_wake {
-                tracing::info!(target: "background-tasks:liveness", delta, "liveness: wake detected (wallclock jump)");
+                tracing::info!(delta, "wake detected (wallclock jump)");
             }
             last_tick = now;
             run_liveness_sweep(&tracker, &mut miss_map, now, force_wake).await;
@@ -177,3 +159,25 @@ pub(crate) fn start_liveness_scheduler_with_clock(
 #[cfg(test)]
 #[path = "liveness_tests.rs"]
 mod tests;
+
+fn prune_misses(miss_map: &mut MissMap, live_by_chat: &HashMap<String, HashSet<String>>) {
+    // GC chats no longer tracked; tasks no longer running.
+    let chat_ids: Vec<String> = miss_map.keys().cloned().collect();
+    for chat_id in chat_ids {
+        let Some(live) = live_by_chat.get(&chat_id) else {
+            miss_map.remove(&chat_id);
+            continue;
+        };
+        if let Some(inner) = miss_map.get_mut(&chat_id) {
+            let task_ids: Vec<String> = inner.keys().cloned().collect();
+            for task_id in task_ids {
+                if !live.contains(&task_id) {
+                    inner.remove(&task_id);
+                }
+            }
+            if inner.is_empty() {
+                miss_map.remove(&chat_id);
+            }
+        }
+    }
+}

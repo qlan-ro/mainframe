@@ -181,7 +181,11 @@ pub async fn add_worktree_for_branch(
 ) -> Result<(), WorktreeError> {
     // Drop the stale registration git still holds for the deleted directory.
     // best-effort
-    let _ = run_worktree_git(&["worktree", "prune"], project_path, DEFAULT_GIT_TIMEOUT_MS).await;
+    if let Err(error) =
+        run_worktree_git(&["worktree", "prune"], project_path, DEFAULT_GIT_TIMEOUT_MS).await
+    {
+        tracing::warn!(%error, "best-effort operation failed");
+    }
     // No timeout: checkout of a large tree can exceed the default cap (see create_worktree).
     run_worktree_git(
         &["worktree", "add", worktree_path, branch_name],
@@ -202,18 +206,26 @@ pub async fn remove_worktree(project_path: &str, worktree_path: &str, branch_nam
     .is_err()
     {
         // best-effort: worktree dir may already be gone
-        let _ = tokio::fs::remove_dir_all(worktree_path).await;
+        if let Err(error) = tokio::fs::remove_dir_all(worktree_path).await {
+            tracing::warn!(%error, "best-effort operation failed");
+        }
         // best-effort
-        let _ =
-            run_worktree_git(&["worktree", "prune"], project_path, DEFAULT_GIT_TIMEOUT_MS).await;
+        if let Err(error) =
+            run_worktree_git(&["worktree", "prune"], project_path, DEFAULT_GIT_TIMEOUT_MS).await
+        {
+            tracing::warn!(%error, "best-effort operation failed");
+        }
     }
     // best-effort: branch may not exist or may still be checked out elsewhere
-    let _ = run_worktree_git(
+    if let Err(error) = run_worktree_git(
         &["branch", "-D", branch_name],
         project_path,
         DEFAULT_GIT_TIMEOUT_MS,
     )
-    .await;
+    .await
+    {
+        tracing::warn!(%error, "best-effort operation failed");
+    }
 }
 
 #[cfg(test)]

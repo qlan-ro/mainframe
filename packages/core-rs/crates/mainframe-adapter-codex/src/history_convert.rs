@@ -18,6 +18,10 @@ use crate::thread_item_render::{dynamic_tool_call_input, dynamic_tool_call_name}
 use crate::thread_registry::AgentMetadata;
 use mainframe_display::parse_unified_diff::parse_unified_diff;
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "exhaustive thread item conversion dispatch table"
+)]
 pub fn convert_thread_items(
     items: &[ThreadItem],
     chat_id: &str,

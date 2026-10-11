@@ -122,7 +122,9 @@ pub async fn delete_agent(agent_id: &str, project_path: &str) -> Result<(), Skil
         .find(|a| a.id == agent_id)
         .ok_or_else(|| SkillsError::AgentNotFound(agent_id.to_string()))?;
     // `rm(file, { force: true })` — force ignores a missing file.
-    let _ = fs::remove_file(&agent.file_path).await;
+    if let Err(error) = fs::remove_file(&agent.file_path).await {
+        tracing::warn!(%error, "best-effort operation failed");
+    }
     Ok(())
 }
 

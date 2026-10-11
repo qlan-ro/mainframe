@@ -15,37 +15,14 @@ impl ChatPermissionHandler {
         chat_id: &str,
         response: ControlResponse,
     ) -> Result<(), PermissionError> {
-        if self
-            .shared
-            .permissions
-            .lock_recover()
-            .was_cancelled(chat_id, &response.request_id)
-        {
-            info!(
-                chat_id,
-                request_id = response.request_id,
-                "respondToPermission: request was cancelled by the CLI, dropping the answer"
-            );
+        if self.response_was_cancelled(chat_id, &response) {
             return Ok(());
         }
 
         let active = self.shared.active(chat_id);
 
-        // Guard: reject stale/duplicate responses (only when a permission is queued).
-        if let Some(cell) = &active {
-            let matches_pending = self
-                .shared
-                .permissions
-                .lock_recover()
-                .matches_pending(chat_id, &response.request_id);
-            if Self::session_spawned(cell) && self.has_pending(chat_id) && !matches_pending {
-                warn!(
-                    chat_id,
-                    request_id = response.request_id,
-                    "respondToPermission: requestId does not match pending, ignoring stale response"
-                );
-                return Ok(());
-            }
+        if self.response_is_stale(chat_id, &response, active.as_ref()) {
+            return Ok(());
         }
 
         let spawned = active.as_ref().is_some_and(Self::session_spawned);
@@ -55,7 +32,7 @@ impl ChatPermissionHandler {
                 request_id = response.request_id,
                 tool_name = ?response.tool_name,
                 behavior = ?response.behavior,
-                "respondToPermission: no active session, will start fresh"
+                "no active session, will start fresh"
             );
             return self
                 .handle_no_session_permission(chat_id, response, active)
@@ -70,7 +47,7 @@ impl ChatPermissionHandler {
             request_id = response.request_id,
             tool_name = ?response.tool_name,
             behavior = ?response.behavior,
-            "respondToPermission: forwarding to session"
+            "forwarding to session"
         );
 
         if let Some(text) = &response.message {
@@ -90,5 +67,47 @@ impl ChatPermissionHandler {
 
         self.handle_normal_permission(chat_id, active, response)
             .await
+    }
+    fn response_was_cancelled(&self, chat_id: &str, response: &ControlResponse) -> bool {
+        if self
+            .shared
+            .permissions
+            .lock_recover()
+            .was_cancelled(chat_id, &response.request_id)
+        {
+            info!(
+                chat_id,
+                request_id = response.request_id,
+                "request was cancelled by the CLI, dropping the answer"
+            );
+            return true;
+        }
+
+        false
+    }
+    fn response_is_stale(
+        &self,
+        chat_id: &str,
+        response: &ControlResponse,
+        active: Option<&std::sync::Arc<std::sync::Mutex<crate::types::ActiveChat>>>,
+    ) -> bool {
+        // Guard: reject stale/duplicate responses (only when a permission is queued).
+        if let Some(cell) = active {
+            let matches_pending = self
+                .shared
+                .permissions
+                .lock_recover()
+                .matches_pending(chat_id, &response.request_id);
+            if Self::session_spawned(cell) && self.has_pending(chat_id) && !matches_pending {
+                warn!(
+                    chat_id,
+                    request_id = response.request_id,
+                    "requestId does not match pending, ignoring stale response"
+                );
+                return true;
+            }
+        }
+
+        false
     }
 }

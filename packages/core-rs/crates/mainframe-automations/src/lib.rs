@@ -2,7 +2,10 @@
 //! trait ports. "Contract" in this crate's comments means the automations v2
 //! wire contract (types, storage, routes, action table).
 #![forbid(unsafe_code)]
-#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
+#![cfg_attr(
+    test,
+    allow(clippy::too_many_lines, clippy::unwrap_used, clippy::expect_used)
+)]
 
 /// The `User-Agent` every outbound request from this crate carries. GitHub's
 /// REST API answers 403 "Request forbidden by administrative rules" to any

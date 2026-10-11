@@ -178,7 +178,6 @@ fn revise_update(prev: &EncodedItem, new: &EncodedItem) -> Vec<SessionUpdate> {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 fn content_revision(
     id: &str,
     role: ItemRole,

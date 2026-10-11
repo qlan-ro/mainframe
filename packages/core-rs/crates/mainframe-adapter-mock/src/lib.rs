@@ -1,5 +1,8 @@
 #![forbid(unsafe_code)]
-#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
+#![cfg_attr(
+    test,
+    allow(clippy::too_many_lines, clippy::unwrap_used, clippy::expect_used)
+)]
 
 mod adapter;
 mod dispatch;

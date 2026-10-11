@@ -122,23 +122,7 @@ async fn create<const SKILL: bool>(
         content: b.content.unwrap_or_default(),
         scope: parse_scope(b.scope.as_deref()),
     };
-    let result = if SKILL {
-        provider
-            .create_skill(project_path, input.clone())
-            .await
-            .map(|value| serde_json::json!(value))
-    } else {
-        let input = CreateAgentInput {
-            name: input.name.clone(),
-            description: input.description.clone(),
-            content: input.content.clone(),
-            scope: input.scope,
-        };
-        provider
-            .create_agent(project_path, input)
-            .await
-            .map(|value| serde_json::json!(value))
-    };
+    let result = create_item::<SKILL>(provider.as_ref(), project_path, &input).await;
     match result {
         Ok(skill) => ok(skill),
         Err(err) => crate::respond::fail_internal(
@@ -265,3 +249,27 @@ mod skill_tests;
 #[cfg(test)]
 #[path = "adapter_catalog/parity_tests.rs"]
 mod parity_tests;
+
+async fn create_item<const SKILL: bool>(
+    provider: &dyn mainframe_adapter_api::SkillsProvider,
+    project_path: String,
+    input: &CreateSkillInput,
+) -> Result<serde_json::Value, mainframe_adapter_api::AdapterError> {
+    if SKILL {
+        provider
+            .create_skill(project_path, input.clone())
+            .await
+            .map(|value| serde_json::json!(value))
+    } else {
+        let input = CreateAgentInput {
+            name: input.name.clone(),
+            description: input.description.clone(),
+            content: input.content.clone(),
+            scope: input.scope,
+        };
+        provider
+            .create_agent(project_path, input)
+            .await
+            .map(|value| serde_json::json!(value))
+    }
+}

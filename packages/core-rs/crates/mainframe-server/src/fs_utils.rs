@@ -201,13 +201,8 @@ pub(crate) async fn walk_project_files(
             if !mainframe_runtime::fs::is_within_base(root, &real_full) {
                 continue;
             }
-            let is_dir = match entry.file_type().await {
-                Ok(ft) if ft.is_symlink() => tokio::fs::metadata(&full_path)
-                    .await
-                    .map(|m| m.is_dir())
-                    .unwrap_or(false),
-                Ok(ft) => ft.is_dir(),
-                Err(_) => continue,
+            let Some(is_dir) = entry_is_directory(&entry, &full_path).await else {
+                continue;
             };
             if is_dir {
                 if entered.insert(real_full) {
@@ -224,3 +219,14 @@ pub(crate) async fn walk_project_files(
 #[cfg(test)]
 #[path = "fs_utils_tests.rs"]
 mod tests;
+
+async fn entry_is_directory(entry: &tokio::fs::DirEntry, full_path: &Path) -> Option<bool> {
+    Some(match entry.file_type().await {
+        Ok(ft) if ft.is_symlink() => tokio::fs::metadata(&full_path)
+            .await
+            .map(|m| m.is_dir())
+            .unwrap_or(false),
+        Ok(ft) => ft.is_dir(),
+        Err(_) => return None,
+    })
+}

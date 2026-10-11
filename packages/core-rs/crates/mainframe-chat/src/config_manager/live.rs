@@ -57,20 +57,8 @@ impl ChatConfigManager {
         // three settings are unrolled with identical control flow (try setter →
         // stage into updates/active.chat on Ok, warn on Err).
         let mut updates = ChatPatch::default();
-        let mut model_error = None;
 
-        if let Some(model) = changes.model {
-            match session.set_model(model.clone()).await {
-                Ok(()) => {
-                    updates.model = Some(model.clone());
-                    cell.lock_recover().chat.model = Some(model);
-                }
-                Err(err) => {
-                    warn!(?err, chat_id, "setModel rejected; not persisting model");
-                    model_error = Some(ConfigError::Adapter(err));
-                }
-            }
-        }
+        let model_error = apply_model(chat_id, cell, session, changes.model, &mut updates).await;
         if let Some(mode) = changes.permission_mode {
             match session.set_permission_mode(mode).await {
                 Ok(()) => {
@@ -78,8 +66,7 @@ impl ChatConfigManager {
                     cell.lock_recover().chat.permission_mode = Some(mode);
                 }
                 Err(err) => {
-                    warn!(
-                        ?err,
+                    warn!( error = ?err,
                         chat_id, "setPermissionMode rejected; not persisting permissionMode"
                     )
                 }
@@ -91,8 +78,7 @@ impl ChatConfigManager {
                     updates.plan_mode = Some(plan);
                     cell.lock_recover().chat.plan_mode = Some(plan);
                 }
-                Err(err) => warn!(
-                    ?err,
+                Err(err) => warn!( error = ?err,
                     chat_id, "setPlanMode rejected; not persisting planMode"
                 ),
             }
@@ -165,4 +151,27 @@ impl ChatConfigManager {
         }
         result.map_err(ConfigError::from)
     }
+}
+
+async fn apply_model(
+    chat_id: &str,
+    cell: &Arc<Mutex<ActiveChat>>,
+    session: &Arc<dyn AdapterSession>,
+    model: Option<String>,
+    updates: &mut ChatPatch,
+) -> Option<ConfigError> {
+    let mut model_error = None;
+    if let Some(model) = model {
+        match session.set_model(model.clone()).await {
+            Ok(()) => {
+                updates.model = Some(model.clone());
+                cell.lock_recover().chat.model = Some(model);
+            }
+            Err(err) => {
+                warn!( error = ?err, chat_id, "setModel rejected; not persisting model");
+                model_error = Some(ConfigError::Adapter(err));
+            }
+        }
+    }
+    model_error
 }

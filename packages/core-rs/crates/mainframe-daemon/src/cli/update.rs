@@ -183,7 +183,9 @@ async fn install_release(url: &str, artifact: &str, root: &Path) -> Result<(), U
         Err(err) => Err(err),
     };
 
-    let _ = tokio::fs::remove_dir_all(&tmp_dir).await; // best-effort cleanup /* expected */
+    if let Err(error) = tokio::fs::remove_dir_all(&tmp_dir).await {
+        tracing::warn!(%error, "best-effort operation failed");
+    } // best-effort cleanup /* expected */
     result
 }
 

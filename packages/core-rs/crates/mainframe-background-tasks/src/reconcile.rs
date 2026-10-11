@@ -74,28 +74,12 @@ fn build_recovered_snapshot(
 }
 
 async fn reconcile_inner(deps: &ReconcileDeps<'_>, spool_root: &str) {
-    let mut session_to_chat: HashMap<String, Chat> = HashMap::new();
-    for chat in deps.db.chats_list_all() {
-        if let Some(sid) = &chat.vendor_session_id
-            && chat.status != ChatStatus::Archived
-        {
-            session_to_chat.insert(sid.clone(), chat);
-        }
-    }
+    let session_to_chat = active_sessions(deps.db);
     if session_to_chat.is_empty() {
         return;
     }
 
-    let validator: Arc<dyn SpoolValidator> = match &deps.validator {
-        Some(v) => v.clone(),
-        None => Arc::new(make_spool_validator(SpoolValidatorDeps {
-            platform: Platform::current(),
-            getuid: None,
-            env: std::env::vars().collect(),
-            realpath: None,
-            tmpdir: None,
-        })),
-    };
+    let validator = reconcile_validator(deps);
 
     let entries = walk_spool_tasks(&WalkOpts {
         root: spool_root.to_string(),
@@ -126,14 +110,8 @@ async fn reconcile_inner(deps: &ReconcileDeps<'_>, spool_root: &str) {
             continue;
         }
 
-        let st = match tokio::fs::symlink_metadata(&entry.fp).await {
-            Ok(ls) if ls.is_file() && !ls.file_type().is_symlink() => {
-                match tokio::fs::metadata(&entry.fp).await {
-                    Ok(st) => st,
-                    Err(_) => continue,
-                }
-            }
-            _ => continue,
+        let Some(st) = regular_metadata(&entry.fp).await else {
+            continue;
         };
 
         let writers = lsof_writers(&deps.tracker.process, &entry.fp).await;
@@ -181,3 +159,37 @@ fn mtime_ms(md: &Metadata) -> i64 {
 #[cfg(test)]
 #[path = "reconcile_tests.rs"]
 mod tests;
+
+fn active_sessions(db: &dyn ReconcileDb) -> HashMap<String, Chat> {
+    let mut session_to_chat: HashMap<String, Chat> = HashMap::new();
+    for chat in db.chats_list_all() {
+        if let Some(sid) = &chat.vendor_session_id
+            && chat.status != ChatStatus::Archived
+        {
+            session_to_chat.insert(sid.clone(), chat);
+        }
+    }
+    session_to_chat
+}
+
+fn reconcile_validator(deps: &ReconcileDeps<'_>) -> Arc<dyn SpoolValidator> {
+    match &deps.validator {
+        Some(v) => v.clone(),
+        None => Arc::new(make_spool_validator(SpoolValidatorDeps {
+            platform: Platform::current(),
+            getuid: None,
+            env: std::env::vars().collect(),
+            realpath: None,
+            tmpdir: None,
+        })),
+    }
+}
+
+async fn regular_metadata(path: &str) -> Option<Metadata> {
+    match tokio::fs::symlink_metadata(path).await {
+        Ok(ls) if ls.is_file() && !ls.file_type().is_symlink() => {
+            tokio::fs::metadata(path).await.ok()
+        }
+        _ => None,
+    }
+}

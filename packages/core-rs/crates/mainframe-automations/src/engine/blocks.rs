@@ -78,27 +78,7 @@ pub(crate) async fn run_repeat(
         .await;
     }
 
-    let mut current = checkpoint;
-    for (index, item) in items.into_iter().enumerate() {
-        let iter_frame = frame.iteration(index, item);
-        let StepsResult { result, checkpoint } =
-            walk_frame(&block.steps, current, ctx, iter_frame).await?;
-        current = checkpoint;
-        // A break leaves the loop, and the loop itself completes normally.
-        if matches!(result, WalkResult::Broke) {
-            break;
-        }
-        if !matches!(result, WalkResult::Done) {
-            return Ok(StepsResult {
-                result,
-                checkpoint: current,
-            });
-        }
-    }
-    Ok(StepsResult {
-        result: WalkResult::Done,
-        checkpoint: current,
-    })
+    repeat_sequential(block, items, checkpoint, ctx, frame).await
 }
 
 /// Retry: re-walk the body from the top until it succeeds or the attempts run
@@ -164,14 +144,7 @@ pub(crate) async fn run_retry(
         }
     }
 
-    Ok(StepsResult {
-        result: WalkResult::Failed {
-            error: last_error.unwrap_or_else(|| {
-                format!("retry '{}' ran no attempts — maxAttempts is 0", block.id)
-            }),
-        },
-        checkpoint: current,
-    })
+    retry_exhausted(block, current, last_error)
 }
 
 async fn mark_attempt(
@@ -203,36 +176,7 @@ pub(crate) async fn run_loop(
 ) -> Result<StepsResult, StoreError> {
     let mut current = checkpoint;
     for index in 0..block.max_iterations {
-        // The test reads the PREVIOUS pass's outputs, so it must be built in
-        // that pass's frame — a body step writes `probe#0`, which is invisible
-        // from the block's own frame.
-        let test_frame = match index.checked_sub(1) {
-            Some(previous) => frame.pass(previous as usize),
-            None => frame.clone(),
-        };
-        let keep_going = {
-            let scope = build_scope(&current, &test_frame, ctx.clock.clone());
-            // Before the first pass there is nothing for a condition about the
-            // body to read. Running it is the only useful reading: it is what
-            // makes "while the build is running" work at all, and it costs
-            // `until` nothing, since an `until` whose goal is already provable
-            // — seeded from outside the loop — still resolves and still exits
-            // at zero passes.
-            if index == 0
-                && !block
-                    .conditions
-                    .iter()
-                    .all(|c| scope.resolve(&c.token).is_some())
-            {
-                true
-            } else {
-                let matched = evaluate(&block.conditions, block.match_mode, &scope);
-                match block.mode {
-                    LoopMode::While => matched,
-                    LoopMode::Until => !matched,
-                }
-            }
-        };
+        let keep_going = loop_continues(block, &current, ctx, frame, index);
         if !keep_going {
             return Ok(StepsResult {
                 result: WalkResult::Done,
@@ -270,3 +214,51 @@ pub(crate) async fn run_loop(
         checkpoint: current,
     })
 }
+
+async fn repeat_sequential(
+    block: &RepeatBlock,
+    items: Vec<TokenValue>,
+    checkpoint: AutomationCheckpoint,
+    ctx: &WalkCtx<'_>,
+    frame: &WalkFrame,
+) -> Result<StepsResult, StoreError> {
+    let mut current = checkpoint;
+    for (index, item) in items.into_iter().enumerate() {
+        let iter_frame = frame.iteration(index, item);
+        let StepsResult { result, checkpoint } =
+            walk_frame(&block.steps, current, ctx, iter_frame).await?;
+        current = checkpoint;
+        // A break leaves the loop, and the loop itself completes normally.
+        if matches!(result, WalkResult::Broke) {
+            break;
+        }
+        if !matches!(result, WalkResult::Done) {
+            return Ok(StepsResult {
+                result,
+                checkpoint: current,
+            });
+        }
+    }
+    Ok(StepsResult {
+        result: WalkResult::Done,
+        checkpoint: current,
+    })
+}
+
+fn retry_exhausted(
+    block: &RetryBlock,
+    current: AutomationCheckpoint,
+    last_error: Option<String>,
+) -> Result<StepsResult, StoreError> {
+    Ok(StepsResult {
+        result: WalkResult::Failed {
+            error: last_error.unwrap_or_else(|| {
+                format!("retry '{}' ran no attempts — maxAttempts is 0", block.id)
+            }),
+        },
+        checkpoint: current,
+    })
+}
+
+mod loop_condition;
+use loop_condition::loop_continues;

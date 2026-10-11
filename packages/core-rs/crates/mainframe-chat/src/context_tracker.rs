@@ -72,7 +72,6 @@ pub fn extract_mentions_from_text(
     Ok(changed)
 }
 
-#[allow(clippy::too_many_arguments)]
 pub async fn get_session_context(
     chat_id: &str,
     project_path: &str,
@@ -82,18 +81,7 @@ pub async fn get_session_context(
     attachment_store: Option<&dyn AttachmentLister>,
     adapter_id: Option<&str>,
 ) -> Result<SessionContext, SeamError> {
-    let mut global_files: Vec<ContextFile> = Vec::new();
-    let mut project_files: Vec<ContextFile> = Vec::new();
-    if let Some(session) = session {
-        let files = session.get_context_files();
-        global_files = files.global;
-        project_files = files.project;
-    } else if let Some(adapter) = adapter_id.and_then(|id| adapters.get(id))
-        && let Some(files) = adapter.get_context_files(project_path)
-    {
-        global_files = files.global;
-        project_files = files.project;
-    }
+    let (global_files, project_files) = context_files(project_path, adapters, session, adapter_id);
 
     let to_relative = |p: &str| -> String {
         if Path::new(p).is_absolute() {
@@ -366,6 +354,8 @@ fn path_relative(from: &str, to: &str) -> String {
     out.join("/")
 }
 
+mod files;
+use files::context_files;
 #[cfg(test)]
 #[path = "context_tracker_tests.rs"]
 mod tests;

@@ -43,7 +43,7 @@ pub(crate) fn parse_claude_usage(text: &str, now: i64) -> ProviderQuota {
             continue;
         }
         if is_no_data(line) {
-            tracing::info!(line, "claude /usage: recognized no-data (non-subscriber)");
+            tracing::info!(line, "recognized no-data (non-subscriber)");
             return unknown(now);
         }
 
@@ -63,34 +63,21 @@ pub(crate) fn parse_claude_usage(text: &str, now: i64) -> ProviderQuota {
             };
             model_windows.push(w);
         } else {
-            tracing::warn!(
-                line,
-                "claude /usage: unclassifiable line, failing provider to unknown"
-            );
+            tracing::warn!(line, "unclassifiable line, failing provider to unknown");
             return unknown(now);
         }
         saw_window = true;
     }
 
     if !saw_window {
-        tracing::info!("claude /usage: no windows recognized, provider unknown");
+        tracing::info!("no windows recognized, provider unknown");
         return unknown(now);
     }
-    ProviderQuota {
-        status: ProviderQuotaStatus::Ok,
-        observed_at: now,
-        session,
-        weekly,
-        model_windows,
-        account_identity: None,
-    }
+    known_quota(now, session, weekly, model_windows)
 }
 
 fn fail_closed(line: &str, now: i64) -> ProviderQuota {
-    tracing::warn!(
-        line,
-        "claude /usage: percent parse failed, failing provider to unknown"
-    );
+    tracing::warn!(line, "percent parse failed, failing provider to unknown");
     unknown(now)
 }
 
@@ -299,6 +286,8 @@ fn wall_clock_in_zone_to_epoch_ms(
     Some(local.timestamp_millis())
 }
 
+mod status;
+use status::known_quota;
 #[cfg(test)]
 #[path = "quota_parse_tests.rs"]
 mod tests;

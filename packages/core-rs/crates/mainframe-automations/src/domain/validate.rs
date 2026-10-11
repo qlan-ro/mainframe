@@ -93,40 +93,7 @@ pub fn validate(definition: &AutomationDefinition) -> Vec<ValidationError> {
         errors.push(automation_error("Add at least one step."));
     }
 
-    let mut seen = BTreeSet::new();
-    let mut duplicated = BTreeSet::new();
-    for_each_step(&definition.steps, &mut |step| {
-        let id = step.id();
-        if id.trim().is_empty() {
-            errors.push(ValidationError {
-                step_id: Some(id.to_string()),
-                level: ValidationLevel::Error,
-                message: "Every step needs an id.".to_string(),
-            });
-            return;
-        }
-        if !seen.insert(id.to_string()) {
-            duplicated.insert(id.to_string());
-        }
-        // The charset is load-bearing beyond display, now: the marker scheme
-        // (`@c`, `@w`, `@a`) and the `#`-suffix chain both assume a step id
-        // never carries those characters itself.
-        if !is_valid_step_id(id) {
-            errors.push(ValidationError {
-                step_id: Some(id.to_string()),
-                level: ValidationLevel::Error,
-                message: "Step ids can only use letters, numbers, underscores, and hyphens."
-                    .to_string(),
-            });
-        }
-    });
-    for id in &duplicated {
-        errors.push(ValidationError {
-            step_id: Some(id.clone()),
-            level: ValidationLevel::Error,
-            message: format!("Two steps share the id \"{id}\" — step ids must be unique."),
-        });
-    }
+    validate_step_ids(definition, &mut errors);
 
     let mut order = HashMap::new();
     let mut position = 0usize;
@@ -234,6 +201,10 @@ fn check_scoped_step(
 
 /// The step's own checks, independent of its body. Returns the concurrency
 /// its nested bodies run under.
+#[expect(
+    clippy::too_many_lines,
+    reason = "exhaustive validation ladder for automation step variants"
+)]
 fn check_step(step: &Step, scope: &[TokenInfo], ctx: &mut Ctx, enclosing_concurrency: u32) -> u32 {
     match step {
         Step::AskMe(s) => check_form_fields(step.id(), s, ctx),
@@ -381,3 +352,6 @@ fn check_ref(step: &Step, token_ref: &TokenRef, scope: &[TokenInfo], ctx: &mut C
         message,
     });
 }
+
+mod ids;
+use ids::validate_step_ids;

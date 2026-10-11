@@ -99,9 +99,9 @@ async fn drive_lsp_socket(
     // Client → process (incoming) and process → client (outgoing) channels, plus a
     // ClientRef the manager can close (server exit / replacement).
     let (incoming_tx, incoming_rx) = mpsc::unbounded_channel::<String>();
-    let (outgoing_tx, mut outgoing_rx) = mpsc::unbounded_channel::<String>();
+    let (outgoing_tx, outgoing_rx) = mpsc::unbounded_channel::<String>();
     let open = Arc::new(AtomicBool::new(true));
-    let (close_tx, mut close_rx) = mpsc::unbounded_channel::<(u16, String)>();
+    let (close_tx, close_rx) = mpsc::unbounded_channel::<(u16, String)>();
     handle.set_client(Some(ClientRef::new(Arc::clone(&open), close_tx)));
 
     // First-connect: bridge immediately with init-result capture. Reconnect: defer
@@ -113,7 +113,106 @@ async fn drive_lsp_socket(
         bridge_started = true;
     }
 
+    let bridge = SocketBridge {
+        incoming_tx,
+        incoming_rx,
+        outgoing_tx,
+        outgoing_rx,
+        close_rx,
+        bridge_started,
+    };
+    pump_lsp_socket(&mut socket, &handle, reattach, bridge).await;
+
+    detach_lsp_client(&handle, &manager, &open, &project_id, &language);
+}
+
+/// Start the plain (no-capture) reattach bridge when the child's stdio is still
+/// available. Returns whether the bridge started. The current `mainframe-lsp` seam
+/// consumes the child's stdout/stderr on the first attach, so a reconnect after the
+/// first bridge was torn down cannot re-proxy — flagged as a known LSP-reattach gap.
+fn start_reattach_bridge(
+    handle: &Arc<LspServerHandle>,
+    incoming_rx: &mut Option<mpsc::UnboundedReceiver<String>>,
+    outgoing_tx: &mpsc::UnboundedSender<String>,
+) -> bool {
+    let (Some(rx), Some(stdout), Some(stderr)) = (
+        incoming_rx.take(),
+        handle.take_stdout(),
+        handle.take_stderr(),
+    ) else {
+        tracing::warn!("child stdio unavailable (consumed by prior bridge) — cannot re-proxy");
+        return false;
+    };
+    let bridge = bridge_ws_to_process(rx, outgoing_tx.clone(), handle.stdin_tx(), stdout, stderr);
+    handle.set_cleanup(Some(bridge));
+    true
+}
+
+fn handle_reattach_text(
+    handle: &Arc<LspServerHandle>,
+    incoming_rx: &mut Option<mpsc::UnboundedReceiver<String>>,
+    outgoing_tx: &mpsc::UnboundedSender<String>,
+    incoming_tx: &mpsc::UnboundedSender<String>,
+    bridge_started: &mut bool,
+    text: String,
+) {
+    match classify_reattach_first(&text) {
+        ReattachAction::ReplayInitialize { id } => {
+            if let Some(result) = handle.initialize_result() {
+                tracing::info!("Replaying cached initialize result for reconnecting client");
+                let _ = outgoing_tx.send(cached_initialize_reply(&id, &result));
+            }
+        }
+        ReattachAction::SkipInitialized => {
+            *bridge_started = start_reattach_bridge(handle, incoming_rx, outgoing_tx);
+        }
+        ReattachAction::Forward => {
+            *bridge_started = start_reattach_bridge(handle, incoming_rx, outgoing_tx);
+            if *bridge_started {
+                let _ = incoming_tx.send(text);
+            }
+        }
+    }
+}
+
+fn detach_lsp_client(
+    handle: &Arc<LspServerHandle>,
+    manager: &mainframe_lsp::LspManager,
+    open: &AtomicBool,
+    project_id: &str,
+    language: &str,
+) {
     let key = format!("{project_id}:{language}");
+    // Disconnect: detach the client + restart the idle reaper (onConnection close).
+    tracing::info!(project_id, language, "LSP WebSocket client disconnected");
+    open.store(false, std::sync::atomic::Ordering::SeqCst);
+    handle.set_cleanup(None);
+    handle.set_client(None);
+    manager.start_idle_timer(&key, handle);
+}
+
+struct SocketBridge {
+    incoming_tx: mpsc::UnboundedSender<String>,
+    incoming_rx: Option<mpsc::UnboundedReceiver<String>>,
+    outgoing_tx: mpsc::UnboundedSender<String>,
+    outgoing_rx: mpsc::UnboundedReceiver<String>,
+    close_rx: mpsc::UnboundedReceiver<(u16, String)>,
+    bridge_started: bool,
+}
+async fn pump_lsp_socket(
+    socket: &mut WebSocket,
+    handle: &Arc<LspServerHandle>,
+    reattach: bool,
+    bridge: SocketBridge,
+) {
+    let SocketBridge {
+        incoming_tx,
+        mut incoming_rx,
+        outgoing_tx,
+        mut outgoing_rx,
+        mut close_rx,
+        mut bridge_started,
+    } = bridge;
     loop {
         tokio::select! {
             incoming = socket.recv() => {
@@ -121,23 +220,7 @@ async fn drive_lsp_socket(
                     Some(Ok(Message::Text(text))) => {
                         let text = text.to_string();
                         if reattach && !bridge_started {
-                            match classify_reattach_first(&text) {
-                                ReattachAction::ReplayInitialize { id } => {
-                                    if let Some(result) = handle.initialize_result() {
-                                        tracing::info!(project_id, language, "Replaying cached initialize result for reconnecting client");
-                                        let _ = outgoing_tx.send(cached_initialize_reply(&id, &result));
-                                    }
-                                }
-                                ReattachAction::SkipInitialized => {
-                                    bridge_started = start_reattach_bridge(&handle, &mut incoming_rx, &outgoing_tx);
-                                }
-                                ReattachAction::Forward => {
-                                    bridge_started = start_reattach_bridge(&handle, &mut incoming_rx, &outgoing_tx);
-                                    if bridge_started {
-                                        let _ = incoming_tx.send(text);
-                                    }
-                                }
-                            }
+                            handle_reattach_text(handle, &mut incoming_rx, &outgoing_tx, &incoming_tx, &mut bridge_started, text);
                         } else {
                             let _ = incoming_tx.send(text);
                         }
@@ -167,35 +250,4 @@ async fn drive_lsp_socket(
             }
         }
     }
-
-    // Disconnect: detach the client + restart the idle reaper (onConnection close).
-    tracing::info!(project_id, language, "LSP WebSocket client disconnected");
-    open.store(false, std::sync::atomic::Ordering::SeqCst);
-    handle.set_cleanup(None);
-    handle.set_client(None);
-    manager.start_idle_timer(&key, &handle);
-}
-
-/// Start the plain (no-capture) reattach bridge when the child's stdio is still
-/// available. Returns whether the bridge started. The current `mainframe-lsp` seam
-/// consumes the child's stdout/stderr on the first attach, so a reconnect after the
-/// first bridge was torn down cannot re-proxy — flagged as a known LSP-reattach gap.
-fn start_reattach_bridge(
-    handle: &Arc<LspServerHandle>,
-    incoming_rx: &mut Option<mpsc::UnboundedReceiver<String>>,
-    outgoing_tx: &mpsc::UnboundedSender<String>,
-) -> bool {
-    let (Some(rx), Some(stdout), Some(stderr)) = (
-        incoming_rx.take(),
-        handle.take_stdout(),
-        handle.take_stderr(),
-    ) else {
-        tracing::warn!(
-            "LSP reattach: child stdio unavailable (consumed by prior bridge) — cannot re-proxy"
-        );
-        return false;
-    };
-    let bridge = bridge_ws_to_process(rx, outgoing_tx.clone(), handle.stdin_tx(), stdout, stderr);
-    handle.set_cleanup(Some(bridge));
-    true
 }

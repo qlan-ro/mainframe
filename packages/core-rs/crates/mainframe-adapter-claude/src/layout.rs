@@ -61,39 +61,12 @@ pub async fn move_session_files(
     let session_dir = source.join(session_id);
     if tokio::fs::metadata(&session_dir).await.is_ok() {
         // No session directory — that's fine (any error here is swallowed).
-        let _ = move_file(&session_dir, &target.join(session_id)).await;
+        if let Err(error) = move_file(&session_dir, &target.join(session_id)).await {
+            tracing::warn!(%error, "best-effort operation failed");
+        }
     }
 
-    // 3. Move sidechain JSONL files that reference this session
-    let main_jsonl = format!("{session_id}.jsonl");
-    // Directory read / move failures are swallowed — proceed without sidechains.
-    let _ = async {
-        let mut entries = tokio::fs::read_dir(source).await?;
-        while let Some(entry) = entries.next_entry().await? {
-            let name = entry.file_name();
-            let name = name.to_string_lossy();
-            if !name.ends_with(".jsonl") || name == main_jsonl.as_str() {
-                continue;
-            }
-            let file_path = source.join(name.as_ref());
-            if is_sidechain_of(&file_path, session_id).await {
-                match move_file(&file_path, &target.join(name.as_ref())).await {
-                    Ok(()) => {}
-                    // One collision must not abandon the rest of the sweep.
-                    Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
-                        tracing::warn!(
-                            session_id,
-                            sidechain = %name,
-                            "sidechain already in target dir — keeping it and leaving the source copy alone"
-                        );
-                    }
-                    Err(err) => return Err(err),
-                }
-            }
-        }
-        Ok::<(), std::io::Error>(())
-    }
-    .await;
+    move_sidechains(source, target, session_id).await;
 
     Ok(())
 }
@@ -176,3 +149,38 @@ fn copy_recursive<'a>(
 #[cfg(test)]
 #[path = "layout_tests.rs"]
 mod tests;
+
+async fn move_sidechains(source: &Path, target: &Path, session_id: &str) {
+    // 3. Move sidechain JSONL files that reference this session
+    let main_jsonl = format!("{session_id}.jsonl");
+    // A sidechain failure must not prevent relocating the main transcript.
+    if let Err(error) = async {
+        let mut entries = tokio::fs::read_dir(source).await?;
+        while let Some(entry) = entries.next_entry().await? {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if !name.ends_with(".jsonl") || name == main_jsonl.as_str() {
+                continue;
+            }
+            let file_path = source.join(name.as_ref());
+            if is_sidechain_of(&file_path, session_id).await {
+                match move_file(&file_path, &target.join(name.as_ref())).await {
+                    Ok(()) => {}
+                    // One collision must not abandon the rest of the sweep.
+                    Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+                        tracing::warn!(
+                            session_id,
+                            sidechain = %name,
+                            "sidechain already in target dir — keeping it and leaving the source copy alone"
+                        );
+                    }
+                    Err(err) => return Err(err),
+                }
+            }
+        }
+        Ok::<(), std::io::Error>(())
+    }
+    .await {
+        tracing::warn!(%error, "best-effort operation failed");
+    }
+}

@@ -45,13 +45,9 @@ pub(crate) async fn scan_lite_candidates(
         };
         while let Ok(Some(entry)) = entries.next_entry().await {
             let name = entry.file_name().to_string_lossy().to_string();
-            if !is_uuid_jsonl(&name) {
+            let Some(session_id) = candidate_session_id(&name, exclude_set) else {
                 continue;
-            }
-            let session_id = name[..name.len() - ".jsonl".len()].to_string();
-            if exclude_set.contains(&session_id) {
-                continue;
-            }
+            };
             let file_path = Path::new(&dir).join(&name).to_string_lossy().to_string();
             let meta = match tokio::fs::metadata(&file_path).await {
                 Ok(m) => m,
@@ -84,17 +80,7 @@ pub(crate) async fn scan_lite_candidates(
 
     let mut candidates: Vec<Candidate> = by_session.into_values().collect();
     // `b.mtimeMs - a.mtimeMs || (a.sessionId < b.sessionId ? 1 : -1)`
-    candidates.sort_by(|a, b| {
-        if b.mtime_ms != a.mtime_ms {
-            b.mtime_ms
-                .partial_cmp(&a.mtime_ms)
-                .unwrap_or(Ordering::Equal)
-        } else if a.session_id < b.session_id {
-            Ordering::Greater
-        } else {
-            Ordering::Less
-        }
-    });
+    sort_candidates(&mut candidates);
     candidates
 }
 
@@ -192,6 +178,31 @@ pub async fn list_external_sessions(
         total,
         next_offset,
     }
+}
+
+fn sort_candidates(candidates: &mut [Candidate]) {
+    candidates.sort_by(|a, b| {
+        if b.mtime_ms != a.mtime_ms {
+            b.mtime_ms
+                .partial_cmp(&a.mtime_ms)
+                .unwrap_or(Ordering::Equal)
+        } else if a.session_id < b.session_id {
+            Ordering::Greater
+        } else {
+            Ordering::Less
+        }
+    });
+}
+
+fn candidate_session_id(name: &str, exclude_set: &HashSet<String>) -> Option<String> {
+    if !is_uuid_jsonl(name) {
+        return None;
+    }
+    let session_id = name[..name.len() - ".jsonl".len()].to_string();
+    if exclude_set.contains(&session_id) {
+        return None;
+    }
+    Some(session_id)
 }
 
 #[cfg(test)]

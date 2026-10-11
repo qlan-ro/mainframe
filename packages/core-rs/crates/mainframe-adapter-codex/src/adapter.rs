@@ -139,20 +139,15 @@ impl CodexAdapter {
         if let Some(cached) = self.cached_models.lock_recover().clone() {
             return cached;
         }
-        let client = match spawn_temp_app_server(
-            executable,
-            None,
-            false,
-            self.resolved_path.as_str(),
-        )
-        .await
-        {
-            Ok(c) => c,
-            Err(err) => {
-                tracing::warn!(module = "codex:adapter", err = %err, "codex: failed to list models");
-                return Vec::new();
-            }
-        };
+        let client =
+            match spawn_temp_app_server(executable, None, false, self.resolved_path.as_str()).await
+            {
+                Ok(c) => c,
+                Err(err) => {
+                    tracing::warn!(error = %err, "failed to list models");
+                    return Vec::new();
+                }
+            };
         let models: Vec<AdapterModel> = match client.request("model/list", None).await {
             Ok(v) => match serde_json::from_value::<ModelListResult>(v) {
                 Ok(result) => result
@@ -162,12 +157,12 @@ impl CodexAdapter {
                     .map(map_codex_model)
                     .collect(),
                 Err(err) => {
-                    tracing::warn!(module = "codex:adapter", err = %err, "codex: failed to list models");
+                    tracing::warn!(error = %err, "failed to list models");
                     Vec::new()
                 }
             },
             Err(err) => {
-                tracing::warn!(module = "codex:adapter", err = %err.0, "codex: failed to list models");
+                tracing::warn!(error = %err.0, "failed to list models");
                 Vec::new()
             }
         };

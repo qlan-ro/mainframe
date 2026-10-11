@@ -50,79 +50,9 @@ pub(crate) fn resolve_existing_skill_path(
 
     let mut candidates: Vec<PathBuf> = Vec::new();
 
-    // Plain (unqualified) skills: project → user home → every plugin dir.
-    if plugin_prefix.is_none() {
-        if let Some(pp) = project_path {
-            candidates.push(
-                PathBuf::from(pp)
-                    .join(".claude")
-                    .join("skills")
-                    .join(leaf_name)
-                    .join("SKILL.md"),
-            );
-        }
-        candidates.push(
-            home()
-                .join(".claude")
-                .join("skills")
-                .join(leaf_name)
-                .join("SKILL.md"),
-        );
+    add_plain_candidates(project_path, plugin_prefix, leaf_name, &mut candidates);
 
-        let plugins_dir = home().join(".claude").join("plugins");
-        if let Ok(entries) = std::fs::read_dir(&plugins_dir) {
-            for entry in entries.flatten() {
-                if is_dir_entry(&entry) {
-                    candidates.push(
-                        plugins_dir
-                            .join(entry.file_name())
-                            .join("skills")
-                            .join(leaf_name)
-                            .join("SKILL.md"),
-                    );
-                }
-            }
-        }
-    }
-
-    // Plugin cache layout:
-    // ~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/skills/<name>/SKILL.md
-    let cache_dir = home().join(".claude").join("plugins").join("cache");
-    if let Ok(marketplaces) = std::fs::read_dir(&cache_dir) {
-        for marketplace in marketplaces.flatten() {
-            if !is_dir_entry(&marketplace) {
-                continue;
-            }
-            let market_dir = cache_dir.join(marketplace.file_name());
-            if let Ok(plugins) = std::fs::read_dir(&market_dir) {
-                for plugin in plugins.flatten() {
-                    if !is_dir_entry(&plugin) {
-                        continue;
-                    }
-                    if let Some(pp) = plugin_prefix
-                        && plugin.file_name().to_string_lossy() != pp
-                    {
-                        continue;
-                    }
-                    let plugin_dir = market_dir.join(plugin.file_name());
-                    if let Ok(versions) = std::fs::read_dir(&plugin_dir) {
-                        for version in versions.flatten() {
-                            if !is_dir_entry(&version) {
-                                continue;
-                            }
-                            candidates.push(
-                                plugin_dir
-                                    .join(version.file_name())
-                                    .join("skills")
-                                    .join(leaf_name)
-                                    .join("SKILL.md"),
-                            );
-                        }
-                    }
-                }
-            }
-        }
-    }
+    add_cached_candidates(plugin_prefix, leaf_name, &mut candidates);
 
     // Non-cache plugin dirs for plugin-qualified skills.
     if let Some(pp) = plugin_prefix {
@@ -237,6 +167,93 @@ pub(crate) fn resolve_skill_path(
         c.insert(skill_name.to_string(), fallback.clone());
     }
     fallback
+}
+
+fn add_plain_candidates(
+    project_path: Option<&str>,
+    plugin_prefix: Option<&str>,
+    leaf_name: &str,
+    candidates: &mut Vec<PathBuf>,
+) {
+    // Plain (unqualified) skills: project → user home → every plugin dir.
+    if plugin_prefix.is_none() {
+        if let Some(pp) = project_path {
+            candidates.push(
+                PathBuf::from(pp)
+                    .join(".claude")
+                    .join("skills")
+                    .join(leaf_name)
+                    .join("SKILL.md"),
+            );
+        }
+        candidates.push(
+            home()
+                .join(".claude")
+                .join("skills")
+                .join(leaf_name)
+                .join("SKILL.md"),
+        );
+
+        let plugins_dir = home().join(".claude").join("plugins");
+        if let Ok(entries) = std::fs::read_dir(&plugins_dir) {
+            for entry in entries.flatten() {
+                if is_dir_entry(&entry) {
+                    candidates.push(
+                        plugins_dir
+                            .join(entry.file_name())
+                            .join("skills")
+                            .join(leaf_name)
+                            .join("SKILL.md"),
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn add_cached_candidates(
+    plugin_prefix: Option<&str>,
+    leaf_name: &str,
+    candidates: &mut Vec<PathBuf>,
+) {
+    // Plugin cache layout:
+    // ~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/skills/<name>/SKILL.md
+    let cache_dir = home().join(".claude").join("plugins").join("cache");
+    if let Ok(marketplaces) = std::fs::read_dir(&cache_dir) {
+        for marketplace in marketplaces.flatten() {
+            if !is_dir_entry(&marketplace) {
+                continue;
+            }
+            let market_dir = cache_dir.join(marketplace.file_name());
+            if let Ok(plugins) = std::fs::read_dir(&market_dir) {
+                for plugin in plugins.flatten() {
+                    if !is_dir_entry(&plugin) {
+                        continue;
+                    }
+                    if let Some(pp) = plugin_prefix
+                        && plugin.file_name().to_string_lossy() != pp
+                    {
+                        continue;
+                    }
+                    let plugin_dir = market_dir.join(plugin.file_name());
+                    if let Ok(versions) = std::fs::read_dir(&plugin_dir) {
+                        for version in versions.flatten() {
+                            if !is_dir_entry(&version) {
+                                continue;
+                            }
+                            candidates.push(
+                                plugin_dir
+                                    .join(version.file_name())
+                                    .join("skills")
+                                    .join(leaf_name)
+                                    .join("SKILL.md"),
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]

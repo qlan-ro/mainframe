@@ -11,7 +11,10 @@
 //! The `AdapterRegistry` tests live in `tests/registry.rs` (they exercise only
 //! the public surface) so this file stays focused on the registry.
 #![forbid(unsafe_code)]
-#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
+#![cfg_attr(
+    test,
+    allow(clippy::too_many_lines, clippy::unwrap_used, clippy::expect_used)
+)]
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
@@ -171,7 +174,8 @@ impl AdapterRegistry {
 
     pub fn configure_refresh(&self, deps: Arc<dyn RefreshDeps>) {
         // `OnceLock` accepts the first setter (boot); later calls are ignored.
-        let _ = self.deps.set(deps);
+        /* expected */
+        let _ = self.deps.set(deps); // First attachment wins.
     }
 
     pub fn allow_refresh(&self) {
@@ -179,7 +183,8 @@ impl AdapterRegistry {
     }
 
     pub fn allow_refresh_for(&self, ids: impl IntoIterator<Item = String>) {
-        let _ = self.refresh_ids.set(ids.into_iter().collect()); // expected: boot configures this once
+        /* expected */
+        let _ = self.refresh_ids.set(ids.into_iter().collect()); // First attachment wins. // expected: boot configures this once
         self.allow_refresh();
     }
 
@@ -215,6 +220,7 @@ impl AdapterRegistry {
             // if the cap wins — the boot path calls refresh_all uncapped, and later
             // list() calls re-trigger via the idempotent single-flight, so the
             // cancelled work is not lost.
+            /* expected */
             let _ = tokio::time::timeout(
                 Duration::from_millis(REFRESH_LIST_CAP_MS),
                 self.refresh_all(),
@@ -231,9 +237,7 @@ impl AdapterRegistry {
         // logged here.
         for id in self.adapter_ids() {
             if let Err(err) = self.refresh_adapter(&id).await {
-                tracing::warn!(
-                    module = "adapter-registry",
-                    ?err,
+                tracing::warn!( error = ?err,
                     "adapter refresh rejected"
                 );
             }
@@ -272,29 +276,7 @@ impl AdapterRegistry {
             return Ok(());
         }
         let exe_path = deps.resolve_executable_path(adapter_id.to_string()).await;
-        // One `--version` spawn covers installed AND version (use the resolved path).
-        let ver = deps
-            .run(
-                exe_path.clone().unwrap_or_else(|| adapter.id().to_string()),
-                vec!["--version".to_string()],
-                Some(5_000),
-            )
-            .await;
-        let mut installed = ver.ok;
-        let mut version = if ver.ok {
-            crate::version::CliVersion::parse(&ver.stdout).map(|v| v.to_string())
-        } else {
-            None
-        };
-        // The spawn above assumes a literal CLI binary on PATH. Plugin-provided
-        // adapters have no such binary and would ENOENT — fall back to asking the
-        // adapter directly before concluding "not installed".
-        if !installed {
-            installed = adapter.is_installed().await?;
-            if installed {
-                version = adapter.get_version().await?;
-            }
-        }
+        let (installed, version) = probe_installation(&adapter, &deps, &exe_path).await?;
         // Report the version once, however it was determined (primary `--version`
         // spawn or the fallback path above), before either `apply_refresh` call
         // site below recomputes `capabilities()` — a version-gated capability
@@ -313,29 +295,13 @@ impl AdapterRegistry {
                 &deps,
             );
             tracing::warn!(
-                module = "adapter-registry",
                 adapter_id,
                 exe_path,
                 "adapter not installed — skipping live catalog discovery"
             );
             return Ok(());
         }
-        // A failed refresh leaves the previous catalog intact.
-        let models: Option<Vec<AdapterModel>> = {
-            let res = adapter.refresh_catalog(exe_path.clone()).await;
-            match res {
-                Ok(m) => m,
-                Err(err) => {
-                    tracing::warn!(
-                        module = "adapter-registry",
-                        ?err,
-                        adapter_id,
-                        "live model refresh threw; keeping fallback catalog"
-                    );
-                    None
-                }
-            }
-        };
+        let models = refresh_catalog(&adapter, adapter_id, exe_path.clone()).await;
         let got_live = models.as_ref().map(|m| !m.is_empty()).unwrap_or(false);
         self.apply_refresh(
             adapter_id,
@@ -346,17 +312,20 @@ impl AdapterRegistry {
             },
             &deps,
         );
+        self.mark_catalog_refresh(adapter_id, &exe_path, got_live);
+        Ok(())
+    }
+
+    fn mark_catalog_refresh(&self, adapter_id: &str, exe_path: &Option<String>, got_live: bool) {
         if got_live {
             self.succeeded.insert(adapter_id.to_string());
         } else {
             tracing::warn!(
-                module = "adapter-registry",
                 adapter_id,
                 exe_path,
                 "no live catalog — will retry on next refresh"
             );
         }
-        Ok(())
     }
 
     fn apply_refresh(&self, adapter_id: &str, patch: RefreshPatch, deps: &Arc<dyn RefreshDeps>) {
@@ -366,45 +335,15 @@ impl AdapterRegistry {
         let adapter = self.adapters.get(adapter_id).map(|e| e.value().clone());
         let installed = patch.installed;
         let models_changed = patch.models.is_some();
-        let models_revision = if models_changed {
-            Some(prev.models_revision.unwrap_or(1) + 1)
-        } else {
-            prev.models_revision
-        };
-        // Recomputed from the adapter every refresh: a
-        // version-gated capability (Codex's `fork`) can flip after
-        // `observe_cli_version` ran, with no catalog change at all. Missing
-        // adapter (shouldn't happen — `prev` came from this same registry)
-        // keeps whatever the snapshot already had.
-        let capabilities = adapter
-            .as_ref()
-            .map(|a| a.capabilities())
-            .unwrap_or(prev.capabilities);
-        let fork_unavailable_reason = adapter.as_ref().and_then(|a| a.fork_unavailable_reason());
-        let capabilities_changed = capabilities != prev.capabilities;
-        let reason_changed = fork_unavailable_reason != prev.fork_unavailable_reason;
-        let next = AdapterInfo {
-            id: prev.id.clone(),
-            name: prev.name.clone(),
-            description: prev.description.clone(),
-            installed: patch.installed,
-            version: patch.version.clone().or_else(|| prev.version.clone()),
-            models: patch.models.clone().unwrap_or_else(|| prev.models.clone()),
-            models_revision,
-            catalog_source: if models_changed {
-                Some(CatalogSource::Probed)
-            } else {
-                prev.catalog_source
-            },
-            capabilities,
-            fork_unavailable_reason,
-        };
+        let next = refresh_snapshot(&prev, &patch, adapter.as_ref());
+        let models_revision = next.models_revision;
+        let capabilities_changed = next.capabilities != prev.capabilities;
+        let reason_changed = next.fork_unavailable_reason != prev.fork_unavailable_reason;
         // Mutate the cache BEFORE emitting so a blocked subscriber cannot
         // leave the snapshot un-updated.
         self.snapshots.insert(adapter_id.to_string(), next.clone());
         if let (Some(models), Some(rev)) = (&patch.models, models_revision) {
             tracing::info!(
-                module = "adapter-registry",
                 adapter_id,
                 models_revision = rev,
                 count = models.len(),
@@ -438,3 +377,6 @@ pub use external_sessions::ExternalSessions;
 
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
+
+mod refresh_helpers;
+use refresh_helpers::{probe_installation, refresh_catalog, refresh_snapshot};

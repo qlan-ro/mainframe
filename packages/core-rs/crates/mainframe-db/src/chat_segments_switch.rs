@@ -44,29 +44,7 @@ pub(crate) fn apply(db: &Connection, commit: &SwitchCommit) -> Result<(), DbErro
             rusqlite::params![segment_id, commit.chat_id],
         )?;
     }
-    if let Some(open) = &commit.open_segment {
-        let native_ref = match &open.native {
-            OpenNative::Existing(id) => id.clone(),
-            OpenNative::Fresh { id, adapter_id } => {
-                natives::insert_fresh(
-                    db,
-                    id,
-                    &commit.chat_id,
-                    adapter_id,
-                    commit.settings.model.as_deref(),
-                )?;
-                id.clone()
-            }
-        };
-        insert_segment(
-            db,
-            &commit.chat_id,
-            &open.id,
-            open.kind,
-            &native_ref,
-            &commit.now,
-        )?;
-    }
+    open_segment(db, commit)?;
     write_settings(db, &commit.chat_id, &commit.settings, &commit.now)?;
     natives::write_mirror(db, &commit.chat_id)
 }
@@ -101,5 +79,32 @@ fn write_settings(
             now,
         ],
     )?;
+    Ok(())
+}
+
+fn open_segment(db: &Connection, commit: &SwitchCommit) -> Result<(), DbError> {
+    if let Some(open) = &commit.open_segment {
+        let native_ref = match &open.native {
+            OpenNative::Existing(id) => id.clone(),
+            OpenNative::Fresh { id, adapter_id } => {
+                natives::insert_fresh(
+                    db,
+                    id,
+                    &commit.chat_id,
+                    adapter_id,
+                    commit.settings.model.as_deref(),
+                )?;
+                id.clone()
+            }
+        };
+        insert_segment(
+            db,
+            &commit.chat_id,
+            &open.id,
+            open.kind,
+            &native_ref,
+            &commit.now,
+        )?;
+    }
     Ok(())
 }

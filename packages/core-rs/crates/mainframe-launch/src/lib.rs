@@ -4,7 +4,10 @@
 //! handle (`BroadcastFn`) passed in by the daemon, matching the `DaemonEvent`
 //! shapes in `packages/types/src/events.ts` (`launch.*`, `tunnel:status`).
 #![forbid(unsafe_code)]
-#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
+#![cfg_attr(
+    test,
+    allow(clippy::too_many_lines, clippy::unwrap_used, clippy::expect_used)
+)]
 
 pub mod expand_variables;
 pub mod launch_config;

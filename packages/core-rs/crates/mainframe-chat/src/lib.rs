@@ -5,7 +5,10 @@
 //! stays FIFO per chat, and a chat lock is never held across an `.await` that
 //! emits events or does session I/O.
 #![forbid(unsafe_code)]
-#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
+#![cfg_attr(
+    test,
+    allow(clippy::too_many_lines, clippy::unwrap_used, clippy::expect_used)
+)]
 
 macro_rules! storage_event {
     ($shared:expr, $result:expr $(, $fallback:expr)?) => {

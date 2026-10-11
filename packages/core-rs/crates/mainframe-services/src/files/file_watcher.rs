@@ -70,7 +70,6 @@ impl FileWatcherService {
             if let Some(existing) = map.get_mut(key) {
                 existing.ref_count += 1;
                 tracing::debug!(
-                    module = "file-watcher",
                     path = key,
                     ref_count = existing.ref_count,
                     "file watch ref++"
@@ -98,38 +97,12 @@ impl FileWatcherService {
             .map(Path::to_path_buf)
             .unwrap_or_else(|| Path::new(watch_path).to_path_buf());
 
-        let handler = move |res: notify::Result<notify::Event>| match res {
-            Ok(event) => {
-                let hit = match &target_name {
-                    Some(name) => event
-                        .paths
-                        .iter()
-                        .any(|p| p.file_name() == Some(name.as_os_str())),
-                    None => true,
-                };
-                if hit && let Some(map) = weak.upgrade() {
-                    schedule_emit(&map, &path_for_cb, &broadcast, rt.as_ref());
-                }
-            }
-            Err(err) => {
-                tracing::warn!(
-                    module = "file-watcher",
-                    ?err,
-                    path = %path_for_cb,
-                    "file watcher error"
-                );
-                if let Some(map) = weak.upgrade() {
-                    cleanup(&map, &path_for_cb);
-                }
-            }
-        };
+        let handler = watch_handler(weak, broadcast, rt, path_for_cb, target_name);
 
         let mut watcher = match notify::recommended_watcher(handler) {
             Ok(watcher) => watcher,
             Err(err) => {
-                tracing::warn!(
-                    module = "file-watcher",
-                    ?err,
+                tracing::warn!( error = ?err,
                     path = %key,
                     "failed to start file watcher"
                 );
@@ -138,9 +111,7 @@ impl FileWatcherService {
         };
 
         if let Err(err) = watcher.watch(&watch_target, RecursiveMode::NonRecursive) {
-            tracing::warn!(
-                module = "file-watcher",
-                ?err,
+            tracing::warn!( error = ?err,
                 path = %watch_path,
                 "failed to start file watcher"
             );
@@ -155,7 +126,7 @@ impl FileWatcherService {
                 debounce: None,
             },
         );
-        tracing::debug!(module = "file-watcher", path = key, "file watch started");
+        tracing::debug!(path = key, "file watch started");
     }
 
     pub fn unsubscribe(&self, absolute_path: &str) {
@@ -166,7 +137,6 @@ impl FileWatcherService {
             };
             entry.ref_count -= 1;
             tracing::debug!(
-                module = "file-watcher",
                 path = absolute_path,
                 ref_count = entry.ref_count,
                 "file watch ref--"
@@ -215,7 +185,6 @@ fn schedule_emit(map: &Arc<WatcherMap>, path: &str, broadcast: &BroadcastFn, rt:
                     }
                 }
                 tracing::debug!(
-                    module = "file-watcher",
                     path = %path_owned,
                     "file changed, broadcasting"
                 );
@@ -238,9 +207,41 @@ fn cleanup(map: &WatcherMap, path: &str) {
     }
     // Dropping the watcher closes the subscription.
     drop(entry);
-    tracing::debug!(module = "file-watcher", path = path, "file watch stopped");
+    tracing::debug!(path = path, "file watch stopped");
 }
 
 #[cfg(test)]
 #[path = "file_watcher_tests.rs"]
 mod tests;
+
+fn watch_handler(
+    weak: std::sync::Weak<WatcherMap>,
+    broadcast: BroadcastFn,
+    rt: Option<Handle>,
+    path_for_cb: String,
+    target_name: Option<std::ffi::OsString>,
+) -> impl FnMut(notify::Result<notify::Event>) + Send + 'static {
+    move |res: notify::Result<notify::Event>| match res {
+        Ok(event) => {
+            let hit = match &target_name {
+                Some(name) => event
+                    .paths
+                    .iter()
+                    .any(|p| p.file_name() == Some(name.as_os_str())),
+                None => true,
+            };
+            if hit && let Some(map) = weak.upgrade() {
+                schedule_emit(&map, &path_for_cb, &broadcast, rt.as_ref());
+            }
+        }
+        Err(err) => {
+            tracing::warn!( error = ?err,
+                path = %path_for_cb,
+                "file watcher error"
+            );
+            if let Some(map) = weak.upgrade() {
+                cleanup(&map, &path_for_cb);
+            }
+        }
+    }
+}

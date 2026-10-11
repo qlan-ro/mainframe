@@ -5,7 +5,10 @@
 //! (`LspConnectionHandler` + `parse_lsp_upgrade_path`), and the framing bridge
 //! (`bridge_ws_to_process` + `encode_json_rpc`).
 #![forbid(unsafe_code)]
-#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
+#![cfg_attr(
+    test,
+    allow(clippy::too_many_lines, clippy::unwrap_used, clippy::expect_used)
+)]
 
 pub mod lsp_connection;
 pub mod lsp_manager;
