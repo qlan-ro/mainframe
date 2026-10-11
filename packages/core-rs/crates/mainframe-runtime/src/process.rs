@@ -37,4 +37,5 @@ pub fn cli_command(exe: &str, path: &crate::ResolvedPath) -> tokio::process::Com
 #[cfg(test)]
 mod managed_tests;
 #[cfg(test)]
+#[path = "process_tests.rs"]
 mod tests;

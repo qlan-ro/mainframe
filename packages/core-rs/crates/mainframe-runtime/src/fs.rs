@@ -147,4 +147,5 @@ impl Drop for Temporary {
 #[cfg(test)]
 mod cancellation_tests;
 #[cfg(test)]
+#[path = "fs_tests.rs"]
 mod tests;
