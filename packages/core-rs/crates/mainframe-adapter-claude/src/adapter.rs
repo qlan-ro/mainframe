@@ -2,7 +2,7 @@
 //! serves — the static fallback list, the older-model merge and
 //! `enrich_with_context_window` — lives in [`crate::models`].
 
-use mainframe_types::sync::LockExt as _;
+use mainframe_types::sync::LockExt;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -87,4 +87,5 @@ impl Default for ClaudeAdapter {
 mod contract;
 
 #[cfg(test)]
+#[path = "adapter_tests.rs"]
 mod tests;

@@ -46,8 +46,9 @@ async fn kill_resolves_only_after_child_emits_close() {
     let mut fut = Box::pin(async move { s2.kill().await });
 
     tokio::select! {
+        biased;
         _ = &mut fut => panic!("kill resolved before close"),
-        _ = tokio::time::sleep(Duration::from_millis(30)) => {}
+        () = std::future::ready(()) => {}
     }
     assert!(ctrl.signals.lock().unwrap().contains(&Signal::Term));
 

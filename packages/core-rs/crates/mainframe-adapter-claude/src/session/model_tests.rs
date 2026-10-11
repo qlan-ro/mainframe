@@ -2,7 +2,6 @@ use super::{
     tests::{session, spawned_with_stdin},
     *,
 };
-use std::os::unix::fs::PermissionsExt;
 
 #[tokio::test]
 async fn reads_the_live_model_without_sending_a_user_turn() {
@@ -71,11 +70,10 @@ async fn selecting_cli_settings_resolves_configuration_before_switching_live_mod
     let session = session();
     let dir = tempfile::tempdir().unwrap();
     let exe = dir.path().join("configured-claude");
-    std::fs::write(&exe, r#"#!/bin/sh
+    mainframe_runtime::test_support::write_shell_script(&exe, r#"#!/bin/sh
 read -r request
 printf '%s\n' '{"type":"control_response","response":{"request_id":"effective-model","subtype":"success","response":{"applied":{"model":"claude-fable-5-1"}}}}'
 "#).unwrap();
-    std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(0o755)).unwrap();
     *session.executable.lock().unwrap() = exe.to_string_lossy().into_owned();
     let mut writes = spawned_with_stdin(&session);
     let other = session.clone();

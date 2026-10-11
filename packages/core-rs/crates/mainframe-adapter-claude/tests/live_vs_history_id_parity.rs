@@ -10,18 +10,14 @@
 
 use std::sync::{Arc, Mutex};
 
-use mainframe_adapter_api::{AdapterError, LoadedSkill, SessionSink};
+use mainframe_adapter_api::SessionSink;
 use mainframe_adapter_claude::events::handle_stdout;
 use mainframe_adapter_claude::history_converters::convert_history_entry;
 use mainframe_adapter_claude::session::ClaudeSession;
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_claude_workflows::store::ClaudeWorkflowStore;
-use mainframe_types::adapter::{
-    ContextUsage, ControlRequest, DetectedPr, MessageMetadata, ProviderQuota, SessionOptions,
-    SessionResult,
-};
-use mainframe_types::chat::{ChatMessageType, MessageContent, TodoItem};
-use mainframe_types::context::SkillFileEntry;
+use mainframe_types::adapter::{MessageMetadata, ProviderQuota, SessionOptions};
+use mainframe_types::chat::{ChatMessageType, MessageContent};
 use serde_json::Value;
 
 const FIXTURE: &str = include_str!("../src/__fixtures__/queued-command-attachment.jsonl");
@@ -37,29 +33,32 @@ struct IdRecordingSink {
 }
 
 impl SessionSink for IdRecordingSink {
-    fn on_init(&self, _session_id: &str) {}
+    mainframe_adapter_api::forward_session_sink!(on_init, on_result);
+
+    mainframe_adapter_api::forward_session_sink!(
+        on_tool_result,
+        on_permission,
+        on_exit,
+        on_error,
+        on_compact,
+        on_compact_start,
+        on_context_usage,
+        on_plan_file,
+        on_skill_file,
+        on_queued_processed,
+        on_todo_update,
+        on_pr_detected,
+        on_cli_message,
+        on_skill_loaded,
+        on_subagent_child
+    );
+
     fn on_message(&self, _content: Vec<MessageContent>, metadata: Option<MessageMetadata>) {
         let id = metadata
             .and_then(|m| m.vendor_id)
             .unwrap_or_else(|| NO_VENDOR_ID_SENTINEL.to_string());
         *self.live_message_id.lock().unwrap() = Some(id);
     }
-    fn on_tool_result(&self, _content: Vec<MessageContent>, _vendor_id: Option<String>) {}
-    fn on_permission(&self, _request: ControlRequest) {}
-    fn on_result(&self, _data: SessionResult) {}
-    fn on_exit(&self, _code: Option<i32>) {}
-    fn on_error(&self, _error: AdapterError) {}
-    fn on_compact(&self, _vendor_id: Option<&str>) {}
-    fn on_compact_start(&self) {}
-    fn on_context_usage(&self, _usage: ContextUsage) {}
-    fn on_plan_file(&self, _file_path: &str) {}
-    fn on_skill_file(&self, _entry: SkillFileEntry) {}
-    fn on_queued_processed(&self, _uuid: &str) {}
-    fn on_todo_update(&self, _todos: Vec<TodoItem>) {}
-    fn on_pr_detected(&self, _pr: DetectedPr) {}
-    fn on_cli_message(&self, _text: &str) {}
-    fn on_skill_loaded(&self, _entry: LoadedSkill) {}
-    fn on_subagent_child(&self, _parent_tool_use_id: &str, _blocks: Vec<MessageContent>) {}
     fn on_provider_quota(&self, _adapter_id: &str, _quota: ProviderQuota) {}
 }
 

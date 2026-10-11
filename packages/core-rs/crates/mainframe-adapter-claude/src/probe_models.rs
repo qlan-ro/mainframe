@@ -277,4 +277,5 @@ pub async fn probe_models(executable: &str, path: &str) -> Option<ProbeResult> {
 }
 
 #[cfg(test)]
+#[path = "probe_models_tests.rs"]
 mod tests;

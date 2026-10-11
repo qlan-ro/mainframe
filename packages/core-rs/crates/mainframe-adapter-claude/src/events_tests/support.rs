@@ -46,6 +46,8 @@ impl RecordingSink {
     }
 }
 impl SessionSink for RecordingSink {
+    mainframe_adapter_api::forward_session_sink!(on_exit);
+
     fn on_init(&self, session_id: &str) {
         self.r().init.push(session_id.to_string());
     }
@@ -68,7 +70,6 @@ impl SessionSink for RecordingSink {
     fn on_result(&self, _data: SessionResult) {
         self.r().results += 1;
     }
-    fn on_exit(&self, _code: Option<i32>) {}
     fn on_error(&self, _error: AdapterError) {
         self.r().errors += 1;
     }
@@ -151,7 +152,7 @@ pub(super) fn block_value(blocks: &[MessageContent], i: usize) -> Value {
     serde_json::to_value(&blocks[i]).unwrap()
 }
 
-#[path = "../events/tests/events_synthetic_tests.rs"]
+#[path = "../events_tests_events_synthetic_tests.rs"]
 mod events_synthetic_tests;
 
 #[path = "init.rs"]
