@@ -231,6 +231,41 @@ async fn shutdown_all_signals_every_server_before_escalating_any() {
 }
 
 #[tokio::test]
+async fn shutdown_escalates_when_the_stdin_queue_is_full() {
+    // `sleep` never reads stdin, so the pipe fills, the writer task blocks
+    // and the bounded queue stays full: a handshake that waited for queue
+    // room would never reach the signals.
+    let (manager, signals) = signal_manager("exec sleep 100", Duration::from_secs(5));
+    let handle = manager
+        .get_or_spawn("proj1", "typescript", "/tmp")
+        .await
+        .unwrap();
+    let stdin = handle.stdin_tx();
+    stdin.try_write(vec![b'x'; 1 << 20]).unwrap();
+    let mut queued = 1;
+    while stdin.try_write(b"x".to_vec()).is_ok() {
+        queued += 1;
+        assert!(queued <= 4096, "the stdin queue never filled");
+    }
+    assert_eq!(
+        stdin.try_write(b"x".to_vec()),
+        Err(mainframe_runtime::process::StdinWriteError::Full)
+    );
+
+    tokio::time::timeout(
+        Duration::from_secs(2),
+        manager.shutdown("proj1", "typescript"),
+    )
+    .await
+    .expect("shutdown must not wait for stdin queue room");
+
+    assert_eq!(*signals.lock().unwrap(), vec![(handle.pid, Signal::Term)]);
+    assert!(handle.exited.load(Ordering::SeqCst));
+    assert_pid_gone(handle.pid).await;
+    assert!(manager.get_handle("proj1", "typescript").is_none());
+}
+
+#[tokio::test]
 async fn starts_idle_timer_on_spawn_no_client_connected() {
     let (m, _) = manager();
     let handle = m.get_or_spawn("proj1", "typescript", "/tmp").await.unwrap();

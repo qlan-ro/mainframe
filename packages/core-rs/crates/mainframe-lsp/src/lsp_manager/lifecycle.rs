@@ -64,45 +64,38 @@ impl ManagerState {
         self.handles.remove(&k);
     }
 
+    /// The polite LSP shutdown: `shutdown` request, a bounded wait for its ack,
+    /// `exit` notification, a bounded wait for the exit. Returns `false` when
+    /// the server must be escalated to signals instead, including when its
+    /// stdin queue is full or closed: a server that stopped reading stdin
+    /// would otherwise hold the handshake forever.
     async fn shutdown_handshake(&self, handle: &LspServerHandle) -> bool {
         if handle.exited.load(Ordering::SeqCst) {
             return true;
         }
-        if !handle.stdin_tx.is_closed() {
-            // shutdown request -> await ack (or timeout) -> exit notification -> await exit (or timeout)
-            let shutdown_req = serde_json::json!({
-                "jsonrpc": "2.0", "id": "shutdown", "method": "shutdown", "params": null
-            })
-            .to_string();
-            if let Err(error) = handle
-                .stdin_tx
-                .write(encode_json_rpc(&shutdown_req).into_bytes())
-                .await
-            {
-                tracing::debug!(%error, "LSP shutdown request not written");
-            }
-
-            if let Some(mut stdout) = handle.take_stdout() {
-                let mut buf = [0u8; 8192];
-                let _ = tokio::time::timeout(self.shutdown_request_timeout, stdout.read(&mut buf))
-                    .await;
-            } else {
-                tokio::time::sleep(self.shutdown_request_timeout).await;
-            }
-
-            let exit_notif = serde_json::json!({ "jsonrpc": "2.0", "method": "exit" }).to_string();
-            if let Err(error) = handle
-                .stdin_tx
-                .write(encode_json_rpc(&exit_notif).into_bytes())
-                .await
-            {
-                tracing::debug!(%error, "LSP exit notification not written");
-            }
-
-            return wait_for_handle_exit(handle, self.shutdown_exit_timeout).await;
+        let shutdown_req = serde_json::json!({
+            "jsonrpc": "2.0", "id": "shutdown", "method": "shutdown", "params": null
+        })
+        .to_string();
+        if !queue_handshake_message(handle, &shutdown_req, "shutdown request") {
+            return false;
         }
 
-        false
+        if let Some(mut stdout) = handle.take_stdout() {
+            let mut buf = [0u8; 8192];
+            // The ack, EOF, a read error or the timeout all move on to `exit`.
+            let _ =
+                tokio::time::timeout(self.shutdown_request_timeout, stdout.read(&mut buf)).await;
+        } else {
+            tokio::time::sleep(self.shutdown_request_timeout).await;
+        }
+
+        let exit_notif = serde_json::json!({ "jsonrpc": "2.0", "method": "exit" }).to_string();
+        if !queue_handshake_message(handle, &exit_notif, "exit notification") {
+            return false;
+        }
+
+        wait_for_handle_exit(handle, self.shutdown_exit_timeout).await
     }
 
     async fn escalate(&self, handle: &LspServerHandle) {
@@ -153,6 +146,20 @@ impl ManagerState {
             if let Err(err) = task.await {
                 tracing::warn!(%err, "LSP shutdown task failed");
             }
+        }
+    }
+}
+
+/// Queue one handshake message without waiting for queue room.
+fn queue_handshake_message(handle: &LspServerHandle, json: &str, what: &str) -> bool {
+    match handle
+        .stdin_tx
+        .try_write(encode_json_rpc(json).into_bytes())
+    {
+        Ok(()) => true,
+        Err(error) => {
+            tracing::debug!(%error, pid = handle.pid, "LSP {what} not written; escalating");
+            false
         }
     }
 }
