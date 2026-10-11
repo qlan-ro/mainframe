@@ -1809,6 +1809,8 @@ dependencies = [
  "nanoid",
  "serde",
  "serde_json",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]
