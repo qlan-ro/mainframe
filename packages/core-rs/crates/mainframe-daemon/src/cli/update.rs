@@ -6,11 +6,13 @@
 //! `release` (pure, unit-tested); this module owns argv parsing, install-root
 //! resolution, and the network/process orchestration.
 
+mod error;
 mod release;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+pub(crate) use error::UpdateError;
 use release::{assert_not_downgrade, asset_url, pick_release, standalone_artifact_name};
 use serde::Deserialize;
 
@@ -27,7 +29,7 @@ pub struct UpdateOptions {
 }
 
 /// `parseUpdateArgs()`.
-pub(crate) fn parse_update_args(argv: &[String]) -> Result<UpdateOptions, String> {
+pub(crate) fn parse_update_args(argv: &[String]) -> Result<UpdateOptions, UpdateError> {
     let mut opts = UpdateOptions::default();
     let mut i = 0;
     while i < argv.len() {
@@ -43,7 +45,7 @@ pub(crate) fn parse_update_args(argv: &[String]) -> Result<UpdateOptions, String
                 i += 1;
                 opts.dir = argv.get(i).cloned();
             }
-            other => return Err(format!("Unknown argument: {other}")),
+            other => return Err(UpdateError::UnknownArgument(other.to_string())),
         }
         i += 1;
     }
@@ -56,7 +58,7 @@ pub(crate) fn parse_update_args(argv: &[String]) -> Result<UpdateOptions, String
 pub(crate) fn resolve_install_root(
     env: &HashMap<String, String>,
     exe_path: &Path,
-) -> Result<PathBuf, String> {
+) -> Result<PathBuf, UpdateError> {
     if let Some(root) = env.get("MAINFRAME_STANDALONE_ROOT") {
         let candidate = PathBuf::from(root);
         if is_standalone_root(&candidate) {
@@ -70,12 +72,7 @@ pub(crate) fn resolve_install_root(
         return Ok(derived.to_path_buf());
     }
 
-    Err(
-        "Could not locate a standalone install to update. This looks like a dev or \
-         non-standalone build. Re-run the install script instead:\n  curl -fsSL \
-         https://raw.githubusercontent.com/qlan-ro/mainframe/main/scripts/install.sh | bash"
-            .to_string(),
-    )
+    Err(UpdateError::NoStandaloneInstall)
 }
 
 fn is_standalone_root(root: &Path) -> bool {
@@ -98,7 +95,7 @@ fn arch_name() -> &'static str {
 }
 
 /// `runUpdate()`.
-pub(crate) async fn run_update(argv: Vec<String>) -> Result<(), String> {
+pub(crate) async fn run_update(argv: Vec<String>) -> Result<(), UpdateError> {
     let opts = parse_update_args(&argv).inspect_err(|_| print_usage())?;
     if opts.help {
         print_usage();
@@ -126,13 +123,12 @@ pub(crate) async fn run_update(argv: Vec<String>) -> Result<(), String> {
     Ok(())
 }
 
-fn resolve_root(opts: &UpdateOptions) -> Result<PathBuf, String> {
+fn resolve_root(opts: &UpdateOptions) -> Result<PathBuf, UpdateError> {
     if let Some(dir) = &opts.dir {
         return Ok(PathBuf::from(dir));
     }
     let env: HashMap<String, String> = std::env::vars().collect();
-    let exe = std::env::current_exe()
-        .map_err(|err| format!("Could not resolve the running binary path: {err}"))?;
+    let exe = std::env::current_exe().map_err(UpdateError::CurrentExe)?;
     resolve_install_root(&env, &exe)
 }
 
@@ -145,40 +141,41 @@ enum ReleasesPayload {
     Single(Box<release::GhRelease>),
 }
 
-async fn fetch_releases(version: Option<&str>) -> Result<Vec<release::GhRelease>, String> {
+async fn fetch_releases(version: Option<&str>) -> Result<Vec<release::GhRelease>, UpdateError> {
     let url = match version {
         Some(v) => format!("https://api.github.com/repos/{REPO}/releases/tags/{v}"),
         None => format!("https://api.github.com/repos/{REPO}/releases?per_page=30"),
     };
+    let request_failed = |source| UpdateError::GitHubRequest {
+        url: url.clone(),
+        source,
+    };
     let mut req = mainframe_runtime::http::client()
-        .map_err(|err| format!("GitHub API request failed for {url}: {err}"))?
+        .map_err(request_failed)?
         .get(&url)
         .header("User-Agent", "mainframe-updater");
     if let Ok(token) = std::env::var("GITHUB_TOKEN") {
         req = req.header("Authorization", format!("Bearer {token}"));
     }
-    let res = req
-        .send()
-        .await
-        .map_err(|err| format!("GitHub API request failed for {url}: {err}"))?;
+    let res = req.send().await.map_err(request_failed)?;
     if !res.status().is_success() {
-        return Err(format!("GitHub API returned {} for {url}", res.status()));
+        return Err(UpdateError::GitHubStatus {
+            status: res.status(),
+            url,
+        });
     }
-    let payload: ReleasesPayload = res
-        .json()
-        .await
-        .map_err(|err| format!("Failed to parse the GitHub API response: {err}"))?;
+    let payload: ReleasesPayload = res.json().await.map_err(UpdateError::GitHubDecode)?;
     Ok(match payload {
         ReleasesPayload::List(list) => list,
         ReleasesPayload::Single(release) => vec![*release],
     })
 }
 
-async fn install_release(url: &str, artifact: &str, root: &Path) -> Result<(), String> {
+async fn install_release(url: &str, artifact: &str, root: &Path) -> Result<(), UpdateError> {
     let tmp_dir = std::env::temp_dir().join(format!("mainframe-update-{}", nanoid::nanoid!(8)));
     tokio::fs::create_dir_all(&tmp_dir)
         .await
-        .map_err(|err| format!("Could not create a temp dir for the download: {err}"))?;
+        .map_err(UpdateError::TempDir)?;
     let tarball = tmp_dir.join(artifact);
 
     let result = match download_tarball(url, &tarball).await {
@@ -190,30 +187,43 @@ async fn install_release(url: &str, artifact: &str, root: &Path) -> Result<(), S
     result
 }
 
-async fn download_tarball(url: &str, dest: &Path) -> Result<(), String> {
+async fn download_tarball(url: &str, dest: &Path) -> Result<(), UpdateError> {
+    let failed = |source| UpdateError::Download {
+        url: url.to_string(),
+        source,
+    };
     let res = mainframe_runtime::http::client()
-        .map_err(|err| format!("Download failed for {url}: {err}"))?
+        .map_err(failed)?
         .get(url)
         .header("User-Agent", "mainframe-updater")
         .send()
         .await
-        .map_err(|err| format!("Download failed for {url}: {err}"))?;
+        .map_err(failed)?;
     if !res.status().is_success() {
-        return Err(format!("Download failed ({}) for {url}", res.status()));
+        return Err(UpdateError::DownloadStatus {
+            status: res.status(),
+            url: url.to_string(),
+        });
     }
     let bytes = res
         .bytes()
         .await
-        .map_err(|err| format!("Download failed while reading {url}: {err}"))?;
+        .map_err(|source| UpdateError::DownloadRead {
+            url: url.to_string(),
+            source,
+        })?;
     tokio::fs::write(dest, &bytes)
         .await
-        .map_err(|err| format!("Could not write {}: {err}", dest.display()))?;
+        .map_err(|source| UpdateError::WriteTarball {
+            path: dest.display().to_string(),
+            source,
+        })?;
     Ok(())
 }
 
 // Extraction shells out to the system `tar` rather than pulling in a Rust
 // tar/gzip crate.
-async fn extract_over(tarball: &Path, root: &Path) -> Result<(), String> {
+async fn extract_over(tarball: &Path, root: &Path) -> Result<(), UpdateError> {
     let status = tokio::process::Command::new("tar")
         .arg("-xzf")
         .arg(tarball)
@@ -222,9 +232,9 @@ async fn extract_over(tarball: &Path, root: &Path) -> Result<(), String> {
         .arg("--strip-components=1")
         .status()
         .await
-        .map_err(|err| format!("Failed to run tar: {err}"))?;
+        .map_err(UpdateError::TarSpawn)?;
     if !status.success() {
-        return Err(format!("tar exited with status {status}"));
+        return Err(UpdateError::TarStatus(status));
     }
     Ok(())
 }

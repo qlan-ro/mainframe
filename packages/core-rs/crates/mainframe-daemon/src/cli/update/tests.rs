@@ -48,7 +48,7 @@ mod parse_update_args_tests {
     #[test]
     fn rejects_unknown_arguments() {
         let err = parse_update_args(&["--nope".to_string()]).unwrap_err();
-        assert!(err.contains("Unknown argument"));
+        assert!(err.to_string().contains("Unknown argument"));
     }
 }
 
@@ -94,6 +94,6 @@ mod resolve_install_root_tests {
     fn errors_with_install_script_guidance_when_no_standalone_layout_is_found() {
         let err = resolve_install_root(&HashMap::new(), Path::new("/usr/bin/mainframe-daemon"))
             .unwrap_err();
-        assert!(err.contains("install script"));
+        assert!(err.to_string().contains("install script"));
     }
 }

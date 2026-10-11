@@ -72,6 +72,7 @@ use mainframe_services::quota::{
 };
 use mainframe_types::chat::Chat;
 use mainframe_types::events::DaemonEvent;
+use mainframe_types::seam_error::SeamError;
 use tokio::signal;
 use tokio::sync::broadcast;
 use tracing::info;
@@ -493,7 +494,7 @@ async fn run_daemon() {
             let quota = Arc::clone(&scheduler_quota);
             Box::pin(async move {
                 quota.refresh("claude").await;
-                Ok::<(), String>(())
+                Ok::<(), SeamError>(())
             })
         }),
         has_clients: Arc::new(move || !scheduler_clients.is_empty()),
@@ -755,7 +756,9 @@ fn register_quota_pullers(
         Box::pin(async move {
             let binary = resolve_adapter_path(&db, &resolved_path, "claude")
                 .await
-                .ok_or_else(|| "claude executable not found".to_string())?;
+                .ok_or_else(|| {
+                    SeamError::new(AdapterError::Unavailable("claude executable not found"))
+                })?;
             let path = resolved_path.as_str().to_string();
             let run_usage =
                 move || -> Pin<Box<dyn Future<Output = Result<String, AdapterError>> + Send>> {
@@ -769,7 +772,7 @@ fn register_quota_pullers(
                 now: now_ms(),
             })
             .await
-            .map_err(|err| err.to_string())
+            .map_err(SeamError::new)
         })
     });
     quota.register_puller("claude", IngestMode::Pull, claude_puller);
@@ -782,10 +785,12 @@ fn register_quota_pullers(
         Box::pin(async move {
             let binary = resolve_adapter_path(&db, &resolved_path, "codex")
                 .await
-                .ok_or_else(|| "codex executable not found".to_string())?;
+                .ok_or_else(|| {
+                    SeamError::new(AdapterError::Unavailable("codex executable not found"))
+                })?;
             pull_codex_quota_via_temp_app_server(&binary, resolved_path.as_str())
                 .await
-                .map_err(|err| err.to_string())
+                .map_err(SeamError::new)
         })
     });
     // Codex reads the app-server sparsely, so its pull merges like a push.

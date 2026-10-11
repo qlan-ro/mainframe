@@ -49,11 +49,13 @@ mod standalone_artifact_name_tests {
         assert!(
             standalone_artifact_name("win32", "x64")
                 .unwrap_err()
+                .to_string()
                 .contains("Unsupported platform")
         );
         assert!(
             standalone_artifact_name("linux", "ia32")
                 .unwrap_err()
+                .to_string()
                 .contains("Unsupported platform")
         );
     }
@@ -114,10 +116,15 @@ mod pick_release_tests {
     #[test]
     fn hints_at_pre_when_only_pre_releases_exist() {
         let only_pre = vec![release("v2.0.0-rc.1", true, &[])];
-        assert!(
+        assert_eq!(
             pick_release(&only_pre, None, false)
                 .unwrap_err()
-                .contains("mainframe update --pre")
+                .to_string(),
+            "No matching release found. Only pre-releases exist — retry with `mainframe update --pre`."
+        );
+        assert_eq!(
+            pick_release(&[], None, false).unwrap_err().to_string(),
+            "No matching release found."
         );
     }
 
@@ -126,6 +133,7 @@ mod pick_release_tests {
         assert!(
             pick_release(&list(), Some("v9.9.9"), false)
                 .unwrap_err()
+                .to_string()
                 .contains("No release found for version")
         );
     }
@@ -149,6 +157,7 @@ mod asset_url_tests {
         assert!(
             asset_url(&r, "mainframe-daemon-linux-x64.tar.gz")
                 .unwrap_err()
+                .to_string()
                 .contains("does not include")
         );
     }
@@ -198,13 +207,19 @@ mod assert_not_downgrade_tests {
     fn refuses_to_install_a_release_that_is_not_newer_than_the_running_version() {
         let err =
             assert_not_downgrade(&release("v1.0.0", false, &[]), "2.0.0-rc.6", false).unwrap_err();
-        assert!(err.contains("not newer than the running version"));
+        assert!(
+            err.to_string()
+                .contains("not newer than the running version")
+        );
     }
 
     #[test]
     fn refuses_to_install_the_same_release_again() {
         let err = assert_not_downgrade(&release("v1.0.0", false, &[]), "1.0.0", false).unwrap_err();
-        assert!(err.contains("not newer than the running version"));
+        assert_eq!(
+            err.to_string(),
+            "v1.0.0 is not newer than the running version (v1.0.0). Refusing to downgrade — pass --force to override."
+        );
     }
 
     #[test]
