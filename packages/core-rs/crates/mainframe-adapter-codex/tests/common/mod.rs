@@ -37,6 +37,8 @@ pub struct Recorded {
     pub context_usages: Vec<ContextUsage>,
     /// Every `on_message_partial(id, content)` call, in order.
     pub partials: Vec<(String, Vec<MessageContent>)>,
+    /// Every `on_error` message, in order.
+    pub errors: Vec<String>,
 }
 
 #[derive(Clone, Default)]
@@ -71,6 +73,9 @@ impl Recorder {
     }
     pub fn provider_quotas(&self) -> Vec<(String, ProviderQuota)> {
         self.0.lock().unwrap().provider_quotas.clone()
+    }
+    pub fn errors(&self) -> Vec<String> {
+        self.0.lock().unwrap().errors.clone()
     }
     pub fn compacts(&self) -> usize {
         self.0.lock().unwrap().compacts
@@ -145,7 +150,9 @@ impl SessionSink for RecordingSink {
         self.0.lock().unwrap().results.push(data);
     }
     fn on_exit(&self, _code: Option<i32>) {}
-    fn on_error(&self, _error: AdapterError) {}
+    fn on_error(&self, error: AdapterError) {
+        self.0.lock().unwrap().errors.push(error.to_string());
+    }
     fn on_compact(&self, _vendor_id: Option<&str>) {
         self.0.lock().unwrap().compacts += 1;
     }

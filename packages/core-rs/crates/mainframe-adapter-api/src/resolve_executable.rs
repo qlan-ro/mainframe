@@ -10,6 +10,7 @@ use std::sync::LazyLock;
 use std::sync::Mutex;
 use std::time::Duration;
 
+use mainframe_runtime::ResolvedPath;
 use serde::{Deserialize, Serialize};
 
 use crate::{BoxFuture, RunResult};
@@ -58,21 +59,20 @@ pub struct ResolvedExecutable {
     pub version: Option<String>,
 }
 
-/// Injected dependencies for resolution. `platform` is a platform name
-/// (`"win32"` selects `where`, else `which`); `None` falls back to the build target.
+/// Injected dependencies for resolution.
 pub struct ResolverDeps<'a> {
     pub settings: &'a dyn SettingsWriter,
     pub run: &'a dyn Runner,
-    pub platform: Option<String>,
+    /// The `PATH` scanned for the bare CLI name when no path is configured.
+    pub path: &'a ResolvedPath,
 }
 
 /// Default `run` implementation — spawns the child and captures stdout, never
 /// failing (a spawn error or timeout maps to `{ ok: false }`).
 ///
 /// `path` is the boot-resolved login-shell `PATH` (see
-/// `mainframe_runtime::ResolvedPath`). It must be threaded here so `which`/`where`
-/// detection and version probes find CLIs installed outside the packaged app's
-/// bare `PATH`.
+/// `mainframe_runtime::ResolvedPath`). It must be threaded here so version
+/// probes find CLIs installed outside the packaged app's bare `PATH`.
 pub async fn default_run(
     cmd: &str,
     args: &[String],
@@ -85,12 +85,12 @@ pub async fn default_run(
     if let Some(path) = path {
         command.env("PATH", path);
     }
-    match tokio::time::timeout(dur, command.output()).await {
-        Ok(Ok(out)) => RunResult {
+    match mainframe_runtime::process::run_captured(command, Some(dur)).await {
+        Ok(out) => RunResult {
             ok: out.status.success(),
             stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
         },
-        Ok(Err(_)) | Err(_) => RunResult {
+        Err(_) => RunResult {
             ok: false,
             stdout: String::new(),
         },
@@ -111,6 +111,17 @@ async fn validate(path: &str, run: &dyn Runner) -> (bool, Option<String>) {
     )
 }
 
+/// First executable named `bare` on `path`, scanned off the executor thread.
+async fn find_on_path(path: &ResolvedPath, bare: &str) -> Option<String> {
+    let path = path.clone();
+    let bare = bare.to_string();
+    tokio::task::spawn_blocking(move || path.find(&bare))
+        .await
+        .ok()
+        .flatten()
+        .map(|found| found.to_string_lossy().into_owned())
+}
+
 pub async fn resolve_adapter_executable(
     adapter_id: &str,
     deps: &ResolverDeps<'_>,
@@ -128,30 +139,14 @@ pub async fn resolve_adapter_executable(
             version,
         };
     }
-    let is_win = match deps.platform.as_deref() {
-        Some(p) => p == "win32",
-        None => cfg!(windows),
-    };
-    let finder = if is_win { "where" } else { "which" };
-    let found = deps
-        .run
-        .run(finder.to_string(), vec![bare.to_string()], Some(5_000))
-        .await;
-    if found.ok {
-        let abs = found
-            .stdout
-            .split(['\r', '\n'])
-            .map(str::trim)
-            .find(|s| !s.is_empty());
-        if let Some(abs) = abs {
-            let (valid, version) = validate(abs, deps.run).await;
-            return ResolvedExecutable {
-                path: abs.to_string(),
-                source: ExecutableSource::Detected,
-                valid,
-                version,
-            };
-        }
+    if let Some(abs) = find_on_path(deps.path, bare).await {
+        let (valid, version) = validate(&abs, deps.run).await;
+        return ResolvedExecutable {
+            path: abs,
+            source: ExecutableSource::Detected,
+            valid,
+            version,
+        };
     }
     ResolvedExecutable {
         path: bare.to_string(),
@@ -249,6 +244,19 @@ mod tests {
         args.iter().any(|a| a == "--version")
     }
 
+    /// A `PATH` of one directory holding an executable `name` (or nothing).
+    fn path_with(name: Option<&str>) -> (tempfile::TempDir, ResolvedPath) {
+        let dir = tempfile::tempdir().unwrap();
+        if let Some(name) = name {
+            use std::os::unix::fs::PermissionsExt;
+            let file = dir.path().join(name);
+            std::fs::write(&file, "#!/bin/sh\n").unwrap();
+            std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        let path = ResolvedPath::from_value(dir.path().to_string_lossy().into_owned());
+        (dir, path)
+    }
+
     #[tokio::test]
     async fn uses_a_configured_path_and_validates_via_version() {
         let runner = FnRunner::new(|_cmd: &str, args: &[String]| {
@@ -259,10 +267,11 @@ mod tests {
             }
         });
         let s = MapSettings::with(&[("provider.claude.executablePath", "/usr/local/bin/claude")]);
+        let (_dir, path) = path_with(Some("claude"));
         let deps = ResolverDeps {
             settings: &s,
             run: &runner,
-            platform: Some("darwin".into()),
+            path: &path,
         };
         let r = resolve_adapter_executable("claude", &deps).await;
         assert_eq!(
@@ -278,63 +287,61 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn detects_via_which_on_posix_and_reports_detected() {
-        let runner = FnRunner::new(|cmd: &str, args: &[String]| {
-            if cmd == "which" {
-                ok("/opt/homebrew/bin/claude\n")
-            } else if has_version(args) {
+    async fn detects_the_bare_name_on_the_resolved_path_and_reports_detected() {
+        let runner = FnRunner::new(|_cmd: &str, args: &[String]| {
+            if has_version(args) {
                 ok("claude 9.9.9\n")
             } else {
                 fail()
             }
         });
         let s = MapSettings::new();
+        let (dir, path) = path_with(Some("claude"));
         let deps = ResolverDeps {
             settings: &s,
             run: &runner,
-            platform: Some("darwin".into()),
+            path: &path,
         };
         let r = resolve_adapter_executable("claude", &deps).await;
+        let expected = dir.path().join("claude").to_string_lossy().into_owned();
         assert_eq!(
             r,
             ResolvedExecutable {
-                path: "/opt/homebrew/bin/claude".into(),
+                path: expected.clone(),
                 source: ExecutableSource::Detected,
                 valid: true,
                 version: Some("9.9.9".into()),
             }
         );
-        assert!(runner.called_with("which", &["claude"]));
+        assert!(runner.called_with(&expected, &["--version"]));
     }
 
     #[tokio::test]
-    async fn detects_via_where_on_win32() {
-        let runner = FnRunner::new(|cmd: &str, _args: &[String]| {
-            if cmd == "where" {
-                ok("C:\\bin\\codex.exe\r\n")
-            } else {
-                ok("codex 1.0.0")
-            }
-        });
+    async fn ignores_a_non_executable_file_of_the_same_name() {
+        let runner = FnRunner::new(|_cmd: &str, _args: &[String]| ok("codex 1.0.0"));
         let s = MapSettings::new();
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("codex"), "not executable").unwrap();
+        let path = ResolvedPath::from_value(dir.path().to_string_lossy().into_owned());
         let deps = ResolverDeps {
             settings: &s,
             run: &runner,
-            platform: Some("win32".into()),
+            path: &path,
         };
         let r = resolve_adapter_executable("codex", &deps).await;
-        assert_eq!(r.source, ExecutableSource::Detected);
-        assert_eq!(r.path, "C:\\bin\\codex.exe");
+        assert_eq!(r.source, ExecutableSource::Fallback);
+        assert_eq!(r.path, "codex");
     }
 
     #[tokio::test]
     async fn falls_back_to_bare_name_when_nothing_is_found() {
         let runner = FnRunner::new(|_cmd: &str, _args: &[String]| fail());
         let s = MapSettings::new();
+        let (_dir, path) = path_with(None);
         let deps = ResolverDeps {
             settings: &s,
             run: &runner,
-            platform: Some("darwin".into()),
+            path: &path,
         };
         let r = resolve_adapter_executable("claude", &deps).await;
         assert_eq!(

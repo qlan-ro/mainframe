@@ -239,37 +239,26 @@ impl Adapter for CodexAdapter {
     fn is_installed(&self) -> BoxFuture<'_, Result<bool, AdapterError>> {
         let path = self.resolved_path.clone();
         Box::pin(async move {
-            match tokio::process::Command::new("codex")
-                .arg("--version")
-                .env("PATH", path.as_str())
-                .output()
-                .await
-            {
-                Ok(out) => Ok(out.status.success()),
-                Err(_) => Ok(false),
-            }
+            Ok(
+                mainframe_adapter_api::version::version_stdout("codex", &path)
+                    .await
+                    .is_some(),
+            )
         })
     }
 
     fn get_version(&self) -> BoxFuture<'_, Result<Option<String>, AdapterError>> {
         let path = self.resolved_path.clone();
         Box::pin(async move {
-            match tokio::process::Command::new("codex")
-                .arg("--version")
-                .env("PATH", path.as_str())
-                .output()
-                .await
-            {
-                Ok(out) if out.status.success() => {
-                    let stdout = String::from_utf8_lossy(&out.stdout);
-                    Ok(Some(
-                        mainframe_adapter_api::version::CliVersion::parse(&stdout)
-                            .map(|v| v.to_string())
-                            .unwrap_or_else(|| stdout.trim().to_string()),
-                    ))
-                }
-                _ => Ok(None),
-            }
+            let Some(stdout) = mainframe_adapter_api::version::version_stdout("codex", &path).await
+            else {
+                return Ok(None);
+            };
+            Ok(Some(
+                mainframe_adapter_api::version::CliVersion::parse(&stdout)
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| stdout.trim().to_string()),
+            ))
         })
     }
 

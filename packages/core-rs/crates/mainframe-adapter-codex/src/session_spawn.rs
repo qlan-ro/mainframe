@@ -150,15 +150,9 @@ pub(super) fn build_app_server_command(
     cwd: Option<&Path>,
     path: &str,
 ) -> tokio::process::Command {
-    let mut cmd = tokio::process::Command::new(executable);
-    cmd.arg("app-server")
-        .env("PATH", path)
-        .env("FORCE_COLOR", "0")
-        .env("NO_COLOR", "1")
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .kill_on_drop(true);
+    let path = mainframe_runtime::ResolvedPath::from_value(path);
+    let mut cmd = mainframe_runtime::process::cli_command(executable, &path);
+    cmd.arg("app-server");
     if let Some(cwd) = cwd {
         cmd.current_dir(cwd);
     }

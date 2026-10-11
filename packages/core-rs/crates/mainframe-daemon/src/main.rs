@@ -132,7 +132,6 @@ async fn run_daemon() {
     // Mutating the process env is `unsafe` under edition 2024 and this crate is
     // `#![forbid(unsafe_code)]`, so the value is passed explicitly instead.
     let resolved_path = mainframe_runtime::ResolvedPath::resolve();
-    mainframe_background_tasks::spawn_env::set_resolved_path(resolved_path.as_str());
 
     // ensure_auth_secret(): generates + persists a secret if none exists. Env
     // mutation is `unsafe` under edition 2024, so the secret is threaded through
@@ -214,7 +213,8 @@ async fn run_daemon() {
     // Registries + adapters. ClaudeAdapter needs the tracker (background-task
     // ownership); both adapters register before the static snapshot seed so
     // `GET /api/adapters` serves instantly without a CLI spawn.
-    let background_tasks = Arc::new(BackgroundTaskTracker::new());
+    let background_tasks =
+        Arc::new(BackgroundTaskTracker::new().with_resolved_path(resolved_path.clone()));
     let claude_workflows = Arc::new(ClaudeWorkflowStore::new());
     let adapters = Arc::new(AdapterRegistry::new());
     adapters.register(Arc::new(ClaudeAdapter::new(
@@ -260,7 +260,7 @@ async fn run_daemon() {
 
     // Configure the refresh BEFORE server start so no request triggers an
     // unconfigured probe. resolve_executable_path reads the persisted provider path
-    // via the DB actor, then falls back to `which` detection through the shared
+    // via the DB actor, then falls back to a `PATH` scan through the shared
     // resolver. Persisting detected paths needs a sync `SettingsWriter` write
     // bridge to the async DB actor — not wired,
     // so refresh re-detects each run instead of reading a backfilled path.
@@ -367,8 +367,8 @@ async fn run_daemon() {
     // LSP: registry (server configs) + the per-(project,language) manager.
     // Every server (including the formerly "bundled" typescript-language-server
     // and pyright) resolves bring-your-own: a project-local `node_modules/.bin`,
-    // then a Python venv, then a `command -v` probe against the boot-resolved
-    // login-shell `PATH` — no packaged Node/servers to inject.
+    // then a Python venv, then a scan of the boot-resolved login-shell `PATH`
+    // — no packaged Node/servers to inject.
     let lsp_registry = LspRegistry::new().with_resolved_path(resolved_path.as_str());
     let lsp_manager = Arc::new(LspManager::new(Arc::new(lsp_registry)));
 
@@ -723,7 +723,7 @@ impl RefreshDeps for DaemonRefreshDeps {
 /// Resolve an adapter's executable path off the DB actor + shared resolver,
 /// returning `None` when detection fails. Reads the persisted provider path,
 /// snapshots it into a one-key SettingsWriter, then runs the shared resolver
-/// (which falls back to `which` detection when unset). `resolve_adapter_executable`
+/// (which falls back to a `PATH` scan when unset). `resolve_adapter_executable`
 /// never writes, so a read snapshot is faithful. Shared by the catalog refresh
 /// and both quota pullers — all need a validated binary before spawning.
 async fn resolve_adapter_path(
@@ -749,7 +749,7 @@ async fn resolve_adapter_path(
         &ResolverDeps {
             settings: &settings,
             run: &runner,
-            platform: None,
+            path: resolved_path,
         },
     )
     .await;

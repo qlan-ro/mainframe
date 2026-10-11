@@ -1,10 +1,12 @@
 use std::process::Stdio;
 use std::time::Duration;
 
+use mainframe_runtime::ResolvedPath;
+use mainframe_runtime::process::cli_command;
+
 use mainframe_types::adapter::{AdapterModel, EffortLevel};
 use serde_json::Value;
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
-use tokio::process::Command;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 const PROBE_TIMEOUT_MS: u64 = 10_000;
 
@@ -199,7 +201,7 @@ pub fn extract_probe_payload(event: &Value) -> Option<ProbeResult> {
 /// resolve with the first parsed model catalog (or `None` on error/timeout/exit).
 pub async fn probe_models(executable: &str, path: &str) -> Option<ProbeResult> {
     let cwd = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
-    let mut child = match Command::new(executable)
+    let mut child = match cli_command(executable, &ResolvedPath::from_value(path))
         .args([
             "--output-format",
             "stream-json",
@@ -210,14 +212,8 @@ pub async fn probe_models(executable: &str, path: &str) -> Option<ProbeResult> {
             "stdio",
         ])
         .current_dir(cwd)
-        .env("PATH", path)
-        .env("FORCE_COLOR", "0")
-        .env("NO_COLOR", "1")
         .env_remove("CLAUDECODE")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true)
+        .stderr(Stdio::null())
         .spawn()
     {
         Ok(child) => child,
@@ -227,17 +223,12 @@ pub async fn probe_models(executable: &str, path: &str) -> Option<ProbeResult> {
         }
     };
 
-    // Drain stderr so a full pipe never blocks the child.
-    if let Some(mut stderr) = child.stderr.take() {
-        tokio::spawn(async move {
-            let mut sink = Vec::new();
-            let _ = stderr.read_to_end(&mut sink).await;
-        });
-    }
+    let mut stdin = child.stdin.take();
+    let stdout = child.stdout.take();
+    let process = mainframe_runtime::process::ManagedProcess::spawn(child, Vec::new());
 
     // Keep stdin open for the lifetime of the read loop (dropping it would close
     // the pipe and the CLI could exit before answering).
-    let mut stdin = child.stdin.take();
     if let Some(stdin) = stdin.as_mut() {
         let payload = serde_json::json!({
             "type": "control_request",
@@ -249,7 +240,7 @@ pub async fn probe_models(executable: &str, path: &str) -> Option<ProbeResult> {
         let _ = stdin.flush().await;
     }
 
-    let result = match child.stdout.take() {
+    let result = match stdout {
         Some(stdout) => {
             let mut lines = BufReader::new(stdout).lines();
             tokio::time::timeout(Duration::from_millis(PROBE_TIMEOUT_MS), async {
@@ -274,7 +265,8 @@ pub async fn probe_models(executable: &str, path: &str) -> Option<ProbeResult> {
         None => Ok(None),
     };
 
-    let _ = child.start_kill();
+    process.signal(mainframe_runtime::process::Signal::Kill);
+    process.exit().wait().await;
     match result {
         Ok(inner) => inner,
         Err(_) => {

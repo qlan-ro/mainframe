@@ -367,7 +367,7 @@ async fn get_providers(State(ctx): State<Arc<AppCtx>>) -> Response {
             &ResolverDeps {
                 settings: &settings,
                 run: &DefaultRunner::new(ctx.resolved_path.clone()),
-                platform: None,
+                path: &ctx.resolved_path,
             },
         )
         .await;
@@ -381,7 +381,7 @@ async fn get_providers(State(ctx): State<Arc<AppCtx>>) -> Response {
         );
         out.insert(id, Value::Object(entry));
     }
-    // PERF: resolution runs live per request (a `which` spawn per unconfigured
+    // PERF: resolution runs live per request (a `PATH` scan per unconfigured
     // adapter) with no memo, on an endpoint the UI polls.
     ok(Value::Object(out))
 }

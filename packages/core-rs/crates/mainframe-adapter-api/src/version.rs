@@ -1,5 +1,27 @@
 use std::cmp::Ordering;
 use std::fmt;
+use std::time::Duration;
+
+use mainframe_runtime::ResolvedPath;
+
+/// How long a `--version` probe may take before the CLI is treated as absent.
+pub const VERSION_PROBE_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Run `<executable> --version` on `path`; the stdout when it exits 0, `None`
+/// when it cannot be spawned, fails, or outlives [`VERSION_PROBE_TIMEOUT`]
+/// (the child is killed and reaped on the way out).
+pub async fn version_stdout(executable: &str, path: &ResolvedPath) -> Option<String> {
+    let mut command = tokio::process::Command::new(executable);
+    command.arg("--version");
+    path.apply(&mut command);
+    let output = mainframe_runtime::process::run_captured(command, Some(VERSION_PROBE_TIMEOUT))
+        .await
+        .ok()?;
+    output
+        .status
+        .success()
+        .then(|| String::from_utf8_lossy(&output.stdout).into_owned())
+}
 
 /// A CLI version triple, retaining its original spelling for wire display.
 #[derive(Debug, Clone)]
@@ -136,5 +158,53 @@ mod tests {
                 .at_least(1, 0, 109)
         );
         assert!(!CliVersion::parse("1.0.108").unwrap().at_least(1, 0, 109));
+    }
+
+    fn daemon_path() -> mainframe_runtime::ResolvedPath {
+        mainframe_runtime::ResolvedPath::from_value(std::env::var("PATH").unwrap_or_default())
+    }
+
+    #[tokio::test]
+    async fn a_missing_binary_has_no_version() {
+        let missing = "/nonexistent/mainframe-no-such-cli";
+
+        assert_eq!(super::version_stdout(missing, &daemon_path()).await, None);
+    }
+
+    #[tokio::test]
+    async fn a_hanging_binary_is_killed_at_the_probe_timeout() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let pid_file = dir.path().join("pid");
+        let cli = dir.path().join("hanging-cli");
+        std::fs::write(
+            &cli,
+            format!(
+                "#!/bin/sh\necho $$ > '{}'\nexec sleep 60\n",
+                pid_file.display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&cli, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        let started = std::time::Instant::now();
+        let version = super::version_stdout(cli.to_str().unwrap(), &daemon_path()).await;
+        let elapsed = started.elapsed();
+
+        assert_eq!(version, None);
+        assert!(
+            elapsed >= super::VERSION_PROBE_TIMEOUT
+                && elapsed < super::VERSION_PROBE_TIMEOUT + std::time::Duration::from_secs(3),
+            "returned after {elapsed:?}"
+        );
+        let pid: u32 = std::fs::read_to_string(&pid_file)
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
+        assert!(
+            !mainframe_runtime::process::is_alive(pid),
+            "the probe must kill and reap the hanging CLI"
+        );
     }
 }

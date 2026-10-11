@@ -1,32 +1,15 @@
 //! `mainframe-background-tasks` — background-task tracking, spool walking, and
 //! process-group kill/liveness reconciliation.
 #![forbid(unsafe_code)]
-// Tests hold the process-wide seam guard (`seam_test_guard`) across `.await` on
-// purpose — it serializes the global lsof/kill test seams for the whole test body.
-#![cfg_attr(
-    test,
-    allow(clippy::unwrap_used, clippy::expect_used, clippy::await_holding_lock)
-)]
-
-#[cfg(test)]
-use mainframe_types::sync::LockExt as _;
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
 pub mod encoding;
 pub mod kill;
 pub mod liveness;
 pub mod lsof;
+pub mod process;
 pub mod reconcile;
-pub mod spawn_env;
 pub mod spool_root;
 pub mod spool_validator;
 pub mod spool_walker;
 pub mod tracker;
-
-/// Serializes the process-wide test seams (lsof exec/logger, kill tree-kill/ps).
-/// Cargo runs a crate's tests on parallel threads that share these globals, so
-/// every seam-mutating test holds this guard for its duration.
-#[cfg(test)]
-pub(crate) fn seam_test_guard() -> std::sync::MutexGuard<'static, ()> {
-    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    LOCK.lock_recover()
-}

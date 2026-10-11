@@ -35,12 +35,7 @@ impl SessionSink for NullSink {
     ) {
     }
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Signal {
-    Term,
-    Kill,
-    Int,
-}
+pub use mainframe_runtime::process::Signal;
 #[derive(Clone)]
 pub struct ChildHandle {
     pub pid: u32,
@@ -69,30 +64,17 @@ impl ChildHandle {
         }
     }
 }
-pub(super) fn real_signaller(pid: u32) -> Arc<dyn Fn(Signal) + Send + Sync> {
-    Arc::new(move |sig| {
-        let flag = match sig {
-            Signal::Term => "-TERM",
-            Signal::Kill => "-KILL",
-            Signal::Int => "-INT",
-        };
-        let pid_s = pid.to_string();
-        tokio::spawn(async move {
-            let _ = tokio::process::Command::new("kill")
-                .arg(flag)
-                .arg(pid_s)
-                .status()
-                .await;
-        });
-    })
-}
 
 impl ClaudeSession {
-    pub(super) fn bind_child(&self, child: &tokio::process::Child) -> ChildHandle {
-        let pid = child.id().unwrap_or(0);
+    pub(super) fn bind_child(
+        &self,
+        pid: u32,
+        process: &mainframe_runtime::process::ManagedProcess,
+    ) -> ChildHandle {
+        let process = process.clone();
         let handle = ChildHandle {
             pid,
-            signaller: real_signaller(pid),
+            signaller: Arc::new(move |signal| process.signal(signal)),
             closed: Arc::new(Notify::new()),
             exited: Arc::new(AtomicBool::new(false)),
         };
@@ -103,18 +85,7 @@ impl ClaudeSession {
         handle
     }
     pub(super) fn start_stdin(&self, stdin: Option<tokio::process::ChildStdin>) {
-        let (stdin_tx, mut stdin_rx) = mpsc::unbounded_channel::<Vec<u8>>();
-        if let Some(mut stdin) = stdin {
-            tokio::spawn(async move {
-                use tokio::io::AsyncWriteExt;
-                while let Some(bytes) = stdin_rx.recv().await {
-                    if stdin.write_all(&bytes).await.is_err() {
-                        break;
-                    }
-                    let _ = stdin.flush().await;
-                }
-            });
-        }
+        let stdin_tx = mainframe_runtime::process::spawn_stdin_writer(stdin);
         *self.stdin_tx.lock_recover() = Some(stdin_tx);
     }
     pub(super) fn start_output<R: tokio::io::AsyncRead + Unpin + Send + 'static>(
@@ -122,38 +93,29 @@ impl ClaudeSession {
         reader: Option<R>,
         sink: Arc<dyn SessionSink>,
         handler: fn(&ClaudeSession, &[u8], &dyn SessionSink),
-    ) {
+    ) -> Option<tokio::task::JoinHandle<()>> {
         let weak = self.weak_self.get().cloned();
-        if let Some(mut reader) = reader {
-            tokio::spawn(async move {
-                use tokio::io::AsyncReadExt;
-                let mut buf = [0u8; 8192];
-                loop {
-                    match reader.read(&mut buf).await {
-                        Ok(0) | Err(_) => break,
-                        Ok(n) => {
-                            if let Some(session) = weak.as_ref().and_then(Weak::upgrade) {
-                                handler(&session, &buf[..n], &*sink);
-                            } else {
-                                break;
-                            }
-                        }
-                    }
+        reader.map(|reader| {
+            mainframe_runtime::process::spawn_chunk_pump(reader, move |bytes| {
+                if let Some(session) = weak.as_ref().and_then(Weak::upgrade) {
+                    handler(&session, bytes, &*sink);
+                    true
+                } else {
+                    false
                 }
-            });
-        }
+            })
+        })
     }
     pub(super) fn wait_for_exit(
         &self,
-        mut child: tokio::process::Child,
+        exit: mainframe_runtime::process::ExitLatch,
         handle: ChildHandle,
         sink: Arc<dyn SessionSink>,
     ) {
         let weak = self.weak_self.get().cloned();
         let control = self.control.clone();
         tokio::spawn(async move {
-            let status = child.wait().await;
-            let code = status.ok().and_then(|s| s.code());
+            let code = exit.wait().await;
             handle.exited.store(true, Ordering::SeqCst);
             if let Some(session) = weak.as_ref().and_then(Weak::upgrade) {
                 session.process_exited(&*sink);

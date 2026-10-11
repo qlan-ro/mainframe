@@ -114,15 +114,9 @@ impl Adapter for ClaudeAdapter {
         let path = self.resolved_path.clone();
         Box::pin(async move {
             Ok(
-                match tokio::process::Command::new("claude")
-                    .arg("--version")
-                    .env("PATH", path.as_str())
-                    .output()
+                mainframe_adapter_api::version::version_stdout("claude", &path)
                     .await
-                {
-                    Ok(o) => o.status.success(),
-                    Err(_) => false,
-                },
+                    .is_some(),
             )
         })
     }
@@ -130,20 +124,14 @@ impl Adapter for ClaudeAdapter {
     fn get_version(&self) -> BoxFuture<'_, Result<Option<String>, AdapterError>> {
         let path = self.resolved_path.clone();
         Box::pin(async move {
-            match tokio::process::Command::new("claude")
-                .arg("--version")
-                .env("PATH", path.as_str())
-                .output()
-                .await
-            {
-                Ok(o) if o.status.success() => {
-                    let stdout = String::from_utf8_lossy(&o.stdout).to_string();
-                    Ok(mainframe_adapter_api::version::CliVersion::parse(&stdout)
-                        .map(|v| v.to_string())
-                        .or_else(|| Some(stdout.trim().to_string())))
-                }
-                _ => Ok(None),
-            }
+            let Some(stdout) =
+                mainframe_adapter_api::version::version_stdout("claude", &path).await
+            else {
+                return Ok(None);
+            };
+            Ok(mainframe_adapter_api::version::CliVersion::parse(&stdout)
+                .map(|v| v.to_string())
+                .or_else(|| Some(stdout.trim().to_string())))
         })
     }
 

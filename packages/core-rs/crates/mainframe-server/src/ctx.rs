@@ -31,8 +31,8 @@ use crate::websocket::WsClients;
 /// enrichment and the daemon's refresh deps) takes `&dyn Runner`; this is the
 /// single production impl over `default_run` (spawn + 5s default timeout).
 ///
-/// Carries the boot-resolved login-shell `PATH` so `which`/`where` detection and
-/// version probes find CLIs outside the packaged app's bare `PATH`.
+/// Carries the boot-resolved login-shell `PATH` so version probes find CLIs
+/// outside the packaged app's bare `PATH`.
 #[derive(Default)]
 pub struct DefaultRunner {
     pub path: Option<ResolvedPath>,

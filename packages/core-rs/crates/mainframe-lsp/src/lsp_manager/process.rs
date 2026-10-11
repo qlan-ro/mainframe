@@ -1,39 +1,33 @@
 use super::*;
 
-// Tokio only exposes SIGKILL; use kill(1) for the graceful SIGTERM step.
+/// The production [`SignalFn`]: direct delivery to the pid.
 pub(super) fn kill_signal() -> SignalFn {
-    Arc::new(|pid, flag| Box::pin(send_kill(pid, flag)))
+    use mainframe_runtime::process::{Target, signal};
+    Arc::new(|pid, kind| {
+        Box::pin(async move {
+            match signal(Target::Pid(pid), kind) {
+                Ok(delivered) => delivered,
+                Err(error) => {
+                    tracing::warn!(pid, ?kind, %error, "LSP signal failed");
+                    false
+                }
+            }
+        })
+    })
 }
 
-async fn send_kill(pid: u32, flag: &'static str) -> bool {
-    match Command::new("kill")
-        .arg(flag)
-        .arg(pid.to_string())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .await
-    {
-        Ok(status) => status.success(),
-        Err(err) => {
-            tracing::warn!(pid, flag, ?err, "failed to run kill");
-            false
-        }
-    }
-}
-
-/// Deliver `flag` to the monitored child, but only while it is unreaped: until
+/// Deliver `kind` to the monitored child, but only while it is unreaped: until
 /// `wait` collects it, its pid cannot be reused by another process.
-pub(super) async fn deliver(child: &mut Child, flag: &'static str, signal: &SignalFn) {
+pub(super) async fn deliver(child: &mut Child, kind: Signal, signal: &SignalFn) {
     match (child.try_wait(), child.id()) {
         (Ok(None), Some(pid)) => {
-            if !signal(pid, flag).await {
-                tracing::warn!(pid, flag, "LSP signal failed");
+            if !signal(pid, kind).await {
+                tracing::warn!(pid, ?kind, "LSP signal failed");
             }
         }
         // Already exited; the monitor's `wait` arm reports it.
         (Ok(_), _) => {}
-        (Err(err), _) => tracing::warn!(flag, ?err, "failed to check LSP server process"),
+        (Err(err), _) => tracing::warn!(?kind, ?err, "failed to check LSP server process"),
     }
 }
 
@@ -53,14 +47,14 @@ impl ManagerState {
         key: String,
         mut child: Child,
         handle: Arc<LspServerHandle>,
-        mut signals: mpsc::UnboundedReceiver<&'static str>,
+        mut signals: mpsc::UnboundedReceiver<Signal>,
     ) {
         let state = self.clone();
         tokio::spawn(async move {
             let status = loop {
                 tokio::select! {
                     status = child.wait() => break status,
-                    Some(flag) = signals.recv() => deliver(&mut child, flag, &state.signal).await,
+                    Some(kind) = signals.recv() => deliver(&mut child, kind, &state.signal).await,
                 }
             };
             match status {

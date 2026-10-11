@@ -40,7 +40,7 @@ async fn stop_all_reaps_a_child_still_mid_start_and_forgets_its_pid() {
 
     manager.stop_all().await;
 
-    assert_eq!(*signals.lock().unwrap(), vec![(pid, "-TERM")]);
+    assert_eq!(*signals.lock().unwrap(), vec![(pid, Signal::Term)]);
     assert!(registry.removed().contains(&i64::from(pid)));
     assert_eq!(manager.live_count(), 0);
     assert_pid_gone(pid).await;
@@ -62,7 +62,7 @@ async fn stop_all_escalates_to_sigkill_when_a_starting_child_ignores_sigterm() {
 
     assert_eq!(
         *signals.lock().unwrap(),
-        vec![(pid, "-TERM"), (pid, "-KILL")]
+        vec![(pid, Signal::Term), (pid, Signal::Kill)]
     );
     assert!(registry.removed().contains(&i64::from(pid)));
     assert_eq!(manager.live_count(), 0);
@@ -94,8 +94,8 @@ async fn stop_all_signals_every_tunnel_before_escalating_any() {
     let (terms, kills) = flags.split_at_mut(2);
     terms.sort_unstable();
     kills.sort_unstable();
-    assert_eq!(terms, [(pids[0], "-TERM"), (pids[1], "-TERM")]);
-    assert_eq!(kills, [(pids[0], "-KILL"), (pids[1], "-KILL")]);
+    assert_eq!(terms, [(pids[0], Signal::Term), (pids[1], Signal::Term)]);
+    assert_eq!(kills, [(pids[0], Signal::Kill), (pids[1], Signal::Kill)]);
     assert_eq!(manager.live_count(), 0);
     for pid in pids {
         assert_pid_gone(pid).await;
@@ -115,7 +115,7 @@ async fn stop_sends_only_sigterm_to_a_tunnel_that_exits_on_it() {
 
     manager.stop("preview:Dev").await;
 
-    assert_eq!(*signals.lock().unwrap(), vec![(pid, "-TERM")]);
+    assert_eq!(*signals.lock().unwrap(), vec![(pid, Signal::Term)]);
     assert_eq!(manager.live_count(), 0);
     assert_pid_gone(pid).await;
     assert_eq!(manager.get_url("preview:Dev"), None);
@@ -136,7 +136,7 @@ async fn stop_escalates_to_sigkill_and_waits_for_a_tunnel_that_ignores_sigterm()
 
     assert_eq!(
         *signals.lock().unwrap(),
-        vec![(pid, "-TERM"), (pid, "-KILL")]
+        vec![(pid, Signal::Term), (pid, Signal::Kill)]
     );
     assert!(registry.removed().contains(&i64::from(pid)));
     assert_eq!(manager.live_count(), 0);
@@ -226,7 +226,7 @@ async fn cancelling_a_start_kills_its_child() {
     .await
     .expect("the cancelled start's child should be reaped");
 
-    assert_eq!(*signals.lock().unwrap(), vec![(pid, "-KILL")]);
+    assert_eq!(*signals.lock().unwrap(), vec![(pid, Signal::Kill)]);
 }
 #[tokio::test]
 async fn restarting_a_label_keeps_the_new_tunnel_when_the_old_child_exits() {
@@ -268,7 +268,7 @@ async fn individual_stop_reaps_a_child_that_has_not_published_its_url() {
     assert!(start.await.unwrap().is_err());
     assert_eq!(
         *signals.lock().unwrap(),
-        vec![(pid, "-TERM"), (pid, "-KILL")]
+        vec![(pid, Signal::Term), (pid, Signal::Kill)]
     );
     assert!(registry.removed().contains(&i64::from(pid)));
     assert_pid_gone(pid).await;

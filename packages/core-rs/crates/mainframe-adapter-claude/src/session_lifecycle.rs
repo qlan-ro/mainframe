@@ -32,11 +32,10 @@ impl ClaudeSession {
         let Some(child) = child else { return Ok(()) };
 
         let stdin = self.stdin_clone();
-        self.control
-            .send(stdin.as_ref(), &json!({ "subtype": "interrupt" }));
+        self.send_control(stdin.as_ref(), &json!({ "subtype": "interrupt" }));
         let task_ids: Vec<String> = { self.state().active_tasks.keys().cloned().collect() };
         for task_id in &task_ids {
-            self.control.send(
+            self.send_control(
                 stdin.as_ref(),
                 &json!({ "subtype": "stop_task", "task_id": task_id }),
             );
@@ -75,8 +74,19 @@ impl ClaudeSession {
             return;
         }
         let stdin = self.stdin_clone();
-        self.control
-            .send(stdin.as_ref(), &json!({ "subtype": "get_context_usage" }));
+        self.send_control(stdin.as_ref(), &json!({ "subtype": "get_context_usage" }));
+    }
+    /// Fire-and-forget control request: nothing awaits it, so a write failure
+    /// is logged with the request's subtype rather than returned.
+    pub(super) fn send_control(&self, stdin: Option<&StdinTx>, request: &serde_json::Value) {
+        if let Err(error) = self.control.send(stdin, request) {
+            tracing::warn!(
+                session_id = %self.id,
+                subtype = ?request.get("subtype").and_then(serde_json::Value::as_str),
+                %error,
+                "control_request not written"
+            );
+        }
     }
     pub fn get_context_files(&self) -> ContextFiles {
         collect_claude_context_files(&self.project_path, None)

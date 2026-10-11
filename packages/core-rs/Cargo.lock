@@ -1398,6 +1398,7 @@ dependencies = [
  "mainframe-types",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror",
  "tokio",
  "tracing",
@@ -1500,11 +1501,13 @@ name = "mainframe-background-tasks"
 version = "0.0.0"
 dependencies = [
  "dashmap",
+ "mainframe-runtime",
  "mainframe-types",
  "rustix",
  "serde",
  "serde_json",
  "tempfile",
+ "thiserror",
  "tokio",
  "tracing",
 ]
@@ -1714,6 +1717,7 @@ dependencies = [
  "mainframe-types",
  "rand 0.8.6",
  "reqwest",
+ "rustix",
  "serde",
  "serde_json",
  "sha2",

@@ -124,10 +124,11 @@ impl ApprovalHandler {
                 ));
             }
         } else if method == "mcpServer/elicitation/request" {
-            respond(
+            let result = respond(
                 json_rpc_id,
                 crate::orchestration_args::elicitation_response(params),
             );
+            self.report_unanswered(result);
             return;
         } else {
             tracing::warn!(
@@ -135,7 +136,7 @@ impl ApprovalHandler {
                 method,
                 "codex: unknown server request method"
             );
-            respond(json_rpc_id, json!({ "decision": "decline" }));
+            self.report_unanswered(respond(json_rpc_id, json!({ "decision": "decline" })));
             return;
         }
 
@@ -182,5 +183,17 @@ fn insert_if_present(input: &mut HashMap<String, Value>, key: &str, val: Option<
         && !v.is_null()
     {
         input.insert(key.to_string(), v.clone());
+    }
+}
+
+impl ApprovalHandler {
+    /// An automatic answer has no caller to return its error to, so it goes
+    /// to the session: the turn would otherwise wait on it silently.
+    fn report_unanswered(&self, result: Result<(), crate::jsonrpc::JsonRpcError>) {
+        if let Err(error) = result {
+            tracing::warn!(module = "codex:approvals", %error, "codex: server request not answered");
+            self.sink
+                .on_error(mainframe_adapter_api::AdapterError::Message(error.0));
+        }
     }
 }

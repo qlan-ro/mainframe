@@ -4,7 +4,7 @@
 //! timeout). On a non-zero exit the error carries
 //! `stdout`/`stderr`/`code` so callers can classify failures.
 
-use std::process::Stdio;
+use mainframe_runtime::process::{ExecError, run_captured};
 use std::time::Duration;
 
 use tokio::process::Command;
@@ -19,11 +19,7 @@ pub struct GitExecOptions {
 
 /// The `code` an [`GitExecError`] carries — git exits with a numeric status, but
 /// timeouts/spawn failures surface as a string.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum GitExecCode {
-    Number(i64),
-    Text(String),
-}
+pub use mainframe_runtime::process::ExecCode as GitExecCode;
 
 /// A failed git run, carrying the captured streams git wrote before exiting
 /// (`code`/`stdout`/`stderr`).
@@ -61,45 +57,24 @@ pub async fn exec_git(
     let timeout_ms = opts.and_then(|o| o.timeout).unwrap_or(30_000);
 
     let mut cmd = Command::new("git");
-    cmd.args(args)
-        .current_dir(cwd)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true);
-
-    let child = cmd.spawn().map_err(|e| GitExecError {
-        message: e.to_string(),
-        code: None,
-        stdout: None,
-        stderr: None,
-    })?;
-
-    let output = if timeout_ms == 0 {
-        child.wait_with_output().await
-    } else {
-        match tokio::time::timeout(Duration::from_millis(timeout_ms), child.wait_with_output())
-            .await
-        {
-            Ok(result) => result,
-            Err(_elapsed) => {
-                // A timeout is reported as ETIMEDOUT; the dropped future kills the
-                // process via `kill_on_drop`.
-                return Err(GitExecError {
-                    message: format!("Command failed: git {} timed out", args.join(" ")),
-                    code: Some(GitExecCode::Text("ETIMEDOUT".to_string())),
-                    stdout: None,
-                    stderr: None,
-                });
-            }
-        }
-    };
-
-    let output = output.map_err(|e| GitExecError {
-        message: e.to_string(),
-        code: None,
-        stdout: None,
-        stderr: None,
-    })?;
+    cmd.args(args).current_dir(cwd);
+    let timeout = (timeout_ms != 0).then(|| Duration::from_millis(timeout_ms));
+    let output = run_captured(cmd, timeout)
+        .await
+        .map_err(|error| match error {
+            ExecError::Timeout => GitExecError {
+                message: format!("Command failed: git {} timed out", args.join(" ")),
+                code: Some(GitExecCode::Text("ETIMEDOUT".to_string())),
+                stdout: None,
+                stderr: None,
+            },
+            error => GitExecError {
+                message: error.to_string(),
+                code: None,
+                stdout: None,
+                stderr: None,
+            },
+        })?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
