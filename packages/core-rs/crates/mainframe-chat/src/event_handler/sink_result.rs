@@ -36,8 +36,7 @@ impl SessionSinkImpl {
                 if let Err(err) = tokio::fs::remove_dir_all(&snapshot_dir).await
                     && err.kind() != std::io::ErrorKind::NotFound
                 {
-                    warn!(
-                        %err,
+                    warn!( error = %err,
                         chat_id,
                         snapshot_dir,
                         "failed to remove a retired fork's snapshot directory"
@@ -154,7 +153,7 @@ impl SessionSinkImpl {
             ?reason,
             was_interrupted,
             is_error,
-            "onResult: emitting chat.updated with processState=idle"
+            "emitting chat.updated with processState=idle"
         );
         update.emit(chat, Some(reason));
         self.notify_surface(ChatSurfaceEvent::TurnFinished {

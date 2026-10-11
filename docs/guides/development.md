@@ -34,6 +34,17 @@ For live branch testing, use the project's [test environment script](../../.agen
 - Handle failures explicitly through the module's logging/error path; do not silently swallow errors. Keep blocking work off async execution threads using the module's existing pattern.
 - Parse persisted JSON through the module's typed/error-handled conversion rather than assuming stored contents are valid.
 
+## Logging
+
+Use snake_case for structured tracing fields.
+Record Display errors as `error = %err` and Debug errors as `error = ?err`.
+Include `chat_id` on every chat-scoped log.
+Keep message text free of hand-written module or component prefixes.
+Use tracing's default module-path target; omit `target:` and `module =`.
+Create one `info_span!("adapter_session", adapter, session_id)` per adapter session.
+Instrument asynchronous session work with that span; do not hold an entered guard across await.
+Use stable event messages and put changing values in structured fields.
+
 ## PRs and package boundaries
 
 Every PR needs an appropriate changeset. Create or update one with `pnpm changeset`; use `pnpm changeset --empty` for changes without a changelog entry. Reuse an existing suitable changeset rather than adding one per commit. Keep hooks and CI checks enabled.

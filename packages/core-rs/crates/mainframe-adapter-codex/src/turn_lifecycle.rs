@@ -89,10 +89,7 @@ pub(crate) fn handle_turn_completed(
             return;
         }
         Owner::Unknown => {
-            tracing::debug!(
-                module = "codex:events",
-                "codex: dropping turn/completed from an unregistered thread"
-            );
+            tracing::debug!("dropping turn/completed from an unregistered thread");
             return;
         }
         Owner::Parent => {}
@@ -155,11 +152,10 @@ fn emit_parent_turn_result(
 
     if is_error {
         tracing::warn!(
-            module = "codex:events",
             turn_id = %turn.id,
             status = %turn.status,
             reason = turn.error.as_ref().map(|e| e.message.as_str()).unwrap_or(""),
-            "codex: turn ended in error"
+            "turn ended in error"
         );
     }
 
@@ -199,10 +195,7 @@ pub(crate) fn handle_token_usage(
         return;
     }
     let Some(usage) = params.resolved_usage() else {
-        tracing::debug!(
-            module = "codex:events",
-            "codex: tokenUsage/updated carried neither usage nor tokenUsage — skipped"
-        );
+        tracing::debug!("tokenUsage/updated carried neither usage nor tokenUsage — skipped");
         return;
     };
     let window = resolve_context_window(&params, state);
@@ -213,10 +206,7 @@ pub(crate) fn handle_token_usage(
     });
 
     let Some(max_tokens) = window else {
-        tracing::debug!(
-            module = "codex:events",
-            "codex: tokenUsage/updated has no resolvable context window — skipped"
-        );
+        tracing::debug!("tokenUsage/updated has no resolvable context window — skipped");
         return;
     };
     sink.on_context_usage(ContextUsage {

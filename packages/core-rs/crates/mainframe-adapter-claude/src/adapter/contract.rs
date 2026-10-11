@@ -171,7 +171,7 @@ impl Adapter for ClaudeAdapter {
         for session in all {
             tokio::spawn(async move {
                 if let Err(err) = session.kill().await {
-                    tracing::warn!(?err, "failed to kill claude session during killAll");
+                    tracing::warn!( error = ?err, "failed to kill claude session during killAll");
                 }
             });
         }

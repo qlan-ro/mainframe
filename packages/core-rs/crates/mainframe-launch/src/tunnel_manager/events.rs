@@ -13,11 +13,15 @@ impl TunnelManager {
             && pending_url.is_none()
             && let Some(url) = Self::parse_url(line)
         {
-            tracing::debug!(target: "tunnel", label, url, "tunnel URL received, waiting for connection registration…");
+            tracing::debug!(
+                label,
+                url,
+                "tunnel URL received, waiting for connection registration…"
+            );
             *pending_url = Some(url);
         }
         if !*registered && line.contains(REGISTERED_MARKER) {
-            tracing::debug!(target: "tunnel", label, "tunnel connection registered");
+            tracing::debug!(label, "tunnel connection registered");
             *registered = true;
         }
     }
@@ -56,7 +60,7 @@ impl TunnelManager {
         tokio::spawn(async move {
             let exit = process.exited().await;
             pumps.finish().await;
-            tracing::info!(target: "tunnel", label = %label, code = ?exit.code, "tunnel process exited");
+            tracing::info!(label = %label, code = ?exit.code, "tunnel process exited");
             if tunnels
                 .remove_if(&label, |_, tunnel| tunnel.process.id == process.id)
                 .is_some()

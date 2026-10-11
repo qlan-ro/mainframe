@@ -50,7 +50,7 @@ impl RunFinalizedHook for CompletionEmitter {
                 Ok(Some(automation)) => automation.name,
                 Ok(None) => run.automation_id.clone(),
                 Err(err) => {
-                    tracing::warn!(error = %err, "completion emitter: name lookup failed");
+                    tracing::warn!(error = %err, "name lookup failed");
                     run.automation_id.clone()
                 }
             };

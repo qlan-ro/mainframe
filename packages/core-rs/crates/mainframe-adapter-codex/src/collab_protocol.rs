@@ -21,7 +21,7 @@ pub(crate) fn classify_collab_tool(tool: &str) -> CollabTool {
         "wait" => CollabTool::Wait,
         "closeAgent" => CollabTool::CloseAgent,
         _ => {
-            tracing::debug!(module = "codex:collab", tool, "codex: unknown collab tool");
+            tracing::debug!(tool, "unknown collab tool");
             CollabTool::Unknown
         }
     }
@@ -42,11 +42,7 @@ pub(crate) fn classify_sub_agent_kind(kind: &str) -> SubAgentKind {
         "interacted" => SubAgentKind::Interacted,
         "interrupted" => SubAgentKind::Interrupted,
         _ => {
-            tracing::debug!(
-                module = "codex:collab",
-                kind,
-                "codex: unknown subAgentActivity kind"
-            );
+            tracing::debug!(kind, "unknown subAgentActivity kind");
             SubAgentKind::Unknown
         }
     }
@@ -69,11 +65,7 @@ pub(crate) fn classify_collab_status(status: &str) -> CollabCallStatus {
         "completed" => CollabCallStatus::Completed,
         "failed" => CollabCallStatus::Failed,
         _ => {
-            tracing::debug!(
-                module = "codex:collab",
-                status,
-                "codex: unknown collab call status"
-            );
+            tracing::debug!(status, "unknown collab call status");
             CollabCallStatus::Unknown
         }
     }

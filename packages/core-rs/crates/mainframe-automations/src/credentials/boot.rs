@@ -36,13 +36,13 @@ pub(super) async fn build_with_backend<B: KeyringBackend + 'static>(
             let store =
                 KeyringCredentialStore::load(backend, data_dir.join(LABELS_INDEX_FILE)).await;
             migrate_legacy_file(&store, &legacy_path).await;
-            tracing::info!("automation credentials: OS keychain backend active");
+            tracing::info!("OS keychain backend active");
             Arc::new(store)
         }
         Err(err) => {
             tracing::warn!(
                 error = %err,
-                "automation credentials: OS keychain unavailable, falling back to the \
+                "OS keychain unavailable, falling back to the \
                  0600 plaintext file store"
             );
             Arc::new(FileCredentialStore::load(legacy_path).await)

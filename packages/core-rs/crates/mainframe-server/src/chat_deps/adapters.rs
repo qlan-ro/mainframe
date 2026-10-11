@@ -83,14 +83,14 @@ impl AdapterPort for DaemonChatDeps {
                     self.scan_and_persist_mentions(chat_id, &history);
                 }
                 Ok(_) => {}
-                Err(err) => tracing::warn!(%err, chat_id, "load_history failed"),
+                Err(err) => tracing::warn!( error = %err, chat_id, "load_history failed"),
             }
             match session.load_scan_records().await {
                 Ok(history) if !history.is_empty() => {
                     self.scan_and_persist_prs(chat_id, &history);
                 }
                 Ok(_) => {}
-                Err(err) => tracing::warn!(%err, chat_id, "load_scan_records failed"),
+                Err(err) => tracing::warn!( error = %err, chat_id, "load_scan_records failed"),
             }
             self.persist_plan_and_skill_files(chat_id, session.as_ref())
                 .await;
@@ -149,7 +149,7 @@ impl AdapterPort for DaemonChatDeps {
             match adapter.generate_title(content, binary).await {
                 Ok(title) => title,
                 Err(err) => {
-                    tracing::warn!(%err, adapter_id, reason = "adapter_error", "title generation failed");
+                    tracing::warn!( error = %err, adapter_id, reason = "adapter_error", "title generation failed");
                     None
                 }
             }
@@ -167,7 +167,7 @@ impl AdapterPort for DaemonChatDeps {
         let session_file_path = session_file_path.map(str::to_string);
         Box::pin(async move {
             let Some(adapter) = adapter else {
-                tracing::warn!(adapter_id, "transcript presence: no adapter registered");
+                tracing::warn!(adapter_id, "no adapter registered");
                 return None;
             };
             match adapter
@@ -176,7 +176,7 @@ impl AdapterPort for DaemonChatDeps {
             {
                 Ok(location) => location,
                 Err(err) => {
-                    tracing::warn!(%err, adapter_id, "transcript lookup failed");
+                    tracing::warn!( error = %err, adapter_id, "transcript lookup failed");
                     None
                 }
             }

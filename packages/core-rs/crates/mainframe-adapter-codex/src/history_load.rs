@@ -33,7 +33,6 @@ pub(crate) fn truncate_at_turn_cap(
         Some(idx) => turns.truncate(idx + 1),
         None => {
             tracing::warn!(
-                module = "codex:history",
                 cap_id,
                 thread_id,
                 "fork turn cap id not found in the source thread; keeping all turns"
@@ -122,7 +121,7 @@ async fn load_children(
                 child_items_by_thread.insert(child_id.clone(), items);
             }
             Err(err) => {
-                tracing::warn!(module = "codex:session", err = %err.0, child_id, "codex: failed to read child thread, nesting will be skipped");
+                tracing::warn!(error = %err.0, child_id, "failed to read child thread, nesting will be skipped");
             }
         }
     }

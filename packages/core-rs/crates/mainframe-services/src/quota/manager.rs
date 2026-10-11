@@ -160,7 +160,7 @@ impl QuotaManager {
         let stored = match self.settings.get_by_category(QUOTA_CATEGORY).await {
             Ok(stored) => stored,
             Err(err) => {
-                tracing::warn!(%err, category = QUOTA_CATEGORY, "failed to load persisted quota blobs");
+                tracing::warn!( error = %err, category = QUOTA_CATEGORY, "failed to load persisted quota blobs");
                 HashMap::new()
             }
         };
@@ -407,7 +407,7 @@ impl QuotaManager {
         match serde_json::to_string(blob) {
             Ok(value) => self.persister.persist(key, value),
             Err(err) => {
-                tracing::error!(%err, key = %key, "failed to serialize quota blob for persistence")
+                tracing::error!( error = %err, key = %key, "failed to serialize quota blob for persistence")
             }
         }
         (self.emit_event)(DaemonEvent::ProviderQuotaUpdated {

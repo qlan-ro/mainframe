@@ -81,6 +81,7 @@ pub struct CodexScanDeps {
 }
 
 pub struct CodexSession {
+    span: tracing::Span,
     id: String,
     project_path: String,
     resume_thread_id: Option<String>,
@@ -111,8 +112,10 @@ impl CodexSession {
             background_tasks: Some(background_tasks),
             ..CodexSessionState::default()
         };
+        let id = nanoid!();
         Self {
-            id: nanoid!(),
+            span: tracing::info_span!("adapter_session", adapter = "codex", session_id = %id, chat_id = ?options.mainframe_chat_id),
+            id,
             project_path: options.project_path,
             resume_thread_id: options.chat_id,
             fork_source: options.fork_source,

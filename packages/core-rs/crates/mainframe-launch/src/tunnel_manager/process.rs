@@ -52,7 +52,7 @@ impl TunnelProcess {
                 .await
                 .is_err()
             {
-                tracing::warn!(target: "tunnel", pid = ?self.pid, "tunnel still running after a concurrent stop");
+                tracing::warn!(pid = ?self.pid, "tunnel still running after a concurrent stop");
             }
             return;
         }
@@ -69,7 +69,7 @@ impl TunnelProcess {
         )
         .await;
         if !matches!(result, Ok(Terminated::Exited | Terminated::Killed)) {
-            tracing::warn!(target: "tunnel", pid = ?self.pid, "tunnel survived shutdown");
+            tracing::warn!(pid = ?self.pid, "tunnel survived shutdown");
             self.stopping.store(false, Ordering::SeqCst);
         }
     }
@@ -103,13 +103,13 @@ pub(super) async fn deliver(child: &mut Child, pid: Option<u32>, kind: Signal, s
     match (child.try_wait(), pid) {
         (Ok(None), Some(pid)) => {
             if !signal(pid, kind).await {
-                tracing::warn!(target: "tunnel", pid, ?kind, "failed to signal tunnel process");
+                tracing::warn!(pid, ?kind, "failed to signal tunnel process");
             }
         }
         // Already exited; the watcher's `wait` arm reports it.
         (Ok(_), _) => {}
         (Err(err), _) => {
-            tracing::warn!(target: "tunnel", ?pid, ?kind, ?err, "failed to check tunnel process");
+            tracing::warn!(?pid, ?kind, error = ?err, "failed to check tunnel process");
         }
     }
 }
@@ -122,7 +122,7 @@ pub(crate) fn kill_signal() -> SignalFn {
             match signal(Target::Pid(pid), kind) {
                 Ok(delivered) => delivered,
                 Err(error) => {
-                    tracing::warn!(target: "tunnel", pid, ?kind, %error, "failed to signal tunnel process");
+                    tracing::warn!(pid, ?kind, %error, "failed to signal tunnel process");
                     false
                 }
             }

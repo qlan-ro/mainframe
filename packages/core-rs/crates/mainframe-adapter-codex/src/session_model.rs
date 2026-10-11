@@ -47,7 +47,7 @@ impl CodexSession {
         {
             Ok(result) => non_empty(result["thread"]["model"].as_str()).map(str::to_owned),
             Err(error) => {
-                tracing::warn!(module = "codex:models", %error, "could not read the current Codex model");
+                tracing::warn!(%error, "could not read the current Codex model");
                 None
             }
         }

@@ -37,10 +37,9 @@ where
                 Ok(item) => Some(item),
                 Err(err) => {
                     tracing::debug!(
-                        module = "codex:history",
                         r#type = kind,
-                        err = %err,
-                        "codex: skipping unrecognized thread item on history reload"
+                        error = %err,
+                        "skipping unrecognized thread item on history reload"
                     );
                     None
                 }

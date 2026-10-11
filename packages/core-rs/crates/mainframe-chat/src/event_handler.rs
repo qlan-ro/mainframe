@@ -95,7 +95,8 @@ impl EventHandler {
     /// no-op (the `OnceLock` already holds the first surface), matching
     /// `attach_self`'s convention elsewhere in this crate.
     pub fn set_chat_surface(&self, surface: Arc<dyn ChatSurface>) {
-        let _ = self.chat_surface.set(surface);
+        /* expected */
+        let _ = self.chat_surface.set(surface); // First attachment wins.
     }
 
     /// Notify the attached surface (a no-op when none is attached). Public so

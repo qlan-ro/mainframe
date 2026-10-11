@@ -112,7 +112,7 @@ pub(crate) async fn fetch_models(config: &CliProxyConfig) -> Option<Vec<ProxyMod
         .await
         .ok()?;
     if !response.status().is_success() {
-        tracing::debug!(status = %response.status(), "cliproxy: /v1/models rejected");
+        tracing::debug!(status = %response.status(), "/v1/models rejected");
         return None;
     }
     let body: serde_json::Value = response.json().await.ok()?;
@@ -170,7 +170,7 @@ pub(crate) async fn probe_catalog() -> Vec<AdapterModel> {
         return Vec::new();
     };
     let Some(catalog) = fetch_models(&config).await else {
-        tracing::debug!("cliproxy: config found but the proxy did not answer");
+        tracing::debug!("config found but the proxy did not answer");
         return Vec::new();
     };
     to_adapter_models(&catalog)

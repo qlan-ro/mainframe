@@ -128,7 +128,8 @@ impl FakeDeps {
         *self.adapters.history_sources.lock_recover() = sources;
     }
     pub(crate) fn set_segment_store(&self, store: Arc<dyn SegmentStore>) {
-        let _ = self.store.segment_store.set(store);
+        /* expected */
+        let _ = self.store.segment_store.set(store); // First attachment wins.
     }
     pub(crate) fn set_adapter_info(&self, info: AdapterInfo) {
         self.adapters

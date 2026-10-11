@@ -88,7 +88,7 @@ impl ChatManager {
             && let Some(side_chat_id) = chat.side_chat_id.clone()
             && let Err(err) = self.discard_chat(&side_chat_id).await
         {
-            tracing::warn!(chat_id, side_chat_id, %err, "failed to discard side chat before archiving its parent");
+            tracing::warn!(chat_id, side_chat_id, error = %err, "failed to discard side chat before archiving its parent");
         }
         self.lifecycle.archive_chat(chat_id, delete_worktree).await;
         self.teardown.clear(chat_id, TeardownMode::Archive);

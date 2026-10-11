@@ -109,7 +109,7 @@ impl FileChildRegistry {
             Ok(raw) => raw,
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Vec::new(),
             Err(err) => {
-                tracing::warn!(target: "child-registry", ?err, file = %self.file, "child registry read failed, treating as empty");
+                tracing::warn!( error = ?err, file = %self.file, "child registry read failed, treating as empty");
                 return Vec::new();
             }
         };
@@ -120,7 +120,7 @@ impl FileChildRegistry {
                 .collect(),
             Ok(_) => Vec::new(),
             Err(err) => {
-                tracing::warn!(target: "child-registry", ?err, file = %self.file, "child registry is corrupt, treating as empty");
+                tracing::warn!( error = ?err, file = %self.file, "child registry is corrupt, treating as empty");
                 Vec::new()
             }
         }
@@ -131,13 +131,13 @@ impl FileChildRegistry {
             && !parent.as_os_str().is_empty()
             && let Err(err) = tokio::fs::create_dir_all(parent).await
         {
-            tracing::warn!(target: "child-registry", ?err, file = %self.file, "child registry mkdir failed");
+            tracing::warn!( error = ?err, file = %self.file, "child registry mkdir failed");
             return;
         }
         let json = match serde_json::to_string(entries) {
             Ok(json) => json,
             Err(err) => {
-                tracing::warn!(target: "child-registry", ?err, file = %self.file, "child registry serialize failed");
+                tracing::warn!( error = ?err, file = %self.file, "child registry serialize failed");
                 return;
             }
         };
@@ -146,10 +146,10 @@ impl FileChildRegistry {
         {
             match err.stage {
                 mainframe_runtime::fs::AtomicWriteStage::Write => {
-                    tracing::warn!(target: "child-registry", err = ?err.source, file = %self.file, "child registry write failed");
+                    tracing::warn!(error = ?err.source, file = %self.file, "child registry write failed");
                 }
                 mainframe_runtime::fs::AtomicWriteStage::Rename => {
-                    tracing::warn!(target: "child-registry", err = ?err.source, file = %self.file, "child registry rename failed");
+                    tracing::warn!(error = ?err.source, file = %self.file, "child registry rename failed");
                 }
             }
         }

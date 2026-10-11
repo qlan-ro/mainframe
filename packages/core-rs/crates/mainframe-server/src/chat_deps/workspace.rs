@@ -65,7 +65,7 @@ impl WorkspacePort for DaemonChatDeps {
                     None => tracing::warn!(
                         chat_id,
                         attachment_id = %id,
-                        "processAttachments: attachment not found in store; skipping"
+                        "attachment not found in store; skipping"
                     ),
                 }
             }
@@ -151,7 +151,7 @@ impl WorkspacePort for DaemonChatDeps {
             match self.git.for_project(project_path).status_raw().await {
                 Ok(stdout) => !stdout.trim().is_empty(),
                 Err(err) => {
-                    tracing::warn!(%err, project_path, "git status --porcelain failed");
+                    tracing::warn!( error = %err, project_path, "git status --porcelain failed");
                     false
                 }
             }

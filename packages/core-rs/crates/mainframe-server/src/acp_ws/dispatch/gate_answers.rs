@@ -20,11 +20,11 @@ pub(super) async fn handle_gate_answer(
     connection: &std::sync::Arc<FacadeConnection>,
 ) {
     let Some(RequestId::String(rpc_id)) = response.id.clone() else {
-        debug!("acp facade: response with no recognizable id dropped");
+        debug!("response with no recognizable id dropped");
         return;
     };
     let Some(pending) = connection.peek_gate(&rpc_id) else {
-        debug!(rpc_id, "acp facade: response matches no pending gate");
+        debug!(rpc_id, "response matches no pending gate");
         return;
     };
     let answer = match response.outcome {
@@ -34,7 +34,7 @@ pub(super) async fn handle_gate_answer(
                 Err(err) => {
                     // Keep the gate pending: a malformed answer must not
                     // destroy the client's only chance to answer it.
-                    warn!(rpc_id, %err, "acp facade: malformed permission answer");
+                    warn!(rpc_id, error = %err, "malformed permission answer");
                     return;
                 }
             }
@@ -45,7 +45,7 @@ pub(super) async fn handle_gate_answer(
             warn!(
                 rpc_id,
                 code = error.code,
-                "acp facade: client answered a gate with an error, denying it"
+                "client answered a gate with an error, denying it"
             );
             let control = deny_response(&pending.request);
             apply_control_response(&rpc_id, pending, control, hub, ports, connection).await;
@@ -90,7 +90,7 @@ async fn apply_gate_answer(
         Err(GateAnswerError::UnknownOption(option)) => {
             // Never treated as approval (spec); the gate stays pending so a
             // corrected answer can still land.
-            warn!(rpc_id, option, "acp facade: unknown permission option");
+            warn!(rpc_id, option, "unknown permission option");
             return;
         }
     };
@@ -112,7 +112,7 @@ async fn apply_control_response(
     connection.remove_gate(rpc_id);
     match hub.claim_gate(&pending.chat_id, &request_id) {
         AnswerOutcome::AlreadyResolved => {
-            debug!(rpc_id, "acp facade: late answer to a resolved gate");
+            debug!(rpc_id, "late answer to a resolved gate");
         }
         AnswerOutcome::Apply => {
             if let Err(err) = ports.respond_to_permission(&pending.chat_id, control).await {
@@ -123,7 +123,7 @@ async fn apply_control_response(
                 // client believes it already answered.
                 hub.release_gate(&pending.chat_id, &request_id);
                 connection.restore_gate(rpc_id, pending);
-                warn!(rpc_id, %err, "acp facade: respond_to_permission failed");
+                warn!(rpc_id, error = %err, "respond_to_permission failed");
             }
         }
     }

@@ -73,7 +73,7 @@ pub async fn kill_background_task(args: KillArgs<'_>) -> KillResult {
             return KillResult::Ok { via: Via::StopTask };
         }
         stop_err = stop.error.clone();
-        tracing::warn!(target: "background-tasks:kill", chat_id = %args.chat_id, task_id = %args.task_id, err = ?stop.error, "stop_task failed; OS fallback");
+        tracing::warn!(chat_id = %args.chat_id, task_id = %args.task_id, error = ?stop.error, "stop_task failed; OS fallback");
     }
 
     let os = kill_one_task_os(&args.tracker.process, task.output_path.as_deref(), |pid| {

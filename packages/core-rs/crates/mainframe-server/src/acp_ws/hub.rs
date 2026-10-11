@@ -224,7 +224,7 @@ impl FacadeHub {
             debug!(
                 chat_id,
                 request_id = %request.request_id,
-                "acp facade: skipped redelivering a gate resolved since the snapshot"
+                "skipped redelivering a gate resolved since the snapshot"
             );
             return;
         }

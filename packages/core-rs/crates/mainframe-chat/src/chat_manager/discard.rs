@@ -29,8 +29,7 @@ impl ChatManager {
         if let Some(session) = &session
             && let Err(err) = session.kill().await
         {
-            tracing::warn!(
-                ?err,
+            tracing::warn!( error = ?err,
                 chat_id = chat.id,
                 "session.kill failed during teardown"
             );

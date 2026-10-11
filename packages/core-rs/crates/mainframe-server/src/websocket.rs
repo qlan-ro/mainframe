@@ -319,7 +319,7 @@ fn fanout(clients: &WsClients, event: &DaemonEvent) {
     let payload = match serde_json::to_string(event) {
         Ok(payload) => payload,
         Err(err) => {
-            tracing::error!(%err, "failed to serialize broadcast event");
+            tracing::error!( error = %err, "failed to serialize broadcast event");
             return;
         }
     };
@@ -376,7 +376,7 @@ fn send(out_tx: &mpsc::UnboundedSender<String>, event: &DaemonEvent) {
         Ok(payload) => {
             let _ = out_tx.send(payload);
         }
-        Err(err) => tracing::error!(%err, "failed to serialize outbound ws event"),
+        Err(err) => tracing::error!( error = %err, "failed to serialize outbound ws event"),
     }
 }
 

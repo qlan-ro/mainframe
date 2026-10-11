@@ -63,13 +63,13 @@ impl ResolvedPath {
                     tracing::debug!(
                         shell,
                         path_length = resolved.split(':').count(),
-                        "enrichPath: resolved from login shell"
+                        "resolved from login shell"
                     );
                     return Self(Arc::from(resolved.as_str()));
                 }
             }
             Err(err) => {
-                tracing::warn!(%err, "enrichPath: login shell failed, using fallback");
+                tracing::warn!( error = %err, "login shell failed, using fallback");
             }
         }
         Self::fallback()
@@ -102,7 +102,7 @@ impl ResolvedPath {
         tracing::debug!(
             ?additions,
             total_paths = path.split(':').count(),
-            "enrichPath: fallback applied"
+            "fallback applied"
         );
         Self(Arc::from(path.as_str()))
     }

@@ -52,7 +52,7 @@ impl PlanModeActionHandler for MockPlanModeHandler {
         ctx: &'a dyn PlanActionContext,
     ) -> BoxFuture<'a, Result<(), AdapterError>> {
         Box::pin(async move {
-            tracing::debug!(chat_id = %ctx.chat_id(), "mock-cli: plan rejection already forwarded");
+            tracing::debug!(chat_id = %ctx.chat_id(), "plan rejection already forwarded");
             Ok(())
         })
     }
@@ -64,7 +64,7 @@ impl PlanModeActionHandler for MockPlanModeHandler {
         ctx: &'a dyn PlanActionContext,
     ) -> BoxFuture<'a, Result<(), AdapterError>> {
         Box::pin(async move {
-            tracing::debug!(chat_id = %ctx.chat_id(), "mock-cli: plan revision already forwarded");
+            tracing::debug!(chat_id = %ctx.chat_id(), "plan revision already forwarded");
             Ok(())
         })
     }

@@ -84,6 +84,7 @@ impl ManagerState {
         if let Some(mut stdout) = handle.take_stdout() {
             let mut buf = [0u8; 8192];
             // The ack, EOF, a read error or the timeout all move on to `exit`.
+            /* expected */
             let _ =
                 tokio::time::timeout(self.shutdown_request_timeout, stdout.read(&mut buf)).await;
         } else {
@@ -144,7 +145,7 @@ impl ManagerState {
             .collect();
         for task in tasks {
             if let Err(err) = task.await {
-                tracing::warn!(%err, "LSP shutdown task failed");
+                tracing::warn!( error = %err, "LSP shutdown task failed");
             }
         }
     }

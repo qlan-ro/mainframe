@@ -125,7 +125,7 @@ pub async fn resolve_adapter_executable(
     let configured = match deps.settings.get("provider", &key).await {
         Ok(configured) => configured,
         Err(err) => {
-            tracing::warn!(%err, category = "provider", key, "executable path read failed; detecting instead");
+            tracing::warn!( error = %err, category = "provider", key, "executable path read failed; detecting instead");
             None
         }
     };

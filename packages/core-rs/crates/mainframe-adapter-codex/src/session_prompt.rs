@@ -44,10 +44,9 @@ impl CodexSession {
         let resolved_model = resolve_turn_model(model, state.reported_model.as_deref())
             .inspect_err(|err| {
                 tracing::error!(
-                    module = "codex:session",
                     session_id = %self.id,
-                    err = %err,
-                    "codex: cannot start turn without a model"
+                    error = %err,
+                    "cannot start turn without a model"
                 );
             })?;
         state.resolved_turn_model = Some(resolved_model.clone());
@@ -109,10 +108,9 @@ impl CodexSession {
     fn report_undeliverable(&self, undeliverable: &[crate::user_input::UndeliverableReason]) {
         if let Some(notice) = crate::user_input::undeliverable_notice(undeliverable) {
             tracing::warn!(
-                module = "codex:session",
                 session_id = %self.id,
                 count = undeliverable.len(),
-                "codex: images not delivered"
+                "images not delivered"
             );
             self.sink.lock_recover().clone().on_cli_message(&notice);
         }

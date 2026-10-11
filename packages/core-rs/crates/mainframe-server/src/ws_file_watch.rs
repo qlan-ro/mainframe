@@ -63,7 +63,7 @@ impl WsFileWatch {
                 return None;
             }
             Err(err) => {
-                tracing::warn!(%err, path = %resolved.display(), "subscribe:file rejected: stat failed");
+                tracing::warn!( error = %err, path = %resolved.display(), "subscribe:file rejected: stat failed");
                 return None;
             }
         }

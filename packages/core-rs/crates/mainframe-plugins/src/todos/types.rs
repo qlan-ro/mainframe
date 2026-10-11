@@ -140,13 +140,13 @@ where
                     todo_id,
                     column,
                     raw,
-                    "todos: unknown stored value, passing it through unchanged"
+                    "unknown stored value, passing it through unchanged"
                 );
             }
             value
         }
         Err(err) => {
-            tracing::warn!(todo_id, column, raw, err = %err, "todos: unreadable stored value");
+            tracing::warn!(todo_id, column, raw, error = %err, "unreadable stored value");
             T::default()
         }
     }
@@ -164,8 +164,8 @@ fn stored_json_array<T: DeserializeOwned>(
         Ok(values) => values,
         Err(err) => {
             tracing::warn!(
-                todo_id, column, raw, err = %err,
-                "todos: malformed JSON column, defaulting to []"
+                todo_id, column, raw, error = %err,
+                "malformed JSON column, defaulting to []"
             );
             Vec::new()
         }
@@ -182,8 +182,8 @@ pub(crate) fn safe_json_array(raw: &str, column: &str, todo_id: &str) -> Vec<Val
         Ok(_) => Vec::new(),
         Err(err) => {
             tracing::warn!(
-                todo_id, column, raw, err = %err,
-                "todos: malformed JSON column, defaulting to []"
+                todo_id, column, raw, error = %err,
+                "malformed JSON column, defaulting to []"
             );
             Vec::new()
         }

@@ -129,7 +129,7 @@ impl ChatManager {
         match session.load_history().await {
             Ok(history) => remap_history(history, chat_id),
             Err(err) => {
-                tracing::warn!(?err, chat_id, "getMessagesFromDisk failed");
+                tracing::warn!( error = ?err, chat_id, "getMessagesFromDisk failed");
                 Vec::new()
             }
         }

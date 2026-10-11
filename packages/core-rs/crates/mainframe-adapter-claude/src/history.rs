@@ -79,7 +79,7 @@ async fn load_discovered_history(
             if line.trim().is_empty() {
                 continue;
             }
-            tracing::trace!(module = "claude:history", session_id = %session_id, file = %file, line = %line, "[jsonl]");
+            tracing::trace!(session_id = %session_id, file = %file, line = %line, "");
 
             let entry: Value = match serde_json::from_str(&line) {
                 Ok(v) => v,

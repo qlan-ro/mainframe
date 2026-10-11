@@ -105,7 +105,7 @@ async fn resolve_one(ctx: &Arc<AppCtx>, chat_id: String) -> TranscriptResolution
             TranscriptResolution::Resolved { chat_id, path }
         }
         Err(err) => {
-            tracing::warn!(chat_id = %chat_id, %err, "locate_transcript failed");
+            tracing::warn!(chat_id = %chat_id, error = %err, "locate_transcript failed");
             TranscriptResolution::Unknown { chat_id }
         }
     }

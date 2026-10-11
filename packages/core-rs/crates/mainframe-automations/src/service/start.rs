@@ -43,7 +43,7 @@ impl AutomationsEngine {
         for run in &live {
             if let Err(err) = self.interpreter.advance(&run.id).await {
                 // One stuck run must not abort boot for the rest.
-                tracing::error!(run_id = run.id, error = %err, "automations start: reconcile advance failed");
+                tracing::error!(run_id = run.id, error = %err, "reconcile advance failed");
             }
         }
 

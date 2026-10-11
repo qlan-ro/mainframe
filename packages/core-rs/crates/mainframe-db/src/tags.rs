@@ -137,7 +137,7 @@ impl FromRow for Tag {
         let color = SqlEnum::<TagColor>::parse(raw.clone()).unwrap_or_else(|error| {
             tracing::warn!(
                 tag = %name, raw, %error,
-                "tags: invalid stored colour; using the name's palette colour"
+                "invalid stored colour; using the name's palette colour"
             );
             hash_tag_color(&name)
         });

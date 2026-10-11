@@ -105,7 +105,6 @@ fn unanswerable(tool_name: &str, request_id: &str, flat_labels: &[String]) -> bo
         return false;
     }
     tracing::warn!(
-        module = "codex:approvals",
         tool_name,
         request_id,
         "codex sent no usable option labels; the gate can only be rejected"

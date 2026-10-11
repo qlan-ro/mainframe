@@ -32,6 +32,7 @@ use crate::task_events::ClaudeTaskEvents;
 use crate::tuning::tuning_to_flag_settings;
 
 pub struct ClaudeSession {
+    span: tracing::Span,
     pub id: String,
     pub project_path: String,
     resume_session_id: Option<String>,
@@ -60,6 +61,7 @@ impl ClaudeSession {
         let control = Arc::new(ControlRequestChannel::new(id.clone()));
         let chat_id = options.chat_id.clone().unwrap_or_default();
         ClaudeSession {
+            span: tracing::info_span!("adapter_session", adapter = "claude", session_id = %id, chat_id = ?options.mainframe_chat_id),
             id,
             project_path: options.project_path.clone(),
             resume_session_id: options.chat_id,
@@ -97,7 +99,8 @@ impl ClaudeSession {
         }
     }
     pub fn init_weak(self: &Arc<Self>) {
-        let _ = self.weak_self.set(Arc::downgrade(self));
+        /* expected */
+        let _ = self.weak_self.set(Arc::downgrade(self)); // First attachment wins.
     }
     pub fn set_on_exit(&self, cb: Box<dyn Fn() + Send + Sync>) {
         *self.on_exit.lock_recover() = Some(cb);

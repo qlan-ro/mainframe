@@ -96,7 +96,7 @@ impl ChatOffload {
         if let Some(session) = &session_handle
             && let Err(err) = session.kill().await
         {
-            warn!(?err, chat_id, "idle offload: failed to kill session");
+            warn!( error = ?err, chat_id, "failed to kill session");
         }
         self.lifecycle.orchestration().revoke(chat_id);
 
@@ -110,7 +110,7 @@ impl ChatOffload {
         drop(claim);
 
         // Step 6: broadcast.
-        info!(chat_id, "idle offload: released chat");
+        info!(chat_id, "released chat");
         self.lifecycle.emit_event(DaemonEvent::ChatOffloaded {
             chat_id: chat_id.to_string(),
         });

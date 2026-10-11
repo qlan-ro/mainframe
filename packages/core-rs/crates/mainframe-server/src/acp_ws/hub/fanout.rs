@@ -153,11 +153,10 @@ impl FacadeHub {
     ) {
         match serde_json::to_string(note) {
             Ok(payload) => self.push_raw_to_attached(chat_id, payload),
-            Err(err) => warn!(
-                %err,
+            Err(err) => warn!( error = %err,
                 chat_id,
                 kind = kind.label(),
-                "acp facade: failed to serialize an out-of-band notification"
+                "failed to serialize an out-of-band notification"
             ),
         }
     }

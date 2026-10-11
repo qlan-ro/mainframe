@@ -57,7 +57,7 @@ pub(crate) async fn delegated_permission_push(db: &Db, chat_id: &str) -> Option<
     match read {
         Ok(push) => push,
         Err(err) => {
-            tracing::warn!(chat_id, %err, "failed to read a delegated chat for its push");
+            tracing::warn!(chat_id, error = %err, "failed to read a delegated chat for its push");
             None
         }
     }

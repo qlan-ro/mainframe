@@ -1,4 +1,5 @@
 use super::*;
+use tracing::Instrument as _;
 impl AdapterSession for ClaudeSession {
     fn id(&self) -> &str {
         &self.id
@@ -35,10 +36,10 @@ impl AdapterSession for ClaudeSession {
             no_persistence: None,
             orchestration_mcp: None,
         });
-        Box::pin(ClaudeSession::spawn(self, options, sink))
+        Box::pin((ClaudeSession::spawn(self, options, sink)).instrument(self.span.clone()))
     }
     fn kill(&self) -> BoxFuture<'_, Result<(), AdapterError>> {
-        Box::pin(ClaudeSession::kill(self))
+        Box::pin((ClaudeSession::kill(self)).instrument(self.span.clone()))
     }
     fn get_process_info(&self) -> Option<AdapterProcess> {
         ClaudeSession::get_process_info(self)
@@ -49,7 +50,10 @@ impl AdapterSession for ClaudeSession {
         images: Vec<ImageInput>,
         uuid: Option<String>,
     ) -> BoxFuture<'_, Result<(), AdapterError>> {
-        Box::pin(ClaudeSession::send_message(self, message, images, uuid))
+        Box::pin(
+            (ClaudeSession::send_message(self, message, images, uuid))
+                .instrument(self.span.clone()),
+        )
     }
     fn supports_steer(&self) -> bool {
         true
@@ -59,84 +63,88 @@ impl AdapterSession for ClaudeSession {
         message: String,
         uuid: Option<String>,
     ) -> BoxFuture<'_, Result<(), AdapterError>> {
-        Box::pin(ClaudeSession::steer(self, message, uuid))
+        Box::pin((ClaudeSession::steer(self, message, uuid)).instrument(self.span.clone()))
     }
     fn respond_to_permission(
         &self,
         response: ControlResponse,
     ) -> BoxFuture<'_, Result<(), AdapterError>> {
-        Box::pin(ClaudeSession::respond_to_permission(self, response))
+        Box::pin(
+            (ClaudeSession::respond_to_permission(self, response)).instrument(self.span.clone()),
+        )
     }
     fn interrupt(&self) -> BoxFuture<'_, Result<(), AdapterError>> {
-        Box::pin(ClaudeSession::interrupt(self))
+        Box::pin((ClaudeSession::interrupt(self)).instrument(self.span.clone()))
     }
     fn model_requires_restart(&self, model: &str) -> bool {
         self.is_endpoint_session() != cliproxy::split_endpoint(model).0.is_some()
     }
 
     fn effective_model(&self) -> BoxFuture<'_, Option<String>> {
-        Box::pin(async move {
-            if !self.is_spawned() {
-                return None;
-            }
-            let response = self
-                .await_terminal(json!({"subtype": "get_settings"}), "get_settings")
-                .await?;
-            crate::effective_model::applied_model(&response).map(|model| {
-                if self.is_endpoint_session() {
-                    format!("{}/{model}", cliproxy::ENDPOINT_ID)
-                } else {
-                    model
+        Box::pin(
+            (async move {
+                if !self.is_spawned() {
+                    return None;
                 }
+                let response = self
+                    .await_terminal(json!({"subtype": "get_settings"}), "get_settings")
+                    .await?;
+                crate::effective_model::applied_model(&response).map(|model| {
+                    if self.is_endpoint_session() {
+                        format!("{}/{model}", cliproxy::ENDPOINT_ID)
+                    } else {
+                        model
+                    }
+                })
             })
-        })
+            .instrument(self.span.clone()),
+        )
     }
 
     fn set_model(&self, model: String) -> BoxFuture<'_, Result<(), AdapterError>> {
-        Box::pin(ClaudeSession::set_model(self, model))
+        Box::pin((ClaudeSession::set_model(self, model)).instrument(self.span.clone()))
     }
     fn set_permission_mode(&self, mode: ExecutionMode) -> BoxFuture<'_, Result<(), AdapterError>> {
-        Box::pin(ClaudeSession::set_permission_mode(self, mode))
+        Box::pin((ClaudeSession::set_permission_mode(self, mode)).instrument(self.span.clone()))
     }
     fn set_plan_mode(&self, on: bool) -> BoxFuture<'_, Result<(), AdapterError>> {
-        Box::pin(ClaudeSession::set_plan_mode(self, on))
+        Box::pin((ClaudeSession::set_plan_mode(self, on)).instrument(self.span.clone()))
     }
     fn send_command(
         &self,
         command: String,
         args: Option<String>,
     ) -> BoxFuture<'_, Result<(), AdapterError>> {
-        Box::pin(ClaudeSession::send_command(
-            self,
-            command,
-            args.unwrap_or_default(),
-        ))
+        Box::pin(
+            (ClaudeSession::send_command(self, command, args.unwrap_or_default()))
+                .instrument(self.span.clone()),
+        )
     }
     fn cancel_queued_message(&self, uuid: String) -> BoxFuture<'_, Result<bool, AdapterError>> {
-        Box::pin(ClaudeSession::cancel_queued_message(self, uuid))
+        Box::pin((ClaudeSession::cancel_queued_message(self, uuid)).instrument(self.span.clone()))
     }
     fn get_context_files(&self) -> ContextFiles {
         ClaudeSession::get_context_files(self)
     }
     fn load_history(&self) -> BoxFuture<'_, Result<Vec<ChatMessage>, AdapterError>> {
-        Box::pin(ClaudeSession::load_history(self))
+        Box::pin((ClaudeSession::load_history(self)).instrument(self.span.clone()))
     }
     fn history_sources(&self) -> BoxFuture<'_, Vec<std::path::PathBuf>> {
-        Box::pin(ClaudeSession::history_sources(self))
+        Box::pin((ClaudeSession::history_sources(self)).instrument(self.span.clone()))
     }
     fn extract_plan_files(&self) -> BoxFuture<'_, Result<Vec<String>, AdapterError>> {
-        Box::pin(ClaudeSession::extract_plan_files(self))
+        Box::pin((ClaudeSession::extract_plan_files(self)).instrument(self.span.clone()))
     }
     fn extract_skill_files(&self) -> BoxFuture<'_, Result<Vec<SkillFileEntry>, AdapterError>> {
-        Box::pin(ClaudeSession::extract_skill_files(self))
+        Box::pin((ClaudeSession::extract_skill_files(self)).instrument(self.span.clone()))
     }
     fn stop_background_task(
         &self,
         task_id: String,
     ) -> BoxFuture<'_, Result<StopBackgroundTaskResult, AdapterError>> {
-        Box::pin(ClaudeSession::stop_background_task(self, task_id))
+        Box::pin((ClaudeSession::stop_background_task(self, task_id)).instrument(self.span.clone()))
     }
     fn apply_tuning(&self, tuning: ResolvedTuning) -> BoxFuture<'_, Result<(), AdapterError>> {
-        Box::pin(ClaudeSession::apply_tuning(self, tuning))
+        Box::pin((ClaudeSession::apply_tuning(self, tuning)).instrument(self.span.clone()))
     }
 }

@@ -118,7 +118,7 @@ impl FileCredentialStore {
                 Ok(map) => map,
                 Err(err) => {
                     tracing::error!(
-                        err = %err,
+                        error = %err,
                         file_path = %path.display(),
                         "credential store unreadable; treating as empty"
                     );
@@ -128,7 +128,7 @@ impl FileCredentialStore {
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => BTreeMap::new(),
             Err(err) => {
                 tracing::error!(
-                    err = %err,
+                    error = %err,
                     file_path = %path.display(),
                     "credential store unreadable; treating as empty"
                 );

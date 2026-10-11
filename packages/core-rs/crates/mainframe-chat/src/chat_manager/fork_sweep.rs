@@ -26,10 +26,9 @@ impl ChatManager {
             // Nothing has ever been pinned — the directory doesn't exist yet.
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => return,
             Err(err) => {
-                tracing::warn!(
-                    %err,
+                tracing::warn!( error = %err,
                     root,
-                    "fork-snapshot sweep: failed to list the snapshots directory"
+                    "failed to list the snapshots directory"
                 );
                 return;
             }
@@ -39,7 +38,7 @@ impl ChatManager {
                 Ok(Some(entry)) => entry,
                 Ok(None) => break,
                 Err(err) => {
-                    tracing::warn!(%err, root, "fork-snapshot sweep: failed to read an entry");
+                    tracing::warn!( error = %err, root, "failed to read an entry");
                     break;
                 }
             };
@@ -48,16 +47,12 @@ impl ChatManager {
                 continue;
             }
             if let Err(err) = tokio::fs::remove_dir_all(&path).await {
-                tracing::warn!(
-                    %err,
+                tracing::warn!( error = %err,
                     path,
-                    "fork-snapshot sweep: failed to remove an unreferenced snapshot directory"
+                    "failed to remove an unreferenced snapshot directory"
                 );
             } else {
-                tracing::info!(
-                    path,
-                    "fork-snapshot sweep: removed an unreferenced snapshot directory"
-                );
+                tracing::info!(path, "removed an unreferenced snapshot directory");
             }
         }
     }

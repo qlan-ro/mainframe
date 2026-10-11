@@ -32,7 +32,7 @@ pub async fn read_claude_account_identity(claude_json_path: Option<&Path>) -> St
             return CLAUDE_IDENTITY_UNKNOWN.to_string();
         }
         Err(err) => {
-            tracing::warn!(path = %path.display(), %err, "claude.json unreadable; identity transient");
+            tracing::warn!(path = %path.display(), error = %err, "claude.json unreadable; identity transient");
             return CLAUDE_IDENTITY_TRANSIENT.to_string();
         }
     };

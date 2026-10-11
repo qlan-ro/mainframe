@@ -30,7 +30,8 @@ pub struct OrchestrationSlot(Arc<OnceLock<Arc<dyn OrchestrationHooks>>>);
 impl OrchestrationSlot {
     /// First attach wins; a stray second attach is a no-op.
     pub fn attach(&self, hooks: Arc<dyn OrchestrationHooks>) {
-        let _ = self.0.set(hooks);
+        /* expected */
+        let _ = self.0.set(hooks); // First attachment wins.
     }
 
     #[must_use]

@@ -146,7 +146,7 @@ impl TriggerRouter {
         let enabled = match self.automations.list_enabled().await {
             Ok(enabled) => enabled,
             Err(err) => {
-                tracing::error!(error = %err, "event router: listing automations failed");
+                tracing::error!(error = %err, "listing automations failed");
                 return;
             }
         };
@@ -173,7 +173,7 @@ impl TriggerRouter {
                 tracing::error!(
                     automation_id = matched.automation_id,
                     error = %err,
-                    "event router: fire failed"
+                    "fire failed"
                 );
             }
         }

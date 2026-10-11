@@ -112,7 +112,7 @@ pub async fn read_rollout_items(
     let raw = match tokio::fs::read_to_string(&resolved).await {
         Ok(s) => s,
         Err(err) => {
-            tracing::warn!(module = "codex:rollout", err = %err, rollout_path, "codex: failed to read rollout file");
+            tracing::warn!(error = %err, rollout_path, "failed to read rollout file");
             return Vec::new();
         }
     };
@@ -130,7 +130,7 @@ async fn resolve_rollout_path(
     let resolved = match tokio::fs::canonicalize(rollout_path).await {
         Ok(p) => p,
         Err(err) => {
-            tracing::warn!(module = "codex:rollout", err = %err, rollout_path, "codex: rollout file not found");
+            tracing::warn!(error = %err, rollout_path, "rollout file not found");
             return None;
         }
     };
@@ -144,10 +144,9 @@ async fn resolve_rollout_path(
     let root = tokio::fs::canonicalize(&root).await.unwrap_or(root);
     if !resolved.starts_with(&root) {
         tracing::warn!(
-            module = "codex:rollout",
             rollout_path,
             resolved = %resolved.display(),
-            "codex: rollout path outside ~/.codex/sessions, refusing to read"
+            "rollout path outside ~/.codex/sessions, refusing to read"
         );
         return None;
     }
@@ -155,10 +154,9 @@ async fn resolve_rollout_path(
         && !resolved.to_string_lossy().contains(expected)
     {
         tracing::warn!(
-            module = "codex:rollout",
             rollout_path,
             expected_thread_id = expected,
-            "codex: rollout filename does not match thread id, refusing to read"
+            "rollout filename does not match thread id, refusing to read"
         );
         return None;
     }

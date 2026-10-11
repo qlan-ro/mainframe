@@ -27,7 +27,7 @@ impl DbTaskStore {
         match self.db.call(f).await {
             Ok(value) => value,
             Err(err) => {
-                tracing::warn!(what, %err, "delegated task read failed");
+                tracing::warn!(what, error = %err, "delegated task read failed");
                 T::default()
             }
         }

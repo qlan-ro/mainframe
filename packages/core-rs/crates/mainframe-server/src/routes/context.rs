@@ -56,7 +56,7 @@ async fn session_file(
             serde_json::json!({ "path": file_path, "content": content }),
         )),
         Err(err) => {
-            tracing::warn!(path = %file_path, %err, "Failed to read session file");
+            tracing::warn!(path = %file_path, error = %err, "Failed to read session file");
             Err(ApiError::NotFound("File not found".into()))
         }
     }

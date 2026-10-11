@@ -60,7 +60,7 @@ pub async fn read_tool_result_from_rollout(file_path: &str, call_id: &str) -> Op
     let file = match tokio::fs::File::open(file_path).await {
         Ok(file) => file,
         Err(err) => {
-            tracing::warn!(module = "rollout-tool-result", err = %err, file_path = %file_path, "error opening rollout");
+            tracing::warn!(error = %err, file_path = %file_path, "error opening rollout");
             return None;
         }
     };
@@ -70,7 +70,7 @@ pub async fn read_tool_result_from_rollout(file_path: &str, call_id: &str) -> Op
             Ok(Some(line)) => line,
             Ok(None) => return None,
             Err(err) => {
-                tracing::warn!(module = "rollout-tool-result", err = %err, file_path = %file_path, "error scanning rollout");
+                tracing::warn!(error = %err, file_path = %file_path, "error scanning rollout");
                 return None;
             }
         };

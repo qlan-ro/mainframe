@@ -69,9 +69,8 @@ impl ApprovalHandler {
         let entry = self.pending.lock_recover().remove(&response.request_id);
         let Some(entry) = entry else {
             tracing::warn!(
-                module = "codex:approvals",
                 request_id = %response.request_id,
-                "codex: no pending approval for requestId"
+                "no pending approval for requestId"
             );
             return Ok(());
         };
@@ -91,7 +90,7 @@ impl ApprovalHandler {
                 (entry.respond)(entry.json_rpc_id, json!({ "decision": "decline" }))
             };
             if let Err(error) = result {
-                tracing::warn!(module = "codex:approvals", %error, "codex: pending approval not rejected");
+                tracing::warn!(%error, "pending approval not rejected");
             }
         }
     }

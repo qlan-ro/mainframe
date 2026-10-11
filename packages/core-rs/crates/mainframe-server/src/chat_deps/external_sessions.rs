@@ -23,7 +23,7 @@ impl ExternalSessionDeps for DaemonChatDeps {
                 .get(adapter_id)
                 .and_then(|adapter| adapter.external_sessions())
             else {
-                tracing::warn!(adapter_id, "list_external_sessions: unknown adapter id");
+                tracing::warn!(adapter_id, "unknown adapter id");
                 return Ok(ExternalSessionPage {
                     sessions: Vec::new(),
                     total: 0,

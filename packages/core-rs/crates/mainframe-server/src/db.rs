@@ -23,7 +23,7 @@ pub async fn notification_config(db: &Db) -> NotificationConfig {
     {
         Ok(raw) => parse_notification_config(raw.as_deref()),
         Err(err) => {
-            tracing::warn!(%err, category = "general", key = "notifications", "notification settings read failed; using the defaults");
+            tracing::warn!( error = %err, category = "general", key = "notifications", "notification settings read failed; using the defaults");
             NotificationConfig::default()
         }
     }

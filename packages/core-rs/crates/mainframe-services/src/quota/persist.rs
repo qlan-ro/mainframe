@@ -77,7 +77,7 @@ impl QuotaPersister {
                 }
             }
             Err(err) => {
-                tracing::warn!(%err, "no async runtime yet; quota blob stays queued");
+                tracing::warn!( error = %err, "no async runtime yet; quota blob stays queued");
             }
         }
     }
@@ -88,7 +88,7 @@ async fn drain(mut rx: mpsc::UnboundedReceiver<PersistJob>, settings: Arc<dyn Se
         match job {
             PersistJob::Write { key, value } => {
                 if let Err(err) = settings.set(QUOTA_CATEGORY, &key, &value).await {
-                    tracing::warn!(%err, category = QUOTA_CATEGORY, key = %key, "failed to persist quota blob");
+                    tracing::warn!( error = %err, category = QUOTA_CATEGORY, key = %key, "failed to persist quota blob");
                 }
             }
             #[cfg(test)]

@@ -55,9 +55,8 @@ pub(crate) fn on_sub_agent_activity(
             );
         }
         SubAgentKind::Interacted | SubAgentKind::Unknown => tracing::debug!(
-            module = "codex:collab",
             kind = %item.kind,
-            "codex: subAgentActivity ping has no card effect"
+            "subAgentActivity ping has no card effect"
         ),
     }
 }
@@ -178,9 +177,8 @@ pub(crate) fn on_collab_tool_call(
             }
         }
         CollabTool::CloseAgent | CollabTool::Unknown => tracing::debug!(
-            module = "codex:collab",
             tool = %item.tool,
-            "codex: collab tool call has no card effect"
+            "collab tool call has no card effect"
         ),
     }
 }

@@ -12,7 +12,7 @@ impl LaunchManager {
             return Err(LaunchError::ShuttingDown);
         }
         if inner.processes.contains_key(name) {
-            tracing::warn!(target: "launch", name, "concurrent start already registered a process");
+            tracing::warn!(name, "concurrent start already registered a process");
             return Ok(());
         }
         let generation = inner.begin_generation(name);
@@ -49,7 +49,7 @@ impl LaunchManager {
             status,
             LaunchProcessStatus::Stopped | LaunchProcessStatus::Failed
         ) {
-            tracing::warn!(target: "launch", name, "process already running, skipping start");
+            tracing::warn!(name, "process already running, skipping start");
             return false;
         }
         let teardown = self.inner.timings.stop_grace + Duration::from_secs(5);
@@ -57,7 +57,10 @@ impl LaunchManager {
             .await
             .is_err()
         {
-            tracing::warn!(target: "launch", name, "previous process did not exit after SIGKILL, skipping start");
+            tracing::warn!(
+                name,
+                "previous process did not exit after SIGKILL, skipping start"
+            );
             return false;
         }
         true
@@ -94,7 +97,7 @@ impl LaunchManager {
     }
 
     async fn spawn_failed(&self, name: &str, error: std::io::Error) -> LaunchError {
-        tracing::warn!(target: "launch", name, code = ?error.kind(), message = %error, "process error");
+        tracing::warn!(name, code = ?error.kind(), message = %error, "process error");
         self.inner
             .state
             .set_status(name, LaunchProcessStatus::Failed);
@@ -117,7 +120,7 @@ impl LaunchManager {
         let inner = &self.inner;
         let name = &config.name;
         let pid = child.id();
-        tracing::info!(target: "launch", name, ?pid, cmd = %format!("{} {}", config.runtime_executable, config.runtime_args.join(" ")), port = ?config.port, "launch process spawned");
+        tracing::info!(name, ?pid, cmd = %format!("{} {}", config.runtime_executable, config.runtime_args.join(" ")), port = ?config.port, "launch process spawned");
         let status = Arc::new(Mutex::new(LaunchProcessStatus::Starting));
         let (exit_tx, exit_rx) = watch::channel(false);
         inner.processes.insert(
@@ -179,7 +182,7 @@ impl LaunchManager {
         let inner = &self.inner;
         let name = &config.name;
         if let Some(port) = config.port {
-            tracing::info!(target: "launch", name, port, "waiting for port to become ready…");
+            tracing::info!(name, port, "waiting for port to become ready…");
             if wait_for_port(port as u16, status, &inner.timings).await {
                 (inner.on_event)(DaemonEvent::LaunchPortTimeout {
                     project_id: inner.project_id.clone(),
@@ -194,7 +197,7 @@ impl LaunchManager {
             *guard = LaunchProcessStatus::Running;
             inner.state.set_status(name, LaunchProcessStatus::Running);
             inner.emit_status(name, LaunchProcessStatus::Running);
-            tracing::info!(target: "launch", name, port = ?config.port, "launch process ready");
+            tracing::info!(name, port = ?config.port, "launch process ready");
         }
     }
 
@@ -219,7 +222,7 @@ impl LaunchManager {
                     url,
                 },
                 Err(error) => {
-                    tracing::warn!(target: "launch", name, err = %error, "tunnel failed to start");
+                    tracing::warn!(name, error = %error, "tunnel failed to start");
                     DaemonEvent::LaunchTunnelFailed {
                         project_id: inner.project_id.clone(),
                         effective_path: inner.project_path.clone(),

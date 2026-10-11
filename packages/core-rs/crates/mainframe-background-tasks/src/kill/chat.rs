@@ -53,10 +53,10 @@ pub async fn kill_tasks_for_chat(args: KillTasksForChatArgs<'_>) -> KillTasksFor
     sweep(&args, &mut result).await;
 
     if !result.failed.is_empty() {
-        tracing::warn!(target: "background-tasks:kill", chat_id = %args.chat_id, failed = ?result.failed, "killTasksForChat: some failures");
+        tracing::warn!(chat_id = %args.chat_id, failed = ?result.failed, "some failures");
     }
     if !result.swept.is_empty() {
-        tracing::info!(target: "background-tasks:kill", chat_id = %args.chat_id, swept = ?result.swept, "worktree sweep killed extras");
+        tracing::info!(chat_id = %args.chat_id, swept = ?result.swept, "worktree sweep killed extras");
     }
 
     result
@@ -73,7 +73,7 @@ async fn kill_task(
             record_stopped(args, task, result, Via::StopTask, "killed via stop_task");
             return;
         }
-        tracing::warn!(target: "background-tasks:kill", chat_id = %args.chat_id, task_id = %task.id, err = ?stop.error, "stop_task failed; OS fallback");
+        tracing::warn!(chat_id = %args.chat_id, task_id = %task.id, error = ?stop.error, "stop_task failed; OS fallback");
     }
 
     let os = kill_one_task_os(&args.tracker.process, task.output_path.as_deref(), |pid| {
@@ -97,7 +97,7 @@ async fn sweep(args: &KillTasksForChatArgs<'_>, result: &mut KillTasksForChatRes
     if let Some(worktree_path) = args.worktree_path {
         match tokio::fs::canonicalize(worktree_path).await {
             Err(err) => {
-                tracing::warn!(target: "background-tasks:kill", err = %err, worktree_path = %worktree_path, "worktree sweep aborted");
+                tracing::warn!(error = %err, worktree_path = %worktree_path, "worktree sweep aborted");
             }
             Ok(real_wt) => {
                 let scoped_cwd_seg = encode_cwd_segment(&real_wt.to_string_lossy());
@@ -162,12 +162,12 @@ async fn sweep_file(
                 pid,
                 command: command.clone(),
             });
-            tracing::info!(target: "background-tasks:kill", pid, command = %command, file = %file, "worktree sweep killed pid");
+            tracing::info!(pid, command = %command, file = %file, "worktree sweep killed pid");
             if let Some(error) = &r.error {
-                tracing::warn!(target: "background-tasks:kill", pid, command = %command, err = %error, "worktree sweep left descendants unsignalled");
+                tracing::warn!(pid, command = %command, error = %error, "worktree sweep left descendants unsignalled");
             }
         } else {
-            tracing::error!(target: "background-tasks:kill", pid, command = %command, err = ?r.error, "worktree sweep kill failed");
+            tracing::error!(pid, command = %command, error = ?r.error, "worktree sweep kill failed");
         }
     }
 }

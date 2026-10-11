@@ -54,7 +54,7 @@ pub(crate) fn render_completed_item(
         ThreadItem::SubAgentActivity(a) => collab_card::on_sub_agent_activity(&a, sink, state),
         ThreadItem::WebSearch(w) => render_web_search(&w, sink),
         ThreadItem::UserMessage(_) => {
-            tracing::debug!(module = "codex:events", "codex: unhandled item type");
+            tracing::debug!("unhandled item type");
         }
     }
 }
@@ -82,11 +82,7 @@ fn render_agent_message(
 }
 
 fn skip_item(name: &str) {
-    tracing::debug!(
-        module = "codex:events",
-        item = name,
-        "skipping unrendered thread item"
-    );
+    tracing::debug!(item = name, "skipping unrendered thread item");
 }
 
 /// `pub(crate)`: shared with `history_convert.rs`'s reload-path rendering so

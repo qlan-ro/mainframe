@@ -142,7 +142,7 @@ pub(crate) fn take_interaction(
     // forward an ExitPlanMode allow twice (permission_handler forwards, then
     // the plan-mode escalation forwards the same response again).
     if expected == RecordedMethod::RespondToPermission && state.replay.is_exhausted() {
-        tracing::debug!("mock-cli: ignoring a respondToPermission past the end of the fixture");
+        tracing::debug!("ignoring a respondToPermission past the end of the fixture");
         return (Vec::new(), state.last_delay, None);
     }
     let mut prefix = if expected == RecordedMethod::Interrupt {

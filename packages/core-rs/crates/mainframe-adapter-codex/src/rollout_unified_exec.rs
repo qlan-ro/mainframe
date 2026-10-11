@@ -31,9 +31,8 @@ pub(crate) fn register_unified_exec(p: &RolloutPayload, pending: &mut HashMap<St
         }
         None => {
             tracing::debug!(
-                module = "codex:rollout",
                 call_id,
-                "codex: failed to parse unified exec command from rollout input, skipping pair"
+                "failed to parse unified exec command from rollout input, skipping pair"
             );
         }
     }

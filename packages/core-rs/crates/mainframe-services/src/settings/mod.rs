@@ -15,7 +15,7 @@ pub async fn read_setting(settings: &dyn SettingsKv, category: &str, key: &str) 
     match settings.get(category, key).await {
         Ok(value) => value,
         Err(err) => {
-            tracing::warn!(%err, category, key, "settings read failed; using the default");
+            tracing::warn!( error = %err, category, key, "settings read failed; using the default");
             None
         }
     }

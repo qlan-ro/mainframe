@@ -16,7 +16,7 @@ impl SegmentStore for DaemonChatDeps {
         match self.db.call_blocking(move |d| d.segments.layout(&id)) {
             Ok(layout) => Some(layout),
             Err(err) => {
-                tracing::warn!(%err, chat_id, "segment layout read failed");
+                tracing::warn!( error = %err, chat_id, "segment layout read failed");
                 None
             }
         }
@@ -56,7 +56,7 @@ impl SegmentStore for DaemonChatDeps {
         {
             Ok(changed) => changed,
             Err(err) => {
-                tracing::warn!(%err, handoff_id, "handoff status write failed");
+                tracing::warn!( error = %err, handoff_id, "handoff status write failed");
                 false
             }
         }
@@ -69,7 +69,7 @@ impl SegmentStore for DaemonChatDeps {
             .db
             .call_blocking(move |d| d.segments.add_result(&id, &delta))
         {
-            tracing::warn!(%err, chat_id, "segment counters write failed");
+            tracing::warn!( error = %err, chat_id, "segment counters write failed");
         }
     }
 
@@ -79,7 +79,7 @@ impl SegmentStore for DaemonChatDeps {
             .db
             .call_blocking(move |d| d.segments.set_session_file_path(&id, &path))
         {
-            tracing::warn!(%err, native_ref, "native session path write failed");
+            tracing::warn!( error = %err, native_ref, "native session path write failed");
         }
     }
 
@@ -91,7 +91,7 @@ impl SegmentStore for DaemonChatDeps {
         {
             Ok(has) => has,
             Err(err) => {
-                tracing::warn!(%err, chat_id, "native session read failed");
+                tracing::warn!( error = %err, chat_id, "native session read failed");
                 false
             }
         }

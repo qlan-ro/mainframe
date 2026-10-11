@@ -126,7 +126,7 @@ impl OrchestrationPort for DaemonOrchestrationPort {
             match self.db.call(move |d| d.projects.get(&id)).await {
                 Ok(project) => project.is_some(),
                 Err(err) => {
-                    tracing::warn!(project_id, %err, "failed to read project");
+                    tracing::warn!(project_id, error = %err, "failed to read project");
                     false
                 }
             }

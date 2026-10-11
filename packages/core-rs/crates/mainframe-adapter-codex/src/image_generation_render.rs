@@ -19,7 +19,7 @@ pub(crate) fn handle_image_generation(img: ImageGenerationItem, sink: &Arc<dyn S
         return;
     }
     let Some(path) = img.saved_path else {
-        tracing::warn!(module = "codex:events", id = %img.id, "codex: imageGeneration missing both result and savedPath");
+        tracing::warn!(id = %img.id, "imageGeneration missing both result and savedPath");
         return;
     };
     // Read the saved image off disk asynchronously, then emit.
@@ -37,7 +37,7 @@ pub(crate) fn handle_image_generation(img: ImageGenerationItem, sink: &Arc<dyn S
                 );
             }
             Err(err) => {
-                tracing::warn!(module = "codex:events", err = %err, path, "codex: failed to read generated image");
+                tracing::warn!(error = %err, path, "failed to read generated image");
             }
         }
     });

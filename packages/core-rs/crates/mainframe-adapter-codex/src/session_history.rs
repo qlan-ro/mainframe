@@ -44,7 +44,7 @@ impl CodexSession {
         {
             Ok(c) => c,
             Err(err) => {
-                tracing::warn!(module = "codex:session", err = %err, thread_id = %read_thread_id, "codex: failed to load history");
+                tracing::warn!(error = %err, thread_id = %read_thread_id, "failed to load history");
                 return Ok(Vec::new());
             }
         };
@@ -60,7 +60,7 @@ impl CodexSession {
         match result {
             Ok(msgs) => Ok(msgs),
             Err(err) => {
-                tracing::warn!(module = "codex:session", err = %err, thread_id = %read_thread_id, "codex: failed to load history");
+                tracing::warn!(error = %err, thread_id = %read_thread_id, "failed to load history");
                 Ok(Vec::new())
             }
         }
@@ -74,7 +74,6 @@ impl CodexSession {
             Some(records) => Ok(records),
             None => {
                 tracing::debug!(
-                    module = "codex:session",
                     thread_id,
                     "no rollout for PR scan; falling back to thread/read"
                 );

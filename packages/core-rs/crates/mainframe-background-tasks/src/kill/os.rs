@@ -101,7 +101,7 @@ pub(super) fn signal_each(
         .filter_map(|(index, &pid)| match send(pid) {
             Ok(()) => None,
             Err(error) => {
-                tracing::warn!(target: "background-tasks:kill", pid, %error, "tree kill signal failed");
+                tracing::warn!(pid, %error, "tree kill signal failed");
                 root_failed |= index == 0;
                 Some(format!("pid {pid}: {error}"))
             }
@@ -122,7 +122,7 @@ pub(super) async fn sigterm_then_kill(
     pid: u32,
 ) -> StopResult {
     if let Err(sig_err) = tree_kill(process, pid, Signal::Sigterm).await {
-        tracing::warn!(target: "background-tasks:kill", pid, err = %sig_err, "SIGTERM failed; trying SIGKILL");
+        tracing::warn!(pid, error = %sig_err, "SIGTERM failed; trying SIGKILL");
     }
     tokio::time::sleep(Duration::from_millis(GRACE_MS)).await;
     // `ok` reports the root; descendants the SIGKILL missed ride along in
@@ -190,7 +190,7 @@ where
     for pid in &writers {
         let r = signaller(*pid).await;
         if !r.ok {
-            tracing::warn!(target: "background-tasks:kill", pid = *pid, err = ?r.error, "signal failed for one pid");
+            tracing::warn!(pid = *pid, error = ?r.error, "signal failed for one pid");
         }
     }
     let remaining = lsof_writers(process, output_path).await;
