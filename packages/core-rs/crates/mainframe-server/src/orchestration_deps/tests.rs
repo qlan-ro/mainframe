@@ -255,7 +255,7 @@ async fn a_task_chats_permission_push_names_its_parent_and_opens_the_top_level_c
     }
 
     assert_eq!(
-        delegated_permission_push(&ctx.core.db, &child.id),
+        delegated_permission_push(&ctx.core.db, &child.id).await,
         Some(DelegatedPush {
             body: "\"Review\" (task of \"Untitled session\") needs permission".into(),
             open_chat_id: caller.clone(),
@@ -264,11 +264,11 @@ async fn a_task_chats_permission_push_names_its_parent_and_opens_the_top_level_c
     // A grandchild's card sits inside its parent's card, so the push still
     // opens the chat the sidebar lists.
     assert_eq!(
-        delegated_permission_push(&ctx.core.db, &grandchild.id),
+        delegated_permission_push(&ctx.core.db, &grandchild.id).await,
         Some(DelegatedPush {
             body: "\"Race check\" (task of \"Review\") needs permission".into(),
             open_chat_id: caller.clone(),
         })
     );
-    assert_eq!(delegated_permission_push(&ctx.core.db, &caller), None);
+    assert_eq!(delegated_permission_push(&ctx.core.db, &caller).await, None);
 }
