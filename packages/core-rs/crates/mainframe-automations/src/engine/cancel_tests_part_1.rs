@@ -1,4 +1,3 @@
-
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -155,22 +154,24 @@ async fn cancel_aborts_the_in_flight_walk_and_the_run_never_continues() {
         std::time::Duration::from_secs(10),
         std::time::Duration::from_millis(5),
         async || {
-        let status = h
-            .store
-            .get_run(&run.id)
-            .await
-            .unwrap()
-            .unwrap()
-            .checkpoint
-            .steps
-            .get("run-1")
-            .map(|e| e.status);
-        if status == Some(StepStatus::Running) {
-            return true;
-        }
+            let status = h
+                .store
+                .get_run(&run.id)
+                .await
+                .unwrap()
+                .unwrap()
+                .checkpoint
+                .steps
+                .get("run-1")
+                .map(|e| e.status);
+            if status == Some(StepStatus::Running) {
+                return true;
+            }
             false
         },
-    ).await.expect("expected state before timeout");
+    )
+    .await
+    .expect("expected state before timeout");
 
     engine.cancel_run(&run.id).await.unwrap();
     advance.await.unwrap().unwrap();

@@ -45,7 +45,10 @@
           "timestamp": "2026-07-08T10:15:30.000Z"
         }
       ],
-      "modifiedFiles": ["packages/core-rs/crates/mainframe-server/src/websocket.rs", "packages/core-rs/crates/mainframe-server/tests/websocket.rs"],
+      "modifiedFiles": [
+        "packages/core-rs/crates/mainframe-server/src/websocket.rs",
+        "packages/core-rs/crates/mainframe-server/tests/websocket.rs"
+      ],
       "worktreePath": "/Users/doru/Projects/mainframe/.worktrees/fix-ws-reconnect",
       "branchName": "fix/ws-reconnect",
       "processState": "working",

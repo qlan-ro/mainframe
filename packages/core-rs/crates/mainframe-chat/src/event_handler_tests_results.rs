@@ -28,12 +28,14 @@ async fn on_result_retires_a_pending_fork_and_removes_its_snapshot_dir() {
         std::time::Duration::from_secs(10),
         std::time::Duration::from_millis(5),
         async || {
-        if !std::path::Path::new(&snapshot_dir).exists() {
-            return true;
-        }
+            if !std::path::Path::new(&snapshot_dir).exists() {
+                return true;
+            }
             false
         },
-    ).await.expect("expected state before timeout");
+    )
+    .await
+    .expect("expected state before timeout");
     assert!(
         !std::path::Path::new(&snapshot_dir).exists(),
         "snapshot directory should have been removed"
