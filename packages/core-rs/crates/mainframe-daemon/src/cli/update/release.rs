@@ -182,4 +182,5 @@ pub(crate) fn assert_not_downgrade(
 }
 
 #[cfg(test)]
+#[path = "release_tests.rs"]
 mod tests;
