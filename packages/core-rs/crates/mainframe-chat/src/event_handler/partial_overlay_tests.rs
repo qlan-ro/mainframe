@@ -6,7 +6,6 @@
 //! moved to `teardown_tests.rs` — it
 //! shares this file's fixtures via `use super::*`.
 
-use mainframe_types::sync::LockExt as _;
 #[path = "partial_overlay_tests_teardown_tests.rs"]
 mod teardown_tests;
 
