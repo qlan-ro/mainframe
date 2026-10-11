@@ -9,7 +9,7 @@ impl ChatShared {
     /// Sets every derived field: display status, background activity, the
     /// directory signals, the side chat's and delegated children's waiting
     /// state, and the agent outbox.
-    pub(super) fn enrich(&self, chat: &mut Chat) {
+    pub(crate) fn enrich(&self, chat: &mut Chat) {
         let has_pending = self.has_pending(&chat.id);
         // The side chat's gate shows on its parent.
         let side_chat_waiting = chat.side_chat_id.as_deref().map(|id| self.has_pending(id));
@@ -43,7 +43,7 @@ impl ChatShared {
 
     /// Enrich `chat.updated` / `chat.created`, then emit through the raw
     /// `onEvent`.
-    pub(super) fn emit(&self, mut event: DaemonEvent) {
+    pub(crate) fn emit(&self, mut event: DaemonEvent) {
         match &mut event {
             DaemonEvent::ChatUpdated { chat, .. } | DaemonEvent::ChatCreated { chat, .. } => {
                 self.enrich(chat);

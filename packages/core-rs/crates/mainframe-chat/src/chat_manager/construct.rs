@@ -18,7 +18,7 @@ impl Collaborators {
         shared: &Arc<ChatShared>,
         self_ref: &Arc<std::sync::OnceLock<std::sync::Weak<ChatManager>>>,
     ) -> Self {
-        let worktree_offers = deps_offer::build(shared);
+        let worktree_offers = Arc::new(WorktreeOfferRegistry::new(shared.clone()));
         let event_handler = deps_event::build(shared, &worktree_offers);
         let lifecycle = deps_lifecycle::build(shared, &event_handler, &worktree_offers);
         let permission_handler =

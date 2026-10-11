@@ -17,15 +17,14 @@
 //! that fills it.
 
 use mainframe_types::sync::LockExt as _;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use mainframe_adapter_api::BoxFuture;
-use mainframe_services::workspace::{WorktreeEntry, get_worktrees};
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::http_status::{HttpStatus, StatusKind};
 use mainframe_types::worktree_offer::{WorktreeOfferOutcome, WorktreeSwitchOffer};
 
+use crate::chat_manager::ChatShared;
 use crate::config_manager::ConfigError;
 
 mod rescan;
@@ -58,23 +57,6 @@ impl HttpStatus for OfferError {
     }
 }
 
-/// The narrow surface the registry needs. `list_worktrees` defaults to the real
-/// git call, so only tests carry an override.
-pub trait WorktreeOfferDeps: Send + Sync {
-    fn emit_event(&self, event: DaemonEvent);
-    fn projects_get_path(&self, project_id: &str) -> Option<String>;
-    /// `(project_id, worktree_path)` for the chat.
-    fn chat_binding(&self, chat_id: &str) -> Option<(String, Option<String>)>;
-    /// Every *other* chat's worktree path in this project.
-    fn other_chat_worktrees(&self, project_id: &str, chat_id: &str) -> HashSet<String>;
-    fn get_dismissed_worktrees(&self, chat_id: &str) -> Vec<String>;
-    fn add_dismissed_worktree(&self, chat_id: &str, worktree_path: &str) -> bool;
-
-    fn list_worktrees<'a>(&'a self, project_path: &'a str) -> BoxFuture<'a, Vec<WorktreeEntry>> {
-        Box::pin(async move { get_worktrees(project_path).await })
-    }
-}
-
 #[derive(Default)]
 struct ChatOffers {
     /// The worktrees a scan has already seen, by path and identity. `None` until
@@ -88,19 +70,19 @@ struct ChatOffers {
 }
 
 pub struct WorktreeOfferRegistry {
-    deps: Arc<dyn WorktreeOfferDeps>,
+    shared: Arc<ChatShared>,
     now: NowFn,
     state: Mutex<HashMap<String, ChatOffers>>,
 }
 
 impl WorktreeOfferRegistry {
-    pub fn new(deps: Arc<dyn WorktreeOfferDeps>) -> Self {
-        Self::with_clock(deps, Arc::new(mainframe_types::time::now_ms))
+    pub(crate) fn new(shared: Arc<ChatShared>) -> Self {
+        Self::with_clock(shared, Arc::new(mainframe_types::time::now_ms))
     }
 
-    pub fn with_clock(deps: Arc<dyn WorktreeOfferDeps>, now: NowFn) -> Self {
+    pub(crate) fn with_clock(shared: Arc<ChatShared>, now: NowFn) -> Self {
         Self {
-            deps,
+            shared,
             now,
             state: Mutex::new(HashMap::new()),
         }
@@ -151,8 +133,10 @@ impl WorktreeOfferRegistry {
             }
             chat.pending.remove(worktree_path);
         }
-        self.deps.add_dismissed_worktree(chat_id, worktree_path);
-        self.deps.emit_event(resolved_event(
+        self.shared
+            .deps
+            .add_dismissed_worktree(chat_id, worktree_path);
+        self.shared.emit(resolved_event(
             chat_id,
             worktree_path,
             WorktreeOfferOutcome::Dismissed,
@@ -208,8 +192,8 @@ impl WorktreeOfferRegistry {
                 .is_some_and(|chat| chat.pending.remove(worktree_path).is_some())
         };
         if removed {
-            self.deps
-                .emit_event(resolved_event(chat_id, worktree_path, outcome));
+            self.shared
+                .emit(resolved_event(chat_id, worktree_path, outcome));
         }
     }
 

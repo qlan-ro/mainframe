@@ -33,6 +33,10 @@ pub(crate) struct FakeChatStore {
     pub(crate) fork_inserts: Mutex<Vec<ForkCreateInput>>,
     /// `db.chats.pendingFork` per chat id.
     pub(crate) pending_forks: Mutex<HashMap<String, PendingForkState>>,
+    /// `db.chats.dismissedWorktrees` per chat id.
+    pub(crate) dismissed: Mutex<HashMap<String, Vec<String>>>,
+    /// Every `(chat_id, worktree_path)` `add_dismissed_worktree` was asked to write.
+    pub(crate) dismiss_writes: Mutex<Vec<(String, String)>>,
     /// `segment_store()` — set once by the provider-switch tests; every other
     /// test leaves it unset (single-segment chats, as before segments existed).
     pub(crate) segment_store: OnceLock<Arc<dyn SegmentStore>>,
@@ -166,6 +170,29 @@ impl ChatStore for FakeDeps {
     fn update_todos(&self, _chat_id: &str, _todos: &[TodoItem]) {}
     fn add_detected_prs(&self, _chat_id: &str, _prs: &[DetectedPr]) -> Vec<DetectedPr> {
         Vec::new()
+    }
+    fn get_dismissed_worktrees(&self, chat_id: &str) -> Vec<String> {
+        self.store
+            .dismissed
+            .lock()
+            .unwrap()
+            .get(chat_id)
+            .cloned()
+            .unwrap_or_default()
+    }
+    fn add_dismissed_worktree(&self, chat_id: &str, worktree_path: &str) -> bool {
+        self.store
+            .dismiss_writes
+            .lock()
+            .unwrap()
+            .push((chat_id.to_string(), worktree_path.to_string()));
+        let mut dismissed = self.store.dismissed.lock().unwrap();
+        let paths = dismissed.entry(chat_id.to_string()).or_default();
+        if paths.iter().any(|p| p == worktree_path) {
+            return false;
+        }
+        paths.push(worktree_path.to_string());
+        true
     }
     fn chats_clear_session(&self, chat_id: &str) {
         if let Some(c) = self.store.chats.lock().unwrap().get_mut(chat_id) {

@@ -56,4 +56,13 @@ pub trait WorkspacePort: Send + Sync {
     fn is_working_tree_dirty<'a>(&'a self, project_path: &'a str) -> BoxFuture<'a, bool>;
 
     fn extract_mentions_from_text(&self, chat_id: &str, text: &str) -> bool;
+
+    /// `git worktree list` for the project. Defaults to the real git call; a
+    /// fake overrides it.
+    fn list_worktrees<'a>(
+        &'a self,
+        project_path: &'a str,
+    ) -> BoxFuture<'a, Vec<mainframe_services::workspace::WorktreeEntry>> {
+        Box::pin(async move { mainframe_services::workspace::get_worktrees(project_path).await })
+    }
 }

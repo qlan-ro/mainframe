@@ -10,7 +10,7 @@ use mainframe_adapter_api::{
 };
 use mainframe_services::quota::{IngestMode, QuotaManager};
 use mainframe_types::adapter::{AdapterInfo, ForkSource, ProviderQuota, SessionOptions};
-use mainframe_types::chat::{ChatMessage, ChatMessageType, ResolvedTuning};
+use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent, ResolvedTuning};
 use mainframe_types::display::{
     DisplayContent, DisplayMessage, DisplayMessageType, ToolCategories,
 };
@@ -81,11 +81,9 @@ pub(crate) struct FakeAdapterPort {
 }
 
 impl FakeAdapterPort {
-    /// A trivial 1:1 echo (one `DisplayMessage` per raw `ChatMessage`,
-    /// carrying the same id/timestamp/type and its leaf content verbatim,
-    /// `Node` content dropped) — real conversion lives outside this crate.
-    /// Shared by `prepare_messages_for_client` (REST) and
-    /// `display_projector` (the live/resume path), so both answer identically.
+    /// A 1:1 echo (same id/timestamp/type, leaf content verbatim, `Node`
+    /// content dropped) shared by `prepare_messages_for_client` and
+    /// `display_projector`, so REST and live paths answer identically.
     pub(crate) fn convert(
         raw: &[ChatMessage],
         _categories: Option<&ToolCategories>,
@@ -105,10 +103,8 @@ impl FakeAdapterPort {
                     .content
                     .iter()
                     .filter_map(|c| match c {
-                        mainframe_types::chat::MessageContent::Leaf(leaf) => {
-                            Some(DisplayContent::Leaf(leaf.clone()))
-                        }
-                        mainframe_types::chat::MessageContent::Node(_) => None,
+                        MessageContent::Leaf(leaf) => Some(DisplayContent::Leaf(leaf.clone())),
+                        MessageContent::Node(_) => None,
                     })
                     .collect(),
                 timestamp: m.timestamp.clone(),

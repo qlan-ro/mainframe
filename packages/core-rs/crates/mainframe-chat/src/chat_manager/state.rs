@@ -1,5 +1,6 @@
 use super::*;
 use crate::orchestration_hooks::OrchestrationSlot;
+use mainframe_types::sync::LockExt as _;
 
 pub(crate) struct ChatShared {
     pub(crate) deps: Arc<dyn ChatManagerDeps>,
@@ -20,5 +21,17 @@ impl ChatShared {
             queued_refs: Arc::new(Mutex::new(Vec::new())),
             orchestration: OrchestrationSlot::default(),
         })
+    }
+
+    /// The live registry cell for `chat_id`, if the chat is active.
+    pub(crate) fn active(&self, chat_id: &str) -> Option<Arc<Mutex<ActiveChat>>> {
+        self.active_chats.get(chat_id).map(|e| e.value().clone())
+    }
+
+    /// The chat as the live cell knows it, else as the store has it.
+    pub(crate) fn chat_or_db(&self, chat_id: &str) -> Option<Chat> {
+        self.active(chat_id)
+            .map(|c| c.lock_recover().chat.clone())
+            .or_else(|| self.deps.chats_get(chat_id))
     }
 }

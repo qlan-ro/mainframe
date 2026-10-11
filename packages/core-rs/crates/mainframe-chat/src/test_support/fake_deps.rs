@@ -5,6 +5,7 @@
 use std::sync::Arc;
 
 use mainframe_adapter_api::ForkPinRequest;
+use mainframe_services::workspace::WorktreeEntry;
 use mainframe_types::adapter::{AdapterInfo, SessionOptions};
 use mainframe_types::chat::{Chat, ChatMessage};
 use mainframe_types::events::DaemonEvent;
@@ -47,6 +48,23 @@ impl FakeDeps {
 
     pub(crate) fn events(&self) -> Vec<DaemonEvent> {
         self.emitter.events()
+    }
+    pub(crate) fn clear_events(&self) {
+        self.emitter.events.lock().unwrap().clear();
+    }
+    pub(crate) fn set_project_path(&self, path: &str) {
+        *self.paths.project_path.lock().unwrap() = Some(path.to_string());
+    }
+    pub(crate) fn set_listing(&self, entries: Vec<WorktreeEntry>) {
+        *self.workspace.listing.lock().unwrap() = entries;
+    }
+    pub(crate) fn list_calls(&self) -> usize {
+        self.workspace
+            .list_calls
+            .load(std::sync::atomic::Ordering::SeqCst)
+    }
+    pub(crate) fn dismiss_writes(&self) -> Vec<(String, String)> {
+        self.store.dismiss_writes.lock().unwrap().clone()
     }
     pub(crate) fn order(&self) -> Vec<String> {
         self.workspace.order.lock().unwrap().clone()

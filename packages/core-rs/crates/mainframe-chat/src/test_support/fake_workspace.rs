@@ -1,9 +1,11 @@
 //! The `WorkspacePort` half of [`FakeDeps`]: filesystem, git, attachment and
 //! launch seams, each recording its calls.
 
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use mainframe_adapter_api::{AdapterSession, BoxFuture};
+use mainframe_services::workspace::WorktreeEntry;
 use mainframe_types::context::SessionContext;
 use mainframe_types::seam_error::SeamError;
 
@@ -43,6 +45,10 @@ pub(crate) struct FakeWorkspacePort {
     pub(crate) dirty: Mutex<bool>,
     /// Every `remove_worktree(project_path, worktree_path, branch)` call.
     pub(crate) removed_worktrees: Mutex<Vec<(String, String, String)>>,
+    /// What `list_worktrees` answers.
+    pub(crate) listing: Mutex<Vec<WorktreeEntry>>,
+    /// How often `list_worktrees` ran.
+    pub(crate) list_calls: AtomicUsize,
 }
 
 impl WorkspacePort for FakeDeps {
@@ -177,5 +183,10 @@ impl WorkspacePort for FakeDeps {
     }
     fn extract_mentions_from_text(&self, _chat_id: &str, _text: &str) -> bool {
         *self.workspace.mentions_found.lock().unwrap()
+    }
+    fn list_worktrees<'a>(&'a self, _project_path: &'a str) -> BoxFuture<'a, Vec<WorktreeEntry>> {
+        self.workspace.list_calls.fetch_add(1, Ordering::SeqCst);
+        let entries = self.workspace.listing.lock().unwrap().clone();
+        Box::pin(async move { entries })
     }
 }

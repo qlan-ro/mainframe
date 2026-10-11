@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use dashmap::DashMap;
@@ -47,7 +47,7 @@ use crate::plan_mode_handler::PlanModeHandler;
 use crate::title_generator::derive_title_from_message;
 use crate::transcript_presence::TranscriptPresenceDeps;
 use crate::types::ActiveChat;
-use crate::worktree_offer::{OfferError, WorktreeOfferDeps, WorktreeOfferRegistry};
+use crate::worktree_offer::{OfferError, WorktreeOfferRegistry};
 use mainframe_types::worktree_offer::WorktreeSwitchOffer;
 
 mod capabilities;
@@ -58,7 +58,6 @@ mod deps;
 mod deps_config;
 mod deps_event;
 mod deps_lifecycle;
-mod deps_offer;
 mod deps_permission;
 mod deps_recovery;
 mod discard;

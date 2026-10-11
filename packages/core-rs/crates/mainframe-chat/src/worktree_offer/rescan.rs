@@ -63,10 +63,11 @@ impl WorktreeOfferRegistry {
     }
 
     async fn rescan_once(&self, chat_id: &str) {
-        let Some((project_id, chat_worktree)) = self.deps.chat_binding(chat_id) else {
+        let Some(chat) = self.shared.chat_or_db(chat_id) else {
             return;
         };
-        let Some(project_path) = self.deps.projects_get_path(&project_id) else {
+        let (project_id, chat_worktree) = (chat.project_id, chat.worktree_path);
+        let Some(project_path) = self.shared.deps.projects_get_path(&project_id) else {
             return;
         };
         let listing = self.canonical_listing(&project_path).await;
@@ -77,6 +78,7 @@ impl WorktreeOfferRegistry {
         };
         let other_chat_worktrees = self.canonical_others(&project_id, chat_id).await;
         let dismissed: HashSet<String> = self
+            .shared
             .deps
             .get_dismissed_worktrees(chat_id)
             .into_iter()
@@ -97,7 +99,7 @@ impl WorktreeOfferRegistry {
         });
 
         for event in self.apply(chat_id, outcome, &seen) {
-            self.deps.emit_event(event);
+            self.shared.emit(event);
         }
     }
 
@@ -174,7 +176,7 @@ impl WorktreeOfferRegistry {
     }
 
     async fn canonical_listing(&self, project_path: &str) -> Vec<WorktreeEntry> {
-        let entries = self.deps.list_worktrees(project_path).await;
+        let entries = self.shared.deps.list_worktrees(project_path).await;
         let mut canonical = Vec::with_capacity(entries.len());
         for entry in entries {
             canonical.push(WorktreeEntry {
@@ -185,8 +187,16 @@ impl WorktreeOfferRegistry {
         canonical
     }
 
+    /// Every *other* chat's worktree path in this project, canonicalized.
     async fn canonical_others(&self, project_id: &str, chat_id: &str) -> HashSet<String> {
-        let raw = self.deps.other_chat_worktrees(project_id, chat_id);
+        let raw: Vec<String> = self
+            .shared
+            .deps
+            .chats_list(project_id)
+            .into_iter()
+            .filter(|chat| chat.id != chat_id)
+            .filter_map(|chat| chat.worktree_path)
+            .collect();
         let mut canonical = HashSet::with_capacity(raw.len());
         for path in raw {
             canonical.insert(canon(&path).await);
