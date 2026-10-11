@@ -74,6 +74,7 @@ graph TB
     Server --> Launch
     Server --> LSP
     Server --> DB
+    Chat --> DB
     Chat --> AdapterAPI
     AdapterAPI --> Adapters
     Adapters -- "spawn/JSONL or JSON-RPC over stdio" --> CLIs
@@ -124,7 +125,7 @@ Tier 2  mainframe-services   workspace/attachment/push/todos/commands/notificati
                                claude-workflows
 
 Tier 3  mainframe-chat       ChatManager: per-chat session orchestration
-                             (depends on adapter-api, not the concrete adapter crates)
+                             (depends on adapter-api and db, not the concrete adapter crates)
 
 Tier 4  mainframe-server     axum HTTP app + WebSocket layer — aggregates nearly
                              every crate above (chat, all three adapters, plugins,
@@ -142,7 +143,7 @@ Tier 5  mainframe-daemon     bin: boots everything mainframe-server aggregates
 |---|---|
 | `mainframe-types` | Shared serde types — one `.rs` module per type family (`chat`, `events`, `adapter`, `display`, `git`, `launch`, `lsp`, `plugin`, `settings`, `skill`, …). The Rust counterpart of `packages/types`. |
 | `mainframe-runtime` | Process-level concerns: config load/merge (`$MAINFRAME_DATA_DIR`, `config.json`), logging setup, auth-secret handling, and login-shell `PATH` resolution (threaded explicitly into every child spawn — see [Boot sequence](#boot-sequence-and-process-ownership) for why). |
-| `mainframe-db` | `DatabaseManager`, the migration runner, and repositories for `projects`, `chats`, `settings`, `devices`, `tags`, `chat_tags`. Synchronous `rusqlite` on one connection, matching the synchronous `better-sqlite3` API it replaced; async callers reach it through a `spawn_blocking`-backed `Db` handle in `mainframe-server::db`. |
+| `mainframe-db` | `DatabaseManager`, the migration runner, and repositories for `projects`, `chats`, `settings`, `devices`, `tags`, `chat_tags`. Synchronous `rusqlite` on one connection, matching the synchronous `better-sqlite3` API it replaced; callers reach it through `mainframe-db::actor::SqliteActor`, exposed by `mainframe-server::db` and the chat storage capability. |
 | `mainframe-git` | The git subprocess primitive, porcelain-output parsers, `GitService`, and a per-project async lock so concurrent git commands on one repo serialize. |
 | `mainframe-display` | The adapter-agnostic half of the message pipeline: tool categorization/grouping, unified-diff parsing, content truncation. Claude-specific message shapes live in `mainframe-adapter-claude` instead. |
 | `mainframe-background-tasks` | Tracks long-running background tasks (spool files on disk), process-group kill, and liveness reconciliation after a daemon restart. |
@@ -158,7 +159,7 @@ Tier 5  mainframe-daemon     bin: boots everything mainframe-server aggregates
 | `mainframe-adapter-claude` | The Claude CLI integration: spawns `claude` with `stream-json` I/O, parses assistant/tool/result events, handles `control_request` permission prompts, reads JSONL session history for resume. |
 | `mainframe-adapter-codex` | The Codex CLI integration: spawns Codex's app-server and speaks its JSON-RPC framing, including approval handling and rollout-file history. |
 | `mainframe-adapter-mock` | A fixture-replay adapter with no real CLI — used by the E2E suite and local demos to produce deterministic adapter output. |
-| `mainframe-chat` | `ChatManager` — the per-chat state machine tying an `AdapterSession` to cached display messages, the permission queue, context tracking, and config. One `Arc<Mutex<ChatState>>` per chat. |
+| `mainframe-chat` | `ChatManager` — the per-chat state machine tying an `AdapterSession` to cached display messages, the permission queue, context tracking, and config. One `Arc<Mutex<ActiveChat>>` per chat. |
 | `mainframe-server` | The axum HTTP app, the WebSocket connection/broadcast layer, the response-envelope helpers, and every HTTP route (`src/routes/*.rs`) — chats, projects, git, launch, automations, skills, quota, tags, worktrees, and more. This is the crate `mainframe-daemon::main` wires together. Full route/message catalog: [`docs/API-REFERENCE.md`](API-REFERENCE.md). |
 | `mainframe-daemon` | The `main.rs` binary: boots config → auth secret → DB → background-task tracker → adapter registry (Claude + Codex, static-seeded, then refreshed) → `ChatManager` → plugins → LSP → services → the HTTP/WS server, then runs a post-bind stray-child sweep, background-task reconciliation, and a liveness scheduler, with graceful `SIGINT`/`SIGTERM` shutdown. |
 

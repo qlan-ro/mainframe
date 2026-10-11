@@ -2,8 +2,6 @@
 '@qlan-ro/mainframe-app-tauri': patch
 ---
 
-Explain when a worktree was created but attaching the chat failed, and warn that some history files may already have moved.
+Keep chat completion, send, and teardown events flowing when storage fails, and restart chats on failed worktree or configuration changes. Report a created worktree's path when attaching it fails; keep notifications ordered with the turn that produced them.
 
-Stop launch processes and public tunnels before deleting their worktree, including requests through path aliases. Read notification preferences without blocking chat events.
-
-Report chat database failures instead of returning empty lists, missing chats, or an unsaved newly created chat.
+Stop launches and tunnels before deleting worktrees, including unbound path aliases, then publish status from the live chat. Imported chat creation and title updates now both include display status, running state, and missing-directory fields. Chat list/get requests return 500 on storage failure, failed creation returns an error instead of a stub, and fork snapshot cleanup stops on a database failure.
