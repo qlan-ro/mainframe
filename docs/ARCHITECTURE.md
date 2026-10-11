@@ -136,6 +136,8 @@ Tier 5  mainframe-daemon     bin: boots everything mainframe-server aggregates
 
 `mainframe-types` is the only crate every other crate can assume is present.
 
+Claude-specific project layout and transcript relocation (including sidechains) live in `mainframe-adapter-claude::layout`.
+
 ### What each crate owns
 
 | Crate | Responsibility |
@@ -144,7 +146,7 @@ Tier 5  mainframe-daemon     bin: boots everything mainframe-server aggregates
 | `mainframe-runtime` | Process-level concerns: config load/merge (`$MAINFRAME_DATA_DIR`, `config.json`), logging setup, auth-secret handling, and login-shell `PATH` resolution (threaded explicitly into every child spawn — see [Boot sequence](#boot-sequence-and-process-ownership) for why). |
 | `mainframe-db` | `DatabaseManager`, the migration runner, and repositories for `projects`, `chats`, `settings`, `devices`, `tags`, `chat_tags`. Synchronous `rusqlite` on one connection, matching the synchronous `better-sqlite3` API it replaced; callers reach it through `mainframe-db::actor::SqliteActor`, exposed by `mainframe-server::db` and the chat storage capability. |
 | `mainframe-git` | The git subprocess primitive, porcelain-output parsers, `GitService`, and a per-project async lock so concurrent git commands on one repo serialize. |
-| `mainframe-display` | Full and incremental message projection, presentation provenance, tool grouping, unified-diff parsing, and content truncation. Adapter-provided `ToolResultDecoders` interpret tool answers and command tags. |
+| `mainframe-display` | Full and incremental message projection, presentation provenance, tool grouping, unified-diff parsing, and content truncation. Adapter-provided `ToolResultDecoders` interpret tool answers and command tags, selected by each transcript segment’s adapter. |
 | `mainframe-background-tasks` | Tracks long-running background tasks (spool files on disk), process-group kill, and liveness reconciliation after a daemon restart. |
 | `mainframe-claude-workflows` | Server-side state for Claude's `/workflows` runs — seeded from `task_started`, updated via `task_progress`, reconciled against on-disk `wf_<runId>.json` records. |
 | `mainframe-launch` | Runs `.mainframe/launches.json` dev-server/sandbox processes per project and manages `cloudflared` tunnels for exposing them (used by the mobile companion). |
