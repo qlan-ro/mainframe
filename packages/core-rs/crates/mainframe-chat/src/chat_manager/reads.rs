@@ -150,28 +150,45 @@ impl ChatManager {
         self.emit_chat_updated(chat_id);
     }
 
-    /// Re-emit `chat.updated` for every non-archived chat bound to `worktree_path`
-    /// so clients pick up the new `worktreeMissing` flag.
-    pub async fn notify_worktree_deleted(&self, project_id: &str, worktree_path: &str) {
-        if let Some(stop) = self
-            .shared
-            .deps
-            .stop_launch_processes(project_id, worktree_path)
-        {
-            stop.await;
+    pub async fn stop_worktree_services(
+        &self,
+        project_id: &str,
+        worktree_path: &str,
+    ) -> Vec<String> {
+        let canonical = tokio::fs::canonicalize(worktree_path).await.ok();
+        let mut paths = std::collections::HashSet::from([worktree_path.to_string()]);
+        if let Some(path) = &canonical {
+            paths.insert(path.to_string_lossy().into_owned());
         }
-        if let Some(stop) = self
-            .shared
-            .deps
-            .stop_scope_tunnels(project_id, worktree_path)
-        {
-            stop.await;
-        }
+        let mut chats = Vec::new();
         for chat in self.shared.deps.chats_list_all() {
-            if chat.project_id == project_id && chat.worktree_path.as_deref() == Some(worktree_path)
-            {
-                self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
+            if chat.project_id != project_id {
+                continue;
             }
+            let Some(path) = chat.worktree_path.as_deref() else {
+                continue;
+            };
+            let matches = std::path::Path::new(path) == std::path::Path::new(worktree_path)
+                || (canonical.is_some() && tokio::fs::canonicalize(path).await.ok() == canonical);
+            if matches {
+                paths.insert(path.to_string());
+                chats.push(chat.id);
+            }
+        }
+        for path in paths {
+            if let Some(stop) = self.shared.deps.stop_launch_processes(project_id, &path) {
+                stop.await;
+            }
+            if let Some(stop) = self.shared.deps.stop_scope_tunnels(project_id, &path) {
+                stop.await;
+            }
+        }
+        chats
+    }
+
+    pub async fn notify_worktree_deleted(&self, project_id: &str, worktree_path: &str) {
+        for chat_id in self.stop_worktree_services(project_id, worktree_path).await {
+            self.emit_chat_updated(&chat_id);
         }
     }
 

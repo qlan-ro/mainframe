@@ -266,10 +266,13 @@ async fn validate_and_delete_worktree(
         .await;
     }
 
-    remove_worktree(project_path, worktree_path, &resolved_branch).await;
-    {
-        let cm = &ctx.chat.chat_manager;
-        cm.notify_worktree_deleted(project_id, worktree_path).await;
+    let cm = &ctx.chat.chat_manager;
+    let affected = cm
+        .stop_worktree_services(project_id, &real_worktree_path)
+        .await;
+    remove_worktree(project_path, &real_worktree_path, &resolved_branch).await;
+    for chat_id in affected {
+        cm.emit_chat_updated(&chat_id);
     }
     Ok(())
 }
