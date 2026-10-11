@@ -80,30 +80,34 @@ impl SessionSinkImpl {
         let Some(attention) = normalize_attention_body(message) else {
             return;
         };
-        if !self.shared.deps.notify_attention_request() {
-            return;
-        }
-        let admitted = self.attention_dedupe.lock_recover().admit(
-            &self.chat_id,
-            &attention.dedupe_key,
-            Instant::now(),
+        let shared = self.shared.clone();
+        let chat_id = self.chat_id.clone();
+        let dedupe = self.attention_dedupe.clone();
+        self.shared.when_notification_enabled(
+            crate::chat_manager::notifications::NotificationGate::Attention,
+            move || {
+                let admitted =
+                    dedupe
+                        .lock_recover()
+                        .admit(&chat_id, &attention.dedupe_key, Instant::now());
+                if !admitted {
+                    return;
+                }
+                shared.emit(DaemonEvent::ChatNotification {
+                    chat_id: chat_id.clone(),
+                    title: "Claude needs your attention".to_string(),
+                    body: attention.body.clone(),
+                    level: ChatNotificationLevel::Success,
+                    kind: Some(ChatNotificationKind::AttentionRequest),
+                });
+                shared.deps.send_push(PushOut {
+                    chat_id: chat_id.clone(),
+                    title: "Claude needs your attention".to_string(),
+                    body: attention.body,
+                    push_type: "attention_request".to_string(),
+                    priority: "high".to_string(),
+                });
+            },
         );
-        if !admitted {
-            return;
-        }
-        self.shared.emit(DaemonEvent::ChatNotification {
-            chat_id: self.chat_id.clone(),
-            title: "Claude needs your attention".to_string(),
-            body: attention.body.clone(),
-            level: ChatNotificationLevel::Success,
-            kind: Some(ChatNotificationKind::AttentionRequest),
-        });
-        self.shared.deps.send_push(PushOut {
-            chat_id: self.chat_id.clone(),
-            title: "Claude needs your attention".to_string(),
-            body: attention.body,
-            push_type: "attention_request".to_string(),
-            priority: "high".to_string(),
-        });
     }
 }

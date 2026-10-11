@@ -17,7 +17,7 @@ use mainframe_types::background_task::{
 };
 use mainframe_types::chat::{
     Chat, ChatMessage, ChatMessageType, ChatStatus, DisplayStatus, MessageContent, NewChat,
-    ProcessState, Project, QueuedMessageRef, TodoItem,
+    ProcessState, QueuedMessageRef, TodoItem,
 };
 use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::content::LeafContent;
@@ -31,8 +31,8 @@ use tracing::info;
 
 use delivery::Delivery;
 
-use crate::config_manager::{ChatConfigManager, ConfigError, ConfigManagerDeps};
-use crate::degraded_recovery::{DegradedRecoveryDeps, DegradedRecoveryError, RecoverySync};
+use crate::config_manager::{ChatConfigManager, ConfigError};
+use crate::degraded_recovery::DegradedRecoveryError;
 use crate::event_handler::{EventHandler, PushOut};
 use crate::external_session_service::{ExternalSessionDeps, ExternalSessionService};
 use crate::fork::{PendingForkState, fork_title};
@@ -45,7 +45,6 @@ use crate::permission_manager::PermissionManager;
 use crate::plan_mode_actions::{ChatPlanModeCtx, PlanHost};
 use crate::plan_mode_handler::PlanModeHandler;
 use crate::title_generator::derive_title_from_message;
-use crate::transcript_presence::TranscriptPresenceDeps;
 use crate::types::ActiveChat;
 use crate::worktree_offer::{OfferError, WorktreeOfferRegistry};
 use mainframe_types::worktree_offer::WorktreeSwitchOffer;
@@ -55,8 +54,6 @@ mod config_api;
 pub(crate) mod construct;
 mod delivery;
 mod deps;
-mod deps_config;
-mod deps_recovery;
 mod discard;
 mod enrich;
 mod errors;
@@ -67,16 +64,18 @@ mod handoff_resolve;
 mod handoff_send;
 mod history;
 mod lifecycle_api;
+pub(crate) mod notifications;
 mod plan_host;
 mod reads;
 mod send;
 mod send_entry;
 mod send_queue;
-mod shared;
+pub(crate) mod shared;
 mod side_chat;
 mod state;
 mod steer;
 mod switch_api;
+mod transcript_refresh;
 mod update;
 
 pub use capabilities::{AdapterPort, ChatStore, EventEmitter, ProjectPaths, Pusher, WorkspacePort};
@@ -95,7 +94,6 @@ pub use update::ProcessedAttachments;
 // `ForkError` above (the `fork_to_worktree` action).
 pub use crate::fork::{AdapterForkInfo, ForkChatError, ForkCreateInput, ForkPoint};
 
-use deps_config::CmDeps;
 pub(crate) use state::ChatShared;
 // `enrich_chat`/`is_working` have no direct caller left in this file — every
 // caller (enrich.rs, construct.rs) reaches them through this re-import via its
@@ -116,7 +114,7 @@ pub struct ChatManager {
     event_handler: Arc<EventHandler>,
     lifecycle: Arc<ChatLifecycleManager>,
     permission_handler: ChatPermissionHandler,
-    config: ChatConfigManager<CmDeps>,
+    config: ChatConfigManager,
     idle_scanner: Mutex<crate::idle_scanner::IdleSessionScanner>,
     external_sessions: Option<Arc<dyn ExternalSessionFacade>>,
     worktree_offers: Arc<WorktreeOfferRegistry>,

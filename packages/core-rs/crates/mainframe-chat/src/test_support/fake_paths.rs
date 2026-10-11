@@ -1,6 +1,7 @@
 //! The `ProjectPaths` half of [`FakeDeps`]: project path lookups and the
 //! daemon-owned directories, all configurable.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashSet;
 use std::sync::Mutex;
 
@@ -47,7 +48,7 @@ impl FakeProjectPaths {}
 impl FakeProjectPaths {
     pub(crate) fn set_present_paths(&self, paths: &[&str]) {
         let paths = paths.iter().map(|path| (*path).to_string()).collect();
-        *self.present_paths.lock().unwrap() = Some(paths);
+        *self.present_paths.lock_recover() = Some(paths);
     }
 }
 
@@ -60,15 +61,14 @@ fn temp_default(name: &str) -> String {
 
 impl ProjectPaths for FakeDeps {
     fn projects_get_path(&self, _project_id: &str) -> Option<String> {
-        self.paths.project_path.lock().unwrap().clone()
+        self.paths.project_path.lock_recover().clone()
     }
     fn projects_remove(&self, project_id: &str) -> Result<(), SeamError> {
         self.paths
             .project_removed
-            .lock()
-            .unwrap()
+            .lock_recover()
             .push(project_id.to_string());
-        match self.paths.fail_project_remove.lock().unwrap().clone() {
+        match self.paths.fail_project_remove.lock_recover().clone() {
             Some(msg) => Err(SeamError::msg(msg)),
             None => Ok(()),
         }
@@ -76,32 +76,28 @@ impl ProjectPaths for FakeDeps {
     fn path_exists(&self, path: &str) -> bool {
         self.paths
             .present_paths
-            .lock()
-            .unwrap()
+            .lock_recover()
             .as_ref()
             .is_none_or(|present| present.contains(path))
     }
     fn ensure_dir<'a>(&'a self, path: &'a str) -> BoxFuture<'a, ()> {
         self.paths
             .ensure_dir_calls
-            .lock()
-            .unwrap()
+            .lock_recover()
             .push(path.to_string());
         Box::pin(async {})
     }
     fn fork_snapshots_dir(&self) -> String {
         self.paths
             .fork_snapshots_dir
-            .lock()
-            .unwrap()
+            .lock_recover()
             .clone()
             .unwrap_or_else(|| temp_default("mainframe-fork-snapshots-test-default"))
     }
     fn history_cache_dir(&self) -> String {
         self.paths
             .history_cache_dir
-            .lock()
-            .unwrap()
+            .lock_recover()
             .clone()
             .unwrap_or_else(|| temp_default("mainframe-history-cache-test-default"))
     }

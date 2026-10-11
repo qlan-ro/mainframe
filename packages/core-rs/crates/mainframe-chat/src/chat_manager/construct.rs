@@ -9,7 +9,7 @@ pub(crate) struct Collaborators {
     pub(crate) event_handler: Arc<EventHandler>,
     pub(crate) lifecycle: Arc<ChatLifecycleManager>,
     pub(crate) permission_handler: ChatPermissionHandler,
-    pub(super) config: ChatConfigManager<CmDeps>,
+    pub(super) config: ChatConfigManager,
     pub(crate) worktree_offers: Arc<WorktreeOfferRegistry>,
 }
 
@@ -26,7 +26,8 @@ impl Collaborators {
             worktree_offers.clone(),
         ));
         let permission_handler = plan_host::build(shared, &event_handler, &lifecycle, self_ref);
-        let config = deps_config::build(shared, &lifecycle, &worktree_offers);
+        let config =
+            ChatConfigManager::new(shared.clone(), lifecycle.clone(), worktree_offers.clone());
         Self {
             event_handler,
             lifecycle,
@@ -89,11 +90,15 @@ impl ChatManager {
         }
     }
 
-    /// Inject the `ExternalSessionService` built from the concrete deps type
-    /// (`getExternalSessionService()`'s backing instance). Called once at boot,
-    /// before the manager is shared behind an `Arc`.
-    pub fn with_external_sessions(mut self, service: Arc<dyn ExternalSessionFacade>) -> Self {
-        self.external_sessions = Some(service);
+    /// Build external-session scans over the manager's shared chat state.
+    pub fn with_external_sessions<D: ExternalSessionDeps + 'static>(
+        mut self,
+        deps: Arc<D>,
+    ) -> Self {
+        self.external_sessions = Some(Arc::new(ExternalSessionService::new(
+            deps,
+            self.shared.clone(),
+        )));
         self
     }
 

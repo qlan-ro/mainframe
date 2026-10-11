@@ -7,6 +7,9 @@ publish.workspace = true
 [lints]
 workspace = true
 
+[features]
+test-support = ["mainframe-runtime/test-support"]
+
 [dependencies]
 tokio = { workspace = true }
 dashmap = { workspace = true }

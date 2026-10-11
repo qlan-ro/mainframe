@@ -1,6 +1,7 @@
 //! The `AdapterPort` half of [`FakeDeps`]: sessions, titles, fork pins and
 //! transcript lookups, all scripted by the test.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, Mutex};
@@ -31,6 +32,7 @@ pub(crate) enum PinFailure {
 pub(crate) struct FakeAdapterPort {
     /// `locate_transcript`'s answer (`None` = cannot determine).
     pub(crate) transcript_present: Mutex<Option<bool>>,
+    pub(crate) transcript_location: Mutex<Option<TranscriptLocation>>,
     /// Every `(adapter_id, session_id)` `locate_transcript` was asked about.
     pub(crate) locate_calls: Mutex<Vec<(String, String)>>,
     /// When `Some`, `create_session` yields a `FakeSession` whose
@@ -79,13 +81,14 @@ pub(crate) struct FakeAdapterPort {
     pub(crate) resolved_tuning: Mutex<Option<ResolvedTuning>>,
     /// When set, backs `display_projector` instead of the 1:1 echo.
     pub(crate) projector: Mutex<Option<ProjectorFn>>,
+    pub(crate) projector_factory: Option<fn() -> Box<dyn mainframe_display::DisplayProjector>>,
     /// Literal tags `strip_command_tags` removes; empty leaves text untouched.
     pub(crate) strip_tags: Mutex<Vec<String>>,
 }
 
 impl AdapterPort for FakeDeps {
     fn get_tool_categories(&self, _chat_id: &str) -> Option<ToolCategories> {
-        self.adapters.tool_categories.lock().unwrap().clone()
+        self.adapters.tool_categories.lock_recover().clone()
     }
     fn prepare_messages_for_client(
         &self,
@@ -95,7 +98,10 @@ impl AdapterPort for FakeDeps {
         FakeAdapterPort::convert(raw, categories)
     }
     fn display_projector(&self) -> Box<dyn mainframe_display::DisplayProjector> {
-        let custom = self.adapters.projector.lock().unwrap().clone();
+        if let Some(factory) = self.adapters.projector_factory {
+            return factory();
+        }
+        let custom = self.adapters.projector.lock_recover().clone();
         Box::new(mainframe_display::FullRebuildProjector::new(
             move |raw, overlay, categories| {
                 if let Some(project) = &custom {
@@ -116,8 +122,7 @@ impl AdapterPort for FakeDeps {
     fn strip_command_tags(&self, text: &str) -> String {
         self.adapters
             .strip_tags
-            .lock()
-            .unwrap()
+            .lock_recover()
             .iter()
             .fold(text.to_string(), |acc, tag| acc.replace(tag, ""))
     }
@@ -127,48 +132,43 @@ impl AdapterPort for FakeDeps {
         session_id: &str,
         cwd: &str,
     ) -> Option<String> {
-        self.adapters.transcript_lookups.lock().unwrap().push((
+        self.adapters.transcript_lookups.lock_recover().push((
             adapter_id.to_string(),
             session_id.to_string(),
             cwd.to_string(),
         ));
-        self.adapters.transcript_path.lock().unwrap().clone()
+        self.adapters.transcript_path.lock_recover().clone()
     }
     fn create_session(
         &self,
         _adapter_id: &str,
         options: SessionOptions,
     ) -> Option<Arc<dyn AdapterSession>> {
-        self.adapters.created_sessions.lock().unwrap().push(options);
-        if let Some(session) = self.adapters.session_to_return.lock().unwrap().clone() {
+        self.adapters.created_sessions.lock_recover().push(options);
+        if let Some(session) = self.adapters.session_to_return.lock_recover().clone() {
             return Some(session);
         }
-        self.adapters
-            .history
-            .lock()
-            .unwrap()
-            .clone()
-            .map(|history| {
-                Arc::new(FakeSession {
-                    history,
-                    history_loads: Some(Arc::clone(&self.adapters.history_loads)),
-                    history_sources: self.adapters.history_sources.lock().unwrap().clone(),
-                    spawn_ok: *self.adapters.spawn_ok.lock().unwrap(),
-                    ..Default::default()
-                }) as Arc<dyn AdapterSession>
-            })
+        self.adapters.history.lock_recover().clone().map(|history| {
+            Arc::new(FakeSession {
+                history,
+                history_loads: Some(Arc::clone(&self.adapters.history_loads)),
+                history_sources: self.adapters.history_sources.lock_recover().clone(),
+                spawn_ok: *self.adapters.spawn_ok.lock_recover(),
+                ..Default::default()
+            }) as Arc<dyn AdapterSession>
+        })
     }
     fn create_plan_mode_handler(
         &self,
         _adapter_id: &str,
     ) -> Option<Arc<dyn PlanModeActionHandler>> {
-        self.adapters.plan_handler.lock().unwrap().clone()
+        self.adapters.plan_handler.lock_recover().clone()
     }
     fn scan_loaded_history<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, ()> {
         Box::pin(async {})
     }
     fn resolve_tuning<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, Option<ResolvedTuning>> {
-        let resolved = self.adapters.resolved_tuning.lock().unwrap().clone();
+        let resolved = self.adapters.resolved_tuning.lock_recover().clone();
         Box::pin(async move { resolved })
     }
     fn apply_codex_provider_tuning(&self, _session: &Arc<dyn AdapterSession>) {}
@@ -180,11 +180,10 @@ impl AdapterPort for FakeDeps {
     ) -> BoxFuture<'a, Option<String>> {
         self.adapters
             .generate_title_calls
-            .lock()
-            .unwrap()
+            .lock_recover()
             .push(content.to_string());
-        let gate = self.adapters.title_gate.lock().unwrap().clone();
-        let result = self.adapters.generated_title.lock().unwrap().clone();
+        let gate = self.adapters.title_gate.lock_recover().clone();
+        let result = self.adapters.generated_title.lock_recover().clone();
         Box::pin(async move {
             if let Some(gate) = gate {
                 gate.notified().await;
@@ -194,7 +193,7 @@ impl AdapterPort for FakeDeps {
     }
     fn on_provider_quota(&self, adapter_id: &str, quota: ProviderQuota) {
         // Mirror DaemonChatDeps: session-pushed quota sparse-merges (Push).
-        if let Some(q) = self.adapters.quota.lock().unwrap().as_ref() {
+        if let Some(q) = self.adapters.quota.lock_recover().as_ref() {
             q.ingest(adapter_id, quota, IngestMode::Push);
         }
     }
@@ -207,10 +206,12 @@ impl AdapterPort for FakeDeps {
     ) -> BoxFuture<'a, Option<TranscriptLocation>> {
         self.adapters
             .locate_calls
-            .lock()
-            .unwrap()
+            .lock_recover()
             .push((adapter_id.to_string(), session_id.to_string()));
-        let present = *self.adapters.transcript_present.lock().unwrap();
+        if let Some(location) = self.adapters.transcript_location.lock_recover().clone() {
+            return Box::pin(async move { Some(location) });
+        }
+        let present = *self.adapters.transcript_present.lock_recover();
         let path = session_file_path
             .map(str::to_string)
             .unwrap_or_else(|| format!("/transcripts/{session_id}.jsonl"));
@@ -225,18 +226,13 @@ impl AdapterPort for FakeDeps {
         })
     }
     fn adapter_supports_no_persistence(&self, _adapter_id: &str) -> bool {
-        *self.adapters.no_persistence_capability.lock().unwrap()
+        *self.adapters.no_persistence_capability.lock_recover()
     }
     fn adapter_fork_info(&self, adapter_id: &str) -> AdapterForkInfo {
         AdapterForkInfo {
             name: adapter_id.to_string(),
-            fork: *self.adapters.fork_capable.lock().unwrap(),
-            unavailable_reason: self
-                .adapters
-                .fork_unavailable_reason
-                .lock()
-                .unwrap()
-                .clone(),
+            fork: *self.adapters.fork_capable.lock_recover(),
+            unavailable_reason: self.adapters.fork_unavailable_reason.lock_recover().clone(),
         }
     }
     fn pin_fork_point<'a>(
@@ -244,11 +240,10 @@ impl AdapterPort for FakeDeps {
         _adapter_id: &'a str,
         request: ForkPinRequest,
     ) -> BoxFuture<'a, Result<ForkSource, ForkPinError>> {
-        let failure = self.adapters.pin_failure.lock().unwrap().clone();
+        let failure = self.adapters.pin_failure.lock_recover().clone();
         self.adapters
             .pin_requests
-            .lock()
-            .unwrap()
+            .lock_recover()
             .push(request.clone());
         Box::pin(async move {
             match failure {
@@ -269,8 +264,7 @@ impl AdapterPort for FakeDeps {
     fn adapter_info(&self, adapter_id: &str) -> Option<AdapterInfo> {
         self.adapters
             .adapter_infos
-            .lock()
-            .unwrap()
+            .lock_recover()
             .get(adapter_id)
             .cloned()
     }

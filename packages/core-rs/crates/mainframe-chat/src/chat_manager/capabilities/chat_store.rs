@@ -1,6 +1,30 @@
 use super::*;
+use crate::config_transcripts::OwnedNativeSession;
 
 pub trait ChatStore: Send + Sync {
+    fn owned_native_sessions(&self, chat_id: &str) -> Vec<OwnedNativeSession> {
+        let Some(layout) = self.segment_store().and_then(|s| s.layout(chat_id)) else {
+            return Vec::new();
+        };
+        layout
+            .natives
+            .into_iter()
+            .filter(|n| n.borrowed_from_chat_id.is_none())
+            .filter_map(|n| {
+                Some(OwnedNativeSession {
+                    session_id: n.native_session_id?,
+                    native_ref: n.id,
+                    adapter_id: n.adapter_id,
+                })
+            })
+            .collect()
+    }
+    fn set_native_session_file_path(&self, native_ref: &str, path: &str) {
+        if let Some(store) = self.segment_store() {
+            store.set_session_file_path(native_ref, path);
+        }
+    }
+
     fn chats_get(&self, id: &str) -> Option<Chat>;
 
     fn chats_create(&self, new_chat: &NewChat) -> Chat;

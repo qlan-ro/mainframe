@@ -1,121 +1,108 @@
 use super::*;
+use crate::config_transcripts::OwnedNativeSession;
 use crate::test_support::{FakeSession, test_chat};
 use mainframe_types::chat::Chat;
-use mainframe_types::settings_kv::MemorySettings;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use mainframe_types::chat::Project;
 
-struct FakeDeps {
+struct Setup {
     cell: Arc<Mutex<ActiveChat>>,
-    updates: Mutex<Vec<ChatPatch>>,
-    events: Mutex<Vec<DaemonEvent>>,
-    apply_tuning_calls: AtomicUsize,
     project: Option<Project>,
-    start_chat_calls: AtomicUsize,
-    stop_chat_calls: AtomicUsize,
-    stop_launch_calls: Mutex<Vec<(String, String)>>,
-    binding_changed: Mutex<Vec<Option<String>>>,
     move_files_error: Option<String>,
-    settings: MemorySettings,
     owned: Vec<OwnedNativeSession>,
 }
-
-impl FakeDeps {
+impl Setup {
     fn new(cell: Arc<Mutex<ActiveChat>>) -> Self {
         Self {
             cell,
-            updates: Mutex::new(Vec::new()),
-            events: Mutex::new(Vec::new()),
-            apply_tuning_calls: AtomicUsize::new(0),
             project: None,
-            start_chat_calls: AtomicUsize::new(0),
-            stop_chat_calls: AtomicUsize::new(0),
-            stop_launch_calls: Mutex::new(Vec::new()),
-            binding_changed: Mutex::new(Vec::new()),
             move_files_error: None,
-            settings: MemorySettings::default(),
             owned: Vec::new(),
         }
     }
-
     fn with_project(cell: Arc<Mutex<ActiveChat>>, project: Project) -> Self {
         Self {
             project: Some(project),
             ..Self::new(cell)
         }
     }
-
     fn failing_move(cell: Arc<Mutex<ActiveChat>>, project: Project, error: &str) -> Self {
         Self {
-            move_files_error: Some(error.to_string()),
+            move_files_error: Some(error.into()),
             ..Self::with_project(cell, project)
         }
     }
 }
 
-impl ConfigManagerDeps for FakeDeps {
-    fn owned_native_sessions(&self, _: &str) -> Vec<OwnedNativeSession> {
-        self.owned.clone()
+struct Harness {
+    config: ChatConfigManager,
+    deps: Arc<crate::test_support::FakeDeps>,
+}
+impl std::ops::Deref for Harness {
+    type Target = ChatConfigManager;
+    fn deref(&self) -> &Self::Target {
+        &self.config
+    }
+}
+impl Harness {
+    fn new(setup: Setup) -> Self {
+        let chat = setup.cell.lock().unwrap().chat.clone();
+        let deps = crate::test_support::FakeDeps::with_chats(vec![chat.clone()]);
+        deps.set_project_path(
+            setup
+                .project
+                .as_ref()
+                .map(|p| p.path.as_str())
+                .unwrap_or("/tmp"),
+        );
+        deps.set_spawn_ok(true);
+        *deps.workspace.has_launches.lock().unwrap() = true;
+        *deps.store.owned_sessions.lock().unwrap() = setup.owned;
+        *deps.workspace.move_files_error.lock().unwrap() = setup.move_files_error;
+        let shared = crate::chat_manager::ChatShared::new(deps.clone());
+        shared.active_chats.insert(chat.id, setup.cell);
+        let offers = Arc::new(crate::worktree_offer::WorktreeOfferRegistry::new(
+            shared.clone(),
+        ));
+        let events = Arc::new(crate::event_handler::EventHandler::new(
+            shared.clone(),
+            offers.clone(),
+        ));
+        let lifecycle = Arc::new(crate::lifecycle_manager::ChatLifecycleManager::new(
+            shared.clone(),
+            events,
+            offers.clone(),
+        ));
+        Self {
+            config: ChatConfigManager::new(shared, lifecycle, offers),
+            deps,
+        }
+    }
+    fn updates(&self) -> Vec<ChatPatch> {
+        self.deps
+            .store
+            .updates
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(_, p)| p.clone())
+            .filter(|p| {
+                p.model.is_some()
+                    || p.permission_mode.is_some()
+                    || p.plan_mode.is_some()
+                    || p.adapter_id.is_some()
+                    || p.worktree_path.is_some()
+            })
+            .collect()
+    }
+    fn starts(&self) -> usize {
+        self.deps.created_sessions().len()
     }
 
-    fn get_active_chat(&self, _chat_id: &str) -> Option<Arc<Mutex<ActiveChat>>> {
-        Some(self.cell.clone())
-    }
-    fn chats_update(&self, _chat_id: &str, updates: &ChatPatch) {
-        self.updates.lock().unwrap().push(updates.clone());
-    }
-    fn projects_get(&self, _project_id: &str) -> Option<Project> {
-        self.project.clone()
-    }
-    fn settings(&self) -> &dyn SettingsKv {
-        &self.settings
-    }
-    fn emit_event(&self, event: DaemonEvent) {
-        self.events.lock().unwrap().push(event);
-    }
-    fn start_chat<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, ()> {
-        self.start_chat_calls.fetch_add(1, Ordering::SeqCst);
-        Box::pin(async {})
-    }
-    fn stop_chat<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, ()> {
-        self.stop_chat_calls.fetch_add(1, Ordering::SeqCst);
-        Box::pin(async {})
-    }
-    fn apply_tuning<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, ()> {
-        self.apply_tuning_calls.fetch_add(1, Ordering::SeqCst);
-        Box::pin(async {})
-    }
-    fn stop_launch_processes<'a>(
-        &'a self,
-        project_id: &'a str,
-        project_path: &'a str,
-    ) -> Option<BoxFuture<'a, ()>> {
-        self.stop_launch_calls
-            .lock()
-            .unwrap()
-            .push((project_id.to_string(), project_path.to_string()));
-        Some(Box::pin(async {}))
-    }
-    fn take_starting_chat<'a>(&'a self, _chat_id: &'a str) -> Option<BoxFuture<'a, ()>> {
-        None
-    }
-    fn on_binding_changed(&self, _chat_id: &str, worktree_path: Option<&str>) {
-        self.binding_changed
-            .lock()
-            .unwrap()
-            .push(worktree_path.map(|s| s.to_string()));
-    }
-    fn move_claude_session_files<'a>(
-        &'a self,
-        _session_id: &'a str,
-        _old_dir: &'a str,
-        _new_dir: &'a str,
-    ) -> BoxFuture<'a, Result<(), SessionFilesError>> {
-        Box::pin(async move {
-            match &self.move_files_error {
-                Some(err) => Err(std::io::Error::other(err.clone()).into()),
-                None => Ok(()),
-            }
-        })
+    fn bindings(&self) -> Vec<Option<String>> {
+        self.updates()
+            .into_iter()
+            .filter_map(|p| p.worktree_path)
+            .collect()
     }
 }
 

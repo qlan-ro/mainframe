@@ -696,7 +696,7 @@ impl ChatLifecycleManager {
             .generate_title(&adapter_id, content, &binary)
             .await
         {
-            self.apply_generated_title(chat_id, &cell, title);
+            self.apply_generated_title(&cell, title);
         } else {
             debug!(
                 chat_id,
@@ -707,21 +707,19 @@ impl ChatLifecycleManager {
         }
     }
 
-    fn apply_generated_title(&self, chat_id: &str, cell: &Arc<Mutex<ActiveChat>>, title: String) {
+    fn apply_generated_title(&self, cell: &Arc<Mutex<ActiveChat>>, title: String) {
         let chat = {
             let mut guard = cell.lock_recover();
             guard.chat.title = Some(title.clone());
             guard.chat.clone()
         };
-        self.shared.deps.chats_update(
-            chat_id,
+        self.shared.update_and_emit(
+            chat,
             &ChatPatch {
                 title: Some(title),
                 ..Default::default()
             },
         );
-        self.shared
-            .emit(DaemonEvent::ChatUpdated { chat, reason: None });
     }
 
     /// The no-persistence context-loss transition. No-op unless

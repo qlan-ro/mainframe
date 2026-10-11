@@ -1,6 +1,7 @@
 //! The `ChatStore` half of [`FakeDeps`]: an in-memory chat table that records
 //! every write.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -19,6 +20,8 @@ use crate::test_support::test_chat;
 
 #[derive(Default)]
 pub(crate) struct FakeChatStore {
+    pub(crate) owned_sessions: Mutex<Vec<crate::config_transcripts::OwnedNativeSession>>,
+    pub(crate) native_paths: Arc<Mutex<Vec<(String, String)>>>,
     /// The chat rows, keyed by id, `sideChatId` NOT yet derived (raw DB row
     /// shape); reads apply `derive_side_chat_id` the way the DB subquery does.
     pub(crate) chats: Mutex<HashMap<String, Chat>>,
@@ -49,12 +52,12 @@ pub(crate) struct FakeChatStore {
 
 impl FakeChatStore {
     pub(crate) fn insert(&self, chat: Chat) {
-        self.chats.lock().unwrap().insert(chat.id.clone(), chat);
+        self.chats.lock_recover().insert(chat.id.clone(), chat);
     }
 
     /// Every stored row, raw (no `sideChatId`).
     pub(crate) fn raw_chats(&self) -> Vec<Chat> {
-        self.chats.lock().unwrap().values().cloned().collect()
+        self.chats.lock_recover().values().cloned().collect()
     }
 
     /// Mirrors the DB's correlated `sideChatId` subquery: the id of the (at
@@ -76,7 +79,7 @@ impl FakeChatStore {
     }
 
     fn update_row(&self, chat_id: &str, patch: &ChatPatch) {
-        let mut chats = self.chats.lock().unwrap();
+        let mut chats = self.chats.lock_recover();
         let Some(c) = chats.get_mut(chat_id) else {
             return;
         };
@@ -105,6 +108,25 @@ impl FakeChatStore {
 }
 
 impl ChatStore for FakeDeps {
+    fn owned_native_sessions(
+        &self,
+        chat_id: &str,
+    ) -> Vec<crate::config_transcripts::OwnedNativeSession> {
+        if let Some(store) = self.segment_store() {
+            return super::fake_rows::owned_sessions(store, chat_id);
+        }
+        self.store.owned_sessions.lock_recover().clone()
+    }
+    fn set_native_session_file_path(&self, native_ref: &str, path: &str) {
+        if let Some(store) = self.segment_store() {
+            store.set_session_file_path(native_ref, path);
+        }
+        self.store
+            .native_paths
+            .lock_recover()
+            .push((native_ref.into(), path.into()));
+    }
+
     fn chats_get(&self, id: &str) -> Option<Chat> {
         let all = self.store.raw_chats();
         let mut chat = all.iter().find(|c| c.id == id)?.clone();
@@ -112,7 +134,7 @@ impl ChatStore for FakeDeps {
         Some(chat)
     }
     fn chats_create(&self, new_chat: &NewChat) -> Chat {
-        self.store.created.lock().unwrap().push(new_chat.clone());
+        self.store.created.lock_recover().push(new_chat.clone());
         // The repository persists before returning: offload-of-a-just-created
         // chat tests need `chats_get("new")` to find it afterward.
         let chat = test_chat("new");
@@ -120,13 +142,12 @@ impl ChatStore for FakeDeps {
         chat
     }
     fn chats_delete(&self, chat_id: &str) {
-        self.store.chats.lock().unwrap().remove(chat_id);
+        self.store.chats.lock_recover().remove(chat_id);
     }
     fn chats_update(&self, chat_id: &str, patch: &ChatPatch) {
         self.store
             .updates
-            .lock()
-            .unwrap()
+            .lock_recover()
             .push((chat_id.to_string(), patch.clone()));
         self.store.update_row(chat_id, patch);
     }
@@ -152,13 +173,12 @@ impl ChatStore for FakeDeps {
     fn chats_add_mention(&self, chat_id: &str, mention: &SessionMention) {
         self.store
             .mentions
-            .lock()
-            .unwrap()
+            .lock_recover()
             .push((chat_id.to_string(), mention.name.clone()));
     }
     fn chats_reset_working_to_idle(&self) -> i64 {
         let mut count = 0;
-        let mut chats = self.store.chats.lock().unwrap();
+        let mut chats = self.store.chats.lock_recover();
         for c in chats.values_mut() {
             if c.process_state == Some(Some(ProcessState::Working)) {
                 c.process_state = Some(Some(ProcessState::Idle));
@@ -176,7 +196,7 @@ impl ChatStore for FakeDeps {
     fn update_todos(&self, _chat_id: &str, _todos: &[TodoItem]) {}
     /// Persists the PRs not yet stored and returns those, as the repository does.
     fn add_detected_prs(&self, _chat_id: &str, prs: &[DetectedPr]) -> Vec<DetectedPr> {
-        let mut stored = self.store.detected_prs.lock().unwrap();
+        let mut stored = self.store.detected_prs.lock_recover();
         let fresh: Vec<DetectedPr> = prs
             .iter()
             .filter(|pr| stored.iter().all(|s| s.url != pr.url))
@@ -188,8 +208,7 @@ impl ChatStore for FakeDeps {
     fn get_dismissed_worktrees(&self, chat_id: &str) -> Vec<String> {
         self.store
             .dismissed
-            .lock()
-            .unwrap()
+            .lock_recover()
             .get(chat_id)
             .cloned()
             .unwrap_or_default()
@@ -197,10 +216,9 @@ impl ChatStore for FakeDeps {
     fn add_dismissed_worktree(&self, chat_id: &str, worktree_path: &str) -> bool {
         self.store
             .dismiss_writes
-            .lock()
-            .unwrap()
+            .lock_recover()
             .push((chat_id.to_string(), worktree_path.to_string()));
-        let mut dismissed = self.store.dismissed.lock().unwrap();
+        let mut dismissed = self.store.dismissed.lock_recover();
         let paths = dismissed.entry(chat_id.to_string()).or_default();
         if paths.iter().any(|p| p == worktree_path) {
             return false;
@@ -209,14 +227,14 @@ impl ChatStore for FakeDeps {
         true
     }
     fn chats_clear_session(&self, chat_id: &str) {
-        if let Some(c) = self.store.chats.lock().unwrap().get_mut(chat_id) {
+        if let Some(c) = self.store.chats.lock_recover().get_mut(chat_id) {
             c.claude_session_id = None;
             c.session_file_path = None;
             c.transcript_missing = Some(false);
         }
     }
     fn chats_clear_worktree(&self, chat_id: &str) {
-        if let Some(c) = self.store.chats.lock().unwrap().get_mut(chat_id) {
+        if let Some(c) = self.store.chats.lock_recover().get_mut(chat_id) {
             c.worktree_path = None;
             c.branch_name = None;
         }
@@ -224,10 +242,9 @@ impl ChatStore for FakeDeps {
     fn mark_context_lost(&self, chat_id: &str, context_lost_at: &str) {
         self.store
             .mark_context_lost_calls
-            .lock()
-            .unwrap()
+            .lock_recover()
             .push((chat_id.to_string(), context_lost_at.to_string()));
-        if let Some(c) = self.store.chats.lock().unwrap().get_mut(chat_id) {
+        if let Some(c) = self.store.chats.lock_recover().get_mut(chat_id) {
             c.context_lost_at = Some(context_lost_at.to_string());
             c.claude_session_id = None;
             c.session_file_path = None;
@@ -235,30 +252,28 @@ impl ChatStore for FakeDeps {
         }
     }
     fn create_fork(&self, insert: &ForkCreateInput) -> Result<Chat, SeamError> {
-        if let Some(message) = self.store.create_fork_failure.lock().unwrap().clone() {
+        if let Some(message) = self.store.create_fork_failure.lock_recover().clone() {
             return Err(SeamError::msg(message));
         }
-        self.store.fork_inserts.lock().unwrap().push(insert.clone());
-        let id = format!("fork-{}", self.store.chats.lock().unwrap().len());
+        self.store.fork_inserts.lock_recover().push(insert.clone());
+        let id = format!("fork-{}", self.store.chats.lock_recover().len());
         let chat = fork_row(&id, insert);
         self.store.insert(chat.clone());
         self.store
             .pending_forks
-            .lock()
-            .unwrap()
+            .lock_recover()
             .insert(id, insert.pending_fork.clone());
         Ok(chat)
     }
     fn get_pending_fork(&self, chat_id: &str) -> Option<PendingForkState> {
         self.store
             .pending_forks
-            .lock()
-            .unwrap()
+            .lock_recover()
             .get(chat_id)
             .cloned()
     }
     fn clear_pending_fork(&self, chat_id: &str) {
-        self.store.pending_forks.lock().unwrap().remove(chat_id);
+        self.store.pending_forks.lock_recover().remove(chat_id);
     }
     fn segment_store(&self) -> Option<&dyn SegmentStore> {
         self.store.segment_store.get().map(|store| store.as_ref())

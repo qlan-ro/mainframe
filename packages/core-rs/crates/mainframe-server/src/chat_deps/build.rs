@@ -44,17 +44,14 @@ pub fn build_chat_manager(params: ChatManagerParams) -> Arc<ChatManager> {
         scope_tunnels,
         quota,
         claude_external_session_cache: new_external_session_cache(),
-        chat_manager: OnceLock::new(),
         claude_workflows,
         data_dir,
     });
-    let external_sessions = Arc::new(ExternalSessionService::new(deps.clone()));
-    let mut manager = ChatManager::new(deps.clone()).with_external_sessions(external_sessions);
+    let mut manager = ChatManager::new(deps.clone()).with_external_sessions(deps);
     if let Some(surface) = chat_surface {
         manager = manager.with_chat_surface(surface);
     }
     let manager = Arc::new(manager);
     manager.attach_self();
-    let _ = deps.chat_manager.set(Arc::downgrade(&manager));
     manager
 }

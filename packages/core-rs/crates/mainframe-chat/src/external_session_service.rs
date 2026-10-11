@@ -4,13 +4,13 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use crate::chat_manager::{ChatManagerDeps, ChatShared};
 use mainframe_adapter_api::{AdapterError, BoxFuture};
 use mainframe_services::settings::read_setting;
 use mainframe_types::adapter::{ExternalSession, ExternalSessionPage};
-use mainframe_types::chat::{Chat, ChatStatus, Project};
+use mainframe_types::chat::{Chat, NewChat};
 use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::events::DaemonEvent;
-use mainframe_types::settings_kv::SettingsKv;
 use tokio::task::JoinHandle;
 use tracing::{debug, info, warn};
 
@@ -25,30 +25,15 @@ const SCAN_INTERVAL_MS: u64 = 5 * 60 * 1000;
 /// External-session listing is not part of the `Adapter` trait, so it is
 /// abstracted here as `external_session_adapter_ids` +
 /// `list_external_sessions(...)`.
-pub trait ExternalSessionDeps: Send + Sync {
-    fn projects_get(&self, project_id: &str) -> Option<Project>;
+pub trait ExternalSessionDeps: ChatManagerDeps {
     fn get_imported_session_ids(&self, project_id: &str) -> Vec<String>;
     fn find_by_external_session_id(&self, session_id: &str, project_id: &str) -> Option<Chat>;
-    fn chats_create(&self, project_id: &str, adapter_id: &str) -> Chat;
-    fn chats_update(&self, chat_id: &str, updates: &ChatPatch);
-    /// `db.chats.list(projectId)` — used by the transcript-presence sweep.
-    fn chats_list(&self, project_id: &str) -> Vec<Chat>;
-    /// The settings store (title generation switch and binary).
-    fn settings(&self) -> &dyn SettingsKv;
-    fn emit_event(&self, event: DaemonEvent);
-    /// Adapter-aware title generation (`adapters.get(adapterId)?.generateTitle`).
-    /// `None` when the owning adapter has no `generateTitle` (deterministic import
-    /// title stands).
-    fn generate_title<'a>(
-        &'a self,
-        adapter_id: &'a str,
-        content: &'a str,
-        binary: &'a str,
-    ) -> BoxFuture<'a, Option<String>>;
-    /// `ChatManager.reconcileTranscript` — flags chats whose transcript vanished
-    /// (degraded-chat sweep). `None` = no callback wired (the sweep is a no-op).
-    fn reconcile_transcript<'a>(&'a self, _chat: &'a Chat) -> Option<BoxFuture<'a, bool>> {
-        None
+    fn create_imported_chat(&self, project_id: &str, adapter_id: &str) -> Chat {
+        self.chats_create(&NewChat {
+            project_id: project_id.into(),
+            adapter_id: adapter_id.into(),
+            ..Default::default()
+        })
     }
     /// Adapter ids that support `listExternalSessions`, in registry order.
     fn external_session_adapter_ids(&self) -> Vec<String>;
@@ -64,14 +49,16 @@ pub trait ExternalSessionDeps: Send + Sync {
 
 pub struct ExternalSessionService<D: ExternalSessionDeps + 'static> {
     deps: Arc<D>,
+    shared: Arc<ChatShared>,
     scan_intervals: Arc<Mutex<HashMap<String, JoinHandle<()>>>>,
     last_counts: Arc<Mutex<HashMap<String, i64>>>,
 }
 
 impl<D: ExternalSessionDeps + 'static> ExternalSessionService<D> {
-    pub fn new(deps: Arc<D>) -> Self {
+    pub(crate) fn new(deps: Arc<D>, shared: Arc<ChatShared>) -> Self {
         Self {
             deps,
+            shared,
             scan_intervals: Arc::new(Mutex::new(HashMap::new())),
             last_counts: Arc::new(Mutex::new(HashMap::new())),
         }
@@ -82,7 +69,7 @@ impl<D: ExternalSessionDeps + 'static> ExternalSessionService<D> {
     /// the chat being opened. Runs on the same cadence as the auto-scan.
     #[cfg(test)]
     pub(crate) async fn sweep_transcript_presence(&self, project_id: &str) {
-        sweep_transcript_presence_impl(self.deps.as_ref(), project_id).await;
+        self.shared.sweep_transcript_presence(project_id).await;
     }
 
     /// Page of importable external sessions merged and sorted across all adapters for a project.
@@ -112,7 +99,7 @@ impl<D: ExternalSessionDeps + 'static> ExternalSessionService<D> {
             return existing;
         }
 
-        let mut chat = self.deps.chats_create(project_id, adapter_id);
+        let mut chat = self.deps.create_imported_chat(project_id, adapter_id);
         let mut updates = ChatPatch {
             claude_session_id: Some(session_id.to_string()),
             ..Default::default()
@@ -180,15 +167,17 @@ impl<D: ExternalSessionDeps + 'static> ExternalSessionService<D> {
         // errors are logged inside), so there is no error to handle here.
         {
             let deps = self.deps.clone();
+            let shared = self.shared.clone();
             let last_counts = self.last_counts.clone();
             let pid = project_id.to_string();
             tokio::spawn(async move {
                 emit_count(deps.as_ref(), &last_counts, &pid).await;
-                sweep_transcript_presence_impl(deps.as_ref(), &pid).await;
+                shared.sweep_transcript_presence(&pid).await;
             });
         }
 
         let deps = self.deps.clone();
+        let shared = self.shared.clone();
         let last_counts = self.last_counts.clone();
         let pid = project_id.to_string();
         let handle = tokio::spawn(async move {
@@ -198,7 +187,7 @@ impl<D: ExternalSessionDeps + 'static> ExternalSessionService<D> {
             loop {
                 ticker.tick().await;
                 emit_count(deps.as_ref(), &last_counts, &pid).await;
-                sweep_transcript_presence_impl(deps.as_ref(), &pid).await;
+                shared.sweep_transcript_presence(&pid).await;
             }
         });
         self.scan_intervals
@@ -224,415 +213,8 @@ impl<D: ExternalSessionDeps + 'static> ExternalSessionService<D> {
     }
 }
 
-async fn scan_page_impl<D: ExternalSessionDeps>(
-    deps: &D,
-    project_id: &str,
-    offset: i64,
-    limit: i64,
-) -> ExternalSessionPage {
-    let Some(project) = deps.projects_get(project_id) else {
-        return ExternalSessionPage {
-            sessions: Vec::new(),
-            total: 0,
-            next_offset: None,
-        };
-    };
-
-    let adapter_ids = deps.external_session_adapter_ids();
-    let exclude_ids = deps.get_imported_session_ids(project_id);
-
-    // Count-only: each adapter returns its total without enriching.
-    if limit <= 0 {
-        let mut total = 0;
-        for adapter_id in &adapter_ids {
-            match deps
-                .list_external_sessions(adapter_id, &project.path, &exclude_ids, 0, 0)
-                .await
-            {
-                Ok(page) => total += page.total,
-                Err(err) => {
-                    warn!(
-                        ?err,
-                        adapter_id, project_id, "Failed to count external sessions"
-                    )
-                }
-            }
-        }
-        return ExternalSessionPage {
-            sessions: Vec::new(),
-            total,
-            next_offset: None,
-        };
-    }
-
-    // Over-fetch each adapter's prefix [0, offset+limit), then merge-sort across
-    // adapters by modifiedAt desc and slice the requested page. This is correct
-    // for any number of session-listing adapters (claude + codex today).
-    let prefix_limit = offset + limit;
-    let mut collected: Vec<ExternalSession> = Vec::new();
-    let mut total = 0;
-    for adapter_id in &adapter_ids {
-        match deps
-            .list_external_sessions(adapter_id, &project.path, &exclude_ids, 0, prefix_limit)
-            .await
-        {
-            Ok(mut page) => {
-                for s in &mut page.sessions {
-                    s.adapter_id = adapter_id.clone();
-                }
-                total += page.total;
-                collected.extend(page.sessions);
-            }
-            Err(err) => {
-                warn!(
-                    ?err,
-                    adapter_id, project_id, "Failed to scan external sessions"
-                )
-            }
-        }
-    }
-
-    collected.sort_by(|a, b| {
-        let d = parse_ms(&b.modified_at) - parse_ms(&a.modified_at);
-        if d != 0 {
-            if d > 0 {
-                Ordering::Greater
-            } else {
-                Ordering::Less
-            }
-        } else if a.session_id < b.session_id {
-            Ordering::Greater
-        } else {
-            Ordering::Less
-        }
-    });
-
-    let len = collected.len() as i64;
-    let start = offset.clamp(0, len) as usize;
-    let end = (offset + limit).clamp(0, len) as usize;
-    let sessions = collected[start..end].to_vec();
-    let next_offset = if offset + limit < total {
-        Some(offset + limit)
-    } else {
-        None
-    };
-    ExternalSessionPage {
-        sessions,
-        total,
-        next_offset,
-    }
-}
-
-async fn generate_import_title<D: ExternalSessionDeps>(
-    deps: &D,
-    chat: &mut Chat,
-    content: &str,
-    adapter_id: &str,
-) {
-    if read_setting(deps.settings(), "general", "titleGeneration.disabled")
-        .await
-        .as_deref()
-        == Some("true")
-    {
-        debug!(
-            chat_id = %chat.id,
-            adapter_id,
-            reason = "disabled_by_setting",
-            "title generation skipped"
-        );
-        return;
-    }
-
-    let binary = resolve_title_binary(
-        read_setting(
-            deps.settings(),
-            "provider",
-            &format!("{adapter_id}.titleBinary"),
-        )
-        .await,
-        adapter_id,
-    );
-    let Some(title) = deps.generate_title(adapter_id, content, &binary).await else {
-        debug!(
-            chat_id = %chat.id,
-            adapter_id,
-            reason = "no_title",
-            "title generation produced no title"
-        );
-        return;
-    };
-
-    chat.title = Some(title.clone());
-    deps.chats_update(
-        &chat.id,
-        &ChatPatch {
-            title: Some(title),
-            ..Default::default()
-        },
-    );
-    deps.emit_event(DaemonEvent::ChatUpdated {
-        chat: chat.clone(),
-        reason: None,
-    });
-}
-
-/// The transcript-presence sweep body, shared by the public method and the
-/// auto-scan tasks.
-async fn sweep_transcript_presence_impl<D: ExternalSessionDeps>(deps: &D, project_id: &str) {
-    let candidates: Vec<Chat> = deps
-        .chats_list(project_id)
-        .into_iter()
-        .filter(|c| c.status != ChatStatus::Archived && c.claude_session_id.is_some())
-        .collect();
-    for chat in candidates {
-        if let Some(fut) = deps.reconcile_transcript(&chat) {
-            let _ = fut.await;
-        }
-    }
-}
-
-async fn emit_count<D: ExternalSessionDeps>(
-    deps: &D,
-    last_counts: &Mutex<HashMap<String, i64>>,
-    project_id: &str,
-) {
-    let page = scan_page_impl(deps, project_id, 0, 0).await; // count-only (no enrichment)
-    let total = page.total;
-    let last = last_counts.lock_recover().get(project_id).copied();
-    if last != Some(total) {
-        last_counts
-            .lock_recover()
-            .insert(project_id.to_string(), total);
-        deps.emit_event(DaemonEvent::SessionsExternalCount {
-            project_id: project_id.to_string(),
-            count: total,
-        });
-    }
-}
-
-/// `new Date(s).getTime()` — parse an ISO-8601 timestamp to epoch ms (0 on failure).
-fn parse_ms(s: &str) -> i64 {
-    chrono::DateTime::parse_from_rfc3339(s)
-        .map(|d| d.timestamp_millis())
-        .unwrap_or(0)
-}
-
-/// Remove XML-like tags and collapse whitespace, returning empty string if nothing remains.
-fn strip_xml_tags(text: &str) -> String {
-    // /<[^>]+>/g → ' ', then /\s+/g → ' ', trim.
-    let chars: Vec<char> = text.chars().collect();
-    let mut without_tags = String::new();
-    let mut i = 0;
-    while i < chars.len() {
-        // `<[^>]+>` — `<`, then ≥1 non-`>` char, then `>`. A bare `<>` or an
-        // unclosed `<` is not a tag and is preserved.
-        if chars[i] == '<'
-            && let Some(close_rel) = chars[i + 1..].iter().position(|c| *c == '>')
-            && close_rel >= 1
-        {
-            without_tags.push(' ');
-            i = i + 1 + close_rel + 1;
-            continue;
-        }
-        without_tags.push(chars[i]);
-        i += 1;
-    }
-    // collapse whitespace runs to a single space, trim
-    let mut out = String::new();
-    let mut prev_ws = false;
-    for c in without_tags.chars() {
-        if c.is_whitespace() {
-            if !prev_ws {
-                out.push(' ');
-                prev_ws = true;
-            }
-        } else {
-            out.push(c);
-            prev_ws = false;
-        }
-    }
-    out.trim().to_string()
-}
+mod scan;
+use scan::{emit_count, generate_import_title, scan_page_impl, strip_xml_tags};
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::test_support::test_chat;
-    use mainframe_types::settings_kv::MemorySettings;
-    use std::sync::Mutex as StdMutex;
-
-    #[derive(Default)]
-    struct SweepDeps {
-        chats: Vec<Chat>,
-        has_reconcile: bool,
-        reconcile_calls: StdMutex<Vec<String>>,
-        /// The settings rows `settings()` serves.
-        settings: MemorySettings,
-        /// Titles `chats_update` observed being written (only when
-        /// `updates.title.is_some()`).
-        title_updates: StdMutex<Vec<String>>,
-        events: StdMutex<Vec<DaemonEvent>>,
-    }
-    impl ExternalSessionDeps for SweepDeps {
-        fn projects_get(&self, _project_id: &str) -> Option<Project> {
-            None
-        }
-        fn get_imported_session_ids(&self, _project_id: &str) -> Vec<String> {
-            Vec::new()
-        }
-        fn find_by_external_session_id(&self, _sid: &str, _pid: &str) -> Option<Chat> {
-            None
-        }
-        fn chats_create(&self, _project_id: &str, _adapter_id: &str) -> Chat {
-            test_chat("new")
-        }
-        fn chats_update(&self, _chat_id: &str, updates: &ChatPatch) {
-            if let Some(title) = &updates.title {
-                self.title_updates.lock_recover().push(title.clone());
-            }
-        }
-        fn chats_list(&self, _project_id: &str) -> Vec<Chat> {
-            self.chats.clone()
-        }
-        fn settings(&self) -> &dyn SettingsKv {
-            &self.settings
-        }
-        fn emit_event(&self, event: DaemonEvent) {
-            self.events.lock_recover().push(event);
-        }
-        fn generate_title<'a>(
-            &'a self,
-            _adapter_id: &'a str,
-            _content: &'a str,
-            _binary: &'a str,
-        ) -> BoxFuture<'a, Option<String>> {
-            Box::pin(async { None })
-        }
-        fn reconcile_transcript<'a>(&'a self, chat: &'a Chat) -> Option<BoxFuture<'a, bool>> {
-            if !self.has_reconcile {
-                return None;
-            }
-            let id = chat.id.clone();
-            Some(Box::pin(async move {
-                self.reconcile_calls.lock_recover().push(id);
-                false
-            }))
-        }
-        fn external_session_adapter_ids(&self) -> Vec<String> {
-            Vec::new()
-        }
-        fn list_external_sessions<'a>(
-            &'a self,
-            _adapter_id: &'a str,
-            _project_path: &'a str,
-            _exclude_ids: &'a [String],
-            _offset: i64,
-            _limit: i64,
-        ) -> BoxFuture<'a, Result<ExternalSessionPage, AdapterError>> {
-            Box::pin(async {
-                Ok(ExternalSessionPage {
-                    sessions: Vec::new(),
-                    total: 0,
-                    next_offset: None,
-                })
-            })
-        }
-    }
-
-    fn chat(id: &str, session: Option<&str>, status: ChatStatus) -> Chat {
-        let mut c = test_chat(id);
-        c.claude_session_id = session.map(str::to_string);
-        c.status = status;
-        c
-    }
-
-    #[tokio::test]
-    async fn reconciles_every_non_archived_chat_with_a_cli_session_id() {
-        let deps = Arc::new(SweepDeps {
-            chats: vec![
-                chat("with-session", Some("sess-a"), ChatStatus::Active),
-                chat("draft", None, ChatStatus::Active),
-                chat("archived", Some("sess-b"), ChatStatus::Archived),
-            ],
-            has_reconcile: true,
-            reconcile_calls: StdMutex::new(Vec::new()),
-            ..Default::default()
-        });
-        let service = ExternalSessionService::new(deps.clone());
-
-        service.sweep_transcript_presence("p1").await;
-
-        let calls = deps.reconcile_calls.lock_recover();
-        assert_eq!(calls.as_slice(), ["with-session"]);
-    }
-
-    #[tokio::test]
-    async fn no_op_when_no_reconcile_callback_provided() {
-        let deps = Arc::new(SweepDeps {
-            chats: vec![chat("with-session", Some("sess-a"), ChatStatus::Active)],
-            has_reconcile: false,
-            reconcile_calls: StdMutex::new(Vec::new()),
-            ..Default::default()
-        });
-        let service = ExternalSessionService::new(deps.clone());
-        service.sweep_transcript_presence("p1").await;
-        assert!(deps.reconcile_calls.lock_recover().is_empty());
-    }
-
-    // ── generate_import_title observability ─────────────────────────────────
-    // Each case installs a `LogCapture` guard and asserts the captured
-    // `(level, reason)` event plus the title-retention invariants; only the
-    // deps setup and the expected reason token differ between cases.
-
-    type CapturedEvents = StdMutex<Vec<(tracing::Level, Option<String>)>>;
-
-    fn assert_logged_once_and_title_untouched(
-        events: &Arc<CapturedEvents>,
-        expected_reason: &str,
-        deps: &SweepDeps,
-    ) {
-        assert_eq!(
-            crate::test_support::LogCapture::events_with_reason(events),
-            vec![(tracing::Level::DEBUG, expected_reason.to_string())]
-        );
-        assert!(deps.title_updates.lock_recover().is_empty());
-        assert!(
-            !deps
-                .events
-                .lock_recover()
-                .iter()
-                .any(|e| matches!(e, DaemonEvent::ChatUpdated { .. }))
-        );
-    }
-
-    #[tokio::test]
-    async fn import_with_title_generation_disabled_logs_and_keeps_the_title() {
-        let deps = Arc::new(SweepDeps {
-            settings: MemorySettings::default().with("general", "titleGeneration.disabled", "true"),
-            ..Default::default()
-        });
-        let mut chat = test_chat("c1");
-        chat.title = Some("Fallback Title".to_string());
-
-        let (subscriber, events) = crate::test_support::LogCapture::install();
-        let _guard = tracing::subscriber::set_default(subscriber);
-        generate_import_title(deps.as_ref(), &mut chat, "first message", "claude").await;
-
-        assert_logged_once_and_title_untouched(&events, "disabled_by_setting", &deps);
-        assert_eq!(chat.title.as_deref(), Some("Fallback Title"));
-    }
-
-    #[tokio::test]
-    async fn import_with_no_title_logs_no_title_and_keeps_the_title() {
-        let deps = Arc::new(SweepDeps::default());
-        let mut chat = test_chat("c1");
-        chat.title = Some("Fallback Title".to_string());
-
-        let (subscriber, events) = crate::test_support::LogCapture::install();
-        let _guard = tracing::subscriber::set_default(subscriber);
-        generate_import_title(deps.as_ref(), &mut chat, "first message", "claude").await;
-
-        assert_logged_once_and_title_untouched(&events, "no_title", &deps);
-        assert_eq!(chat.title.as_deref(), Some("Fallback Title"));
-    }
-}
+mod tests;

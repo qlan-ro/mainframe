@@ -1,6 +1,6 @@
 use super::*;
 
-impl<D: ConfigManagerDeps> ChatConfigManager<D> {
+impl ChatConfigManager {
     pub async fn attach_worktree(
         &self,
         chat_id: &str,
@@ -24,8 +24,9 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
 
         if let Some(session_id) = claude_session_id {
             let project = self
+                .shared
                 .deps
-                .projects_get(&project_id)
+                .projects_get_path(&project_id)
                 .ok_or_else(|| NotFound::unnamed("Project"))?;
             return self
                 .rebind_live_session(
@@ -33,7 +34,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
                     chat_id,
                     LiveRebind {
                         project_id: &project_id,
-                        old_dir: effective_dir(current_worktree.as_deref(), &project.path),
+                        old_dir: effective_dir(current_worktree.as_deref(), &project),
                         old_worktree: current_worktree.as_deref(),
                         active: ActiveSession {
                             adapter_id: &adapter,
@@ -59,7 +60,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
     }
 
     pub async fn disable_worktree(&self, chat_id: &str) -> Result<(), ConfigError> {
-        let Some(cell) = self.deps.get_active_chat(chat_id) else {
+        let Some(cell) = self.active_chat(chat_id) else {
             return Ok(());
         };
         let (worktree_path, has_claude_session, project_id, branch_name) = {
@@ -74,7 +75,13 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
         let Some(worktree_path) = worktree_path else {
             return Ok(());
         };
-        if has_claude_session || self.deps.has_native_session(chat_id) {
+        if has_claude_session
+            || self
+                .shared
+                .deps
+                .segment_store()
+                .is_some_and(|s| s.has_native_id(chat_id))
+        {
             return Err(ConfigError::Refused(
                 "Cannot disable worktree after session has started".to_string(),
             ));
@@ -82,13 +89,17 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
 
         self.detach_session(&cell).await?;
 
-        if let Some(fut) = self.deps.stop_launch_processes(&project_id, &worktree_path) {
+        if let Some(fut) = self
+            .shared
+            .deps
+            .stop_launch_processes(&project_id, &worktree_path)
+        {
             fut.await;
         }
 
-        if let Some(project) = self.deps.projects_get(&project_id) {
+        if let Some(project) = self.shared.deps.projects_get_path(&project_id) {
             remove_worktree(
-                &project.path,
+                &project,
                 &worktree_path,
                 branch_name.as_deref().unwrap_or_default(),
             )

@@ -56,7 +56,6 @@
 #[path = "live_vs_cold_reload_golden/timing.rs"]
 mod timing;
 
-use mainframe_types::chat_patch::ChatPatch;
 use std::sync::{Arc, Mutex};
 
 use timing::{OBSERVED_AT, assert_and_remove_live_timing, normalize};
@@ -67,82 +66,16 @@ use mainframe_adapter_claude::history::load_history;
 use mainframe_adapter_claude::messages::display_pipeline::prepare_messages_for_client;
 use mainframe_adapter_claude::session::ClaudeSession;
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
-use mainframe_chat::event_handler::{EventHandler, EventHandlerDeps};
 use mainframe_chat::message_cache::MessageCache;
-use mainframe_chat::permission_manager::PermissionManager;
-use mainframe_chat::types::ActiveChat;
 use mainframe_claude_workflows::store::ClaudeWorkflowStore;
-use mainframe_types::adapter::{DetectedPr, SessionOptions};
-use mainframe_types::chat::{ChatMessageType, QueuedMessageRef, TodoItem};
-use mainframe_types::context::SkillFileEntry;
-use mainframe_types::display::ToolCategories;
-use mainframe_types::events::DaemonEvent;
+use mainframe_types::adapter::SessionOptions;
+use mainframe_types::chat::ChatMessageType;
 use serde_json::Value;
 
 const FIXTURE: &str = include_str!("fixtures/golden-session-with-tool-calls.jsonl");
 const SESSION_ID: &str = "9d21c142-41f1-4474-a69e-926bea77010d";
 const CHAT_ID: &str = "chat-golden-178";
 const PROJECT_PATH: &str = "/tmp/golden-178";
-
-/// A no-op `EventHandlerDeps`: this test drives the sink purely to populate
-/// the raw `MessageCache` the way a live CLI stdout stream would, and reads
-/// that cache back directly rather than through the deps-mediated display
-/// path, so every hook here can be inert.
-struct NoopDeps;
-
-impl EventHandlerDeps for NoopDeps {
-    fn get_active_chat(&self, _chat_id: &str) -> Option<Arc<Mutex<ActiveChat>>> {
-        None
-    }
-    fn emit_event(&self, _event: DaemonEvent) {}
-    fn get_tool_categories(&self, _chat_id: &str) -> Option<ToolCategories> {
-        None
-    }
-    fn on_queued_processed(&self, _chat_id: &str, _uuid: &str) {}
-    fn on_queued_cleared(&self, _chat_id: &str) {}
-    fn get_queued_refs(&self, _chat_id: &str) -> Vec<QueuedMessageRef> {
-        Vec::new()
-    }
-    fn display_projector(&self) -> Box<dyn mainframe_display::DisplayProjector> {
-        Box::new(mainframe_display::FullRebuildProjector::new(
-            |_raw, _overlay, _categories| Vec::new(),
-        ))
-    }
-    fn strip_command_tags(&self, text: &str) -> String {
-        text.to_string()
-    }
-    fn chats_update(&self, _chat_id: &str, _patch: &ChatPatch) {}
-    fn projects_get_path(&self, _project_id: &str) -> Option<String> {
-        None
-    }
-    fn initial_transcript_path(&self, _: &str, _: &str, _: &str) -> Option<String> {
-        None
-    }
-    fn add_plan_file(&self, _chat_id: &str, _file_path: &str) -> bool {
-        false
-    }
-    fn add_skill_file(&self, _chat_id: &str, _entry: &SkillFileEntry) -> bool {
-        false
-    }
-    fn update_todos(&self, _chat_id: &str, _todos: &[TodoItem]) {}
-    fn add_detected_prs(&self, _chat_id: &str, _prs: &[DetectedPr]) -> Vec<DetectedPr> {
-        Vec::new()
-    }
-    fn should_notify_permission(&self, _tool_name: Option<&str>) -> bool {
-        false
-    }
-    fn notify_task_complete(&self) -> bool {
-        false
-    }
-    fn notify_session_error(&self) -> bool {
-        false
-    }
-    fn notify_attention_request(&self) -> bool {
-        false
-    }
-    fn tracker_end_all_running(&self, _chat_id: &str) {}
-    fn workflow_runs_stop_all(&self, _chat_id: &str) {}
-}
 
 fn fixture_entries() -> Vec<Value> {
     FIXTURE
@@ -196,9 +129,15 @@ fn run_live_pipeline() -> Vec<mainframe_types::chat::ChatMessage> {
     let cache = Arc::new(Mutex::new(MessageCache::with_clock(Arc::new(|| {
         OBSERVED_AT
     }))));
-    let permissions = Arc::new(Mutex::new(PermissionManager::new()));
-    let deps = Arc::new(NoopDeps);
-    let handler = EventHandler::new(cache.clone(), permissions, deps);
+    let handler = mainframe_chat::test_support::presentation_handler(
+        cache.clone(),
+        || {
+            Box::new(mainframe_display::FullRebuildProjector::new(|_, _, _| {
+                Vec::new()
+            }))
+        },
+        None,
+    );
     let session = claude_session();
     let sink = handler.build_sink(CHAT_ID, Some(SESSION_ID.to_string()));
 

@@ -8,7 +8,7 @@
 use mainframe_services::workspace::get_claude_project_dir;
 use mainframe_services::workspace::session_files::SessionFilesError;
 
-use crate::config_manager::ConfigManagerDeps;
+use crate::chat_manager::ChatManagerDeps;
 use crate::event_handler::compute_session_file_path;
 
 const CLAUDE: &str = "claude";
@@ -32,8 +32,8 @@ pub struct ActiveSession<'a> {
 /// path, for the live cell and the mirror. A deps impl without segments
 /// reports no owned sessions; the active one is then moved as before.
 /// Stops at the first failure: rows already moved keep their new paths.
-pub(crate) async fn relocate_claude_transcripts<D: ConfigManagerDeps>(
-    deps: &D,
+pub(crate) async fn relocate_claude_transcripts(
+    deps: &dyn ChatManagerDeps,
     chat_id: &str,
     active: ActiveSession<'_>,
     old_dir: &str,
@@ -62,8 +62,8 @@ pub(crate) async fn relocate_claude_transcripts<D: ConfigManagerDeps>(
 }
 
 /// (native row, session id) for each Claude session to move.
-fn claude_sessions<D: ConfigManagerDeps>(
-    deps: &D,
+fn claude_sessions(
+    deps: &dyn ChatManagerDeps,
     chat_id: &str,
     active: &ActiveSession<'_>,
 ) -> Vec<(Option<String>, String)> {

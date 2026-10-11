@@ -85,3 +85,10 @@ impl ChatShared {
             .or_else(|| self.deps.chats_get(chat_id))
     }
 }
+
+impl ChatShared {
+    pub(crate) fn update_and_emit(&self, chat: Chat, patch: &ChatPatch) {
+        self.deps.chats_update(&chat.id, patch);
+        self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
+    }
+}

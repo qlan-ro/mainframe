@@ -1,6 +1,6 @@
 use super::*;
 
-impl<D: ConfigManagerDeps> ChatConfigManager<D> {
+impl ChatConfigManager {
     pub(super) fn apply_worktree_update(
         &self,
         cell: &Arc<Mutex<ActiveChat>>,
@@ -17,8 +17,9 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
                 guard.chat.session_file_path = session_file_path.clone();
             }
         }
-        self.deps.chats_update(
-            chat_id,
+        let chat = cell.lock_recover().chat.clone();
+        self.shared.update_and_emit(
+            chat,
             &ChatPatch {
                 worktree_path: Some(worktree_path.clone()),
                 branch_name: Some(branch_name),
@@ -26,10 +27,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
                 ..Default::default()
             },
         );
-        let chat = cell.lock_recover().chat.clone();
-        self.deps
-            .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
-        self.deps
+        self.worktree_offers
             .on_binding_changed(chat_id, worktree_path.as_deref());
     }
 
@@ -39,18 +37,21 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
         chat_id: &str,
         rebind: LiveRebind<'_>,
     ) -> Result<(), ConfigError> {
-        self.deps.stop_chat(chat_id).await;
+        self.lifecycle.stop_chat(chat_id).await;
 
         // Same blast radius as `disable_worktree`: the whole (project, path)
         // launch manager, not just this chat's processes.
         if let Some(old) = rebind.old_worktree
-            && let Some(fut) = self.deps.stop_launch_processes(rebind.project_id, old)
+            && let Some(fut) = self
+                .shared
+                .deps
+                .stop_launch_processes(rebind.project_id, old)
         {
             fut.await;
         }
 
         let moved_transcript = match relocate_claude_transcripts(
-            &self.deps,
+            self.shared.deps.as_ref(),
             chat_id,
             rebind.active,
             rebind.old_dir,
@@ -66,7 +67,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
                     error = %err,
                     "failed to move session files; restarting the chat on its current binding"
                 );
-                self.deps.start_chat(chat_id).await;
+                self.lifecycle.start_chat(chat_id).await;
                 return Err(ConfigError::TranscriptMoveFailed(err));
             }
         };
@@ -78,7 +79,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
             rebind.branch_name,
             moved_transcript,
         );
-        self.deps.start_chat(chat_id).await;
+        self.lifecycle.start_chat(chat_id).await;
         Ok(())
     }
 }

@@ -1,12 +1,7 @@
 //! `ExternalSessionFacade` — object-safe erasure of `ExternalSessionService<D>`.
 use super::*;
 
-/// Object-safe facade over `ExternalSessionService<D>` (`ctx.chats.
-/// getExternalSessionService()`). `ChatManager` only ever holds the
-/// already-erased `Arc<dyn ChatManagerDeps>`, so the generic service is built
-/// once at boot from the concrete deps type (see
-/// `mainframe_server::chat_deps::build_chat_manager`, where that type is still
-/// known) and injected here pre-erased via [`ChatManager::with_external_sessions`].
+/// Object-safe access to the external-session service built over shared chat state.
 pub trait ExternalSessionFacade: Send + Sync {
     fn start_auto_scan(&self, project_id: &str);
     fn stop_auto_scan(&self, project_id: &str);

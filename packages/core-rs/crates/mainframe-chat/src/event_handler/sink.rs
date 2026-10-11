@@ -71,24 +71,11 @@ impl SessionSinkImpl {
     /// what `on_permission` emits for a freshly enqueued front request.
     pub(super) fn promote_next(&self, next: Option<ControlRequest>) {
         if let Some(next) = next {
-            let notify = self
-                .shared
-                .deps
-                .should_notify_permission(Some(&next.tool_name));
             self.notify_surface(ChatSurfaceEvent::GateRaised {
                 chat_id: self.chat_id.clone(),
                 request: next.clone(),
             });
-            if notify {
-                let tool = &next.tool_name;
-                self.shared.deps.send_push(PushOut {
-                    chat_id: self.chat_id.clone(),
-                    title: "Permission Required".to_string(),
-                    body: format!("Agent wants to run: {tool}"),
-                    push_type: "permission".to_string(),
-                    priority: "high".to_string(),
-                });
-            }
+            self.shared.permission_push(&self.chat_id, &next.tool_name);
         }
         if let Some(cell) = self.shared.active(&self.chat_id) {
             let chat = cell.lock_recover().chat.clone();

@@ -7,10 +7,6 @@ impl SessionSinkImpl {
             .lock_recover()
             .enqueue(&self.chat_id, request.clone());
         if is_first {
-            let notify = self
-                .shared
-                .deps
-                .should_notify_permission(Some(&request.tool_name));
             self.notify_surface(ChatSurfaceEvent::GateRaised {
                 chat_id: self.chat_id.clone(),
                 request: request.clone(),
@@ -20,16 +16,8 @@ impl SessionSinkImpl {
                 self.shared
                     .emit(DaemonEvent::ChatUpdated { chat, reason: None });
             }
-            if notify {
-                let tool = &request.tool_name;
-                self.shared.deps.send_push(PushOut {
-                    chat_id: self.chat_id.clone(),
-                    title: "Permission Required".to_string(),
-                    body: format!("Agent wants to run: {tool}"),
-                    push_type: "permission".to_string(),
-                    priority: "high".to_string(),
-                });
-            }
+            self.shared
+                .permission_push(&self.chat_id, &request.tool_name);
         }
     }
 

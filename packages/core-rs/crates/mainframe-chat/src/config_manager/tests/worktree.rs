@@ -4,8 +4,8 @@ use super::*;
 async fn repoints_the_stored_session_file_path_at_the_new_worktree() {
     let session = Arc::new(FakeSession::spawned());
     let cell = cell_with_chat(claude_worktreed_chat(), session);
-    let deps = FakeDeps::with_project(cell.clone(), test_project());
-    let manager = ChatConfigManager::new(deps);
+    let deps = Setup::with_project(cell.clone(), test_project());
+    let manager = Harness::new(deps);
 
     manager
         .attach_worktree("c1", "/new/wt", Some("feat"))
@@ -18,7 +18,7 @@ async fn repoints_the_stored_session_file_path_at_the_new_worktree() {
         .to_string_lossy()
         .to_string();
     assert_eq!(
-        manager.deps.updates.lock().unwrap().as_slice(),
+        manager.updates().as_slice(),
         &[ChatPatch {
             worktree_path: Some(Some("/new/wt".to_string())),
             branch_name: Some(Some("feat".to_string())),
@@ -37,12 +37,12 @@ async fn repoints_the_stored_session_file_path_at_the_new_worktree() {
 async fn restarts_the_chat_when_moving_session_files_fails() {
     let session = Arc::new(FakeSession::spawned());
     let cell = cell_with_chat(claude_worktreed_chat(), session);
-    let deps = FakeDeps::failing_move(
+    let deps = Setup::failing_move(
         cell.clone(),
         test_project(),
         "No such file or directory (os error 2)",
     );
-    let manager = ChatConfigManager::new(deps);
+    let manager = Harness::new(deps);
 
     let err = manager
         .attach_worktree("c1", "/new/wt", Some("feat"))
@@ -55,7 +55,7 @@ async fn restarts_the_chat_when_moving_session_files_fails() {
         "raw io text must not reach the user-facing toast"
     );
     assert_eq!(
-        manager.deps.start_chat_calls.load(Ordering::SeqCst),
+        manager.starts(),
         1,
         "expected the stopped chat to be restarted rather than stranded"
     );
@@ -65,16 +65,16 @@ async fn restarts_the_chat_when_moving_session_files_fails() {
 async fn keeps_the_old_binding_when_moving_session_files_fails() {
     let session = Arc::new(FakeSession::spawned());
     let cell = cell_with_chat(claude_worktreed_chat(), session);
-    let deps = FakeDeps::failing_move(cell.clone(), test_project(), "boom");
-    let manager = ChatConfigManager::new(deps);
+    let deps = Setup::failing_move(cell.clone(), test_project(), "boom");
+    let manager = Harness::new(deps);
 
     manager
         .attach_worktree("c1", "/new/wt", Some("feat"))
         .await
         .unwrap_err();
 
-    assert!(manager.deps.updates.lock().unwrap().is_empty());
-    assert!(manager.deps.binding_changed.lock().unwrap().is_empty());
+    assert!(manager.updates().is_empty());
+    assert!(manager.bindings().is_empty());
     let chat = cell.lock().unwrap().chat.clone();
     assert_eq!(chat.worktree_path.as_deref(), Some("/old/wt"));
     assert_eq!(chat.branch_name.as_deref(), Some("old-branch"));
@@ -90,15 +90,15 @@ fn effective_dir_is_the_worktree_when_bound_else_the_project_path() {
 async fn attaching_without_a_branch_name_persists_a_cleared_branch() {
     let session = Arc::new(FakeSession::spawned());
     let cell = cell_with(session);
-    let deps = FakeDeps::with_project(cell.clone(), test_project());
-    let manager = ChatConfigManager::new(deps);
+    let deps = Setup::with_project(cell.clone(), test_project());
+    let manager = Harness::new(deps);
 
     manager
         .attach_worktree("c1", "/new/wt", None)
         .await
         .unwrap();
 
-    let updates = manager.deps.updates.lock().unwrap();
+    let updates = manager.updates();
     assert_eq!(
         updates.as_slice(),
         &[ChatPatch {
@@ -113,24 +113,25 @@ async fn attaching_without_a_branch_name_persists_a_cleared_branch() {
 async fn attach_worktree_fires_on_binding_changed_exactly_once_with_the_new_path() {
     let session = Arc::new(FakeSession::spawned());
     let cell = cell_with(session);
-    let deps = FakeDeps::with_project(cell.clone(), test_project());
-    let manager = ChatConfigManager::new(deps);
+    let deps = Setup::with_project(cell.clone(), test_project());
+    let manager = Harness::new(deps);
 
     manager
         .attach_worktree("c1", "/new/wt", Some("feat"))
         .await
         .unwrap();
 
-    let binding_changed = manager.deps.binding_changed.lock().unwrap();
+    let binding_changed = manager.bindings();
     assert_eq!(binding_changed.as_slice(), &[Some("/new/wt".to_string())]);
 }
 
 #[tokio::test]
 async fn enabling_a_worktree_restarts_the_chat_when_moving_session_files_fails() {
     let (repo, project) = git_project();
-    let cell = cell_with_chat(claude_live_chat(), Arc::new(FakeSession::spawned()));
-    let deps = FakeDeps::failing_move(cell.clone(), project, "boom");
-    let manager = ChatConfigManager::new(deps);
+    let session = Arc::new(FakeSession::spawned());
+    let cell = cell_with_chat(claude_live_chat(), session.clone());
+    let deps = Setup::failing_move(cell.clone(), project, "boom");
+    let manager = Harness::new(deps);
 
     let err = manager
         .enable_worktree("c1", "HEAD", "feat/x")
@@ -145,14 +146,14 @@ async fn enabling_a_worktree_restarts_the_chat_when_moving_session_files_fails()
         )
     );
     assert_created_worktree(&repo);
-    assert_eq!(manager.deps.stop_chat_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(session.kills(), 1);
     assert_eq!(
-        manager.deps.start_chat_calls.load(Ordering::SeqCst),
+        manager.starts(),
         1,
         "the stopped chat must be running again, not stranded"
     );
-    assert!(manager.deps.updates.lock().unwrap().is_empty());
-    assert!(manager.deps.binding_changed.lock().unwrap().is_empty());
+    assert!(manager.updates().is_empty());
+    assert!(manager.bindings().is_empty());
     let chat = cell.lock().unwrap().chat.clone();
     assert_eq!(chat.worktree_path, None);
     assert_eq!(chat.branch_name, None);
@@ -161,9 +162,10 @@ async fn enabling_a_worktree_restarts_the_chat_when_moving_session_files_fails()
 #[tokio::test]
 async fn enabling_a_worktree_on_a_live_chat_binds_it_and_restarts_it() {
     let (repo, project) = git_project();
-    let cell = cell_with_chat(claude_live_chat(), Arc::new(FakeSession::spawned()));
-    let deps = FakeDeps::with_project(cell.clone(), project);
-    let manager = ChatConfigManager::new(deps);
+    let session = Arc::new(FakeSession::spawned());
+    let cell = cell_with_chat(claude_live_chat(), session.clone());
+    let deps = Setup::with_project(cell.clone(), project);
+    let manager = Harness::new(deps);
 
     manager
         .enable_worktree("c1", "HEAD", "feat/x")
@@ -175,7 +177,7 @@ async fn enabling_a_worktree_on_a_live_chat_binds_it_and_restarts_it() {
         .join(".worktrees/feat-x")
         .to_string_lossy()
         .to_string();
-    let updates = manager.deps.updates.lock().unwrap().clone();
+    let updates = manager.updates().clone();
     let [update] = updates.as_slice() else {
         panic!("expected exactly one persisted update, got {updates:?}");
     };
@@ -188,29 +190,26 @@ async fn enabling_a_worktree_on_a_live_chat_binds_it_and_restarts_it() {
             && transcript.ends_with("--worktrees-feat-x/sess1.jsonl"),
         "the stored transcript must point into the worktree's project dir, got {transcript}"
     );
-    assert_eq!(manager.deps.stop_chat_calls.load(Ordering::SeqCst), 1);
-    assert_eq!(manager.deps.start_chat_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(session.kills(), 1);
+    assert_eq!(manager.starts(), 1);
     assert!(
-        manager.deps.stop_launch_calls.lock().unwrap().is_empty(),
+        manager.deps.workspace.stop_calls.lock().unwrap().is_empty(),
         "an unbound chat has no worktree launch processes to stop"
     );
-    assert_eq!(
-        manager.deps.binding_changed.lock().unwrap().as_slice(),
-        &[Some(worktree)]
-    );
+    assert_eq!(manager.bindings().as_slice(), &[Some(worktree)]);
 }
 
 #[tokio::test]
 async fn pre_session_move_failure_reports_the_created_worktree_and_keeps_binding() {
     let (repo, project) = git_project();
     let cell = Arc::new(Mutex::new(ActiveChat::new(test_chat("c1"), None)));
-    let mut deps = FakeDeps::failing_move(cell.clone(), project, "disk full");
+    let mut deps = Setup::failing_move(cell.clone(), project, "disk full");
     deps.owned.push(OwnedNativeSession {
         native_ref: "native-1".into(),
         adapter_id: "claude".into(),
         session_id: "session-1".into(),
     });
-    let manager = ChatConfigManager::new(deps);
+    let manager = Harness::new(deps);
     let error = manager
         .enable_worktree("c1", "HEAD", "feat/x")
         .await
@@ -224,7 +223,7 @@ async fn pre_session_move_failure_reports_the_created_worktree_and_keeps_binding
         )
     );
     assert_created_worktree(&repo);
-    assert!(manager.deps.updates.lock().unwrap().is_empty());
-    assert!(manager.deps.binding_changed.lock().unwrap().is_empty());
+    assert!(manager.updates().is_empty());
+    assert!(manager.bindings().is_empty());
     assert_eq!(cell.lock().unwrap().chat.worktree_path, None);
 }

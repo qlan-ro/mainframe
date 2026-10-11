@@ -1,18 +1,16 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
-#[path = "codex_presentation_streaming/support.rs"]
+#[path = "support/presentation.rs"]
 mod support;
 use mainframe_acp::encoder::{EncodedItem, encode_revision};
 use mainframe_adapter_api::SessionSink;
 use mainframe_adapter_codex::event_mapper::{CodexSessionState, handle_notification};
-use mainframe_chat::{
-    event_handler::EventHandler, message_cache::MessageCache, permission_manager::PermissionManager,
-};
+use mainframe_chat::{event_handler::EventHandler, message_cache::MessageCache};
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
 use support::*;
 struct Harness {
     cache: Arc<Mutex<MessageCache>>,
-    handler: EventHandler<Deps>,
+    handler: EventHandler,
     sink: Arc<dyn SessionSink>,
     state: CodexSessionState,
     surface: Arc<RevisionSurface>,
@@ -20,11 +18,7 @@ struct Harness {
 impl Harness {
     fn new() -> Self {
         let cache = Arc::new(Mutex::new(MessageCache::new()));
-        let handler = EventHandler::new(
-            cache.clone(),
-            Arc::new(Mutex::new(PermissionManager::new())),
-            Arc::new(Deps),
-        );
+        let handler = handler(cache.clone(), "CollabAgent");
         let surface = Arc::new(RevisionSurface::default());
         handler.set_chat_surface(surface.clone());
         let sink = handler.build_sink("chat", Some("session".into()));

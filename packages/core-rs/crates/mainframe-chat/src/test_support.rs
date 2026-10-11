@@ -3,6 +3,7 @@
 //! Tests need a concrete `dyn AdapterSession` double, so the shared `FakeSession`
 //! lives here to avoid re-stubbing ~20 trait methods per test.
 
+use mainframe_types::sync::LockExt as _;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
@@ -90,7 +91,7 @@ impl FakeSession {
 
     /// Bump "last activity" to `ts` — see `activity_override`.
     pub fn bump_activity(&self, ts: i64) {
-        *self.activity_override.lock().unwrap() = Some(ts);
+        *self.activity_override.lock_recover() = Some(ts);
     }
 }
 
@@ -120,7 +121,7 @@ impl AdapterSession for FakeSession {
         self.model_requires_restart
     }
     fn last_activity_at(&self) -> Option<i64> {
-        self.activity_override.lock().unwrap().or(self.activity)
+        self.activity_override.lock_recover().or(self.activity)
     }
 
     fn spawn(
@@ -128,7 +129,7 @@ impl AdapterSession for FakeSession {
         options: Option<SessionSpawnOptions>,
         _sink: Option<Arc<dyn SessionSink>>,
     ) -> BoxFuture<'_, Result<AdapterProcess, AdapterError>> {
-        *self.spawn_options.lock().unwrap() = options;
+        *self.spawn_options.lock_recover() = options;
         if !self.spawn_ok {
             return err("unused");
         }
@@ -174,7 +175,7 @@ impl AdapterSession for FakeSession {
     }
     fn set_model(&self, model: String) -> BoxFuture<'_, Result<(), AdapterError>> {
         let gated = model == "default";
-        self.set_model_calls.lock().unwrap().push(model);
+        self.set_model_calls.lock_recover().push(model);
         if gated && let Some(gate) = &self.model_gate {
             return Box::pin(async move {
                 gate.0.notify_one();
@@ -189,7 +190,7 @@ impl AdapterSession for FakeSession {
         }
     }
     fn set_permission_mode(&self, mode: ExecutionMode) -> BoxFuture<'_, Result<(), AdapterError>> {
-        self.set_permission_mode_calls.lock().unwrap().push(mode);
+        self.set_permission_mode_calls.lock_recover().push(mode);
         if self.set_permission_mode_ok {
             ok()
         } else {
@@ -197,7 +198,7 @@ impl AdapterSession for FakeSession {
         }
     }
     fn set_plan_mode(&self, on: bool) -> BoxFuture<'_, Result<(), AdapterError>> {
-        self.set_plan_mode_calls.lock().unwrap().push(on);
+        self.set_plan_mode_calls.lock_recover().push(on);
         if self.set_plan_mode_ok {
             ok()
         } else {
@@ -275,3 +276,8 @@ pub fn no_settings() -> &'static mainframe_types::settings_kv::MemorySettings {
 /// already, so the tracing capture helper lives there and is re-exported here
 /// for the crate's existing `crate::test_support::LogCapture` call sites.
 pub use mainframe_runtime::log_capture::LogCapture;
+
+mod presentation;
+pub use presentation::presentation_handler;
+
+mod fake_external;

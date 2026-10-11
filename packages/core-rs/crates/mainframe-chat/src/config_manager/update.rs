@@ -1,6 +1,6 @@
 use super::*;
 
-impl<D: ConfigManagerDeps> ChatConfigManager<D> {
+impl ChatConfigManager {
     pub async fn update_chat_config(
         &self,
         chat_id: &str,
@@ -26,7 +26,12 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
 
         if let Some(ref new_adapter) = adapter_id
             && *new_adapter != cur_adapter
-            && (has_claude_session || self.deps.has_native_session(chat_id))
+            && (has_claude_session
+                || self
+                    .shared
+                    .deps
+                    .segment_store()
+                    .is_some_and(|s| s.has_native_id(chat_id)))
         {
             return Err(ConfigError::Refused(
                 "Use switch-provider to change this chat's provider".to_string(),
@@ -79,8 +84,8 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
             return Ok(());
         }
 
-        let name = self.deps.adapter_name(&cur_adapter);
-        let live = self.deps.live_background_tasks(chat_id);
+        let name = self.shared.deps.adapter_fork_info(&cur_adapter).name;
+        let live = self.shared.deps.tracker_list_live(chat_id).len();
         if let Some(refusal) = respawn_refusal(session_spawned, live, &name) {
             return Err(ConfigError::Refused(refusal));
         }

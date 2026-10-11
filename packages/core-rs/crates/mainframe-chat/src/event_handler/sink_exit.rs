@@ -61,15 +61,13 @@ impl SessionSinkImpl {
                 guard.chat.process_state = Some(None);
                 (guard.chat.clone(), was_working)
             };
-            self.shared.deps.chats_update(
-                &self.chat_id,
+            self.shared.update_and_emit(
+                chat,
                 &ChatPatch {
                     process_state: Some(None),
                     ..Default::default()
                 },
             );
-            self.shared
-                .emit(DaemonEvent::ChatUpdated { chat, reason: None });
             if was_working {
                 self.notify_surface(ChatSurfaceEvent::TurnFinished {
                     chat_id: self.chat_id.clone(),

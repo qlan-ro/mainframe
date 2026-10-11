@@ -110,3 +110,24 @@ fn two_long_messages_sharing_a_199_char_prefix_both_notify() {
     assert_eq!(deps.events().len(), 2);
     assert_eq!(pushes(&deps).len(), 2);
 }
+
+#[tokio::test]
+async fn a_pending_settings_read_does_not_block_the_sink_and_delivers_after_release() {
+    let (sink, deps) = sink();
+    let gate = Arc::new(tokio::sync::Notify::new());
+    *deps.push.settings_gate.lock().unwrap() = Some(gate.clone());
+    sink.on_attention_request("please confirm");
+    assert!(deps.events().is_empty());
+    assert!(pushes(&deps).is_empty());
+    gate.notify_one();
+    tokio::time::timeout(std::time::Duration::from_secs(1), async {
+        while pushes(&deps).is_empty() {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(pushes(&deps).len(), 1);
+    assert_eq!(pushes(&deps)[0].body, "please confirm");
+    assert_eq!(deps.events().len(), 1);
+}

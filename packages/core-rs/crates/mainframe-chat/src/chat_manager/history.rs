@@ -159,14 +159,12 @@ impl ChatManager {
     /// Reconcile the persisted `transcriptMissing` flag against the transcript file
     /// on disk.
     pub async fn reconcile_transcript(&self, chat: &mut Chat) -> bool {
-        let presence = self.presence_deps();
-        crate::transcript_presence::reconcile_transcript_presence(&presence, chat).await
+        crate::transcript_presence::reconcile_transcript_presence(&self.shared, chat).await
     }
 
     /// Forget the dead CLI session so the next send spawns fresh in the same chat row.
     pub async fn continue_here(&self, chat_id: &str) -> Result<(), DegradedRecoveryError> {
-        let wrapper = self.recovery_wrapper();
-        crate::degraded_recovery::continue_here(&wrapper, chat_id).await
+        crate::degraded_recovery::continue_here(&self.shared, &self.event_handler, chat_id).await
     }
 
     /// Detach the chat from its deleted worktree and rebind it to the project root.
@@ -174,14 +172,12 @@ impl ChatManager {
         &self,
         chat_id: &str,
     ) -> Result<(), DegradedRecoveryError> {
-        let wrapper = self.recovery_wrapper();
-        crate::degraded_recovery::continue_in_project_root(&wrapper, chat_id).await
+        crate::degraded_recovery::continue_in_project_root(&self.shared, chat_id).await
     }
 
     /// Re-add the deleted worktree at its stored path from the stored branch (409 when branch gone).
     pub async fn recreate_worktree(&self, chat_id: &str) -> Result<(), DegradedRecoveryError> {
-        let wrapper = self.recovery_wrapper();
-        crate::degraded_recovery::recreate_chat_worktree(&wrapper, chat_id).await
+        crate::degraded_recovery::recreate_chat_worktree(&self.shared, chat_id).await
     }
 
     /// Build a stateless history-load session for `chat_id`, or `None` when the chat

@@ -13,7 +13,6 @@ use mainframe_types::content::LeafContent;
 use mainframe_types::events::DaemonEvent;
 
 use crate::chat_surface::ChatSurfaceEvent;
-use crate::event_handler::PushOut;
 use crate::types::ActiveChat;
 
 use super::{ChatPermissionHandler, PermissionError, is_exit_plan_mode};
@@ -98,23 +97,12 @@ impl ChatPermissionHandler {
             .lock_recover()
             .shift(chat_id, &response.request_id);
         if let Some(next_request) = next_request {
-            let notify = self
-                .shared
-                .deps
-                .should_notify_permission(Some(&next_request.tool_name));
             self.notify_surface(ChatSurfaceEvent::GateRaised {
                 chat_id: chat_id.to_string(),
                 request: next_request.clone(),
             });
-            if notify {
-                self.shared.deps.send_push(PushOut {
-                    chat_id: chat_id.to_string(),
-                    title: "Permission Required".to_string(),
-                    body: format!("Agent wants to run: {}", next_request.tool_name),
-                    push_type: "permission".to_string(),
-                    priority: "high".to_string(),
-                });
-            }
+            self.shared
+                .permission_push(chat_id, &next_request.tool_name);
         }
 
         let chat = active.lock_recover().chat.clone();

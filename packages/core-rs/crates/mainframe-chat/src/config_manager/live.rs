@@ -1,11 +1,23 @@
 use super::*;
 
-impl<D: ConfigManagerDeps> ChatConfigManager<D> {
-    pub fn new(deps: D) -> Self {
+impl ChatConfigManager {
+    pub(crate) fn new(
+        shared: Arc<crate::chat_manager::ChatShared>,
+        lifecycle: Arc<crate::lifecycle_manager::ChatLifecycleManager>,
+        worktree_offers: Arc<crate::worktree_offer::WorktreeOfferRegistry>,
+    ) -> Self {
         Self {
-            deps,
+            shared,
+            lifecycle,
+            worktree_offers,
             changes: KeyedMutex::default(),
         }
+    }
+
+    pub(super) fn active_chat(&self, chat_id: &str) -> Option<Arc<Mutex<ActiveChat>>> {
+        let cell = self.shared.active(chat_id)?;
+        self.lifecycle.touch(chat_id);
+        Some(cell)
     }
 
     pub(crate) async fn lock_changes(&self, chat_id: &str) -> tokio::sync::OwnedMutexGuard<()> {
@@ -16,8 +28,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
         &self,
         chat_id: &str,
     ) -> Result<Arc<Mutex<ActiveChat>>, ConfigError> {
-        self.deps
-            .get_active_chat(chat_id)
+        self.active_chat(chat_id)
             .ok_or_else(|| NotFound::new("Chat", chat_id).into())
     }
 
@@ -90,15 +101,20 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
         if updates == ChatPatch::default() {
             return model_error.map_or(Ok(()), Err);
         }
-        self.deps.chats_update(chat_id, &updates);
+        self.shared.deps.chats_update(chat_id, &updates);
         // Model switch can invalidate the live tuning (e.g. xhigh/ultracode on a model that
         // doesn't support them). Re-resolve against the new model and re-apply.
         if updates.model.is_some() {
-            self.deps.apply_tuning(chat_id).await;
+            crate::chat_manager::shared::apply_tuning_impl(
+                &self.shared.active_chats,
+                &self.shared.deps,
+                chat_id,
+            )
+            .await;
         }
         let chat = cell.lock_recover().chat.clone();
-        self.deps
-            .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
+        self.shared
+            .emit(DaemonEvent::ChatUpdated { chat, reason: None });
         model_error.map_or(Ok(()), Err)
     }
 
@@ -108,10 +124,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
         cell: &Arc<Mutex<ActiveChat>>,
         changes: RespawnChanges,
     ) -> Result<(), ConfigError> {
-        if let Some(inflight) = self.deps.take_starting_chat(chat_id) {
-            // spawn may have failed — the guard future carries no error here.
-            inflight.await;
-        }
+        self.lifecycle.await_starting(chat_id).await;
 
         let session = cell.lock_recover().session.clone();
         let was_spawned = session.as_ref().is_some_and(|s| s.is_spawned());
@@ -143,12 +156,10 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
             }
         }
 
-        self.deps.chats_update(chat_id, &updates);
         let chat = cell.lock_recover().chat.clone();
-        self.deps
-            .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
+        self.shared.update_and_emit(chat, &updates);
         if was_spawned {
-            self.deps.start_chat(chat_id).await;
+            self.lifecycle.start_chat(chat_id).await;
         }
         Ok(())
     }

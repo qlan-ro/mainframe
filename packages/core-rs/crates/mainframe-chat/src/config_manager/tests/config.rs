@@ -8,8 +8,8 @@ async fn persists_permission_mode_even_when_set_model_rejects() {
         ..FakeSession::spawned()
     });
     let cell = cell_with(session.clone());
-    let deps = FakeDeps::new(cell.clone());
-    let manager = ChatConfigManager::new(deps);
+    let deps = Setup::new(cell.clone());
+    let manager = Harness::new(deps);
 
     manager
         .update_chat_config(
@@ -30,7 +30,7 @@ async fn persists_permission_mode_even_when_set_model_rejects() {
         session.set_permission_mode_calls.lock().unwrap().as_slice(),
         &[ExecutionMode::AcceptEdits]
     );
-    let updates = manager.deps.updates.lock().unwrap();
+    let updates = manager.updates();
     assert_eq!(
         updates.as_slice(),
         &[ChatPatch {
@@ -41,8 +41,7 @@ async fn persists_permission_mode_even_when_set_model_rejects() {
     let chat = cell.lock().unwrap().chat.clone();
     assert_eq!(chat.model.as_deref(), Some("old-model")); // rejected — not applied
     assert_eq!(chat.permission_mode, Some(ExecutionMode::AcceptEdits)); // succeeded — applied
-    assert_eq!(manager.deps.apply_tuning_calls.load(Ordering::SeqCst), 0); // model didn't change
-    let events = manager.deps.events.lock().unwrap();
+    let events = manager.deps.events();
     assert_eq!(events.len(), 1);
     assert!(
         matches!(&events[0], DaemonEvent::ChatUpdated { chat: c, reason: None } if c.permission_mode == Some(ExecutionMode::AcceptEdits))
@@ -53,7 +52,7 @@ async fn persists_permission_mode_even_when_set_model_rejects() {
 async fn moving_a_live_chat_onto_an_endpoint_model_respawns_instead_of_setting_the_model() {
     let session = Arc::new(FakeSession::spawned());
     let cell = cell_with(session.clone());
-    let manager = ChatConfigManager::new(FakeDeps::new(cell.clone()));
+    let manager = Harness::new(Setup::new(cell.clone()));
 
     manager
         .update_chat_config(
@@ -68,7 +67,7 @@ async fn moving_a_live_chat_onto_an_endpoint_model_respawns_instead_of_setting_t
 
     assert!(session.set_model_calls.lock().unwrap().is_empty());
     assert_eq!(session.kills(), 1);
-    assert_eq!(manager.deps.start_chat_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(manager.starts(), 1);
     assert_eq!(
         cell.lock().unwrap().chat.model.as_deref(),
         Some("cliproxy/gpt-5.6-sol")
@@ -80,7 +79,7 @@ async fn switching_between_two_models_on_the_same_endpoint_stays_live() {
     let session = Arc::new(FakeSession::spawned());
     let cell = cell_with(session.clone());
     cell.lock().unwrap().chat.model = Some("cliproxy/gpt-5.6-sol".to_string());
-    let manager = ChatConfigManager::new(FakeDeps::new(cell.clone()));
+    let manager = Harness::new(Setup::new(cell.clone()));
 
     manager
         .update_chat_config("c1", None, Some("cliproxy/kimi-k3".to_string()), None, None)
@@ -92,7 +91,7 @@ async fn switching_between_two_models_on_the_same_endpoint_stays_live() {
         &["cliproxy/kimi-k3".to_string()]
     );
     assert_eq!(session.kills(), 0);
-    assert_eq!(manager.deps.start_chat_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(manager.starts(), 0);
 }
 
 #[tokio::test]
@@ -103,7 +102,7 @@ async fn inherited_runtime_endpoint_requires_restart_when_selecting_native_model
     });
     let cell = cell_with(session.clone());
     cell.lock().unwrap().chat.model = None;
-    let manager = ChatConfigManager::new(FakeDeps::new(cell.clone()));
+    let manager = Harness::new(Setup::new(cell.clone()));
 
     manager
         .update_chat_config("c1", None, Some("claude-opus-5-5".into()), None, None)
@@ -111,14 +110,14 @@ async fn inherited_runtime_endpoint_requires_restart_when_selecting_native_model
         .unwrap();
 
     assert_eq!(session.kills(), 1);
-    assert_eq!(manager.deps.start_chat_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(manager.starts(), 1);
     assert!(session.set_model_calls.lock().unwrap().is_empty());
     assert_eq!(
         cell.lock().unwrap().chat.model.as_deref(),
         Some("claude-opus-5-5")
     );
     assert_eq!(
-        manager.deps.updates.lock().unwrap().as_slice(),
+        manager.updates().as_slice(),
         &[ChatPatch {
             model: Some("claude-opus-5-5".into()),
             ..Default::default()
@@ -134,7 +133,7 @@ async fn later_explicit_selection_wins_over_a_slow_inheritance_resolution() {
         ..FakeSession::spawned()
     });
     let cell = cell_with(session);
-    let manager = Arc::new(ChatConfigManager::new(FakeDeps::new(cell.clone())));
+    let manager = Arc::new(Harness::new(Setup::new(cell.clone())));
     let first_manager = manager.clone();
     let first = tokio::spawn(async move {
         first_manager
@@ -165,7 +164,7 @@ async fn later_explicit_selection_wins_over_a_slow_inheritance_resolution() {
         cell.lock().unwrap().chat.model.as_deref(),
         Some("claude-opus-5-5")
     );
-    let updates = manager.deps.updates.lock().unwrap();
+    let updates = manager.updates();
     assert_eq!(
         updates.last().unwrap().model.as_deref(),
         Some("claude-opus-5-5")
@@ -179,31 +178,31 @@ async fn does_not_persist_or_emit_when_every_setting_rejects() {
         ..FakeSession::spawned()
     });
     let cell = cell_with(session);
-    let deps = FakeDeps::new(cell);
-    let manager = ChatConfigManager::new(deps);
+    let deps = Setup::new(cell);
+    let manager = Harness::new(deps);
 
     manager
         .update_chat_config("c1", None, Some("new-model".to_string()), None, None)
         .await
         .unwrap_err();
 
-    assert!(manager.deps.updates.lock().unwrap().is_empty());
-    assert!(manager.deps.events.lock().unwrap().is_empty());
+    assert!(manager.updates().is_empty());
+    assert!(manager.deps.events().is_empty());
 }
 
 #[tokio::test]
 async fn rebinds_a_worktreed_chat_to_a_different_worktree() {
     let session = Arc::new(FakeSession::spawned());
-    let cell = cell_with_chat(worktreed_chat(), session);
-    let deps = FakeDeps::with_project(cell.clone(), test_project());
-    let manager = ChatConfigManager::new(deps);
+    let cell = cell_with_chat(worktreed_chat(), session.clone());
+    let deps = Setup::with_project(cell.clone(), test_project());
+    let manager = Harness::new(deps);
 
     manager
         .attach_worktree("c1", "/new/wt", Some("feat"))
         .await
         .unwrap();
 
-    let updates = manager.deps.updates.lock().unwrap();
+    let updates = manager.updates();
     assert_eq!(
         updates.as_slice(),
         &[ChatPatch {
@@ -213,7 +212,7 @@ async fn rebinds_a_worktreed_chat_to_a_different_worktree() {
         }]
     );
     assert_eq!(
-        manager.deps.start_chat_calls.load(Ordering::SeqCst),
+        manager.starts(),
         1,
         "expected start_chat to be called once to restart the chat in the new worktree"
     );
@@ -222,33 +221,33 @@ async fn rebinds_a_worktreed_chat_to_a_different_worktree() {
 #[tokio::test]
 async fn attaching_the_same_worktree_path_is_a_no_op() {
     let session = Arc::new(FakeSession::spawned());
-    let cell = cell_with_chat(worktreed_chat(), session);
-    let deps = FakeDeps::with_project(cell.clone(), test_project());
-    let manager = ChatConfigManager::new(deps);
+    let cell = cell_with_chat(worktreed_chat(), session.clone());
+    let deps = Setup::with_project(cell.clone(), test_project());
+    let manager = Harness::new(deps);
 
     manager
         .attach_worktree("c1", "/old/wt", Some("old-branch"))
         .await
         .unwrap();
 
-    assert_eq!(manager.deps.stop_chat_calls.load(Ordering::SeqCst), 0);
-    assert!(manager.deps.updates.lock().unwrap().is_empty());
-    assert!(manager.deps.events.lock().unwrap().is_empty());
+    assert_eq!(session.kills(), 0);
+    assert!(manager.updates().is_empty());
+    assert!(manager.deps.events().is_empty());
 }
 
 #[tokio::test]
 async fn rebinding_stops_launch_processes_for_the_old_worktree_path() {
     let session = Arc::new(FakeSession::spawned());
-    let cell = cell_with_chat(worktreed_chat(), session);
-    let deps = FakeDeps::with_project(cell.clone(), test_project());
-    let manager = ChatConfigManager::new(deps);
+    let cell = cell_with_chat(worktreed_chat(), session.clone());
+    let deps = Setup::with_project(cell.clone(), test_project());
+    let manager = Harness::new(deps);
 
     manager
         .attach_worktree("c1", "/new/wt", Some("feat"))
         .await
         .unwrap();
 
-    let stop_launch_calls = manager.deps.stop_launch_calls.lock().unwrap();
+    let stop_launch_calls = manager.deps.workspace.stop_calls.lock().unwrap();
     assert_eq!(
         stop_launch_calls.as_slice(),
         &[("p1".to_string(), "/old/wt".to_string())]

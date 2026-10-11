@@ -1,6 +1,7 @@
 //! The `EventEmitter` half of [`FakeDeps`]: records every daemon event and
 //! every background-task / workflow-run teardown call.
 
+use mainframe_types::sync::LockExt as _;
 use std::sync::Mutex;
 
 use std::sync::Arc;
@@ -29,39 +30,36 @@ pub(crate) struct FakeEventEmitter {
 
 impl FakeEventEmitter {
     pub(crate) fn events(&self) -> Vec<DaemonEvent> {
-        self.events.lock().unwrap().clone()
+        self.events.lock_recover().clone()
     }
 }
 
 impl EventEmitter for FakeDeps {
     fn emit_event(&self, event: DaemonEvent) {
-        self.emitter.events.lock().unwrap().push(event);
+        self.emitter.events.lock_recover().push(event);
     }
     fn tracker_remove_chat(&self, chat_id: &str) {
         self.emitter
             .tracker_removed
-            .lock()
-            .unwrap()
+            .lock_recover()
             .push(chat_id.to_string());
     }
     fn tracker_list_live(&self, _chat_id: &str) -> Vec<BackgroundTask> {
-        self.emitter.live_tasks.lock().unwrap().clone()
+        self.emitter.live_tasks.lock_recover().clone()
     }
     fn tracker_end_all_running(&self, chat_id: &str) {
         self.emitter
             .tracker_ended
-            .lock()
-            .unwrap()
+            .lock_recover()
             .push(chat_id.to_string());
-        if let Some(tracker) = self.emitter.tracker.lock().unwrap().as_ref() {
+        if let Some(tracker) = self.emitter.tracker.lock_recover().as_ref() {
             tracker.end_all_running(chat_id);
         }
     }
     fn workflow_runs_stop_all(&self, chat_id: &str) {
         self.emitter
             .workflow_runs_stopped
-            .lock()
-            .unwrap()
+            .lock_recover()
             .push(chat_id.to_string());
     }
 }

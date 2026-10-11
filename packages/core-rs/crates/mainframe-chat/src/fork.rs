@@ -19,8 +19,7 @@ pub enum ForkPoint {
     BeforeMessage(String),
 }
 
-/// `chats.pending_fork`'s in-memory shape, as it crosses the `ChatManagerDeps` /
-/// `LifecycleManagerDeps` / `EventHandlerDeps` boundary. Mirrors
+/// `chats.pending_fork`'s in-memory shape at the `ChatStore` boundary. Mirrors
 /// `mainframe_db::chats::PendingFork` field-for-field; kept as a separate type
 /// because this crate does not depend on `mainframe-db` (the daemon-side deps
 /// impl translates both ways).

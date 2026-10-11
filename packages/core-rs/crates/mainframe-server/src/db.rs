@@ -16,13 +16,11 @@ use mainframe_types::settings::NotificationConfig;
 /// also the daemon's `SettingsKv`.
 pub type Db = mainframe_db::actor::SqliteActor<mainframe_db::DatabaseManager>;
 
-/// The effective notification config, for the synchronous notification gates
-/// (chat event sinks, the plugin UI `notify`). Blocks on the actor, so it
-/// follows the `SqliteActor::call_blocking` rule. A read failure is logged and
-/// yields the defaults (every notification on), so an unreadable store never
-/// silences a notification.
-pub fn notification_config_blocking(db: &Db) -> NotificationConfig {
-    match db.call_blocking(|d| d.settings.get("general", "notifications")) {
+pub async fn notification_config(db: &Db) -> NotificationConfig {
+    match db
+        .call(|d| d.settings.get("general", "notifications"))
+        .await
+    {
         Ok(raw) => parse_notification_config(raw.as_deref()),
         Err(err) => {
             tracing::warn!(%err, category = "general", key = "notifications", "notification settings read failed; using the defaults");
@@ -33,7 +31,7 @@ pub fn notification_config_blocking(db: &Db) -> NotificationConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::{Db, notification_config_blocking};
+    use super::{Db, notification_config};
     use mainframe_db::DatabaseManager;
     use mainframe_types::settings::NotificationConfig;
 
@@ -71,10 +69,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn notification_config_blocking_parses_the_stored_row() {
+    async fn notification_config_parses_the_stored_row() {
         let db = open_in_memory();
         assert_eq!(
-            notification_config_blocking(&db),
+            notification_config(&db).await,
             NotificationConfig::default()
         );
         db.call(|d| {
@@ -86,7 +84,7 @@ mod tests {
         })
         .await
         .unwrap();
-        let cfg = notification_config_blocking(&db);
+        let cfg = notification_config(&db).await;
         assert!(!cfg.chat.session_error);
         assert!(!cfg.other.plugin);
         assert!(cfg.chat.task_complete);
@@ -94,13 +92,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn notification_config_blocking_defaults_when_the_store_fails() {
+    async fn notification_config_defaults_when_the_store_fails() {
         let db = open_in_memory();
         db.call(|d| Ok(d.connection().execute_batch("DROP TABLE settings")?))
             .await
             .unwrap();
         assert_eq!(
-            notification_config_blocking(&db),
+            notification_config(&db).await,
             NotificationConfig::default()
         );
     }

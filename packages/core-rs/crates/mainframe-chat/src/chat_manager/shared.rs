@@ -50,7 +50,7 @@ pub(super) fn enrich_chat(
 /// `ChatManager.applyTuning` — live-apply resolved tuning to the running session.
 /// Shared by the facade method and the config manager's `apply_tuning` dep (a model
 /// switch re-resolves + re-applies). No live session → applied at next spawn.
-pub(super) async fn apply_tuning_impl(
+pub(crate) async fn apply_tuning_impl(
     active_chats: &Registry,
     deps: &Arc<dyn ChatManagerDeps>,
     chat_id: &str,

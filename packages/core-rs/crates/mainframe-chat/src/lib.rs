@@ -45,9 +45,10 @@ pub mod worktree_offer_scan;
 
 mod history_cache;
 
-#[cfg(test)]
-mod test_support;
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
+#[allow(dead_code, clippy::unwrap_used, clippy::expect_used)]
+pub mod test_support;
+#[cfg(any(test, feature = "test-support"))]
 mod test_support_chat;
 
 mod tool_call_timing;

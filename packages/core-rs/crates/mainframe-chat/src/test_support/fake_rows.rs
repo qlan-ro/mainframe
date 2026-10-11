@@ -48,3 +48,22 @@ pub(crate) fn side_chat_row(id: &str, parent: &Chat) -> Chat {
     chat.parent_chat_id = Some(Some(parent.id.clone()));
     chat
 }
+
+pub(crate) fn owned_sessions(
+    store: &dyn crate::segments::SegmentStore,
+    chat_id: &str,
+) -> Vec<crate::config_transcripts::OwnedNativeSession> {
+    store
+        .layout(chat_id)
+        .into_iter()
+        .flat_map(|l| l.natives)
+        .filter(|n| n.borrowed_from_chat_id.is_none())
+        .filter_map(|n| {
+            Some(crate::config_transcripts::OwnedNativeSession {
+                session_id: n.native_session_id?,
+                native_ref: n.id,
+                adapter_id: n.adapter_id,
+            })
+        })
+        .collect()
+}

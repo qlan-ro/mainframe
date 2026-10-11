@@ -1,8 +1,8 @@
 use super::*;
 
-impl<D: ConfigManagerDeps> ChatConfigManager<D> {
+impl ChatConfigManager {
     pub(super) async fn worktree_dir(&self) -> String {
-        read_setting(self.deps.settings(), "general", "worktreeDir")
+        read_setting(self.shared.deps.settings(), "general", "worktreeDir")
             .await
             .unwrap_or_else(|| GeneralConfig::default().worktree_dir)
     }
@@ -28,15 +28,16 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
         }
 
         let project = self
+            .shared
             .deps
-            .projects_get(&project_id)
+            .projects_get_path(&project_id)
             .ok_or_else(|| NotFound::unnamed("Project"))?;
 
         if let Some(session_id) = claude_session_id {
             // Mid-session path. The worktree is created while the chat still runs,
             // so a failed `git worktree add` leaves it untouched.
             let info = create_worktree(
-                &project.path,
+                &project,
                 &self.worktree_dir().await,
                 base_branch,
                 branch_name,
@@ -48,7 +49,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
                     chat_id,
                     LiveRebind {
                         project_id: &project_id,
-                        old_dir: &project.path,
+                        old_dir: &project,
                         old_worktree: None,
                         active: ActiveSession {
                             adapter_id: &adapter,
@@ -72,7 +73,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
         self.detach_session(&cell).await?;
 
         let info = create_worktree(
-            &project.path,
+            &project,
             &self.worktree_dir().await,
             base_branch,
             branch_name,
@@ -85,10 +86,10 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
             session_id: None,
         };
         relocate_claude_transcripts(
-            &self.deps,
+            self.shared.deps.as_ref(),
             chat_id,
             active,
-            &project.path,
+            &project,
             &info.worktree_path,
         )
         .await

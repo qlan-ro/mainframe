@@ -45,15 +45,14 @@ impl ChatManager {
                 let mut guard = cell.lock_recover();
                 guard.chat.title = Some(title.clone());
             }
-            self.shared.deps.chats_update(
-                chat_id,
+            let chat = cell.lock_recover().chat.clone();
+            self.shared.update_and_emit(
+                chat,
                 &ChatPatch {
                     title: Some(title),
                     ..Default::default()
                 },
             );
-            let chat = cell.lock_recover().chat.clone();
-            self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
         }
         // Title generation runs WITHOUT awaiting: it shells out to the CLI, so
         // awaiting it here would both stall the send and shift its `chat.updated`
