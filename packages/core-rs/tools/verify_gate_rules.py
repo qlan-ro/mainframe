@@ -12,6 +12,12 @@ RETIRED = re.compile("PORT" r" STATUS|packages/core" "/")
 
 MACRO = re.compile(r'\b(?:tracing::)?(?:(?:trace|debug|info|warn|error)(?:_span)?|span|event)!\s*[(\[{]')
 
+CHANNEL_SEND = re.compile(
+    r'\s*(?:\w+\.)*'
+    r'(?:\w*(?:sender|tx|channel|bcast)|broadcast|bus|emit|emitter|done|waiters|signals)'
+    r'\s*\.(?:send|try_send)\s*\(.*\)\s*', re.S,
+)
+
 
 def delimiters(code: str, start: int) -> int:
     stack = []
@@ -83,12 +89,26 @@ def scan_basic(scan: Scan, sleep_allowed: set[str]):
     for match in re.finditer(r'#\s*!?\s*\[\s*allow\s*\(', code):
         if production(match.start()):
             report(match.start(), 'production allow requires expect with reason')
-    for match in re.finditer(r'\b(?:e?println)!\s*\(', code):
+    for match in re.finditer(r'\b(?:e?print(?:ln)?|dbg)!\s*[(\[{]', code):
         if production(match.start()) and not ('mainframe-daemon' in path.parts and 'cli' in path.parts):
             report(match.start(), 'printing outside daemon CLI subcommands')
     for match in re.finditer(r'\bsleep\s*\(', code):
-        if not production(match.start()) and not any(path.as_posix().endswith(p) for p in sleep_allowed):
+        if not production(match.start()) and not sleep_exempt(scan, match.start(), sleep_allowed):
             report(match.start(), 'test sleep outside polling helper or real-child allowlist')
+
+
+def sleep_exempt(scan: Scan, position: int, allowed: set[str]) -> bool:
+    pattern = r'^\s*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?fn\s+(\w+)\s*\('
+    for function in re.finditer(pattern, scan.code, re.M):
+        body = scan.code.find('{', function.end())
+        if body < 0 or not body < position < delimiters(scan.code, body):
+            continue
+        return any(
+            entry.endswith('::' + function[1])
+            and scan.path.as_posix().endswith(entry.rsplit('::', 1)[0])
+            for entry in allowed
+        )
+    return False
 
 
 def scan_signatures(scan: Scan):
@@ -113,15 +133,17 @@ def scan_discards(scan: Scan):
             continue
         end = statement_end(code, match.end())
         expression = code[match.end():end]
-        if not re.search(r'\w+\s*\(', expression) or re.search(r'\b(?:send|try_send)\s*\(', expression):
+        if not re.search(r'\w+\s*\(|\w+\s*!\s*[(\[{]|\.\s*await\b', expression):
+            continue
+        if CHANNEL_SEND.fullmatch(expression) and '.await' not in expression:
             continue
         start_line = text.rfind('\n', 0, match.start()) + 1
-        adjacent_start = text.rfind('\n', 0, max(0, start_line - 1)) + 1
         line_end = text.find('\n', end + 1)
-        adjacent_end = text.find('\n', line_end + 1) if line_end >= 0 else -1
-        context = text[adjacent_start:adjacent_end if adjacent_end >= 0 else len(text)]
-        if '/* expected */' not in context and not re.search(r'\bwarn!\s*\(', mask_code(context)):
-            report(match.start(), 'discarded call requires /* expected */ or adjacent warn!')
+        previous_start = text.rfind('\n', 0, max(0, start_line - 1)) + 1
+        context = text[start_line:line_end if line_end >= 0 else len(text)]
+        previous = text[previous_start:start_line].strip()
+        if '/* expected */' not in context and previous != '/* expected */':
+            report(match.start(), 'discarded call requires /* expected */ or if let Err handling')
 
 
 def measured_lines(path: Path, test_files: set[Path]) -> int:
@@ -143,9 +165,15 @@ def check_lengths(crates: Path, limits: dict[str, int], test_files: set[Path]) -
     violations = []
     for path in sorted(crates.rglob('*.rs')):
         count = measured_lines(path, test_files)
-        limit = limits.get(path.relative_to(crates).as_posix(), 300)
-        if count > max(300, limit):
-            violations.append(f'{path}:1: file length {count} exceeds ratchet {max(300, limit)}')
+        name = path.relative_to(crates).as_posix()
+        limit = limits.get(name, 300)
+        if name in limits and count != limit:
+            violations.append(f'{path}:1: measured size {count} must equal ratchet {limit}')
+        elif count > limit:
+            violations.append(f'{path}:1: file length {count} exceeds ratchet {limit}')
+    for name in limits:
+        if not (crates / name).is_file():
+            violations.append(f'{name}: remove the ratchet entry for the missing file')
     return violations
 
 

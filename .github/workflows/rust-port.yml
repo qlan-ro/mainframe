@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - 'packages/core-rs/**'
+      - 'docs/ARCHITECTURE.md'
 
 jobs:
   check:

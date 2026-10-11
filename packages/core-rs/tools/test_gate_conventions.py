@@ -2,8 +2,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from arch_tiers import START, END, check_document, render
-from verify_gate_ratchet import compare_limits
+from arch_tiers import START, END, check_document, read_manifest, render
+from verify_gate_ratchet import check_ratchet, compare_limits
 from verify_gate_rules import check_retired_sources, check_lengths, scan_conventions
 
 
@@ -28,12 +28,19 @@ class ConventionTests(unittest.TestCase):
         self.assertEqual(len(self.scan('fn run() { let _ = persist().await; }')), 1)
         for expression in ['let _ = sender.send(value);', 'let _ = sender.try_send(value);',
                            'let _ = persist(); /* expected */',
-                           'let _ = persist();\ntracing::warn!("failed");']:
+                           'if let Err(error) = persist() { tracing::warn!(%error, "failed"); }']:
             self.assertEqual(self.scan(expression), [])
-        self.assertEqual(len(self.scan('let _ = persist(); // warn!("not real")')), 1)
+        for expression in [
+            'let _ = persist(); // warn!("not real")', 'let _ = task.await;',
+            'let _ = write!(buffer, "x");', 'let _ = client.send().await;',
+            'let _ = send(value);', 'let _ = request.send();',
+            'let _ = persist();\nwarn!("failed");',
+        ]:
+            self.assertEqual(len(self.scan(expression)), 1)
 
     def test_printing(self):
-        self.assertEqual(len(self.scan('eprintln!("failure");')), 1)
+        for macro in ['print', 'eprint', 'println', 'eprintln', 'dbg']:
+            self.assertEqual(len(self.scan(f'{macro}!("failure");')), 1)
         self.assertEqual(self.scan('println!("version");', 'mainframe-daemon/src/cli/version.rs'), [])
         self.assertEqual(len(self.scan('println!("version");', 'mainframe-daemon/src/main.rs')), 2)
         self.assertEqual(self.scan('println!("test");', test=True), [])
@@ -53,9 +60,11 @@ class ConventionTests(unittest.TestCase):
     def test_sleep_only_in_tests(self):
         self.assertEqual(len(self.scan('tokio::time::sleep(interval).await;', test=True)), 1)
         self.assertEqual(self.scan('tokio::time::sleep(interval).await;'), [])
-        self.assertEqual(self.scan('sleep(interval);', test=True, allowed={'src/example.rs'}), [])
+        self.assertEqual(self.scan('fn allowed() { sleep(interval); }', test=True, allowed={'src/example.rs::allowed'}), [])
         self.assertEqual(len(self.scan('#[cfg(test)] mod cases { fn run() { sleep(interval); } }')), 1)
         self.assertEqual(self.scan('fn asleep() {} // sleep(interval)'), [])
+        self.assertEqual(len(self.scan('fn other() { sleep(interval); }', test=True, allowed={'src/example.rs::allowed'})), 1)
+        self.assertEqual(len(self.scan('fn allowed() {}\nfn other() { sleep(interval); }', test=True, allowed={'src/example.rs::allowed'})), 1)
 
     def test_production_allow(self):
         self.assertEqual(len(self.scan('#[allow(dead_code)] fn example() {}')), 1)
@@ -70,6 +79,9 @@ class ConventionTests(unittest.TestCase):
         self.assertEqual(len(check_lengths(self.root, {}, set())), 1)
         self.assertEqual(check_lengths(self.root, {'src/example.rs': 301}, set()), [])
         path.write_text('fn example() {}\n' * 302)
+        self.assertEqual(len(check_lengths(self.root, {'src/example.rs': 301}, set())), 1)
+
+        path.write_text('fn example() {}\n' * 300)
         self.assertEqual(len(check_lengths(self.root, {'src/example.rs': 301}, set())), 1)
 
     def test_length_excludes_inline_tests_but_counts_test_files(self):
@@ -124,3 +136,28 @@ class ConventionTests(unittest.TestCase):
             path.parent.mkdir()
             path.write_text(f'[package]\nname = "{name}"\n{deps}\n')
         self.assertIn('| 1 | `b` | `a` |', render(self.root))
+
+    def test_manifest_dotted_and_table_dependencies(self):
+        path = self.root / 'Cargo.toml'
+        path.write_text('[package]\nname="a"\n[dependencies]\nmainframe-x.workspace=true\n[dependencies.mainframe-y]\nworkspace=true\n')
+        self.assertEqual(read_manifest(path), ('a', {'mainframe-x', 'mainframe-y'}))
+
+    def test_base_comparison_skips_are_visible(self):
+        import contextlib
+        import io
+        from subprocess import CompletedProcess
+        from unittest.mock import patch
+        for outcomes in [
+            [CompletedProcess([], 1, '', 'missing base')],
+            [CompletedProcess([], 0, 'abc', ''), CompletedProcess([], 1, '', 'missing file')],
+        ]:
+            output = io.StringIO()
+            with patch('verify_gate_ratchet.subprocess.run', side_effect=outcomes), contextlib.redirect_stderr(output):
+                self.assertEqual(check_ratchet(self.root / 'packages/core-rs/crates', {}), [])
+            self.assertIn('base ratchet comparison skipped:', output.getvalue())
+
+    def test_a_low_limit_must_still_match_its_file(self):
+        path = self.root / 'example.rs'
+        path.write_text('fn example() {}\n' * 2)
+        self.assertEqual(len(check_lengths(self.root, {'example.rs': 1}, set())), 1)
+        self.assertEqual(len(check_lengths(self.root, {'missing.rs': 301}, set())), 1)

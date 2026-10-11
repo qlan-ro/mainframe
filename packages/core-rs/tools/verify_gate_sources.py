@@ -40,12 +40,18 @@ def test_spans(masked: str, text: str | None = None) -> list[tuple[int, int]]:
         pattern = r'#\[cfg\(any\(test,\s*feature\s*=\s*"test-support"\)\)\]'
         attrs.extend(m for m in re.finditer(pattern, text) if masked[m.start()] == '#')
     for attr in attrs:
-        end = re.search(r'[;{]', masked[attr.end():])
-        if end:
-            pos = attr.end() + end.start()
-            stop = pairs.get(pos) if end[0] == '{' else pos + 1
-            if stop is not None:
-                spans.append((attr.start(), stop))
+        depth = 0
+        for pos in range(attr.end(), len(masked)):
+            char = masked[pos]
+            if char in '([<':
+                depth += 1
+            elif char in ')]>':
+                depth = max(0, depth - 1)
+            elif depth == 0 and char in ',};{':
+                stop = pairs.get(pos) if char == '{' else pos + (char != '}')
+                if stop is not None:
+                    spans.append((attr.start(), stop))
+                break
     return spans
 
 

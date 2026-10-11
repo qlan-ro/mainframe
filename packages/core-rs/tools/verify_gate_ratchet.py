@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -23,6 +24,7 @@ def check_ratchet(crates: Path, limits: dict[str, int]) -> list[str]:
         ['git', 'merge-base', 'HEAD', ref], cwd=root, text=True, capture_output=True,
     )
     if merge_base.returncode:
+        print('verify-gate: base ratchet comparison skipped: merge-base unavailable', file=sys.stderr)
         return []
     path = 'packages/core-rs/tools/file_length_ratchet.json'
     previous = subprocess.run(
@@ -30,5 +32,6 @@ def check_ratchet(crates: Path, limits: dict[str, int]) -> list[str]:
         cwd=root, text=True, capture_output=True,
     )
     if previous.returncode:
+        print('verify-gate: base ratchet comparison skipped: base ratchet unavailable', file=sys.stderr)
         return []
     return compare_limits(limits, json.loads(previous.stdout))

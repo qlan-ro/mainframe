@@ -2,7 +2,7 @@
 """Render dependency tiers from normal workspace dependencies (excluding tests)."""
 from __future__ import annotations
 
-import re
+import tomllib
 from pathlib import Path
 
 START = '<!-- BEGIN GENERATED CRATE TIERS -->'
@@ -10,23 +10,14 @@ END = '<!-- END GENERATED CRATE TIERS -->'
 
 
 def read_manifest(path: Path) -> tuple[str, set[str]]:
-    section = ''
-    name = None
-    dependencies = set()
-    for line in path.read_text().splitlines():
-        line = line.strip()
-        if line.startswith('['):
-            section = line.strip('[]')
-        elif section == 'package' and line.startswith('name'):
-            name = line.split('=', 1)[1].strip().strip('"')
-        elif section == 'dependencies' or (section.startswith('target.') and section.endswith('.dependencies')):
-            match = re.match(r'([\w-]+)\s*=', line)
-            if match:
-                package = re.search(r'package\s*=\s*"([^"]+)"', line)
-                dependencies.add(package[1] if package else match[1])
-    if name is None:
-        raise ValueError(f'missing package name: {path}')
-    return name, dependencies
+    manifest = tomllib.loads(path.read_text())
+    tables = [manifest.get('dependencies', {})]
+    tables.extend(target.get('dependencies', {}) for target in manifest.get('target', {}).values())
+    dependencies = {
+        value.get('package', key) if isinstance(value, dict) else key
+        for table in tables for key, value in table.items()
+    }
+    return manifest['package']['name'], dependencies
 
 
 def render(crates: Path) -> str:
