@@ -13,7 +13,7 @@
 
 use std::io::Write;
 
-use base64::Engine as _;
+use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use flate2::Compression;
 use flate2::write::ZlibEncoder;
@@ -78,4 +78,5 @@ fn notification(session_id: &str, count: usize, data: String) -> JsonRpcNotifica
 }
 
 #[cfg(test)]
+#[path = "replay_batch_tests.rs"]
 mod tests;

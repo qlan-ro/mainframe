@@ -229,7 +229,7 @@ async fn handle_frame_with_prompt_routes_session_cancel_through_the_port_with_no
 async fn handle_frame_with_prompt_still_serves_initialize_synchronously() {
     let port = FakePort::default();
     let text =
-        include_str!("../../../mainframe-types/tests/fixtures/acp/jsonrpc-request.initialize.json");
+        include_str!("../../mainframe-types/tests/fixtures/acp/jsonrpc-request.initialize.json");
 
     // Not yet negotiated: initialize is exempt from the gate.
     let reply = handle_frame_with_prompt(text, &daemon(), &port, false)

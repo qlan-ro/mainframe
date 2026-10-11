@@ -5,21 +5,22 @@ use serde_json::{Value, json};
 
 use super::*;
 
+#[path = "gates_tests_offered_options_tests.rs"]
 mod offered_options_tests;
 
 fn fixture(name: &str) -> Value {
     let text = match name {
         "permission.request" => {
-            include_str!("../../../mainframe-types/tests/fixtures/acp/permission.request.json")
+            include_str!("../../mainframe-types/tests/fixtures/acp/permission.request.json")
         }
-        "permission.response-plain" => include_str!(
-            "../../../mainframe-types/tests/fixtures/acp/permission.response-plain.json"
-        ),
-        "permission.response-rich" => include_str!(
-            "../../../mainframe-types/tests/fixtures/acp/permission.response-rich.json"
-        ),
+        "permission.response-plain" => {
+            include_str!("../../mainframe-types/tests/fixtures/acp/permission.response-plain.json")
+        }
+        "permission.response-rich" => {
+            include_str!("../../mainframe-types/tests/fixtures/acp/permission.response-rich.json")
+        }
         "permission.response-cancelled" => include_str!(
-            "../../../mainframe-types/tests/fixtures/acp/permission.response-cancelled.json"
+            "../../mainframe-types/tests/fixtures/acp/permission.response-cancelled.json"
         ),
         other => panic!("unknown fixture: {other}"),
     };

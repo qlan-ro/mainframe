@@ -283,6 +283,7 @@ fn chunk_extension(prev: &[ContentBlock], new: &[ContentBlock]) -> Option<Vec<Co
 #[cfg(test)]
 mod preview_tests;
 #[cfg(test)]
+#[path = "session_state_tests.rs"]
 mod tests;
 #[cfg(test)]
 mod vanish_tests;

@@ -2,7 +2,9 @@
 //! Retry-marker cases moved to `retry_marker_tests.rs` — it shares this file's
 //! fixture builders via `use super::*`.
 
+#[path = "stream_tests_container_delta_tests.rs"]
 mod container_delta_tests;
+#[path = "stream_tests_retry_marker_tests.rs"]
 mod retry_marker_tests;
 
 use serde_json::json;

@@ -233,4 +233,5 @@ impl RevisionLog {
 mod delta;
 
 #[cfg(test)]
+#[path = "revision_log_tests.rs"]
 mod tests;

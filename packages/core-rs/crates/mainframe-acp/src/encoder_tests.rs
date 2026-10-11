@@ -5,15 +5,25 @@
 //! no-split marker cases (compaction, skill-loaded, error) to `marker_tests.rs`
 //! — all five share this file's fixture builders via `use super::*`.
 
+#[path = "encoder_tests_command_metadata_tests.rs"]
 mod command_metadata_tests;
+#[path = "encoder_tests_container_tests.rs"]
 mod container_tests;
+#[path = "encoder_tests_marker_tests.rs"]
 mod marker_tests;
+#[path = "encoder_tests_meta_tests.rs"]
 mod meta_tests;
+#[path = "encoder_tests_provider_switch_tests.rs"]
 mod provider_switch_tests;
+#[path = "encoder_tests_result_content_tests.rs"]
 mod result_content_tests;
+#[path = "encoder_tests_result_image_tests.rs"]
 mod result_image_tests;
+#[path = "encoder_tests_segment_tests.rs"]
 mod segment_tests;
+#[path = "encoder_tests_streaming_tests.rs"]
 mod streaming_tests;
+#[path = "encoder_tests_tool_call_tests.rs"]
 mod tool_call_tests;
 
 use std::collections::HashMap;
@@ -274,6 +284,8 @@ fn queued_messages_are_not_encoded_as_items() {
     assert_eq!(ids, vec!["u1", "a1"]);
 }
 
+#[path = "encoder_tests_tool_timing_tests.rs"]
 mod tool_timing_tests;
 
+#[path = "encoder_tests_presentation_tests.rs"]
 mod presentation_tests;

@@ -252,4 +252,5 @@ pub(crate) fn merge_namespace(existing: Option<Value>, value: Value) -> Value {
 }
 
 #[cfg(test)]
+#[path = "stream_tests.rs"]
 mod tests;

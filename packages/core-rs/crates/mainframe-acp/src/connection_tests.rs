@@ -38,7 +38,7 @@ async fn handle(text: &str, negotiated: bool) -> Option<String> {
 #[tokio::test]
 async fn initialize_at_the_pinned_version_returns_a_result_with_capabilities_meta() {
     let text =
-        include_str!("../../../mainframe-types/tests/fixtures/acp/jsonrpc-request.initialize.json");
+        include_str!("../../mainframe-types/tests/fixtures/acp/jsonrpc-request.initialize.json");
     // Not yet negotiated: `initialize` is the one method exempt from the gate —
     // it is how negotiation happens.
     let reply = handle(text, false).await.expect("initialize must reply");
@@ -137,7 +137,7 @@ async fn dispatch(text: &str, negotiated: bool) -> DispatchOutcome {
 #[tokio::test]
 async fn a_successful_initialize_reports_the_handshake_as_negotiated() {
     let text =
-        include_str!("../../../mainframe-types/tests/fixtures/acp/jsonrpc-request.initialize.json");
+        include_str!("../../mainframe-types/tests/fixtures/acp/jsonrpc-request.initialize.json");
     assert!(dispatch(text, false).await.negotiated);
 }
 
