@@ -151,10 +151,13 @@ impl QuotaManager {
     /// persisted blob, that blob wins instead (#268 F2 boot selection). A store
     /// failure is logged and boots with no persisted quota.
     pub async fn load_from_disk(&self) {
+        // Bind the persistence writer to the boot runtime rather than to
+        // whichever runtime the first ingest happens to run on.
+        self.persister.start_writer();
         let stored = match self.settings.get_by_category(QUOTA_CATEGORY).await {
             Ok(stored) => stored,
             Err(err) => {
-                tracing::warn!(%err, category = QUOTA_CATEGORY, "quota: failed to load persisted blobs");
+                tracing::warn!(%err, category = QUOTA_CATEGORY, "failed to load persisted quota blobs");
                 HashMap::new()
             }
         };
@@ -163,7 +166,7 @@ impl QuotaManager {
             let mut st = self.state.lock_recover();
             for (key, value) in stored {
                 let Some(blob) = safe_parse_quota(&value) else {
-                    tracing::warn!(key = %key, "quota: discarding unparseable persisted blob");
+                    tracing::warn!(key = %key, "discarding unparseable persisted quota blob");
                     continue;
                 };
                 st.blobs.insert(key.clone(), blob.clone());
@@ -401,7 +404,7 @@ impl QuotaManager {
         match serde_json::to_string(blob) {
             Ok(value) => self.persister.persist(key, value),
             Err(err) => {
-                tracing::error!(%err, key = %key, "quota: failed to serialize blob for persistence")
+                tracing::error!(%err, key = %key, "failed to serialize quota blob for persistence")
             }
         }
         (self.emit_event)(DaemonEvent::ProviderQuotaUpdated {
