@@ -164,13 +164,12 @@ Tier 5  mainframe-daemon     bin: boots everything mainframe-server aggregates
 
 ### Boot sequence and process ownership
 
-`mainframe-daemon::main` is a single sequential boot (see the doc comment at
-the top of `packages/core-rs/crates/mainframe-daemon/src/main.rs`): resolve
-the login-shell `PATH` once, then load config → ensure an auth secret → open
-the SQLite DB → start the
+`mainframe-daemon::main` delegates startup to
+`packages/core-rs/crates/mainframe-server/src/bootstrap.rs`: resolve
+the login-shell `PATH` once, then load config → ensure an auth secret → bind
+the HTTP listener → open the SQLite DB → start the
 `BackgroundTaskTracker` → build the `AdapterRegistry` → build `ChatManager` →
-load plugins → start LSP → wire cross-cutting services → bind the HTTP/WS
-server. After bind, it sweeps stray children left by a previous crash,
+load plugins → start LSP → wire cross-cutting services. Before serving, it sweeps stray children left by a previous crash,
 reconciles background tasks, backfills worktree relationships, and starts the
 liveness scheduler. Launch processes and the cloudflared tunnel share one
 on-disk `FileChildRegistry` (`managed-children.json`) specifically so a
