@@ -24,8 +24,9 @@ type Writer = (mpsc::UnboundedReceiver<PersistJob>, Arc<dyn SettingsKv>);
 
 pub(super) struct QuotaPersister {
     tx: mpsc::UnboundedSender<PersistJob>,
-    /// The writer task's inputs until it is spawned on the first write (the
-    /// manager can be built before a runtime exists).
+    /// The writer task's inputs until it is spawned: at boot from
+    /// `QuotaManager::load_from_disk`, or on the first write if that runs
+    /// earlier (the manager can be built before a runtime exists).
     writer: Mutex<Option<Writer>>,
 }
 
@@ -52,18 +53,19 @@ impl QuotaPersister {
         let (done, wait) = tokio::sync::oneshot::channel();
         self.enqueue(PersistJob::Flush(done));
         if wait.await.is_err() {
-            tracing::warn!("quota: persistence writer stopped before the flush");
+            tracing::warn!("quota persistence writer stopped before the flush");
         }
     }
 
     fn enqueue(&self, job: PersistJob) {
         self.start_writer();
         if self.tx.send(job).is_err() {
-            tracing::warn!("quota: persistence writer stopped; blob not saved");
+            tracing::warn!("quota persistence writer stopped; blob not saved");
         }
     }
 
-    fn start_writer(&self) {
+    /// Spawn the writer task on the current runtime if it is not running yet.
+    pub(super) fn start_writer(&self) {
         let mut writer = self.writer.lock_recover();
         if writer.is_none() {
             return;
@@ -75,7 +77,7 @@ impl QuotaPersister {
                 }
             }
             Err(err) => {
-                tracing::warn!(%err, "quota: no async runtime yet; blob stays queued");
+                tracing::warn!(%err, "no async runtime yet; quota blob stays queued");
             }
         }
     }
@@ -86,7 +88,7 @@ async fn drain(mut rx: mpsc::UnboundedReceiver<PersistJob>, settings: Arc<dyn Se
         match job {
             PersistJob::Write { key, value } => {
                 if let Err(err) = settings.set(QUOTA_CATEGORY, &key, &value).await {
-                    tracing::warn!(%err, category = QUOTA_CATEGORY, key = %key, "quota: failed to persist blob");
+                    tracing::warn!(%err, category = QUOTA_CATEGORY, key = %key, "failed to persist quota blob");
                 }
             }
             #[cfg(test)]

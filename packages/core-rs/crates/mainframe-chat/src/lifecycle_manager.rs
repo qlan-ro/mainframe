@@ -322,24 +322,9 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         let mut effective_plan_mode = false;
 
         if new_chat.model.is_none() || new_chat.permission_mode.is_none() || !effective_plan_mode {
-            let default_model = read_setting(
-                self.deps.settings(),
-                "provider",
-                &format!("{adapter_id}.defaultModel"),
-            )
-            .await;
-            let default_mode = read_setting(
-                self.deps.settings(),
-                "provider",
-                &format!("{adapter_id}.defaultMode"),
-            )
-            .await;
-            let default_plan_mode = read_setting(
-                self.deps.settings(),
-                "provider",
-                &format!("{adapter_id}.defaultPlanMode"),
-            )
-            .await;
+            let default_model = self.provider_setting(&adapter_id, "defaultModel").await;
+            let default_mode = self.provider_setting(&adapter_id, "defaultMode").await;
+            let default_plan_mode = self.provider_setting(&adapter_id, "defaultPlanMode").await;
 
             if new_chat.model.is_none()
                 && let Some(m) = default_model
@@ -772,12 +757,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             return;
         }
         let binary = resolve_title_binary(
-            read_setting(
-                self.deps.settings(),
-                "provider",
-                &format!("{adapter_id}.titleBinary"),
-            )
-            .await,
+            self.provider_setting(&adapter_id, "titleBinary").await,
             &adapter_id,
         );
 
@@ -984,13 +964,18 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         cache_reloaded
     }
 
-    async fn default_model_for(&self, adapter_id: &str) -> Option<String> {
-        let saved = read_setting(
+    /// One `provider.<adapter>.<field>` setting; `None` when unset or unreadable.
+    async fn provider_setting(&self, adapter_id: &str, field: &str) -> Option<String> {
+        read_setting(
             self.deps.settings(),
             "provider",
-            &format!("{adapter_id}.defaultModel"),
+            &format!("{adapter_id}.{field}"),
         )
-        .await;
+        .await
+    }
+
+    async fn default_model_for(&self, adapter_id: &str) -> Option<String> {
+        let saved = self.provider_setting(&adapter_id, "defaultModel").await;
         normalize_saved_default_model(saved.as_deref()).filter(|model| model != "default")
     }
 
@@ -1065,24 +1050,15 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
 
         let sink = self.deps.build_sink(chat_id, session.id());
 
-        let executable_path = read_setting(
-            self.deps.settings(),
-            "provider",
-            &format!("{}.executablePath", chat.adapter_id),
-        )
-        .await;
-        let system_prompt = read_setting(
-            self.deps.settings(),
-            "provider",
-            &format!("{}.systemPrompt", chat.adapter_id),
-        )
-        .await;
-        let small_fast_model = read_setting(
-            self.deps.settings(),
-            "provider",
-            &format!("{}.cliproxySmallFastModel", chat.adapter_id),
-        )
-        .await;
+        let executable_path = self
+            .provider_setting(&chat.adapter_id, "executablePath")
+            .await;
+        let system_prompt = self
+            .provider_setting(&chat.adapter_id, "systemPrompt")
+            .await;
+        let small_fast_model = self
+            .provider_setting(&chat.adapter_id, "cliproxySmallFastModel")
+            .await;
         let tuning = self.deps.resolve_tuning(chat_id).await;
         let default_model = self.default_model_for(&chat.adapter_id).await;
 
