@@ -179,3 +179,22 @@ async fn waits_for_a_listening_port_before_running() {
     assert_eq!(manager.get_status("web"), LaunchProcessStatus::Running);
     manager.stop("web").await;
 }
+
+/// A launch pid that no longer leads a process group (the group is gone, the
+/// pid reused by an unrelated process) must not be signalled as a bare pid.
+#[tokio::test]
+async fn signal_group_does_not_fall_back_to_the_pid_when_the_group_is_gone() {
+    // Spawned without its own group, so no group carries this pid's id.
+    let mut unrelated = std::process::Command::new("sleep")
+        .arg("30")
+        .spawn()
+        .unwrap();
+
+    signal_group(Some(unrelated.id()), Signal::Kill);
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    let still_running = unrelated.try_wait().unwrap().is_none();
+    unrelated.kill().unwrap();
+    unrelated.wait().unwrap();
+    assert!(still_running, "the bare pid was signalled");
+}

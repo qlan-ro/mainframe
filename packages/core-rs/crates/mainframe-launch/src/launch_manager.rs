@@ -146,6 +146,11 @@ struct Inner {
     on_event: BroadcastFn,
     tunnel_manager: Option<Arc<TunnelManager>>,
     processes: DashMap<String, ManagedProcess>,
+    /// Latest start of each name, bumped under the spawn gate. A finished
+    /// process's exit task touches the name's status and preview tunnel only
+    /// while its start is still the latest, so it cannot clobber a newer
+    /// process started while it drained the old one's pipes.
+    generations: DashMap<String, u64>,
     state: LaunchProcessState,
     timings: LaunchTimings,
     /// Pidfile registry so a crashed daemon's next startup sweep can reap this

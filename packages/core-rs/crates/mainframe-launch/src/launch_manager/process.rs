@@ -24,7 +24,9 @@ pub(super) fn pump_output<R: tokio::io::AsyncRead + Unpin + Send + 'static>(
 /// Everything the exit watcher needs to retire one launch process.
 pub(super) struct ExitWatch {
     pub(super) inner: Arc<Inner>,
+    pub(super) spawn_gate: Arc<tokio::sync::Mutex<bool>>,
     pub(super) name: String,
+    pub(super) generation: u64,
     pub(super) pid: Option<u32>,
     pub(super) status: Arc<Mutex<LaunchProcessStatus>>,
     pub(super) stderr_tail: Arc<Mutex<TailBuffer>>,
@@ -35,7 +37,10 @@ pub(super) struct ExitWatch {
 /// and the exit published as soon as the pid is reaped, so a concurrent
 /// `stop()` never signals a reaped (possibly reused) pid while the output
 /// pumps finish; the final status is emitted only after the pumps delivered
-/// their last chunk.
+/// their last chunk. The entry's removal lets a new start of the same name
+/// begin during the drain, so the final status and the preview-tunnel stop
+/// happen under the spawn gate and only while this start is still the
+/// latest generation of the name.
 pub(super) async fn wait_for_exit_task(
     mut child: tokio::process::Child,
     watch: ExitWatch,
@@ -43,7 +48,9 @@ pub(super) async fn wait_for_exit_task(
 ) {
     let ExitWatch {
         inner,
+        spawn_gate,
         name,
+        generation,
         pid,
         status,
         stderr_tail,
@@ -58,6 +65,11 @@ pub(super) async fn wait_for_exit_task(
 
     log_exit(&name, pid, code, &stderr_tail);
 
+    let _gate = spawn_gate.lock().await;
+    if !inner.is_current_generation(&name, generation) {
+        tracing::debug!(target: "launch", name = %name, pid = ?pid, "a newer start owns the name; leaving its status and tunnel alone");
+        return;
+    }
     {
         let mut guard = status.lock_recover();
         if *guard != LaunchProcessStatus::Stopped {
@@ -120,13 +132,16 @@ pub(super) async fn wait_until_exited(rx: &mut watch::Receiver<bool>) {
 }
 
 /// Signal a launch child's whole process group (pnpm/tsx spawn child trees),
-/// falling back to the pid alone when the group cannot be signalled.
+/// falling back to the pid alone only when the group signal errors. A group
+/// that no longer exists (`Ok(false)`) is not retried as a bare pid.
 pub(super) fn signal_group(pid: Option<u32>, kind: Signal) {
     use mainframe_runtime::process::{Target, signal};
     let Some(pid) = pid else { return };
-    if !matches!(signal(Target::Group(pid), kind), Ok(true))
-        && let Err(error) = signal(Target::Pid(pid), kind)
-    {
+    let Err(group_error) = signal(Target::Group(pid), kind) else {
+        return;
+    };
+    tracing::debug!(pid, %group_error, "launch group signal failed; signalling the pid");
+    if let Err(error) = signal(Target::Pid(pid), kind) {
         tracing::warn!(pid, %error, "failed to signal launch child");
     }
 }

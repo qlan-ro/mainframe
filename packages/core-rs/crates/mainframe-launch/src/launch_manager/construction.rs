@@ -64,6 +64,7 @@ impl LaunchManager {
                 on_event,
                 tunnel_manager,
                 processes: DashMap::new(),
+                generations: DashMap::new(),
                 state: LaunchProcessState::new(),
                 timings,
                 child_registry,

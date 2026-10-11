@@ -43,6 +43,20 @@ impl Inner {
             .await;
     }
 
+    /// Claim the next generation of `name`; call under the spawn gate.
+    pub(super) fn begin_generation(&self, name: &str) -> u64 {
+        let mut generation = self.generations.entry(name.to_string()).or_insert(0);
+        *generation += 1;
+        *generation
+    }
+
+    /// Whether `generation` is still the latest start of `name`.
+    pub(super) fn is_current_generation(&self, name: &str, generation: u64) -> bool {
+        self.generations
+            .get(name)
+            .is_some_and(|current| *current == generation)
+    }
+
     pub(super) fn forget_spawn(&self, pid: Option<u32>) {
         let Some(pid) = pid else {
             return;

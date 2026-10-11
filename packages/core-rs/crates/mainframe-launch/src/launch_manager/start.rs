@@ -15,6 +15,7 @@ impl LaunchManager {
             tracing::warn!(target: "launch", name, "concurrent start already registered a process");
             return Ok(());
         }
+        let generation = inner.begin_generation(name);
         inner.state.reset(name);
         inner.emit_status(name, LaunchProcessStatus::Starting);
         let (executable, mut command) = self.command(config);
@@ -25,7 +26,7 @@ impl LaunchManager {
                 return Err(self.spawn_failed(name, error).await);
             }
         };
-        let (pid, status) = self.supervise(child, config);
+        let (pid, status) = self.supervise(child, config, generation);
         drop(gate);
         inner
             .record_spawn(name, pid, &executable, &config.runtime_args)
@@ -111,6 +112,7 @@ impl LaunchManager {
         &self,
         mut child: tokio::process::Child,
         config: &LaunchConfiguration,
+        generation: u64,
     ) -> (Option<u32>, Arc<Mutex<LaunchProcessStatus>>) {
         let inner = &self.inner;
         let name = &config.name;
@@ -132,7 +134,9 @@ impl LaunchManager {
             child,
             ExitWatch {
                 inner: inner.clone(),
+                spawn_gate: self.spawn_gate.clone(),
                 name: name.clone(),
+                generation,
                 pid,
                 status: status.clone(),
                 stderr_tail: tail,
