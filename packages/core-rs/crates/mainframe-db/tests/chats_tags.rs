@@ -1,3 +1,4 @@
+#![allow(clippy::too_many_lines)]
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::rc::Rc;

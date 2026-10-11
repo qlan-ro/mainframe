@@ -7,6 +7,7 @@
 //! fixtures so one drifting file doesn't hide another (see
 //! `golden_fixtures.rs` module docs for the same rationale).
 
+#![allow(clippy::too_many_lines)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
 use std::path::{Path, PathBuf};

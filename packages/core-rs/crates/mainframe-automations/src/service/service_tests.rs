@@ -195,15 +195,22 @@ async fn wait_for_status(
     run_id: &str,
     wanted: RunStatus,
 ) -> crate::store::RunRecord {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    while std::time::Instant::now() < deadline {
-        let run = engine.get_run(run_id).await.unwrap().unwrap();
-        if run.status == wanted {
-            return run;
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-    }
-    panic!("run {run_id} never reached {wanted:?}");
+    let mut result = None;
+    mainframe_runtime::test_support::poll_until(
+        std::time::Duration::from_secs(10),
+        std::time::Duration::from_millis(5),
+        async || {
+            let run = engine.get_run(run_id).await.unwrap().unwrap();
+            if run.status == wanted {
+                result = Some(run);
+                return true;
+            }
+            false
+        },
+    )
+    .await
+    .expect("state did not settle before timeout");
+    result.expect("polling condition produced a result")
 }
 
 #[tokio::test]
@@ -332,37 +339,4 @@ async fn start_is_idempotent_and_double_start_errors() {
     assert!(matches!(err, StartError::AlreadyStarted));
 }
 
-#[tokio::test]
-async fn start_reconciles_live_runs_and_reattaches_agent_watches() {
-    let dir = tempfile::tempdir().unwrap();
-    let db_path = dir.path().join("automations.db");
-    let creds = dir.path().join("automation-credentials.json");
-
-    // Engine 1 parks the ask_agent step and is then dropped mid-wait.
-    let run_id = {
-        let sink = Arc::new(CollectingSink::default());
-        let engine1 = build_engine(&db_path, &creds, Arc::new(ParkingAgent), sink).await;
-        let created = engine1.create(standup_input("Standup")).await.unwrap();
-        let run = engine1.run_manually(&created.id).await.unwrap();
-        let waiting = wait_for_status(&engine1, &run.id, RunStatus::Waiting).await;
-        // The chat id is durably stamped on the checkpoint entry.
-        let entry = waiting.checkpoint.steps.get("agent").unwrap();
-        assert_eq!(entry.chat_id.as_deref(), Some("chat-parked"));
-        run.id
-    };
-
-    // Engine 2 adopts the same store: reconcile re-attaches the watch, the
-    // agent completes, and the run finishes WITHOUT starting a second chat.
-    let sink = Arc::new(CollectingSink::default());
-    let agent = Arc::new(AdoptingAgent::default());
-    let engine2 = build_engine(&db_path, &creds, agent.clone(), sink).await;
-    engine2.start().await.unwrap();
-
-    let done = wait_for_status(&engine2, &run_id, RunStatus::Succeeded).await;
-    assert_eq!(done.status, RunStatus::Succeeded);
-    assert_eq!(
-        agent.start_calls.load(Ordering::SeqCst),
-        0,
-        "reconcile must re-attach the existing chat, not open a new one"
-    );
-}
+include!("service_tests_additional_cases.rs");

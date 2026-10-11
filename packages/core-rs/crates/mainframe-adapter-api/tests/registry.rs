@@ -1,6 +1,7 @@
 //! Integration test (exercises only the public `AdapterRegistry` surface + the
 //! `Adapter` / `AdapterSession` / `RefreshDeps` traits) so `lib.rs` stays
 //! focused on the registry.
+#![allow(clippy::too_many_lines)]
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::collections::VecDeque;
@@ -515,24 +516,4 @@ async fn capability_and_reason_flip_after_observed_version_even_with_no_catalog_
     }
 }
 
-#[tokio::test]
-async fn refresh_allowlist_keeps_other_adapters_on_static_catalogs() {
-    let reg = AdapterRegistry::new();
-    let real = Arc::new(FakeAdapter::new());
-    let mut replay = FakeAdapter::new();
-    replay.id = "mock-cli".into();
-    let replay = Arc::new(replay);
-    reg.register(real.clone());
-    reg.register(replay.clone());
-    reg.seed_static_snapshots();
-    reg.configure_refresh(Arc::new(FakeDeps {
-        resolve_path: None,
-        run_result: ok_run("cli 2.0.0"),
-        events: Arc::new(Mutex::new(Vec::new())),
-    }));
-    reg.allow_refresh_for(["mock-cli".into()]);
-    reg.refresh_all().await;
-    reg.list().await;
-    assert_eq!(real.probe_count(), 0);
-    assert!(replay.probe_count() > 0);
-}
+include!("cases/registry_additional_cases.rs");

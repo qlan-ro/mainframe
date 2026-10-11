@@ -1,8 +1,6 @@
-//! Shared integration-test harness: spawns `build_app` on an ephemeral port with
-//! a real in-memory DB + real service collaborators (no mocks), plus a minimal
-//! hand-rolled RFC-6455 WebSocket client (no ws client crate is in the workspace
-//! allowlist).
-#![allow(clippy::unwrap_used, clippy::expect_used, dead_code)]
+//! Integration harness with an in-memory database and a WebSocket client.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(clippy::too_many_lines, dead_code)]
 
 pub mod barrier_adapter;
 pub mod facade;

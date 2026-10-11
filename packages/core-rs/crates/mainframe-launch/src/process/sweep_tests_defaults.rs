@@ -45,11 +45,11 @@ async fn group_kill_takes_a_non_leader_group_member() {
     assert!(default_kill(i64::from(leader_pid), Signal::Kill, true));
 
     leader.wait().await.unwrap();
-    tokio::time::timeout(Duration::from_secs(5), async {
-        while is_alive(member) {
-            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-        }
-    })
+    mainframe_runtime::test_support::poll_until(
+        Duration::from_secs(5),
+        std::time::Duration::from_millis(5),
+        async || !(is_alive(member)),
+    )
     .await
     .expect("the non-leader group member must die with the group");
 }

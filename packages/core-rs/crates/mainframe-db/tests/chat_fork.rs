@@ -1,5 +1,6 @@
 //! `ChatsRepository::create_fork` and the `parent_chat_id` / `pending_fork`
 //! storage seams.
+#![allow(clippy::too_many_lines)]
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use mainframe_types::chat_patch::ChatPatch;

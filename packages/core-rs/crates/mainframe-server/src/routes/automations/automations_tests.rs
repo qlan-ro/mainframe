@@ -62,15 +62,19 @@ async fn create_ok(h: &AutomationsHarness, body: &Value) -> String {
 }
 
 async fn wait_status(h: &AutomationsHarness, run_id: &str, wanted: AutomationRunStatus) {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    while std::time::Instant::now() < deadline {
-        let run = h.engine.get_run(run_id).await.unwrap();
-        if run.as_ref().map(|r| r.status) == Some(wanted) {
-            return;
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-    }
-    panic!("run {run_id} never reached {wanted:?}");
+    mainframe_runtime::test_support::poll_until(
+        std::time::Duration::from_secs(10),
+        std::time::Duration::from_millis(5),
+        async || {
+            let run = h.engine.get_run(run_id).await.unwrap();
+            if run.as_ref().map(|r| r.status) == Some(wanted) {
+                return true;
+            }
+            false
+        },
+    )
+    .await
+    .expect("state did not settle before timeout");
 }
 
 #[tokio::test]
@@ -290,16 +294,4 @@ async fn delete_cancels_active_runs_then_drops_rows() {
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
 
-#[test]
-fn output_preview_truncates_at_32k() {
-    let mut outputs = serde_json::Map::new();
-    outputs.insert("small".to_string(), json!("x"));
-    assert_eq!(output_preview(Some(&outputs)).unwrap(), r#"{"small":"x"}"#);
-
-    let mut big = serde_json::Map::new();
-    big.insert("blob".to_string(), json!("y".repeat(40 * 1024)));
-    let preview = output_preview(Some(&big)).unwrap();
-    assert!(preview.starts_with("[truncated — "));
-    assert!(preview.len() < 64);
-    assert_eq!(output_preview(None), None);
-}
+include!("automations_tests_additional_cases.rs");

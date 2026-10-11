@@ -1,6 +1,7 @@
 //! Golden texts for `AdapterError`. They reach the chat's error banner and
 //! REST bodies verbatim, so each variant's text is wire contract.
 
+#![allow(clippy::too_many_lines)]
 use mainframe_adapter_api::AdapterError;
 use mainframe_runtime::process::ExecError;
 

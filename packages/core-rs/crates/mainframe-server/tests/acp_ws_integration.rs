@@ -287,28 +287,4 @@ async fn heartbeat_arrives_periodically_at_the_configured_cadence() {
 
 // ── connection registry ──────────────────────────────────────────────────────
 
-#[tokio::test]
-async fn connecting_registers_a_facade_client_and_disconnecting_unregisters_it() {
-    let server = server_with_mock_adapter().await;
-    assert_eq!(server.ctx.chat.facade_hub.connection_count(), 0);
-
-    let ws = WsClient::connect(server.addr, "/acp/mock-cli", None)
-        .await
-        .unwrap();
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
-    while server.ctx.chat.facade_hub.connection_count() == 0
-        && tokio::time::Instant::now() < deadline
-    {
-        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-    }
-    assert_eq!(server.ctx.chat.facade_hub.connection_count(), 1);
-
-    drop(ws);
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
-    while server.ctx.chat.facade_hub.connection_count() != 0
-        && tokio::time::Instant::now() < deadline
-    {
-        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-    }
-    assert_eq!(server.ctx.chat.facade_hub.connection_count(), 0);
-}
+include!("cases/acp_ws_integration_additional_cases.rs");

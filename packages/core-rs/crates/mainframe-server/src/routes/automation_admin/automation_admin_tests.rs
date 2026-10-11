@@ -20,15 +20,22 @@ fn bytes(value: &Value) -> Bytes {
 }
 
 async fn pending_interaction_id(h: &AutomationsHarness) -> String {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    while std::time::Instant::now() < deadline {
-        let pending = h.engine.list_pending_interactions().await.unwrap();
-        if let Some(first) = pending.first() {
-            return first.id.clone();
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-    }
-    panic!("no interaction ever went pending");
+    let mut result = None;
+    mainframe_runtime::test_support::poll_until(
+        std::time::Duration::from_secs(10),
+        std::time::Duration::from_millis(5),
+        async || {
+            let pending = h.engine.list_pending_interactions().await.unwrap();
+            if let Some(first) = pending.first() {
+                result = Some(first.id.clone());
+                return true;
+            }
+            false
+        },
+    )
+    .await
+    .expect("state did not settle before timeout");
+    result.expect("polling condition produced a result")
 }
 
 #[tokio::test]

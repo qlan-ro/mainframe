@@ -3,7 +3,7 @@
 //! `AutomationsEngine` facade with recording fakes; assertions target the
 //! behaviors the contract names per fixture. One integration target keeps the
 //! harness compiled once; the scenario modules live under `conformance/`.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::too_many_lines)]
 
 #[path = "conformance/fake_actions.rs"]
 mod fake_actions;

@@ -13,12 +13,11 @@ async fn shutdown_rejects_a_replacement_already_waiting_for_the_previous_child()
     let pid = manager.pid_of("daemon").unwrap();
     let starting = manager.clone();
     let replacement = tokio::spawn(async move { starting.start(4173, "daemon", None).await });
-    timeout(Duration::from_secs(2), async {
-        while signals.lock().unwrap().is_empty() {
-            // The signal recorder has no notification for the stop task.
-            sleep(Duration::from_millis(5)).await;
-        }
-    })
+    mainframe_runtime::test_support::poll_until(
+        Duration::from_secs(2),
+        Duration::from_millis(5),
+        async || !signals.lock().unwrap().is_empty(),
+    )
     .await
     .unwrap();
     manager.close_starts().await;

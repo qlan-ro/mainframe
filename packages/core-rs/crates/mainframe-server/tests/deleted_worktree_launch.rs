@@ -1,3 +1,4 @@
+#![allow(clippy::too_many_lines)]
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 use mainframe_launch::{TunnelConfig, TunnelManager};
 use mainframe_server::{ctx::AppCtx, db::Db};

@@ -5,6 +5,7 @@
 //! `DisplayRevision` → `encode_revision` transitions a live chat-surface
 //! subscriber actually sees: growing streamed text, a single converged
 //! completion under the same item id, and no overlay left behind.
+#![allow(clippy::too_many_lines)]
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::sync::{Arc, Mutex};

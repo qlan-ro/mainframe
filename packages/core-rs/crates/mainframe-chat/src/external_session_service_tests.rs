@@ -109,11 +109,11 @@ async fn imported_creation_and_generated_title_share_enrichment() {
         .import_session("p1", "native", "claude", Some("hello"), None, None)
         .await
         .unwrap();
-    tokio::time::timeout(std::time::Duration::from_secs(1), async {
-        while deps.events().len() < 2 {
-            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-        }
-    })
+    mainframe_runtime::test_support::poll_until(
+        std::time::Duration::from_secs(1),
+        std::time::Duration::from_millis(5),
+        async || !(deps.events().len() < 2),
+    )
     .await
     .unwrap();
     let wire = serde_json::to_value(deps.events()).unwrap();

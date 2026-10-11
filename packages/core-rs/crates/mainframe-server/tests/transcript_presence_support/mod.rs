@@ -1,3 +1,4 @@
+#![allow(clippy::too_many_lines)]
 //! Shared harness for the wiring-level transcript-presence tests. Drives the
 //! production stack through `build_chat_manager` (see
 //! `chat_background_activity.rs`, the structural template) rather than a

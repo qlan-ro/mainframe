@@ -33,3 +33,50 @@ pub fn write_shell_script(path: &Path, body: &str) -> io::Result<()> {
         }
     }
 }
+
+pub async fn poll_until(
+    timeout: Duration,
+    interval: Duration,
+    mut condition: impl AsyncFnMut() -> bool,
+) -> Result<(), tokio::time::error::Elapsed> {
+    tokio::time::timeout(timeout, async {
+        while !condition().await {
+            tokio::time::sleep(interval).await;
+        }
+    })
+    .await
+}
+
+#[cfg(test)]
+mod poll_tests {
+    use super::*;
+
+    #[tokio::test(start_paused = true)]
+    async fn poll_stops_when_the_condition_becomes_true() {
+        let mut attempts = 0;
+        poll_until(
+            Duration::from_secs(1),
+            Duration::from_millis(5),
+            async || {
+                attempts += 1;
+                attempts == 3
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(attempts, 3);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn poll_fails_when_the_condition_never_becomes_true() {
+        assert!(
+            poll_until(
+                Duration::from_millis(20),
+                Duration::from_millis(5),
+                async || false
+            )
+            .await
+            .is_err()
+        );
+    }
+}

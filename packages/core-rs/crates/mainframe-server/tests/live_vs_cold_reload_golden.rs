@@ -51,6 +51,7 @@
 //! Tool timing comes from live observation and is absent from provider history.
 //! The test asserts that boundary before comparing every other graph field,
 //! excluding only the display timestamp minted on live receipt.
+#![allow(clippy::too_many_lines)]
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 #[path = "live_vs_cold_reload_golden/timing.rs"]

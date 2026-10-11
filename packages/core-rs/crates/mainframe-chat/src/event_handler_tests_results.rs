@@ -24,13 +24,16 @@ async fn on_result_retires_a_pending_fork_and_removes_its_snapshot_dir() {
 
     // The directory removal is spawned fire-and-forget; poll for it rather
     // than assume a fixed delay.
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    while std::time::Instant::now() < deadline {
+    mainframe_runtime::test_support::poll_until(
+        std::time::Duration::from_secs(10),
+        std::time::Duration::from_millis(5),
+        async || {
         if !std::path::Path::new(&snapshot_dir).exists() {
-            break;
+            return true;
         }
-        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-    }
+            false
+        },
+    ).await.expect("expected state before timeout");
     assert!(
         !std::path::Path::new(&snapshot_dir).exists(),
         "snapshot directory should have been removed"

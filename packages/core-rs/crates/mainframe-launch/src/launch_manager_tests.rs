@@ -147,11 +147,11 @@ mod exit_order;
 mod start_stop;
 
 async fn wait_until(predicate: impl Fn() -> bool) {
-    tokio::time::timeout(Duration::from_secs(10), async {
-        while !predicate() {
-            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-        }
-    })
+    mainframe_runtime::test_support::poll_until(
+        Duration::from_secs(10),
+        std::time::Duration::from_millis(5),
+        async || !(!predicate()),
+    )
     .await
     .expect("child process reached the expected state");
 }

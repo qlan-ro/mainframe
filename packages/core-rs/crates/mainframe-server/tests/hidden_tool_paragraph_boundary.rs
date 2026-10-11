@@ -12,6 +12,7 @@
 //! `live_vs_cold_reload_golden.rs` exercises), with the adapter's real
 //! `ClaudeAdapter::default().get_tool_categories()` rather than a hand-built
 //! `ToolCategories`.
+#![allow(clippy::too_many_lines)]
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::collections::HashMap;
