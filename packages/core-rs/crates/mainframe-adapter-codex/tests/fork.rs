@@ -4,9 +4,13 @@
 //! request line to a capture file). Covers four scenarios:
 //! successful fork, a parent the fake server never "loaded" first, history
 //! truncation on both sides of a fork, and the version-gated capability.
-#![allow(clippy::too_many_lines)]
+#![allow(clippy::too_many_lines, reason = "Test assertions and scenarios")]
 #![cfg(unix)]
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod common;
 mod fork_support;

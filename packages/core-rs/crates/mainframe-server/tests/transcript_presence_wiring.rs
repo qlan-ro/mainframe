@@ -9,7 +9,11 @@
 //! `AdapterRegistry`, read back only through `ChatManager`'s public history and
 //! sweep APIs. A regression where `DaemonChatDeps` silently inherited the trait
 //! default (`Box::pin(async { None })`) would fail every case here.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod transcript_presence_support;
 

@@ -80,7 +80,7 @@ impl ChatManager {
                     })
             }),
             Err(err) => {
-                tracing::warn!( error = ?err,
+                tracing::warn!(error = ?err,
                     chat_id,
                     "could not read the target transcript"
                 );

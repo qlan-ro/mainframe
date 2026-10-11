@@ -1,6 +1,10 @@
 //! Request-user-input routing, plan exit, question, and approval tests share
 //! fixtures here.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod common;
 

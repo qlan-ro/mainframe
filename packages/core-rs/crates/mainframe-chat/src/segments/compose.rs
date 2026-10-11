@@ -86,7 +86,7 @@ async fn load_natives(
                 loaded.insert(native.id.clone(), remapped);
             }
             Err(err) => {
-                tracing::warn!( error = ?err, chat_id = %chat.id, native = %native.id, "segment history load failed")
+                tracing::warn!(error = ?err, chat_id = %chat.id, native = %native.id, "segment history load failed")
             }
         }
     }

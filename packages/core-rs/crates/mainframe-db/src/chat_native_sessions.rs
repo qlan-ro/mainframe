@@ -46,7 +46,7 @@ fn parse_tuning(raw: &str) -> Option<SessionTuning> {
         Ok(tuning) => Some(tuning),
         Err(err) => {
             // A corrupt snapshot only loses the restore-on-return convenience.
-            tracing::warn!( error = %err, "ignoring unreadable native-session tuning snapshot");
+            tracing::warn!(error = %err, "ignoring unreadable native-session tuning snapshot");
             None
         }
     }

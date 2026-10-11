@@ -1,7 +1,11 @@
 //! CHARACTERIZATION TESTS for `apply_tool_grouping`: pins the current
 //! interleaving / grouping / progress-accumulation / task-group-nesting /
 //! hidden-suppression behavior. Assertions compare whole serde_json Values.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use mainframe_display::display_helpers::apply_tool_grouping;
 use mainframe_types::display::{DisplayContent, ToolCategories};

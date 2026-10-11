@@ -1,7 +1,11 @@
 //! WebSocket integration tests — auth, file subscriptions, and broadcast
 //! gating, plus the connect/ready/subscribe/ack/file:changed flow. Real app,
 //! real FileWatcherService, real in-memory DB (no mocks).
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 

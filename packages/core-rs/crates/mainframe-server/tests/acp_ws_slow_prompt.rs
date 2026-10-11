@@ -1,7 +1,11 @@
 //! A slow `session/prompt` blocks neither the socket loop nor the ordering its
 //! own session's `session/cancel` depends on. These tests need the
 //! `FacadeServer` fixture and a barrier adapter.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use mainframe_types::sync::LockExt as _;
 mod support;

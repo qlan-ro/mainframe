@@ -6,7 +6,12 @@
 #![forbid(unsafe_code)]
 #![cfg_attr(
     test,
-    allow(clippy::too_many_lines, clippy::unwrap_used, clippy::expect_used)
+    allow(
+        clippy::too_many_lines,
+        clippy::unwrap_used,
+        clippy::expect_used,
+        reason = "Test assertions and scenarios"
+    )
 )]
 
 pub mod attachment;

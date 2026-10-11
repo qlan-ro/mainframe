@@ -184,8 +184,8 @@ async fn install_release(url: &str, artifact: &str, root: &Path) -> Result<(), U
     };
 
     if let Err(error) = tokio::fs::remove_dir_all(&tmp_dir).await {
-        tracing::warn!(%error, "best-effort operation failed");
-    } // best-effort cleanup /* expected */
+        tracing::warn!(%error, path = %tmp_dir.display(), "failed to remove update staging directory");
+    }
     result
 }
 

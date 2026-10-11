@@ -2,7 +2,11 @@
 //! `RequestBodyLimitLayer` in `build_app`. Asserts against the assembled
 //! router, not the limit constants in isolation, so a limit relocated into a
 //! different layer is still covered.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 

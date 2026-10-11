@@ -4,9 +4,13 @@
 //!
 //! `record()`'s nested `json!` fixture (phases + workflow_progress agents) needs
 //! more than the default macro depth to expand.
-#![allow(clippy::too_many_lines)]
+#![allow(clippy::too_many_lines, reason = "Test assertions and scenarios")]
 #![recursion_limit = "256"]
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use mainframe_types::settings_kv::MemorySettings;
 use std::net::SocketAddr;

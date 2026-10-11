@@ -55,7 +55,7 @@ impl TunnelManager {
         }
         for task in tasks {
             if let Err(err) = task.await {
-                tracing::warn!( error = ?err, "tunnel stop task failed");
+                tracing::warn!(error = ?err, "tunnel stop task failed");
             }
         }
     }
@@ -84,7 +84,7 @@ impl TunnelManager {
         }
         for task in stopping {
             if let Err(err) = task.await {
-                tracing::warn!( error = ?err, "tunnel stop task failed");
+                tracing::warn!(error = ?err, "tunnel stop task failed");
             }
         }
     }

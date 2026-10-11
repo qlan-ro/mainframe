@@ -1,7 +1,11 @@
 //! Integration test for `routes/commands.rs`. Adapter commands are not listed
 //! (the `Adapter` trait has no `list_commands` method), so this asserts the
 //! built-in mainframe command from the services registry is returned.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 

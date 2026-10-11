@@ -2,7 +2,11 @@
 //! and MCP (`function_call` w/ `namespace: "mcp__*"`) records on reload (B5),
 //! plus the existing message/reasoning/exec_command paths staying correct when
 //! interleaved with the new record types in the same rollout file.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod common;
 

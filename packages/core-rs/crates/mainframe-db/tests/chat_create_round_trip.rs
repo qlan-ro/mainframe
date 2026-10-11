@@ -1,7 +1,11 @@
 //! `create` and `create_fork` return the row exactly as a later `get` reads
 //! it, so the `chat.created` payload a client receives carries the same keys
 //! as every `chat.updated` for that row.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use std::collections::BTreeSet;
 

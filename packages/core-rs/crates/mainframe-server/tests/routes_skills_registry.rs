@@ -3,7 +3,11 @@
 //! depends on a third-party registry being up is a flaky test suite. The
 //! outcome mapping is covered by `routes::skills_registry`'s unit tests and
 //! `skills_cli_catalog.rs`.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 

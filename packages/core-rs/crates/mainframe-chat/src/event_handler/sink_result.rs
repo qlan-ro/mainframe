@@ -36,7 +36,7 @@ impl SessionSinkImpl {
                 if let Err(err) = tokio::fs::remove_dir_all(&snapshot_dir).await
                     && err.kind() != std::io::ErrorKind::NotFound
                 {
-                    warn!( error = %err,
+                    warn!(error = %err,
                         chat_id,
                         snapshot_dir,
                         "failed to remove a retired fork's snapshot directory"

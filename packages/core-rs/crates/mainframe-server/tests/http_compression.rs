@@ -1,15 +1,13 @@
-//! Integration tests for negotiated HTTP response compression: gzip/brotli
-//! negotiation, the size floor, CORS/attachment interaction, and the WS upgrade
-//! staying untouched — all against the production `build_app` router (real
-//! spawned app, no mocks).
+//! HTTP compression negotiation, byte identity, size thresholds, CORS,
+//! attachments, and WebSocket upgrades through the production router.
 //!
-//! `GET /api/chats/{id}/messages` self-gates on `ctx.chat.chat_manager`, which this
-//! harness leaves `None`, so it never produces a large real payload here. The
-//! negotiation/byte-identity/threshold criteria are proven instead
-//! against `GET /api/projects/{id}/files?path=big.txt`, a large *real* payload
-//! through the same layer; the chat-history route gets its own dedicated
-//! byte-identity assertion.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+//! The harness has no chat manager, so large payload checks use a real project
+//! file. Chat history has a separate byte-identity assertion.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 

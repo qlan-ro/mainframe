@@ -145,7 +145,7 @@ impl ManagerState {
             .collect();
         for task in tasks {
             if let Err(err) = task.await {
-                tracing::warn!( error = %err, "LSP shutdown task failed");
+                tracing::warn!(error = %err, "LSP shutdown task failed");
             }
         }
     }

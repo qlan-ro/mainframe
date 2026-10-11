@@ -1,5 +1,9 @@
 //! `merge::merge_runs` precedence rules, one test per numbered rule.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use mainframe_claude_workflows::merge::merge_runs;
 use mainframe_types::claude_workflow::{

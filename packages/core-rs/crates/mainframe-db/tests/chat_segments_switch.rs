@@ -1,5 +1,9 @@
 //! Provider segments: switch commits, handoff rows and per-segment counters.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use mainframe_db::{DatabaseManager, SegmentResultDelta};
 use mainframe_types::chat::{Chat, NewChat};

@@ -12,8 +12,12 @@
 //! `live_vs_cold_reload_golden.rs` exercises), with the adapter's real
 //! `ClaudeAdapter::default().get_tool_categories()` rather than a hand-built
 //! `ToolCategories`.
-#![allow(clippy::too_many_lines)]
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(clippy::too_many_lines, reason = "Test assertions and scenarios")]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use std::collections::HashMap;
 

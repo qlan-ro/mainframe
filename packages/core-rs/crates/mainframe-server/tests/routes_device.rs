@@ -1,7 +1,11 @@
 //! Integration tests for `routes/device.rs` — POST /api/device/activity. These
 //! pin the contract (200 on a valid state enum, 400 otherwise) and confirm the
 //! push service sees the transition.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 

@@ -62,7 +62,7 @@ impl LaunchManager {
         }
         while let Some(result) = tasks.join_next().await {
             if let Err(err) = result {
-                tracing::warn!( error = ?err, "launch stop task failed");
+                tracing::warn!(error = ?err, "launch stop task failed");
             }
         }
     }

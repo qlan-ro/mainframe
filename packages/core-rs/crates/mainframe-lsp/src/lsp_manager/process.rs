@@ -63,7 +63,7 @@ impl ManagerState {
                     code = ?status.code(), "LSP server exited"
                 ),
                 Err(err) => {
-                    tracing::error!( error = %err, language = %handle.language, project_path = %handle.project_path,
+                    tracing::error!(error = %err, language = %handle.language, project_path = %handle.project_path,
                         "LSP server process error"
                     )
                 }

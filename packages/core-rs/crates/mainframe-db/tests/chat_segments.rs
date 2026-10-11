@@ -1,7 +1,11 @@
 //! Provider segments (migration 31): backfill, the `chats` mirror invariant,
 //! the `record_native_id` rule, insert-path seeding, and dedupe.
-#![allow(clippy::too_many_lines)]
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(clippy::too_many_lines, reason = "Test assertions and scenarios")]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use mainframe_types::chat_patch::ChatPatch;
 use rusqlite::Connection;

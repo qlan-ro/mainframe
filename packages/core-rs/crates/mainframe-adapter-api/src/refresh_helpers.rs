@@ -42,7 +42,7 @@ pub(super) async fn refresh_catalog(
         match res {
             Ok(m) => m,
             Err(err) => {
-                tracing::warn!( error = ?err,
+                tracing::warn!(error = ?err,
                     adapter_id,
                     "live model refresh threw; keeping fallback catalog"
                 );

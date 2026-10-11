@@ -41,7 +41,7 @@ pub(super) async fn scan_page_impl<D: ExternalSessionDeps>(
                 collected.extend(page.sessions);
             }
             Err(err) => {
-                warn!( error = ?err,
+                warn!(error = ?err,
                     adapter_id, project_id, "Failed to scan external sessions"
                 )
             }
@@ -194,7 +194,7 @@ async fn count_sessions<D: ExternalSessionDeps>(
         {
             Ok(page) => total += page.total,
             Err(err) => {
-                warn!( error = ?err,
+                warn!(error = ?err,
                     adapter_id, project_id, "Failed to count external sessions"
                 )
             }

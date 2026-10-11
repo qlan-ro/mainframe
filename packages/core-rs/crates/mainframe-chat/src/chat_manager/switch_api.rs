@@ -207,7 +207,7 @@ impl ChatManager {
         if let Some(session) = session
             && let Err(err) = session.kill().await
         {
-            tracing::warn!( error = ?err, chat_id, "failed to stop the session");
+            tracing::warn!(error = ?err, chat_id, "failed to stop the session");
         }
     }
 

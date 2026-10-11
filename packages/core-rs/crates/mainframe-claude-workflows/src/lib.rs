@@ -5,7 +5,10 @@
 //! against the on-disk `wf_<runId>.json` record once the run goes terminal.
 
 #![forbid(unsafe_code)]
-#![cfg_attr(test, allow(clippy::too_many_lines))]
+#![cfg_attr(
+    test,
+    allow(clippy::too_many_lines, reason = "Test assertions and scenarios")
+)]
 
 pub mod bridge;
 pub mod merge;

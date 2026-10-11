@@ -236,12 +236,11 @@ async fn starts_during_cancelled_child_teardown_share_the_cancelled_outcome() {
     enter_mid_start(starting.as_mut()).await;
     registry.stop(5173).await;
     let second = async {
-        tokio::time::timeout(Duration::from_secs(2), async {
-            while signals.lock().unwrap().is_empty() {
-                // Wait for the real process lifecycle to advance.
-                tokio::time::sleep(Duration::from_millis(5)).await;
-            }
-        })
+        mainframe_runtime::test_support::poll_until(
+            Duration::from_secs(2),
+            Duration::from_millis(5),
+            async || !(signals.lock().unwrap().is_empty()),
+        )
         .await
         .unwrap();
         registry.start(5173, scope("chat-b")).await

@@ -1,6 +1,10 @@
 //! Integration harness with an in-memory database and a WebSocket client.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
-#![allow(clippy::too_many_lines, dead_code)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
+#![allow(clippy::too_many_lines, dead_code, reason = "Shared test helpers")]
 
 pub mod barrier_adapter;
 pub mod facade;

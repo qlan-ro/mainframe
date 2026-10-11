@@ -2,7 +2,11 @@
 //! `parse_launch_result`), `task_events::map_task_kind`'s workflow/agent split,
 //! and three lock-regression dispatch tests that drive `events::handle_stdout`
 //! end-to-end.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use std::sync::Arc;
 use std::time::Duration;

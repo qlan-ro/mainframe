@@ -192,7 +192,7 @@ async fn tunnel_survives_continued_child_logging_after_start_resolves() {
 
     // Long enough for several post-ready log writes: with the pipes closed
     // the child dies on SIGPIPE and the exit watcher removes the tunnel.
-    // Wait for the real process lifecycle to advance.
+    // Let the cloudflared stand-in write to its pipes and expose SIGPIPE.
     sleep(Duration::from_millis(400)).await;
     assert_eq!(
         manager.get_url("daemon").as_deref(),
@@ -240,7 +240,7 @@ async fn start_resolves_with_url_when_dns_outlasts_the_start_timeout() {
     );
     manager.stop("daemon").await;
     // stop() reports the tunnel it stopped; the exit watcher stays quiet.
-    // Wait for the real process lifecycle to advance.
+    // Let the stopped cloudflared stand-in's exit watcher attempt a duplicate event.
     sleep(Duration::from_millis(50)).await;
     assert_eq!(stopped_broadcasts(&events), 1);
 }

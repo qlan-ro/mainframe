@@ -225,7 +225,7 @@ impl FacadeConnection {
     pub fn send_json<T: serde::Serialize>(&self, frame: &T) {
         match serde_json::to_string(frame) {
             Ok(payload) => self.send_frame(payload),
-            Err(err) => warn!( error = %err, "failed to serialize outbound frame"),
+            Err(err) => warn!(error = %err, "failed to serialize outbound frame"),
         }
     }
 

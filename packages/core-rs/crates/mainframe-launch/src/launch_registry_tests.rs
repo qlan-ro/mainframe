@@ -106,20 +106,17 @@ async fn shutdown_kills_a_launch_preview_tunnel_that_ignores_sigterm() {
         })
         .await
         .unwrap();
-    tokio::time::timeout(Duration::from_secs(5), async {
-        loop {
-            let ready = events
+    mainframe_runtime::test_support::poll_until(
+        Duration::from_secs(5),
+        Duration::from_millis(20),
+        async || {
+            events
                 .lock()
                 .unwrap()
                 .iter()
-                .any(|e| matches!(e, DaemonEvent::LaunchTunnel { .. }));
-            if ready {
-                break;
-            }
-            // Wait for the real process lifecycle to advance.
-            tokio::time::sleep(Duration::from_millis(20)).await;
-        }
-    })
+                .any(|e| matches!(e, DaemonEvent::LaunchTunnel { .. }))
+        },
+    )
     .await
     .expect("the preview tunnel should come up");
     let pid = tunnels.pid_of("preview:web").unwrap();

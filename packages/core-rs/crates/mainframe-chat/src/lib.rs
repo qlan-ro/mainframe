@@ -7,7 +7,12 @@
 #![forbid(unsafe_code)]
 #![cfg_attr(
     test,
-    allow(clippy::too_many_lines, clippy::unwrap_used, clippy::expect_used)
+    allow(
+        clippy::too_many_lines,
+        clippy::unwrap_used,
+        clippy::expect_used,
+        reason = "Test assertions and scenarios"
+    )
 )]
 
 macro_rules! storage_event {
@@ -65,7 +70,7 @@ pub mod worktree_offer_scan;
 mod history_cache;
 
 #[cfg(any(test, feature = "test-support"))]
-#[allow(dead_code, clippy::unwrap_used, clippy::expect_used)]
+#[expect(dead_code, reason = "Shared test helpers")]
 pub mod test_support;
 #[cfg(any(test, feature = "test-support"))]
 mod test_support_chat;

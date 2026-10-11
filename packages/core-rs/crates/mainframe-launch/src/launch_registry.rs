@@ -94,7 +94,7 @@ impl LaunchRegistry {
         }
         while let Some(result) = tasks.join_next().await {
             if let Err(err) = result {
-                tracing::warn!( error = ?err, "launch shutdown task failed");
+                tracing::warn!(error = ?err, "launch shutdown task failed");
             }
         }
         self.managers.clear();

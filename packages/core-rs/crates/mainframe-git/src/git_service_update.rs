@@ -9,7 +9,7 @@ impl<E: GitExec> GitService<E> {
             .await
         {
             Ok(_) => fetched = true,
-            Err(err) => tracing::warn!( error = ?err, "fetch --all failed during updateAll"),
+            Err(err) => tracing::warn!(error = ?err, "fetch --all failed during updateAll"),
         }
 
         let pull = self.pull_for_update().await?;
@@ -50,7 +50,7 @@ impl<E: GitExec> GitService<E> {
                         message: err.message.clone(),
                     };
                 } else {
-                    tracing::warn!( error = ?err, "pull failed during updateAll");
+                    tracing::warn!(error = ?err, "pull failed during updateAll");
                     pull = PullResult::UpToDate;
                 }
             }
@@ -100,7 +100,7 @@ impl<E: GitExec> GitService<E> {
                     }
                 }
             }
-            Err(err) => tracing::warn!( error = ?err, "branch enumeration failed during updateAll"),
+            Err(err) => tracing::warn!(error = ?err, "branch enumeration failed during updateAll"),
         }
 
         branches

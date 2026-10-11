@@ -78,7 +78,7 @@ async fn find_in_project_dirs(root: &Path, session_id: &str) -> Option<String> {
     let mut entries = match fs::read_dir(root).await {
         Ok(entries) => entries,
         Err(err) => {
-            tracing::debug!( error = %err, root = %root.display(), "claude projects dir unreadable");
+            tracing::debug!(error = %err, root = %root.display(), "claude projects dir unreadable");
             return None;
         }
     };
@@ -87,7 +87,7 @@ async fn find_in_project_dirs(root: &Path, session_id: &str) -> Option<String> {
             Ok(Some(entry)) => entry,
             Ok(None) => return None,
             Err(err) => {
-                tracing::warn!( error = %err, root = %root.display(), "claude projects dir scan failed");
+                tracing::warn!(error = %err, root = %root.display(), "claude projects dir scan failed");
                 return None;
             }
         };

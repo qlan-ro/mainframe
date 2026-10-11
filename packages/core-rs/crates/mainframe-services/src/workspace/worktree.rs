@@ -184,7 +184,7 @@ pub async fn add_worktree_for_branch(
     if let Err(error) =
         run_worktree_git(&["worktree", "prune"], project_path, DEFAULT_GIT_TIMEOUT_MS).await
     {
-        tracing::warn!(%error, "best-effort operation failed");
+        tracing::warn!(%error, path = %project_path, operation = "worktree_prune", "failed to prune stale worktree references");
     }
     // No timeout: checkout of a large tree can exceed the default cap (see create_worktree).
     run_worktree_git(
@@ -207,13 +207,13 @@ pub async fn remove_worktree(project_path: &str, worktree_path: &str, branch_nam
     {
         // best-effort: worktree dir may already be gone
         if let Err(error) = tokio::fs::remove_dir_all(worktree_path).await {
-            tracing::warn!(%error, "best-effort operation failed");
+            tracing::warn!(%error, path = %worktree_path, "failed to remove worktree directory");
         }
         // best-effort
         if let Err(error) =
             run_worktree_git(&["worktree", "prune"], project_path, DEFAULT_GIT_TIMEOUT_MS).await
         {
-            tracing::warn!(%error, "best-effort operation failed");
+            tracing::warn!(%error, path = %project_path, operation = "worktree_prune", "failed to prune removed worktree references");
         }
     }
     // best-effort: branch may not exist or may still be checked out elsewhere
@@ -224,7 +224,7 @@ pub async fn remove_worktree(project_path: &str, worktree_path: &str, branch_nam
     )
     .await
     {
-        tracing::warn!(%error, "best-effort operation failed");
+        tracing::warn!(%error, path = %project_path, operation = "branch_delete", "failed to delete worktree branch");
     }
 }
 

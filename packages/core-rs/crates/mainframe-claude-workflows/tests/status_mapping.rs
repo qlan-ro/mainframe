@@ -1,5 +1,9 @@
 //! The CLI `patch.status` -> tracker action / run status mapping table.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use mainframe_claude_workflows::status::{
     TaskUpdateAction, run_status, task_update_action, terminal_task_status,

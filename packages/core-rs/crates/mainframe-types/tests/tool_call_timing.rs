@@ -1,4 +1,4 @@
-#![allow(clippy::unwrap_used)]
+#![allow(clippy::unwrap_used, reason = "Test assertions and scenarios")]
 
 use mainframe_types::chat::MessageContentNode;
 use serde_json::json;

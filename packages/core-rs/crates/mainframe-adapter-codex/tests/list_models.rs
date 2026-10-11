@@ -3,7 +3,11 @@
 //! handshake against a fake newline-JSON-RPC executable at the configured path, which
 //! proves both the mapping/hidden-filter and that the configured binary is spawned.
 #![cfg(unix)]
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;

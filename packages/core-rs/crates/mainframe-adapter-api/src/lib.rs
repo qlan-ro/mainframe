@@ -13,7 +13,12 @@
 #![forbid(unsafe_code)]
 #![cfg_attr(
     test,
-    allow(clippy::too_many_lines, clippy::unwrap_used, clippy::expect_used)
+    allow(
+        clippy::too_many_lines,
+        clippy::unwrap_used,
+        clippy::expect_used,
+        reason = "Test assertions and scenarios"
+    )
 )]
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -184,7 +189,7 @@ impl AdapterRegistry {
 
     pub fn allow_refresh_for(&self, ids: impl IntoIterator<Item = String>) {
         /* expected */
-        let _ = self.refresh_ids.set(ids.into_iter().collect()); // First attachment wins. // expected: boot configures this once
+        let _ = self.refresh_ids.set(ids.into_iter().collect()); // First attachment wins.
         self.allow_refresh();
     }
 
@@ -237,7 +242,7 @@ impl AdapterRegistry {
         // logged here.
         for id in self.adapter_ids() {
             if let Err(err) = self.refresh_adapter(&id).await {
-                tracing::warn!( error = ?err,
+                tracing::warn!(error = ?err,
                     "adapter refresh rejected"
                 );
             }

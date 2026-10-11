@@ -1,4 +1,8 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 //! Byte-level pin of a sparse `chats` row as read back and serialized. The
 //! expected string was captured from the pre-refactor row mapper.

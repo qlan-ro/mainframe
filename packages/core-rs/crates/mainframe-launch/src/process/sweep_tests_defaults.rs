@@ -28,18 +28,21 @@ async fn group_kill_takes_a_non_leader_group_member() {
         .spawn()
         .unwrap();
     let leader_pid = leader.id().unwrap();
-    let member: u32 = tokio::time::timeout(Duration::from_secs(5), async {
-        loop {
-            if let Ok(text) = tokio::fs::read_to_string(&pid_file).await
-                && let Ok(pid) = text.trim().parse::<u32>()
-            {
-                break pid;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-        }
-    })
+    let mut member = None;
+    mainframe_runtime::test_support::poll_until(
+        Duration::from_secs(5),
+        Duration::from_millis(5),
+        async || {
+            member = tokio::fs::read_to_string(&pid_file)
+                .await
+                .ok()
+                .and_then(|text| text.trim().parse::<u32>().ok());
+            member.is_some()
+        },
+    )
     .await
     .unwrap();
+    let member = member.unwrap();
     assert!(is_alive(member));
 
     assert!(default_kill(i64::from(leader_pid), Signal::Kill, true));

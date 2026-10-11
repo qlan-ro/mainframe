@@ -1,5 +1,9 @@
 //! `convert_thread_items` history conversion tests.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use std::collections::HashMap;
 

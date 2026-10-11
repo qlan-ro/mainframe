@@ -1,7 +1,11 @@
 //! Golden wire tests for the provider settings routes: the exact rows a PUT
 //! writes or clears, the single rejection text for every out-of-enum value, and
 //! the exact GET body. Captured from the pre-refactor routes.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 

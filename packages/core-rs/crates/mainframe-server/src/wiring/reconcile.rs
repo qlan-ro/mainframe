@@ -20,7 +20,7 @@ pub(crate) fn spawn_reconcile(db: Db, tracker: Arc<BackgroundTaskTracker>) {
                 project_paths: projects.into_iter().map(|p| (p.id, p.path)).collect(),
             },
             Err(err) => {
-                tracing::warn!( error = %err, "Background task reconciliation failed");
+                tracing::warn!(error = %err, "Background task reconciliation failed");
                 return;
             }
         };
@@ -39,7 +39,7 @@ pub(crate) fn spawn_worktree_backfill(db: Db) {
         let projects = match db.call(|d| d.projects.list()).await {
             Ok(projects) => projects,
             Err(err) => {
-                tracing::warn!( error = %err, "Worktree relationship backfill failed");
+                tracing::warn!(error = %err, "Worktree relationship backfill failed");
                 return;
             }
         };
@@ -61,7 +61,7 @@ pub(crate) fn spawn_worktree_backfill(db: Db) {
             })
             .await;
         if let Err(err) = result {
-            tracing::warn!( error = %err, "Worktree relationship backfill failed");
+            tracing::warn!(error = %err, "Worktree relationship backfill failed");
         }
     });
 }

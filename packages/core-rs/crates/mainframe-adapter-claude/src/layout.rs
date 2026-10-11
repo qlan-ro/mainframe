@@ -62,7 +62,7 @@ pub async fn move_session_files(
     if tokio::fs::metadata(&session_dir).await.is_ok() {
         // No session directory — that's fine (any error here is swallowed).
         if let Err(error) = move_file(&session_dir, &target.join(session_id)).await {
-            tracing::warn!(%error, "best-effort operation failed");
+            tracing::warn!(%error, path = %session_dir.display(), operation = "move_session", "failed to move session directory");
         }
     }
 
@@ -181,6 +181,6 @@ async fn move_sidechains(source: &Path, target: &Path, session_id: &str) {
         Ok::<(), std::io::Error>(())
     }
     .await {
-        tracing::warn!(%error, "best-effort operation failed");
+        tracing::warn!(%error, path = %source.display(), operation = "move_sidechains", "failed to relocate sidechain transcripts");
     }
 }

@@ -3,7 +3,11 @@
 //! `no_persistence_for_spawn` already gives a side chat the no-persistence
 //! spawn option once it is temporary (always true) and the adapter reports the
 //! capability.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod temporary_chat_lifecycle_support;
 
@@ -48,7 +52,7 @@ async fn first_spawn_cwd_prefers_the_parents_worktree() {
     let adapter = support::TestAdapter::new(false);
     let manager = support::rebuild_manager(&h, adapter.clone());
 
-    let side = support::create_side_chat(&manager, &parent.id).await;
+    let side = create_side_chat(&manager, &parent.id).await;
     assert_eq!(side.worktree_path.as_deref(), Some(wt.as_str()));
 
     manager.start_chat(&side.id).await;
@@ -62,7 +66,7 @@ async fn first_spawn_cwd_falls_back_to_the_project_path_without_a_worktree() {
     let adapter = support::TestAdapter::new(false);
     let manager = support::rebuild_manager(&h, adapter.clone());
 
-    let side = support::create_side_chat(&manager, &parent.id).await;
+    let side = create_side_chat(&manager, &parent.id).await;
     assert_eq!(side.worktree_path, None);
 
     manager.start_chat(&side.id).await;
@@ -80,7 +84,7 @@ async fn first_spawn_cwd_falls_back_to_the_parents_scratch_directory_for_a_non_p
     let adapter = support::TestAdapter::new(false);
     let manager = support::rebuild_manager(&h, adapter.clone());
 
-    let side = support::create_side_chat(&manager, &parent.id).await;
+    let side = create_side_chat(&manager, &parent.id).await;
     assert!(side.scratch_path.is_some());
     assert_eq!(side.scratch_path, parent.scratch_path);
 
@@ -100,7 +104,7 @@ async fn spawn_carries_no_persistence_exactly_when_the_capability_is_on() {
 
     let capable = support::TestAdapter::new(true);
     let manager = support::rebuild_manager(&h, capable.clone());
-    let side = support::create_side_chat(&manager, &parent.id).await;
+    let side = create_side_chat(&manager, &parent.id).await;
     manager.start_chat(&side.id).await;
     assert_eq!(
         capable.spawn_no_persistence.lock().unwrap().last(),
@@ -111,7 +115,7 @@ async fn spawn_carries_no_persistence_exactly_when_the_capability_is_on() {
     let parent2 = support::create_chat(&h2, false);
     let not_capable = support::TestAdapter::new(false);
     let manager2 = support::rebuild_manager(&h2, not_capable.clone());
-    let side2 = support::create_side_chat(&manager2, &parent2.id).await;
+    let side2 = create_side_chat(&manager2, &parent2.id).await;
     manager2.start_chat(&side2.id).await;
     assert_ne!(
         not_capable.spawn_no_persistence.lock().unwrap().last(),
@@ -133,7 +137,7 @@ async fn the_side_chat_starts_with_no_session_even_after_the_parent_has_one() {
     let parent_after_start = support::get_chat(&h, &parent.id);
     assert!(parent_after_start.vendor_session_id.is_some());
 
-    let side = support::create_side_chat(&manager, &parent.id).await;
+    let side = create_side_chat(&manager, &parent.id).await;
     assert_eq!(side.vendor_session_id, None);
     assert_eq!(side.title, None);
 
@@ -154,7 +158,7 @@ async fn restart_with_the_capability_on_stamps_loss_mints_a_fresh_id_never_trans
 
     let adapter = support::TestAdapter::new(true);
     let manager = support::rebuild_manager(&h, adapter);
-    let side = support::create_side_chat(&manager, &parent.id).await;
+    let side = create_side_chat(&manager, &parent.id).await;
     manager.start_chat(&side.id).await;
 
     let after_first_start = support::get_chat(&h, &side.id);
@@ -198,7 +202,7 @@ async fn restart_with_the_capability_off_resumes_the_same_provider_id() {
 
     let adapter = support::TestAdapter::new(false);
     let manager = support::rebuild_manager(&h, adapter);
-    let side = support::create_side_chat(&manager, &parent.id).await;
+    let side = create_side_chat(&manager, &parent.id).await;
     manager.start_chat(&side.id).await;
 
     let after_first_start = support::get_chat(&h, &side.id);
@@ -224,7 +228,7 @@ async fn a_restart_before_any_spawn_stamps_no_loss() {
 
     let adapter = support::TestAdapter::new(true);
     let manager = support::rebuild_manager(&h, adapter);
-    let side = support::create_side_chat(&manager, &parent.id).await;
+    let side = create_side_chat(&manager, &parent.id).await;
 
     // "Restart" before the side chat ever spawned.
     let adapter2 = support::TestAdapter::new(true);
@@ -237,4 +241,13 @@ async fn a_restart_before_any_spawn_stamps_no_loss() {
         "a chat that never spawned has nothing to lose"
     );
     assert_ne!(after_start.transcript_missing, Some(true));
+}
+
+async fn create_side_chat(
+    mgr: &mainframe_chat::chat_manager::ChatManager,
+    parent_id: &str,
+) -> Chat {
+    mgr.open_side_chat(parent_id)
+        .await
+        .expect("open_side_chat should succeed")
 }

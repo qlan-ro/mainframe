@@ -9,7 +9,11 @@
 //! Neither
 //! has a fixture in this crate that reproduces it, and fabricating one risks
 //! pinning the wrong shape.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod common;
 

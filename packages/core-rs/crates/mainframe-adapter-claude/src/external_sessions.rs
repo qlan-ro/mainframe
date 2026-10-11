@@ -122,7 +122,9 @@ async fn enrich_window(
         }));
     }
     for h in handles {
-        let _ = h.await;
+        if let Err(error) = h.await {
+            tracing::warn!(%error, path = %project_path, operation = "enrich_session", "session enrichment worker failed");
+        }
     }
 
     let results = out.lock_recover().clone();

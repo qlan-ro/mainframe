@@ -1,7 +1,11 @@
 //! `parse_frontmatter` tests: the YAML block scalars (`description: |` / `>`)
 //! real agent and skill files use, and a closing fence found by line rather
 //! than by substring search.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use mainframe_adapter_claude::frontmatter::{build_frontmatter, parse_frontmatter};
 

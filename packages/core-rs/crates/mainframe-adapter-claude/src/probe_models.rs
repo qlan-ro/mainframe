@@ -197,7 +197,7 @@ pub async fn probe_models(executable: &str, path: &str) -> Option<ProbeResult> {
     {
         Ok(child) => child,
         Err(err) => {
-            tracing::warn!( error = ?err, "probe spawn error");
+            tracing::warn!(error = ?err, "probe spawn error");
             return None;
         }
     };
@@ -262,10 +262,10 @@ async fn initialize_probe(stdin: &mut tokio::process::ChildStdin) {
     });
     let line = format!("{payload}\n");
     if let Err(error) = stdin.write_all(line.as_bytes()).await {
-        tracing::warn!(%error, "best-effort operation failed");
+        tracing::warn!(%error, operation = "write_control_response", "failed to write model probe response");
     }
     if let Err(error) = stdin.flush().await {
-        tracing::warn!(%error, "best-effort operation failed");
+        tracing::warn!(%error, operation = "flush_control_response", "failed to flush model probe response");
     }
 }
 

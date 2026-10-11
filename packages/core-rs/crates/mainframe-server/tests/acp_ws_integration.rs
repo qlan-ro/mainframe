@@ -3,7 +3,11 @@
 //! succeeds, unsupported gets a structured error with the connection still
 //! open), the heartbeat cadence, and the daemon side of the facade connection
 //! registry.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 

@@ -21,7 +21,14 @@
 // Test crate: unwrap/expect on setup (file IO, JSON parse) is how a broken
 // fixture surfaces as a loud test failure. Matches the per-crate `lib.rs`
 // exemption for the workspace-level deny of these lints.
-#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        reason = "Test assertions and scenarios"
+    )
+)]
 
 use std::path::{Path, PathBuf};
 

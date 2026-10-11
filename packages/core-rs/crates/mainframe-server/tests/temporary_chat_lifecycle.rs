@@ -2,7 +2,11 @@
 //! context loss, and reconciliation, built on a real `ChatManager`
 //! (`build_chat_manager`) rather than a hand-built deps fake, per the
 //! `transcript_presence_wiring.rs` template.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod temporary_chat_lifecycle_support;
 

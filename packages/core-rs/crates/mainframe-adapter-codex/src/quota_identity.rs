@@ -49,7 +49,7 @@ pub(crate) async fn read_codex_account_identity(deps: ReadCodexAccountIdentityDe
     let account = match (deps.read_account)().await {
         Ok(account) => account,
         Err(err) => {
-            tracing::warn!( error = %err, "codex account/read failed; identity transient");
+            tracing::warn!(error = %err, "codex account/read failed; identity transient");
             return CODEX_IDENTITY_TRANSIENT.to_string();
         }
     };
@@ -69,7 +69,7 @@ pub(crate) async fn read_codex_account_identity(deps: ReadCodexAccountIdentityDe
     let auth_file = match auth_file {
         Ok(auth_file) => auth_file,
         Err(err) => {
-            tracing::warn!( error = %err, "codex auth.json unreadable; identity transient");
+            tracing::warn!(error = %err, "codex auth.json unreadable; identity transient");
             return CODEX_IDENTITY_TRANSIENT.to_string();
         }
     };

@@ -209,7 +209,7 @@ fn spawn_session_method(
             }
         });
         if let Err(err) = work.await {
-            error!( error = %err,
+            error!(error = %err,
                 session_id = session_id.as_deref().unwrap_or("<none>"),
                 answered = request_id.is_some(),
                 "session method failed"

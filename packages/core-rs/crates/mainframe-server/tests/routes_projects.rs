@@ -1,7 +1,11 @@
 //! Integration tests for `routes/projects.rs`: the DB-backed endpoints
 //! (list/get/create/409) and the DELETE failure response when no ChatManager is
 //! wired.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 

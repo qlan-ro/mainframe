@@ -3,7 +3,11 @@
 //! Chats are created via the db chats repo and their `worktree_path` set through
 //! `ChatPatch` (no ChatManager is required — resolution goes through the shared
 //! git.rs helpers).
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 

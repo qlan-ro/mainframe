@@ -2,7 +2,11 @@
 //! middleware, the `/health` shape, and the CORS contract. Auth is exercised
 //! through the mounted routers: an authenticated but unmatched path returns
 //! `404` (auth passed), a rejected one returns `401`.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 

@@ -2,7 +2,11 @@
 //! of GET and of every PUT rejection, plus the exact `settings` rows a PUT leaves
 //! behind. Captured from the pre-refactor routes so key names, defaults, enum
 //! spellings and error texts cannot drift.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 

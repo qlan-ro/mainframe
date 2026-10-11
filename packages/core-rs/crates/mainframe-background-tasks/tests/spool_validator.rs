@@ -1,6 +1,10 @@
 //! Tests for `src/spool_validator.rs`, kept out of line so that file stays under
 //! the 300-line limit.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use std::collections::HashMap;
 use std::sync::Arc;

@@ -97,6 +97,8 @@ mainframe-acp = { path = "crates/mainframe-acp" }
 unwrap_used = "deny"
 expect_used = "deny"
 too_many_lines = "warn"
+allow_attributes = "warn"
+allow_attributes_without_reason = "warn"
 
 # Full DWARF across the daemon crates and every dep grew target/debug to 38 GB; line
 # tables keep backtraces readable for a fraction of the disk.

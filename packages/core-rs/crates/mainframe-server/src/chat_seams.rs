@@ -137,7 +137,7 @@ impl RegistryScopeTunnelStopper {
                 true
             }
             Err(err) => {
-                tracing::warn!( error = %err, project_id, chat_id, "port-tunnel scope resolution failed");
+                tracing::warn!(error = %err, project_id, chat_id, "port-tunnel scope resolution failed");
                 false
             }
         }

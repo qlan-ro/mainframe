@@ -6,7 +6,11 @@
 //!
 //! The reader must accept array-shaped `custom_tool_call_output` entries
 //! and pair them with their `exec` calls.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use mainframe_adapter_codex::item_types::{PatchChangeKind, ThreadItem};
 use mainframe_adapter_codex::rollout_reader::{RolloutReaderDeps, read_rollout_items};

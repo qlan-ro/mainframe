@@ -11,7 +11,7 @@ use mainframe_types::{
 type Db = SqliteActor<DatabaseManager>;
 
 fn store_error(err: mainframe_db::DbError) -> SeamError {
-    tracing::error!( error = %err, "chat storage operation failed");
+    tracing::error!(error = %err, "chat storage operation failed");
     SeamError::new(err)
 }
 

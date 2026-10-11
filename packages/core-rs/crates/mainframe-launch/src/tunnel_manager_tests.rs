@@ -130,17 +130,18 @@ async fn start_until_spawned(
 ) {
     let start_manager = manager.clone();
     let task = tokio::spawn(async move { start_manager.start(4173, label, None).await });
-    let pid = tokio::time::timeout(Duration::from_secs(2), async {
-        loop {
-            if let Some(entry) = registry.added().first() {
-                break entry.pid as u32;
-            }
-            // Wait for the real process lifecycle to advance.
-            sleep(Duration::from_millis(10)).await;
-        }
-    })
+    let mut pid = None;
+    mainframe_runtime::test_support::poll_until(
+        Duration::from_secs(2),
+        Duration::from_millis(10),
+        async || {
+            pid = registry.added().first().map(|entry| entry.pid as u32);
+            pid.is_some()
+        },
+    )
     .await
     .expect("cloudflared child should spawn");
+    let pid = pid.unwrap();
     (task, pid)
 }
 
@@ -164,12 +165,11 @@ fn signal_manager(
 }
 
 async fn assert_pid_gone(pid: u32) {
-    tokio::time::timeout(Duration::from_secs(2), async {
-        while mainframe_runtime::process::is_alive(pid) {
-            // Wait for the real process lifecycle to advance.
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-    })
+    mainframe_runtime::test_support::poll_until(
+        Duration::from_secs(2),
+        Duration::from_millis(10),
+        async || !(mainframe_runtime::process::is_alive(pid)),
+    )
     .await
     .expect("the stopped child must no longer exist");
 }

@@ -3,7 +3,11 @@
 //! Codex rollout and `thread/read`), so composition can split the transcript
 //! at it and strip it back to exactly what the user typed. Fixture-based; the
 //! live CLI checks are listed in the spec's "Pending live verification".
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use std::collections::HashMap;
 

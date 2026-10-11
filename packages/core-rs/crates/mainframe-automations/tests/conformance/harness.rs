@@ -5,7 +5,7 @@
 //! fresh engine over the SAME db/credentials paths, mirroring a daemon
 //! crash-and-reboot.
 
-#![allow(dead_code)]
+#![allow(dead_code, reason = "Shared test helpers")]
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

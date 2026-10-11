@@ -149,7 +149,7 @@ impl PluginAttachments for FsAttachmentContext {
                 if (name == json_name || name.starts_with(&data_prefix))
                     && let Err(error) = tokio::fs::remove_file(entry.path()).await
                 {
-                    tracing::warn!(%error, "best-effort operation failed");
+                    tracing::warn!(%error, path = %entry.path().display(), "failed to remove attachment context file");
                 }
             }
             Ok(())

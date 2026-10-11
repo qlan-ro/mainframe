@@ -102,7 +102,7 @@ impl FileWatcherService {
         let mut watcher = match notify::recommended_watcher(handler) {
             Ok(watcher) => watcher,
             Err(err) => {
-                tracing::warn!( error = ?err,
+                tracing::warn!(error = ?err,
                     path = %key,
                     "failed to start file watcher"
                 );
@@ -111,7 +111,7 @@ impl FileWatcherService {
         };
 
         if let Err(err) = watcher.watch(&watch_target, RecursiveMode::NonRecursive) {
-            tracing::warn!( error = ?err,
+            tracing::warn!(error = ?err,
                 path = %watch_path,
                 "failed to start file watcher"
             );
@@ -235,7 +235,7 @@ fn watch_handler(
             }
         }
         Err(err) => {
-            tracing::warn!( error = ?err,
+            tracing::warn!(error = ?err,
                 path = %path_for_cb,
                 "file watcher error"
             );

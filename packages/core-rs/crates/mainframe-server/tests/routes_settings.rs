@@ -1,7 +1,11 @@
 //! Integration tests for `routes/settings.rs`, general and notification settings
 //! included. The provider GET cases assert the DB-derived shape
 //! (skipPermissions→yolo, ghost adapter) and the per-id `resolvedExecutable`.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 

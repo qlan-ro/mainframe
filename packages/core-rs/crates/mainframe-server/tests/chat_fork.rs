@@ -3,8 +3,12 @@
 //! `mainframe-adapter-mock`'s `MockCliAdapter` standing in for a real
 //! fork-capable CLI (`with_fork_capable`). Follows `workflow_runs_history.rs`'s
 //! harness pattern.
-#![allow(clippy::too_many_lines)]
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(clippy::too_many_lines, reason = "Test assertions and scenarios")]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use mainframe_types::settings_kv::MemorySettings;
 use std::net::SocketAddr;

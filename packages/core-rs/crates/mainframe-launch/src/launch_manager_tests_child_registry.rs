@@ -109,13 +109,13 @@ async fn forgets_the_pid_when_the_launch_process_exits() {
         .await
         .unwrap();
     let pid = poll_added(&registry).await.pid;
-    for _ in 0..80 {
-        if registry.removed().contains(&pid) {
-            break;
-        }
-        // Wait for the real process lifecycle to advance.
-        sleep(Duration::from_millis(25)).await;
-    }
+    mainframe_runtime::test_support::poll_until(
+        Duration::from_secs(2),
+        Duration::from_millis(25),
+        async || registry.removed().contains(&pid),
+    )
+    .await
+    .unwrap();
     assert!(registry.removed().contains(&pid));
 }
 
@@ -140,13 +140,13 @@ async fn kills_the_process_group_and_forgets_the_pid_on_stop() {
     let pid = poll_added(&registry).await.pid;
     manager.stop("dev").await;
     assert_eq!(manager.get_status("dev"), LaunchProcessStatus::Stopped);
-    for _ in 0..80 {
-        if registry.removed().contains(&pid) {
-            break;
-        }
-        // Wait for the real process lifecycle to advance.
-        sleep(Duration::from_millis(25)).await;
-    }
+    mainframe_runtime::test_support::poll_until(
+        Duration::from_secs(2),
+        Duration::from_millis(25),
+        async || registry.removed().contains(&pid),
+    )
+    .await
+    .unwrap();
     assert!(registry.removed().contains(&pid));
 }
 
@@ -203,19 +203,17 @@ async fn records_a_shebang_child_so_the_real_sweep_reaps_its_group() {
     assert_eq!(result.reaped, 1);
 
     // SIGTERM delivery is async; the process exits shortly after.
-    let mut gone = false;
-    for _ in 0..40 {
-        if crate::process::sweep::default_process_command(pid)
-            .await
-            .is_none()
-        {
-            gone = true;
-            break;
-        }
-        // Wait for the real process lifecycle to advance.
-        sleep(Duration::from_millis(50)).await;
-    }
-    assert!(gone);
+    mainframe_runtime::test_support::poll_until(
+        Duration::from_secs(2),
+        Duration::from_millis(50),
+        async || {
+            crate::process::sweep::default_process_command(pid)
+                .await
+                .is_none()
+        },
+    )
+    .await
+    .unwrap();
     assert!(registry.list().await.is_empty());
 
     // Cleanup: reap the group if anything survived the assertions.

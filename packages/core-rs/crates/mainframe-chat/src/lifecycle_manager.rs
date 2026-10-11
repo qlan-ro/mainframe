@@ -403,7 +403,7 @@ impl ChatLifecycleManager {
         let result = self.do_start_chat(chat_id).await;
         drop(notify);
         if let Err(err) = result {
-            warn!( error = ?err, chat_id, "startChat failed");
+            warn!(error = ?err, chat_id, "startChat failed");
             self.shared.emit(DaemonEvent::Error {
                 chat_id: Some(chat_id.to_string()),
                 error: err.to_string(),
@@ -452,7 +452,7 @@ impl ChatLifecycleManager {
         if let Some(session) = session
             && let Err(err) = session.interrupt().await
         {
-            warn!( error = ?err, chat_id, "interrupt failed");
+            warn!(error = ?err, chat_id, "interrupt failed");
         }
     }
 
@@ -488,7 +488,7 @@ impl ChatLifecycleManager {
         if let Some(session) = &session
             && let Err(err) = session.kill().await
         {
-            warn!( error = ?err, chat_id, "session.kill failed on archive");
+            warn!(error = ?err, chat_id, "session.kill failed on archive");
         }
         self.shared.orchestration.revoke(chat_id);
 
@@ -525,7 +525,7 @@ impl ChatLifecycleManager {
         if session.is_spawned()
             && let Err(err) = session.kill().await
         {
-            warn!( error = ?err, chat_id, "session.kill failed on stopChat");
+            warn!(error = ?err, chat_id, "session.kill failed on stopChat");
         }
         self.shared.orchestration.revoke(chat_id);
         cell.lock_recover().session = None;
@@ -547,7 +547,7 @@ impl ChatLifecycleManager {
         if let Some(session) = &session
             && let Err(err) = session.kill().await
         {
-            warn!( error = ?err, chat_id, "session.kill failed on endChat");
+            warn!(error = ?err, chat_id, "session.kill failed on endChat");
         }
         self.shared.orchestration.revoke(chat_id);
 
@@ -726,8 +726,10 @@ impl ChatLifecycleManager {
         let Some((chat, effective_path)) = self.prepare_load(chat_id).await else {
             return false;
         };
+        // Compose earlier segments even when the active session has no transcript.
         let composed = self.compose_history(chat_id).await;
         let own_id = chat.vendor_session_id.clone();
+        // A pending fork snapshot can resume before the new session writes its own transcript.
         let fork_source = storage_event!(
             self.shared, Some(chat_id);
             self.shared.deps.get_pending_fork(chat_id),
@@ -881,8 +883,8 @@ impl ChatLifecycleManager {
             .event_handler
             .build_sink(chat_id, Some(session.id().to_string()));
 
-        let options = self
-            .session_spawn_options(chat_id, &chat, plan.no_persistence, session.id())
+        let mut options = self
+            .session_spawn_options(chat_id, &chat, plan.no_persistence)
             .await;
 
         // The no-persistence flag write: persisted and mirrored into the active
@@ -890,6 +892,7 @@ impl ChatLifecycleManager {
         // the right ephemeral flag already in place.
         self.apply_no_persistence_flag(&chat.id, &cell, plan.no_persistence);
 
+        options.orchestration_mcp = self.shared.orchestration.issue(chat_id, session.id());
         let process = session.spawn(Some(options), Some(sink)).await?;
         info!(chat_id, "chat session started");
         self.shared.emit(DaemonEvent::ProcessStarted {
@@ -981,14 +984,6 @@ impl ChatLifecycleManager {
             return None;
         }
 
-        // A fork's own session id may not exist yet (its first turn never ran)
-        // or may exist but crashed before the CLI wrote its transcript — either
-        // way, `fork_source` rides along so the adapter's own resolver
-        // (`resolve_resume`) can fall back to the pinned snapshot. Only a chat
-        // with neither an own id nor a pending fork has nothing to resume.
-        // A multi-segment chat composes every segment's history, even while
-        // its active segment has no session yet (switched, nothing sent):
-        // returning early below would hide the earlier segments.
         Some((chat, effective_path))
     }
 }

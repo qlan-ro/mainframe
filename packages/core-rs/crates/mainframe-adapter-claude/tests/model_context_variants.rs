@@ -1,4 +1,4 @@
-#![allow(clippy::unwrap_used)]
+#![allow(clippy::unwrap_used, reason = "Test assertions and scenarios")]
 
 use mainframe_adapter_claude::{models::enrich_with_context_window, probe_models::map_model_info};
 use mainframe_types::adapter::AdapterModel;

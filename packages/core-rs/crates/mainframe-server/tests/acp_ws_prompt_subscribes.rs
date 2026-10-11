@@ -3,7 +3,11 @@
 //! a session from the moment it sends a prompt rather than from whenever the
 //! spawned task gets scheduled. Moving `attach` below the spawn (or behind
 //! `dispatch_with_prompt`) must fail this test.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 

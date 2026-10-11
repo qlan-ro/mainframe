@@ -137,12 +137,11 @@ fn ignores_sigterm(marker: &std::path::Path) -> String {
 /// Waits until every server spawned from [`ignores_sigterm`] has installed its
 /// trap, so the SIGTERM that follows cannot kill it by default disposition.
 async fn wait_for_markers(markers: &[std::path::PathBuf]) {
-    tokio::time::timeout(Duration::from_secs(5), async {
-        while !markers.iter().all(|m| m.exists()) {
-            // OS child; Tokio time cannot be paused.
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-    })
+    mainframe_runtime::test_support::poll_until(
+        Duration::from_secs(5),
+        Duration::from_millis(10),
+        async || !(!markers.iter().all(|m| m.exists())),
+    )
     .await
     .expect("the server should install its TERM trap");
 }

@@ -121,7 +121,7 @@ async fn drive_lsp_socket(
         close_rx,
         bridge_started,
     };
-    pump_lsp_socket(&mut socket, &handle, reattach, bridge).await;
+    pump_lsp_socket(&mut socket, &handle, &project_id, reattach, bridge).await;
 
     detach_lsp_client(&handle, &manager, &open, &project_id, &language);
 }
@@ -149,6 +149,7 @@ fn start_reattach_bridge(
 }
 
 fn handle_reattach_text(
+    project_id: &str,
     handle: &Arc<LspServerHandle>,
     incoming_rx: &mut Option<mpsc::UnboundedReceiver<String>>,
     outgoing_tx: &mpsc::UnboundedSender<String>,
@@ -159,7 +160,7 @@ fn handle_reattach_text(
     match classify_reattach_first(&text) {
         ReattachAction::ReplayInitialize { id } => {
             if let Some(result) = handle.initialize_result() {
-                tracing::info!("Replaying cached initialize result for reconnecting client");
+                tracing::info!(project_id, language = %handle.language, "Replaying cached initialize result for reconnecting client");
                 let _ = outgoing_tx.send(cached_initialize_reply(&id, &result));
             }
         }
@@ -202,6 +203,7 @@ struct SocketBridge {
 async fn pump_lsp_socket(
     socket: &mut WebSocket,
     handle: &Arc<LspServerHandle>,
+    project_id: &str,
     reattach: bool,
     bridge: SocketBridge,
 ) {
@@ -220,7 +222,7 @@ async fn pump_lsp_socket(
                     Some(Ok(Message::Text(text))) => {
                         let text = text.to_string();
                         if reattach && !bridge_started {
-                            handle_reattach_text(handle, &mut incoming_rx, &outgoing_tx, &incoming_tx, &mut bridge_started, text);
+                            handle_reattach_text(project_id, handle, &mut incoming_rx, &outgoing_tx, &incoming_tx, &mut bridge_started, text);
                         } else {
                             let _ = incoming_tx.send(text);
                         }
@@ -241,10 +243,11 @@ async fn pump_lsp_socket(
                 }
             }
             closed = close_rx.recv() => {
-                if let Some((code, reason)) = closed {
-                    let _ = socket
+                if let Some((code, reason)) = closed
+                    && let Err(error) = socket
                         .send(Message::Close(Some(CloseFrame { code, reason: reason.into() })))
-                        .await;
+                        .await {
+                        tracing::warn!(%error, "failed to send LSP WebSocket close frame");
                 }
                 break;
             }

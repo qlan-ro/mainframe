@@ -20,7 +20,7 @@ impl ProjectPaths for DaemonChatDeps {
         self.db
             .call_blocking(move |d| d.projects.remove(&pid))
             .map_err(|err| {
-                tracing::warn!( error = %err, project_id, "projects.remove failed");
+                tracing::warn!(error = %err, project_id, "projects.remove failed");
                 SeamError::new(err)
             })
     }
@@ -31,7 +31,7 @@ impl ProjectPaths for DaemonChatDeps {
         let path = path.to_string();
         Box::pin(async move {
             if let Err(err) = tokio::fs::create_dir_all(&path).await {
-                tracing::warn!( error = %err, path, "failed to create the chat's scratch directory");
+                tracing::warn!(error = %err, path, "failed to create the chat's scratch directory");
             }
         })
     }

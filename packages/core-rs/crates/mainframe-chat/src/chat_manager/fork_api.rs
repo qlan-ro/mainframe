@@ -221,7 +221,7 @@ async fn remove_snapshot_dir(chat_id: &str, dir: &str) {
     if let Err(err) = tokio::fs::remove_dir_all(dir).await
         && err.kind() != std::io::ErrorKind::NotFound
     {
-        tracing::warn!( error = %err, chat_id, dir, "failed to remove fork snapshot directory after a failed fork");
+        tracing::warn!(error = %err, chat_id, dir, "failed to remove fork snapshot directory after a failed fork");
     }
 }
 

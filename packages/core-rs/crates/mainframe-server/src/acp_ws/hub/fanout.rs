@@ -153,7 +153,7 @@ impl FacadeHub {
     ) {
         match serde_json::to_string(note) {
             Ok(payload) => self.push_raw_to_attached(chat_id, payload),
-            Err(err) => warn!( error = %err,
+            Err(err) => warn!(error = %err,
                 chat_id,
                 kind = kind.label(),
                 "failed to serialize an out-of-band notification"

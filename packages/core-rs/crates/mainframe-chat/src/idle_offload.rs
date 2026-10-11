@@ -96,7 +96,7 @@ impl ChatOffload {
         if let Some(session) = &session_handle
             && let Err(err) = session.kill().await
         {
-            warn!( error = ?err, chat_id, "failed to kill session");
+            warn!(error = ?err, chat_id, "failed to kill session");
         }
         self.lifecycle.orchestration().revoke(chat_id);
 

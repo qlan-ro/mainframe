@@ -2,7 +2,11 @@
 //! (content + images) whether it arrives live through `events::handle_stdout`
 //! or via history reload's `history_converters::convert_history_entry` —
 //! modelled on `live_vs_history_id_parity.rs`.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use std::sync::{Arc, Mutex};
 

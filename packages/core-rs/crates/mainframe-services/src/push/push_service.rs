@@ -167,7 +167,7 @@ impl PushService {
         let client = match &self.client {
             Ok(client) => client,
             Err(err) => {
-                tracing::error!( error = ?err, "failed to send push notification");
+                tracing::error!(error = ?err, "failed to send push notification");
                 return;
             }
         };
@@ -178,7 +178,7 @@ impl PushService {
                 }
             }
             Err(err) => {
-                tracing::error!( error = ?err, "failed to send push notification");
+                tracing::error!(error = ?err, "failed to send push notification");
             }
         }
     }

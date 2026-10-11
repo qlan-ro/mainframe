@@ -2,7 +2,11 @@
 //! behind the localhost chips. The harness drives a stub `cloudflared`
 //! that mints `https://abc-def<n>.trycloudflare.com` and logs every spawn, so
 //! "reused, not respawned" is asserted on the process count, not just the URL.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 

@@ -1,8 +1,12 @@
 //! Integration test (exercises only the public `AdapterRegistry` surface + the
 //! `Adapter` / `AdapterSession` / `RefreshDeps` traits) so `lib.rs` stays
 //! focused on the registry.
-#![allow(clippy::too_many_lines)]
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(clippy::too_many_lines, reason = "Test assertions and scenarios")]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicUsize, Ordering};

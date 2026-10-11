@@ -16,7 +16,7 @@ pub(crate) fn blocks_to_message_content(blocks: &[Value]) -> Vec<MessageContent>
             |b| match serde_json::from_value::<MessageContent>(b.clone()) {
                 Ok(mc) => Some(mc),
                 Err(err) => {
-                    tracing::warn!( error = ?err,
+                    tracing::warn!(error = ?err,
                         "unrepresentable content block skipped"
                     );
                     None

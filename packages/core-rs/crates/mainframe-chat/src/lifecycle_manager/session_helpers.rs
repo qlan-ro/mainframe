@@ -6,7 +6,6 @@ impl ChatLifecycleManager {
         chat_id: &str,
         chat: &Chat,
         no_persistence: bool,
-        session_id: &str,
     ) -> SessionSpawnOptions {
         let executable_path = self
             .provider_setting(&chat.adapter_id, "executablePath")
@@ -30,7 +29,7 @@ impl ChatLifecycleManager {
             small_fast_model,
             default_model,
             no_persistence: Some(no_persistence),
-            orchestration_mcp: self.shared.orchestration.issue(chat_id, session_id),
+            orchestration_mcp: None,
         }
     }
 

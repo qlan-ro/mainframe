@@ -5,8 +5,12 @@
 //!
 //! Integration tests are only built under `cargo test`, so `unwrap`/`expect` are
 //! permitted here (RUST RULES `#[cfg(test)]` exemption).
-#![allow(clippy::too_many_lines)]
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(clippy::too_many_lines, reason = "Test assertions and scenarios")]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use std::net::SocketAddr;
 use std::sync::Arc;

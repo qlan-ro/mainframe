@@ -61,9 +61,8 @@ fn purge_old_logs(dir: &PathBuf) {
         // ignore individual file errors
         if let Ok(modified) = entry.metadata().and_then(|m| m.modified())
             && is_stale_server_log(&name, modified, cutoff)
-            && let Err(error) = fs::remove_file(entry.path())
         {
-            tracing::warn!(%error, "best-effort operation failed");
+            let _ = fs::remove_file(entry.path()); /* expected */ // Boot purge tolerates inaccessible logs.
         }
     }
 }
@@ -96,7 +95,10 @@ pub fn init(log_dir: &std::path::Path) -> Option<WorkerGuard> {
 
     let dir = log_dir.to_path_buf();
     if let Err(err) = fs::create_dir_all(&dir) {
-        boot_error("could not create log directory", &err);
+        boot_error(
+            &format!("could not create log directory {}", dir.display()),
+            &err,
+        );
     }
     purge_old_logs(&dir);
 

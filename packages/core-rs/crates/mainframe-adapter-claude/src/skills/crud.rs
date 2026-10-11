@@ -91,7 +91,7 @@ pub async fn delete_skill(skill_id: &str, project_path: &str) -> Result<(), Skil
         .unwrap_or_default();
     // `rm(dir, { recursive: true, force: true })` — force ignores a missing dir.
     if let Err(error) = fs::remove_dir_all(&skill_dir).await {
-        tracing::warn!(%error, "best-effort operation failed");
+        tracing::warn!(%error, path = %skill_dir.display(), "failed to remove skill directory");
     }
     Ok(())
 }

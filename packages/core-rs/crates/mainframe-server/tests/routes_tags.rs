@@ -1,6 +1,10 @@
 //! Integration tests for `routes/tags.rs` (real in-memory DB, a seeded project +
 //! chat for the chat-scoped routes).
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 

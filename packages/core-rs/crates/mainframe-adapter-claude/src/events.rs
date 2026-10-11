@@ -28,7 +28,7 @@ pub fn handle_stdout(session: &ClaudeSession, chunk: &[u8], sink: &dyn SessionSi
             continue;
         }
         session.bump_last_activity();
-        tracing::trace!(session_id = %session.id, line = %line, "");
+        tracing::trace!(session_id = %session.id, line = %line, "stream-json line");
         if let Ok(event) = serde_json::from_str::<Value>(line.trim()) {
             handle_event(session, &event, sink);
         }

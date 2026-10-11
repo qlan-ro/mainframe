@@ -39,7 +39,7 @@ pub fn replay_batch_notifications(
         .filter_map(|chunk| match encode_batch(chunk) {
             Ok(data) => Some(notification(session_id, chunk.len(), data)),
             Err(err) => {
-                tracing::warn!( error = %err, session_id, count = chunk.len(), "dropped a replay batch");
+                tracing::warn!(error = %err, session_id, count = chunk.len(), "dropped a replay batch");
                 None
             }
         })

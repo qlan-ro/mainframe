@@ -69,7 +69,7 @@ impl ResolvedPath {
                 }
             }
             Err(err) => {
-                tracing::warn!( error = %err, "login shell failed, using fallback");
+                tracing::warn!(error = %err, "login shell failed, using fallback");
             }
         }
         Self::fallback()

@@ -2,7 +2,11 @@
 //! daemon actually resolves to (the daemon's real uid), and must keep rejecting
 //! a path outside the spool root.
 #![cfg(unix)]
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 

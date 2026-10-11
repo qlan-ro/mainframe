@@ -66,7 +66,7 @@ impl ChatConfigManager {
                     cell.lock_recover().chat.permission_mode = Some(mode);
                 }
                 Err(err) => {
-                    warn!( error = ?err,
+                    warn!(error = ?err,
                         chat_id, "setPermissionMode rejected; not persisting permissionMode"
                     )
                 }
@@ -78,7 +78,7 @@ impl ChatConfigManager {
                     updates.plan_mode = Some(plan);
                     cell.lock_recover().chat.plan_mode = Some(plan);
                 }
-                Err(err) => warn!( error = ?err,
+                Err(err) => warn!(error = ?err,
                     chat_id, "setPlanMode rejected; not persisting planMode"
                 ),
             }
@@ -168,7 +168,7 @@ async fn apply_model(
                 cell.lock_recover().chat.model = Some(model);
             }
             Err(err) => {
-                warn!( error = ?err, chat_id, "setModel rejected; not persisting model");
+                warn!(error = ?err, chat_id, "setModel rejected; not persisting model");
                 model_error = Some(ConfigError::Adapter(err));
             }
         }

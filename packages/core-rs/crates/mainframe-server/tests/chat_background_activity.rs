@@ -7,7 +7,11 @@
 //! its own `start`/`end` API, read back only through `ChatManager`'s public
 //! broadcast and read paths. A regression where `tracker_list_live` silently
 //! falls back to an empty default would fail every case here.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use mainframe_types::settings_kv::MemorySettings;
 use std::collections::HashMap;
