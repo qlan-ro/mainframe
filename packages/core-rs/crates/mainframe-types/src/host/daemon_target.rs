@@ -46,15 +46,15 @@ pub struct DaemonMeta {
 
 impl DaemonMeta {
     /// The `.min(1)` refinements from `DaemonMetaSchema` (id/label/host non-empty).
-    pub fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), crate::validation::RefinementError> {
         if self.id.is_empty() {
-            return Err("id must contain at least 1 character".to_string());
+            return Err(crate::validation::RefinementError::TooShort("id"));
         }
         if self.label.is_empty() {
-            return Err("label must contain at least 1 character".to_string());
+            return Err(crate::validation::RefinementError::TooShort("label"));
         }
         if self.host.is_empty() {
-            return Err("host must contain at least 1 character".to_string());
+            return Err(crate::validation::RefinementError::TooShort("host"));
         }
         Ok(())
     }
