@@ -104,11 +104,11 @@ pub(super) fn test_child() -> (ChildHandle, TestChild) {
     )
 }
 
-#[path = "spawn.rs"]
+#[path = "session_tests_spawn.rs"]
 mod spawn;
 
-#[path = "controls.rs"]
+#[path = "session_tests_controls.rs"]
 mod controls;
 
-#[path = "lifecycle.rs"]
+#[path = "session_tests_lifecycle.rs"]
 mod lifecycle;

@@ -1,4 +1,4 @@
-use mainframe_types::sync::LockExt;
+use mainframe_types::sync::LockExt as _;
 use std::sync::Mutex;
 
 use serde_json::json;

@@ -446,17 +446,11 @@ async fn event_loop_subscribes_and_dispatches() {
     let handle = spawn_event_loop(h.router.clone(), source);
 
     tx.send(session_finished("chat-1")).unwrap();
-    let mut fired = false;
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    while std::time::Instant::now() < deadline {
-        if h.runs.list_runs(&watcher, 10).await.unwrap().len() == 1 {
-            fired = true;
-            break;
-        }
-        tokio::task::yield_now().await;
-    }
+    tokio::time::timeout(std::time::Duration::from_secs(10), h.sink.wait_for(|event| {
+        matches!(event, AutomationEvent::RunUpdated { run } if run.automation_id == watcher)
+    })).await.unwrap();
     handle.abort();
-    assert!(fired, "the subscribed loop dispatched the event to a run");
+    assert_eq!(h.runs.list_runs(&watcher, 10).await.unwrap().len(), 1);
 }
 
 #[test]

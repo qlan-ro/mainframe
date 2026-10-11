@@ -8,7 +8,7 @@
 //! `fanout.rs` owns per-event delivery and `handlers.rs` the `ChatSurface` sink
 //! itself.
 
-use mainframe_types::sync::LockExt;
+use mainframe_types::sync::LockExt as _;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 

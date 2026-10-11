@@ -1,6 +1,6 @@
 use crate::SessionSink;
 use mainframe_types::adapter::DetectedPr;
-use mainframe_types::sync::LockExt;
+use mainframe_types::sync::LockExt as _;
 use std::sync::Mutex;
 
 #[derive(Default)]

@@ -14,7 +14,7 @@
 //! Delivery fans out through the `Arc<DashMap<ClientId, ClientHandle>>`
 //! registry and each connection's mpsc sink.
 
-use mainframe_types::sync::LockExt;
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};

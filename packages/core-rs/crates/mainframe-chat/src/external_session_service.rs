@@ -1,5 +1,5 @@
 use mainframe_types::seam_error::SeamError;
-use mainframe_types::sync::LockExt;
+use mainframe_types::sync::LockExt as _;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};

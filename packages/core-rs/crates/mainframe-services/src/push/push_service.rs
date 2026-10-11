@@ -1,4 +1,4 @@
-use mainframe_types::sync::LockExt;
+use mainframe_types::sync::LockExt as _;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;

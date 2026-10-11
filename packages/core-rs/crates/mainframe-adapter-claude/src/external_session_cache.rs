@@ -4,7 +4,7 @@
 //! `Arc<Mutex<HashMap<..>>>` owned by the adapter; every accessor takes the
 //! handle. `new_external_session_cache` constructs it at adapter init.
 
-use mainframe_types::sync::LockExt;
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 

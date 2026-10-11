@@ -58,7 +58,7 @@ async fn settle(h: &Harness, run_id: &str, pred: impl Fn(&RunRecord) -> bool) ->
         if pred(&record) {
             return record;
         }
-        tokio::task::yield_now().await;
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
     }
     panic!("run {run_id} never reached the expected state");
 }

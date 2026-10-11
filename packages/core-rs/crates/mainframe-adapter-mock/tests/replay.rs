@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use mainframe_types::sync::LockExt;
+use mainframe_types::sync::LockExt as _;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 

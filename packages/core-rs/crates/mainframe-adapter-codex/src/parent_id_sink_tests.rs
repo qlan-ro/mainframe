@@ -1,7 +1,7 @@
 //! `ParentIdSink` must forward every `SessionSink` callback, including new ones
 //! added after it was written (#284) — a silent drop here is a trap.
 
-use mainframe_types::sync::LockExt;
+use mainframe_types::sync::LockExt as _;
 use std::sync::Arc;
 
 use mainframe_adapter_api::SessionSink;

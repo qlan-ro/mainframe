@@ -17,12 +17,11 @@ async fn stop_background_task_error_on_error_envelope() {
     let mut rx = spawned_with_stdin(&s);
     let s2 = s.clone();
     let pending = tokio::spawn(async move { s2.stop_background_task("task-4b".to_string()).await });
-    let payload = loop {
-        tokio::task::yield_now().await;
-        if let Ok(bytes) = rx.try_recv() {
-            break serde_json::from_slice::<Value>(&bytes).unwrap();
-        }
-    };
+    let bytes = tokio::time::timeout(Duration::from_secs(10), rx.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    let payload = serde_json::from_slice::<Value>(&bytes).unwrap();
     let request_id = payload["request_id"].as_str().unwrap();
     s.control.resolve(
         request_id,
@@ -37,7 +36,7 @@ async fn stop_background_task_error_on_error_envelope() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn kill_resolves_only_after_child_emits_close() {
     let s = session();
     let (child, ctrl) = test_child();
@@ -48,7 +47,7 @@ async fn kill_resolves_only_after_child_emits_close() {
     tokio::select! {
         biased;
         _ = &mut fut => panic!("kill resolved before close"),
-        () = std::future::ready(()) => {}
+        () = tokio::time::sleep(Duration::from_millis(2999)) => {}
     }
     assert!(ctrl.signals.lock().unwrap().contains(&Signal::Term));
 
@@ -75,12 +74,11 @@ async fn stop_background_task_ok_on_success_envelope() {
     let mut rx = spawned_with_stdin(&s);
     let s2 = s.clone();
     let pending = tokio::spawn(async move { s2.stop_background_task("task-4".to_string()).await });
-    let payload = loop {
-        tokio::task::yield_now().await;
-        if let Ok(bytes) = rx.try_recv() {
-            break serde_json::from_slice::<Value>(&bytes).unwrap();
-        }
-    };
+    let bytes = tokio::time::timeout(Duration::from_secs(10), rx.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    let payload = serde_json::from_slice::<Value>(&bytes).unwrap();
     let request_id = payload["request_id"].as_str().unwrap();
     assert!(s.control.resolve(
         request_id,
@@ -130,12 +128,11 @@ async fn stop_background_task_writes_stop_task_control_request() {
     let mut rx = spawned_with_stdin(&s);
     let s2 = s.clone();
     let pending = tokio::spawn(async move { s2.stop_background_task("task-5".to_string()).await });
-    let payload = loop {
-        tokio::task::yield_now().await;
-        if let Ok(bytes) = rx.try_recv() {
-            break serde_json::from_slice::<Value>(&bytes).unwrap();
-        }
-    };
+    let bytes = tokio::time::timeout(Duration::from_secs(10), rx.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    let payload = serde_json::from_slice::<Value>(&bytes).unwrap();
     assert_eq!(payload["type"], "control_request");
     assert_eq!(payload["request"]["subtype"], "stop_task");
     assert_eq!(payload["request"]["task_id"], "task-5");

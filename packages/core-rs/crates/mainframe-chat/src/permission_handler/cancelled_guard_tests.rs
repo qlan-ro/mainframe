@@ -2,7 +2,7 @@
 //! session or restart a chat (D4) — `was_cancelled` guards `respond_to_permission`
 //! before it even looks for an active session.
 
-use mainframe_types::sync::LockExt;
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 
 use mainframe_types::adapter::ControlBehavior;

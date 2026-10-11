@@ -40,19 +40,6 @@ async fn cold_manager(dir: &tempfile::TempDir) -> (Arc<FakeDeps>, ChatManager, P
     (deps, manager, transcript)
 }
 
-/// The snapshot write is fire-and-forget, so wait for it rather than racing it.
-async fn wait_for_snapshot(dir: &tempfile::TempDir) {
-    let path = dir.path().join("cache").join("c1.json");
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    while std::time::Instant::now() < deadline {
-        if tokio::fs::metadata(&path).await.is_ok() {
-            return;
-        }
-        tokio::task::yield_now().await;
-    }
-    panic!("snapshot never written to {}", path.display());
-}
-
 #[tokio::test]
 async fn a_second_cold_load_of_an_unchanged_transcript_hits_the_snapshot() {
     let dir = tempfile::tempdir().unwrap();
@@ -60,7 +47,7 @@ async fn a_second_cold_load_of_an_unchanged_transcript_hits_the_snapshot() {
 
     assert_eq!(manager.get_messages("c1").await, vec![history()]);
     assert_eq!(deps.adapters.history_loads.load(Ordering::SeqCst), 1);
-    wait_for_snapshot(&dir).await;
+    manager.history_cache.flush().await;
     assert!(manager.shared.messages.lock().unwrap().get("c1").is_none());
 
     assert_eq!(manager.get_messages("c1").await, vec![history()]);
@@ -77,7 +64,7 @@ async fn a_changed_transcript_misses_the_snapshot_and_reparses() {
     let (deps, manager, transcript) = cold_manager(&dir).await;
 
     manager.get_messages("c1").await;
-    wait_for_snapshot(&dir).await;
+    manager.history_cache.flush().await;
 
     // Grow the file: a new length is a fingerprint miss on its own, without
     // depending on mtime granularity.
@@ -100,6 +87,7 @@ async fn a_session_without_history_sources_never_touches_the_cache() {
 
     manager.get_messages("c1").await;
     manager.get_messages("c1").await;
+    manager.history_cache.flush().await;
     assert_eq!(deps.adapters.history_loads.load(Ordering::SeqCst), 2);
     assert!(
         tokio::fs::metadata(dir.path().join("cache")).await.is_err(),

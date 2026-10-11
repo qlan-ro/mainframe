@@ -50,7 +50,7 @@ async fn retires_the_process_entry_before_the_pumps_drain_and_emits_status_after
 
     tokio::time::timeout(Duration::from_secs(5), async {
         while manager.get_status("dev") != LaunchProcessStatus::Stopped {
-            // OS child; Tokio time cannot be paused.
+            // Wait for the real process lifecycle to advance.
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
     })
@@ -113,7 +113,7 @@ async fn a_restart_during_the_drain_keeps_its_status_and_preview_tunnel() {
 
     // Both old pumps give up after PUMP_DRAIN_GRACE each; then the old exit
     // task has had its chance to touch the name.
-    // OS child; Tokio time cannot be paused.
+    // Wait for the real process lifecycle to advance.
     tokio::time::sleep(PUMP_DRAIN_GRACE * 3).await;
 
     assert_eq!(manager.get_status("dev"), LaunchProcessStatus::Running);

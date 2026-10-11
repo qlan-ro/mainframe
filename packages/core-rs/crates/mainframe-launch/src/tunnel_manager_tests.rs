@@ -135,7 +135,7 @@ async fn start_until_spawned(
             if let Some(entry) = registry.added().first() {
                 break entry.pid as u32;
             }
-            // OS child; Tokio time cannot be paused.
+            // Wait for the real process lifecycle to advance.
             sleep(Duration::from_millis(10)).await;
         }
     })
@@ -166,7 +166,7 @@ fn signal_manager(
 async fn assert_pid_gone(pid: u32) {
     tokio::time::timeout(Duration::from_secs(2), async {
         while mainframe_runtime::process::is_alive(pid) {
-            // OS child; Tokio time cannot be paused.
+            // Wait for the real process lifecycle to advance.
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
     })

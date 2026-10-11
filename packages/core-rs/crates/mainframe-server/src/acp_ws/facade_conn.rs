@@ -2,7 +2,7 @@
 //! socket loop drains, per-session stream state, and gates delivered but not
 //! yet answered.
 
-use mainframe_types::sync::LockExt;
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::future::Future;
 use std::sync::atomic::{AtomicBool, Ordering};

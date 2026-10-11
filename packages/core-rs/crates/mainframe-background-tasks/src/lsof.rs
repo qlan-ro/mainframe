@@ -1,4 +1,4 @@
-use mainframe_types::sync::LockExt;
+use mainframe_types::sync::LockExt as _;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex, MutexGuard};

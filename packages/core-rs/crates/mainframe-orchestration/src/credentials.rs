@@ -3,13 +3,13 @@
 //! Everything here is in memory: the CLIs die with the daemon, so no
 //! credential can outlive it.
 
-use mainframe_types::sync::LockExt;
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
-use base64::Engine;
+use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use mainframe_types::orchestration::SecretToken;
 use rand::RngCore;

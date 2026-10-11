@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use mainframe_types::sync::LockExt;
+use mainframe_types::sync::LockExt as _;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -167,6 +167,9 @@ async fn cancelling_a_queued_prompt_drops_it_before_the_result() {
     );
 
     sink.wait_for_calls(3).await;
+    for _ in 0..4 {
+        tokio::time::advance(Duration::from_secs(1)).await;
+    }
     assert_eq!(sink.calls(), ["init:recorded-session", "message", "result"]);
 }
 

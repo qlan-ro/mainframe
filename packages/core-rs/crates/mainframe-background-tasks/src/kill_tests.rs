@@ -2,7 +2,7 @@ use super::*;
 use crate::lsof::{ExecCode, ExecFn, ExecOk, LsofExecError, set_exec_for_tests};
 use crate::tracker::TaskSeed;
 use mainframe_types::background_task::{BackgroundTaskToolName, BackgroundWorkKind};
-use mainframe_types::sync::LockExt;
+use mainframe_types::sync::LockExt as _;
 use std::collections::VecDeque;
 use std::fs;
 use tempfile::tempdir;

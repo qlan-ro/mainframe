@@ -130,7 +130,7 @@ fn handle_event(session: &ClaudeSession, event: &Value, sink: &dyn SessionSink) 
 }
 
 #[cfg(test)]
-#[path = "events_tests/support.rs"]
+#[path = "events_tests_support.rs"]
 mod tests;
 
 #[path = "event_system.rs"]

@@ -7,11 +7,11 @@ mod support;
 use reqwest::StatusCode;
 use support::spawn_test_server;
 
-use support::run_git;
+use support::helpers::run_git;
 
-use support::init_repo;
+use support::helpers::init_repo;
 
-use support::get_json;
+use support::helpers::get_json;
 
 #[tokio::test]
 async fn github_remotes_returns_404_for_an_unknown_project() {

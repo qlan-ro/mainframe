@@ -111,7 +111,7 @@ async fn imported_creation_and_generated_title_share_enrichment() {
         .unwrap();
     tokio::time::timeout(std::time::Duration::from_secs(1), async {
         while deps.events().len() < 2 {
-            tokio::task::yield_now().await;
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
         }
     })
     .await

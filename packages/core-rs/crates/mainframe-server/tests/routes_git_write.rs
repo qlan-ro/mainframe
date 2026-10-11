@@ -12,7 +12,7 @@ use support::{TestServer, spawn_test_server};
 
 /// Init a repo with one commit, using repo-local identity/no-sign config so the
 /// daemon's own `GitService` commits succeed regardless of the host git config.
-use support::init_repo;
+use support::helpers::init_repo;
 
 async fn post(server: &TestServer, path: &str, body: Value) -> reqwest::Response {
     reqwest::Client::new()

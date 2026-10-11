@@ -418,6 +418,4 @@ impl WsClient {
     }
 }
 
-mod helpers;
-#[allow(unused_imports)]
-pub use helpers::{get_json, init_repo, run_git};
+pub mod helpers;

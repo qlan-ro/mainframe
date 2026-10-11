@@ -2,7 +2,7 @@
 //! serves — the static fallback list, the older-model merge and
 //! `enrich_with_context_window` — lives in [`crate::models`].
 
-use mainframe_types::sync::LockExt;
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 

@@ -10,7 +10,7 @@
 //! session already wrote to. Before this, `on_exit` racing a fresh session's
 //! first `on_message_partial` could drop the wrong overlay.
 
-use mainframe_types::sync::LockExt;
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 

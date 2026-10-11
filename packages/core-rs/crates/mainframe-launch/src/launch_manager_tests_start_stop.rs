@@ -201,7 +201,7 @@ async fn signal_group_does_not_fall_back_to_the_pid_when_the_group_is_gone() {
 
     signal_group(Some(unrelated.id()), Signal::Kill);
 
-    // OS child; Tokio time cannot be paused.
+    // Wait for the real process lifecycle to advance.
     tokio::time::sleep(Duration::from_millis(100)).await;
     let still_running = unrelated.try_wait().unwrap().is_none();
     unrelated.kill().unwrap();

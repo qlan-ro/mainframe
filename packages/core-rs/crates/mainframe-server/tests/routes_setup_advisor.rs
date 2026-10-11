@@ -10,7 +10,7 @@ use reqwest::StatusCode;
 use serde_json::json;
 use support::spawn_test_server;
 
-use support::run_git;
+use support::helpers::run_git;
 
 /// The rich fixture from the fingerprint tests
 /// (`src/setup_advisor/fingerprint/tests.rs`): a Next.js + React + Supabase
@@ -51,7 +51,7 @@ fn rich_fixture_repo() -> tempfile::TempDir {
     dir
 }
 
-use support::get_json;
+use support::helpers::get_json;
 
 #[tokio::test]
 async fn returns_a_report_with_camel_case_fields_for_a_registered_fixture_project() {

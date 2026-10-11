@@ -13,7 +13,7 @@
 //! ends it. Work that a recording never resolves stays running, which is exactly
 //! what a fixture wants when the point is to show live work.
 use crate::recorded_method::RecordedMethod;
-use mainframe_types::sync::LockExt;
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 

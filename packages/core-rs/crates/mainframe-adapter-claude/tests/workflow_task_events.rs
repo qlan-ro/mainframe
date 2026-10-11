@@ -337,23 +337,21 @@ fn write_record(project_path: &str, session_id: &str, task_id: &str) -> RemoveDi
 }
 
 async fn await_record_source(store: &ClaudeWorkflowStore, task_id: &str) -> ClaudeWorkflowRun {
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
-    loop {
-        let run = store
-            .runs_for_chat(CHAT)
-            .into_iter()
-            .find(|r| r.task_id == task_id);
-        if let Some(run) = run
-            && run.source == ClaudeWorkflowRunSource::Record
-        {
-            return run;
+    let mut events = store.subscribe();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            if let Some(run) = store
+                .runs_for_chat(CHAT)
+                .into_iter()
+                .find(|r| r.task_id == task_id && r.source == ClaudeWorkflowRunSource::Record)
+            {
+                return run;
+            }
+            events.recv().await.unwrap();
         }
-        assert!(
-            tokio::time::Instant::now() < deadline,
-            "terminal reconcile never applied the on-disk record"
-        );
-        tokio::task::yield_now().await;
-    }
+    })
+    .await
+    .expect("terminal reconcile applied the on-disk record")
 }
 
 /// `spawn_terminal_reconcile` only runs when `record_location` resolves, which

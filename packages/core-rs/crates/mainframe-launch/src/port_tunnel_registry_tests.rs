@@ -238,7 +238,7 @@ async fn starts_during_cancelled_child_teardown_share_the_cancelled_outcome() {
     let second = async {
         tokio::time::timeout(Duration::from_secs(2), async {
             while signals.lock().unwrap().is_empty() {
-                // OS child; Tokio time cannot be paused.
+                // Wait for the real process lifecycle to advance.
                 tokio::time::sleep(Duration::from_millis(5)).await;
             }
         })

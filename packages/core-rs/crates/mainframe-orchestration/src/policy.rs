@@ -1,7 +1,7 @@
 //! Limits and the privilege ceiling. The numbers are first guesses (spec "Open
 //! questions") kept in one place so tuning them is a one-line change.
 
-use mainframe_types::sync::LockExt;
+use mainframe_types::sync::LockExt as _;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};

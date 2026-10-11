@@ -4,7 +4,7 @@
 //! debounce emits one trailing `file:changed` event per burst. Reference counts
 //! keep each watcher alive until its final subscriber leaves.
 
-use mainframe_types::sync::LockExt;
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};

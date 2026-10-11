@@ -198,9 +198,9 @@ mod tests {
         serde_json::to_value(&m.content).unwrap()
     }
 
-    include!("display_pipeline_tests/basic.rs");
-    include!("display_pipeline_tests/markers.rs");
-    include!("display_pipeline_tests/attachments.rs");
+    include!("display_pipeline_tests_basic.rs");
+    include!("display_pipeline_tests_markers.rs");
+    include!("display_pipeline_tests_attachments.rs");
 }
 #[cfg(test)]
 mod tool_timing_tests;

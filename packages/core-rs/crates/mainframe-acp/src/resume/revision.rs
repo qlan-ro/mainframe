@@ -5,7 +5,7 @@
 //! all, so a connection that never negotiated the feature sees no
 //! revision-cursor fields.
 
-use mainframe_types::sync::LockExt;
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashSet;
 use std::sync::Mutex;
 

@@ -14,7 +14,7 @@
 //! map's back. Every read of a ready entry is therefore liveness-checked
 //! against the manager.
 
-use mainframe_types::sync::LockExt;
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 

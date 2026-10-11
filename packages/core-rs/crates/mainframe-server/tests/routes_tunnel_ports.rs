@@ -163,7 +163,7 @@ async fn a_mid_start_tunnel_lists_as_starting_without_a_url() {
             {
                 break;
             }
-            tokio::task::yield_now().await;
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
         }
     })
     .await

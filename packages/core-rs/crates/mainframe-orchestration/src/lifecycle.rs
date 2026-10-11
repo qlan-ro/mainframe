@@ -1,7 +1,7 @@
 //! The service's reactions to chat lifecycle: task progress, outbox
 //! flushes when a target goes idle, and credential revocation on exit.
 
-use mainframe_types::sync::LockExt;
+use mainframe_types::sync::LockExt as _;
 use std::sync::Arc;
 
 use mainframe_types::events::{ChatUpdatedReason, DaemonEvent};

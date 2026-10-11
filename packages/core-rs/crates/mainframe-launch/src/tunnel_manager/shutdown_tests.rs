@@ -13,8 +13,13 @@ async fn records_the_spawned_pid_and_forgets_it_on_stop() {
     let manager = manager_with(config, registry.clone());
 
     manager.start(4173, "preview:Dev", None).await.unwrap();
-    // OS child; Tokio time cannot be paused.
-    sleep(Duration::from_millis(50)).await; // let the fire-and-forget add() run
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while registry.added().is_empty() {
+            sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .expect("registry add completed");
 
     let added = registry.added();
     assert_eq!(added.len(), 1);
@@ -158,7 +163,7 @@ async fn individual_stop_retains_registry_until_exit_and_concurrent_stop_waits()
     let first = tokio::spawn(async move { stopping.stop("preview:Dev").await });
     tokio::time::timeout(Duration::from_secs(2), async {
         while signals.lock().unwrap().is_empty() {
-            // OS child; Tokio time cannot be paused.
+            // The signal recorder has no notification for the stop task.
             sleep(Duration::from_millis(5)).await;
         }
     })
@@ -222,7 +227,7 @@ async fn cancelling_a_start_kills_its_child() {
     assert!(task.await.unwrap_err().is_cancelled());
     tokio::time::timeout(Duration::from_secs(2), async {
         while manager.live_count() > 0 {
-            // OS child; Tokio time cannot be paused.
+            // Wait for the real process lifecycle to advance.
             sleep(Duration::from_millis(10)).await;
         }
     })
@@ -246,7 +251,7 @@ async fn restarting_a_label_keeps_the_new_tunnel_when_the_old_child_exits() {
     manager.start(3000, "daemon", None).await.unwrap();
     manager.start(3000, "daemon", None).await.unwrap();
     // Give the first child's exit watcher time to run.
-    // OS child; Tokio time cannot be paused.
+    // Wait for the real process lifecycle to advance.
     sleep(Duration::from_millis(100)).await;
 
     assert_eq!(

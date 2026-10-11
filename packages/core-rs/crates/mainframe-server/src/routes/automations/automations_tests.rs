@@ -68,7 +68,7 @@ async fn wait_status(h: &AutomationsHarness, run_id: &str, wanted: AutomationRun
         if run.as_ref().map(|r| r.status) == Some(wanted) {
             return;
         }
-        tokio::task::yield_now().await;
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
     }
     panic!("run {run_id} never reached {wanted:?}");
 }

@@ -11,7 +11,7 @@ use reqwest::StatusCode;
 use serde_json::json;
 use support::spawn_test_server;
 
-use support::get_json;
+use support::helpers::get_json;
 
 /// The registry rejects a one-character query itself, so spending the round
 /// trip to be told so is pure latency. Rejecting here also means the debounced

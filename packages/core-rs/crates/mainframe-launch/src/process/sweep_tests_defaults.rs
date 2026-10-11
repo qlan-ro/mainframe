@@ -35,7 +35,7 @@ async fn group_kill_takes_a_non_leader_group_member() {
             {
                 break pid;
             }
-            tokio::task::yield_now().await;
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
         }
     })
     .await
@@ -47,7 +47,7 @@ async fn group_kill_takes_a_non_leader_group_member() {
     leader.wait().await.unwrap();
     tokio::time::timeout(Duration::from_secs(5), async {
         while is_alive(member) {
-            tokio::task::yield_now().await;
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
         }
     })
     .await

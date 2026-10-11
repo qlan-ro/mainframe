@@ -133,16 +133,8 @@ async fn write_in_background_eventually_lands_a_hit() {
         .unwrap();
     cache.write_in_background("c1".to_string(), fp.clone(), vec![msg("m1")]);
 
-    let mut hit = None;
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    while std::time::Instant::now() < deadline {
-        if let Some(messages) = cache.read("c1", &fp).await {
-            hit = Some(messages);
-            break;
-        }
-        tokio::task::yield_now().await;
-    }
-    assert_eq!(hit, Some(vec![msg("m1")]));
+    cache.flush().await;
+    assert_eq!(cache.read("c1", &fp).await, Some(vec![msg("m1")]));
 }
 
 // ── pruning ───────────────────────────────────────────────────────────────

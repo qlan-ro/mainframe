@@ -13,7 +13,7 @@
 use crate::chat_manager::ChatShared;
 use mainframe_types::chat::{Chat, ProcessState};
 use mainframe_types::chat_patch::ChatPatch;
-use mainframe_types::sync::LockExt;
+use mainframe_types::sync::LockExt as _;
 use mainframe_types::transcript::TranscriptLocation;
 
 use crate::chat_cwd::chat_cwd;

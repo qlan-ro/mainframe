@@ -201,7 +201,7 @@ async fn wait_for_status(
         if run.status == wanted {
             return run;
         }
-        tokio::task::yield_now().await;
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
     }
     panic!("run {run_id} never reached {wanted:?}");
 }

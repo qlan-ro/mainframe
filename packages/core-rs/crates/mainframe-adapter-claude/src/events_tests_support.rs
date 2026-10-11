@@ -152,25 +152,25 @@ pub(super) fn block_value(blocks: &[MessageContent], i: usize) -> Value {
     serde_json::to_value(&blocks[i]).unwrap()
 }
 
-#[path = "../events_tests_events_synthetic_tests.rs"]
+#[path = "events_tests_events_synthetic_tests.rs"]
 mod events_synthetic_tests;
 
-#[path = "init.rs"]
+#[path = "events_tests_init.rs"]
 mod init;
 
-#[path = "control.rs"]
+#[path = "events_tests_control.rs"]
 mod control;
 
-#[path = "results.rs"]
+#[path = "events_tests_results.rs"]
 mod results;
 
-#[path = "notifications.rs"]
+#[path = "events_tests_notifications.rs"]
 mod notifications;
 
-#[path = "stderr.rs"]
+#[path = "events_tests_stderr.rs"]
 mod stderr;
 
-#[path = "skills.rs"]
+#[path = "events_tests_skills.rs"]
 mod skills;
-#[path = "subagents.rs"]
+#[path = "events_tests_subagents.rs"]
 mod subagents;

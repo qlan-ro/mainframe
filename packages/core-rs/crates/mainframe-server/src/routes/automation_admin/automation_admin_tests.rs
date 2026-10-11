@@ -26,7 +26,7 @@ async fn pending_interaction_id(h: &AutomationsHarness) -> String {
         if let Some(first) = pending.first() {
             return first.id.clone();
         }
-        tokio::task::yield_now().await;
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
     }
     panic!("no interaction ever went pending");
 }

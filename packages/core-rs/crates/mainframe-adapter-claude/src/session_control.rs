@@ -4,7 +4,7 @@
 //! map is drained by `events.rs` via [`ControlRequestChannel::resolve`], and by
 //! session close via [`ControlRequestChannel::drain_all_as_failed`].
 
-use mainframe_types::sync::LockExt;
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;

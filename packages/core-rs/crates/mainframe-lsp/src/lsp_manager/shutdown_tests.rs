@@ -105,7 +105,7 @@ async fn cancelling_spawn_owner_allows_waiter_to_resolve_and_spawn() {
     let handle = bounded(waiter).await.unwrap();
     bounded(async {
         while !marker.exists() {
-            tokio::task::yield_now().await;
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
         }
     })
     .await;

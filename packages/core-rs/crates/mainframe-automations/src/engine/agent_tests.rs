@@ -250,14 +250,12 @@ async fn resume_after_restart_watches_waiting_agent_entries() {
     let parked = rig.h.store.get_run(&run.id).await.unwrap().unwrap();
     verb2.resume_run_watches(&parked);
 
-    // Poll: the watch attach is a spawned task.
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    while std::time::Instant::now() < deadline {
-        if !port2.watch_calls.lock().unwrap().is_empty() {
-            break;
-        }
-        tokio::task::yield_now().await;
-    }
+    tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        port2.wait_for_watch("chat-1"),
+    )
+    .await
+    .unwrap();
     assert_eq!(
         *port2.watch_calls.lock().unwrap(),
         vec!["chat-1".to_string()]

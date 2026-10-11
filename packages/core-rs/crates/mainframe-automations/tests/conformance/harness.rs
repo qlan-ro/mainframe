@@ -130,26 +130,19 @@ impl Rig {
     }
 
     pub async fn wait(&self, run_id: &str, status: RunStatus) -> RunRecord {
-        wait_status(&self.engine, run_id, status).await
+        tokio::time::timeout(std::time::Duration::from_secs(10), self.sink.wait_for(|event| {
+            matches!(event, mainframe_automations::ports::AutomationEvent::RunUpdated { run } if run.id == run_id && run.status == status)
+        })).await.unwrap();
+        self.engine.get_run(run_id).await.unwrap().unwrap()
     }
 
-    /// The chat cancel rides a detached task, so it can land after the run is
-    /// already `Cancelled` — poll for it instead of reading it once.
     pub async fn wait_chat_cancel(&self, chat_id: &str) {
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-        while std::time::Instant::now() < deadline {
-            let told = self
-                .agent
-                .cancels
-                .lock()
-                .unwrap()
-                .contains(&chat_id.to_string());
-            if told {
-                return;
-            }
-            tokio::task::yield_now().await;
-        }
-        panic!("chat {chat_id} was never told to stop");
+        tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            self.agent.wait_for_cancel(chat_id),
+        )
+        .await
+        .unwrap();
     }
 
     pub async fn pending(&self) -> InteractionRecord {
@@ -176,7 +169,7 @@ pub async fn wait_status(engine: &AutomationsEngine, run_id: &str, status: RunSt
         {
             return run;
         }
-        tokio::task::yield_now().await;
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
     }
     let actual = engine.get_run(run_id).await.unwrap().map(|r| r.status);
     panic!("run {run_id} never reached {status:?} (last: {actual:?})");
@@ -184,14 +177,12 @@ pub async fn wait_status(engine: &AutomationsEngine, run_id: &str, status: RunSt
 
 /// Poll until a fake action has been invoked at least `count` times.
 pub async fn wait_action(recorder: &ActionRecorder, action_id: &str, count: usize) {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    while std::time::Instant::now() < deadline {
-        if recorder.count(action_id) >= count {
-            return;
-        }
-        tokio::task::yield_now().await;
-    }
-    panic!("action {action_id} never reached {count} call(s)");
+    tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        recorder.wait_for(action_id, count),
+    )
+    .await
+    .unwrap();
 }
 
 /// GitHub's `sha256=<lowercase-hex>` HMAC-SHA256 over the raw body.

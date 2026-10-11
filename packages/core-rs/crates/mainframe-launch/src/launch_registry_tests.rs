@@ -116,7 +116,7 @@ async fn shutdown_kills_a_launch_preview_tunnel_that_ignores_sigterm() {
             if ready {
                 break;
             }
-            // OS child; Tokio time cannot be paused.
+            // Wait for the real process lifecycle to advance.
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
     })

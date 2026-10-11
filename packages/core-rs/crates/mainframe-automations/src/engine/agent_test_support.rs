@@ -95,7 +95,7 @@ pub(crate) async fn wait_for_run(
         if pred(&run) {
             return run;
         }
-        tokio::task::yield_now().await;
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
     }
     panic!("run {run_id} never reached the expected state");
 }

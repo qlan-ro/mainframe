@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use mainframe_types::BoxFuture;
-use mainframe_types::sync::LockExt;
+use mainframe_types::sync::LockExt as _;
 use tokio::sync::mpsc;
 
 use crate::ports::{AgentHandle, AgentOutcome, AgentPort, AgentPortError, AgentRequest};
@@ -14,8 +14,6 @@ type OutcomeResult = Result<AgentOutcome, AgentPortError>;
 
 struct Chan {
     tx: mpsc::UnboundedSender<OutcomeResult>,
-    delivered: AtomicUsize,
-    changed: tokio::sync::Notify,
     rx: tokio::sync::Mutex<mpsc::UnboundedReceiver<OutcomeResult>>,
 }
 
@@ -25,6 +23,7 @@ struct Chan {
 /// `completing(...)` instead resolves every watch at once with one outcome.
 #[derive(Default)]
 pub struct FakeAgentPort {
+    changed: tokio::sync::Notify,
     pub started: Mutex<Vec<AgentRequest>>,
     pub watch_calls: Mutex<Vec<String>>,
     pub retry_calls: Mutex<Vec<(String, String)>>,
@@ -67,13 +66,29 @@ impl FakeAgentPort {
         }
     }
 
-    pub async fn wait_for_deliveries(&self, chat_id: &str, count: usize) {
-        let chan = self.chan(chat_id);
+    pub async fn wait_for_cancel(&self, chat_id: &str) {
         loop {
-            let changed = chan.changed.notified();
+            let changed = self.changed.notified();
             tokio::pin!(changed);
             changed.as_mut().enable();
-            if chan.delivered.load(Ordering::SeqCst) >= count {
+            if self.cancels.lock_recover().iter().any(|id| id == chat_id) {
+                return;
+            }
+            changed.await;
+        }
+    }
+
+    pub async fn wait_for_watch(&self, chat_id: &str) {
+        loop {
+            let changed = self.changed.notified();
+            tokio::pin!(changed);
+            changed.as_mut().enable();
+            if self
+                .watch_calls
+                .lock_recover()
+                .iter()
+                .any(|id| id == chat_id)
+            {
                 return;
             }
             changed.await;
@@ -108,8 +123,6 @@ impl FakeAgentPort {
                 let (tx, rx) = mpsc::unbounded_channel();
                 Arc::new(Chan {
                     tx,
-                    delivered: AtomicUsize::new(0),
-                    changed: tokio::sync::Notify::new(),
                     rx: tokio::sync::Mutex::new(rx),
                 })
             })
@@ -123,13 +136,9 @@ impl FakeAgentPort {
         }
         let chan = self.chan(chat_id);
         let mut rx = chan.rx.lock().await;
-        let outcome = rx
-            .recv()
+        rx.recv()
             .await
-            .unwrap_or_else(|| Err(AgentPortError("watch channel closed".to_string())));
-        chan.delivered.fetch_add(1, Ordering::SeqCst);
-        chan.changed.notify_waiters();
-        outcome
+            .unwrap_or_else(|| Err(AgentPortError("watch channel closed".to_string())))
     }
 }
 
@@ -149,6 +158,7 @@ impl AgentPort for FakeAgentPort {
 
     fn watch<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, OutcomeResult> {
         self.watch_calls.lock_recover().push(chat_id.to_string());
+        self.changed.notify_waiters();
         Box::pin(self.next_outcome(chat_id))
     }
 
@@ -161,6 +171,7 @@ impl AgentPort for FakeAgentPort {
 
     fn cancel<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, Result<(), AgentPortError>> {
         self.cancels.lock_recover().push(chat_id.to_string());
+        self.changed.notify_waiters();
         Box::pin(async { Ok(()) })
     }
 }

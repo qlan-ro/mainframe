@@ -196,7 +196,7 @@ async fn watch_resolves_on_the_matching_terminal_chat_updated() {
     let watching = tokio::spawn(async move { port.watch("chat_1").await });
     tokio::time::timeout(Duration::from_secs(10), async {
         while tx.receiver_count() < 2 {
-            tokio::task::yield_now().await;
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
         }
     })
     .await
@@ -228,7 +228,7 @@ async fn watch_maps_error_and_interrupt_reasons() {
         let watching = tokio::spawn(async move { port.watch("chat_1").await });
         tokio::time::timeout(Duration::from_secs(10), async {
             while tx.receiver_count() < 2 {
-                tokio::task::yield_now().await;
+                tokio::time::sleep(std::time::Duration::from_millis(5)).await;
             }
         })
         .await
@@ -265,7 +265,7 @@ async fn retry_sends_the_correction_into_the_same_chat() {
     };
     tokio::time::timeout(Duration::from_secs(10), async {
         while tx.receiver_count() < 2 {
-            tokio::task::yield_now().await;
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
         }
     })
     .await

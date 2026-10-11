@@ -29,7 +29,7 @@ async fn on_result_retires_a_pending_fork_and_removes_its_snapshot_dir() {
         if !std::path::Path::new(&snapshot_dir).exists() {
             break;
         }
-        tokio::task::yield_now().await;
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
     }
     assert!(
         !std::path::Path::new(&snapshot_dir).exists(),

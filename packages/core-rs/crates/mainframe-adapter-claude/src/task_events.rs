@@ -7,7 +7,7 @@
 //! eviction task can delete its own entry without reaching the whole session
 //! state.
 
-use mainframe_types::sync::LockExt;
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;

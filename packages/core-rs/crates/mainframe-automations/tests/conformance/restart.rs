@@ -247,13 +247,12 @@ async fn restart_mid_fan_out_resumes_both_agent_watches_and_completes() {
         // Both branches must have started their own chat before the crash —
         // the run flips to `waiting` as soon as the FIRST one parks, so wait
         // on the agent port's own call count, not just the run status.
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-        while std::time::Instant::now() < deadline {
-            if b1.agent.start_count() >= 2 {
-                break;
-            }
-            tokio::task::yield_now().await;
-        }
+        tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            b1.agent.wait_for_watch("chat-2"),
+        )
+        .await
+        .unwrap();
         assert_eq!(
             b1.agent.start_count(),
             2,

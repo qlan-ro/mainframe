@@ -112,6 +112,8 @@ struct Snapshot {
 /// (`ProjectPaths::history_cache_dir`). Cheap to clone-share (`Arc`'d by
 /// `ChatManager`); every method does its own async I/O, none of it blocking.
 pub(crate) struct HistorySnapshotCache {
+    #[cfg(test)]
+    writes: std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>,
     dir: PathBuf,
     max_snapshots: usize,
 }
@@ -121,12 +123,18 @@ impl HistorySnapshotCache {
         Self {
             dir,
             max_snapshots: DEFAULT_MAX_SNAPSHOTS,
+            #[cfg(test)]
+            writes: std::sync::Mutex::default(),
         }
     }
 
     #[cfg(test)]
     fn with_max_snapshots(dir: PathBuf, max_snapshots: usize) -> Self {
-        Self { dir, max_snapshots }
+        Self {
+            dir,
+            max_snapshots,
+            writes: std::sync::Mutex::default(),
+        }
     }
 
     fn snapshot_path(&self, chat_id: &str) -> PathBuf {
@@ -169,11 +177,23 @@ impl HistorySnapshotCache {
         messages: Vec<ChatMessage>,
     ) {
         let cache = Arc::clone(self);
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             if let Err(err) = cache.write(&chat_id, fingerprint, messages).await {
                 tracing::warn!(%err, chat_id, "history snapshot cache: write failed");
             }
         });
+        #[cfg(test)]
+        self.writes.lock().unwrap().push(handle);
+        #[cfg(not(test))]
+        drop(handle);
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn flush(&self) {
+        let writes = std::mem::take(&mut *self.writes.lock().unwrap());
+        for write in writes {
+            write.await.unwrap();
+        }
     }
 
     async fn write(

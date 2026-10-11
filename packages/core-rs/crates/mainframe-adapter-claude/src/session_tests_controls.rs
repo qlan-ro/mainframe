@@ -38,12 +38,11 @@ async fn each_control_request_has_a_unique_request_id() {
         .to_string();
     let s2 = s.clone();
     let pending = tokio::spawn(async move { s2.set_model("claude-opus-4-6".to_string()).await });
-    let payload = loop {
-        tokio::task::yield_now().await;
-        if let Ok(bytes) = rx.try_recv() {
-            break serde_json::from_slice::<Value>(&bytes).unwrap();
-        }
-    };
+    let bytes = tokio::time::timeout(Duration::from_secs(10), rx.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    let payload = serde_json::from_slice::<Value>(&bytes).unwrap();
     let id2 = payload["request_id"].as_str().unwrap().to_string();
     assert!(s.control.resolve(
         &id2,
@@ -104,12 +103,11 @@ async fn set_model_sends_control_request_and_awaits_success() {
     let s2 = s.clone();
     let pending =
         tokio::spawn(async move { s2.set_model("claude-sonnet-4-5-20250929".to_string()).await });
-    let payload = loop {
-        tokio::task::yield_now().await;
-        if let Ok(bytes) = rx.try_recv() {
-            break serde_json::from_slice::<Value>(&bytes).unwrap();
-        }
-    };
+    let bytes = tokio::time::timeout(Duration::from_secs(10), rx.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    let payload = serde_json::from_slice::<Value>(&bytes).unwrap();
     let request_id = payload["request_id"].as_str().unwrap();
     assert_eq!(payload["request"]["subtype"], "set_model");
     assert_eq!(payload["request"]["model"], "claude-sonnet-4-5-20250929");

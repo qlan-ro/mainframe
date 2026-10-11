@@ -129,7 +129,7 @@ async fn valid_delivery_starts_a_run_and_a_replay_is_a_200_noop() {
     assert_eq!(envelope, json!({ "success": true }));
     tokio::time::timeout(Duration::from_secs(10), async {
         while run_count(&h, &automation_id).await == 0 {
-            tokio::task::yield_now().await;
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
         }
     })
     .await

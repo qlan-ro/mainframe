@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use super::TestServer;
 use reqwest::StatusCode;
 use serde_json::Value;

@@ -9,11 +9,11 @@ mod support;
 use reqwest::StatusCode;
 use support::spawn_test_server;
 
-use support::run_git;
+use support::helpers::run_git;
 
-use support::init_repo;
+use support::helpers::init_repo;
 
-use support::get_json;
+use support::helpers::get_json;
 
 // ── working-stat ─────────────────────────────────────────────────────────────
 

@@ -5,7 +5,7 @@
 //! rather than trusting an index. A session belongs to a project when the `cwd`
 //! recorded in its session_meta is the project root or nested under it.
 
-use mainframe_types::sync::LockExt;
+use mainframe_types::sync::LockExt as _;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};

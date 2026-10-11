@@ -9,7 +9,7 @@ use reqwest::StatusCode;
 use serde_json::{Value, json};
 use support::{TestServer, spawn_test_server};
 
-use support::get_json;
+use support::helpers::get_json;
 
 async fn post_json(server: &TestServer, path: &str, body: Value) -> (StatusCode, Value) {
     let res = reqwest::Client::new()

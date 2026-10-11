@@ -6,7 +6,7 @@
 //! on boot. Status is always re-derived at read time so expiry reflects the real
 //! clock.
 
-use mainframe_types::sync::LockExt;
+use mainframe_types::sync::LockExt as _;
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::pin::Pin;

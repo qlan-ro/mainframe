@@ -129,7 +129,7 @@ async fn poll_added(registry: &RecordingRegistry) -> ManagedChildEntry {
         if let Some(entry) = registry.added().into_iter().next() {
             return entry;
         }
-        // OS child; Tokio time cannot be paused.
+        // Wait for the real process lifecycle to advance.
         sleep(Duration::from_millis(25)).await;
     }
     panic!("no launch pid was recorded");
@@ -149,7 +149,7 @@ mod start_stop;
 async fn wait_until(predicate: impl Fn() -> bool) {
     tokio::time::timeout(Duration::from_secs(10), async {
         while !predicate() {
-            tokio::task::yield_now().await;
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
         }
     })
     .await

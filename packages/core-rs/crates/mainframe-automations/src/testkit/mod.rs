@@ -10,7 +10,7 @@ use std::sync::Mutex;
 
 use chrono::{DateTime, FixedOffset};
 use mainframe_types::BoxFuture;
-use mainframe_types::sync::LockExt;
+use mainframe_types::sync::LockExt as _;
 
 use crate::ports::{
     AutomationEvent, Clock, EventSink, InteractionSummary, Notification, Notifier, NotifyError,
@@ -66,6 +66,18 @@ impl CollectingSink {
             tokio::pin!(changed);
             changed.as_mut().enable();
             if self.events.lock_recover().iter().any(&predicate) {
+                return;
+            }
+            changed.await;
+        }
+    }
+
+    pub async fn wait_for_run_updates(&self, count: usize) {
+        loop {
+            let changed = self.changed.notified();
+            tokio::pin!(changed);
+            changed.as_mut().enable();
+            if self.run_updates().len() >= count {
                 return;
             }
             changed.await;

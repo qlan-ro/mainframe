@@ -2,7 +2,7 @@
 //! idle-timeout reaper, and the graceful shutdown handshake (shutdown request ->
 //! exit notification -> SIGTERM/SIGKILL fallback).
 
-use mainframe_types::sync::LockExt;
+use mainframe_types::sync::LockExt as _;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};

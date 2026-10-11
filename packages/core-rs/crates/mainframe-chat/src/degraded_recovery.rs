@@ -13,7 +13,7 @@ use crate::event_handler::EventHandler;
 use mainframe_types::chat::Chat;
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::http_status::{HttpStatus, StatusKind};
-use mainframe_types::sync::LockExt;
+use mainframe_types::sync::LockExt as _;
 
 /// Errors surfaced by the recovery ops. The strings cross the wire (the routes
 /// return them verbatim).

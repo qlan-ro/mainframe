@@ -13,7 +13,7 @@
 
 use std::io::Write;
 
-use base64::Engine;
+use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
 use flate2::Compression;
 use flate2::write::ZlibEncoder;

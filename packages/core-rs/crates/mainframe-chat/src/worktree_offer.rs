@@ -16,7 +16,7 @@
 //! This module owns the sync offer state machine; `rescan` owns the async half
 //! that fills it.
 
-use mainframe_types::sync::LockExt;
+use mainframe_types::sync::LockExt as _;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex, MutexGuard};
 

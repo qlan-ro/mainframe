@@ -12,7 +12,7 @@ use reqwest::StatusCode;
 use serde_json::{Value, json};
 use support::{TestServer, spawn_test_server};
 
-use support::init_repo;
+use support::helpers::init_repo;
 
 async fn create_chat(server: &TestServer, project_id: &str) -> String {
     let pid = project_id.to_string();

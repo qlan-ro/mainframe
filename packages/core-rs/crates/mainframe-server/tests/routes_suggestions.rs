@@ -9,7 +9,7 @@ use reqwest::StatusCode;
 use serde_json::json;
 use support::spawn_test_server;
 
-use support::run_git;
+use support::helpers::run_git;
 
 fn init_repo() -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
@@ -23,7 +23,7 @@ fn init_repo() -> tempfile::TempDir {
     dir
 }
 
-use support::get_json;
+use support::helpers::get_json;
 
 #[tokio::test]
 async fn returns_a_churn_suggestion_for_a_repo_with_uncommitted_changes() {

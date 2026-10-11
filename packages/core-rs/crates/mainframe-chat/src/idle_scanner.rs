@@ -1,6 +1,6 @@
 //! Scans for idle chats and triggers whole-chat offload (`idle_offload.rs`).
 
-use mainframe_types::sync::LockExt;
+use mainframe_types::sync::LockExt as _;
 use std::sync::Arc;
 #[cfg(test)]
 use std::sync::Mutex;

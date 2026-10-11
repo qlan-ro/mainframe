@@ -30,9 +30,10 @@ async fn cancel_during_agent_wait_ignores_a_late_completion() {
     rig.agent.complete("chat-1", late_completion());
     tokio::time::timeout(
         std::time::Duration::from_secs(10),
-        rig.agent.wait_for_deliveries("chat-1", 1),
+        rig.engine.wait_for_agent_watcher("chat-1"),
     )
     .await
+    .unwrap()
     .unwrap();
     let run = rig.engine.get_run(&run_id).await.unwrap().unwrap();
     assert_eq!(run.status, RunStatus::Cancelled, "no resurrection");
@@ -56,9 +57,10 @@ async fn cancel_mid_repeat_ignores_a_late_completion() {
     rig.agent.complete("chat-1", late_completion());
     tokio::time::timeout(
         std::time::Duration::from_secs(10),
-        rig.agent.wait_for_deliveries("chat-1", 1),
+        rig.engine.wait_for_agent_watcher("chat-1"),
     )
     .await
+    .unwrap()
     .unwrap();
     let run = rig.engine.get_run(&run_id).await.unwrap().unwrap();
     assert_eq!(run.status, RunStatus::Cancelled);
