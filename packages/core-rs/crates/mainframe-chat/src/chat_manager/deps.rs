@@ -1,5 +1,6 @@
 //! `ChatManagerDeps` — the crate's entire dependency-injection surface.
 use super::*;
+use mainframe_types::seam_error::SeamError;
 
 /// The external dependency surface — everything the daemon injects into the
 /// ChatManager (db repos, adapters, attachments, launch, notifications, and the
@@ -32,8 +33,10 @@ pub trait ChatManagerDeps: Send + Sync {
     /// `remove_dir_all(scratch_path)` (discard step 3). `NotFound` counts as
     /// success; any other error is surfaced so the row is not deleted and a
     /// retry stays possible.
-    fn remove_scratch_dir<'a>(&'a self, scratch_path: &'a str)
-    -> BoxFuture<'a, Result<(), String>>;
+    fn remove_scratch_dir<'a>(
+        &'a self,
+        scratch_path: &'a str,
+    ) -> BoxFuture<'a, Result<(), SeamError>>;
     fn chats_update(&self, chat_id: &str, patch: &ChatPatch);
     fn chats_list(&self, project_id: &str) -> Vec<Chat>;
     fn chats_list_all(&self) -> Vec<Chat>;
@@ -60,14 +63,14 @@ pub trait ChatManagerDeps: Send + Sync {
         session_id: &str,
         cwd: &str,
     ) -> Option<String>;
-    fn projects_remove(&self, project_id: &str) -> Result<(), String>;
+    fn projects_remove(&self, project_id: &str) -> Result<(), SeamError>;
     /// `writeWorkspaceTrust(projectPath)` — persists workspace trust to the
     /// Claude CLI's `~/.claude.json` (injected so this crate does not depend on
     /// `mainframe-adapter-claude`). Backs `trust_workspace`.
     fn write_workspace_trust<'a>(
         &'a self,
         project_path: &'a str,
-    ) -> BoxFuture<'a, Result<(), String>>;
+    ) -> BoxFuture<'a, Result<(), SeamError>>;
     /// The settings store every sub-manager reads provider and general settings from.
     fn settings(&self) -> &dyn mainframe_types::settings_kv::SettingsKv;
     fn add_plan_file(&self, chat_id: &str, file_path: &str) -> bool;
@@ -236,9 +239,11 @@ pub trait ChatManagerDeps: Send + Sync {
     /// `db.chats.createFork` — a single INSERT that seeds the new chat from the
     /// parent's resolved config. Defaulted to a failure so a deps impl that never
     /// wires storage cannot silently mint unpersisted forks.
-    fn create_fork(&self, insert: &ForkCreateInput) -> Result<Chat, String> {
+    fn create_fork(&self, insert: &ForkCreateInput) -> Result<Chat, SeamError> {
         let _ = insert;
-        Err("fork creation is not supported by this ChatManagerDeps".to_string())
+        Err(SeamError::msg(
+            "fork creation is not supported by this ChatManagerDeps",
+        ))
     }
     /// `db.chats.getPendingFork(chatId)`. `None` (the default) is the correct
     /// answer for every chat this feature doesn't touch — a chat with no
@@ -286,7 +291,7 @@ pub trait ChatManagerDeps: Send + Sync {
     /// Required (not defaulted): the two implementers (`DaemonChatDeps`,
     /// `StoreDeps`) both back a real store, so a silent no-op default would mint
     /// side chats that vanish on the next read.
-    fn chats_find_or_create_side_chat(&self, parent: &Chat) -> Result<(Chat, bool), String>;
+    fn chats_find_or_create_side_chat(&self, parent: &Chat) -> Result<(Chat, bool), SeamError>;
 
     // ── provider segments ─────────────────────────────────────────────────────
     /// The segment repository. `None` (the default) runs every chat as one

@@ -97,7 +97,7 @@ impl ChatManager {
             .attach_worktree(chat_id, worktree_path, offer.branch_name.as_deref())
             .await;
         self.worktree_offers.release_accept(chat_id);
-        result.map_err(|err| OfferError::Message(err.to_string()))
+        result.map_err(OfferError::from)
     }
 
     pub async fn disable_worktree(&self, chat_id: &str) -> Result<(), ConfigError> {
@@ -133,9 +133,9 @@ impl ChatManager {
     /// Remove a project and all its chats' live resources. Refuses the hidden
     /// scratch project: removing it would cascade-delete every non-project
     /// chat's row.
-    pub async fn remove_project(&self, project_id: &str) -> Result<(), String> {
+    pub async fn remove_project(&self, project_id: &str) -> Result<(), RemoveProjectError> {
         if project_id == mainframe_types::chat::NO_PROJECT_ID {
-            return Err("cannot remove the hidden scratch project".to_string());
+            return Err(RemoveProjectError::ScratchProject);
         }
         // Unfiltered `ChatsRepository::list` (via `chats_list`), so a temporary
         // chat's live state and row are torn down along with the project.
@@ -143,7 +143,9 @@ impl ChatManager {
         for chat in chats {
             self.teardown_live_chat(&chat).await;
         }
-        self.deps.projects_remove(project_id)?;
+        self.deps
+            .projects_remove(project_id)
+            .map_err(RemoveProjectError::Store)?;
         info!(project_id, "project removed");
         Ok(())
     }

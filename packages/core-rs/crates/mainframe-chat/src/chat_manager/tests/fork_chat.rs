@@ -2,6 +2,8 @@
 //! `tests`, so it sees `tests`' private `StoreDeps`.
 
 use super::*;
+use mainframe_types::http_status::StatusKind;
+use mainframe_types::seam_error::SeamError;
 
 fn chat_with(id: &str, adapter_id: &str, claude_session_id: Option<&str>) -> Chat {
     // `enrich_chat`'s directory-missing check stats the real filesystem against
@@ -21,7 +23,7 @@ async fn unknown_chat_id_is_not_found() {
     let mgr = ChatManager::new(deps);
     let err = mgr.fork_chat("nope", ForkPoint::Current).await.unwrap_err();
     assert_eq!(err, ForkChatError::NotFound("nope".to_string()));
-    assert_eq!(err.status_code(), 404);
+    assert_eq!(err.status_kind(), StatusKind::NotFound);
 }
 
 #[tokio::test]
@@ -32,7 +34,7 @@ async fn adapter_without_fork_capability_is_unsupported_422() {
     let mgr = ChatManager::new(deps);
     let err = mgr.fork_chat("c1", ForkPoint::Current).await.unwrap_err();
     assert_eq!(err, ForkChatError::Unsupported("codex".to_string()));
-    assert_eq!(err.status_code(), 422);
+    assert_eq!(err.status_kind(), StatusKind::Unprocessable);
 }
 
 // A version-gated adapter (Codex below the fork-RPC floor) reports
@@ -53,7 +55,7 @@ async fn adapter_with_a_version_specific_reason_surfaces_it_422() {
             "Forking Codex chats needs Codex CLI 0.143.0 or newer (installed: 0.140.0)".to_string()
         )
     );
-    assert_eq!(err.status_code(), 422);
+    assert_eq!(err.status_kind(), StatusKind::Unprocessable);
     assert_eq!(
         err.to_string(),
         "Forking Codex chats needs Codex CLI 0.143.0 or newer (installed: 0.140.0)"
@@ -69,7 +71,7 @@ async fn a_temporary_chat_is_refused_409() {
     let mgr = ChatManager::new(deps);
     let err = mgr.fork_chat("c1", ForkPoint::Current).await.unwrap_err();
     assert_eq!(err, ForkChatError::Temporary);
-    assert_eq!(err.status_code(), 409);
+    assert_eq!(err.status_kind(), StatusKind::Conflict);
 }
 
 #[tokio::test]
@@ -82,7 +84,7 @@ async fn a_no_project_chat_is_refused_409() {
     let mgr = ChatManager::new(deps);
     let err = mgr.fork_chat("c1", ForkPoint::Current).await.unwrap_err();
     assert_eq!(err, ForkChatError::NoProject);
-    assert_eq!(err.status_code(), 409);
+    assert_eq!(err.status_kind(), StatusKind::Conflict);
 }
 
 #[tokio::test]
@@ -93,7 +95,7 @@ async fn no_provider_session_is_nothing_to_fork_yet_409() {
     let mgr = ChatManager::new(deps);
     let err = mgr.fork_chat("c1", ForkPoint::Current).await.unwrap_err();
     assert_eq!(err, ForkChatError::NothingToForkYet);
-    assert_eq!(err.status_code(), 409);
+    assert_eq!(err.status_kind(), StatusKind::Conflict);
 }
 
 #[tokio::test]
@@ -105,7 +107,7 @@ async fn missing_transcript_is_refused_409() {
     let mgr = ChatManager::new(deps);
     let err = mgr.fork_chat("c1", ForkPoint::Current).await.unwrap_err();
     assert_eq!(err, ForkChatError::TranscriptMissing);
-    assert_eq!(err.status_code(), 409);
+    assert_eq!(err.status_kind(), StatusKind::Conflict);
 }
 
 #[tokio::test]
@@ -117,7 +119,7 @@ async fn a_running_turn_is_refused_409() {
     let mgr = ChatManager::new(deps);
     let err = mgr.fork_chat("c1", ForkPoint::Current).await.unwrap_err();
     assert_eq!(err, ForkChatError::TurnInFlight);
-    assert_eq!(err.status_code(), 409);
+    assert_eq!(err.status_kind(), StatusKind::Conflict);
 }
 
 // Waiting-on-a-permission-answer coverage lives in fork_api.rs's
@@ -170,7 +172,7 @@ async fn a_pin_failure_leaves_no_new_chat() {
     let before = deps.chat_count();
     let err = mgr.fork_chat("c1", ForkPoint::Current).await.unwrap_err();
     assert_eq!(err, ForkChatError::PinFailed("cli crashed".to_string()));
-    assert_eq!(err.status_code(), 500);
+    assert_eq!(err.status_kind(), StatusKind::Internal);
     assert_eq!(deps.chat_count(), before);
 }
 
@@ -183,7 +185,7 @@ async fn a_pin_transcript_missing_maps_to_409_not_500() {
     let mgr = ChatManager::new(deps);
     let err = mgr.fork_chat("c1", ForkPoint::Current).await.unwrap_err();
     assert_eq!(err, ForkChatError::TranscriptMissing);
-    assert_eq!(err.status_code(), 409);
+    assert_eq!(err.status_kind(), StatusKind::Conflict);
 }
 
 /// The parent's own adapter capability said yes, but the adapter's own pin
@@ -198,7 +200,7 @@ async fn a_pin_unsupported_after_capability_passed_is_still_422() {
     let mgr = ChatManager::new(deps);
     let err = mgr.fork_chat("c1", ForkPoint::Current).await.unwrap_err();
     assert_eq!(err, ForkChatError::Unsupported("claude".to_string()));
-    assert_eq!(err.status_code(), 422);
+    assert_eq!(err.status_kind(), StatusKind::Unprocessable);
 }
 
 #[tokio::test]
@@ -210,7 +212,10 @@ async fn an_insert_failure_leaves_no_new_chat() {
     let mgr = ChatManager::new(deps.clone());
     let before = deps.chat_count();
     let err = mgr.fork_chat("c1", ForkPoint::Current).await.unwrap_err();
-    assert_eq!(err, ForkChatError::InsertFailed("db is full".to_string()));
-    assert_eq!(err.status_code(), 500);
+    assert_eq!(
+        err,
+        ForkChatError::InsertFailed(SeamError::msg("db is full"))
+    );
+    assert_eq!(err.status_kind(), StatusKind::Internal);
     assert_eq!(deps.chat_count(), before);
 }

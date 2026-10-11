@@ -43,14 +43,14 @@ impl PlanHost for PlanHostImpl {
                     chat_id,
                     "plan-mode follow-up send has no ChatManager — attach_self was never called"
                 );
-                return Err(AdapterError::Message(
-                    "plan-mode follow-up send has no ChatManager".to_string(),
+                return Err(AdapterError::Invariant(
+                    "plan-mode follow-up send has no ChatManager",
                 ));
             };
             manager
                 .send_message(chat_id, content, None, None)
                 .await
-                .map_err(|e| AdapterError::Message(e.0))
+                .map_err(SendError::into_adapter_error)
         })
     }
 }

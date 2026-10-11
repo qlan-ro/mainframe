@@ -61,8 +61,7 @@ impl ChatManager {
                     None,
                     Some(plan_mode),
                 )
-                .await
-                .map_err(|e| SwitchError::Failed(e.to_string()))?;
+                .await?;
                 self.get_chat(chat_id)
                     .ok_or_else(|| SwitchError::NotFound(chat_id.to_string()))
             }
@@ -103,10 +102,7 @@ impl ChatManager {
         if req.adapter_id == chat.adapter_id {
             return Ok(SwitchOutcome::Done(Box::new(chat)));
         }
-        let store = self
-            .deps
-            .segment_store()
-            .ok_or_else(|| SwitchError::Failed("Provider switching is unavailable".into()))?;
+        let store = self.deps.segment_store().ok_or(SwitchError::Unavailable)?;
         let unsent_fork = self.deps.get_pending_fork(chat_id).is_some();
         if !unsent_fork && !store.has_native_id(chat_id) {
             let target_plan_mode = self
@@ -121,9 +117,7 @@ impl ChatManager {
             .ok_or_else(|| SwitchError::NotFound(chat_id.to_string()))?;
         let borrow = self.unsent_fork_borrow(&chat, &mut layout, fork_history);
         if unsent_fork && borrow.is_none() {
-            return Err(SwitchError::Failed(
-                "Couldn't switch this fork before its first message".into(),
-            ));
+            return Err(SwitchError::UnsentFork);
         }
         let default_model = read_setting(
             self.deps.settings(),
@@ -134,7 +128,7 @@ impl ChatManager {
         let mut commit = self.plan_commit(&chat, &layout, req, default_model)?;
         commit.borrow_pinned = borrow;
         self.detach_session(chat_id).await;
-        let layout = store.commit_switch(&commit).map_err(SwitchError::Failed)?;
+        let layout = store.commit_switch(&commit)?;
         let chat = self.apply_switch(chat_id, &commit, &layout)?;
         Ok(SwitchOutcome::Done(Box::new(chat)))
     }
@@ -166,7 +160,7 @@ impl ChatManager {
             new_segment_id: &new_segment_id,
             new_native_id: &new_native_id,
         })
-        .ok_or_else(|| SwitchError::Failed(format!("Chat {} has no active segment", chat.id)))
+        .ok_or_else(|| SwitchError::NoActiveSegment(chat.id.clone()))
     }
 
     /// An unsent fork's pinned row as a borrowed view of its parent's source

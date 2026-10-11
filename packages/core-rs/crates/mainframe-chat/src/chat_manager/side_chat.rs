@@ -3,6 +3,8 @@
 //! temporary-chat discard path (`discard.rs`); the parent re-sync is shared by
 //! both `open_side_chat` and `discard.rs`'s side-chat branch.
 use super::*;
+use mainframe_types::http_status::{HttpStatus, StatusKind};
+use mainframe_types::seam_error::SeamError;
 use mainframe_types::sync::LockExt as _;
 
 /// Whether `chat` is itself a side chat: temporary AND has a parent. No third
@@ -22,19 +24,19 @@ pub enum OpenSideChatError {
     ParentIsSideChat,
     #[error("This chat's folder is missing")]
     DirectoryMissing,
-    #[error("{0}")]
-    InsertFailed(String),
+    #[error(transparent)]
+    InsertFailed(SeamError),
 }
 
-impl OpenSideChatError {
+impl HttpStatus for OpenSideChatError {
     /// The REST status the wire contract assigns this failure.
-    pub fn status_code(&self) -> u16 {
+    fn status_kind(&self) -> StatusKind {
         match self {
-            OpenSideChatError::NotFound(_) => 404,
+            OpenSideChatError::NotFound(_) => StatusKind::NotFound,
             OpenSideChatError::Archived
             | OpenSideChatError::ParentIsSideChat
-            | OpenSideChatError::DirectoryMissing => 409,
-            OpenSideChatError::InsertFailed(_) => 500,
+            | OpenSideChatError::DirectoryMissing => StatusKind::Conflict,
+            OpenSideChatError::InsertFailed(_) => StatusKind::Internal,
         }
     }
 }

@@ -23,7 +23,10 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use mainframe_adapter_api::BoxFuture;
 use mainframe_services::workspace::{WorktreeEntry, get_worktrees};
 use mainframe_types::events::DaemonEvent;
+use mainframe_types::http_status::{HttpStatus, StatusKind};
 use mainframe_types::worktree_offer::{WorktreeOfferOutcome, WorktreeSwitchOffer};
+
+use crate::config_manager::ConfigError;
 
 mod rescan;
 
@@ -40,15 +43,17 @@ pub enum OfferError {
     ChatBusy,
     #[error("Worktree no longer exists")]
     Vanished,
-    #[error("{0}")]
-    Message(String),
+    /// Rebinding the chat onto the accepted worktree failed.
+    #[error(transparent)]
+    Rebind(#[from] ConfigError),
 }
 
-impl OfferError {
-    pub fn status_code(&self) -> u16 {
+impl HttpStatus for OfferError {
+    fn status_kind(&self) -> StatusKind {
         match self {
-            OfferError::SwitchInProgress | OfferError::ChatBusy => 409,
-            _ => 400,
+            OfferError::SwitchInProgress | OfferError::ChatBusy => StatusKind::Conflict,
+            OfferError::NotPending | OfferError::Vanished => StatusKind::BadRequest,
+            OfferError::Rebind(err) => err.status_kind(),
         }
     }
 }

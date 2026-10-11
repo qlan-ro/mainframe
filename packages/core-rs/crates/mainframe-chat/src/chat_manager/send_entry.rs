@@ -125,9 +125,7 @@ impl ChatManager {
     ) -> Result<(), SendError> {
         let transcript_missing = chat.and_then(|c| c.transcript_missing).unwrap_or(false);
         if transcript_missing && !self.session_is_spawned(chat_id) {
-            self.continue_here(chat_id)
-                .await
-                .map_err(|e| SendError(e.to_string()))?;
+            self.continue_here(chat_id).await?;
         }
         Ok(())
     }
@@ -135,12 +133,12 @@ impl ChatManager {
     pub(super) fn require_live_session(&self, chat_id: &str) -> Result<LiveSession, SendError> {
         let post = self
             .get_active(chat_id)
-            .ok_or_else(|| SendError(format!("Chat {chat_id} not running")))?;
+            .ok_or_else(|| SendError::NotRunning(chat_id.to_string()))?;
         let session = {
             let guard = post.lock_recover();
             match guard.session.clone() {
                 Some(s) if s.is_spawned() => s,
-                _ => return Err(SendError(format!("Chat {chat_id} not running"))),
+                _ => return Err(SendError::NotRunning(chat_id.to_string())),
             }
         };
         Ok((post, session))

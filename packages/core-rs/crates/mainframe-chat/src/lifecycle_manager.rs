@@ -11,6 +11,7 @@ use mainframe_types::adapter::{SessionOptions, SessionSpawnOptions};
 use mainframe_types::chat::{Chat, ChatMessage, ChatStatus, NewChat, ProcessState, ResolvedTuning};
 use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::events::DaemonEvent;
+use mainframe_types::http_status::{HttpStatus, NotFound, StatusKind};
 use mainframe_types::settings::ExecutionMode;
 use mainframe_types::settings_kv::SettingsKv;
 use mainframe_types::time::now_iso8601;
@@ -51,13 +52,33 @@ use mainframe_types::time::now_ms;
 /// Errors surfaced by lifecycle ops (strings cross the wire; copied verbatim).
 #[derive(Debug, thiserror::Error)]
 pub enum LifecycleError {
-    #[error("{0}")]
-    Message(String),
+    /// The chat, its project or its adapter is gone.
+    #[error(transparent)]
+    NotFound(#[from] NotFound),
+    /// `load_chat` ran but left no active cell behind.
+    #[error("Chat {0} not found after load")]
+    NotLoaded(String),
+    #[error("Worktree directory does not exist: {0}")]
+    WorktreeMissing(String),
+    #[error("Project directory does not exist or is not accessible: {0}")]
+    ProjectDirMissing(String),
     /// `forkToWorktree` dirty-tree rejection (HTTP 409 upstream).
     #[error("Commit or stash your changes before forking")]
     DirtyWorkingTree,
     #[error(transparent)]
     Adapter(#[from] AdapterError),
+}
+
+impl HttpStatus for LifecycleError {
+    fn status_kind(&self) -> StatusKind {
+        match self {
+            Self::NotFound(_) => StatusKind::NotFound,
+            Self::WorktreeMissing(_) | Self::ProjectDirMissing(_) | Self::DirtyWorkingTree => {
+                StatusKind::Conflict
+            }
+            Self::NotLoaded(_) | Self::Adapter(_) => StatusKind::Internal,
+        }
+    }
 }
 
 /// Injected dependency surface for the lifecycle manager.
@@ -697,11 +718,11 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
     ) -> Result<String, LifecycleError> {
         let source_chat = self
             .chat_or_db(chat_id)
-            .ok_or_else(|| LifecycleError::Message(format!("Chat {chat_id} not found")))?;
+            .ok_or_else(|| NotFound::new("Chat", chat_id))?;
         let project_path = self
             .deps
             .projects_get_path(&source_chat.project_id)
-            .ok_or_else(|| LifecycleError::Message("Project not found".to_string()))?;
+            .ok_or_else(|| NotFound::unnamed("Project"))?;
 
         if self.deps.is_working_tree_dirty(&project_path).await {
             return Err(LifecycleError::DirtyWorkingTree);
@@ -982,9 +1003,9 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
     async fn do_start_chat(&self, chat_id: &str) -> Result<(), LifecycleError> {
         self.load_chat(chat_id).await;
 
-        let cell = self.get_active(chat_id).ok_or_else(|| {
-            LifecycleError::Message(format!("Chat {chat_id} not found after load"))
-        })?;
+        let cell = self
+            .get_active(chat_id)
+            .ok_or_else(|| LifecycleError::NotLoaded(chat_id.to_string()))?;
 
         let (spawned, process, mut chat) = {
             let guard = cell.lock_recover();
@@ -1007,9 +1028,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         if let Some(wt) = &chat.worktree_path
             && !self.deps.path_exists(wt)
         {
-            return Err(LifecycleError::Message(format!(
-                "Worktree directory does not exist: {wt}"
-            )));
+            return Err(LifecycleError::WorktreeMissing(wt.clone()));
         }
 
         let project_path = self.deps.projects_get_path(&chat.project_id);
@@ -1039,9 +1058,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
                     fork_source,
                 },
             )
-            .ok_or_else(|| {
-                LifecycleError::Message(format!("Adapter {} not found", chat.adapter_id))
-            })?;
+            .ok_or_else(|| NotFound::new("Adapter", chat.adapter_id.clone()))?;
         cell.lock_recover().session = Some(session.clone());
 
         if chat.adapter_id == "codex" {

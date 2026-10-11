@@ -13,9 +13,10 @@ use std::sync::Arc;
 use mainframe_adapter_api::{AdapterSession, BoxFuture};
 use mainframe_services::workspace::{add_worktree_for_branch, branch_exists};
 use mainframe_types::chat::Chat;
+use mainframe_types::http_status::{HttpStatus, StatusKind};
 
 /// Errors surfaced by the recovery ops. The strings cross the wire (the routes
-/// return them verbatim); `BranchGone` also carries the HTTP 409 the route emits.
+/// return them verbatim).
 #[derive(Debug, thiserror::Error)]
 pub enum DegradedRecoveryError {
     #[error("Chat {0} not found")]
@@ -30,12 +31,14 @@ pub enum DegradedRecoveryError {
     BranchGone(String),
 }
 
-impl DegradedRecoveryError {
-    /// `err.statusCode` — `recreateChatWorktree` tags the branch-gone case 409.
-    pub fn status_code(&self) -> Option<u16> {
+impl HttpStatus for DegradedRecoveryError {
+    /// A missing chat or project is a 404 and a vanished branch a 409; a
+    /// chat with no worktree to act on is a bad request.
+    fn status_kind(&self) -> StatusKind {
         match self {
-            DegradedRecoveryError::BranchGone(_) => Some(409),
-            _ => None,
+            Self::ChatNotFound(_) | Self::ProjectNotFound(_) => StatusKind::NotFound,
+            Self::BranchGone(_) => StatusKind::Conflict,
+            Self::NoWorktree | Self::NoWorktreeToRecreate => StatusKind::BadRequest,
         }
     }
 }
@@ -371,7 +374,7 @@ mod tests {
                 .to_lowercase()
                 .contains("branch \"feat-x\" no longer exists")
         );
-        assert_eq!(err.status_code(), Some(409));
+        assert_eq!(err.status_kind(), StatusKind::Conflict);
         assert!(deps.add_worktree_calls.lock().unwrap().is_empty());
     }
 

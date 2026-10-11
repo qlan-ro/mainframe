@@ -2,9 +2,11 @@
 //! (`chat_manager/fork_api.rs`) needs that don't touch the registry, the DB or an
 //! adapter: the fork point, the provisional title rule, the deps-boundary data shapes (so
 //! `mainframe-chat` never depends on `mainframe-db`'s `PendingFork`/`ForkInsert`),
-//! and the REST-status mapping for `ForkChatError`.
+//! and the REST-status class of `ForkChatError`.
 
 use mainframe_types::adapter::{EffortLevel, ForkSource};
+use mainframe_types::http_status::{HttpStatus, StatusKind};
+use mainframe_types::seam_error::SeamError;
 use mainframe_types::settings::ExecutionMode;
 
 /// Where `ChatManager::fork_chat` cuts the parent's conversation.
@@ -128,17 +130,19 @@ pub enum ForkChatError {
     ForkPointUnresolved(String),
     #[error("{0}")]
     PinFailed(String),
-    #[error("{0}")]
-    InsertFailed(String),
+    #[error(transparent)]
+    InsertFailed(SeamError),
 }
 
-impl ForkChatError {
+impl HttpStatus for ForkChatError {
     /// The REST status the Daemon contract table assigns this failure.
-    pub fn status_code(&self) -> u16 {
+    fn status_kind(&self) -> StatusKind {
         match self {
-            ForkChatError::NotFound(_) | ForkChatError::MessageNotFound => 404,
-            ForkChatError::NotAUserMessage => 400,
-            ForkChatError::Unsupported(_) | ForkChatError::UnavailableWithReason(_) => 422,
+            ForkChatError::NotFound(_) | ForkChatError::MessageNotFound => StatusKind::NotFound,
+            ForkChatError::NotAUserMessage => StatusKind::BadRequest,
+            ForkChatError::Unsupported(_) | ForkChatError::UnavailableWithReason(_) => {
+                StatusKind::Unprocessable
+            }
             ForkChatError::Temporary
             | ForkChatError::NoProject
             | ForkChatError::NothingToForkYet
@@ -149,8 +153,8 @@ impl ForkChatError {
             | ForkChatError::NothingBeforeMessage
             | ForkChatError::BeforeProviderSwitch(_)
             | ForkChatError::BeforeContextReset
-            | ForkChatError::ForkPointUnresolved(_) => 409,
-            ForkChatError::PinFailed(_) | ForkChatError::InsertFailed(_) => 500,
+            | ForkChatError::ForkPointUnresolved(_) => StatusKind::Conflict,
+            ForkChatError::PinFailed(_) | ForkChatError::InsertFailed(_) => StatusKind::Internal,
         }
     }
 }
@@ -184,36 +188,69 @@ mod tests {
 
     #[test]
     fn status_codes_match_the_daemon_contract_table() {
-        assert_eq!(ForkChatError::NotFound("c1".into()).status_code(), 404);
         assert_eq!(
-            ForkChatError::Unsupported("Codex".into()).status_code(),
-            422
+            ForkChatError::NotFound("c1".into()).status_kind(),
+            StatusKind::NotFound
         );
         assert_eq!(
-            ForkChatError::UnavailableWithReason("needs a newer CLI".into()).status_code(),
-            422
+            ForkChatError::Unsupported("Codex".into()).status_kind(),
+            StatusKind::Unprocessable
         );
-        assert_eq!(ForkChatError::NothingToForkYet.status_code(), 409);
-        assert_eq!(ForkChatError::TranscriptMissing.status_code(), 409);
-        assert_eq!(ForkChatError::DirectoryMissing.status_code(), 409);
-        assert_eq!(ForkChatError::TurnInFlight.status_code(), 409);
-        assert_eq!(ForkChatError::MessageNotFound.status_code(), 404);
-        assert_eq!(ForkChatError::NotAUserMessage.status_code(), 400);
-        assert_eq!(ForkChatError::MessageNotSent.status_code(), 409);
-        assert_eq!(ForkChatError::NothingBeforeMessage.status_code(), 409);
         assert_eq!(
-            ForkChatError::BeforeProviderSwitch("Codex".into()).status_code(),
-            409
+            ForkChatError::UnavailableWithReason("needs a newer CLI".into()).status_kind(),
+            StatusKind::Unprocessable
         );
-        assert_eq!(ForkChatError::BeforeContextReset.status_code(), 409);
         assert_eq!(
-            ForkChatError::ForkPointUnresolved("gone".into()).status_code(),
-            409
+            ForkChatError::NothingToForkYet.status_kind(),
+            StatusKind::Conflict
         );
-        assert_eq!(ForkChatError::PinFailed("boom".into()).status_code(), 500);
         assert_eq!(
-            ForkChatError::InsertFailed("boom".into()).status_code(),
-            500
+            ForkChatError::TranscriptMissing.status_kind(),
+            StatusKind::Conflict
+        );
+        assert_eq!(
+            ForkChatError::DirectoryMissing.status_kind(),
+            StatusKind::Conflict
+        );
+        assert_eq!(
+            ForkChatError::TurnInFlight.status_kind(),
+            StatusKind::Conflict
+        );
+        assert_eq!(
+            ForkChatError::MessageNotFound.status_kind(),
+            StatusKind::NotFound
+        );
+        assert_eq!(
+            ForkChatError::NotAUserMessage.status_kind(),
+            StatusKind::BadRequest
+        );
+        assert_eq!(
+            ForkChatError::MessageNotSent.status_kind(),
+            StatusKind::Conflict
+        );
+        assert_eq!(
+            ForkChatError::NothingBeforeMessage.status_kind(),
+            StatusKind::Conflict
+        );
+        assert_eq!(
+            ForkChatError::BeforeProviderSwitch("Codex".into()).status_kind(),
+            StatusKind::Conflict
+        );
+        assert_eq!(
+            ForkChatError::BeforeContextReset.status_kind(),
+            StatusKind::Conflict
+        );
+        assert_eq!(
+            ForkChatError::ForkPointUnresolved("gone".into()).status_kind(),
+            StatusKind::Conflict
+        );
+        assert_eq!(
+            ForkChatError::PinFailed("boom".into()).status_kind(),
+            StatusKind::Internal
+        );
+        assert_eq!(
+            ForkChatError::InsertFailed(SeamError::msg("boom")).status_kind(),
+            StatusKind::Internal
         );
     }
 

@@ -10,6 +10,7 @@ use super::provider_switch::{codex_info, text_message};
 use super::segment_fake::{FakeStore, native, segment};
 use super::*;
 use crate::fork::{ForkPoint, PendingForkState};
+use mainframe_types::http_status::StatusKind;
 
 /// Claude (s0 on ns_c), then Codex (s1 on ns_x, handoff delivered); Codex active.
 fn claude_then_codex() -> SegmentLayout {
@@ -82,7 +83,7 @@ async fn a_message_before_the_switch_is_refused_with_no_pin() {
         .await
         .unwrap_err();
     assert_eq!(err, ForkChatError::BeforeProviderSwitch("Codex".into()));
-    assert_eq!(err.status_code(), 409);
+    assert_eq!(err.status_kind(), StatusKind::Conflict);
     let err = mgr
         .fork_chat("c1", ForkPoint::BeforeMessage("u1".into()))
         .await

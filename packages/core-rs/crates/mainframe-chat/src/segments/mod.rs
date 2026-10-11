@@ -17,6 +17,7 @@ pub mod switch_rules;
 #[cfg(test)]
 mod tests;
 
+use mainframe_types::seam_error::SeamError;
 use mainframe_types::segment::{
     HandoffRecord, HandoffStatus, SegmentLayout, SegmentResultDelta, SwitchCommit,
 };
@@ -29,15 +30,15 @@ pub trait SegmentStore: Send + Sync {
     /// Segments in ordinal order, their native rows, and live handoffs.
     fn layout(&self, chat_id: &str) -> Option<SegmentLayout>;
     /// Applies a planned switch in one transaction (mirror included).
-    fn commit_switch(&self, commit: &SwitchCommit) -> Result<SegmentLayout, String>;
+    fn commit_switch(&self, commit: &SwitchCommit) -> Result<SegmentLayout, SeamError>;
     /// Moves the active segment onto a fresh native row (delta fallback).
-    fn replace_active_native(&self, chat_id: &str) -> Result<SegmentLayout, String>;
+    fn replace_active_native(&self, chat_id: &str) -> Result<SegmentLayout, SeamError>;
     /// Supersedes older pending rows, inserts `record`, stamps the marker.
     fn insert_pending_handoff(
         &self,
         record: &HandoffRecord,
         start_marker: &str,
-    ) -> Result<(), String>;
+    ) -> Result<(), SeamError>;
     /// Returns whether the row changed.
     fn set_handoff_status(&self, handoff_id: &str, status: HandoffStatus) -> bool;
     /// Adds one turn's deltas to the active segment.

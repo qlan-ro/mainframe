@@ -103,7 +103,7 @@ impl ChatManager {
                 fell_back: false,
             }));
         }
-        let layout = store.replace_active_native(&chat.id).map_err(SendError)?;
+        let layout = store.replace_active_native(&chat.id)?;
         if let (Some(cell), Some(fresh)) =
             (self.get_active(&chat.id), self.deps.chats_get(&chat.id))
         {
@@ -169,9 +169,7 @@ impl ChatManager {
         };
         let built = self.build_block(chat, &identity, &planned).await?;
         let record = handoff_record(&identity, active, &planned, &built);
-        store
-            .insert_pending_handoff(&record, &identity.segment_marker)
-            .map_err(SendError)?;
+        store.insert_pending_handoff(&record, &identity.segment_marker)?;
         let name_of = |id: &str| self.deps.adapter_fork_info(id).name;
         if refresh_divider(&self.messages, store, &chat.id, &active.id, &name_of) {
             self.event_handler.emit_display(&chat.id);
@@ -209,10 +207,7 @@ impl ChatManager {
             .map(|c| c.subagent)
             .unwrap_or_default();
         build_handoff(identity, &spans, &subagents, planned.budget).map_err(|_| {
-            let to_name = self.deps.adapter_fork_info(&chat.adapter_id).name;
-            SendError(format!(
-                "This message is too large to send with {to_name}'s context handoff. Shorten it or remove attachments."
-            ))
+            SendError::HandoffTooLarge(self.deps.adapter_fork_info(&chat.adapter_id).name)
         })
     }
 

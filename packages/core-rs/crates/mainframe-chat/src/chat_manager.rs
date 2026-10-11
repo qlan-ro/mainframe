@@ -97,7 +97,9 @@ mod switch_api;
 mod update;
 
 pub use deps::ChatManagerDeps;
-pub use errors::{CommandMeta, ForkError, SendError, TrustWorkspaceError};
+pub use errors::{
+    CommandMeta, DiscardError, ForkError, RemoveProjectError, SendError, TrustWorkspaceError,
+};
 pub use external_facade::ExternalSessionFacade;
 pub use history::ResumeSnapshot;
 pub(crate) use shared::remap_history as remap_history_for;

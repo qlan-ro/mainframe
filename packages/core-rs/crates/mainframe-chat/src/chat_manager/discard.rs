@@ -2,6 +2,7 @@
 //! it shares with `config_api.rs::remove_project`.
 use super::*;
 use crate::chat_teardown::TeardownMode;
+use mainframe_types::http_status::NotFound;
 use mainframe_types::sync::LockExt as _;
 
 impl ChatManager {
@@ -52,9 +53,9 @@ impl ChatManager {
     /// parent's `side_chat_id` to `None` after the row is gone (rule 4). Any
     /// other temporary chat discards its own side chat first (AC 7), so a side
     /// chat never outlives the chat it belongs to.
-    pub async fn discard_chat(&self, chat_id: &str) -> Result<(), String> {
+    pub async fn discard_chat(&self, chat_id: &str) -> Result<(), DiscardError> {
         let Some(chat) = self.deps.chats_get(chat_id) else {
-            return Err("Chat not found".to_string());
+            return Err(NotFound::unnamed("Chat").into());
         };
         let side_chat = is_side_chat(&chat);
 
@@ -68,7 +69,10 @@ impl ChatManager {
         if !side_chat && let Some(scratch_path) = &chat.scratch_path {
             // NotFound counts as success (already gone); any other error stops
             // here so the row is not deleted and a retry stays possible.
-            self.deps.remove_scratch_dir(scratch_path).await?;
+            self.deps
+                .remove_scratch_dir(scratch_path)
+                .await
+                .map_err(DiscardError::ScratchDir)?;
         }
         self.deps.chats_delete(chat_id);
         self.deps.emit_event(DaemonEvent::ChatEnded {

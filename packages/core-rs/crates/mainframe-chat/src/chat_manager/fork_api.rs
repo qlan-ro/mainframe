@@ -189,9 +189,9 @@ impl ChatManager {
 
         let new_chat = match self.deps.create_fork(&insert) {
             Ok(chat) => chat,
-            Err(message) => {
+            Err(error) => {
                 remove_snapshot_dir(&dest_dir).await;
-                return Err(ForkChatError::InsertFailed(message));
+                return Err(ForkChatError::InsertFailed(error));
             }
         };
 

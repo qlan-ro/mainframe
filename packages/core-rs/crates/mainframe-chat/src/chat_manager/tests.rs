@@ -10,6 +10,8 @@ use mainframe_types::adapter::{AdapterProcess, ControlResponse, SessionSpawnOpti
 use mainframe_types::background_task::BackgroundTask;
 use mainframe_types::chat::{Chat, ChatStatus, ProcessState};
 use mainframe_types::context::SkillFileEntry;
+use mainframe_types::http_status::{HttpStatus as _, StatusKind};
+use mainframe_types::seam_error::SeamError;
 use mainframe_types::settings::ExecutionMode;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -349,7 +351,7 @@ impl ChatManagerDeps for StoreDeps {
     fn remove_scratch_dir<'a>(
         &'a self,
         scratch_path: &'a str,
-    ) -> BoxFuture<'a, Result<(), String>> {
+    ) -> BoxFuture<'a, Result<(), SeamError>> {
         self.remove_scratch_dir_calls
             .lock()
             .unwrap()
@@ -357,7 +359,7 @@ impl ChatManagerDeps for StoreDeps {
         let fail = self.fail_remove_scratch_dir.lock().unwrap().clone();
         Box::pin(async move {
             match fail {
-                Some(msg) => Err(msg),
+                Some(msg) => Err(SeamError::msg(msg)),
                 None => Ok(()),
             }
         })
@@ -432,23 +434,23 @@ impl ChatManagerDeps for StoreDeps {
     fn initial_transcript_path(&self, _: &str, _: &str, _: &str) -> Option<String> {
         None
     }
-    fn projects_remove(&self, project_id: &str) -> Result<(), String> {
+    fn projects_remove(&self, project_id: &str) -> Result<(), SeamError> {
         self.project_removed
             .lock()
             .unwrap()
             .push(project_id.to_string());
         match self.fail_project_remove.lock().unwrap().clone() {
-            Some(msg) => Err(msg),
+            Some(msg) => Err(SeamError::msg(msg)),
             None => Ok(()),
         }
     }
     fn write_workspace_trust<'a>(
         &'a self,
         project_path: &'a str,
-    ) -> BoxFuture<'a, Result<(), String>> {
+    ) -> BoxFuture<'a, Result<(), SeamError>> {
         Box::pin(async move {
             if let Some(msg) = self.fail_trust_write.lock().unwrap().clone() {
-                return Err(msg);
+                return Err(SeamError::msg(msg));
             }
             self.trusted_paths
                 .lock()
@@ -705,9 +707,9 @@ impl ChatManagerDeps for StoreDeps {
             }
         })
     }
-    fn create_fork(&self, insert: &ForkCreateInput) -> Result<Chat, String> {
+    fn create_fork(&self, insert: &ForkCreateInput) -> Result<Chat, SeamError> {
         if let Some(message) = self.create_fork_failure.lock().unwrap().clone() {
-            return Err(message);
+            return Err(SeamError::msg(message));
         }
         self.fork_inserts.lock().unwrap().push(insert.clone());
         let id = format!("fork-{}", self.store.lock().unwrap().len());
@@ -807,7 +809,7 @@ impl ChatManagerDeps for StoreDeps {
     fn adapter_info(&self, adapter_id: &str) -> Option<mainframe_types::adapter::AdapterInfo> {
         self.adapter_infos.lock().unwrap().get(adapter_id).cloned()
     }
-    fn chats_find_or_create_side_chat(&self, parent: &Chat) -> Result<(Chat, bool), String> {
+    fn chats_find_or_create_side_chat(&self, parent: &Chat) -> Result<(Chat, bool), SeamError> {
         let all = self.raw_chats();
         if let Some(existing_id) = Self::derive_side_chat_id(&parent.id, &all)
             && let Some(existing) = all.iter().find(|c| c.id == existing_id)
@@ -2018,8 +2020,12 @@ async fn remove_project_propagates_a_row_delete_failure() {
     let s1 = RecSession::with_order("c1", order.clone());
     seed_active(&mgr, "c1", c1, s1);
 
-    let result = mgr.remove_project("p1").await;
-    assert_eq!(result, Err("database is locked".to_string()));
+    let err = mgr.remove_project("p1").await.unwrap_err();
+    assert!(matches!(err, RemoveProjectError::Store(_)));
+    assert_eq!(
+        (err.status_kind(), err.to_string()),
+        (StatusKind::Internal, "database is locked".to_string())
+    );
 
     let order = order.lock().unwrap();
     let idx = |s: &str| order.iter().position(|x| x == s);
@@ -2074,8 +2080,11 @@ async fn discard_chat_whose_scratch_dir_removal_fails_leaves_the_chat_discardabl
     *deps.fail_remove_scratch_dir.lock().unwrap() = Some("permission denied".to_string());
     let mgr = ChatManager::new(deps.clone());
 
-    let result = mgr.discard_chat("c1").await;
-    assert_eq!(result, Err("permission denied".to_string()));
+    let err = mgr.discard_chat("c1").await.unwrap_err();
+    assert_eq!(
+        (err.status_kind(), err.to_string()),
+        (StatusKind::Internal, "permission denied".to_string())
+    );
     assert!(
         deps.chats_get("c1").is_some(),
         "a failed removal must leave the row (and a retry) intact"
@@ -2091,9 +2100,10 @@ async fn discard_chat_whose_scratch_dir_removal_fails_leaves_the_chat_discardabl
 async fn discard_chat_404s_for_an_unknown_chat() {
     let deps = StoreDeps::arc();
     let mgr = ChatManager::new(deps);
+    let err = mgr.discard_chat("missing").await.unwrap_err();
     assert_eq!(
-        mgr.discard_chat("missing").await,
-        Err("Chat not found".to_string())
+        (err.status_kind(), err.to_string()),
+        (StatusKind::NotFound, "Chat not found".to_string())
     );
 }
 
@@ -2673,7 +2683,11 @@ async fn trust_workspace_propagates_a_write_failure_without_gating_being_bypasse
 
     let err = mgr.trust_workspace("c1").await.unwrap_err();
 
-    assert!(matches!(err, TrustWorkspaceError::Write(msg) if msg == "disk full"));
+    assert!(matches!(err, TrustWorkspaceError::Write(_)));
+    assert_eq!(
+        (err.status_kind(), err.to_string()),
+        (StatusKind::Internal, "disk full".to_string())
+    );
 }
 
 // ── accept_worktree_offer gating ────────────────────────────────────────────
@@ -2695,7 +2709,7 @@ async fn accept_worktree_offer_refuses_while_a_turn_is_in_flight() {
         .unwrap_err();
 
     assert!(matches!(err, OfferError::ChatBusy));
-    assert_eq!(err.status_code(), 409);
+    assert_eq!(err.status_kind(), StatusKind::Conflict);
 }
 
 /// Idle reaches the registry instead — `NotPending` proves the busy gate let it

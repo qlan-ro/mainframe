@@ -2,6 +2,7 @@
 //! (— daemon-side-chats). A child module of `tests`, so
 //! it sees `tests`' private `StoreDeps`.
 use super::*;
+use mainframe_types::http_status::StatusKind;
 
 fn parent_chat(id: &str) -> Chat {
     // `enrich_chat`'s directory-missing check stats the real filesystem against
@@ -28,7 +29,7 @@ async fn unknown_parent_is_not_found() {
     let mgr = ChatManager::new(deps);
     let err = mgr.open_side_chat("nope").await.unwrap_err();
     assert_eq!(err, OpenSideChatError::NotFound("nope".to_string()));
-    assert_eq!(err.status_code(), 404);
+    assert_eq!(err.status_kind(), StatusKind::NotFound);
 }
 
 #[tokio::test]
@@ -39,7 +40,7 @@ async fn an_archived_parent_is_refused_409() {
     let mgr = ChatManager::new(deps);
     let err = mgr.open_side_chat("c1").await.unwrap_err();
     assert_eq!(err, OpenSideChatError::Archived);
-    assert_eq!(err.status_code(), 409);
+    assert_eq!(err.status_kind(), StatusKind::Conflict);
 }
 
 #[tokio::test]
@@ -51,7 +52,7 @@ async fn a_side_chat_cannot_open_its_own_side_chat_409() {
     let mgr = ChatManager::new(deps);
     let err = mgr.open_side_chat("c1").await.unwrap_err();
     assert_eq!(err, OpenSideChatError::ParentIsSideChat);
-    assert_eq!(err.status_code(), 409);
+    assert_eq!(err.status_kind(), StatusKind::Conflict);
 }
 
 #[tokio::test]
@@ -62,7 +63,7 @@ async fn a_missing_directory_is_refused_409() {
     let mgr = ChatManager::new(deps);
     let err = mgr.open_side_chat("c1").await.unwrap_err();
     assert_eq!(err, OpenSideChatError::DirectoryMissing);
-    assert_eq!(err.status_code(), 409);
+    assert_eq!(err.status_kind(), StatusKind::Conflict);
 }
 
 // A temporary parent and a non-project parent are both allowed.

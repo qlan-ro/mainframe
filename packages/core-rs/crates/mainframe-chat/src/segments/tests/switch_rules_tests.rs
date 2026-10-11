@@ -5,6 +5,8 @@ use std::collections::HashMap;
 use mainframe_types::adapter::{AdapterCapabilities, AdapterInfo, AdapterModel};
 use mainframe_types::background_task::BackgroundActivity;
 use mainframe_types::chat::{Chat, DisplayStatus, ProcessState};
+use mainframe_types::http_status::{HttpStatus, StatusKind};
+use mainframe_types::seam_error::SeamError;
 
 use crate::segments::switch_rules::{SwitchCheck, SwitchError, check_switch_allowed};
 
@@ -55,14 +57,8 @@ fn idle_chat() -> Chat {
 
 #[test]
 fn an_idle_chat_may_switch() {
-    assert_eq!(
-        check(&idle_chat(), Some(&codex(true)), Some("codex-pro"), 0),
-        Ok(())
-    );
-    assert_eq!(
-        check(&idle_chat(), Some(&codex(true)), Some("default"), 0),
-        Ok(())
-    );
+    assert!(check(&idle_chat(), Some(&codex(true)), Some("codex-pro"), 0).is_ok());
+    assert!(check(&idle_chat(), Some(&codex(true)), Some("default"), 0).is_ok());
 }
 
 #[test]
@@ -74,20 +70,29 @@ fn refusals_come_in_table_order_with_their_status_and_copy() {
 
     let err = check(&chat, None, None, 3).unwrap_err();
     assert_eq!(
-        (err.status(), err.to_string()),
-        (422, "codex isn't installed".to_string())
+        (err.status_kind(), err.to_string()),
+        (
+            StatusKind::Unprocessable,
+            "codex isn't installed".to_string()
+        )
     );
     let err = check(&chat, Some(&codex(false)), None, 3).unwrap_err();
     assert_eq!(err.to_string(), "Codex isn't installed");
     let err = check(&chat, Some(&codex(true)), Some("unlisted-model"), 3).unwrap_err();
     assert_eq!(
-        (err.status(), err.to_string()),
-        (422, "unlisted-model isn't a Codex model".to_string())
+        (err.status_kind(), err.to_string()),
+        (
+            StatusKind::Unprocessable,
+            "unlisted-model isn't a Codex model".to_string()
+        )
     );
     let err = check(&chat, Some(&codex(true)), None, 3).unwrap_err();
     assert_eq!(
-        (err.status(), err.to_string()),
-        (409, "Side chats keep their parent's provider".to_string())
+        (err.status_kind(), err.to_string()),
+        (
+            StatusKind::Conflict,
+            "Side chats keep their parent's provider".to_string()
+        )
     );
     chat.parent_chat_id = None;
     let err = check(&chat, Some(&codex(true)), None, 3).unwrap_err();
@@ -100,10 +105,10 @@ fn refusals_come_in_table_order_with_their_status_and_copy() {
     );
     chat.process_state = None;
     chat.display_status = Some(DisplayStatus::Waiting);
-    assert_eq!(
+    assert!(matches!(
         check(&chat, Some(&codex(true)), None, 3),
         Err(SwitchError::TurnInFlight)
-    );
+    ));
     chat.display_status = None;
     let err = check(&chat, Some(&codex(true)), None, 3).unwrap_err();
     assert_eq!(
@@ -117,9 +122,9 @@ fn refusals_come_in_table_order_with_their_status_and_copy() {
     });
     let err = check(&chat, Some(&codex(true)), None, 0).unwrap_err();
     assert_eq!(
-        (err.status(), err.to_string()),
+        (err.status_kind(), err.to_string()),
         (
-            409,
+            StatusKind::Conflict,
             "Claude is still running background agents or commands, and switching would end them. \
              Wait for them to finish, or press Stop, then switch."
                 .to_string()
@@ -129,10 +134,33 @@ fn refusals_come_in_table_order_with_their_status_and_copy() {
 
 #[test]
 fn not_found_and_failures_map_to_404_and_500() {
-    assert_eq!(SwitchError::NotFound("c".into()).status(), 404);
+    assert_eq!(
+        SwitchError::NotFound("c".into()).status_kind(),
+        StatusKind::NotFound
+    );
     assert_eq!(
         SwitchError::NotFound("c".into()).to_string(),
         "Chat c not found"
     );
-    assert_eq!(SwitchError::Failed("x".into()).status(), 500);
+    let failures = [
+        (
+            SwitchError::Unavailable,
+            "Provider switching is unavailable",
+        ),
+        (
+            SwitchError::UnsentFork,
+            "Couldn't switch this fork before its first message",
+        ),
+        (
+            SwitchError::NoActiveSegment("c".into()),
+            "Chat c has no active segment",
+        ),
+        (SwitchError::Store(SeamError::msg("locked")), "locked"),
+    ];
+    for (error, text) in failures {
+        assert_eq!(
+            (error.status_kind(), error.to_string()),
+            (StatusKind::Internal, text.to_string())
+        );
+    }
 }
