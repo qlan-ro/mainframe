@@ -11,7 +11,7 @@ use axum::http::StatusCode;
 use axum::response::Response;
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::plugin::PluginCapability;
-use mainframe_types::settings_kv::SettingsKv as _;
+use mainframe_types::settings_kv::SettingsKv;
 use serde_json::{Value, json};
 
 use super::routes::{get_todos, post_todo};
