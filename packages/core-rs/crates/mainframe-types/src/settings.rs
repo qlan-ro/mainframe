@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
 
+mod provider_update;
+pub use provider_update::{PROVIDER_CONFIG_FIELDS, ProviderConfigUpdate};
+
 pub const EXECUTION_MODES: [ExecutionMode; 4] = [
     ExecutionMode::Default,
     ExecutionMode::AcceptEdits,
