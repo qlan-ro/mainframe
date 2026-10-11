@@ -1,12 +1,4 @@
-//! Durability matrix: for each pause point (waiting-on-form, waiting-on-agent,
-//! mid-Repeat, mid-`running`), drop the engine and rebuild a fresh one over the
-//! SAME db — a daemon crash-and-reboot. Assert the run completes with no
-//! non-idempotent action re-executed, and the restart-mid- `running` policy
-//! (idempotent re-runs, else fails loudly).
-//!
-//! The automations are DISABLED before their manual run so the boot sweep
-//! injects no scheduled make-up runs — these tests isolate reconcile, and an
-//! in-flight run reconciles regardless of the automation's enabled flag.
+//! Restart conformance over a shared database, with schedules disabled.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -26,6 +18,7 @@ struct Boot {
     engine: Arc<AutomationsEngine>,
     agent: Arc<FakeAgentPort>,
     notifier: Arc<FakeNotifier>,
+    sink: Arc<CollectingSink>,
     actions: FakeActions,
 }
 
@@ -41,17 +34,25 @@ async fn boot(db: &Path, creds: &Path, agent: FakeAgentPort) -> Boot {
     let notifier = Arc::new(FakeNotifier::default());
     let sink = Arc::new(CollectingSink::default());
     let actions = build_actions();
-    let engine = build_engine(db, creds, agent.clone(), notifier.clone(), sink, &actions).await;
+    let engine = build_engine(
+        db,
+        creds,
+        agent.clone(),
+        notifier.clone(),
+        sink.clone(),
+        &actions,
+    )
+    .await;
     Boot {
         engine,
         agent,
         notifier,
+        sink,
         actions,
     }
 }
 
-/// Create + disable + manual-run: disabling quiesces the scheduler so only the
-/// in-flight run under test exists.
+/// Disable scheduled runs to isolate restart reconciliation.
 async fn start_manual(engine: &AutomationsEngine, fixture: &str) -> String {
     let created = engine.create(load_fixture(fixture)).await.unwrap();
     engine.set_enabled(&created.id, false).await.unwrap();
@@ -127,8 +128,16 @@ async fn mid_repeat_resumes_without_rerunning_the_list_action() {
     let run_id = {
         let b1 = boot(&db, &creds, FakeAgentPort::manual()).await;
         let run_id = start_manual(&b1.engine, "morning-pr-sweep").await;
-        // list_prs ran; the first repeat iteration parked on its agent.
-        wait_status(&b1.engine, &run_id, RunStatus::Waiting).await;
+        // Waiting reaches SQLite before the old walk finishes its final write.
+        tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            b1.sink.wait_for(|event| {
+                matches!(event, mainframe_automations::ports::AutomationEvent::RunUpdated { run }
+                    if run.id == run_id && run.status == RunStatus::Waiting)
+            }),
+        )
+        .await
+        .expect("the old walk must finish parking before restart");
         assert_eq!(b1.actions.recorder.count("github.list_prs"), 1);
         run_id
     };
@@ -195,10 +204,7 @@ async fn restart_mid_running_nonidempotent_fails_loudly() {
     );
 }
 
-/// A repeat over `github.list_prs`' two records, fanned out with
-/// `concurrency: 2` — built inline rather than as a fixture, since the
-/// fixtures directory holds the canonical contract fixtures (checked by
-/// `fixture_tests`), which are never re-authored.
+/// Keep the canonical fixtures unchanged while exercising concurrent repeat.
 fn concurrent_fan_out_input() -> AutomationCreateInput {
     serde_json::from_value(json!({
         "name": "Concurrent PR review",
@@ -244,9 +250,7 @@ async fn restart_mid_fan_out_resumes_both_agent_watches_and_completes() {
         let created = b1.engine.create(concurrent_fan_out_input()).await.unwrap();
         b1.engine.set_enabled(&created.id, false).await.unwrap();
         let run_id = b1.engine.run_manually(&created.id).await.unwrap().id;
-        // Both branches must have started their own chat before the crash —
-        // the run flips to `waiting` as soon as the FIRST one parks, so wait
-        // on the agent port's own call count, not just the run status.
+        // Waiting alone does not prove both branches have parked.
         tokio::time::timeout(
             std::time::Duration::from_secs(10),
             b1.agent.wait_for_watch("chat-2"),
@@ -262,11 +266,7 @@ async fn restart_mid_fan_out_resumes_both_agent_watches_and_completes() {
         run_id
     };
 
-    // `b2` is a FRESH port, so `start_count() == 0` would hold whether or not
-    // watches actually resumed — it proves nothing. The real assertion is
-    // `wait_status(Succeeded)` below: `FakeAgentPort::completing` only ever
-    // answers a `watch()` call, so the run can only reach `Succeeded` if
-    // reconcile re-attached both chats' watches (never called here) itself.
+    // Auto-completion requires reconcile to reattach both watches.
     let b2 = boot(&db, &creds, FakeAgentPort::completing("reviewed")).await;
     b2.engine.start().await.unwrap();
     wait_status(&b2.engine, &run_id, RunStatus::Succeeded).await;
