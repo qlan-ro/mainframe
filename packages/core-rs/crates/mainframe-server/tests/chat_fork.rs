@@ -88,22 +88,21 @@ async fn harness(fork_capable: bool, update: ChatPatch) -> Harness {
         MockCliAdapter::default().with_fork_capable(fork_capable),
     ));
 
-    let manager = build_chat_manager(
-        db.clone(),
-        Arc::clone(&registry),
-        Arc::clone(&tracker),
-        Arc::clone(&attachments),
-        Arc::clone(&push),
-        GitFactory,
-        broadcast.clone(),
-        Arc::new(NoopLaunchStopper),
-        Arc::new(NoopScopeTunnelStopper),
+    let manager = build_chat_manager(mainframe_server::ChatManagerParams {
+        db: db.clone(),
+        adapters: Arc::clone(&registry),
+        background_tasks: Arc::clone(&tracker),
+        attachments: Arc::clone(&attachments),
+        push: Arc::clone(&push),
+        git: GitFactory,
+        broadcast: broadcast.clone(),
+        launch: Arc::new(NoopLaunchStopper),
+        scope_tunnels: Arc::new(NoopScopeTunnelStopper),
         quota,
-        Arc::clone(&workflows),
-        mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
-        None,
-        data_dir.path().to_path_buf(),
-    );
+        claude_workflows: Arc::clone(&workflows),
+        chat_surface: None,
+        data_dir: data_dir.path().to_path_buf(),
+    });
 
     let ctx = Arc::new(
         AppCtx::test_builder(db.clone(), data_dir.path().to_path_buf())

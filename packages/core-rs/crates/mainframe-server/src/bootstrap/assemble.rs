@@ -65,25 +65,24 @@ fn chats(
     quota: &Arc<QuotaManager>,
     facade: &Arc<crate::FacadeHub>,
 ) -> Arc<ChatManager> {
-    build_chat_manager(
-        bound.db.clone(),
-        r.adapters.clone(),
-        r.background_tasks.clone(),
-        r.services.attachments.clone(),
-        r.services.push.clone(),
-        GitFactory,
-        r.broadcast.clone(),
-        Arc::new(RegistryLaunchStopper::new(r.launch_registry.clone())),
-        Arc::new(RegistryScopeTunnelStopper::new(
+    build_chat_manager(crate::ChatManagerParams {
+        db: bound.db.clone(),
+        adapters: r.adapters.clone(),
+        background_tasks: r.background_tasks.clone(),
+        attachments: r.services.attachments.clone(),
+        push: r.services.push.clone(),
+        git: GitFactory,
+        broadcast: r.broadcast.clone(),
+        launch: Arc::new(RegistryLaunchStopper::new(r.launch_registry.clone())),
+        scope_tunnels: Arc::new(RegistryScopeTunnelStopper::new(
             r.port_tunnels.clone(),
             bound.db.clone(),
         )),
-        quota.clone(),
-        r.claude_workflows.clone(),
-        bound.input.resolved_path.clone(),
-        Some(facade.as_chat_surface()),
-        bound.input.paths.data_dir.clone(),
-    )
+        quota: quota.clone(),
+        claude_workflows: r.claude_workflows.clone(),
+        chat_surface: Some(facade.as_chat_surface()),
+        data_dir: bound.input.paths.data_dir.clone(),
+    })
 }
 
 async fn automations(

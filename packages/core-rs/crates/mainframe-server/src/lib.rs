@@ -32,7 +32,7 @@ pub mod ws_schemas;
 
 pub use acp_ws::FacadeHub;
 pub use automations_deps::build_automations_engine;
-pub use chat_deps::build_chat_manager;
+pub use chat_deps::{ChatManagerParams, build_chat_manager};
 pub use chat_seams::{
     LaunchStopper, NoopScopeTunnelStopper, RegistryLaunchStopper, RegistryScopeTunnelStopper,
     ScopeTunnelStopper,

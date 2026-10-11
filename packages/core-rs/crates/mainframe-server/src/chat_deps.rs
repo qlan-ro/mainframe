@@ -46,7 +46,6 @@ use mainframe_chat::external_session_service::{ExternalSessionDeps, ExternalSess
 use mainframe_chat::fork::PendingForkState;
 use mainframe_chat::resolve_tuning_for_chat::{ResolveTuningDeps, resolve_tuning_for_chat};
 use mainframe_claude_workflows::store::ClaudeWorkflowStore;
-use mainframe_runtime::ResolvedPath;
 use mainframe_services::attachment::AttachmentStore;
 use mainframe_services::attachment::attachment_store::AttachmentKind;
 use mainframe_services::notifications::should_notify_permission;
@@ -1115,59 +1114,9 @@ impl ExternalSessionDeps for DaemonChatDeps {
     }
 }
 
-/// Assemble the production `ChatManager` from the daemon's live collaborators.
-/// Called once at boot (after the AdapterRegistry + BackgroundTaskTracker exist,
-/// before the server starts).
-#[allow(clippy::too_many_arguments)]
-pub fn build_chat_manager(
-    db: Db,
-    adapters: Arc<AdapterRegistry>,
-    background_tasks: Arc<BackgroundTaskTracker>,
-    attachments: Arc<AttachmentStore>,
-    push: Arc<PushService>,
-    git: GitFactory,
-    broadcast: broadcast::Sender<DaemonEvent>,
-    launch: Arc<dyn LaunchStopper>,
-    scope_tunnels: Arc<dyn ScopeTunnelStopper>,
-    quota: Arc<QuotaManager>,
-    claude_workflows: Arc<ClaudeWorkflowStore>,
-    // Title generation is adapter-aware — the resolved PATH lives with the
-    // adapter's title spawn, so the ChatManager does not need it. The param
-    // is retained for the boot call site (mainframe-daemon) until it drops the arg.
-    _resolved_path: ResolvedPath,
-    // The chat-surface observer: the ACP facade hub in the daemon
-    // boot; `None` in harnesses that exercise the legacy surface only.
-    chat_surface: Option<Arc<dyn mainframe_chat::chat_surface::ChatSurface>>,
-    // A non-project chat's scratch root and `fork_snapshots_dir` both join
-    // onto this.
-    data_dir: std::path::PathBuf,
-) -> Arc<ChatManager> {
-    let deps = Arc::new(DaemonChatDeps {
-        db,
-        adapters,
-        background_tasks,
-        attachments,
-        push,
-        git,
-        broadcast,
-        launch,
-        scope_tunnels,
-        quota,
-        claude_external_session_cache: new_external_session_cache(),
-        chat_manager: OnceLock::new(),
-        claude_workflows,
-        data_dir,
-    });
-    let external_sessions = Arc::new(ExternalSessionService::new(deps.clone()));
-    let mut manager = ChatManager::new(deps.clone()).with_external_sessions(external_sessions);
-    if let Some(surface) = chat_surface {
-        manager = manager.with_chat_surface(surface);
-    }
-    let manager = Arc::new(manager);
-    manager.attach_self();
-    let _ = deps.chat_manager.set(Arc::downgrade(&manager));
-    manager
-}
+#[path = "chat_deps/build.rs"]
+mod build;
+pub use build::{ChatManagerParams, build_chat_manager};
 
 /// A `Send + Sync` `ResolveTuningDeps` that routes the synchronous `db.chats.get`
 /// read through the actor bridge, settings through `Db`'s `SettingsKv`, and the
