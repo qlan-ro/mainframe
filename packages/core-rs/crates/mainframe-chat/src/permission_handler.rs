@@ -6,22 +6,34 @@ use mainframe_types::sync::LockExt as _;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use mainframe_types::adapter::{ControlRequest, ControlResponse};
+use mainframe_types::chat::ChatMessage;
 
+use crate::chat_manager::{ChatShared, build_history_session, remap_history_for};
 use crate::chat_surface::{self, ChatSurface, ChatSurfaceEvent};
+use crate::event_handler::EventHandler;
+use crate::lifecycle_manager::ChatLifecycleManager;
 use crate::message_cache::MessageCache;
 use crate::permission_manager::PermissionManager;
+use crate::plan_mode_actions::ChatPlanModeCtx;
+use crate::plan_mode_handler::PlanModeHandler;
 use crate::types::ActiveChat;
 
 mod branches;
-mod deps;
+mod error;
 mod respond;
 
-pub use deps::{PermissionError, PermissionHandlerDeps};
+pub use error::PermissionError;
 
-pub struct ChatPermissionHandler<D: PermissionHandlerDeps> {
+pub struct ChatPermissionHandler {
+    shared: Arc<ChatShared>,
+    /// Display revisions for an answer's text, and the surface it drives.
+    event_handler: Arc<EventHandler>,
+    /// Starts a chat that has no live session to answer the gate on.
+    lifecycle: Arc<ChatLifecycleManager>,
+    /// Plan-mode delegation for `ExitPlanMode` approvals.
+    plan_mode: Arc<PlanModeHandler<ChatPlanModeCtx>>,
     permissions: Arc<Mutex<PermissionManager>>,
     messages: Arc<Mutex<MessageCache>>,
-    deps: D,
     /// The chat-surface observer: unlike `EventHandler`, this handler owns the
     /// normal (non-cancelled) permission-answer path, so it needs its own
     /// attach point to emit `GateResolved`/`GateRaised` there — mirrors
@@ -35,17 +47,38 @@ fn is_exit_plan_mode(response: &ControlResponse) -> bool {
     response.tool_name.as_deref() == Some("ExitPlanMode")
 }
 
-impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
-    pub fn new(
-        permissions: Arc<Mutex<PermissionManager>>,
-        messages: Arc<Mutex<MessageCache>>,
-        deps: D,
+impl ChatPermissionHandler {
+    pub(crate) fn new(
+        shared: Arc<ChatShared>,
+        event_handler: Arc<EventHandler>,
+        lifecycle: Arc<ChatLifecycleManager>,
+        plan_mode: Arc<PlanModeHandler<ChatPlanModeCtx>>,
     ) -> Self {
         Self {
-            permissions,
-            messages,
-            deps,
+            permissions: shared.permissions.clone(),
+            messages: shared.messages.clone(),
+            shared,
+            event_handler,
+            lifecycle,
+            plan_mode,
             chat_surface: Arc::new(OnceLock::new()),
+        }
+    }
+
+    /// `getPendingPermission` calls `getMessages` to restore permission state
+    /// from JSONL. Mirrors the facade's `getMessages` disk load (cache-agnostic
+    /// here — the caller only scans the returned messages for a pending
+    /// permission).
+    async fn load_messages(&self, chat_id: &str) -> Vec<ChatMessage> {
+        let Some(chat) = self.shared.chat_or_db(chat_id) else {
+            return Vec::new();
+        };
+        let Some(session) = build_history_session(&self.shared.deps, &chat, chat_id) else {
+            return Vec::new();
+        };
+        match session.load_history().await {
+            Ok(history) => remap_history_for(history, chat_id),
+            Err(_) => Vec::new(),
         }
     }
 
@@ -72,7 +105,7 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
 
     pub async fn get_pending_permission(&self, chat_id: &str) -> Option<ControlRequest> {
         if !self.has_pending(chat_id) {
-            let _ = self.deps.get_messages(chat_id).await;
+            let _ = self.load_messages(chat_id).await;
         }
         self.pending_permission_as_known(chat_id)
     }

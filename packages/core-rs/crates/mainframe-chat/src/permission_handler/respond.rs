@@ -7,9 +7,9 @@ use mainframe_types::adapter::{ControlBehavior, ControlResponse};
 use mainframe_types::sync::LockExt as _;
 use tracing::{info, warn};
 
-use super::{ChatPermissionHandler, PermissionError, PermissionHandlerDeps, is_exit_plan_mode};
+use super::{ChatPermissionHandler, PermissionError, is_exit_plan_mode};
 
-impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
+impl ChatPermissionHandler {
     pub async fn respond_to_permission(
         &self,
         chat_id: &str,
@@ -28,7 +28,7 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
             return Ok(());
         }
 
-        let active = self.deps.get_active_chat(chat_id);
+        let active = self.shared.active(chat_id);
 
         // Guard: reject stale/duplicate responses (only when a permission is queued).
         if let Some(cell) = &active {
@@ -74,7 +74,7 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
         if let Some(text) = &response.message {
             let message = self.transient_user_text(chat_id, text);
             self.messages.lock_recover().append(chat_id, message);
-            self.deps.emit_display(chat_id);
+            self.event_handler.emit_display(chat_id);
         }
 
         if response.clear_context == Some(true)

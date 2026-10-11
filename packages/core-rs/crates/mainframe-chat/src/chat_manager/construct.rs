@@ -5,16 +5,16 @@ use mainframe_types::sync::LockExt as _;
 /// The five sub-manager collaborators, built in dependency order (offers →
 /// event handler → lifecycle → permission handler → config) so `new` stays a
 /// straight read of the assembled bundle.
-struct Collaborators {
-    event_handler: Arc<EventHandler>,
-    lifecycle: Arc<ChatLifecycleManager>,
-    permission_handler: ChatPermissionHandler<PhDeps>,
-    config: ChatConfigManager<CmDeps>,
-    worktree_offers: Arc<WorktreeOfferRegistry>,
+pub(crate) struct Collaborators {
+    pub(crate) event_handler: Arc<EventHandler>,
+    pub(crate) lifecycle: Arc<ChatLifecycleManager>,
+    pub(crate) permission_handler: ChatPermissionHandler,
+    pub(super) config: ChatConfigManager<CmDeps>,
+    pub(crate) worktree_offers: Arc<WorktreeOfferRegistry>,
 }
 
 impl Collaborators {
-    fn build(
+    pub(crate) fn build(
         shared: &Arc<ChatShared>,
         self_ref: &Arc<std::sync::OnceLock<std::sync::Weak<ChatManager>>>,
     ) -> Self {
@@ -25,8 +25,7 @@ impl Collaborators {
             event_handler.clone(),
             worktree_offers.clone(),
         ));
-        let permission_handler =
-            deps_permission::build(shared, &event_handler, &lifecycle, self_ref);
+        let permission_handler = plan_host::build(shared, &event_handler, &lifecycle, self_ref);
         let config = deps_config::build(shared, &lifecycle, &worktree_offers);
         Self {
             event_handler,

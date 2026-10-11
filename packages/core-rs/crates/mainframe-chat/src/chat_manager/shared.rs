@@ -90,7 +90,7 @@ pub(crate) async fn compose_if_multi(
 /// `chats.pending_fork`'s `fork_source` instead; this is the path a freshly
 /// forked chat's pre-first-message history takes (still in `active_chats`, so
 /// `load_chat` never runs `do_load_chat` for it).
-pub(super) fn build_history_session(
+pub(crate) fn build_history_session(
     deps: &Arc<dyn ChatManagerDeps>,
     chat: &Chat,
     chat_id: &str,

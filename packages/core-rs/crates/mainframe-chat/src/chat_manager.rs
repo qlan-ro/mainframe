@@ -40,7 +40,7 @@ use crate::history_cache::{HistoryFingerprint, HistorySnapshotCache};
 use crate::lifecycle_manager::{ChatLifecycleManager, LifecycleError};
 use crate::message_cache::MessageCache;
 use crate::message_markers::visible_message_text;
-use crate::permission_handler::{ChatPermissionHandler, PermissionError, PermissionHandlerDeps};
+use crate::permission_handler::{ChatPermissionHandler, PermissionError};
 use crate::permission_manager::PermissionManager;
 use crate::plan_mode_actions::{ChatPlanModeCtx, PlanHost};
 use crate::plan_mode_handler::PlanModeHandler;
@@ -52,11 +52,10 @@ use mainframe_types::worktree_offer::WorktreeSwitchOffer;
 
 mod capabilities;
 mod config_api;
-mod construct;
+pub(crate) mod construct;
 mod delivery;
 mod deps;
 mod deps_config;
-mod deps_permission;
 mod deps_recovery;
 mod discard;
 mod enrich;
@@ -68,6 +67,7 @@ mod handoff_resolve;
 mod handoff_send;
 mod history;
 mod lifecycle_api;
+mod plan_host;
 mod reads;
 mod send;
 mod send_entry;
@@ -86,8 +86,8 @@ pub use errors::{
 };
 pub use external_facade::ExternalSessionFacade;
 pub use history::ResumeSnapshot;
-pub(crate) use shared::compose_if_multi;
 pub(crate) use shared::remap_history as remap_history_for;
+pub(crate) use shared::{build_history_session, compose_if_multi};
 pub use side_chat::OpenSideChatError;
 pub use update::ProcessedAttachments;
 
@@ -96,14 +96,11 @@ pub use update::ProcessedAttachments;
 pub use crate::fork::{AdapterForkInfo, ForkChatError, ForkCreateInput, ForkPoint};
 
 use deps_config::CmDeps;
-use deps_permission::PhDeps;
 pub(crate) use state::ChatShared;
 // `enrich_chat`/`is_working` have no direct caller left in this file — every
 // caller (enrich.rs, construct.rs) reaches them through this re-import via its
 // own `use super::*`, so removing this line would break the glob for them.
-use shared::{
-    apply_tuning_impl, build_history_session, enrich_chat, is_working, now_ms, remap_history,
-};
+use shared::{apply_tuning_impl, enrich_chat, is_working, now_ms, remap_history};
 use side_chat::is_side_chat;
 
 pub type Registry = Arc<DashMap<String, Arc<Mutex<ActiveChat>>>>;
@@ -118,7 +115,7 @@ pub struct ChatManager {
     shared: Arc<ChatShared>,
     event_handler: Arc<EventHandler>,
     lifecycle: Arc<ChatLifecycleManager>,
-    permission_handler: ChatPermissionHandler<PhDeps>,
+    permission_handler: ChatPermissionHandler,
     config: ChatConfigManager<CmDeps>,
     idle_scanner: Mutex<crate::idle_scanner::IdleSessionScanner>,
     external_sessions: Option<Arc<dyn ExternalSessionFacade>>,

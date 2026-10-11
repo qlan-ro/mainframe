@@ -16,9 +16,9 @@ use crate::chat_surface::ChatSurfaceEvent;
 use crate::event_handler::PushOut;
 use crate::types::ActiveChat;
 
-use super::{ChatPermissionHandler, PermissionError, PermissionHandlerDeps, is_exit_plan_mode};
+use super::{ChatPermissionHandler, PermissionError, is_exit_plan_mode};
 
-impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
+impl ChatPermissionHandler {
     pub(super) async fn handle_no_session_permission(
         &self,
         chat_id: &str,
@@ -31,13 +31,12 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
             && is_exit_plan_mode(&response)
             && let Some(active) = &active
         {
-            self.deps
-                .plan_mode_handle_no_process(chat_id, active, &response);
+            self.plan_mode.handle_no_process(chat_id, active, &response);
         }
 
-        self.deps.start_chat(chat_id).await;
+        self.lifecycle.start_chat(chat_id).await;
 
-        if let Some(started) = self.deps.get_active_chat(chat_id)
+        if let Some(started) = self.shared.active(chat_id)
             && Self::session_spawned(&started)
         {
             let chat = {
@@ -45,15 +44,15 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
                 guard.chat.process_state = Some(Some(ProcessState::Working));
                 guard.chat.clone()
             };
-            self.deps.chats_update(
+            self.shared.deps.chats_update(
                 chat_id,
                 &ChatPatch {
                     process_state: Some(Some(ProcessState::Working)),
                     ..Default::default()
                 },
             );
-            self.deps
-                .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
+            self.shared
+                .emit(DaemonEvent::ChatUpdated { chat, reason: None });
             let session = started.lock_recover().session.clone();
             if let Some(session) = session {
                 session.respond_to_permission(response).await?;
@@ -68,8 +67,8 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
         active: Arc<Mutex<ActiveChat>>,
         response: ControlResponse,
     ) -> Result<(), PermissionError> {
-        self.deps
-            .plan_mode_handle_clear_context(chat_id, active, response)
+        self.plan_mode
+            .handle_clear_context(chat_id, &active, response)
             .await?;
         Ok(())
     }
@@ -100,6 +99,7 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
             .shift(chat_id, &response.request_id);
         if let Some(next_request) = next_request {
             let notify = self
+                .shared
                 .deps
                 .should_notify_permission(Some(&next_request.tool_name));
             self.notify_surface(ChatSurfaceEvent::GateRaised {
@@ -107,7 +107,7 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
                 request: next_request.clone(),
             });
             if notify {
-                self.deps.send_push(PushOut {
+                self.shared.deps.send_push(PushOut {
                     chat_id: chat_id.to_string(),
                     title: "Permission Required".to_string(),
                     body: format!("Agent wants to run: {}", next_request.tool_name),
@@ -118,12 +118,12 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
         }
 
         let chat = active.lock_recover().chat.clone();
-        self.deps
-            .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
+        self.shared
+            .emit(DaemonEvent::ChatUpdated { chat, reason: None });
 
         if response.behavior == ControlBehavior::Allow && is_exit_plan_mode(&response) {
-            self.deps
-                .plan_mode_handle_escalation(chat_id, active, response)
+            self.plan_mode
+                .handle_escalation(chat_id, &active, response)
                 .await?;
         }
         Ok(())
