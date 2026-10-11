@@ -975,7 +975,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
     }
 
     async fn default_model_for(&self, adapter_id: &str) -> Option<String> {
-        let saved = self.provider_setting(&adapter_id, "defaultModel").await;
+        let saved = self.provider_setting(adapter_id, "defaultModel").await;
         normalize_saved_default_model(saved.as_deref()).filter(|model| model != "default")
     }
 
