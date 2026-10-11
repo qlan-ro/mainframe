@@ -1,12 +1,13 @@
 //! The fake host database and context builder behind the todos test harness.
 
-use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use mainframe_types::chat::Chat;
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::plugin::{PluginCapability, PluginManifest};
+use mainframe_types::settings::NotificationConfig;
+use mainframe_types::settings_kv::{MemorySettings, SettingsKv};
 use mainframe_types::time::now_iso8601;
 use serde_json::json;
 
@@ -20,7 +21,7 @@ type CreatedChat = (String, String, Option<String>, Option<String>);
 #[derive(Default)]
 pub(super) struct FakeHostDb {
     pub(super) created: Mutex<Vec<CreatedChat>>,
-    pub(super) settings: Mutex<HashMap<(String, String), String>>,
+    pub(super) settings: MemorySettings,
 }
 
 fn make_chat(id: &str, project_id: &str) -> Chat {
@@ -62,12 +63,11 @@ impl PluginHostDb for FakeHostDb {
         ));
         make_chat("chat-1", project_id)
     }
-    fn settings_get(&self, category: &str, key: &str) -> Option<String> {
-        self.settings
-            .lock()
-            .unwrap()
-            .get(&(category.to_string(), key.to_string()))
-            .cloned()
+    fn settings(&self) -> &dyn SettingsKv {
+        &self.settings
+    }
+    fn notification_config(&self) -> NotificationConfig {
+        NotificationConfig::default()
     }
 }
 

@@ -457,8 +457,8 @@ impl ChatManagerDeps for StoreDeps {
             Ok(())
         })
     }
-    fn settings_get(&self, _ns: &str, _key: &str) -> Option<String> {
-        None
+    fn settings(&self) -> &dyn mainframe_types::settings_kv::SettingsKv {
+        crate::test_support::no_settings()
     }
     fn add_plan_file(&self, _chat_id: &str, _file_path: &str) -> bool {
         false
@@ -2506,8 +2506,8 @@ impl crate::external_session_service::ExternalSessionDeps for FakeExternalDeps {
     fn chats_list(&self, _project_id: &str) -> Vec<Chat> {
         Vec::new()
     }
-    fn settings_get(&self, _ns: &str, _key: &str) -> Option<String> {
-        None
+    fn settings(&self) -> &dyn mainframe_types::settings_kv::SettingsKv {
+        crate::test_support::no_settings()
     }
     fn emit_event(&self, _event: DaemonEvent) {}
     fn generate_title<'a>(

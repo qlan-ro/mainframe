@@ -37,8 +37,8 @@ impl ConfigManagerDeps for CmDeps {
             available: None,
         })
     }
-    fn settings_get(&self, ns: &str, key: &str) -> Option<String> {
-        self.deps.settings_get(ns, key)
+    fn settings(&self) -> &dyn mainframe_types::settings_kv::SettingsKv {
+        self.deps.settings()
     }
     fn emit_event(&self, event: DaemonEvent) {
         self.enricher.emit(event);

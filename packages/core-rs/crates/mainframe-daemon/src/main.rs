@@ -17,7 +17,6 @@ mod cli;
 mod e2e_mock;
 mod github_issues_port;
 mod plugin_host_db;
-mod quota_store;
 mod shutdown;
 mod startup;
 
@@ -31,10 +30,7 @@ use std::pin::Pin;
 use std::sync::{Arc, RwLock};
 
 use crate::plugin_host_db::DaemonPluginHostDb;
-use crate::quota_store::DaemonQuotaSettings;
-use mainframe_adapter_api::resolve_executable::{
-    ResolverDeps, SettingsWriter, resolve_adapter_executable,
-};
+use mainframe_adapter_api::resolve_executable::{ResolverDeps, resolve_adapter_executable};
 use mainframe_adapter_api::{AdapterError, AdapterRegistry, BoxFuture, RefreshDeps, RunResult};
 use mainframe_adapter_claude::adapter::ClaudeAdapter;
 use mainframe_adapter_claude::quota_pull::{
@@ -260,10 +256,9 @@ async fn run_daemon() {
 
     // Configure the refresh BEFORE server start so no request triggers an
     // unconfigured probe. resolve_executable_path reads the persisted provider path
-    // via the DB actor, then falls back to a `PATH` scan through the shared
-    // resolver. Persisting detected paths needs a sync `SettingsWriter` write
-    // bridge to the async DB actor — not wired,
-    // so refresh re-detects each run instead of reading a backfilled path.
+    // through the DB's `SettingsKv`, then falls back to a `PATH` scan through the
+    // shared resolver. Detected paths are not persisted, so refresh re-detects
+    // each run instead of reading a backfilled path.
     adapters.configure_refresh(Arc::new(DaemonRefreshDeps {
         db: db.clone(),
         broadcast: broadcast.clone(),
@@ -283,7 +278,7 @@ async fn run_daemon() {
     // `account/rateLimits/updated`, Claude `rate_limit_event`) can sparse-merge in.
     let quota_emit = broadcast.clone();
     let quota_manager = Arc::new(QuotaManager::new(QuotaManagerDeps {
-        settings: Box::new(DaemonQuotaSettings::new(db.clone())),
+        settings: Arc::new(db.clone()),
         emit_event: Box::new(move |event| {
             let _ = quota_emit.send(event);
         }),
@@ -720,34 +715,20 @@ impl RefreshDeps for DaemonRefreshDeps {
     }
 }
 
-/// Resolve an adapter's executable path off the DB actor + shared resolver,
-/// returning `None` when detection fails. Reads the persisted provider path,
-/// snapshots it into a one-key SettingsWriter, then runs the shared resolver
-/// (which falls back to a `PATH` scan when unset). `resolve_adapter_executable`
-/// never writes, so a read snapshot is faithful. Shared by the catalog refresh
-/// and both quota pullers — all need a validated binary before spawning.
+/// Resolve an adapter's executable path through the shared resolver (the
+/// persisted `provider.<id>.executablePath`, else a `PATH` scan), returning
+/// `None` when the binary does not validate. Shared by the catalog refresh and
+/// both quota pullers — all need a validated binary before spawning.
 async fn resolve_adapter_path(
     db: &Db,
     resolved_path: &mainframe_runtime::ResolvedPath,
     adapter_id: &str,
 ) -> Option<String> {
-    let key = format!("{adapter_id}.executablePath");
-    let lookup_key = key.clone();
-    let configured = db
-        .call(move |d| Ok(d.settings.get("provider", &lookup_key).ok().flatten()))
-        .await
-        .ok()
-        .flatten();
-    let settings = OneSetting {
-        category: "provider".to_string(),
-        key,
-        value: configured,
-    };
     let runner = DefaultRunner::new(resolved_path.clone());
     let resolved = resolve_adapter_executable(
         adapter_id,
         &ResolverDeps {
-            settings: &settings,
+            settings: db,
             run: &runner,
             path: resolved_path,
         },
@@ -837,27 +818,6 @@ fn register_quota_identity_resolvers(quota: &Arc<QuotaManager>) {
 /// Wall-clock epoch-ms for the quota pullers' `observedAt` stamp (the harvesters
 /// take an injected `now`; the pure engine still derives status off its own clock).
 use mainframe_types::time::now_ms;
-
-/// A single-entry read-only `SettingsWriter` snapshot: `get` returns the
-/// pre-fetched value for its one `(category, key)`, `set` is a no-op (the refresh
-/// resolve path never persists). Bridges the sync `SettingsWriter` trait to a
-/// value already read off the async DB actor.
-struct OneSetting {
-    category: String,
-    key: String,
-    value: Option<String>,
-}
-
-impl SettingsWriter for OneSetting {
-    fn get(&self, category: &str, key: &str) -> Option<String> {
-        if category == self.category && key == self.key {
-            self.value.clone()
-        } else {
-            None
-        }
-    }
-    fn set(&self, _category: &str, _key: &str, _value: &str) {}
-}
 
 /// Log a fatal boot error and exit. Boot failures have no supervisor to hand a
 /// `Result` back to — the RUST RULES permit the abort only here, in `main`.

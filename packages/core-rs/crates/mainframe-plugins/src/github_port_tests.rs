@@ -29,8 +29,13 @@ impl PluginHostDb for NullHostDb {
         }))
         .unwrap()
     }
-    fn settings_get(&self, _c: &str, _k: &str) -> Option<String> {
-        None
+    fn settings(&self) -> &dyn mainframe_types::settings_kv::SettingsKv {
+        static EMPTY: std::sync::LazyLock<mainframe_types::settings_kv::MemorySettings> =
+            std::sync::LazyLock::new(Default::default);
+        &*EMPTY
+    }
+    fn notification_config(&self) -> mainframe_types::settings::NotificationConfig {
+        mainframe_types::settings::NotificationConfig::default()
     }
 }
 

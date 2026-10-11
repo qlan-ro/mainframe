@@ -164,3 +164,50 @@ async fn general_put_writes_the_exact_rows() {
         )])
     );
 }
+
+// ── behaviour pinned after the settings consolidation ────────────────────────
+
+#[tokio::test]
+async fn general_get_reports_the_default_channel_for_an_unknown_stored_one() {
+    let server = spawn_test_server(None).await;
+    set_setting(&server, "general", "updateChannel", "nightly").await;
+    let (_, body) = get_text(&server, "/api/settings/general").await;
+    let data: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(data["data"]["updateChannel"], "stable");
+}
+
+#[tokio::test]
+async fn general_get_drops_a_notification_group_with_a_null_or_non_object_value() {
+    let server = spawn_test_server(None).await;
+    set_setting(
+        &server,
+        "general",
+        "notifications",
+        r#"{"chat":{"taskComplete":null,"sessionError":false},"permission":[false],"other":{"plugin":false}}"#,
+    )
+    .await;
+    let (_, body) = get_text(&server, "/api/settings/general").await;
+    let data: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(
+        data["data"]["notifications"],
+        json!({
+            "chat": { "taskComplete": true, "sessionError": true, "attentionRequest": true },
+            "permission": { "toolRequest": true, "userQuestion": true, "planApproval": true },
+            "other": { "plugin": false }
+        })
+    );
+}
+
+#[tokio::test]
+async fn general_put_rejects_a_null_notification_leaf() {
+    let server = spawn_test_server(None).await;
+    let (status, text) = put_text(
+        &server,
+        "/api/settings/general",
+        json!({ "notifications": { "chat": { "taskComplete": null } } }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(text, r#"{"error":"Invalid request body","success":false}"#);
+    assert_eq!(rows(&server, "general").await, expected_rows(&[]));
+}

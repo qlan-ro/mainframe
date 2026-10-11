@@ -1,39 +1,8 @@
-use mainframe_services::quota::{QuotaManagerDeps, QuotaSettingsStore};
+use mainframe_services::quota::QuotaManagerDeps;
+use mainframe_types::settings_kv::MemorySettings;
 use mainframe_types::adapter::{ProviderQuotaStatus, QuotaWindow, QuotaWindowKind};
-use std::collections::HashMap as StdHashMap;
 
 const NOW: i64 = 1_700_000_000_000;
-
-#[derive(Clone, Default)]
-struct MapSettings {
-    store: Arc<Mutex<StdHashMap<String, String>>>,
-}
-impl QuotaSettingsStore for MapSettings {
-    fn get(&self, category: &str, key: &str) -> Option<String> {
-        self.store
-            .lock()
-            .unwrap()
-            .get(&format!("{category} {key}"))
-            .cloned()
-    }
-    fn get_by_category(&self, category: &str) -> StdHashMap<String, String> {
-        let mut out = StdHashMap::new();
-        for (k, v) in self.store.lock().unwrap().iter() {
-            if let Some((cat, key)) = k.split_once(' ')
-                && cat == category
-            {
-                out.insert(key.to_string(), v.clone());
-            }
-        }
-        out
-    }
-    fn set(&self, category: &str, key: &str, value: &str) {
-        self.store
-            .lock()
-            .unwrap()
-            .insert(format!("{category} {key}"), value.to_string());
-    }
-}
 
 fn window(kind: QuotaWindowKind, used: f64) -> QuotaWindow {
     QuotaWindow {
@@ -60,7 +29,7 @@ fn sink_provider_quota_sparse_merges_into_the_quota_manager_and_fans_out() {
     let quota_events = Arc::new(Mutex::new(Vec::<DaemonEvent>::new()));
     let quota_events_emit = Arc::clone(&quota_events);
     let quota = Arc::new(QuotaManager::new(QuotaManagerDeps {
-        settings: Box::new(MapSettings::default()),
+        settings: Arc::new(MemorySettings::default()),
         emit_event: Box::new(move |e| quota_events_emit.lock().unwrap().push(e)),
         now: Some(Box::new(|| NOW)),
     }));

@@ -27,8 +27,8 @@ impl ConfigManagerDeps for Deps {
     fn projects_get(&self, _project_id: &str) -> Option<Project> {
         None
     }
-    fn settings_get(&self, _ns: &str, _key: &str) -> Option<String> {
-        None
+    fn settings(&self) -> &dyn mainframe_types::settings_kv::SettingsKv {
+        crate::test_support::no_settings()
     }
     fn emit_event(&self, _event: DaemonEvent) {}
     fn start_chat<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, ()> {

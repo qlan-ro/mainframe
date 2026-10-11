@@ -43,8 +43,13 @@ impl PluginHostDb for NullHostDb {
     fn chats_create(&self, _p: &str, _a: &str, _m: Option<&str>, _mode: Option<&str>) -> Chat {
         unreachable!("chats_create is not exercised by the listing route")
     }
-    fn settings_get(&self, _category: &str, _key: &str) -> Option<String> {
-        None
+    fn settings(&self) -> &dyn mainframe_types::settings_kv::SettingsKv {
+        static EMPTY: std::sync::LazyLock<mainframe_types::settings_kv::MemorySettings> =
+            std::sync::LazyLock::new(Default::default);
+        &*EMPTY
+    }
+    fn notification_config(&self) -> mainframe_types::settings::NotificationConfig {
+        mainframe_types::settings::NotificationConfig::default()
     }
 }
 

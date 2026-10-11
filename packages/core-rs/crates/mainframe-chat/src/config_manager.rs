@@ -2,12 +2,14 @@ use mainframe_types::sync::LockExt as _;
 use std::sync::{Arc, Mutex};
 
 use mainframe_adapter_api::{AdapterError, AdapterSession, BoxFuture};
+use mainframe_services::settings::read_setting;
 use mainframe_services::workspace::{create_worktree, move_session_files, remove_worktree};
 use mainframe_types::adapter::model_endpoint;
 use mainframe_types::chat::Project;
 use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::settings::{ExecutionMode, GeneralConfig};
+use mainframe_types::settings_kv::SettingsKv;
 use tracing::warn;
 
 use crate::config_respawn_guard::{model_changed, respawn_refusal};
@@ -44,7 +46,8 @@ pub trait ConfigManagerDeps: Send + Sync {
     fn get_active_chat(&self, chat_id: &str) -> Option<Arc<Mutex<ActiveChat>>>;
     fn chats_update(&self, chat_id: &str, updates: &ChatPatch);
     fn projects_get(&self, project_id: &str) -> Option<Project>;
-    fn settings_get(&self, ns: &str, key: &str) -> Option<String>;
+    /// The settings store (the configured worktree directory).
+    fn settings(&self) -> &dyn SettingsKv;
     fn emit_event(&self, event: DaemonEvent);
     fn start_chat<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()>;
     fn stop_chat<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()>;
@@ -473,9 +476,9 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
         .await
     }
 
-    fn worktree_dir(&self) -> String {
-        self.deps
-            .settings_get("general", "worktreeDir")
+    async fn worktree_dir(&self) -> String {
+        read_setting(self.deps.settings(), "general", "worktreeDir")
+            .await
             .unwrap_or_else(|| GeneralConfig::default().worktree_dir)
     }
 
@@ -509,7 +512,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
             // so a failed `git worktree add` leaves it untouched.
             let info = create_worktree(
                 &project.path,
-                &self.worktree_dir(),
+                &self.worktree_dir().await,
                 base_branch,
                 branch_name,
             )
@@ -539,7 +542,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
 
         let info = create_worktree(
             &project.path,
-            &self.worktree_dir(),
+            &self.worktree_dir().await,
             base_branch,
             branch_name,
         )
@@ -684,6 +687,7 @@ mod tests {
     use super::*;
     use crate::test_support::{FakeSession, test_chat};
     use mainframe_types::chat::Chat;
+    use mainframe_types::settings_kv::MemorySettings;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     struct FakeDeps {
@@ -697,6 +701,7 @@ mod tests {
         stop_launch_calls: Mutex<Vec<(String, String)>>,
         binding_changed: Mutex<Vec<Option<String>>>,
         move_files_error: Option<String>,
+        settings: MemorySettings,
     }
 
     impl FakeDeps {
@@ -712,6 +717,7 @@ mod tests {
                 stop_launch_calls: Mutex::new(Vec::new()),
                 binding_changed: Mutex::new(Vec::new()),
                 move_files_error: None,
+                settings: MemorySettings::default(),
             }
         }
 
@@ -740,8 +746,8 @@ mod tests {
         fn projects_get(&self, _project_id: &str) -> Option<Project> {
             self.project.clone()
         }
-        fn settings_get(&self, _ns: &str, _key: &str) -> Option<String> {
-            None
+        fn settings(&self) -> &dyn SettingsKv {
+            &self.settings
         }
         fn emit_event(&self, event: DaemonEvent) {
             self.events.lock().unwrap().push(event);

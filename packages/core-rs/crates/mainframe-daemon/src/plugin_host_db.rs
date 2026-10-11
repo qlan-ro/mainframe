@@ -1,10 +1,13 @@
 //! The daemon-side `PluginHostDb` — the `DatabaseManager` slice the plugin
-//! contexts read, bridged onto the async `Db` actor via `call_blocking` (the same
-//! SYNC-DB BRIDGE the `ChatManagerDeps` accessors use).
+//! contexts read. Chat accessors are bridged onto the async `Db` actor via
+//! `call_blocking` (the same SYNC-DB BRIDGE the `ChatManagerDeps` accessors
+//! use); settings go through `Db`'s `SettingsKv`.
 
 use mainframe_plugins::PluginHostDb;
-use mainframe_server::db::Db;
+use mainframe_server::db::{Db, notification_config_blocking};
 use mainframe_types::chat::Chat;
+use mainframe_types::settings::NotificationConfig;
+use mainframe_types::settings_kv::SettingsKv;
 
 pub struct DaemonPluginHostDb {
     db: Db,
@@ -58,11 +61,11 @@ impl PluginHostDb for DaemonPluginHostDb {
         }
     }
 
-    fn settings_get(&self, category: &str, key: &str) -> Option<String> {
-        let (cat, key) = (category.to_string(), key.to_string());
-        self.db
-            .call_blocking(move |d| Ok(d.settings.get(&cat, &key).ok().flatten()))
-            .ok()
-            .flatten()
+    fn settings(&self) -> &dyn SettingsKv {
+        &self.db
+    }
+
+    fn notification_config(&self) -> NotificationConfig {
+        notification_config_blocking(&self.db)
     }
 }

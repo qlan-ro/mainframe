@@ -3,6 +3,7 @@
 //! (fresh, or resuming its earlier native session) and carries the handoff.
 //! An unsent fork's pin becomes a borrowed view of its parent first.
 use super::*;
+use mainframe_services::settings::read_setting;
 use mainframe_types::sync::LockExt as _;
 
 use mainframe_types::segment::{
@@ -124,7 +125,13 @@ impl ChatManager {
                 "Couldn't switch this fork before its first message".into(),
             ));
         }
-        let mut commit = self.plan_commit(&chat, &layout, req)?;
+        let default_model = read_setting(
+            self.deps.settings(),
+            "provider",
+            &format!("{}.defaultModel", req.adapter_id),
+        )
+        .await;
+        let mut commit = self.plan_commit(&chat, &layout, req, default_model)?;
         commit.borrow_pinned = borrow;
         self.detach_session(chat_id).await;
         let layout = store.commit_switch(&commit).map_err(SwitchError::Failed)?;
@@ -137,14 +144,12 @@ impl ChatManager {
         chat: &Chat,
         layout: &SegmentLayout,
         req: &SwitchProviderRequest,
+        default_model: Option<String>,
     ) -> Result<SwitchCommit, SwitchError> {
         let caps = self
             .deps
             .adapter_info(&req.adapter_id)
             .map(|a| a.capabilities);
-        let default_model = self
-            .deps
-            .settings_get("provider", &format!("{}.defaultModel", req.adapter_id));
         let now = now_iso8601();
         let new_segment_id = format!("seg_{}", nanoid::nanoid!());
         let new_native_id = format!("ns_{}", nanoid::nanoid!());

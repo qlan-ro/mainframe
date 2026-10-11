@@ -35,8 +35,8 @@ impl LifecycleManagerDeps for LcDeps {
     fn projects_get_path(&self, project_id: &str) -> Option<String> {
         self.deps.projects_get_path(project_id)
     }
-    fn settings_get(&self, ns: &str, key: &str) -> Option<String> {
-        self.deps.settings_get(ns, key)
+    fn settings(&self) -> &dyn mainframe_types::settings_kv::SettingsKv {
+        self.deps.settings()
     }
     fn create_session(
         &self,

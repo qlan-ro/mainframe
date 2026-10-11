@@ -1784,7 +1784,6 @@ name = "mainframe-services"
 version = "0.0.0"
 dependencies = [
  "dirs",
- "mainframe-db",
  "mainframe-git",
  "mainframe-runtime",
  "mainframe-types",

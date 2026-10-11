@@ -14,13 +14,15 @@ use std::sync::{Arc, Mutex};
 
 use mainframe_types::adapter::{ProviderQuota, ProviderQuotaStatus};
 use mainframe_types::events::DaemonEvent;
+use mainframe_types::settings_kv::SettingsKv;
 
 use super::backoff::handle_pull_failure;
 use super::keying::{compute_quota_key, resolve_account_identity};
 use super::merge::{ProviderQuotaUpdate, merge_provider_quota};
+use super::persist::QuotaPersister;
 use super::status::derive_provider_status;
 
-const QUOTA_CATEGORY: &str = "quota";
+pub(super) const QUOTA_CATEGORY: &str = "quota";
 /// Identity sentinel prefix meaning "read failed transiently" — reuse last-known,
 /// never re-key.
 const TRANSIENT_IDENTITY_PREFIX: &str = "transient:";
@@ -34,15 +36,6 @@ const IDENTITY_TTL_MS: i64 = 60_000;
 pub enum IngestMode {
     Pull,
     Push,
-}
-
-/// The account-wide `settings` KV surface the manager persists into. Sync, to
-/// use a synchronous settings collaborator; the
-/// daemon backs it with the `Db` actor's blocking bridge.
-pub trait QuotaSettingsStore: Send + Sync {
-    fn get(&self, category: &str, key: &str) -> Option<String>;
-    fn get_by_category(&self, category: &str) -> HashMap<String, String>;
-    fn set(&self, category: &str, key: &str, value: &str);
 }
 
 /// Harvests a fresh full-replacement blob for one adapter (e.g. Claude `/usage`).
@@ -85,7 +78,8 @@ impl QuotaService for QuotaManager {
 
 /// Constructor collaborators for the quota manager.
 pub struct QuotaManagerDeps {
-    pub settings: Box<dyn QuotaSettingsStore>,
+    /// The account-wide settings store blobs persist into (`quota` category).
+    pub settings: Arc<dyn SettingsKv>,
     pub emit_event: EmitFn,
     /// Injected clock; defaults to wall-clock epoch-ms when `None`.
     pub now: Option<ClockFn>,
@@ -110,7 +104,8 @@ pub struct QuotaManager {
     pullers: Mutex<HashMap<String, (IngestMode, QuotaPuller)>>,
     identity_resolvers: Mutex<HashMap<String, IdentityResolver>>,
     identity_cache: Arc<Mutex<HashMap<String, CachedIdentity>>>,
-    settings: Box<dyn QuotaSettingsStore>,
+    settings: Arc<dyn SettingsKv>,
+    persister: QuotaPersister,
     emit_event: EmitFn,
     now: SharedClock,
 }
@@ -126,6 +121,7 @@ impl QuotaManager {
             pullers: Mutex::new(HashMap::new()),
             identity_resolvers: Mutex::new(HashMap::new()),
             identity_cache: Arc::new(Mutex::new(HashMap::new())),
+            persister: QuotaPersister::new(Arc::clone(&deps.settings)),
             settings: deps.settings,
             emit_event: deps.emit_event,
             now,
@@ -152,9 +148,16 @@ impl QuotaManager {
 
     /// Rehydrate persisted blobs. The newest-observed per adapter is the default
     /// current one; when a registered resolver names a concrete identity with a
-    /// persisted blob, that blob wins instead (#268 F2 boot selection).
+    /// persisted blob, that blob wins instead (#268 F2 boot selection). A store
+    /// failure is logged and boots with no persisted quota.
     pub async fn load_from_disk(&self) {
-        let stored = self.settings.get_by_category(QUOTA_CATEGORY);
+        let stored = match self.settings.get_by_category(QUOTA_CATEGORY).await {
+            Ok(stored) => stored,
+            Err(err) => {
+                tracing::warn!(%err, category = QUOTA_CATEGORY, "quota: failed to load persisted blobs");
+                HashMap::new()
+            }
+        };
         let mut adapters: HashSet<String> = HashSet::new();
         {
             let mut st = self.state.lock_recover();
@@ -215,7 +218,8 @@ impl QuotaManager {
 
     /// Fold a harvested quota into state. `Pull` fully replaces the account's
     /// blob; `Push` sparse-merges (an omitted window keeps the prior value).
-    /// Persists and emits either way.
+    /// Emits either way and queues the blob for persistence (written behind,
+    /// in ingest order).
     pub fn ingest(
         &self,
         adapter_id: &str,
@@ -387,9 +391,15 @@ impl QuotaManager {
         Some(identity)
     }
 
+    /// Waits for every queued blob write to be attempted.
+    #[cfg(test)]
+    async fn flush_persistence(&self) {
+        self.persister.flush().await;
+    }
+
     fn persist_and_emit(&self, adapter_id: &str, key: &str, blob: &ProviderQuota) {
         match serde_json::to_string(blob) {
-            Ok(value) => self.settings.set(QUOTA_CATEGORY, key, &value),
+            Ok(value) => self.persister.persist(key, value),
             Err(err) => {
                 tracing::error!(%err, key = %key, "quota: failed to serialize blob for persistence")
             }
@@ -475,41 +485,10 @@ fn safe_parse_quota(value: &str) -> Option<ProviderQuota> {
 mod tests {
     use super::*;
     use mainframe_types::adapter::{QuotaWindow, QuotaWindowKind};
+    use mainframe_types::settings_kv::MemorySettings;
     use std::sync::Mutex as StdMutex;
 
     const NOW: i64 = 1_700_000_000_000;
-
-    #[derive(Clone, Default)]
-    struct MapSettings {
-        store: Arc<StdMutex<HashMap<String, String>>>,
-    }
-
-    impl QuotaSettingsStore for MapSettings {
-        fn get(&self, category: &str, key: &str) -> Option<String> {
-            self.store
-                .lock()
-                .unwrap()
-                .get(&format!("{category} {key}"))
-                .cloned()
-        }
-        fn get_by_category(&self, category: &str) -> HashMap<String, String> {
-            let mut out = HashMap::new();
-            for (k, v) in self.store.lock().unwrap().iter() {
-                if let Some((cat, key)) = k.split_once(' ')
-                    && cat == category
-                {
-                    out.insert(key.to_string(), v.clone());
-                }
-            }
-            out
-        }
-        fn set(&self, category: &str, key: &str, value: &str) {
-            self.store
-                .lock()
-                .unwrap()
-                .insert(format!("{category} {key}"), value.to_string());
-        }
-    }
 
     fn session(used_percent: f64) -> QuotaWindow {
         QuotaWindow {
@@ -545,14 +524,15 @@ mod tests {
     struct Ctx {
         manager: QuotaManager,
         events: Arc<StdMutex<Vec<DaemonEvent>>>,
-        settings: MapSettings,
+        settings: Arc<MemorySettings>,
     }
 
-    fn make_manager(settings: MapSettings) -> Ctx {
+    fn make_manager(settings: MemorySettings) -> Ctx {
+        let settings = Arc::new(settings);
         let events = Arc::new(StdMutex::new(Vec::new()));
         let events_for_emit = Arc::clone(&events);
         let manager = QuotaManager::new(QuotaManagerDeps {
-            settings: Box::new(settings.clone()),
+            settings: settings.clone(),
             emit_event: Box::new(move |e| events_for_emit.lock().unwrap().push(e)),
             now: Some(Box::new(|| NOW)),
         });
@@ -572,14 +552,21 @@ mod tests {
 
     #[tokio::test]
     async fn ingests_a_pull_persists_under_compound_key_and_emits() {
-        let ctx = make_manager(MapSettings::default());
+        let ctx = make_manager(MemorySettings::default());
         let result = ctx
             .manager
             .ingest("claude", claude_quota(), IngestMode::Pull);
 
         assert_eq!(result.status, ProviderQuotaStatus::Ok);
         assert_eq!(result.session.as_ref().unwrap().used_percent, 40.0);
-        assert!(ctx.settings.get("quota", "claude:uuid-1").is_some());
+        ctx.manager.flush_persistence().await;
+        assert!(
+            ctx.settings
+                .get("quota", "claude:uuid-1")
+                .await
+                .unwrap()
+                .is_some()
+        );
         let events = ctx.events.lock().unwrap();
         assert_eq!(events.len(), 1);
         match &events[0] {
@@ -593,7 +580,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_returns_current_blob_with_status_rederived() {
-        let ctx = make_manager(MapSettings::default());
+        let ctx = make_manager(MemorySettings::default());
         ctx.manager
             .ingest("claude", claude_quota(), IngestMode::Pull);
         let got = ctx.manager.get("claude").unwrap();
@@ -603,7 +590,7 @@ mod tests {
 
     #[tokio::test]
     async fn push_sparse_merges_keeping_prior_weekly() {
-        let ctx = make_manager(MapSettings::default());
+        let ctx = make_manager(MemorySettings::default());
         ctx.manager.ingest(
             "claude",
             ProviderQuota {
@@ -631,7 +618,7 @@ mod tests {
 
     #[tokio::test]
     async fn reuses_last_known_identity_on_transient_push_sentinel() {
-        let ctx = make_manager(MapSettings::default());
+        let ctx = make_manager(MemorySettings::default());
         ctx.manager
             .ingest("claude", claude_quota(), IngestMode::Pull);
         ctx.manager.ingest(
@@ -646,10 +633,19 @@ mod tests {
             },
             IngestMode::Push,
         );
-        assert!(ctx.settings.get("quota", "claude:uuid-1").is_some());
+        ctx.manager.flush_persistence().await;
+        assert!(
+            ctx.settings
+                .get("quota", "claude:uuid-1")
+                .await
+                .unwrap()
+                .is_some()
+        );
         assert!(
             ctx.settings
                 .get("quota", "claude:transient:identity-read-failed")
+                .await
+                .unwrap()
                 .is_none()
         );
         assert_eq!(
@@ -665,7 +661,7 @@ mod tests {
 
     #[tokio::test]
     async fn account_swap_lands_on_fresh_key_with_no_inherited_windows() {
-        let ctx = make_manager(MapSettings::default());
+        let ctx = make_manager(MemorySettings::default());
         ctx.manager.ingest(
             "claude",
             ProviderQuota {
@@ -689,33 +685,46 @@ mod tests {
         let got = ctx.manager.get("claude").unwrap();
         assert_eq!(got.session.unwrap().used_percent, 5.0);
         assert!(got.weekly.is_none());
-        assert!(ctx.settings.get("quota", "claude:uuid-2").is_some());
+        ctx.manager.flush_persistence().await;
+        assert!(
+            ctx.settings
+                .get("quota", "claude:uuid-2")
+                .await
+                .unwrap()
+                .is_some()
+        );
     }
 
     #[tokio::test]
     async fn load_from_disk_rehydrates_newest_observed_blob_per_adapter() {
-        let settings = MapSettings::default();
-        settings.set(
-            "quota",
-            "claude:uuid-old",
-            &serde_json::to_string(&ProviderQuota {
-                observed_at: NOW - 10_000,
-                session: Some(session(20.0)),
-                ..claude_quota()
-            })
-            .unwrap(),
-        );
-        settings.set(
-            "quota",
-            "claude:uuid-new",
-            &serde_json::to_string(&ProviderQuota {
-                observed_at: NOW - 1_000,
-                session: Some(session(70.0)),
-                account_identity: Some("uuid-new".into()),
-                ..claude_quota()
-            })
-            .unwrap(),
-        );
+        let settings = MemorySettings::default();
+        settings
+            .set(
+                "quota",
+                "claude:uuid-old",
+                &serde_json::to_string(&ProviderQuota {
+                    observed_at: NOW - 10_000,
+                    session: Some(session(20.0)),
+                    ..claude_quota()
+                })
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+        settings
+            .set(
+                "quota",
+                "claude:uuid-new",
+                &serde_json::to_string(&ProviderQuota {
+                    observed_at: NOW - 1_000,
+                    session: Some(session(70.0)),
+                    account_identity: Some("uuid-new".into()),
+                    ..claude_quota()
+                })
+                .unwrap(),
+            )
+            .await
+            .unwrap();
         let ctx = make_manager(settings);
         ctx.manager.load_from_disk().await;
         assert_eq!(
@@ -731,16 +740,30 @@ mod tests {
 
     #[tokio::test]
     async fn load_from_disk_discards_unparseable_blob_without_panicking() {
-        let settings = MapSettings::default();
-        settings.set("quota", "claude:uuid-1", "not-json");
+        let settings = MemorySettings::default();
+        settings
+            .set("quota", "claude:uuid-1", "not-json")
+            .await
+            .unwrap();
         let ctx = make_manager(settings);
         ctx.manager.load_from_disk().await;
         assert!(ctx.manager.get("claude").is_none());
     }
 
     #[tokio::test]
+    async fn load_from_disk_boots_empty_when_the_store_fails() {
+        let manager = QuotaManager::new(QuotaManagerDeps {
+            settings: Arc::new(crate::settings::test_support::FailingSettings),
+            emit_event: Box::new(|_| {}),
+            now: Some(Box::new(|| NOW)),
+        });
+        manager.load_from_disk().await;
+        assert!(manager.get("claude").is_none());
+    }
+
+    #[tokio::test]
     async fn refresh_invokes_registered_puller_and_ingests_result() {
-        let ctx = make_manager(MapSettings::default());
+        let ctx = make_manager(MemorySettings::default());
         let puller: QuotaPuller = Arc::new(|| {
             Box::pin(async {
                 Ok(ProviderQuota {
@@ -766,7 +789,7 @@ mod tests {
 
     #[tokio::test]
     async fn refresh_keeps_last_known_blob_when_puller_throws() {
-        let ctx = make_manager(MapSettings::default());
+        let ctx = make_manager(MemorySettings::default());
         ctx.manager.ingest(
             "claude",
             ProviderQuota {
@@ -793,7 +816,7 @@ mod tests {
 
     #[tokio::test]
     async fn refresh_on_adapter_without_puller_returns_last_known() {
-        let ctx = make_manager(MapSettings::default());
+        let ctx = make_manager(MemorySettings::default());
         ctx.manager.ingest(
             "codex",
             ProviderQuota {
@@ -806,25 +829,34 @@ mod tests {
         assert_eq!(result.unwrap().session.unwrap().used_percent, 40.0);
     }
 
-    fn persist(settings: &MapSettings, key: &str, observed_at: i64, identity: &str, used: f64) {
-        settings.set(
-            "quota",
-            key,
-            &serde_json::to_string(&ProviderQuota {
-                observed_at,
-                session: Some(session(used)),
-                account_identity: Some(identity.into()),
-                ..claude_quota()
-            })
-            .unwrap(),
-        );
+    async fn persist(
+        settings: &MemorySettings,
+        key: &str,
+        observed_at: i64,
+        identity: &str,
+        used: f64,
+    ) {
+        settings
+            .set(
+                "quota",
+                key,
+                &serde_json::to_string(&ProviderQuota {
+                    observed_at,
+                    session: Some(session(used)),
+                    account_identity: Some(identity.into()),
+                    ..claude_quota()
+                })
+                .unwrap(),
+            )
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
     async fn boot_resolver_selects_the_named_identitys_blob_over_newest_observed() {
-        let settings = MapSettings::default();
-        persist(&settings, "claude:uuid-old", NOW - 10_000, "uuid-old", 20.0);
-        persist(&settings, "claude:uuid-new", NOW - 1_000, "uuid-new", 70.0);
+        let settings = MemorySettings::default();
+        persist(&settings, "claude:uuid-old", NOW - 10_000, "uuid-old", 20.0).await;
+        persist(&settings, "claude:uuid-new", NOW - 1_000, "uuid-new", 70.0).await;
         let ctx = make_manager(settings);
         let resolver: IdentityResolver =
             Arc::new(|| Box::pin(async { Some("uuid-old".to_string()) }));
@@ -846,9 +878,9 @@ mod tests {
 
     #[tokio::test]
     async fn boot_resolver_absent_keeps_the_newest_observed_blob() {
-        let settings = MapSettings::default();
-        persist(&settings, "claude:uuid-old", NOW - 10_000, "uuid-old", 20.0);
-        persist(&settings, "claude:uuid-new", NOW - 1_000, "uuid-new", 70.0);
+        let settings = MemorySettings::default();
+        persist(&settings, "claude:uuid-old", NOW - 10_000, "uuid-old", 20.0).await;
+        persist(&settings, "claude:uuid-new", NOW - 1_000, "uuid-new", 70.0).await;
         let ctx = make_manager(settings);
         let resolver: IdentityResolver = Arc::new(|| Box::pin(async { None }));
         ctx.manager.register_identity_resolver("claude", resolver);
@@ -868,7 +900,7 @@ mod tests {
 
     #[tokio::test]
     async fn push_warms_the_identity_cache_so_the_next_push_keys_to_the_resolved_account() {
-        let ctx = make_manager(MapSettings::default());
+        let ctx = make_manager(MemorySettings::default());
         let resolver: IdentityResolver =
             Arc::new(|| Box::pin(async { Some("openai-42".to_string()) }));
         ctx.manager.register_identity_resolver("codex", resolver);
@@ -897,7 +929,14 @@ mod tests {
             IngestMode::Push,
         );
 
-        assert!(ctx.settings.get("quota", "codex:openai-42").is_some());
+        ctx.manager.flush_persistence().await;
+        assert!(
+            ctx.settings
+                .get("quota", "codex:openai-42")
+                .await
+                .unwrap()
+                .is_some()
+        );
     }
 
     #[test]

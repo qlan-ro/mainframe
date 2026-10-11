@@ -142,20 +142,10 @@ struct ChatManagerParts {
 
 fn chat_manager_parts() -> ChatManagerParts {
     use mainframe_db::DatabaseManager;
-    use mainframe_services::quota::{QuotaManager, QuotaManagerDeps, QuotaSettingsStore};
+    use mainframe_services::quota::{QuotaManager, QuotaManagerDeps};
+    use mainframe_types::settings_kv::MemorySettings;
 
     use crate::chat_seams::{NoopLaunchStopper, NoopScopeTunnelStopper};
-
-    struct NoopQuotaSettings;
-    impl QuotaSettingsStore for NoopQuotaSettings {
-        fn get(&self, _category: &str, _key: &str) -> Option<String> {
-            None
-        }
-        fn get_by_category(&self, _category: &str) -> std::collections::HashMap<String, String> {
-            std::collections::HashMap::new()
-        }
-        fn set(&self, _category: &str, _key: &str, _value: &str) {}
-    }
 
     let db = Db::spawn(|| DatabaseManager::open(std::path::Path::new(":memory:")))
         .expect("open in-memory db");
@@ -164,7 +154,7 @@ fn chat_manager_parts() -> ChatManagerParts {
     let adapter_registry = Arc::new(AdapterRegistry::new());
     let data_dir = std::env::temp_dir().join(format!("mf-routes-cm-test-{}", nanoid::nanoid!()));
     let quota = Arc::new(QuotaManager::new(QuotaManagerDeps {
-        settings: Box::new(NoopQuotaSettings),
+        settings: Arc::new(MemorySettings::default()),
         emit_event: Box::new(|_| {}),
         now: None,
     }));

@@ -11,10 +11,12 @@
 //!      the connection behind the async `Db` actor. They go through the SYNC-DB
 //!      BRIDGE (`Db::call_blocking`) — one WAL connection, no second writer.
 //!   2. A handful of generic helpers (`resolve_tuning_for_chat`,
-//!      `extract_mentions_from_text`, `read_notification_config`) take a trait the
-//!      raw `!Send` `DatabaseManager` cannot satisfy across the actor boundary;
-//!      small local bridge types (`RtDeps`, `CtxDbHandle`) satisfy those bounds by
-//!      routing each call back through `Db::call_blocking`.
+//!      `extract_mentions_from_text`) take a trait the raw `!Send`
+//!      `DatabaseManager` cannot satisfy across the actor boundary; small local
+//!      bridge types (`RtDeps`, `CtxDbHandle`) satisfy those bounds by routing
+//!      each call back through the actor. Settings are read asynchronously
+//!      through `Db`'s `SettingsKv` impl, except the synchronous notification
+//!      gates (`notification_config_blocking`).
 
 use mainframe_chat::segments::categories::{segment_adapters, union_categories};
 use std::sync::{Arc, OnceLock, Weak};
@@ -47,13 +49,10 @@ use mainframe_claude_workflows::store::ClaudeWorkflowStore;
 use mainframe_runtime::ResolvedPath;
 use mainframe_services::attachment::AttachmentStore;
 use mainframe_services::attachment::attachment_store::AttachmentKind;
-use mainframe_services::notifications::notification_config::{
-    read_notification_config, should_notify_permission,
-};
+use mainframe_services::notifications::should_notify_permission;
 use mainframe_services::push::PushService;
 use mainframe_services::push::push_service::{PushMessage, PushPriority};
 use mainframe_services::quota::{IngestMode, QuotaManager};
-use mainframe_services::settings::provider_config::SettingsReader;
 use mainframe_types::adapter::{
     AdapterModel, DetectedPr, ExternalSessionPage, ProviderQuota, SessionOptions,
 };
@@ -68,11 +67,12 @@ use mainframe_types::context::{
 };
 use mainframe_types::display::{DisplayMessage, ToolCategories};
 use mainframe_types::events::DaemonEvent;
+use mainframe_types::settings_kv::SettingsKv;
 use tokio::sync::broadcast;
 
 use crate::chat_seams::{LaunchStopper, ScopeTunnelStopper};
 use crate::ctx::GitFactory;
-use crate::db::Db;
+use crate::db::{Db, notification_config_blocking};
 
 /// `mainframe_chat::fork::PendingForkState` → the DB repository's `PendingFork`.
 /// Field-for-field; the two exist separately only because
@@ -464,12 +464,8 @@ impl ChatManagerDeps for DaemonChatDeps {
         })
     }
 
-    fn settings_get(&self, ns: &str, key: &str) -> Option<String> {
-        let (ns, key) = (ns.to_string(), key.to_string());
-        self.db
-            .call_blocking(move |d| Ok(d.settings.get(&ns, &key).ok().flatten()))
-            .ok()
-            .flatten()
+    fn settings(&self) -> &dyn SettingsKv {
+        &self.db
     }
 
     fn add_plan_file(&self, chat_id: &str, file_path: &str) -> bool {
@@ -789,31 +785,21 @@ impl ChatManagerDeps for DaemonChatDeps {
     }
 
     fn should_notify_permission(&self, tool_name: Option<&str>) -> bool {
-        let tool_name = tool_name.map(str::to_string);
-        self.db
-            .call_blocking(move |d| {
-                let cfg = read_notification_config(d);
-                Ok(should_notify_permission(&cfg, tool_name.as_deref()))
-            })
-            .unwrap_or(true)
+        should_notify_permission(&notification_config_blocking(&self.db), tool_name)
     }
 
     fn notify_task_complete(&self) -> bool {
-        self.db
-            .call_blocking(|d| Ok(read_notification_config(d).chat.task_complete))
-            .unwrap_or(true)
+        notification_config_blocking(&self.db).chat.task_complete
     }
 
     fn notify_session_error(&self) -> bool {
-        self.db
-            .call_blocking(|d| Ok(read_notification_config(d).chat.session_error))
-            .unwrap_or(true)
+        notification_config_blocking(&self.db).chat.session_error
     }
 
     fn notify_attention_request(&self) -> bool {
-        self.db
-            .call_blocking(|d| Ok(read_notification_config(d).chat.attention_request))
-            .unwrap_or(true)
+        notification_config_blocking(&self.db)
+            .chat
+            .attention_request
     }
 
     fn send_push(&self, msg: PushOut) {
@@ -1036,8 +1022,8 @@ impl ExternalSessionDeps for DaemonChatDeps {
         <Self as ChatManagerDeps>::chats_list(self, project_id)
     }
 
-    fn settings_get(&self, ns: &str, key: &str) -> Option<String> {
-        <Self as ChatManagerDeps>::settings_get(self, ns, key)
+    fn settings(&self) -> &dyn SettingsKv {
+        &self.db
     }
 
     fn emit_event(&self, event: DaemonEvent) {
@@ -1183,25 +1169,19 @@ pub fn build_chat_manager(
 }
 
 /// A `Send + Sync` `ResolveTuningDeps` that routes the synchronous `db.chats.get`
-/// / `db.settings.get` reads through the actor bridge and the async `listModels`
-/// through the registry. The raw `!Send` `DatabaseManager` cannot cross the actor
-/// boundary, so this handle-backed bridge stands in for it.
+/// read through the actor bridge, settings through `Db`'s `SettingsKv`, and the
+/// async `listModels` through the registry. The raw `!Send` `DatabaseManager`
+/// cannot cross the actor boundary, so this handle-backed bridge stands in for it.
 struct RtDeps {
     db: Db,
     adapters: Arc<AdapterRegistry>,
 }
 
-impl SettingsReader for RtDeps {
-    fn get(&self, ns: &str, key: &str) -> Option<String> {
-        let (ns, key) = (ns.to_string(), key.to_string());
-        self.db
-            .call_blocking(move |d| Ok(d.settings.get(&ns, &key).ok().flatten()))
-            .ok()
-            .flatten()
-    }
-}
-
 impl ResolveTuningDeps for RtDeps {
+    fn settings(&self) -> &dyn SettingsKv {
+        &self.db
+    }
+
     fn get_chat(&self, id: &str) -> Option<Chat> {
         let id = id.to_string();
         self.db
@@ -1325,6 +1305,7 @@ mod scan_loaded_history_tests {
     use mainframe_types::chat::MessageContentNode;
     use mainframe_types::claude_workflow::ClaudeWorkflowRunStatus;
     use mainframe_types::context::MentionKind;
+    use mainframe_types::settings_kv::MemorySettings;
 
     use super::*;
     use crate::chat_seams::{NoopLaunchStopper, NoopScopeTunnelStopper};
@@ -1452,24 +1433,13 @@ mod scan_loaded_history_tests {
 
     // -- full DaemonChatDeps harness (scan_and_persist_prs / plan+skill files) --
 
-    struct NoopQuotaSettings;
-    impl mainframe_services::quota::QuotaSettingsStore for NoopQuotaSettings {
-        fn get(&self, _category: &str, _key: &str) -> Option<String> {
-            None
-        }
-        fn get_by_category(&self, _category: &str) -> StdHashMap<String, String> {
-            StdHashMap::new()
-        }
-        fn set(&self, _category: &str, _key: &str, _value: &str) {}
-    }
-
     fn test_deps() -> DaemonChatDeps {
         let db = Db::spawn(|| DatabaseManager::open(std::path::Path::new(":memory:"))).unwrap();
         // `emit_event` ignores the "no subscribers" send error, so the
         // constructor's own receiver can be dropped immediately.
         let (broadcast, _rx) = broadcast::channel::<DaemonEvent>(16);
         let quota = QuotaManager::new(mainframe_services::quota::QuotaManagerDeps {
-            settings: Box::new(NoopQuotaSettings),
+            settings: Arc::new(MemorySettings::default()),
             emit_event: Box::new(|_| {}),
             now: None,
         });

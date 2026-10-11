@@ -5,7 +5,7 @@
 //! the facade hub and a pre-created project/chat so a test can prompt a real
 //! session immediately.
 
-use std::collections::HashMap;
+use mainframe_types::settings_kv::MemorySettings;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
@@ -23,23 +23,11 @@ use mainframe_server::{build_app, build_chat_manager, spawn_broadcast_pump};
 use mainframe_services::attachment::AttachmentStore;
 use mainframe_services::files::FileWatcherService;
 use mainframe_services::push::PushService;
-use mainframe_services::quota::{QuotaManager, QuotaManagerDeps, QuotaSettingsStore};
+use mainframe_services::quota::{QuotaManager, QuotaManagerDeps};
 use mainframe_types::events::DaemonEvent;
 use tokio::net::TcpListener;
 
 use super::TestServer;
-
-struct NoopQuotaSettings;
-
-impl QuotaSettingsStore for NoopQuotaSettings {
-    fn get(&self, _category: &str, _key: &str) -> Option<String> {
-        None
-    }
-    fn get_by_category(&self, _category: &str) -> HashMap<String, String> {
-        HashMap::new()
-    }
-    fn set(&self, _category: &str, _key: &str, _value: &str) {}
-}
 
 /// A live facade session ready to drive: `chat_id` belongs to a real project
 /// row, and `profile` is the adapter id its `/acp/{profile}` route serves.
@@ -100,7 +88,7 @@ pub async fn spawn_facade_server_with(
     let facade_hub = Arc::new(mainframe_server::FacadeHub::default());
     let quota_tx = broadcast.clone();
     let quota = Arc::new(QuotaManager::new(QuotaManagerDeps {
-        settings: Box::new(NoopQuotaSettings),
+        settings: Arc::new(MemorySettings::default()),
         emit_event: Box::new(move |event| {
             let _ = quota_tx.send(event);
         }),

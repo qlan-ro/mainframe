@@ -11,6 +11,7 @@ use axum::http::StatusCode;
 use axum::response::Response;
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::plugin::PluginCapability;
+use mainframe_types::settings_kv::SettingsKv as _;
 use serde_json::{Value, json};
 
 use super::routes::{get_todos, post_todo};
@@ -32,10 +33,7 @@ pub(super) async fn setup_with_settings(settings: &[((&str, &str), &str)]) -> Ha
     let dir = tempfile::tempdir().unwrap();
     let host = Arc::new(FakeHostDb::default());
     for ((cat, key), value) in settings {
-        host.settings
-            .lock()
-            .unwrap()
-            .insert((cat.to_string(), key.to_string()), value.to_string());
+        host.settings.set(cat, key, value).await.unwrap();
     }
     let capabilities = vec![
         PluginCapability::Storage,

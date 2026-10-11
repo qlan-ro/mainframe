@@ -9,6 +9,7 @@
 //! falls back to an empty default would fail every case here.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+use mainframe_types::settings_kv::MemorySettings;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
@@ -23,7 +24,7 @@ use mainframe_server::chat_seams::{NoopLaunchStopper, NoopScopeTunnelStopper};
 use mainframe_server::{Db, GitFactory, build_chat_manager};
 use mainframe_services::attachment::AttachmentStore;
 use mainframe_services::push::PushService;
-use mainframe_services::quota::{QuotaManager, QuotaManagerDeps, QuotaSettingsStore};
+use mainframe_services::quota::{QuotaManager, QuotaManagerDeps};
 use mainframe_types::background_task::{
     BackgroundTaskStatus, BackgroundTaskToolName, BackgroundWorkKind,
 };
@@ -31,18 +32,6 @@ use mainframe_types::chat::{Chat, DisplayStatus};
 use mainframe_types::events::DaemonEvent;
 use tempfile::TempDir;
 use tokio::sync::broadcast;
-
-struct NoopQuotaSettings;
-
-impl QuotaSettingsStore for NoopQuotaSettings {
-    fn get(&self, _category: &str, _key: &str) -> Option<String> {
-        None
-    }
-    fn get_by_category(&self, _category: &str) -> HashMap<String, String> {
-        HashMap::new()
-    }
-    fn set(&self, _category: &str, _key: &str, _value: &str) {}
-}
 
 struct Harness {
     manager: Arc<ChatManager>,
@@ -59,7 +48,7 @@ fn harness() -> Harness {
     let (broadcast, _keepalive) = broadcast::channel::<DaemonEvent>(64);
     let tracker = Arc::new(BackgroundTaskTracker::new());
     let quota = Arc::new(QuotaManager::new(QuotaManagerDeps {
-        settings: Box::new(NoopQuotaSettings),
+        settings: Arc::new(MemorySettings::default()),
         emit_event: Box::new(|_| {}),
         now: None,
     }));

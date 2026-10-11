@@ -5,10 +5,12 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use mainframe_adapter_api::{AdapterError, BoxFuture};
+use mainframe_services::settings::read_setting;
 use mainframe_types::adapter::{ExternalSession, ExternalSessionPage};
 use mainframe_types::chat::{Chat, ChatStatus, Project};
 use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::events::DaemonEvent;
+use mainframe_types::settings_kv::SettingsKv;
 use tokio::task::JoinHandle;
 use tracing::{debug, info, warn};
 
@@ -31,7 +33,8 @@ pub trait ExternalSessionDeps: Send + Sync {
     fn chats_update(&self, chat_id: &str, updates: &ChatPatch);
     /// `db.chats.list(projectId)` — used by the transcript-presence sweep.
     fn chats_list(&self, project_id: &str) -> Vec<Chat>;
-    fn settings_get(&self, ns: &str, key: &str) -> Option<String>;
+    /// The settings store (title generation switch and binary).
+    fn settings(&self) -> &dyn SettingsKv;
     fn emit_event(&self, event: DaemonEvent);
     /// Adapter-aware title generation (`adapters.get(adapterId)?.generateTitle`).
     /// `None` when the owning adapter has no `generateTitle` (deterministic import
@@ -326,8 +329,8 @@ async fn generate_import_title<D: ExternalSessionDeps>(
     content: &str,
     adapter_id: &str,
 ) {
-    if deps
-        .settings_get("general", "titleGeneration.disabled")
+    if read_setting(deps.settings(), "general", "titleGeneration.disabled")
+        .await
         .as_deref()
         == Some("true")
     {
@@ -341,7 +344,12 @@ async fn generate_import_title<D: ExternalSessionDeps>(
     }
 
     let binary = resolve_title_binary(
-        deps.settings_get("provider", &format!("{adapter_id}.titleBinary")),
+        read_setting(
+            deps.settings(),
+            "provider",
+            &format!("{adapter_id}.titleBinary"),
+        )
+        .await,
         adapter_id,
     );
     let Some(title) = deps.generate_title(adapter_id, content, &binary).await else {
@@ -450,6 +458,7 @@ fn strip_xml_tags(text: &str) -> String {
 mod tests {
     use super::*;
     use crate::test_support::test_chat;
+    use mainframe_types::settings_kv::MemorySettings;
     use std::sync::Mutex as StdMutex;
 
     #[derive(Default)]
@@ -457,9 +466,8 @@ mod tests {
         chats: Vec<Chat>,
         has_reconcile: bool,
         reconcile_calls: StdMutex<Vec<String>>,
-        /// When `true`, `settings_get("general", "titleGeneration.disabled")`
-        /// answers `Some("true")`.
-        title_disabled: bool,
+        /// The settings rows `settings()` serves.
+        settings: MemorySettings,
         /// Titles `chats_update` observed being written (only when
         /// `updates.title.is_some()`).
         title_updates: StdMutex<Vec<String>>,
@@ -486,12 +494,8 @@ mod tests {
         fn chats_list(&self, _project_id: &str) -> Vec<Chat> {
             self.chats.clone()
         }
-        fn settings_get(&self, ns: &str, key: &str) -> Option<String> {
-            if self.title_disabled && ns == "general" && key == "titleGeneration.disabled" {
-                Some("true".to_string())
-            } else {
-                None
-            }
+        fn settings(&self) -> &dyn SettingsKv {
+            &self.settings
         }
         fn emit_event(&self, event: DaemonEvent) {
             self.events.lock_recover().push(event);
@@ -604,7 +608,7 @@ mod tests {
     #[tokio::test]
     async fn import_with_title_generation_disabled_logs_and_keeps_the_title() {
         let deps = Arc::new(SweepDeps {
-            title_disabled: true,
+            settings: MemorySettings::default().with("general", "titleGeneration.disabled", "true"),
             ..Default::default()
         });
         let mut chat = test_chat("c1");

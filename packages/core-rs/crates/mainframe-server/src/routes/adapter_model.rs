@@ -5,6 +5,7 @@ use axum::{
     http::StatusCode,
     response::Response,
 };
+use mainframe_types::settings_kv::SettingsKv as _;
 use serde::Deserialize;
 
 use crate::{
@@ -35,11 +36,7 @@ pub(super) async fn resolve(
         Err(response) => return response,
     };
     let key = format!("{adapter_id}.executablePath");
-    let executable = match ctx
-        .db
-        .call(move |db| db.settings.get("provider", &key))
-        .await
-    {
+    let executable = match ctx.db.get("provider", &key).await {
         Ok(value) => value.filter(|value| !value.is_empty()),
         Err(err) => return crate::async_err::internal_error("get provider executable", &err),
     };
