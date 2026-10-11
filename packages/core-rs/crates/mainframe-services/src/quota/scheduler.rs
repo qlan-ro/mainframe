@@ -11,6 +11,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
+use mainframe_types::seam_error::SeamError;
 use tokio::task::JoinHandle;
 
 /// Claude's "always fresh" cadence (#252): pull `/usage` about every five minutes.
@@ -19,7 +20,7 @@ const CLAUDE_PULL_INTERVAL_MS: u64 = 5 * 60 * 1000;
 /// Refresh the Claude quota (delegates to the `QuotaManager` puller). Errors are
 /// swallowed so one failed pull never halts the cadence.
 pub type RefreshFn =
-    Arc<dyn Fn() -> Pin<Box<dyn Future<Output = Result<(), String>> + Send>> + Send + Sync>;
+    Arc<dyn Fn() -> Pin<Box<dyn Future<Output = Result<(), SeamError>> + Send>> + Send + Sync>;
 
 /// Focus proxy: a connected client stands in for an explicit focus signal.
 pub type HasClientsFn = Arc<dyn Fn() -> bool + Send + Sync>;
@@ -98,7 +99,7 @@ mod tests {
             Box::pin(async move {
                 calls.fetch_add(1, Ordering::SeqCst);
                 if fail {
-                    Err("spawn failed".to_string())
+                    Err(SeamError::msg("spawn failed"))
                 } else {
                     Ok(())
                 }

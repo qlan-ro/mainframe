@@ -14,6 +14,7 @@ use std::sync::{Arc, Mutex};
 
 use mainframe_types::adapter::{ProviderQuota, ProviderQuotaStatus};
 use mainframe_types::events::DaemonEvent;
+use mainframe_types::seam_error::SeamError;
 use mainframe_types::settings_kv::SettingsKv;
 
 use super::backoff::handle_pull_failure;
@@ -40,7 +41,9 @@ pub enum IngestMode {
 
 /// Harvests a fresh full-replacement blob for one adapter (e.g. Claude `/usage`).
 pub type QuotaPuller = Arc<
-    dyn Fn() -> Pin<Box<dyn Future<Output = Result<ProviderQuota, String>> + Send>> + Send + Sync,
+    dyn Fn() -> Pin<Box<dyn Future<Output = Result<ProviderQuota, SeamError>> + Send>>
+        + Send
+        + Sync,
 >;
 
 /// Resolves the current logged-in account identity for one adapter (Claude
@@ -801,7 +804,8 @@ mod tests {
             },
             IngestMode::Pull,
         );
-        let puller: QuotaPuller = Arc::new(|| Box::pin(async { Err("spawn failed".to_string()) }));
+        let puller: QuotaPuller =
+            Arc::new(|| Box::pin(async { Err(SeamError::msg("spawn failed")) }));
         ctx.manager
             .register_puller("claude", IngestMode::Pull, puller);
         let result = ctx.manager.refresh("claude").await;
