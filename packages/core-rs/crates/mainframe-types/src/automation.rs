@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 mod step_kind;
-pub use step_kind::AutomationStepKind;
+pub use step_kind::{AutomationStepKind, UnknownStepKind};
 
 /// Run statuses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

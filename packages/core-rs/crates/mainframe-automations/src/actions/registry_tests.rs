@@ -110,7 +110,7 @@ fn unknown_id_is_an_error() {
 
 /// Contract §5: every launch action's named outputs, in order, as the
 /// validator sees them. The manifests are the single source, so this pins
-/// the frozen table against accidental manifest edits.
+/// the contract's output table against accidental manifest edits.
 #[test]
 fn launch_catalog_matches_the_contract_output_table() {
     use crate::domain::catalog::action_outputs;
@@ -160,6 +160,20 @@ fn launch_catalog_matches_the_contract_output_table() {
             .collect();
         assert_eq!(action_outputs(id), outputs, "outputs drifted for '{id}'");
     }
+}
+
+/// `known_manifest` reads the static `LAUNCH_MANIFESTS` table, never the
+/// registered actions, so the two must hold the same manifests in the same
+/// order or validation and the catalog would disagree.
+#[test]
+fn the_static_manifest_table_matches_the_registered_actions() {
+    let mut registry = ActionRegistry::new();
+    super::register_all_actions(&mut registry).unwrap();
+    let table: Vec<ActionManifest> = super::LAUNCH_MANIFESTS
+        .iter()
+        .map(|manifest| manifest())
+        .collect();
+    assert_eq!(registry.catalog(), table);
 }
 
 /// The wire `ActionCatalogEntry` shape (GET /api/automation-actions): camelCase

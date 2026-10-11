@@ -2,7 +2,7 @@
 //! terminal immutability, the dedup insert race, and boot's resumable scan.
 
 use nanoid::nanoid;
-use rusqlite::params;
+use rusqlite::{Connection, params};
 
 use crate::domain::AutomationDefinition;
 use crate::error::StoreError;
@@ -161,6 +161,7 @@ impl RunStore {
         let run_id = run_id.to_string();
         self.db
             .call(move |conn| {
+<<<<<<< HEAD
                 let tx = conn.transaction()?;
                 let mut checkpoint = assert_not_terminal(&tx, &run_id)?.checkpoint;
                 mutate(&mut checkpoint);
@@ -171,7 +172,32 @@ impl RunStore {
                     params![run_id, serde_json::to_string(&checkpoint)?, status.as_str()],
                 )?;
                 tx.commit()?;
+=======
+                patch_in_transaction(conn, &run_id, |cp| {
+                    mutate(cp);
+                    true
+                })?;
+>>>>>>> 17c51e34 (fix(automations): address review of the internals consolidation)
                 require(conn, &run_id)
+            })
+            .await
+    }
+
+    /// `patch_checkpoint` for a guarded transition: `mutate` reports whether
+    /// it changed anything, and when it returns false the transaction rolls
+    /// back without an UPDATE and this returns `None`.
+    pub(crate) async fn patch_checkpoint_if(
+        &self,
+        run_id: &str,
+        mutate: impl FnOnce(&mut AutomationCheckpoint) -> bool + Send + 'static,
+    ) -> Result<Option<RunRecord>, StoreError> {
+        let run_id = run_id.to_string();
+        self.db
+            .call(move |conn| {
+                if !patch_in_transaction(conn, &run_id, mutate)? {
+                    return Ok(None);
+                }
+                require(conn, &run_id).map(Some)
             })
             .await
     }
@@ -211,4 +237,34 @@ impl RunStore {
             })
             .await
     }
+}
+
+/// The shared read-modify-write: reads the live checkpoint under the A8
+/// guard, applies `mutate`, and commits the checkpoint with its derived
+/// status (A5) only when `mutate` returns true. Returns whether it wrote.
+fn patch_in_transaction(
+    conn: &mut Connection,
+    run_id: &str,
+    mutate: impl FnOnce(&mut AutomationCheckpoint) -> bool,
+) -> Result<bool, StoreError> {
+    let tx = conn.transaction()?;
+    let parts = assert_not_terminal(&tx, run_id)?;
+    let mut checkpoint: AutomationCheckpoint =
+        serde_json::from_str(&parts.checkpoint).map_err(|source| StoreError::Corrupt {
+            what: "run checkpoint",
+            id: run_id.to_string(),
+            source,
+        })?;
+    if !mutate(&mut checkpoint) {
+        // Dropping the transaction rolls it back: nothing was written.
+        return Ok(false);
+    }
+    assert_step_outputs_within_cap(&checkpoint)?;
+    let status = derive_run_status(&checkpoint);
+    tx.execute(
+        "UPDATE automation_runs SET checkpoint = ?2, status = ?3 WHERE id = ?1",
+        params![run_id, serde_json::to_string(&checkpoint)?, status.as_str()],
+    )?;
+    tx.commit()?;
+    Ok(true)
 }

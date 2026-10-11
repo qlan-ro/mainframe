@@ -75,7 +75,8 @@ impl AgentVerb {
 
         // Park + stamp chatId BEFORE the watch task exists, so a completion
         // can never race a still-`running` entry; the walk's own wait commit
-        // afterwards is a guarded no-op re-park (checkpoint::park_step).
+        // afterwards is a guarded no-op re-park
+        // (`AutomationCheckpoint::park_step`).
         let (step_ref, step_id) = (ctx.step_ref.to_string(), step.id.clone());
         let chat_id = handle.chat_id.clone();
         let parked = self

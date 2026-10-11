@@ -73,24 +73,30 @@ impl Default for GithubListPrsAction {
     }
 }
 
+/// The manifest, readable without building the action (see
+/// `actions::known_manifest`).
+pub(crate) fn list_prs_manifest() -> ActionManifest {
+    ActionManifest::new(
+        ActionMeta {
+            id: "github.list_prs",
+            title: "GitHub: list my open pull requests",
+            group: ActionGroup::Connector,
+            auth: ActionAuth::Token,
+            credential_label_hint: Some("github"),
+            outputs: vec![ActionOutput::new("prs", ActionOutputType::List)],
+            idempotent: true,
+        },
+        vec![ActionParam::field(
+            ActionField::text("author", "Author").placeholder("@me"),
+            json!({"type": "string", "default": "@me"}),
+        )],
+        Value::Bool(false),
+    )
+}
+
 impl Action for GithubListPrsAction {
     fn manifest(&self) -> ActionManifest {
-        ActionManifest::new(
-            ActionMeta {
-                id: "github.list_prs",
-                title: "GitHub: list my open pull requests",
-                group: ActionGroup::Connector,
-                auth: ActionAuth::Token,
-                credential_label_hint: Some("github"),
-                outputs: vec![ActionOutput::new("prs", ActionOutputType::List)],
-                idempotent: true,
-            },
-            vec![ActionParam::field(
-                ActionField::text("author", "Author").placeholder("@me"),
-                json!({"type": "string", "default": "@me"}),
-            )],
-            Value::Bool(false),
-        )
+        list_prs_manifest()
     }
 
     fn execute<'a>(

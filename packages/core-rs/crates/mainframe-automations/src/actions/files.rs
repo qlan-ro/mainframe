@@ -34,9 +34,15 @@ pub struct FilesAppendAction;
 pub struct FilesWriteAction;
 pub struct FilesReadAction;
 
+/// The manifest, readable without building the action (see
+/// `actions::known_manifest`).
+pub(crate) fn append_manifest() -> ActionManifest {
+    write_manifest("files.append", "Append to file", false)
+}
+
 impl Action for FilesAppendAction {
     fn manifest(&self) -> ActionManifest {
-        write_manifest("files.append", "Append to file", false)
+        append_manifest()
     }
 
     fn execute<'a>(
@@ -64,11 +70,17 @@ impl Action for FilesAppendAction {
     }
 }
 
+/// The manifest, readable without building the action (see
+/// `actions::known_manifest`).
+pub(crate) fn overwrite_manifest() -> ActionManifest {
+    // Truncating write is restart-safe (idempotent: true) — blindly
+    // re-running converges on the same file body.
+    write_manifest("files.write", "Write file (overwrite)", true)
+}
+
 impl Action for FilesWriteAction {
     fn manifest(&self) -> ActionManifest {
-        // Truncating write is restart-safe (idempotent: true) — blindly
-        // re-running converges on the same file body.
-        write_manifest("files.write", "Write file (overwrite)", true)
+        overwrite_manifest()
     }
 
     fn execute<'a>(
@@ -90,31 +102,37 @@ impl Action for FilesWriteAction {
     }
 }
 
+/// The manifest, readable without building the action (see
+/// `actions::known_manifest`).
+pub(crate) fn read_manifest() -> ActionManifest {
+    ActionManifest::new(
+        ActionMeta {
+            id: "files.read",
+            title: "Read file",
+            group: ActionGroup::Builtin,
+            auth: ActionAuth::None,
+            credential_label_hint: None,
+            outputs: vec![ActionOutput::new("content", ActionOutputType::Text)],
+            idempotent: true,
+        },
+        vec![
+            ActionParam::field(
+                ActionField::chip("path", "File").placeholder("~/notes/log.md"),
+                json!({"type": "string"}),
+            )
+            .required(),
+            ActionParam::hidden(
+                "outputAs",
+                json!({"type": "string", "enum": ["text", "lines"]}),
+            ),
+        ],
+        Value::Bool(false),
+    )
+}
+
 impl Action for FilesReadAction {
     fn manifest(&self) -> ActionManifest {
-        ActionManifest::new(
-            ActionMeta {
-                id: "files.read",
-                title: "Read file",
-                group: ActionGroup::Builtin,
-                auth: ActionAuth::None,
-                credential_label_hint: None,
-                outputs: vec![ActionOutput::new("content", ActionOutputType::Text)],
-                idempotent: true,
-            },
-            vec![
-                ActionParam::field(
-                    ActionField::chip("path", "File").placeholder("~/notes/log.md"),
-                    json!({"type": "string"}),
-                )
-                .required(),
-                ActionParam::hidden(
-                    "outputAs",
-                    json!({"type": "string", "enum": ["text", "lines"]}),
-                ),
-            ],
-            Value::Bool(false),
-        )
+        read_manifest()
     }
 
     fn execute<'a>(

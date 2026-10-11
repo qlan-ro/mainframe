@@ -1,5 +1,11 @@
 //! The validator's view of action outputs, read from the launch action
 //! manifests, plus the friendly output labels used in error messages.
+//!
+//! This is `domain`'s one dependency on `actions`, and it is on static data
+//! only: `known_manifest` reads a table of plain manifest functions and never
+//! builds an action or its HTTP client. The manifests stay in the action
+//! modules, next to the input structs their params describe, so that an
+//! action's params, schema and editor fields are declared in one place.
 
 use crate::actions::{ActionOutputType, known_manifest};
 
