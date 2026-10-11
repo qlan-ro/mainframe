@@ -338,7 +338,10 @@
       "attachments": [
         {
           "name": "notes.txt",
-          "kind": "file"
+          "kind": "file",
+          "mediaType": "text/plain",
+          "sizeBytes": 42,
+          "originalPath": "/tmp/notes.txt"
         }
       ]
     }
