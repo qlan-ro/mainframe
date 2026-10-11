@@ -139,5 +139,6 @@ fn deps(process_command: ProcessQueryFn, process_cwd: ProcessQueryFn, kill: Kill
 }
 
 mod defaults;
+mod group_kill;
 mod matching;
 mod reaping;
