@@ -33,6 +33,7 @@ mod resume_snapshot;
 mod segment_fake;
 mod side_chat;
 mod teardown;
+mod wire_golden;
 
 // ── fake ChatManagerDeps ─────────────────────────────────────────────────────
 
