@@ -1784,7 +1784,6 @@ name = "mainframe-services"
 version = "0.0.0"
 dependencies = [
  "dirs",
- "mainframe-db",
  "mainframe-git",
  "mainframe-runtime",
  "mainframe-types",
@@ -1809,6 +1808,8 @@ dependencies = [
  "nanoid",
  "serde",
  "serde_json",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]

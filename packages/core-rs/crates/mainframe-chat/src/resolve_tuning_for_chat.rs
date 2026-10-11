@@ -1,18 +1,17 @@
 use mainframe_adapter_api::BoxFuture;
-use mainframe_services::settings::provider_config::{SettingsReader, get_provider_config};
+use mainframe_services::settings::get_provider_config;
 use mainframe_types::adapter::AdapterModel;
 use mainframe_types::chat::{Chat, ResolvedTuning, SessionTuning};
+use mainframe_types::settings_kv::SettingsKv;
 
 use crate::resolve_tuning::{ProviderTuningDefaults, resolve_tuning};
 
-/// The injected dependency surface: chat lookup, settings reads, and the
-/// adapter's model list.
-///
-/// `SettingsReader` (super-trait) fulfils the settings reads, so
-/// `get_provider_config` consumes the deps object directly. `list_models`
-/// returns `[]` when the adapter is absent.
-pub trait ResolveTuningDeps: SettingsReader + Sync {
+/// The injected dependency surface: chat lookup, the settings store the
+/// provider tuning defaults come from, and the adapter's model list.
+/// `list_models` returns `[]` when the adapter is absent.
+pub trait ResolveTuningDeps: Sync {
     fn get_chat(&self, id: &str) -> Option<Chat>;
+    fn settings(&self) -> &dyn SettingsKv;
     fn list_models<'a>(&'a self, adapter_id: &'a str) -> BoxFuture<'a, Vec<AdapterModel>>;
 }
 
@@ -47,7 +46,7 @@ pub async fn resolve_tuning_for_chat<D: ResolveTuningDeps>(
             supports_personality: None,
             resolved_model: None,
         });
-    let cfg = get_provider_config(deps, &chat.adapter_id);
+    let cfg = get_provider_config(deps.settings(), &chat.adapter_id).await;
     let provider = ProviderTuningDefaults {
         default_effort: cfg.default_effort,
         default_fast: cfg.default_fast,
@@ -71,6 +70,7 @@ mod tests {
     use super::*;
     use mainframe_types::adapter::EffortLevel;
     use mainframe_types::chat::ChatStatus;
+    use mainframe_types::settings_kv::MemorySettings;
 
     fn chat_with(model: &str, effort: EffortLevel) -> Chat {
         Chat {
@@ -131,17 +131,15 @@ mod tests {
     struct TestDeps {
         models: Vec<AdapterModel>,
         chat: Chat,
-    }
-
-    impl SettingsReader for TestDeps {
-        fn get(&self, _ns: &str, _key: &str) -> Option<String> {
-            None
-        }
+        settings: MemorySettings,
     }
 
     impl ResolveTuningDeps for TestDeps {
         fn get_chat(&self, _id: &str) -> Option<Chat> {
             Some(self.chat.clone())
+        }
+        fn settings(&self) -> &dyn SettingsKv {
+            &self.settings
         }
         fn list_models<'a>(&'a self, _adapter_id: &'a str) -> BoxFuture<'a, Vec<AdapterModel>> {
             let models = self.models.clone();
@@ -184,6 +182,7 @@ mod tests {
         let deps = TestDeps {
             models,
             chat: chat_with("opus[1m]", EffortLevel::Xhigh),
+            settings: MemorySettings::default(),
         };
         let t = resolve_tuning_for_chat(&deps, "c1").await;
         assert_eq!(t.map(|t| t.effort), Some(Some(EffortLevel::Xhigh)));
@@ -199,8 +198,23 @@ mod tests {
         let deps = TestDeps {
             models,
             chat: chat_with("default", EffortLevel::High),
+            settings: MemorySettings::default(),
         };
         let t = resolve_tuning_for_chat(&deps, "c2").await;
+        assert_eq!(t.map(|t| t.effort), Some(Some(EffortLevel::High)));
+    }
+
+    #[tokio::test]
+    async fn a_chat_without_its_own_effort_takes_the_stored_provider_default() {
+        let models = vec![model("opus", false, &[EffortLevel::Low, EffortLevel::High])];
+        let mut chat = chat_with("opus", EffortLevel::Low);
+        chat.tuning.effort = None;
+        let deps = TestDeps {
+            models,
+            chat,
+            settings: MemorySettings::default().with("provider", "claude.defaultEffort", "high"),
+        };
+        let t = resolve_tuning_for_chat(&deps, "c3").await;
         assert_eq!(t.map(|t| t.effort), Some(Some(EffortLevel::High)));
     }
 }

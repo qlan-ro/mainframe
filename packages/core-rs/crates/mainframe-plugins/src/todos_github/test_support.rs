@@ -2,12 +2,13 @@
 //! rest of `todos_github`, those two modules call the `GitHubIssues` port, so
 //! `todos::tests::setup()` (which hardcodes `github: None`) can't be reused.
 
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use axum::extract::State;
 use mainframe_types::chat::Chat;
 use mainframe_types::plugin::{PluginCapability, PluginManifest};
+use mainframe_types::settings::NotificationConfig;
+use mainframe_types::settings_kv::{MemorySettings, SettingsKv};
 
 use crate::context::{PluginContextDeps, PluginHostDb, build_plugin_context};
 use crate::github_port::GitHubIssues;
@@ -15,7 +16,7 @@ use crate::{PluginContext, todos};
 
 #[derive(Default)]
 struct FakeHostDb {
-    settings: Mutex<HashMap<(String, String), String>>,
+    settings: MemorySettings,
 }
 
 impl PluginHostDb for FakeHostDb {
@@ -34,12 +35,11 @@ impl PluginHostDb for FakeHostDb {
     ) -> Chat {
         unreachable!("the sync engine never creates chats")
     }
-    fn settings_get(&self, category: &str, key: &str) -> Option<String> {
-        self.settings
-            .lock()
-            .unwrap()
-            .get(&(category.to_string(), key.to_string()))
-            .cloned()
+    fn settings(&self) -> &dyn SettingsKv {
+        &self.settings
+    }
+    fn notification_config(&self) -> NotificationConfig {
+        NotificationConfig::default()
     }
 }
 

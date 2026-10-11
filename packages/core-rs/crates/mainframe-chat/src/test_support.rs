@@ -252,6 +252,13 @@ impl AdapterSession for FakeSession {
 
 pub use crate::test_support_chat::test_chat;
 
+/// An empty settings store, for fakes whose every settings read is unset.
+pub fn no_settings() -> &'static mainframe_types::settings_kv::MemorySettings {
+    static EMPTY: std::sync::LazyLock<mainframe_types::settings_kv::MemorySettings> =
+        std::sync::LazyLock::new(Default::default);
+    &EMPTY
+}
+
 /// `mainframe-chat` and `mainframe-server` both depend on `mainframe-runtime`
 /// already, so the tracing capture helper lives there and is re-exported here
 /// for the crate's existing `crate::test_support::LogCapture` call sites.

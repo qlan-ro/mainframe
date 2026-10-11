@@ -8,14 +8,34 @@
 //! See `SqliteActor::call_blocking` for the rule the synchronous
 //! `ChatManagerDeps` bridge must follow.
 
+use mainframe_services::notifications::parse_notification_config;
+use mainframe_types::settings::NotificationConfig;
+
 /// Handle to the single-threaded `DatabaseManager`. `call` ships an
-/// `FnOnce(&DatabaseManager)` closure, so every repository is reachable.
+/// `FnOnce(&DatabaseManager)` closure, so every repository is reachable. It is
+/// also the daemon's `SettingsKv`.
 pub type Db = mainframe_db::actor::SqliteActor<mainframe_db::DatabaseManager>;
+
+/// The effective notification config, for the synchronous notification gates
+/// (chat event sinks, the plugin UI `notify`). Blocks on the actor, so it
+/// follows the `SqliteActor::call_blocking` rule. A read failure is logged and
+/// yields the defaults (every notification on), so an unreadable store never
+/// silences a notification.
+pub fn notification_config_blocking(db: &Db) -> NotificationConfig {
+    match db.call_blocking(|d| d.settings.get("general", "notifications")) {
+        Ok(raw) => parse_notification_config(raw.as_deref()),
+        Err(err) => {
+            tracing::warn!(%err, category = "general", key = "notifications", "notification settings read failed; using the defaults");
+            NotificationConfig::default()
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
-    use super::Db;
+    use super::{Db, notification_config_blocking};
     use mainframe_db::DatabaseManager;
+    use mainframe_types::settings::NotificationConfig;
 
     fn open_in_memory() -> Db {
         Db::spawn(|| DatabaseManager::open(std::path::Path::new(":memory:"))).unwrap()
@@ -47,6 +67,41 @@ mod tests {
         assert_eq!(
             fetched.map(|p| p.path),
             Some("/tmp/sync-bridge".to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn notification_config_blocking_parses_the_stored_row() {
+        let db = open_in_memory();
+        assert_eq!(
+            notification_config_blocking(&db),
+            NotificationConfig::default()
+        );
+        db.call(|d| {
+            d.settings.set(
+                "general",
+                "notifications",
+                r#"{"chat":{"sessionError":false},"other":{"plugin":false}}"#,
+            )
+        })
+        .await
+        .unwrap();
+        let cfg = notification_config_blocking(&db);
+        assert!(!cfg.chat.session_error);
+        assert!(!cfg.other.plugin);
+        assert!(cfg.chat.task_complete);
+        assert!(cfg.permission.tool_request);
+    }
+
+    #[tokio::test]
+    async fn notification_config_blocking_defaults_when_the_store_fails() {
+        let db = open_in_memory();
+        db.call(|d| Ok(d.connection().execute_batch("DROP TABLE settings")?))
+            .await
+            .unwrap();
+        assert_eq!(
+            notification_config_blocking(&db),
+            NotificationConfig::default()
         );
     }
 

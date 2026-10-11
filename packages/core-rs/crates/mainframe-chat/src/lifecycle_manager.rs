@@ -6,12 +6,13 @@ use std::time::Duration;
 use dashmap::DashMap;
 use mainframe_adapter_api::{AdapterError, AdapterSession, BoxFuture, SessionSink};
 use mainframe_runtime::sync::{FlightClaim, FlightWaiter, SingleFlight};
-use mainframe_services::settings::normalize_saved_default_model;
+use mainframe_services::settings::{normalize_saved_default_model, read_setting};
 use mainframe_types::adapter::{SessionOptions, SessionSpawnOptions};
 use mainframe_types::chat::{Chat, ChatMessage, ChatStatus, NewChat, ProcessState, ResolvedTuning};
 use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::settings::ExecutionMode;
+use mainframe_types::settings_kv::SettingsKv;
 use mainframe_types::time::now_iso8601;
 use tracing::{debug, info, warn};
 
@@ -67,7 +68,8 @@ pub trait LifecycleManagerDeps: Send + Sync {
     fn chats_update(&self, chat_id: &str, patch: &ChatPatch);
     fn chats_list(&self, project_id: &str) -> Vec<Chat>;
     fn projects_get_path(&self, project_id: &str) -> Option<String>;
-    fn settings_get(&self, ns: &str, key: &str) -> Option<String>;
+    /// The settings store (provider defaults, title generation).
+    fn settings(&self) -> &dyn SettingsKv;
     /// Record the worktrees that already existed when the chat activated, so a
     /// switch offer only ever names one registered since.
     fn seed_worktree_baseline<'a>(
@@ -320,15 +322,9 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         let mut effective_plan_mode = false;
 
         if new_chat.model.is_none() || new_chat.permission_mode.is_none() || !effective_plan_mode {
-            let default_model = self
-                .deps
-                .settings_get("provider", &format!("{adapter_id}.defaultModel"));
-            let default_mode = self
-                .deps
-                .settings_get("provider", &format!("{adapter_id}.defaultMode"));
-            let default_plan_mode = self
-                .deps
-                .settings_get("provider", &format!("{adapter_id}.defaultPlanMode"));
+            let default_model = self.provider_setting(&adapter_id, "defaultModel").await;
+            let default_mode = self.provider_setting(&adapter_id, "defaultMode").await;
+            let default_plan_mode = self.provider_setting(&adapter_id, "defaultPlanMode").await;
 
             if new_chat.model.is_none()
                 && let Some(m) = default_model
@@ -747,9 +743,8 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             return;
         };
         let adapter_id = cell.lock_recover().chat.adapter_id.clone();
-        if self
-            .deps
-            .settings_get("general", "titleGeneration.disabled")
+        if read_setting(self.deps.settings(), "general", "titleGeneration.disabled")
+            .await
             .as_deref()
             == Some("true")
         {
@@ -762,8 +757,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             return;
         }
         let binary = resolve_title_binary(
-            self.deps
-                .settings_get("provider", &format!("{adapter_id}.titleBinary")),
+            self.provider_setting(&adapter_id, "titleBinary").await,
             &adapter_id,
         );
 
@@ -970,10 +964,18 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         cache_reloaded
     }
 
-    fn default_model_for(&self, adapter_id: &str) -> Option<String> {
-        let saved = self
-            .deps
-            .settings_get("provider", &format!("{adapter_id}.defaultModel"));
+    /// One `provider.<adapter>.<field>` setting; `None` when unset or unreadable.
+    async fn provider_setting(&self, adapter_id: &str, field: &str) -> Option<String> {
+        read_setting(
+            self.deps.settings(),
+            "provider",
+            &format!("{adapter_id}.{field}"),
+        )
+        .await
+    }
+
+    async fn default_model_for(&self, adapter_id: &str) -> Option<String> {
+        let saved = self.provider_setting(adapter_id, "defaultModel").await;
         normalize_saved_default_model(saved.as_deref()).filter(|model| model != "default")
     }
 
@@ -1049,17 +1051,16 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         let sink = self.deps.build_sink(chat_id, session.id());
 
         let executable_path = self
-            .deps
-            .settings_get("provider", &format!("{}.executablePath", chat.adapter_id));
+            .provider_setting(&chat.adapter_id, "executablePath")
+            .await;
         let system_prompt = self
-            .deps
-            .settings_get("provider", &format!("{}.systemPrompt", chat.adapter_id));
-        let small_fast_model = self.deps.settings_get(
-            "provider",
-            &format!("{}.cliproxySmallFastModel", chat.adapter_id),
-        );
+            .provider_setting(&chat.adapter_id, "systemPrompt")
+            .await;
+        let small_fast_model = self
+            .provider_setting(&chat.adapter_id, "cliproxySmallFastModel")
+            .await;
         let tuning = self.deps.resolve_tuning(chat_id).await;
-        let default_model = self.default_model_for(&chat.adapter_id);
+        let default_model = self.default_model_for(&chat.adapter_id).await;
 
         // The no-persistence flag write: persisted and mirrored into the active
         // chat before the spawn, so `on_init`'s stored provider id lands with
@@ -1107,6 +1108,7 @@ mod orchestration_tests;
 mod tests {
     use super::*;
     use crate::test_support::{FakeSession, test_chat};
+    use mainframe_types::settings_kv::MemorySettings;
     use std::collections::HashSet;
 
     /// A `SessionSink` that drops every callback — enough to let a spawn
@@ -1226,12 +1228,8 @@ mod tests {
         /// `patch.title.is_some()`, so unrelated lifecycle updates don't pollute
         /// title-logging assertions).
         pub(super) title_updates: Mutex<Vec<String>>,
-        /// When `true`, `settings_get("general", "titleGeneration.disabled")`
-        /// answers `Some("true")`.
-        disabled: bool,
-        /// `settings_get("provider", "<adapter>.defaultModel")` answer, for
-        /// `default_model_for` coverage.
-        saved_default_model: Mutex<Option<String>>,
+        /// The settings rows `settings()` serves.
+        settings: MemorySettings,
         /// `adapter_supports_no_persistence` answer.
         adapter_no_persistence: Mutex<bool>,
         /// Every `ensure_dir` path, in order.
@@ -1285,8 +1283,11 @@ mod tests {
                 present_paths: Mutex::new(None),
                 has_launches,
                 title_updates: Mutex::new(Vec::new()),
-                disabled,
-                saved_default_model: Mutex::new(None),
+                settings: if disabled {
+                    MemorySettings::default().with("general", "titleGeneration.disabled", "true")
+                } else {
+                    MemorySettings::default()
+                },
                 adapter_no_persistence: Mutex::new(false),
                 ensure_dir_calls: Mutex::new(Vec::new()),
                 mark_context_lost_calls: Mutex::new(Vec::new()),
@@ -1317,8 +1318,12 @@ mod tests {
             *self.present_paths.lock().unwrap() = Some(paths);
         }
 
-        pub(super) fn set_saved_default_model(&self, model: Option<&str>) {
-            *self.saved_default_model.lock().unwrap() = model.map(str::to_string);
+        async fn set_saved_default_model(&self, adapter_id: &str, model: Option<&str>) {
+            let key = format!("{adapter_id}.defaultModel");
+            match model {
+                Some(model) => self.settings.set("provider", &key, model).await.unwrap(),
+                None => self.settings.delete("provider", &key).await.unwrap(),
+            }
         }
 
         pub(super) fn set_pending_fork(&self, pending: PendingForkState) {
@@ -1361,14 +1366,8 @@ mod tests {
         fn projects_get_path(&self, _project_id: &str) -> Option<String> {
             Some("/proj".to_string())
         }
-        fn settings_get(&self, ns: &str, key: &str) -> Option<String> {
-            if self.disabled && ns == "general" && key == "titleGeneration.disabled" {
-                Some("true".to_string())
-            } else if ns == "provider" && key.ends_with(".defaultModel") {
-                self.saved_default_model.lock().unwrap().clone()
-            } else {
-                None
-            }
+        fn settings(&self) -> &dyn SettingsKv {
+            &self.settings
         }
 
         fn create_session(&self, _a: &str, o: SessionOptions) -> Option<Arc<dyn AdapterSession>> {
@@ -1805,8 +1804,8 @@ mod tests {
         assert!(deps.ensure_dir_calls.lock().unwrap().is_empty());
     }
 
-    #[test]
-    fn default_model_for_uses_only_explicit_provider_settings() {
+    #[tokio::test]
+    async fn default_model_for_uses_only_explicit_provider_settings() {
         let deps = FakeDeps::new(chat_over("c1", None, ChatStatus::Active), Vec::new());
         let mgr = manager(deps);
         for (saved, expected) in [
@@ -1815,8 +1814,8 @@ mod tests {
             (Some(""), None),
             (None, None),
         ] {
-            mgr.deps.set_saved_default_model(saved);
-            assert_eq!(mgr.default_model_for("codex").as_deref(), expected);
+            mgr.deps.set_saved_default_model("codex", saved).await;
+            assert_eq!(mgr.default_model_for("codex").await.as_deref(), expected);
         }
     }
 

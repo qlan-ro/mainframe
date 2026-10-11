@@ -6,6 +6,7 @@ mod constants;
 mod keying;
 mod manager;
 mod merge;
+mod persist;
 mod scheduler;
 mod status;
 mod window_lifecycle;
@@ -14,7 +15,6 @@ pub use constants::{SESSION_WINDOW_DURATION_MS, STALE_THRESHOLD_MS, WEEKLY_WINDO
 pub use keying::UNKNOWN_ACCOUNT_IDENTITY;
 pub use manager::{
     IdentityResolver, IngestMode, QuotaManager, QuotaManagerDeps, QuotaPuller, QuotaService,
-    QuotaSettingsStore,
 };
 pub use merge::ProviderQuotaUpdate;
 pub use scheduler::{ClaudeQuotaScheduler, ClaudeQuotaSchedulerDeps, HasClientsFn, RefreshFn};

@@ -68,7 +68,8 @@ pub trait ChatManagerDeps: Send + Sync {
         &'a self,
         project_path: &'a str,
     ) -> BoxFuture<'a, Result<(), String>>;
-    fn settings_get(&self, ns: &str, key: &str) -> Option<String>;
+    /// The settings store every sub-manager reads provider and general settings from.
+    fn settings(&self) -> &dyn mainframe_types::settings_kv::SettingsKv;
     fn add_plan_file(&self, chat_id: &str, file_path: &str) -> bool;
     fn add_skill_file(&self, chat_id: &str, entry: &SkillFileEntry) -> bool;
     fn update_todos(&self, chat_id: &str, todos: &[TodoItem]);

@@ -110,7 +110,7 @@ Tier 1  mainframe-runtime          config, logging, auth, login-shell PATH captu
         mainframe-adapter-api       the AgentAdapter contract + registry
 
 Tier 2  mainframe-services   workspace/attachment/push/todos/commands/notifications/
-                             settings/files — cross-cutting (depends on types + db)
+                             settings/files — cross-cutting (depends on types + runtime + git)
         mainframe-plugins    builtin plugin registry + capability contexts
                              (depends on runtime + services + adapter-api + git)
         mainframe-adapter-claude   Claude CLI: stream-json over stdio

@@ -13,7 +13,7 @@
 #![recursion_limit = "256"]
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use std::collections::HashMap;
+use mainframe_types::settings_kv::MemorySettings;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
@@ -33,23 +33,12 @@ use mainframe_server::{
 use mainframe_services::attachment::AttachmentStore;
 use mainframe_services::files::FileWatcherService;
 use mainframe_services::push::PushService;
-use mainframe_services::quota::{QuotaManager, QuotaManagerDeps, QuotaSettingsStore};
+use mainframe_services::quota::{QuotaManager, QuotaManagerDeps};
 use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::events::DaemonEvent;
 use serde_json::{Value, json};
 use tempfile::TempDir;
 use tokio::net::TcpListener;
-
-struct NoopQuotaSettings;
-impl QuotaSettingsStore for NoopQuotaSettings {
-    fn get(&self, _category: &str, _key: &str) -> Option<String> {
-        None
-    }
-    fn get_by_category(&self, _category: &str) -> HashMap<String, String> {
-        HashMap::new()
-    }
-    fn set(&self, _category: &str, _key: &str, _value: &str) {}
-}
 
 /// `get_session_jsonl_path` always derives under the real `~/.claude/projects`
 /// tree (`transcript.rs`'s own seam), so scenarios with an on-disk record write
@@ -82,7 +71,7 @@ async fn harness(session_id: &str) -> Harness {
     let attachments = Arc::new(AttachmentStore::new(data_dir.path().join("attachments")));
     let push = Arc::new(PushService::new());
     let quota = Arc::new(QuotaManager::new(QuotaManagerDeps {
-        settings: Box::new(NoopQuotaSettings),
+        settings: Arc::new(MemorySettings::default()),
         emit_event: Box::new(|_| {}),
         now: None,
     }));

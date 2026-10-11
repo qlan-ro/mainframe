@@ -15,6 +15,8 @@ use mainframe_types::events::DaemonEvent;
 use mainframe_types::plugin::{
     ChatSummary, PluginAttachmentMeta, PluginCapability, PluginManifest, UiZone,
 };
+use mainframe_types::settings::NotificationConfig;
+use mainframe_types::settings_kv::SettingsKv;
 use rusqlite::types::Value as SqlValue;
 use serde::Serialize;
 
@@ -141,8 +143,8 @@ pub trait ChatService: Send + Sync {
 }
 
 /// The host database surface the context reads (the `DatabaseManager` slice the
-/// TS `buildPluginContext` depends on). Synchronous, matching better-sqlite3;
-/// the server implements it over its `Db` actor's `call_blocking` bridge.
+/// TS `buildPluginContext` depends on). The chat accessors are synchronous; the
+/// daemon implements them over its `Db` actor's `call_blocking` bridge.
 pub trait PluginHostDb: Send + Sync {
     fn chats_list(&self, project_id: &str) -> Vec<Chat>;
     fn chats_get(&self, id: &str) -> Option<Chat>;
@@ -153,7 +155,11 @@ pub trait PluginHostDb: Send + Sync {
         model: Option<&str>,
         permission_mode: Option<&str>,
     ) -> Chat;
-    fn settings_get(&self, category: &str, key: &str) -> Option<String>;
+    /// The host settings store (provider defaults for `chat:create`).
+    fn settings(&self) -> &dyn SettingsKv;
+    /// The effective notification config. Synchronous because the UI context's
+    /// `notify` gate runs on a non-async path.
+    fn notification_config(&self) -> NotificationConfig;
 }
 
 type UnloadFn = Box<dyn FnOnce() + Send>;
@@ -217,7 +223,7 @@ pub fn build_plugin_context(deps: PluginContextDeps) -> Result<Arc<PluginContext
     let ui: Arc<dyn PluginUi> =
         if has(PluginCapability::UiPanels) || has(PluginCapability::UiNotifications) {
             let host_db = Arc::clone(&deps.host_db);
-            let gate = Box::new(move || plugin_notify_enabled(host_db.as_ref()));
+            let gate = Box::new(move || host_db.notification_config().other.plugin);
             Arc::new(create_plugin_ui_context(
                 &deps.manifest.id,
                 Arc::clone(&deps.emit),
@@ -250,20 +256,6 @@ pub fn build_plugin_context(deps: PluginContextDeps) -> Result<Arc<PluginContext
         github,
         on_unload: Mutex::new(Vec::new()),
     }))
-}
-
-/// `readNotificationConfig(db).other.plugin` — the gate `createPluginUIContext`
-/// receives.
-fn plugin_notify_enabled(host_db: &dyn PluginHostDb) -> bool {
-    struct Reader<'a>(&'a dyn PluginHostDb);
-    impl mainframe_services::settings::SettingsReader for Reader<'_> {
-        fn get(&self, ns: &str, key: &str) -> Option<String> {
-            self.0.settings_get(ns, key)
-        }
-    }
-    mainframe_services::notifications::read_notification_config(&Reader(host_db))
-        .other
-        .plugin
 }
 
 mod guards {

@@ -1,8 +1,7 @@
-//! Resolves an adapter's CLI executable path (configured → detected → fallback)
-//! and persists a detected absolute path back to settings. Settings persistence
-//! goes through the `SettingsWriter` trait so this crate never depends on
-//! `mainframe-db` (avoids a db → adapter-api → db cycle). The resolve memo is an
-//! injectable `ResolveMemo` value, not a module global.
+//! Resolves an adapter's CLI executable path (configured → detected → fallback).
+//! The configured path is read through the `SettingsKv` contract so this crate
+//! never depends on `mainframe-db` (avoids a db → adapter-api → db cycle). The
+//! resolve memo is an injectable `ResolveMemo` value, not a module global.
 
 use std::collections::HashMap;
 use std::sync::LazyLock;
@@ -11,16 +10,10 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use mainframe_runtime::ResolvedPath;
+use mainframe_types::settings_kv::SettingsKv;
 use serde::{Deserialize, Serialize};
 
 use crate::{BoxFuture, RunResult};
-
-/// Persists resolved CLI paths. A trait (not a db handle) so `resolve-executable`
-/// stays free of a `mainframe-db` dependency.
-pub trait SettingsWriter: Send + Sync {
-    fn get(&self, category: &str, key: &str) -> Option<String>;
-    fn set(&self, category: &str, key: &str, value: &str);
-}
 
 /// Runs a child process and reports `{ ok, stdout }` (mirrors the injected `run`).
 pub trait Runner: Send + Sync {
@@ -61,7 +54,8 @@ pub struct ResolvedExecutable {
 
 /// Injected dependencies for resolution.
 pub struct ResolverDeps<'a> {
-    pub settings: &'a dyn SettingsWriter,
+    /// Source of `provider.<adapterId>.executablePath`; never written.
+    pub settings: &'a dyn SettingsKv,
     pub run: &'a dyn Runner,
     /// The `PATH` scanned for the bare CLI name when no path is configured.
     pub path: &'a ResolvedPath,
@@ -127,9 +121,14 @@ pub async fn resolve_adapter_executable(
     deps: &ResolverDeps<'_>,
 ) -> ResolvedExecutable {
     let bare = BARE_NAMES.get(adapter_id).copied().unwrap_or(adapter_id);
-    let configured = deps
-        .settings
-        .get("provider", &format!("{adapter_id}.executablePath"));
+    let key = format!("{adapter_id}.executablePath");
+    let configured = match deps.settings.get("provider", &key).await {
+        Ok(configured) => configured,
+        Err(err) => {
+            tracing::warn!(%err, category = "provider", key, "executable path read failed; detecting instead");
+            None
+        }
+    };
     if let Some(configured) = configured {
         let (valid, version) = validate(&configured, deps.run).await;
         return ResolvedExecutable {
@@ -159,41 +158,7 @@ pub async fn resolve_adapter_executable(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    struct MapSettings {
-        store: Mutex<HashMap<String, String>>,
-    }
-    impl MapSettings {
-        fn new() -> Self {
-            Self {
-                store: Mutex::new(HashMap::new()),
-            }
-        }
-        fn with(pairs: &[(&str, &str)]) -> Self {
-            let store = pairs
-                .iter()
-                .map(|(k, v)| (k.to_string(), v.to_string()))
-                .collect();
-            Self {
-                store: Mutex::new(store),
-            }
-        }
-    }
-    impl SettingsWriter for MapSettings {
-        fn get(&self, category: &str, key: &str) -> Option<String> {
-            self.store
-                .lock()
-                .unwrap()
-                .get(&format!("{category}.{key}"))
-                .cloned()
-        }
-        fn set(&self, category: &str, key: &str, value: &str) {
-            self.store
-                .lock()
-                .unwrap()
-                .insert(format!("{category}.{key}"), value.to_string());
-        }
-    }
+    use mainframe_types::settings_kv::{MemorySettings, SettingsError, SettingsResult};
 
     struct FnRunner<F> {
         f: F,
@@ -266,7 +231,11 @@ mod tests {
                 fail()
             }
         });
-        let s = MapSettings::with(&[("provider.claude.executablePath", "/usr/local/bin/claude")]);
+        let s = MemorySettings::default().with(
+            "provider",
+            "claude.executablePath",
+            "/usr/local/bin/claude",
+        );
         let (_dir, path) = path_with(Some("claude"));
         let deps = ResolverDeps {
             settings: &s,
@@ -295,7 +264,7 @@ mod tests {
                 fail()
             }
         });
-        let s = MapSettings::new();
+        let s = MemorySettings::default();
         let (dir, path) = path_with(Some("claude"));
         let deps = ResolverDeps {
             settings: &s,
@@ -319,7 +288,7 @@ mod tests {
     #[tokio::test]
     async fn ignores_a_non_executable_file_of_the_same_name() {
         let runner = FnRunner::new(|_cmd: &str, _args: &[String]| ok("codex 1.0.0"));
-        let s = MapSettings::new();
+        let s = MemorySettings::default();
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("codex"), "not executable").unwrap();
         let path = ResolvedPath::from_value(dir.path().to_string_lossy().into_owned());
@@ -336,7 +305,7 @@ mod tests {
     #[tokio::test]
     async fn falls_back_to_bare_name_when_nothing_is_found() {
         let runner = FnRunner::new(|_cmd: &str, _args: &[String]| fail());
-        let s = MapSettings::new();
+        let s = MemorySettings::default();
         let (_dir, path) = path_with(None);
         let deps = ResolverDeps {
             settings: &s,
@@ -359,6 +328,55 @@ mod tests {
     fn exposes_a_bare_name_map() {
         assert_eq!(BARE_NAMES.get("claude").copied(), Some("claude"));
         assert_eq!(BARE_NAMES.get("codex").copied(), Some("codex"));
+    }
+
+    /// A store whose reads fail, for the unreadable-setting path.
+    struct UnreadableSettings;
+    impl SettingsKv for UnreadableSettings {
+        fn get<'a>(
+            &'a self,
+            _: &'a str,
+            _: &'a str,
+        ) -> BoxFuture<'a, SettingsResult<Option<String>>> {
+            Box::pin(async { Err(SettingsError::Store("database is locked".into())) })
+        }
+        fn get_by_category<'a>(
+            &'a self,
+            _: &'a str,
+        ) -> BoxFuture<'a, SettingsResult<HashMap<String, String>>> {
+            Box::pin(async { Err(SettingsError::Store("database is locked".into())) })
+        }
+        fn set<'a>(
+            &'a self,
+            _: &'a str,
+            _: &'a str,
+            _: &'a str,
+        ) -> BoxFuture<'a, SettingsResult<()>> {
+            Box::pin(async { Err(SettingsError::Store("database is locked".into())) })
+        }
+        fn delete<'a>(&'a self, _: &'a str, _: &'a str) -> BoxFuture<'a, SettingsResult<()>> {
+            Box::pin(async { Err(SettingsError::Store("database is locked".into())) })
+        }
+    }
+
+    #[tokio::test]
+    async fn an_unreadable_configured_path_falls_through_to_detection() {
+        let runner = FnRunner::new(|_cmd: &str, args: &[String]| {
+            if has_version(args) {
+                ok("claude 2.0.0\n")
+            } else {
+                fail()
+            }
+        });
+        let (dir, path) = path_with(Some("claude"));
+        let deps = ResolverDeps {
+            settings: &UnreadableSettings,
+            run: &runner,
+            path: &path,
+        };
+        let r = resolve_adapter_executable("claude", &deps).await;
+        assert_eq!(r.source, ExecutableSource::Detected);
+        assert_eq!(r.path, dir.path().join("claude").to_string_lossy());
     }
 
     #[tokio::test]

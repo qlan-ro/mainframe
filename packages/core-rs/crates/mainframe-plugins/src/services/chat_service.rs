@@ -5,6 +5,7 @@
 use std::sync::Arc;
 
 use mainframe_adapter_api::BoxFuture;
+use mainframe_services::settings::read_setting;
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::plugin::{ChatSummary, PluginCapability, PluginManifest};
 
@@ -76,12 +77,19 @@ impl ChatService for HostChatService {
             let mut effective_mode = args.permission_mode;
 
             if effective_model.is_none() || effective_mode.is_none() {
-                let default_model = self
-                    .host_db
-                    .settings_get("provider", &format!("{effective_adapter}.defaultModel"));
-                let default_mode = self
-                    .host_db
-                    .settings_get("provider", &format!("{effective_adapter}.defaultMode"));
+                let settings = self.host_db.settings();
+                let default_model = read_setting(
+                    settings,
+                    "provider",
+                    &format!("{effective_adapter}.defaultModel"),
+                )
+                .await;
+                let default_mode = read_setting(
+                    settings,
+                    "provider",
+                    &format!("{effective_adapter}.defaultMode"),
+                )
+                .await;
                 if effective_model.is_none()
                     && let Some(m) = default_model
                 {

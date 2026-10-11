@@ -32,6 +32,7 @@ pub mod projects;
 mod relocation;
 pub mod schema;
 pub mod settings;
+mod settings_kv;
 mod side_chats;
 pub mod tag_color;
 pub mod tags;

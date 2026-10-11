@@ -37,6 +37,7 @@ pub mod segment;
 mod segment_records;
 pub mod serde_util;
 pub mod settings;
+pub mod settings_kv;
 pub mod setup_advisor;
 pub mod skill;
 pub mod suggestion;
