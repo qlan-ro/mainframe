@@ -17,6 +17,7 @@ use crate::chat_manager::{ProcessedAttachments, WorkspacePort};
 pub(crate) struct FakeWorkspacePort {
     pub(crate) move_files_error: Mutex<Option<String>>,
     pub(crate) move_fail_session: Mutex<Option<String>>,
+    pub(crate) move_destinations: Mutex<Vec<String>>,
     pub(crate) moved_sessions: Arc<Mutex<Vec<String>>>,
     pub(crate) branch_missing: Mutex<bool>,
     pub(crate) added_worktrees: Mutex<Vec<(String, String, String)>>,
@@ -62,7 +63,7 @@ impl WorkspacePort for FakeDeps {
         &'a self,
         session: &'a str,
         _: &'a str,
-        _: &'a str,
+        destination: &'a str,
     ) -> BoxFuture<'a, Result<(), mainframe_services::workspace::session_files::SessionFilesError>>
     {
         Box::pin(async move {
@@ -72,6 +73,10 @@ impl WorkspacePort for FakeDeps {
             if self.workspace.move_fail_session.lock_recover().as_deref() == Some(session) {
                 return Err(std::io::Error::other("disk full").into());
             }
+            self.workspace
+                .move_destinations
+                .lock_recover()
+                .push(destination.into());
             self.workspace
                 .moved_sessions
                 .lock_recover()

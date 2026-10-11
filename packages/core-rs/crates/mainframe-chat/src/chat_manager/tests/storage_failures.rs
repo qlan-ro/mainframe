@@ -21,6 +21,7 @@ async fn failed_command_state_write_does_not_fail_a_delivered_command() {
         mgr.get_chat("chat-1").unwrap().process_state,
         Some(Some(ProcessState::Working))
     );
+    assert_storage_events(&deps.events(), &["error", "chat.updated"]);
     mgr.dispose();
 }
 
@@ -36,6 +37,7 @@ async fn failed_turn_writes_do_not_skip_delivery() {
         mgr.get_chat("chat-1").unwrap().process_state,
         Some(Some(ProcessState::Working))
     );
+    assert_storage_events(&deps.events(), &["error", "chat.updated"]);
     mgr.dispose();
 }
 
@@ -49,6 +51,7 @@ async fn failed_steer_mentions_do_not_fail_delivered_steer() {
         .await
         .unwrap();
     assert_eq!(session.steer_calls.lock().unwrap().as_slice(), &["hello"]);
+    assert_storage_events(&deps.events(), &["error"]);
     mgr.dispose();
 }
 
@@ -67,6 +70,10 @@ async fn failed_archive_list_and_write_still_tears_down_and_emits_ended() {
             .iter()
             .any(|e| matches!(e, DaemonEvent::ChatEnded { chat_id } if chat_id == "chat-1"))
     );
+    assert_storage_events(
+        &deps.events(),
+        &["error", "launch.scopeReleased", "chat.ended"],
+    );
     mgr.dispose();
 }
 
@@ -82,5 +89,20 @@ async fn failed_end_write_still_emits_ended() {
             .iter()
             .any(|e| matches!(e, DaemonEvent::ChatEnded { .. }))
     );
+    assert_storage_events(&deps.events(), &["error", "chat.ended"]);
     mgr.dispose();
+}
+
+fn assert_storage_events(events: &[DaemonEvent], expected: &[&str]) {
+    let tags: Vec<String> = events
+        .iter()
+        .map(|e| {
+            serde_json::to_value(e).unwrap()["type"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        })
+        .collect();
+    assert_eq!(tags, expected);
+    assert!(events.iter().any(|e| matches!(e, DaemonEvent::Error { chat_id: Some(id), error } if id == "chat-1" && error == "Chat storage operation failed")));
 }

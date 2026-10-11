@@ -151,6 +151,7 @@ fn test_deps() -> DaemonChatDeps {
         now: None,
     });
     DaemonChatDeps {
+        notification_config: Default::default(),
         db,
         adapters: Arc::new(AdapterRegistry::new()),
         background_tasks: Arc::new(BackgroundTaskTracker::new()),

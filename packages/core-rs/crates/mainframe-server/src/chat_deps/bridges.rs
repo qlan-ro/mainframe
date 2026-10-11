@@ -70,27 +70,34 @@ impl EventEmitter for DaemonChatDeps {
     }
 }
 
+impl DaemonChatDeps {
+    fn notification_snapshot(&self) -> Arc<mainframe_types::settings::NotificationConfig> {
+        self.notification_config
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+}
+
 impl Pusher for DaemonChatDeps {
+    fn set_notification_config(&self, config: mainframe_types::settings::NotificationConfig) {
+        *self
+            .notification_config
+            .write()
+            .unwrap_or_else(|e| e.into_inner()) = Arc::new(config);
+    }
+
     fn should_notify_permission(&self, tool_name: Option<&str>) -> bool {
-        should_notify_permission(
-            &crate::db::notification_config_blocking(&self.db),
-            tool_name,
-        )
+        should_notify_permission(&self.notification_snapshot(), tool_name)
     }
     fn notify_task_complete(&self) -> bool {
-        crate::db::notification_config_blocking(&self.db)
-            .chat
-            .task_complete
+        self.notification_snapshot().chat.task_complete
     }
     fn notify_session_error(&self) -> bool {
-        crate::db::notification_config_blocking(&self.db)
-            .chat
-            .session_error
+        self.notification_snapshot().chat.session_error
     }
     fn notify_attention_request(&self) -> bool {
-        crate::db::notification_config_blocking(&self.db)
-            .chat
-            .attention_request
+        self.notification_snapshot().chat.attention_request
     }
     fn send_push(&self, msg: PushOut) {
         let push = Arc::clone(&self.push);

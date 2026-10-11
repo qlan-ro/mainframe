@@ -106,3 +106,17 @@ async fn none_outcome_logs_no_title_and_keeps_the_fallback() {
 fn mgr_insert(mgr: &super::ChatLifecycleManager, chat_id: &str, cell: Arc<Mutex<ActiveChat>>) {
     mgr.shared.active_chats.insert(chat_id.to_string(), cell);
 }
+
+#[test]
+fn failed_title_write_emits_the_live_title() {
+    let chat = chat_over("c1", None, ChatStatus::Active);
+    let deps = fake(chat.clone(), Vec::new());
+    let mgr = manager(deps.clone());
+    let cell = Arc::new(Mutex::new(ActiveChat::new(chat, None)));
+    *deps.store.write_failure.lock().unwrap() = Some("write failed".into());
+    mgr.apply_generated_title(&cell, "Generated".into());
+    assert!(matches!(deps.events().as_slice(), [
+        DaemonEvent::Error { chat_id: Some(id), .. },
+        DaemonEvent::ChatUpdated { chat, reason: None }
+    ] if id == "c1" && chat.title.as_deref() == Some("Generated")));
+}

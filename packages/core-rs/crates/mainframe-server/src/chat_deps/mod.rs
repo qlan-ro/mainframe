@@ -58,6 +58,7 @@ use crate::db::Db;
 /// `Arc`/handle), constructed once at boot in [`build_chat_manager`].
 pub struct DaemonChatDeps {
     db: Db,
+    notification_config: std::sync::RwLock<Arc<mainframe_types::settings::NotificationConfig>>,
     adapters: Arc<AdapterRegistry>,
     background_tasks: Arc<BackgroundTaskTracker>,
     attachments: Arc<AttachmentStore>,

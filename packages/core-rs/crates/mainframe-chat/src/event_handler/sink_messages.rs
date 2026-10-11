@@ -51,16 +51,15 @@ impl SessionSinkImpl {
                 }
             };
             if let Some(chat) = updated {
-                storage_event!(
-                    self.shared,
-                    self.shared.update_and_emit(
-                        chat,
+                self.shared
+                    .prepare_live_update(
+                        &chat.id,
                         &ChatPatch {
                             process_state: Some(Some(ProcessState::Working)),
                             ..Default::default()
                         },
                     )
-                );
+                    .emit(chat, None);
             }
         }
     }
@@ -112,16 +111,15 @@ impl SessionSinkImpl {
                 }
             };
             if let Some(chat) = updated {
-                storage_event!(
-                    self.shared,
-                    self.shared.update_and_emit(
-                        chat,
+                self.shared
+                    .prepare_live_update(
+                        &chat.id,
                         &ChatPatch {
                             plan_mode: Some(true),
                             ..Default::default()
                         },
                     )
-                );
+                    .emit(chat, None);
             }
         }
     }

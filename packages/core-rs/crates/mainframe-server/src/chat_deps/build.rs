@@ -32,7 +32,16 @@ pub fn build_chat_manager(params: ChatManagerParams) -> Arc<ChatManager> {
         chat_surface,
         data_dir,
     } = params;
+    let raw = db.call_blocking(|db| db.settings.get("general", "notifications"));
+    let config = match raw {
+        Ok(raw) => mainframe_services::notifications::parse_notification_config(raw.as_deref()),
+        Err(error) => {
+            tracing::warn!(%error, "notification settings read failed at boot; using defaults");
+            Default::default()
+        }
+    };
     let deps = Arc::new(DaemonChatDeps {
+        notification_config: std::sync::RwLock::new(Arc::new(config)),
         db,
         adapters,
         background_tasks,

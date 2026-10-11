@@ -40,3 +40,33 @@ impl ChatShared {
         });
     }
 }
+
+impl super::ChatManager {
+    pub fn set_notification_config(&self, config: mainframe_types::settings::NotificationConfig) {
+        self.shared.deps.set_notification_config(config);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn notification_callbacks_do_not_read_settings() {
+        let deps = crate::test_support::FakeDeps::arc();
+        let shared = ChatShared::new(deps.clone());
+        for gate in [
+            NotificationGate::Permission("Bash".into()),
+            NotificationGate::Complete,
+            NotificationGate::Error,
+            NotificationGate::Attention,
+        ] {
+            shared.when_notification_enabled(gate, || {});
+        }
+        assert_eq!(
+            deps.settings_calls
+                .load(std::sync::atomic::Ordering::SeqCst),
+            0
+        );
+        assert!(deps.store.updates.lock().unwrap().is_empty());
+    }
+}

@@ -33,6 +33,7 @@ pub(crate) struct FakeDeps {
     pub(crate) workspace: FakeWorkspacePort,
     /// The settings rows `settings()` serves; empty unless a test adds rows.
     pub(crate) settings: MemorySettings,
+    pub(crate) settings_calls: std::sync::atomic::AtomicUsize,
 }
 
 impl FakeDeps {
@@ -142,6 +143,8 @@ impl FakeDeps {
 
 impl ChatManagerDeps for FakeDeps {
     fn settings(&self) -> &dyn SettingsKv {
+        self.settings_calls
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         &self.settings
     }
 }

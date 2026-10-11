@@ -722,16 +722,15 @@ impl ChatLifecycleManager {
             guard.chat.title = Some(title.clone());
             guard.chat.clone()
         };
-        storage_event!(
-            self.shared, Some(&cell.lock_recover().chat.id);
-            self.shared.update_and_emit(
-                chat,
+        self.shared
+            .prepare_live_update(
+                &chat.id,
                 &ChatPatch {
                     title: Some(title),
                     ..Default::default()
                 },
             )
-        );
+            .emit(chat, None);
     }
 
     /// The no-persistence context-loss transition. No-op unless
