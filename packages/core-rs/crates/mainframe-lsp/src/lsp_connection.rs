@@ -11,6 +11,7 @@
 use std::sync::Arc;
 
 use mainframe_types::chat::{Chat, Project};
+use mainframe_types::http_status::StatusKind;
 use tokio::sync::mpsc;
 
 use crate::lsp_manager::{LspManager, LspServerHandle};
@@ -55,18 +56,14 @@ pub fn get_effective_path(
     Some(project.path)
 }
 
-/// The outcome of pre-upgrade validation. The server maps `Reject` onto the raw
-/// HTTP status write + socket destroy, and `Proceed` onto accepting the WS.
+/// The outcome of pre-upgrade validation. The server maps `Reject` onto the
+/// handshake's HTTP status, and `Proceed` onto accepting the WS.
 pub enum UpgradeOutcome {
-    /// Reject: the raw HTTP status line to write before destroying the socket.
-    Reject(&'static str),
+    /// Reject the handshake with this status class.
+    Reject(StatusKind),
     /// Proceed: the spawned (or reattached) handle to bridge.
     Proceed(Arc<LspServerHandle>),
 }
-
-const REJECT_404: &str = "HTTP/1.1 404 Not Found\r\n\r\n";
-const REJECT_409: &str = "HTTP/1.1 409 Conflict\r\n\r\n";
-const REJECT_503: &str = "HTTP/1.1 503 Service Unavailable\r\n\r\n";
 
 /// Handles `/lsp/...` WebSocket upgrades: validation, spawn, and client attach.
 pub struct LspConnectionHandler<P: ProjectStore, C: ChatStore> {
@@ -107,7 +104,7 @@ impl<P: ProjectStore, C: ChatStore> LspConnectionHandler<P, C> {
                 language,
                 "LSP upgrade rejected: unknown project"
             );
-            return UpgradeOutcome::Reject(REJECT_404);
+            return UpgradeOutcome::Reject(StatusKind::NotFound);
         }
 
         // Refuse a missing worktree with 409 so the client can surface a clear error
@@ -122,7 +119,7 @@ impl<P: ProjectStore, C: ChatStore> LspConnectionHandler<P, C> {
                 chat_id,
                 "LSP upgrade rejected: worktree missing"
             );
-            return UpgradeOutcome::Reject(REJECT_409);
+            return UpgradeOutcome::Reject(StatusKind::Conflict);
         }
 
         // Resolve effective path (worktree vs project root).
@@ -136,19 +133,19 @@ impl<P: ProjectStore, C: ChatStore> LspConnectionHandler<P, C> {
                 ?chat_id,
                 "LSP upgrade rejected: project or worktree not found"
             );
-            return UpgradeOutcome::Reject(REJECT_404);
+            return UpgradeOutcome::Reject(StatusKind::NotFound);
         };
 
         // Validate effective path exists on disk (async — no sync I/O).
         if let Err(err) = tokio::fs::metadata(&effective_path).await {
             tracing::warn!(%err, project_id, path = %effective_path, "LSP upgrade rejected: project path not found");
-            return UpgradeOutcome::Reject(REJECT_404);
+            return UpgradeOutcome::Reject(StatusKind::NotFound);
         }
 
         // Check the language-server config exists.
         if self.manager.registry().get_config(language).is_none() {
             tracing::warn!(language, "LSP upgrade rejected: unsupported language");
-            return UpgradeOutcome::Reject(REJECT_404);
+            return UpgradeOutcome::Reject(StatusKind::NotFound);
         }
 
         // Close any existing OPEN client so the new connection replaces it.
@@ -181,7 +178,7 @@ impl<P: ProjectStore, C: ChatStore> LspConnectionHandler<P, C> {
             Ok(handle) => UpgradeOutcome::Proceed(handle),
             Err(err) => {
                 tracing::error!(%err, project_id, language, "Failed to spawn LSP server");
-                UpgradeOutcome::Reject(REJECT_503)
+                UpgradeOutcome::Reject(StatusKind::Unavailable)
             }
         }
     }
