@@ -94,7 +94,7 @@ fn config_errors() {
         wire(&ConfigError::TranscriptMoveFailed(moved)),
         pair(
             StatusKind::Internal,
-            "Moving the session's history into the worktree failed. The session stayed where it was."
+            "Moving the session's history into the worktree failed. The chat kept its previous binding; some history files may have moved."
         )
     );
     assert_eq!(
