@@ -145,3 +145,22 @@ async fn stop_background_task_writes_stop_task_control_request() {
     );
     pending.await.unwrap().unwrap();
 }
+
+#[tokio::test]
+async fn a_message_the_full_stdin_queue_cannot_take_is_an_error() {
+    let s = session();
+    s.set_child_for_test(dummy_child());
+    let (tx, _queue) = StdinTx::channel(1);
+    tx.try_write(b"backlog\n".to_vec()).unwrap();
+    s.set_stdin_for_test(Some(tx));
+
+    let error = s
+        .send_command("compact".to_string(), String::new())
+        .await
+        .unwrap_err();
+
+    assert_eq!(
+        error.to_string(),
+        format!("Session {} stdin queue is full", s.id)
+    );
+}

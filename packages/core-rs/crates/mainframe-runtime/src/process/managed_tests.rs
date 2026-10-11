@@ -156,3 +156,52 @@ async fn exit_latch_fires_only_after_the_pumps_delivered_the_last_chunk() {
     assert_eq!(code, Some(0));
     assert_eq!(seen.lock().unwrap().as_slice(), b"hello");
 }
+
+#[tokio::test]
+async fn exit_latch_fires_within_the_drain_bound_when_a_grandchild_holds_the_pipes() {
+    struct KillOnDrop(u32);
+    impl Drop for KillOnDrop {
+        fn drop(&mut self) {
+            let _ = signal(Target::Pid(self.0), Signal::Kill); /* expected: may be gone */
+        }
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let pid_file = dir.path().join("pid");
+    let mut child = Command::new("/bin/sh")
+        .args([
+            "-c",
+            "sleep 60 & echo $! > \"$PID_FILE\"; printf leader; exit 0",
+        ])
+        .env("PID_FILE", &pid_file)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let sink = seen.clone();
+    let pump = spawn_chunk_pump(child.stdout.take().unwrap(), move |bytes| {
+        sink.lock().unwrap().extend_from_slice(bytes);
+        true
+    });
+    let started = std::time::Instant::now();
+    let process = ManagedProcess::spawn(child, vec![pump]);
+
+    let code = tokio::time::timeout(Duration::from_secs(5), process.exit().wait())
+        .await
+        .expect("the latch must not wait for the grandchild");
+    let elapsed = started.elapsed();
+    let grandchild: u32 = std::fs::read_to_string(&pid_file)
+        .unwrap()
+        .trim()
+        .parse()
+        .unwrap();
+    let _grandchild = KillOnDrop(grandchild);
+
+    assert_eq!(code, Some(0));
+    assert_eq!(seen.lock().unwrap().as_slice(), b"leader");
+    assert!(is_alive(grandchild), "the grandchild still holds the pipe");
+    assert!(
+        elapsed < PUMP_DRAIN_GRACE + Duration::from_secs(2),
+        "fired after {elapsed:?}"
+    );
+}
