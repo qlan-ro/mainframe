@@ -30,7 +30,7 @@ test.describe('§composer provider availability and session lock', () => {
     await closeTauriApp(app);
   });
 
-  test('M4: installed providers are selectable before the first message; unavailable providers are disabled', async () => {
+  test('M4: installed providers are selectable before the first message; unavailable providers are disabled @real', async () => {
     const { page } = app;
     const response = await page.request.get(ADAPTERS_URL);
     expect(response.ok()).toBe(true);
