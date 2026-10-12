@@ -26,8 +26,16 @@ vi.mock('@assistant-ui/react', () => {
       Messages: () => <div data-testid="tp-messages" />,
     },
     // isRunning selector → true; messages.length selector → 1.
-    useAuiState: (sel: (s: { thread: { isRunning: boolean; messages: unknown[] } }) => unknown) =>
-      sel({ thread: { isRunning: true, messages: [{}] } }),
+    useAuiState: (
+      sel: (s: {
+        thread: { isRunning: boolean; messages: unknown[] };
+        threadListItem?: { custom: unknown };
+      }) => unknown,
+    ) =>
+      sel({
+        thread: { isRunning: true, messages: [{}] },
+        threadListItem: delegated ? { custom: { delegation: {} } } : undefined,
+      }),
   };
 });
 
@@ -44,6 +52,7 @@ vi.mock('../../gates/ChatGateMount', () => ({ ChatGateMount: () => <div data-tes
 vi.mock('../DegradedChatCard', () => ({ DegradedChatCard: () => null }));
 // `undefined` (no extras) by default; a test sets a run state to drive "Stopping".
 let __extras: { state: { runState: { type: string }; loadState: { type: string } } } | undefined;
+let delegated = false;
 vi.mock('../../runtime/chat-extras', () => ({ useChatExtras: () => __extras }));
 vi.mock('@/features/skills/use-chat-skills', () => ({
   SkillsProvider: ({ children }: { children?: ReactNode }) => <>{children}</>,
@@ -61,9 +70,17 @@ import { useShortcutDispatcher } from '@/features/shortcuts/use-shortcut-dispatc
 
 beforeEach(() => {
   __extras = undefined;
+  delegated = false;
 });
 
 describe('ChatThread — status-line placement (D18 reverses #214)', () => {
+  it('keeps the approval gate and removes the composer in a delegated task split', () => {
+    delegated = true;
+    render(<ChatThread />);
+    expect(screen.getByTestId('chat-thread-gate-slot')).toBeInTheDocument();
+    expect(screen.queryByTestId('composer-stub')).toBeNull();
+    expect(screen.getByTestId('chat-read-only-note')).toHaveTextContent('read-only');
+  });
   it('renders the running indicator while a run is active', () => {
     render(<ChatThread />);
     expect(screen.getByTestId('chat-thread-running')).toBeInTheDocument();

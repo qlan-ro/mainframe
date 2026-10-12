@@ -14,14 +14,16 @@ export function SubagentTranscript({
   messages,
   messageId,
   toolCallId,
+  inZone = false,
 }: {
   messages: readonly ThreadMessage[];
   messageId: string;
   toolCallId: string;
+  inZone?: boolean;
 }) {
   const mode = useUiPrefs((state) => state.transcriptMode);
   return (
-    <div className="ml-[12px] min-w-0 border-l-2 border-border pl-3.5">
+    <div className={inZone ? 'min-w-0' : 'ml-[12px] min-w-0 border-l-2 border-border pl-3.5'}>
       <NestedTranscriptScope messageId={messageId} toolCallId={toolCallId}>
         <CompactDetailProvider value={false}>
           <NestedTranscriptProvider>

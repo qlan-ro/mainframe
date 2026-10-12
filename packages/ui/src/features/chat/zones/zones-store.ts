@@ -16,6 +16,20 @@ import { isRegisteredSideChatId } from '@/features/side-chat/side-chat-ids';
 
 export type ZoneIndex = 0 | 1;
 
+export interface SubagentZoneRef {
+  parentChatId: string;
+  parentThreadId: string;
+  toolCallId: string;
+  messageId: string;
+  title: string;
+}
+
+export function isSubagentParentActive(subagent: SubagentZoneRef | null, threadId: string | null | undefined): boolean {
+  return (
+    subagent != null && threadId != null && (threadId === subagent.parentThreadId || threadId === subagent.parentChatId)
+  );
+}
+
 /** A zone below this is unusable (user-measured verdict, 2026-08-12: 483px
  *  zones were the floor). The surface renders the split only when BOTH zones
  *  clear it; narrower, the pair stays parked behind the single view. */
@@ -30,6 +44,7 @@ const FRAC_MAX = 0.85;
 interface ZonesState {
   /** The two visible chats, left to right; null = single-zone (no split). */
   zones: [string, string] | null;
+  subagent: SubagentZoneRef | null;
   /** The slot `mainThreadId` occupies — the slot a tab switch replaces. */
   focusedIndex: ZoneIndex;
   /** The left zone's share of the row (divider-dragged); 0.5 = even. */
@@ -46,6 +61,8 @@ interface ZonesState {
   queuePair: (anchorId: string, id: string) => void;
   /** Opens the split with the current chat left and `second` right; focus stays left. */
   openSplit: (first: string, second: string) => void;
+  openSubagent: (subagent: SubagentZoneRef) => void;
+  closeSubagent: () => void;
   replaceZone: (index: ZoneIndex, id: string) => void;
   setFocusedIndex: (index: ZoneIndex) => void;
   setFrac: (frac: number) => void;
@@ -54,6 +71,7 @@ interface ZonesState {
 
 export const useZonesStore = create<ZonesState>((set) => ({
   zones: null,
+  subagent: null,
   focusedIndex: 0,
   frac: 0.5,
   pendingPair: null,
@@ -64,8 +82,10 @@ export const useZonesStore = create<ZonesState>((set) => ({
     // A side chat can never take a zone of its own — it lives inside its
     // parent's zone (todo #344, UI rule 2).
     if (isRegisteredSideChatId(first) || isRegisteredSideChatId(second)) return;
-    set({ zones: [first, second], focusedIndex: 0 });
+    set({ zones: [first, second], subagent: null, focusedIndex: 0 });
   },
+  openSubagent: (subagent) => set({ zones: null, subagent, focusedIndex: 0 }),
+  closeSubagent: () => set({ subagent: null, frac: 0.5 }),
   replaceZone: (index, id) =>
     set((s) => {
       if (s.zones == null || s.zones.includes(id) || isRegisteredSideChatId(id)) return s;

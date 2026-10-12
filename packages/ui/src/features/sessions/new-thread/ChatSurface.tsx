@@ -33,9 +33,10 @@ import { soleProjectId, useSessionFilters } from '@/store/session-filters';
 import { SessionPanel } from '@/features/session-panel/SessionPanel';
 import { useSessionPanelState } from '@/features/session-panel/use-session-panel-state';
 import { ChatZone } from '@/features/chat/zones/ChatZone';
+import { SubagentZone } from '@/features/chat/zones/SubagentZone';
 import { SplitDivider } from '@/features/shared/SplitDivider';
 import { useMeasuredWidth } from '@/features/shared/use-measured-width';
-import { MIN_ZONE_WIDTH, useZonesStore } from '@/features/chat/zones/zones-store';
+import { isSubagentParentActive, MIN_ZONE_WIDTH, useZonesStore } from '@/features/chat/zones/zones-store';
 import { useZonesReconciler } from '@/features/chat/zones/use-zones-reconciler';
 import { useZoneShortcutActions } from '@/features/chat/zones/use-zone-shortcut-actions';
 import { useShortcutAction } from '@/features/shortcuts/action-store';
@@ -61,7 +62,9 @@ export function ChatSurface() {
   useZoneShortcutActions(aui);
   useShortcutAction('chat.focus-composer', focusVisibleComposer);
   const zones = useZonesStore((s) => s.zones);
+  const subagent = useZonesStore((s) => s.subagent);
   const closeSplit = useZonesStore((s) => s.closeSplit);
+  const closeSubagent = useZonesStore((s) => s.closeSubagent);
   const splitFrac = useZonesStore((s) => s.frac);
   const setSplitFrac = useZonesStore((s) => s.setFrac);
 
@@ -147,6 +150,36 @@ export function ChatSurface() {
   }
 
   const welcome = isNewLocal ? <ChatEmptyState variant="welcome" projectId={draftCfg?.projectId} /> : undefined;
+
+  if (subagent != null && isSubagentParentActive(subagent, mainThreadId) && splitFits) {
+    return (
+      <div ref={measureSurface} data-testid="chat-split-row" className="relative flex min-h-0 flex-1 overflow-hidden">
+        <div style={{ flexGrow: splitFrac }} className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
+          <div
+            ref={panelState.hostRef}
+            data-chat-column
+            className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden"
+          >
+            <SideChatHost parentChatId={mainThreadId}>
+              <ChatColumnHeader columnId="main" toggleTestId="session-panel-toggle" tourAnchor />
+              <div className="min-h-0 flex-1">
+                <ChatThread />
+              </div>
+            </SideChatHost>
+            <SessionPanel state={panelState} />
+          </div>
+        </div>
+        <SplitDivider
+          testId="chat-split-divider"
+          minLeft={MIN_ZONE_WIDTH}
+          minRight={MIN_ZONE_WIDTH}
+          onFrac={setSplitFrac}
+        />
+        <SubagentZone subagent={subagent} grow={1 - splitFrac} onClose={closeSubagent} />
+        <ZoneDropLayer canSplit />
+      </div>
+    );
+  }
 
   // Split mode renders only while the focused chat is a MEMBER of the pair
   // AND both zones clear MIN_ZONE_WIDTH — any other active session, or a

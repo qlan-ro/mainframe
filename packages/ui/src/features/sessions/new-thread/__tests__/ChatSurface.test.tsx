@@ -43,7 +43,7 @@ let __initialization: { status: 'idle' | 'initializing' | 'ready' | 'error'; ret
 vi.mock('@assistant-ui/react', () => ({
   useAuiState: (sel: (s: unknown) => unknown) =>
     sel({
-      threads: { mainThreadId: __mainThreadId },
+      threads: { mainThreadId: __mainThreadId, threadItems: __mainThreadId ? [{ id: __mainThreadId }] : [] },
       threadListItem: { id: __mainThreadId, status: __itemStatus },
       thread: { messages: { length: __messageCount } },
     }),
@@ -74,6 +74,14 @@ vi.mock('../use-new-thread-auto-config', () => ({ useNewThreadAutoConfig: () => 
 vi.mock('../../../chat/thread/ChatColumnHeader', () => ({ ChatColumnHeader: () => null }));
 vi.mock('../../../chat/thread/ChatThread', () => ({
   ChatThread: ({ emptyState }: { emptyState?: React.ReactNode }) => <div data-testid="chat-thread">{emptyState}</div>,
+}));
+vi.mock('@/features/chat/zones/ChatZone', () => ({
+  ChatZone: ({ chatId }: { chatId: string }) => <div data-testid={`chat-zone-${chatId}`} />,
+}));
+vi.mock('@/features/chat/zones/SubagentZone', () => ({
+  SubagentZone: ({ subagent }: { subagent: { toolCallId: string } }) => (
+    <div data-testid={`chat-subagent-zone-${subagent.toolCallId}`} />
+  ),
 }));
 vi.mock('../ChatEmptyState', () => ({
   ChatEmptyState: ({ variant, projectId }: { variant: string; projectId?: string }) => (
@@ -107,9 +115,11 @@ class RecordingResizeObserver {
 
 import { ChatSurface } from '../ChatSurface';
 import { useFindInChatStore } from '@/features/chat/find/find-in-chat-store';
+import { useZonesStore } from '@/features/chat/zones/zones-store';
 
 describe('ChatSurface', () => {
   beforeEach(() => {
+    useZonesStore.setState({ zones: null, subagent: null });
     observed = [];
     __mainThreadId = '__LOCALID_1';
     __itemStatus = 'new';
@@ -175,6 +185,33 @@ describe('ChatSurface', () => {
     render(<ChatSurface />);
     expect(screen.getByTestId('chat-thread')).toBeInTheDocument();
     expect(screen.queryByTestId('empty-welcome')).toBeNull();
+  });
+
+  it('opens a native subagent beside a parent still using a temporary thread ID', () => {
+    const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1200);
+    __mainThreadId = '__LOCALID_parent';
+    __itemStatus = 'regular';
+    __messageCount = 4;
+    useZonesStore.getState().openSubagent({
+      parentChatId: 'daemon-parent',
+      parentThreadId: '__LOCALID_parent',
+      toolCallId: 'task-1',
+      messageId: 'm-1',
+      title: 'worker',
+    });
+
+    try {
+      const view = render(<ChatSurface />);
+      expect(screen.getByTestId('chat-split-row')).toBeInTheDocument();
+      expect(screen.getByTestId('side-chat-host-stub')).toHaveAttribute('data-parent-chat-id', '__LOCALID_parent');
+      expect(screen.getByTestId('chat-subagent-zone-task-1')).toBeInTheDocument();
+
+      __mainThreadId = 'daemon-parent';
+      view.rerender(<ChatSurface />);
+      expect(screen.getByTestId('chat-split-row')).toBeInTheDocument();
+    } finally {
+      width.mockRestore();
+    }
   });
 
   it('mounts the side-chat host in the single view, keyed by the main thread id (todo #344)', () => {

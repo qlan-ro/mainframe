@@ -13,6 +13,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { TranscriptScopeProvider } from '@/features/chat/messages/compact/transcript-scope';
+import { useZonesStore } from '@/features/chat/zones/zones-store';
 
 // ---------------------------------------------------------------------------
 // Module mocks — must come before the component import
@@ -74,6 +76,39 @@ const baseProps = {
 // ---------------------------------------------------------------------------
 
 describe('TaskCard — done state', () => {
+  it('opens its live transcript beside the parent using the tool-call identity', () => {
+    useZonesStore.getState().closeSubagent();
+    render(
+      <Wrap>
+        <TranscriptScopeProvider
+          value={{
+            rootThreadId: 'parent',
+            chatId: 'parent',
+            messageId: 'parent-message',
+            ancestors: [],
+            pendingToolIds: new Set(),
+          }}
+        >
+          <TaskCard
+            {...baseProps}
+            args={{ subagent_type: 'worker', description: 'Inspect files' }}
+            result="done"
+            status={doneStatus}
+          />
+        </TranscriptScopeProvider>
+      </Wrap>,
+    );
+
+    fireEvent.click(screen.getByTestId('chat-task-open-tc-task-001'));
+    expect(useZonesStore.getState().subagent).toEqual({
+      parentChatId: 'parent',
+      parentThreadId: 'parent',
+      toolCallId: 'tc-task-001',
+      messageId: 'parent-message',
+      title: 'worker',
+    });
+    useZonesStore.getState().closeSubagent();
+  });
   it('renders the card root element', () => {
     render(
       <Wrap>
