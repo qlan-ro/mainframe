@@ -51,6 +51,8 @@ pub mod skill_path;
 pub mod skills;
 pub mod task_events;
 pub mod title_generator;
+#[cfg(test)]
+mod title_generator_tests;
 pub mod transcript;
 mod transcript_presentation;
 pub mod trust_store;

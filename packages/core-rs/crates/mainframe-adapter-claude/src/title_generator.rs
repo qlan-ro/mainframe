@@ -65,7 +65,7 @@ pub async fn generate_claude_title(
 
 /// Turns a completed title-child `Output` into the accepted title, or an error
 /// that names the exit status and the CLI's own (bounded) stderr.
-fn interpret_output(
+pub(crate) fn interpret_output(
     output: std::process::Output,
     binary: &str,
 ) -> Result<Option<String>, AdapterError> {
@@ -75,15 +75,22 @@ fn interpret_output(
             .code()
             .map(|code| code.to_string())
             .unwrap_or_else(|| "unknown".to_string());
-        let stderr = truncate_stderr(&output.stderr);
-        let stderr = if stderr.is_empty() {
-            "<no stderr>".to_string()
-        } else {
+        let stderr = truncate_output(&output.stderr);
+        // The CLI reports "Not logged in" and usage-limit refusals on stdout
+        // and exits 1 with an empty stderr, so fall back to stdout.
+        let detail = if !stderr.is_empty() {
             stderr
+        } else {
+            let stdout = truncate_output(&output.stdout);
+            if stdout.is_empty() {
+                "<no stderr or stdout>".to_string()
+            } else {
+                format!("stdout: {stdout}")
+            }
         };
         return Err(AdapterError::Exited {
             what: "claude title generation",
-            detail: format!("{status}: {stderr}"),
+            detail: format!("{status}: {detail}"),
         });
     }
 
@@ -103,9 +110,9 @@ fn interpret_output(
     Ok(title)
 }
 
-/// Bounds the CLI's stderr to 1024 *characters* (not bytes, so a multibyte code
-/// point is never split), appending `…` when the source was longer.
-fn truncate_stderr(raw: &[u8]) -> String {
+/// Bounds one CLI output stream to 1024 *characters* (not bytes, so a multibyte
+/// code point is never split), appending `…` when the source was longer.
+fn truncate_output(raw: &[u8]) -> String {
     let text = String::from_utf8_lossy(raw);
     let text = text.trim();
     let mut truncated: String = text.chars().take(1024).collect();
