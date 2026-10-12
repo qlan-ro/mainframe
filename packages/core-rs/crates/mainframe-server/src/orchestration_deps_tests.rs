@@ -6,7 +6,7 @@ use mainframe_orchestration::errors::{ErrorCode, PortError};
 use mainframe_orchestration::ports::{
     LaunchRequest, LaunchWorkspace, OrchestrationPort, TaskStore,
 };
-use mainframe_types::chat::{NO_PROJECT_ID, NewChat};
+use mainframe_types::chat::{DisplayStatus, NO_PROJECT_ID, NewChat};
 use mainframe_types::orchestration::{DelegatedTask, TaskDelivery, TaskRole, TaskStatus};
 use mainframe_types::settings::ExecutionMode;
 
@@ -179,6 +179,8 @@ async fn a_delegated_child_reports_its_task_and_boot_interrupts_open_tasks() {
     );
     let parent_chat = chats.get_chat(&caller).unwrap();
     assert_eq!(parent_chat.orchestration.delegated_waiting, Some(false));
+    assert_eq!(parent_chat.display_status, Some(DisplayStatus::Working));
+    assert_eq!(parent_chat.is_running, Some(false));
 
     let view = port.chat(&child.id).await.unwrap();
     assert_eq!(view.task_id.as_deref(), Some("task_1"));
@@ -191,6 +193,10 @@ async fn a_delegated_child_reports_its_task_and_boot_interrupts_open_tasks() {
     let after = store.get("task_1").await.unwrap();
     assert_eq!(after.status, TaskStatus::Interrupted);
     assert_eq!(after.delivery, TaskDelivery::Dropped);
+    assert_eq!(
+        chats.get_chat(&caller).unwrap().display_status,
+        Some(DisplayStatus::Idle)
+    );
 }
 
 /// The Stop cascade through the *real* hook (`ChatManager::interrupt_chat`
