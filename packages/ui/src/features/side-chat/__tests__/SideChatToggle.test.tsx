@@ -72,7 +72,7 @@ describe('SideChatToggle — opening', () => {
 
     fireEvent.click(screen.getByTestId('side-chat-toggle-parent-1'));
 
-    expect(openSideChat).toHaveBeenCalledWith('parent-1');
+    expect(openSideChat).toHaveBeenCalledWith('parent-1', false);
     expect(screen.getByTestId('side-chat-toggle-parent-1')).toHaveAttribute('data-side-chat-status', 'none');
   });
 });

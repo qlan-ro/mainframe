@@ -53,7 +53,7 @@ export function SideChatToggle() {
         variant="ghost"
         size="icon-xs"
         onClick={() => {
-          if (sideChatId == null) void openSideChat(parentChatId);
+          if (sideChatId == null) void openSideChat(parentChatId, false);
           else setCollapsed(parentChatId, !collapsed);
         }}
       >

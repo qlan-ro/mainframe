@@ -82,7 +82,7 @@ function ForkFallbackGlyph({ forkFallback }: { forkFallback: ForkFallback }) {
               }
         }
       >
-        <Glyph aria-hidden className={cn(GLYPH_SIZE, 'shrink-0')} />
+        <Glyph aria-hidden className={cn(GLYPH_SIZE, 'shrink-0', forkFallback.relation === 'fork' && 'rotate-90')} />
       </span>
     </Hint>
   );

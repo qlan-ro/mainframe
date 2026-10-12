@@ -75,7 +75,7 @@ vi.mock('../../thread/ChatColumnHeader', () => ({
 }));
 
 import { ChatZone } from '../ChatZone';
-import { seedDraft } from '../../runtime/draft-stash';
+import { handoffDraft } from '../../runtime/draft-stash';
 
 describe('ChatZone — side-chat host placement (todo #344)', () => {
   it("mounts SideChatHost inside its own zone, keyed by that zone's chat id", () => {
@@ -113,11 +113,11 @@ describe('ChatZone — side-chat host placement (todo #344)', () => {
 });
 
 /**
- * ChatZone — draft-stash restore (finding 1, fork-from-message prefill).
+ * ChatZone — draft-stash restore after a split handoff.
  *
- * A fork opened beside its parent renders through ChatZone, not through
- * `useChatRuntimeHook`'s hidden kept-warm instance — so ChatZone must apply a
- * seeded draft (`seedDraft`) to ITS OWN composer, the one actually displayed.
+ * A split member renders through ChatZone, not through `useChatRuntimeHook`'s
+ * hidden kept-warm instance — so ChatZone restores the handed-off draft to
+ * its own displayed composer.
  */
 describe('ChatZone — draft-stash restore', () => {
   it("seeds the zone's own composer with a stashed draft on mount", () => {
@@ -125,7 +125,7 @@ describe('ChatZone — draft-stash restore', () => {
     const addAttachment = vi.fn().mockResolvedValue(undefined);
     mockUseAui.mockReturnValue({ thread: { composer: () => ({ setText, addAttachment }) } });
 
-    seedDraft('chat-fork-1', 'List the files in this project using bash ls.');
+    handoffDraft('chat-fork-1', { text: 'List the files in this project using bash ls.', attachments: [] });
 
     render(<ChatZone chatId="chat-fork-1" focused onFocus={() => {}} onClose={() => {}} />);
 

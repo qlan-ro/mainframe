@@ -7,7 +7,7 @@
  * so the button's own `items-center` centres it across both lines.
  */
 import type { ReactNode } from 'react';
-import { GitFork, PinIcon } from 'lucide-react';
+import { PinIcon, Split } from 'lucide-react';
 import type { TagColor } from '@qlan-ro/mainframe-types';
 import { FadeLabel } from '@/components/ui/fade-label';
 import { useTabHintIndex } from '@/features/session-tabs/use-tab-hint-index';
@@ -27,7 +27,7 @@ interface RowBodyProps {
   renameSlot: ReactNode | null;
   /** The hover action cluster, revealed inline just before the time. */
   actionsSlot: ReactNode;
-  /** True when this row nests under its parent (variant D) — leads the title with a GitFork glyph. */
+  /** True when this row nests under its parent (variant D). */
   nestedFork: boolean;
   /** Set only for a non-nested fork — the meta line's trailing fallback glyph. */
   forkFallback?: ForkFallback;
@@ -55,10 +55,10 @@ export function RowBody({
             glyphs grow the hovered row and nudge every row below by 1px. */}
         <span className="flex h-4.5 items-center gap-1.5">
           {nestedFork && (
-            <GitFork
+            <Split
               aria-hidden
               data-testid="sessions-row-fork-nest-glyph"
-              className="size-3! shrink-0 text-muted-foreground"
+              className="size-3! shrink-0 rotate-90 text-muted-foreground"
             />
           )}
           {renameSlot ?? (

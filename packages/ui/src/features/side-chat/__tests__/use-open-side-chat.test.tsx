@@ -60,6 +60,18 @@ describe('useOpenSideChat — parent off screen', () => {
     expect(switchToThread).toHaveBeenCalledWith('chat-parent');
     expect(openSideChatMock).toHaveBeenCalledWith(31415, 'chat-parent');
   });
+
+  it('opens a visible split column without switching the main session', async () => {
+    getState.mockReturnValue({ mainThreadId: 'chat-other' });
+    openSideChatMock.mockResolvedValue({ id: 'chat-side-1' });
+    const { result } = renderHook(() => useOpenSideChat());
+
+    await act(() => result.current('chat-parent', false));
+
+    expect(switchToThread).not.toHaveBeenCalled();
+    expect(openSideChatMock).toHaveBeenCalledWith(31415, 'chat-parent');
+    expect(useSideChatCollapseStore.getState().isCollapsed('chat-parent')).toBe(false);
+  });
 });
 
 describe('useOpenSideChat — daemon failure', () => {

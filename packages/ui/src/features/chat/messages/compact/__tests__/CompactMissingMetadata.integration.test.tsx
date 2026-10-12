@@ -10,7 +10,7 @@ import { CompactTranscript } from '../CompactTranscript';
 import { TranscriptScopeProvider } from '../transcript-scope';
 import { boundedMessageComponents } from '../../bounded-messages';
 import { act, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, expect, it } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
 import type { PresentationSource } from '@qlan-ro/mainframe-types';
 import { useUiPrefs } from '@/store/ui-prefs';
 import { createChatThreadState } from '../../../controller/chat-thread-state';
@@ -18,6 +18,8 @@ import { projectChatThreadMessages, projectChatThreadRepository } from '../../..
 import { useNativeThreadMessages } from '../../../runtime/use-native-thread-messages';
 import { convertAcpItems } from '../../../view-model/convert-acp-item';
 import { TurnFixture, turnContext, turnMessage, turnSource } from './turn-fixtures';
+
+vi.mock('../../AssistantForkAction', () => ({ AssistantForkAction: () => null }));
 
 type Variant = 'absent metadata' | 'absent custom' | 'invalid Unicode spans';
 const variants: Variant[] = ['absent metadata', 'absent custom', 'invalid Unicode spans'];

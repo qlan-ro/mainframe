@@ -43,7 +43,16 @@ function beforeSegmentReason(start: LatestSegmentStart): string {
 export interface SegmentedMessage {
   readonly id: string;
   readonly role: string;
-  readonly metadata?: { readonly custom?: { readonly mainframe?: { readonly providerSwitch?: ProviderSwitchMarker } } };
+  readonly metadata?: {
+    readonly custom?: {
+      readonly mainframe?: {
+        readonly providerSwitch?: ProviderSwitchMarker;
+        readonly pending?: boolean;
+        readonly queued?: boolean;
+        readonly error?: string;
+      };
+    };
+  };
 }
 
 /** The latest divider's marker when `messageId` lies before it or is the

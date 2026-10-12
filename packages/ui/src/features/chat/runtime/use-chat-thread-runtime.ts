@@ -181,8 +181,7 @@ export function useChatThreadRuntime(
   // effect instead. Without it, this hook's hidden kept-warm instance —
   // mounted by aui's RemoteThreadListHookInstanceManager well before the zone
   // itself renders — always wins the one-shot take and seeds a composer
-  // nobody displays, leaving the visible zone's composer empty (a "Fork from
-  // here" prefill landing beside its parent, #343/fork-from-message).
+  // nobody displays, leaving the visible zone's composer empty.
   const skipDraftRestore = opts?.skipDraftRestore ?? false;
   const tookDraftRef = useRef(false);
   useEffect(() => {

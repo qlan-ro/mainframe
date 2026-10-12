@@ -23,7 +23,6 @@ vi.mock('@/lib/toast', () => ({ mfToast: { error: (...args: unknown[]) => toastE
 vi.mock('../runtime/daemon-port-context', () => ({ useDaemonPort: () => 31415 }));
 
 import { useZonesStore } from '@/features/chat/zones/zones-store';
-import { takeStash } from '@/features/chat/runtime/draft-stash';
 import { useForkChat } from '../use-fork-chat';
 
 beforeEach(() => {
@@ -91,25 +90,21 @@ describe('useForkChat', () => {
     expect(useZonesStore.getState().pendingPair).toBeNull();
   });
 
-  it('sends fromMessageId and seeds the prefill before switching to the fork', async () => {
+  it('sends fromMessageId and opens the fork', async () => {
     forkChatMock.mockResolvedValue({ id: 'chat-fork-2' });
-    switchToThread.mockImplementation((id: string) => {
-      // The fork's runtime reads its stash on mount, which follows the switch.
-      expect(takeStash(id)).toEqual({ text: 'try it another way', attachments: [] });
-    });
     const { result } = renderHook(() => useForkChat());
 
-    await act(() => result.current('chat-parent', { fromMessageId: 'msg-2', prefill: 'try it another way' }));
+    await act(() => result.current('chat-parent', { fromMessageId: 'msg-2' }));
 
     expect(forkChatMock).toHaveBeenCalledWith(31415, 'chat-parent', { fromMessageId: 'msg-2' });
     expect(switchToThread).toHaveBeenCalledWith('chat-fork-2');
   });
 
-  it('seeds nothing when a from-message fork fails', async () => {
+  it('does not switch when a from-message fork fails', async () => {
     forkChatMock.mockRejectedValue(new Error('Nothing before this message to fork'));
     const { result } = renderHook(() => useForkChat());
 
-    await act(() => result.current('chat-parent', { fromMessageId: 'msg-1', prefill: 'first' }));
+    await act(() => result.current('chat-parent', { fromMessageId: 'msg-1' }));
 
     expect(toastError).toHaveBeenCalledWith('Nothing before this message to fork');
     expect(switchToThread).not.toHaveBeenCalled();

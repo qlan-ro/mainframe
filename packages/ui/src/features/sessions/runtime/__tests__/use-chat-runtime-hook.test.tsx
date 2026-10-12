@@ -53,7 +53,7 @@ vi.mock('../daemon-port-context', () => ({
 
 // Split-zone membership: a thread that is (or is queued to become) a
 // `ChatZone` member defers its draft-stash take to the zone (finding 1,
-// fork-from-message prefill) — but ONLY when the split will actually render
+// offload-release draft) — but ONLY when the split will actually render
 // (`splitFits`; ChatSurface parks the pair behind the single view otherwise —
 // the review follow-up on 3e34c95c). Defaults to "no split, fits" unless a
 // test opts in.

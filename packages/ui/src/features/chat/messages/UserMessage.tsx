@@ -17,7 +17,6 @@
  *     tiles with their selector context (native message.attachments)
  *   - Implementing plan → PlanBubble, when the daemon sent a clear-context
  *     `Implement the following plan:` turn (see plan-message.ts)
- *   - Hover bar     → UserMessageActionBar ("Fork from here")
  *   - Agent-sent turn → AgentMessageCard, when another chat's agent wrote it
  *     through the orchestration MCP server (see markers/agent-message.ts)
  *
@@ -52,7 +51,6 @@ import { UserAttachments } from './UserAttachments';
 import { ReviewCommentCard } from './ReviewCommentCard';
 import { PlanBubble } from './PlanBubble';
 import { parsePlanUserMessage } from './plan-message';
-import { UserMessageActionBar } from './UserMessageActionBar';
 import { AgentMessageCard } from './AgentMessageCard';
 import { parseAgentText } from '../markers/agent-message';
 
@@ -267,8 +265,6 @@ function UserMessageImpl() {
               </p>
             </div>
           )}
-
-          <UserMessageActionBar prefill={visibleMessageText(rawText)} />
         </MessageContent>
       </Message>
     </MessagePrimitive.Root>
