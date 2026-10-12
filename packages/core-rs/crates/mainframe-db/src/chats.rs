@@ -54,9 +54,7 @@ pub(crate) const CHAT_SELECT_FIELDS: &str = "id, adapter_id, project_id, \
        UNION SELECT t.child_chat_id FROM delegated_tasks t JOIN open_tasks o \
          ON t.parent_chat_id = o.child WHERE t.status IN ('queued', 'running', 'waiting')) \
      SELECT group_concat(child, ' ') FROM open_tasks) \
-     AS activeDelegatedChildIds, \
-  EXISTS(SELECT 1 FROM delegated_tasks t WHERE t.parent_chat_id = chats.id \
-    AND t.status = 'running') AS hasRunningDelegatedTask";
+     AS activeDelegatedChildIds, EXISTS(SELECT 1 FROM delegated_tasks t WHERE t.parent_chat_id = chats.id AND t.status = 'running') AS hasRunningDelegatedTask";
 
 /// The still-pending fork state stored in `chats.pending_fork` (JSON), read and
 /// written only through `get_pending_fork` / `clear_pending_fork` —
