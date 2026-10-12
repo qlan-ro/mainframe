@@ -258,6 +258,9 @@ pub struct ChatOrchestration {
     /// can follow live gates. Daemon-internal.
     #[serde(skip)]
     pub active_child_ids: Vec<String>,
+    /// Direct running tasks keep the parent's sidebar status active after its turn ends.
+    #[serde(skip)]
+    pub has_running_delegated_task: bool,
 }
 
 #[cfg(test)]

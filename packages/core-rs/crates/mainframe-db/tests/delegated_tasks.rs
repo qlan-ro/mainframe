@@ -163,11 +163,17 @@ fn fork_side_and_delegated_children_coexist_under_one_parent() {
     );
     // Only unfinished tasks count toward the parent's waiting derivation.
     let parent_row = repos.chats.get(&parent.id).unwrap().unwrap();
+    assert!(parent_row.orchestration.has_running_delegated_task);
     assert_eq!(
         parent_row.orchestration.active_child_ids,
         vec![first.id.clone()]
     );
     assert!(parent_row.orchestration.delegation.is_none());
+    let mut waiting = task("t1", &parent.id, &first.id, "1");
+    waiting.status = TaskStatus::Waiting;
+    repos.tasks.update(&waiting).unwrap();
+    let waiting_parent = repos.chats.get(&parent.id).unwrap().unwrap();
+    assert!(!waiting_parent.orchestration.has_running_delegated_task);
     let side_row = repos.chats.get(&side.id).unwrap().unwrap();
     assert!(side_row.orchestration.delegation.is_none());
     assert!(side.temporary);

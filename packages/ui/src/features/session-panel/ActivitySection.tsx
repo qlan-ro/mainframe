@@ -1,26 +1,14 @@
-/**
- * ActivitySection — the live background work of this session: subagents,
- * background bash tasks, and workflow runs, as a section of the docked panel.
- *
- * The daemon ships only running work (there is no status field on
- * `BackgroundActivityTask` — see background-task.ts), so every row IS running
- * and the count is the list length. The row's leading glyph says what KIND of
- * work it is — workflow, subagent, task — not its state; liveness is carried
- * by the ticking elapsed column and the eyebrow's pulse dot.
- *
- * A workflow row drills in place into its run panel — the level swap the
- * composer's two-level popover used to do, minus the popover.
- *
- * The section stays mounted across a session switch, so the drill-in is reset
- * on `chatId` explicitly; the popover got that free from Radix unmounting.
- *
- * Empty keeps one muted row: a section that vanishes when work finishes is
- * worse than a placeholder.
- */
+/** Live CLI work and unfinished delegated chats in the docked session panel. */
 import { useEffect, useMemo, useState } from 'react';
+import { useAui } from '@assistant-ui/react';
 import { Bot, ChevronLeft, ChevronRight, CircleDashed, SquareTerminal, Workflow } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import type { BackgroundActivityTask, BackgroundWorkKind, ClaudeWorkflowRun } from '@qlan-ro/mainframe-types';
+import {
+  isTerminalTaskStatus,
+  type BackgroundActivityTask,
+  type BackgroundWorkKind,
+  type ClaudeWorkflowRun,
+} from '@qlan-ro/mainframe-types';
 import { cn } from '@/lib/utils';
 import { useChatExtras } from '@/features/chat/runtime/chat-extras';
 import { formatElapsed, useNow } from './background-activity-view';
@@ -29,6 +17,9 @@ import { WorkflowRunPanel } from '@/features/chat/workflow/WorkflowRunPanel';
 import { runKey } from '@/features/chat/workflow/workflow-progress';
 import { runningCount } from './activity-view';
 import { PanelEyebrow } from './PanelEyebrow';
+import { delegatedTasksOf, type DelegatedTaskRow } from '@/features/sessions/view-model/agent-provenance';
+import { useSessionItems } from '@/features/chat/orchestration/use-session-items';
+import { TaskStatusLabel } from '@/features/chat/orchestration/TaskStatusLabel';
 
 const ROW = 'flex items-center gap-2 rounded-md px-2 py-1';
 const ELAPSED = 'shrink-0 font-mono text-xs tabular-nums text-muted-foreground';
@@ -92,6 +83,22 @@ function TaskRow({ task, now }: { task: BackgroundActivityTask; now: number }) {
   );
 }
 
+function DelegatedRow({ task, onOpen }: { task: DelegatedTaskRow; onOpen: (itemId: string) => void }) {
+  return (
+    <button
+      type="button"
+      data-testid={`session-panel-delegated-${task.taskId}`}
+      onClick={() => onOpen(task.itemId)}
+      className={cn(ROW, 'w-full text-left transition-colors hover:bg-foreground/8')}
+    >
+      <Bot className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+      <span className="min-w-0 flex-1 truncate text-sm">{task.title}</span>
+      <TaskStatusLabel status={task.status} waiting={task.waiting} />
+      <ChevronRight className="size-3 shrink-0 text-muted-foreground" aria-hidden />
+    </button>
+  );
+}
+
 /** The only row that opens something — and only once its run is known. */
 function WorkflowRow({
   task,
@@ -144,14 +151,21 @@ function WorkflowDrillIn({ run, onBack }: { run: ClaudeWorkflowRun; onBack: () =
 }
 
 export function ActivitySection() {
+  const aui = useAui();
+  const items = useSessionItems();
   const extras = useChatExtras();
   const chatId = extras?.state.chatId;
   const backgroundTasks = extras?.state.backgroundTasks;
   const tasks = useMemo(() => Object.values(backgroundTasks ?? {}), [backgroundTasks]);
+  const delegated = useMemo(
+    () => (chatId == null ? [] : delegatedTasksOf(items, chatId).filter((row) => !isTerminalTaskStatus(row.status))),
+    [items, chatId],
+  );
   const [drillTaskId, setDrillTaskId] = useState<string | null>(null);
   const drillRun = useWorkflowRun(drillTaskId ?? undefined);
   const now = useNow(tasks.length > 0);
-  const running = runningCount(tasks);
+  const running = runningCount(tasks) + delegated.filter((task) => task.status === 'running').length;
+  const active = tasks.length + delegated.length;
 
   useEffect(() => setDrillTaskId(null), [chatId]);
 
@@ -161,18 +175,23 @@ export function ActivitySection() {
       <div className="flex flex-col gap-0.5 px-2 pb-2">
         {drillRun ? (
           <WorkflowDrillIn run={drillRun} onBack={() => setDrillTaskId(null)} />
-        ) : tasks.length === 0 ? (
+        ) : active === 0 ? (
           <div data-testid="session-panel-activity-empty" className={cn(ROW, 'text-sm text-muted-foreground')}>
             Nothing running
           </div>
         ) : (
-          tasks.map((task) =>
-            task.kind === 'workflow' ? (
-              <WorkflowRow key={task.id} task={task} now={now} onOpen={setDrillTaskId} />
-            ) : (
-              <TaskRow key={task.id} task={task} now={now} />
-            ),
-          )
+          <>
+            {delegated.map((task) => (
+              <DelegatedRow key={task.taskId} task={task} onOpen={(id) => aui.threads.switchToThread(id)} />
+            ))}
+            {tasks.map((task) =>
+              task.kind === 'workflow' ? (
+                <WorkflowRow key={task.id} task={task} now={now} onOpen={setDrillTaskId} />
+              ) : (
+                <TaskRow key={task.id} task={task} now={now} />
+              ),
+            )}
+          </>
         )}
       </div>
     </section>

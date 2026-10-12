@@ -23,7 +23,7 @@ pub(super) fn enrich_chat(
     // isRunning — the composer/thread indicator stays main-turn-only.
     chat.display_status = Some(if has_pending {
         DisplayStatus::Waiting
-    } else if working || !live_tasks.is_empty() {
+    } else if working || !live_tasks.is_empty() || chat.orchestration.has_running_delegated_task {
         DisplayStatus::Working
     } else {
         DisplayStatus::Idle

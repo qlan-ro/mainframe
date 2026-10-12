@@ -245,7 +245,12 @@ impl OrchestrationService {
     /// Boot: interrupt what died with the previous daemon, and hold owed
     /// deliveries until each parent spawns again.
     pub async fn reconcile_boot(&self) {
+        let unfinished = self.tasks.nonterminal().await;
         let interrupted = self.tasks.interrupt_unfinished().await;
+        for task in &unfinished {
+            self.port.chat_changed(&task.parent_chat_id);
+            self.port.chat_changed(&task.child_chat_id);
+        }
         let owed = self.tasks.owed().await;
         for task in &owed {
             self.boot_held

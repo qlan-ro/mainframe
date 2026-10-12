@@ -20,10 +20,19 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { render as rtlRender, screen, fireEvent, within } from '@testing-library/react';
 import type { BackgroundActivityTask, ClaudeWorkflowRun } from '@qlan-ro/mainframe-types';
+import type { SessionItem } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 let mockTasks: Record<string, BackgroundActivityTask> = {};
 let mockChatId = 'chat-1';
+let mockSessionItems: SessionItem[] = [];
+const mockSwitchToThread = vi.fn();
+vi.mock('@assistant-ui/react', () => ({
+  useAui: () => ({ threads: { switchToThread: mockSwitchToThread } }),
+}));
+vi.mock('@/features/chat/orchestration/use-session-items', () => ({
+  useSessionItems: () => mockSessionItems,
+}));
 vi.mock('@/features/chat/runtime/chat-extras', () => ({
   useChatExtras: () => ({ state: { chatId: mockChatId, backgroundTasks: mockTasks } }),
 }));
@@ -80,6 +89,8 @@ beforeEach(() => {
   mockTasks = {};
   mockRuns = {};
   mockChatId = 'chat-1';
+  mockSessionItems = [];
+  mockSwitchToThread.mockClear();
 });
 
 afterEach(() => {
@@ -108,6 +119,25 @@ describe('ActivitySection — header', () => {
 });
 
 describe('ActivitySection — task rows', () => {
+  it('shows live delegated children and opens their chat, excluding finished tasks', () => {
+    const child = (id: string, status: 'running' | 'waiting' | 'completed'): SessionItem =>
+      ({
+        id,
+        title: `Task ${id}`,
+        status: 'regular',
+        custom: { parentChatId: 'chat-1', delegation: { taskId: id, role: 'review', status }, updatedAt: 1 },
+      }) as SessionItem;
+    mockSessionItems = [child('running', 'running'), child('waiting', 'waiting'), child('done', 'completed')];
+    render(section());
+
+    expect(screen.getByTestId('session-panel-delegated-running')).toHaveTextContent('Task running');
+    expect(screen.getByTestId('session-panel-delegated-waiting')).toHaveTextContent('waiting');
+    expect(screen.queryByTestId('session-panel-delegated-done')).toBeNull();
+    expect(screen.getByTestId('session-panel-activity-live')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('session-panel-delegated-running'));
+    expect(mockSwitchToThread).toHaveBeenCalledWith('running');
+  });
+
   it('renders one row per live task with its description and elapsed time', () => {
     mockTasks = {
       'a-1': task('a-1', 'agent', 'reviewer subagent', 5 * 60_000), // started 5m ago

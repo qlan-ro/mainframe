@@ -43,6 +43,7 @@ pub(crate) fn map_orchestration(row: &rusqlite::Row<'_>) -> Result<ChatOrchestra
         delegated_waiting: None,
         agent_outbox: None,
         active_child_ids,
+        has_running_delegated_task: row.get("hasRunningDelegatedTask")?,
     })
 }
 

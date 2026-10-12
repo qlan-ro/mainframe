@@ -107,6 +107,19 @@ mod background_activity {
     }
 
     #[test]
+    fn delegated_task_keeps_parent_working_after_its_turn_ends() {
+        let mut chat = working_chat("parent", None, false);
+        chat.orchestration.has_running_delegated_task = true;
+        enrich_chat(&mut chat, false, &[], None, None);
+        assert_eq!(chat.display_status, Some(DisplayStatus::Working));
+        assert_eq!(chat.is_running, Some(false));
+
+        chat.orchestration.has_running_delegated_task = false;
+        enrich_chat(&mut chat, false, &[], None, None);
+        assert_eq!(chat.display_status, Some(DisplayStatus::Idle));
+    }
+
+    #[test]
     fn pending_permission_wins_over_background_activity() {
         let mut chat = working_chat("c-idle", None, false);
         let tasks = vec![bg_task("a-3", BackgroundWorkKind::Agent, "work")];
