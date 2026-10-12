@@ -18,16 +18,16 @@ import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { registerSideChat } from './side-chat-ids';
 import { useSideChatCollapseStore } from './side-chat-collapse-store';
 
-export type OpenSideChatFn = (parentChatId: string) => Promise<void>;
+export type OpenSideChatFn = (parentChatId: string, activateParent?: boolean) => Promise<void>;
 
 export function useOpenSideChat(): OpenSideChatFn {
   const port = useDaemonPort();
   const aui = useAui();
 
   return useCallback(
-    async (parentChatId: string) => {
+    async (parentChatId: string, activateParent = true) => {
       const { mainThreadId } = aui.threads.getState();
-      if (mainThreadId !== parentChatId) aui.threads.switchToThread(parentChatId);
+      if (activateParent && mainThreadId !== parentChatId) aui.threads.switchToThread(parentChatId);
       try {
         const sideChat = await openSideChat(port, parentChatId);
         registerSideChat(sideChat.id, parentChatId);
