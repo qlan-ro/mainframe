@@ -5,7 +5,7 @@
  * opening or closing the split always parks focus on the left slot.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { isVisibleZone, useZonesStore } from '../zones-store';
+import { isSubagentParentActive, isVisibleZone, useZonesStore } from '../zones-store';
 import { __resetSideChatRegistryForTests, registerSideChat } from '@/features/side-chat/side-chat-ids';
 
 const state = () => useZonesStore.getState();
@@ -15,9 +15,27 @@ beforeEach(() => {
 });
 
 describe('native subagent split', () => {
+  it('remains active when a temporary parent thread becomes its canonical chat ID', () => {
+    const subagent = {
+      parentThreadId: '__LOCALID_parent',
+      parentChatId: 'daemon-parent',
+      toolCallId: 'task-1',
+      messageId: 'm-1',
+      title: 'worker',
+    };
+    expect(isSubagentParentActive(subagent, '__LOCALID_parent')).toBe(true);
+    expect(isSubagentParentActive(subagent, 'daemon-parent')).toBe(true);
+    expect(isSubagentParentActive(subagent, 'other')).toBe(false);
+  });
   it('replaces the chat pair and closes without leaving a persisted chat zone', () => {
     state().openSplit('parent', 'other');
-    state().openSubagent({ parentChatId: 'parent', toolCallId: 'task-1', messageId: 'm-1', title: 'worker' });
+    state().openSubagent({
+      parentChatId: 'parent',
+      parentThreadId: 'parent',
+      toolCallId: 'task-1',
+      messageId: 'm-1',
+      title: 'worker',
+    });
     expect(state().zones).toBeNull();
     expect(state().subagent?.toolCallId).toBe('task-1');
 

@@ -36,7 +36,7 @@ import { ChatZone } from '@/features/chat/zones/ChatZone';
 import { SubagentZone } from '@/features/chat/zones/SubagentZone';
 import { SplitDivider } from '@/features/shared/SplitDivider';
 import { useMeasuredWidth } from '@/features/shared/use-measured-width';
-import { MIN_ZONE_WIDTH, useZonesStore } from '@/features/chat/zones/zones-store';
+import { isSubagentParentActive, MIN_ZONE_WIDTH, useZonesStore } from '@/features/chat/zones/zones-store';
 import { useZonesReconciler } from '@/features/chat/zones/use-zones-reconciler';
 import { useZoneShortcutActions } from '@/features/chat/zones/use-zone-shortcut-actions';
 import { useShortcutAction } from '@/features/shortcuts/action-store';
@@ -151,16 +151,24 @@ export function ChatSurface() {
 
   const welcome = isNewLocal ? <ChatEmptyState variant="welcome" projectId={draftCfg?.projectId} /> : undefined;
 
-  if (subagent != null && mainThreadId === subagent.parentChatId && splitFits) {
+  if (subagent != null && isSubagentParentActive(subagent, mainThreadId) && splitFits) {
     return (
       <div ref={measureSurface} data-testid="chat-split-row" className="relative flex min-h-0 flex-1 overflow-hidden">
-        <ChatZone
-          chatId={subagent.parentChatId}
-          grow={splitFrac}
-          focused
-          onFocus={() => undefined}
-          onClose={closeSubagent}
-        />
+        <div style={{ flexGrow: splitFrac }} className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
+          <div
+            ref={panelState.hostRef}
+            data-chat-column
+            className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden"
+          >
+            <SideChatHost parentChatId={mainThreadId}>
+              <ChatColumnHeader columnId="main" toggleTestId="session-panel-toggle" tourAnchor />
+              <div className="min-h-0 flex-1">
+                <ChatThread />
+              </div>
+            </SideChatHost>
+            <SessionPanel state={panelState} />
+          </div>
+        </div>
         <SplitDivider
           testId="chat-split-divider"
           minLeft={MIN_ZONE_WIDTH}

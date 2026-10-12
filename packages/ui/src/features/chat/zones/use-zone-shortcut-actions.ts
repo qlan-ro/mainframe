@@ -14,13 +14,13 @@ import { useShortcutAction } from '@/features/shortcuts/action-store';
 import { useSessionTabsStore } from '@/features/session-tabs/store';
 import { canonicalTabId, displayedTabIds, nextSplitPartner } from '@/features/session-tabs/tabs-model';
 import { openInSplit } from './open-in-split';
-import { splitVisible, useZonesStore } from './zones-store';
+import { isSubagentParentActive, splitVisible, useZonesStore } from './zones-store';
 
 export function useZoneShortcutActions(aui: AssistantClient): void {
   useShortcutAction('sessions.close-split', () => {
     const store = useZonesStore.getState();
     const { mainThreadId } = aui.threads.getState();
-    if (store.subagent?.parentChatId === mainThreadId && store.splitFits) {
+    if (isSubagentParentActive(store.subagent, mainThreadId) && store.splitFits) {
       store.closeSubagent();
       return;
     }

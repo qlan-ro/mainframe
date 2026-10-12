@@ -129,7 +129,7 @@ function taskHeaderProps({ args, result, isError, status }: ToolCallMessagePartP
 
 export const TaskCard: ToolCallMessagePartComponent = (part) => {
   const { messages, toolCallId } = part;
-  const { messageId = '', chatId } = useTranscriptScope();
+  const { messageId = '', chatId, rootThreadId } = useTranscriptScope();
   const openSubagent = useZonesStore((state) => state.openSubagent);
 
   const header = taskHeaderProps(part);
@@ -160,7 +160,15 @@ export const TaskCard: ToolCallMessagePartComponent = (part) => {
               variant="ghost"
               size="icon-xs"
               className="shrink-0 text-muted-foreground"
-              onClick={() => openSubagent({ parentChatId: chatId, toolCallId, messageId, title: header.agentName })}
+              onClick={() =>
+                openSubagent({
+                  parentChatId: chatId,
+                  parentThreadId: rootThreadId,
+                  toolCallId,
+                  messageId,
+                  title: header.agentName,
+                })
+              }
             >
               <ExternalLink />
             </Button>

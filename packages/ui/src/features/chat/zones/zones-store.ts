@@ -18,9 +18,16 @@ export type ZoneIndex = 0 | 1;
 
 export interface SubagentZoneRef {
   parentChatId: string;
+  parentThreadId: string;
   toolCallId: string;
   messageId: string;
   title: string;
+}
+
+export function isSubagentParentActive(subagent: SubagentZoneRef | null, threadId: string | null | undefined): boolean {
+  return (
+    subagent != null && threadId != null && (threadId === subagent.parentThreadId || threadId === subagent.parentChatId)
+  );
 }
 
 /** A zone below this is unusable (user-measured verdict, 2026-08-12: 483px

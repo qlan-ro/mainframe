@@ -187,23 +187,28 @@ describe('ChatSurface', () => {
     expect(screen.queryByTestId('empty-welcome')).toBeNull();
   });
 
-  it('opens a native subagent beside its parent without a second chat session', () => {
+  it('opens a native subagent beside a parent still using a temporary thread ID', () => {
     const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1200);
-    __mainThreadId = 'chat-123';
+    __mainThreadId = '__LOCALID_parent';
     __itemStatus = 'regular';
     __messageCount = 4;
     useZonesStore.getState().openSubagent({
-      parentChatId: 'chat-123',
+      parentChatId: 'daemon-parent',
+      parentThreadId: '__LOCALID_parent',
       toolCallId: 'task-1',
       messageId: 'm-1',
       title: 'worker',
     });
 
     try {
-      render(<ChatSurface />);
+      const view = render(<ChatSurface />);
       expect(screen.getByTestId('chat-split-row')).toBeInTheDocument();
-      expect(screen.getByTestId('chat-zone-chat-123')).toBeInTheDocument();
+      expect(screen.getByTestId('side-chat-host-stub')).toHaveAttribute('data-parent-chat-id', '__LOCALID_parent');
       expect(screen.getByTestId('chat-subagent-zone-task-1')).toBeInTheDocument();
+
+      __mainThreadId = 'daemon-parent';
+      view.rerender(<ChatSurface />);
+      expect(screen.getByTestId('chat-split-row')).toBeInTheDocument();
     } finally {
       width.mockRestore();
     }

@@ -17,7 +17,7 @@ import { useEffect, useRef } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import { registerChatSplitVisibleProbe, useLayoutStore } from '@/store/layout';
 import { openBeside } from './open-in-split';
-import { splitVisible, useZonesStore, type ZoneIndex } from './zones-store';
+import { isSubagentParentActive, splitVisible, useZonesStore, type ZoneIndex } from './zones-store';
 
 // The layout store's workspace placement is split-aware through this probe
 // (store/ cannot import features/, so the dependency is inverted). Module
@@ -30,7 +30,9 @@ export function useZonesReconciler(): void {
   const zones = useZonesStore((s) => s.zones);
   const subagent = useZonesStore((s) => s.subagent);
   const parentListed = useAuiState(
-    (s) => subagent == null || s.threads.threadItems.some((item) => item.id === subagent.parentChatId),
+    (s) =>
+      subagent == null ||
+      s.threads.threadItems.some((item) => item.id === subagent.parentThreadId || item.id === subagent.parentChatId),
   );
   useEffect(() => {
     if (subagent != null && !parentListed) useZonesStore.getState().closeSubagent();
@@ -39,7 +41,7 @@ export function useZonesReconciler(): void {
   // width the split needs. Gating on fit made a narrow window park the split,
   // restore the workspace beside the chat, and keep the surface too narrow for
   // the split ever to come back after the window widened again.
-  const visible = splitVisible(zones, mainThreadId) || subagent?.parentChatId === mainThreadId;
+  const visible = splitVisible(zones, mainThreadId) || isSubagentParentActive(subagent, mainThreadId);
   splitVisibleNow = visible;
 
   const wasVisible = useRef(false);

@@ -37,7 +37,13 @@ vi.mock('@/components/ui/hint', () => ({ Hint: ({ children }: { children: React.
 
 import { SubagentZone } from '../SubagentZone';
 
-const subagent = { parentChatId: 'parent', toolCallId: 'task-1', messageId: 'parent-message', title: 'worker' };
+const subagent = {
+  parentChatId: 'parent',
+  parentThreadId: 'parent',
+  toolCallId: 'task-1',
+  messageId: 'parent-message',
+  title: 'worker',
+};
 
 describe('SubagentZone', () => {
   it('follows parent transcript updates and has no composer', () => {

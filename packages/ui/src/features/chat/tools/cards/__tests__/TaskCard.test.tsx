@@ -102,6 +102,7 @@ describe('TaskCard — done state', () => {
     fireEvent.click(screen.getByTestId('chat-task-open-tc-task-001'));
     expect(useZonesStore.getState().subagent).toEqual({
       parentChatId: 'parent',
+      parentThreadId: 'parent',
       toolCallId: 'tc-task-001',
       messageId: 'parent-message',
       title: 'worker',
